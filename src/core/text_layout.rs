@@ -39,8 +39,8 @@ pub fn measure_text_width(text: &str, font_size: f32, tracking: f32) -> f32 {
     if char_count == 0.0 {
         return 0.0;
     }
-    let char_width = font_size * 0.6;
-    char_count * char_width + (char_count - 1.0).max(0.0) * tracking * 0.1
+    let char_width = font_size * 0.8;
+    char_count * char_width + (char_count - 1.0).max(0.0) * tracking
 }
 
 /// Lay out text with line wrapping and alignment.
@@ -157,7 +157,7 @@ mod tests {
     fn test_measure_text_width() {
         let w = measure_text_width("Hello", 20.0, 0.0);
         assert!(w > 0.0);
-        assert!((w - 60.0).abs() < 1.0); // 5 chars * 20 * 0.6 = 60
+        assert!((w - 80.0).abs() < 1.0); // 5 chars * 20 * 0.8 = 80
     }
 
     #[test]

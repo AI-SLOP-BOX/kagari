@@ -393,7 +393,26 @@ impl FontRasterizer {
             return None;
         }
 
-        let buf_w = (layout.total_width.ceil() as u32).max(1);
+        // Compute actual pixel width from font glyph metrics instead of the
+        // rough estimate in measure_text_width, which clips long text.
+        let actual_width: f32 = layout
+            .lines
+            .iter()
+            .map(|line| {
+                let mut w = 0.0f32;
+                for ch in line.text.chars() {
+                    let glyph_id = font.glyph_id(ch);
+                    w += scaled_font.h_advance(glyph_id);
+                    w += tracking;
+                }
+                if line.text.ends_with(' ') {
+                    w -= tracking;
+                }
+                w.max(line.width)
+            })
+            .fold(0.0f32, f32::max);
+
+        let buf_w = (actual_width.ceil() as u32).max(layout.total_width.ceil() as u32).max(1);
         let line_height = font_size * leading;
         let buf_h = (layout.total_height.ceil() as u32)
             .max(line_height.ceil() as u32)

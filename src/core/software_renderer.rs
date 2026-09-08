@@ -867,13 +867,9 @@ fn render_precomp_layers_inner(
             LayerType::Solid { .. } | LayerType::PreComp { .. } => {
                 (precomp_comp.width as f32, precomp_comp.height as f32)
             }
-            LayerType::Text {
-                font_size, text, ..
-            } => (
-                (text.chars().count().max(1) as f32 * *font_size as f32 * 0.6)
-                    .max(*font_size as f32),
-                *font_size as f32 * 1.2,
-            ),
+            LayerType::Text { .. } => {
+                (precomp_comp.width as f32, precomp_comp.height as f32)
+            }
             LayerType::Shape { .. } | LayerType::Image { .. } | LayerType::Video { .. } => {
                 (precomp_comp.width as f32, precomp_comp.height as f32)
             }
@@ -1863,13 +1859,9 @@ pub fn render_frame_to_pixels(
             LayerType::Solid { .. } | LayerType::PreComp { .. } => {
                 (comp.width as f32, comp.height as f32)
             }
-            LayerType::Text {
-                font_size, text, ..
-            } => (
-                (text.chars().count().max(1) as f32 * *font_size as f32 * 0.6)
-                    .max(*font_size as f32),
-                *font_size as f32 * 1.2,
-            ),
+            LayerType::Text { .. } => {
+                (comp.width as f32, comp.height as f32)
+            }
             LayerType::Shape { .. } | LayerType::Image { .. } | LayerType::Video { .. } => {
                 (comp.width as f32, comp.height as f32)
             }

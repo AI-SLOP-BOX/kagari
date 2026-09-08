@@ -63,3 +63,8 @@ required-features = ["cli"]
 name = "kagari-studio"
 path = "src/main.rs"
 required-features = ["gui"]
+
+[[bin]]
+name = "gen-splash"
+path = "src/bin/gen_splash.rs"
+required-features = ["cli"]
