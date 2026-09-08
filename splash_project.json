@@ -119,7 +119,7 @@
           "global_resolution": "Half"
         },
         "dither_output": false,
-        "duration_frames": 240,
+        "duration_frames": 270,
         "fps": 30,
         "height": 1080,
         "id": "splash",
@@ -148,7 +148,7 @@
                   0.0,
                   0.0,
                   0.0,
-                  1.0
+                  0.0
                 ]
               }
             },
@@ -169,7 +169,7 @@
             },
             "motion_blur": false,
             "name": "Background",
-            "out_frame": 240,
+            "out_frame": 270,
             "paint_strokes": [],
             "parent_id": null,
             "posterize_time": null,
@@ -387,7 +387,7 @@
             "effects": [],
             "effects_enabled": true,
             "essential_properties": [],
-            "id": "matte_shape",
+            "id": "Shard 1",
             "in_frame": 0,
             "is_3d": false,
             "is_adjustment_layer": false,
@@ -400,78 +400,61 @@
                 "bevel_depth": 0.0,
                 "color": [
                   1.0,
-                  1.0,
-                  1.0,
+                  0.699999988079071,
+                  0.10000000149011612,
                   1.0
                 ],
                 "extrusion_depth": 0.0,
                 "fill_type": "Solid",
                 "shape_type": {
-                  "Ellipse": {
-                    "height": {
-                      "type": "Animated",
-                      "value": [
-                        {
-                          "frame": 0,
-                          "interpolation": "Linear",
-                          "value": 0.0
-                        },
-                        {
-                          "frame": 5,
-                          "interpolation": "Linear",
-                          "value": 0.0
-                        },
-                        {
-                          "frame": 50,
-                          "interpolation": {
-                            "Bezier": {
-                              "custom_bezier": null,
-                              "incoming": {
-                                "influence": 0.41999998688697815,
-                                "speed": 0.0
-                              },
-                              "outgoing": {
-                                "influence": 0.0,
-                                "speed": 0.0
-                              }
-                            }
-                          },
-                          "value": 2600.0
-                        }
+                  "FreeformBezier": {
+                    "closed": true,
+                    "points": [
+                      [
+                        0.0,
+                        -69.62640380859375
+                      ],
+                      [
+                        -60.0,
+                        34.293601989746094
+                      ],
+                      [
+                        60.0,
+                        34.293601989746094
                       ]
-                    },
-                    "width": {
-                      "type": "Animated",
-                      "value": [
-                        {
-                          "frame": 0,
-                          "interpolation": "Linear",
-                          "value": 0.0
-                        },
-                        {
-                          "frame": 5,
-                          "interpolation": "Linear",
-                          "value": 0.0
-                        },
-                        {
-                          "frame": 50,
-                          "interpolation": {
-                            "Bezier": {
-                              "custom_bezier": null,
-                              "incoming": {
-                                "influence": 0.41999998688697815,
-                                "speed": 0.0
-                              },
-                              "outgoing": {
-                                "influence": 0.0,
-                                "speed": 0.0
-                              }
-                            }
-                          },
-                          "value": 2600.0
-                        }
+                    ],
+                    "tangents": [
+                      [
+                        [
+                          0.0,
+                          0.0
+                        ],
+                        [
+                          0.0,
+                          0.0
+                        ]
+                      ],
+                      [
+                        [
+                          0.0,
+                          0.0
+                        ],
+                        [
+                          0.0,
+                          0.0
+                        ]
+                      ],
+                      [
+                        [
+                          0.0,
+                          0.0
+                        ],
+                        [
+                          0.0,
+                          0.0
+                        ]
                       ]
-                    }
+                    ]
                   }
                 },
                 "stroke_color": [
@@ -499,8 +482,8 @@
               "specular_exponent": 32.0
             },
             "motion_blur": false,
-            "name": "Radial Matte",
-            "out_frame": 240,
+            "name": "Shard 1",
+            "out_frame": 270,
             "paint_strokes": [],
             "parent_id": null,
             "posterize_time": null,
@@ -653,15 +636,3267 @@
               },
               "anchor_point_expression": null,
               "opacity": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 10,
+                    "interpolation": "Linear",
+                    "value": 100.0
+                  },
+                  {
+                    "frame": 67,
+                    "interpolation": "Linear",
+                    "value": 100.0
+                  },
+                  {
+                    "frame": 85,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  }
+                ]
+              },
+              "opacity_expression": null,
+              "position": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": [
+                      180.0,
+                      120.0
+                    ]
+                  },
+                  {
+                    "frame": 10,
+                    "interpolation": "Linear",
+                    "value": [
+                      180.0,
+                      120.0
+                    ]
+                  },
+                  {
+                    "frame": 55,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": null,
+                        "incoming": {
+                          "influence": 0.699999988079071,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.0,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": [
+                      960.0,
+                      480.0
+                    ]
+                  }
+                ]
+              },
+              "position_expression": null,
+              "rotation": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": -45.0
+                  },
+                  {
+                    "frame": 10,
+                    "interpolation": "Linear",
+                    "value": -45.0
+                  },
+                  {
+                    "frame": 55,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": null,
+                        "incoming": {
+                          "influence": 0.5,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.0,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": 495.0
+                  }
+                ]
+              },
+              "rotation_expression": null,
+              "scale": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": [
+                      6.5,
+                      6.5
+                    ]
+                  },
+                  {
+                    "frame": 10,
+                    "interpolation": "Linear",
+                    "value": [
+                      6.5,
+                      6.5
+                    ]
+                  },
+                  {
+                    "frame": 55,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": null,
+                        "incoming": {
+                          "influence": 0.550000011920929,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.0,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": [
+                      9.75,
+                      9.75
+                    ]
+                  }
+                ]
+              },
+              "scale_expression": null
+            },
+            "transform_3d": {
+              "position": {
                 "type": "Constant",
-                "value": 100.0
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "rotation": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "scale": {
+                "type": "Constant",
+                "value": [
+                  100.0,
+                  100.0,
+                  100.0
+                ]
+              }
+            },
+            "trim_paths": null,
+            "visible": true
+          },
+          {
+            "auto_orient": "Off",
+            "blend_mode": "Normal",
+            "constraints": {
+              "horizontal": "Left",
+              "vertical": "Top"
+            },
+            "effects": [],
+            "effects_enabled": true,
+            "essential_properties": [],
+            "id": "Shard 2",
+            "in_frame": 0,
+            "is_3d": false,
+            "is_adjustment_layer": false,
+            "is_collapsed": false,
+            "is_guide_layer": false,
+            "is_shy": false,
+            "label": "Red",
+            "layer_type": {
+              "Shape": {
+                "bevel_depth": 0.0,
+                "color": [
+                  1.0,
+                  0.5,
+                  0.0,
+                  1.0
+                ],
+                "extrusion_depth": 0.0,
+                "fill_type": "Solid",
+                "shape_type": {
+                  "Star": {
+                    "inner_radius": {
+                      "type": "Constant",
+                      "value": 30.0
+                    },
+                    "outer_radius": {
+                      "type": "Constant",
+                      "value": 70.0
+                    },
+                    "points": {
+                      "type": "Constant",
+                      "value": 4.0
+                    }
+                  }
+                },
+                "stroke_color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "stroke_width": 0.0
+              }
+            },
+            "locked": false,
+            "markers": [],
+            "masks": [],
+            "material": {
+              "accepts_lights": true,
+              "accepts_shadows": true,
+              "ambient": 0.30000001192092896,
+              "cast_shadows": true,
+              "diffuse": 0.800000011920929,
+              "emission": 0.0,
+              "light_transmission": 0.0,
+              "metalness": 0.0,
+              "specular": 0.5,
+              "specular_exponent": 32.0
+            },
+            "motion_blur": false,
+            "name": "Shard 2",
+            "out_frame": 270,
+            "paint_strokes": [],
+            "parent_id": null,
+            "posterize_time": null,
+            "preserve_transparency": false,
+            "proxy": {
+              "enabled": false,
+              "proxy_path": null,
+              "resolution": "Full"
+            },
+            "puppet_pins": [],
+            "shape_repeater": null,
+            "solo": false,
+            "style": {
+              "bevel_emboss": {
+                "angle": 135.0,
+                "color_dark": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_light": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "depth": 3.0,
+                "enabled": false,
+                "highlight": 70.0,
+                "shadow": 50.0,
+                "size": 3.0
+              },
+              "color_overlay": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0
+              },
+              "drop_shadow": {
+                "angle": 0.0,
+                "blend_mode": "Normal",
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "gradient_overlay": {
+                "angle": 90.0,
+                "color_end": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_start": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "enabled": false,
+                "opacity": 100.0,
+                "scale": 100.0
+              },
+              "inner_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "inner_shadow": {
+                "angle": 0.0,
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "outer_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0,
+                "spread": 0.0
+              },
+              "satin": {
+                "angle": 90.0,
+                "color": [
+                  0.20000000298023224,
+                  0.20000000298023224,
+                  0.3499999940395355,
+                  1.0
+                ],
+                "distance": 12.0,
+                "enabled": false,
+                "opacity": 50.0,
+                "size": 16.0
+              },
+              "stroke": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "position": 0,
+                "size": 0.0
+              }
+            },
+            "text_animator": null,
+            "text_animator_stack": null,
+            "text_formatting": null,
+            "time_remap": null,
+            "track_matte": "None",
+            "trackers": [],
+            "transform": {
+              "anchor_point": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0
+                ]
+              },
+              "anchor_point_expression": null,
+              "opacity": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 13,
+                    "interpolation": "Linear",
+                    "value": 100.0
+                  },
+                  {
+                    "frame": 70,
+                    "interpolation": "Linear",
+                    "value": 100.0
+                  },
+                  {
+                    "frame": 88,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  }
+                ]
+              },
+              "opacity_expression": null,
+              "position": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": [
+                      1720.0,
+                      100.0
+                    ]
+                  },
+                  {
+                    "frame": 13,
+                    "interpolation": "Linear",
+                    "value": [
+                      1720.0,
+                      100.0
+                    ]
+                  },
+                  {
+                    "frame": 58,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": null,
+                        "incoming": {
+                          "influence": 0.699999988079071,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.0,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": [
+                      960.0,
+                      480.0
+                    ]
+                  }
+                ]
+              },
+              "position_expression": null,
+              "rotation": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": 30.0
+                  },
+                  {
+                    "frame": 13,
+                    "interpolation": "Linear",
+                    "value": 30.0
+                  },
+                  {
+                    "frame": 58,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": null,
+                        "incoming": {
+                          "influence": 0.5,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.0,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": 570.0
+                  }
+                ]
+              },
+              "rotation_expression": null,
+              "scale": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": [
+                      7.0,
+                      7.0
+                    ]
+                  },
+                  {
+                    "frame": 13,
+                    "interpolation": "Linear",
+                    "value": [
+                      7.0,
+                      7.0
+                    ]
+                  },
+                  {
+                    "frame": 58,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": null,
+                        "incoming": {
+                          "influence": 0.550000011920929,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.0,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": [
+                      10.5,
+                      10.5
+                    ]
+                  }
+                ]
+              },
+              "scale_expression": null
+            },
+            "transform_3d": {
+              "position": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "rotation": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "scale": {
+                "type": "Constant",
+                "value": [
+                  100.0,
+                  100.0,
+                  100.0
+                ]
+              }
+            },
+            "trim_paths": null,
+            "visible": true
+          },
+          {
+            "auto_orient": "Off",
+            "blend_mode": "Normal",
+            "constraints": {
+              "horizontal": "Left",
+              "vertical": "Top"
+            },
+            "effects": [],
+            "effects_enabled": true,
+            "essential_properties": [],
+            "id": "Shard 3",
+            "in_frame": 0,
+            "is_3d": false,
+            "is_adjustment_layer": false,
+            "is_collapsed": false,
+            "is_guide_layer": false,
+            "is_shy": false,
+            "label": "Red",
+            "layer_type": {
+              "Shape": {
+                "bevel_depth": 0.0,
+                "color": [
+                  0.8999999761581421,
+                  0.20000000298023224,
+                  0.10000000149011612,
+                  1.0
+                ],
+                "extrusion_depth": 0.0,
+                "fill_type": "Solid",
+                "shape_type": {
+                  "FreeformBezier": {
+                    "closed": true,
+                    "points": [
+                      [
+                        0.0,
+                        -58.02199935913086
+                      ],
+                      [
+                        -50.0,
+                        28.578001022338867
+                      ],
+                      [
+                        50.0,
+                        28.578001022338867
+                      ]
+                    ],
+                    "tangents": [
+                      [
+                        [
+                          0.0,
+                          0.0
+                        ],
+                        [
+                          0.0,
+                          0.0
+                        ]
+                      ],
+                      [
+                        [
+                          0.0,
+                          0.0
+                        ],
+                        [
+                          0.0,
+                          0.0
+                        ]
+                      ],
+                      [
+                        [
+                          0.0,
+                          0.0
+                        ],
+                        [
+                          0.0,
+                          0.0
+                        ]
+                      ]
+                    ]
+                  }
+                },
+                "stroke_color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "stroke_width": 0.0
+              }
+            },
+            "locked": false,
+            "markers": [],
+            "masks": [],
+            "material": {
+              "accepts_lights": true,
+              "accepts_shadows": true,
+              "ambient": 0.30000001192092896,
+              "cast_shadows": true,
+              "diffuse": 0.800000011920929,
+              "emission": 0.0,
+              "light_transmission": 0.0,
+              "metalness": 0.0,
+              "specular": 0.5,
+              "specular_exponent": 32.0
+            },
+            "motion_blur": false,
+            "name": "Shard 3",
+            "out_frame": 270,
+            "paint_strokes": [],
+            "parent_id": null,
+            "posterize_time": null,
+            "preserve_transparency": false,
+            "proxy": {
+              "enabled": false,
+              "proxy_path": null,
+              "resolution": "Full"
+            },
+            "puppet_pins": [],
+            "shape_repeater": null,
+            "solo": false,
+            "style": {
+              "bevel_emboss": {
+                "angle": 135.0,
+                "color_dark": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_light": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "depth": 3.0,
+                "enabled": false,
+                "highlight": 70.0,
+                "shadow": 50.0,
+                "size": 3.0
+              },
+              "color_overlay": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0
+              },
+              "drop_shadow": {
+                "angle": 0.0,
+                "blend_mode": "Normal",
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "gradient_overlay": {
+                "angle": 90.0,
+                "color_end": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_start": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "enabled": false,
+                "opacity": 100.0,
+                "scale": 100.0
+              },
+              "inner_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "inner_shadow": {
+                "angle": 0.0,
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "outer_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0,
+                "spread": 0.0
+              },
+              "satin": {
+                "angle": 90.0,
+                "color": [
+                  0.20000000298023224,
+                  0.20000000298023224,
+                  0.3499999940395355,
+                  1.0
+                ],
+                "distance": 12.0,
+                "enabled": false,
+                "opacity": 50.0,
+                "size": 16.0
+              },
+              "stroke": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "position": 0,
+                "size": 0.0
+              }
+            },
+            "text_animator": null,
+            "text_animator_stack": null,
+            "text_formatting": null,
+            "time_remap": null,
+            "track_matte": "None",
+            "trackers": [],
+            "transform": {
+              "anchor_point": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0
+                ]
+              },
+              "anchor_point_expression": null,
+              "opacity": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 17,
+                    "interpolation": "Linear",
+                    "value": 100.0
+                  },
+                  {
+                    "frame": 74,
+                    "interpolation": "Linear",
+                    "value": 100.0
+                  },
+                  {
+                    "frame": 92,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  }
+                ]
+              },
+              "opacity_expression": null,
+              "position": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": [
+                      100.0,
+                      500.0
+                    ]
+                  },
+                  {
+                    "frame": 17,
+                    "interpolation": "Linear",
+                    "value": [
+                      100.0,
+                      500.0
+                    ]
+                  },
+                  {
+                    "frame": 62,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": null,
+                        "incoming": {
+                          "influence": 0.699999988079071,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.0,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": [
+                      960.0,
+                      480.0
+                    ]
+                  }
+                ]
+              },
+              "position_expression": null,
+              "rotation": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": 120.0
+                  },
+                  {
+                    "frame": 17,
+                    "interpolation": "Linear",
+                    "value": 120.0
+                  },
+                  {
+                    "frame": 62,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": null,
+                        "incoming": {
+                          "influence": 0.5,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.0,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": 660.0
+                  }
+                ]
+              },
+              "rotation_expression": null,
+              "scale": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": [
+                      6.0,
+                      6.0
+                    ]
+                  },
+                  {
+                    "frame": 17,
+                    "interpolation": "Linear",
+                    "value": [
+                      6.0,
+                      6.0
+                    ]
+                  },
+                  {
+                    "frame": 62,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": null,
+                        "incoming": {
+                          "influence": 0.550000011920929,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.0,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": [
+                      9.0,
+                      9.0
+                    ]
+                  }
+                ]
+              },
+              "scale_expression": null
+            },
+            "transform_3d": {
+              "position": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "rotation": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "scale": {
+                "type": "Constant",
+                "value": [
+                  100.0,
+                  100.0,
+                  100.0
+                ]
+              }
+            },
+            "trim_paths": null,
+            "visible": true
+          },
+          {
+            "auto_orient": "Off",
+            "blend_mode": "Normal",
+            "constraints": {
+              "horizontal": "Left",
+              "vertical": "Top"
+            },
+            "effects": [],
+            "effects_enabled": true,
+            "essential_properties": [],
+            "id": "Shard 4",
+            "in_frame": 0,
+            "is_3d": false,
+            "is_adjustment_layer": false,
+            "is_collapsed": false,
+            "is_guide_layer": false,
+            "is_shy": false,
+            "label": "Red",
+            "layer_type": {
+              "Shape": {
+                "bevel_depth": 0.0,
+                "color": [
+                  1.0,
+                  0.8500000238418579,
+                  0.30000001192092896,
+                  1.0
+                ],
+                "extrusion_depth": 0.0,
+                "fill_type": "Solid",
+                "shape_type": {
+                  "Ellipse": {
+                    "height": {
+                      "type": "Constant",
+                      "value": 90.0
+                    },
+                    "width": {
+                      "type": "Constant",
+                      "value": 90.0
+                    }
+                  }
+                },
+                "stroke_color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "stroke_width": 0.0
+              }
+            },
+            "locked": false,
+            "markers": [],
+            "masks": [],
+            "material": {
+              "accepts_lights": true,
+              "accepts_shadows": true,
+              "ambient": 0.30000001192092896,
+              "cast_shadows": true,
+              "diffuse": 0.800000011920929,
+              "emission": 0.0,
+              "light_transmission": 0.0,
+              "metalness": 0.0,
+              "specular": 0.5,
+              "specular_exponent": 32.0
+            },
+            "motion_blur": false,
+            "name": "Shard 4",
+            "out_frame": 270,
+            "paint_strokes": [],
+            "parent_id": null,
+            "posterize_time": null,
+            "preserve_transparency": false,
+            "proxy": {
+              "enabled": false,
+              "proxy_path": null,
+              "resolution": "Full"
+            },
+            "puppet_pins": [],
+            "shape_repeater": null,
+            "solo": false,
+            "style": {
+              "bevel_emboss": {
+                "angle": 135.0,
+                "color_dark": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_light": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "depth": 3.0,
+                "enabled": false,
+                "highlight": 70.0,
+                "shadow": 50.0,
+                "size": 3.0
+              },
+              "color_overlay": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0
+              },
+              "drop_shadow": {
+                "angle": 0.0,
+                "blend_mode": "Normal",
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "gradient_overlay": {
+                "angle": 90.0,
+                "color_end": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_start": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "enabled": false,
+                "opacity": 100.0,
+                "scale": 100.0
+              },
+              "inner_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "inner_shadow": {
+                "angle": 0.0,
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "outer_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0,
+                "spread": 0.0
+              },
+              "satin": {
+                "angle": 90.0,
+                "color": [
+                  0.20000000298023224,
+                  0.20000000298023224,
+                  0.3499999940395355,
+                  1.0
+                ],
+                "distance": 12.0,
+                "enabled": false,
+                "opacity": 50.0,
+                "size": 16.0
+              },
+              "stroke": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "position": 0,
+                "size": 0.0
+              }
+            },
+            "text_animator": null,
+            "text_animator_stack": null,
+            "text_formatting": null,
+            "time_remap": null,
+            "track_matte": "None",
+            "trackers": [],
+            "transform": {
+              "anchor_point": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0
+                ]
+              },
+              "anchor_point_expression": null,
+              "opacity": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 21,
+                    "interpolation": "Linear",
+                    "value": 100.0
+                  },
+                  {
+                    "frame": 78,
+                    "interpolation": "Linear",
+                    "value": 100.0
+                  },
+                  {
+                    "frame": 96,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  }
+                ]
+              },
+              "opacity_expression": null,
+              "position": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": [
+                      1780.0,
+                      520.0
+                    ]
+                  },
+                  {
+                    "frame": 21,
+                    "interpolation": "Linear",
+                    "value": [
+                      1780.0,
+                      520.0
+                    ]
+                  },
+                  {
+                    "frame": 66,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": null,
+                        "incoming": {
+                          "influence": 0.699999988079071,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.0,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": [
+                      960.0,
+                      480.0
+                    ]
+                  }
+                ]
+              },
+              "position_expression": null,
+              "rotation": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": -60.0
+                  },
+                  {
+                    "frame": 21,
+                    "interpolation": "Linear",
+                    "value": -60.0
+                  },
+                  {
+                    "frame": 66,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": null,
+                        "incoming": {
+                          "influence": 0.5,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.0,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": 480.0
+                  }
+                ]
+              },
+              "rotation_expression": null,
+              "scale": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": [
+                      6.5,
+                      6.5
+                    ]
+                  },
+                  {
+                    "frame": 21,
+                    "interpolation": "Linear",
+                    "value": [
+                      6.5,
+                      6.5
+                    ]
+                  },
+                  {
+                    "frame": 66,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": null,
+                        "incoming": {
+                          "influence": 0.550000011920929,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.0,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": [
+                      9.75,
+                      9.75
+                    ]
+                  }
+                ]
+              },
+              "scale_expression": null
+            },
+            "transform_3d": {
+              "position": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "rotation": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "scale": {
+                "type": "Constant",
+                "value": [
+                  100.0,
+                  100.0,
+                  100.0
+                ]
+              }
+            },
+            "trim_paths": null,
+            "visible": true
+          },
+          {
+            "auto_orient": "Off",
+            "blend_mode": "Normal",
+            "constraints": {
+              "horizontal": "Left",
+              "vertical": "Top"
+            },
+            "effects": [],
+            "effects_enabled": true,
+            "essential_properties": [],
+            "id": "Shard 5",
+            "in_frame": 0,
+            "is_3d": false,
+            "is_adjustment_layer": false,
+            "is_collapsed": false,
+            "is_guide_layer": false,
+            "is_shy": false,
+            "label": "Red",
+            "layer_type": {
+              "Shape": {
+                "bevel_depth": 0.0,
+                "color": [
+                  0.800000011920929,
+                  0.10000000149011612,
+                  0.10000000149011612,
+                  1.0
+                ],
+                "extrusion_depth": 0.0,
+                "fill_type": "Solid",
+                "shape_type": {
+                  "Star": {
+                    "inner_radius": {
+                      "type": "Constant",
+                      "value": 25.0
+                    },
+                    "outer_radius": {
+                      "type": "Constant",
+                      "value": 60.0
+                    },
+                    "points": {
+                      "type": "Constant",
+                      "value": 4.0
+                    }
+                  }
+                },
+                "stroke_color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "stroke_width": 0.0
+              }
+            },
+            "locked": false,
+            "markers": [],
+            "masks": [],
+            "material": {
+              "accepts_lights": true,
+              "accepts_shadows": true,
+              "ambient": 0.30000001192092896,
+              "cast_shadows": true,
+              "diffuse": 0.800000011920929,
+              "emission": 0.0,
+              "light_transmission": 0.0,
+              "metalness": 0.0,
+              "specular": 0.5,
+              "specular_exponent": 32.0
+            },
+            "motion_blur": false,
+            "name": "Shard 5",
+            "out_frame": 270,
+            "paint_strokes": [],
+            "parent_id": null,
+            "posterize_time": null,
+            "preserve_transparency": false,
+            "proxy": {
+              "enabled": false,
+              "proxy_path": null,
+              "resolution": "Full"
+            },
+            "puppet_pins": [],
+            "shape_repeater": null,
+            "solo": false,
+            "style": {
+              "bevel_emboss": {
+                "angle": 135.0,
+                "color_dark": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_light": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "depth": 3.0,
+                "enabled": false,
+                "highlight": 70.0,
+                "shadow": 50.0,
+                "size": 3.0
+              },
+              "color_overlay": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0
+              },
+              "drop_shadow": {
+                "angle": 0.0,
+                "blend_mode": "Normal",
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "gradient_overlay": {
+                "angle": 90.0,
+                "color_end": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_start": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "enabled": false,
+                "opacity": 100.0,
+                "scale": 100.0
+              },
+              "inner_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "inner_shadow": {
+                "angle": 0.0,
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "outer_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0,
+                "spread": 0.0
+              },
+              "satin": {
+                "angle": 90.0,
+                "color": [
+                  0.20000000298023224,
+                  0.20000000298023224,
+                  0.3499999940395355,
+                  1.0
+                ],
+                "distance": 12.0,
+                "enabled": false,
+                "opacity": 50.0,
+                "size": 16.0
+              },
+              "stroke": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "position": 0,
+                "size": 0.0
+              }
+            },
+            "text_animator": null,
+            "text_animator_stack": null,
+            "text_formatting": null,
+            "time_remap": null,
+            "track_matte": "None",
+            "trackers": [],
+            "transform": {
+              "anchor_point": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0
+                ]
+              },
+              "anchor_point_expression": null,
+              "opacity": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 25,
+                    "interpolation": "Linear",
+                    "value": 100.0
+                  },
+                  {
+                    "frame": 82,
+                    "interpolation": "Linear",
+                    "value": 100.0
+                  },
+                  {
+                    "frame": 100,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  }
+                ]
+              },
+              "opacity_expression": null,
+              "position": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": [
+                      220.0,
+                      930.0
+                    ]
+                  },
+                  {
+                    "frame": 25,
+                    "interpolation": "Linear",
+                    "value": [
+                      220.0,
+                      930.0
+                    ]
+                  },
+                  {
+                    "frame": 70,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": null,
+                        "incoming": {
+                          "influence": 0.699999988079071,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.0,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": [
+                      960.0,
+                      480.0
+                    ]
+                  }
+                ]
+              },
+              "position_expression": null,
+              "rotation": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": 90.0
+                  },
+                  {
+                    "frame": 25,
+                    "interpolation": "Linear",
+                    "value": 90.0
+                  },
+                  {
+                    "frame": 70,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": null,
+                        "incoming": {
+                          "influence": 0.5,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.0,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": 630.0
+                  }
+                ]
+              },
+              "rotation_expression": null,
+              "scale": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": [
+                      6.5,
+                      6.5
+                    ]
+                  },
+                  {
+                    "frame": 25,
+                    "interpolation": "Linear",
+                    "value": [
+                      6.5,
+                      6.5
+                    ]
+                  },
+                  {
+                    "frame": 70,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": null,
+                        "incoming": {
+                          "influence": 0.550000011920929,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.0,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": [
+                      9.75,
+                      9.75
+                    ]
+                  }
+                ]
+              },
+              "scale_expression": null
+            },
+            "transform_3d": {
+              "position": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "rotation": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "scale": {
+                "type": "Constant",
+                "value": [
+                  100.0,
+                  100.0,
+                  100.0
+                ]
+              }
+            },
+            "trim_paths": null,
+            "visible": true
+          },
+          {
+            "auto_orient": "Off",
+            "blend_mode": "Normal",
+            "constraints": {
+              "horizontal": "Left",
+              "vertical": "Top"
+            },
+            "effects": [],
+            "effects_enabled": true,
+            "essential_properties": [],
+            "id": "Shard 6",
+            "in_frame": 0,
+            "is_3d": false,
+            "is_adjustment_layer": false,
+            "is_collapsed": false,
+            "is_guide_layer": false,
+            "is_shy": false,
+            "label": "Red",
+            "layer_type": {
+              "Shape": {
+                "bevel_depth": 0.0,
+                "color": [
+                  1.0,
+                  0.8999999761581421,
+                  0.4000000059604645,
+                  1.0
+                ],
+                "extrusion_depth": 0.0,
+                "fill_type": "Solid",
+                "shape_type": {
+                  "FreeformBezier": {
+                    "closed": true,
+                    "points": [
+                      [
+                        0.0,
+                        -63.82420349121094
+                      ],
+                      [
+                        -55.0,
+                        31.435802459716797
+                      ],
+                      [
+                        55.0,
+                        31.435802459716797
+                      ]
+                    ],
+                    "tangents": [
+                      [
+                        [
+                          0.0,
+                          0.0
+                        ],
+                        [
+                          0.0,
+                          0.0
+                        ]
+                      ],
+                      [
+                        [
+                          0.0,
+                          0.0
+                        ],
+                        [
+                          0.0,
+                          0.0
+                        ]
+                      ],
+                      [
+                        [
+                          0.0,
+                          0.0
+                        ],
+                        [
+                          0.0,
+                          0.0
+                        ]
+                      ]
+                    ]
+                  }
+                },
+                "stroke_color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "stroke_width": 0.0
+              }
+            },
+            "locked": false,
+            "markers": [],
+            "masks": [],
+            "material": {
+              "accepts_lights": true,
+              "accepts_shadows": true,
+              "ambient": 0.30000001192092896,
+              "cast_shadows": true,
+              "diffuse": 0.800000011920929,
+              "emission": 0.0,
+              "light_transmission": 0.0,
+              "metalness": 0.0,
+              "specular": 0.5,
+              "specular_exponent": 32.0
+            },
+            "motion_blur": false,
+            "name": "Shard 6",
+            "out_frame": 270,
+            "paint_strokes": [],
+            "parent_id": null,
+            "posterize_time": null,
+            "preserve_transparency": false,
+            "proxy": {
+              "enabled": false,
+              "proxy_path": null,
+              "resolution": "Full"
+            },
+            "puppet_pins": [],
+            "shape_repeater": null,
+            "solo": false,
+            "style": {
+              "bevel_emboss": {
+                "angle": 135.0,
+                "color_dark": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_light": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "depth": 3.0,
+                "enabled": false,
+                "highlight": 70.0,
+                "shadow": 50.0,
+                "size": 3.0
+              },
+              "color_overlay": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0
+              },
+              "drop_shadow": {
+                "angle": 0.0,
+                "blend_mode": "Normal",
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "gradient_overlay": {
+                "angle": 90.0,
+                "color_end": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_start": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "enabled": false,
+                "opacity": 100.0,
+                "scale": 100.0
+              },
+              "inner_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "inner_shadow": {
+                "angle": 0.0,
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "outer_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0,
+                "spread": 0.0
+              },
+              "satin": {
+                "angle": 90.0,
+                "color": [
+                  0.20000000298023224,
+                  0.20000000298023224,
+                  0.3499999940395355,
+                  1.0
+                ],
+                "distance": 12.0,
+                "enabled": false,
+                "opacity": 50.0,
+                "size": 16.0
+              },
+              "stroke": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "position": 0,
+                "size": 0.0
+              }
+            },
+            "text_animator": null,
+            "text_animator_stack": null,
+            "text_formatting": null,
+            "time_remap": null,
+            "track_matte": "None",
+            "trackers": [],
+            "transform": {
+              "anchor_point": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0
+                ]
+              },
+              "anchor_point_expression": null,
+              "opacity": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 29,
+                    "interpolation": "Linear",
+                    "value": 100.0
+                  },
+                  {
+                    "frame": 86,
+                    "interpolation": "Linear",
+                    "value": 100.0
+                  },
+                  {
+                    "frame": 104,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  }
+                ]
+              },
+              "opacity_expression": null,
+              "position": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": [
+                      1680.0,
+                      910.0
+                    ]
+                  },
+                  {
+                    "frame": 29,
+                    "interpolation": "Linear",
+                    "value": [
+                      1680.0,
+                      910.0
+                    ]
+                  },
+                  {
+                    "frame": 74,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": null,
+                        "incoming": {
+                          "influence": 0.699999988079071,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.0,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": [
+                      960.0,
+                      480.0
+                    ]
+                  }
+                ]
+              },
+              "position_expression": null,
+              "rotation": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": -120.0
+                  },
+                  {
+                    "frame": 29,
+                    "interpolation": "Linear",
+                    "value": -120.0
+                  },
+                  {
+                    "frame": 74,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": null,
+                        "incoming": {
+                          "influence": 0.5,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.0,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": 420.0
+                  }
+                ]
+              },
+              "rotation_expression": null,
+              "scale": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": [
+                      6.0,
+                      6.0
+                    ]
+                  },
+                  {
+                    "frame": 29,
+                    "interpolation": "Linear",
+                    "value": [
+                      6.0,
+                      6.0
+                    ]
+                  },
+                  {
+                    "frame": 74,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": null,
+                        "incoming": {
+                          "influence": 0.550000011920929,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.0,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": [
+                      9.0,
+                      9.0
+                    ]
+                  }
+                ]
+              },
+              "scale_expression": null
+            },
+            "transform_3d": {
+              "position": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "rotation": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "scale": {
+                "type": "Constant",
+                "value": [
+                  100.0,
+                  100.0,
+                  100.0
+                ]
+              }
+            },
+            "trim_paths": null,
+            "visible": true
+          },
+          {
+            "auto_orient": "Off",
+            "blend_mode": "Normal",
+            "constraints": {
+              "horizontal": "Left",
+              "vertical": "Top"
+            },
+            "effects": [],
+            "effects_enabled": true,
+            "essential_properties": [],
+            "id": "Shard 7",
+            "in_frame": 0,
+            "is_3d": false,
+            "is_adjustment_layer": false,
+            "is_collapsed": false,
+            "is_guide_layer": false,
+            "is_shy": false,
+            "label": "Red",
+            "layer_type": {
+              "Shape": {
+                "bevel_depth": 0.0,
+                "color": [
+                  1.0,
+                  0.949999988079071,
+                  0.800000011920929,
+                  1.0
+                ],
+                "extrusion_depth": 0.0,
+                "fill_type": "Solid",
+                "shape_type": {
+                  "Ellipse": {
+                    "height": {
+                      "type": "Constant",
+                      "value": 60.0
+                    },
+                    "width": {
+                      "type": "Constant",
+                      "value": 60.0
+                    }
+                  }
+                },
+                "stroke_color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "stroke_width": 0.0
+              }
+            },
+            "locked": false,
+            "markers": [],
+            "masks": [],
+            "material": {
+              "accepts_lights": true,
+              "accepts_shadows": true,
+              "ambient": 0.30000001192092896,
+              "cast_shadows": true,
+              "diffuse": 0.800000011920929,
+              "emission": 0.0,
+              "light_transmission": 0.0,
+              "metalness": 0.0,
+              "specular": 0.5,
+              "specular_exponent": 32.0
+            },
+            "motion_blur": false,
+            "name": "Shard 7",
+            "out_frame": 270,
+            "paint_strokes": [],
+            "parent_id": null,
+            "posterize_time": null,
+            "preserve_transparency": false,
+            "proxy": {
+              "enabled": false,
+              "proxy_path": null,
+              "resolution": "Full"
+            },
+            "puppet_pins": [],
+            "shape_repeater": null,
+            "solo": false,
+            "style": {
+              "bevel_emboss": {
+                "angle": 135.0,
+                "color_dark": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_light": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "depth": 3.0,
+                "enabled": false,
+                "highlight": 70.0,
+                "shadow": 50.0,
+                "size": 3.0
+              },
+              "color_overlay": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0
+              },
+              "drop_shadow": {
+                "angle": 0.0,
+                "blend_mode": "Normal",
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "gradient_overlay": {
+                "angle": 90.0,
+                "color_end": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_start": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "enabled": false,
+                "opacity": 100.0,
+                "scale": 100.0
+              },
+              "inner_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "inner_shadow": {
+                "angle": 0.0,
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "outer_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0,
+                "spread": 0.0
+              },
+              "satin": {
+                "angle": 90.0,
+                "color": [
+                  0.20000000298023224,
+                  0.20000000298023224,
+                  0.3499999940395355,
+                  1.0
+                ],
+                "distance": 12.0,
+                "enabled": false,
+                "opacity": 50.0,
+                "size": 16.0
+              },
+              "stroke": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "position": 0,
+                "size": 0.0
+              }
+            },
+            "text_animator": null,
+            "text_animator_stack": null,
+            "text_formatting": null,
+            "time_remap": null,
+            "track_matte": "None",
+            "trackers": [],
+            "transform": {
+              "anchor_point": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0
+                ]
+              },
+              "anchor_point_expression": null,
+              "opacity": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 15,
+                    "interpolation": "Linear",
+                    "value": 100.0
+                  },
+                  {
+                    "frame": 72,
+                    "interpolation": "Linear",
+                    "value": 100.0
+                  },
+                  {
+                    "frame": 90,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  }
+                ]
+              },
+              "opacity_expression": null,
+              "position": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": [
+                      960.0,
+                      -30.0
+                    ]
+                  },
+                  {
+                    "frame": 15,
+                    "interpolation": "Linear",
+                    "value": [
+                      960.0,
+                      -30.0
+                    ]
+                  },
+                  {
+                    "frame": 60,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": null,
+                        "incoming": {
+                          "influence": 0.699999988079071,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.0,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": [
+                      960.0,
+                      480.0
+                    ]
+                  }
+                ]
+              },
+              "position_expression": null,
+              "rotation": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 15,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 60,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": null,
+                        "incoming": {
+                          "influence": 0.5,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.0,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": 540.0
+                  }
+                ]
+              },
+              "rotation_expression": null,
+              "scale": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": [
+                      5.0,
+                      5.0
+                    ]
+                  },
+                  {
+                    "frame": 15,
+                    "interpolation": "Linear",
+                    "value": [
+                      5.0,
+                      5.0
+                    ]
+                  },
+                  {
+                    "frame": 60,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": null,
+                        "incoming": {
+                          "influence": 0.550000011920929,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.0,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": [
+                      7.5,
+                      7.5
+                    ]
+                  }
+                ]
+              },
+              "scale_expression": null
+            },
+            "transform_3d": {
+              "position": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "rotation": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "scale": {
+                "type": "Constant",
+                "value": [
+                  100.0,
+                  100.0,
+                  100.0
+                ]
+              }
+            },
+            "trim_paths": null,
+            "visible": true
+          },
+          {
+            "auto_orient": "Off",
+            "blend_mode": "Normal",
+            "constraints": {
+              "horizontal": "Left",
+              "vertical": "Top"
+            },
+            "effects": [],
+            "effects_enabled": true,
+            "essential_properties": [],
+            "id": "Shard 8",
+            "in_frame": 0,
+            "is_3d": false,
+            "is_adjustment_layer": false,
+            "is_collapsed": false,
+            "is_guide_layer": false,
+            "is_shy": false,
+            "label": "Red",
+            "layer_type": {
+              "Shape": {
+                "bevel_depth": 0.0,
+                "color": [
+                  0.699999988079071,
+                  0.05000000074505806,
+                  0.05000000074505806,
+                  1.0
+                ],
+                "extrusion_depth": 0.0,
+                "fill_type": "Solid",
+                "shape_type": {
+                  "Star": {
+                    "inner_radius": {
+                      "type": "Constant",
+                      "value": 20.0
+                    },
+                    "outer_radius": {
+                      "type": "Constant",
+                      "value": 55.0
+                    },
+                    "points": {
+                      "type": "Constant",
+                      "value": 5.0
+                    }
+                  }
+                },
+                "stroke_color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "stroke_width": 0.0
+              }
+            },
+            "locked": false,
+            "markers": [],
+            "masks": [],
+            "material": {
+              "accepts_lights": true,
+              "accepts_shadows": true,
+              "ambient": 0.30000001192092896,
+              "cast_shadows": true,
+              "diffuse": 0.800000011920929,
+              "emission": 0.0,
+              "light_transmission": 0.0,
+              "metalness": 0.0,
+              "specular": 0.5,
+              "specular_exponent": 32.0
+            },
+            "motion_blur": false,
+            "name": "Shard 8",
+            "out_frame": 270,
+            "paint_strokes": [],
+            "parent_id": null,
+            "posterize_time": null,
+            "preserve_transparency": false,
+            "proxy": {
+              "enabled": false,
+              "proxy_path": null,
+              "resolution": "Full"
+            },
+            "puppet_pins": [],
+            "shape_repeater": null,
+            "solo": false,
+            "style": {
+              "bevel_emboss": {
+                "angle": 135.0,
+                "color_dark": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_light": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "depth": 3.0,
+                "enabled": false,
+                "highlight": 70.0,
+                "shadow": 50.0,
+                "size": 3.0
+              },
+              "color_overlay": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0
+              },
+              "drop_shadow": {
+                "angle": 0.0,
+                "blend_mode": "Normal",
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "gradient_overlay": {
+                "angle": 90.0,
+                "color_end": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_start": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "enabled": false,
+                "opacity": 100.0,
+                "scale": 100.0
+              },
+              "inner_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "inner_shadow": {
+                "angle": 0.0,
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "outer_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0,
+                "spread": 0.0
+              },
+              "satin": {
+                "angle": 90.0,
+                "color": [
+                  0.20000000298023224,
+                  0.20000000298023224,
+                  0.3499999940395355,
+                  1.0
+                ],
+                "distance": 12.0,
+                "enabled": false,
+                "opacity": 50.0,
+                "size": 16.0
+              },
+              "stroke": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "position": 0,
+                "size": 0.0
+              }
+            },
+            "text_animator": null,
+            "text_animator_stack": null,
+            "text_formatting": null,
+            "time_remap": null,
+            "track_matte": "None",
+            "trackers": [],
+            "transform": {
+              "anchor_point": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0
+                ]
+              },
+              "anchor_point_expression": null,
+              "opacity": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 33,
+                    "interpolation": "Linear",
+                    "value": 100.0
+                  },
+                  {
+                    "frame": 90,
+                    "interpolation": "Linear",
+                    "value": 100.0
+                  },
+                  {
+                    "frame": 108,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  }
+                ]
+              },
+              "opacity_expression": null,
+              "position": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": [
+                      960.0,
+                      1120.0
+                    ]
+                  },
+                  {
+                    "frame": 33,
+                    "interpolation": "Linear",
+                    "value": [
+                      960.0,
+                      1120.0
+                    ]
+                  },
+                  {
+                    "frame": 78,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": null,
+                        "incoming": {
+                          "influence": 0.699999988079071,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.0,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": [
+                      960.0,
+                      480.0
+                    ]
+                  }
+                ]
+              },
+              "position_expression": null,
+              "rotation": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": 45.0
+                  },
+                  {
+                    "frame": 33,
+                    "interpolation": "Linear",
+                    "value": 45.0
+                  },
+                  {
+                    "frame": 78,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": null,
+                        "incoming": {
+                          "influence": 0.5,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.0,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": 585.0
+                  }
+                ]
+              },
+              "rotation_expression": null,
+              "scale": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": [
+                      6.0,
+                      6.0
+                    ]
+                  },
+                  {
+                    "frame": 33,
+                    "interpolation": "Linear",
+                    "value": [
+                      6.0,
+                      6.0
+                    ]
+                  },
+                  {
+                    "frame": 78,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": null,
+                        "incoming": {
+                          "influence": 0.550000011920929,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.0,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": [
+                      9.0,
+                      9.0
+                    ]
+                  }
+                ]
+              },
+              "scale_expression": null
+            },
+            "transform_3d": {
+              "position": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "rotation": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "scale": {
+                "type": "Constant",
+                "value": [
+                  100.0,
+                  100.0,
+                  100.0
+                ]
+              }
+            },
+            "trim_paths": null,
+            "visible": true
+          },
+          {
+            "auto_orient": "Off",
+            "blend_mode": "Normal",
+            "constraints": {
+              "horizontal": "Left",
+              "vertical": "Top"
+            },
+            "effects": [],
+            "effects_enabled": true,
+            "essential_properties": [],
+            "id": "flash",
+            "in_frame": 0,
+            "is_3d": false,
+            "is_adjustment_layer": false,
+            "is_collapsed": false,
+            "is_guide_layer": false,
+            "is_shy": false,
+            "label": "Red",
+            "layer_type": {
+              "Shape": {
+                "bevel_depth": 0.0,
+                "color": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "extrusion_depth": 0.0,
+                "fill_type": "Solid",
+                "shape_type": {
+                  "Ellipse": {
+                    "height": {
+                      "type": "Constant",
+                      "value": 200.0
+                    },
+                    "width": {
+                      "type": "Constant",
+                      "value": 200.0
+                    }
+                  }
+                },
+                "stroke_color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "stroke_width": 0.0
+              }
+            },
+            "locked": false,
+            "markers": [],
+            "masks": [],
+            "material": {
+              "accepts_lights": true,
+              "accepts_shadows": true,
+              "ambient": 0.30000001192092896,
+              "cast_shadows": true,
+              "diffuse": 0.800000011920929,
+              "emission": 0.0,
+              "light_transmission": 0.0,
+              "metalness": 0.0,
+              "specular": 0.5,
+              "specular_exponent": 32.0
+            },
+            "motion_blur": false,
+            "name": "Flash",
+            "out_frame": 270,
+            "paint_strokes": [],
+            "parent_id": null,
+            "posterize_time": null,
+            "preserve_transparency": false,
+            "proxy": {
+              "enabled": false,
+              "proxy_path": null,
+              "resolution": "Full"
+            },
+            "puppet_pins": [],
+            "shape_repeater": null,
+            "solo": false,
+            "style": {
+              "bevel_emboss": {
+                "angle": 135.0,
+                "color_dark": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_light": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "depth": 3.0,
+                "enabled": false,
+                "highlight": 70.0,
+                "shadow": 50.0,
+                "size": 3.0
+              },
+              "color_overlay": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0
+              },
+              "drop_shadow": {
+                "angle": 0.0,
+                "blend_mode": "Normal",
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "gradient_overlay": {
+                "angle": 90.0,
+                "color_end": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_start": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "enabled": false,
+                "opacity": 100.0,
+                "scale": 100.0
+              },
+              "inner_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "inner_shadow": {
+                "angle": 0.0,
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "outer_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0,
+                "spread": 0.0
+              },
+              "satin": {
+                "angle": 90.0,
+                "color": [
+                  0.20000000298023224,
+                  0.20000000298023224,
+                  0.3499999940395355,
+                  1.0
+                ],
+                "distance": 12.0,
+                "enabled": false,
+                "opacity": 50.0,
+                "size": 16.0
+              },
+              "stroke": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "position": 0,
+                "size": 0.0
+              }
+            },
+            "text_animator": null,
+            "text_animator_stack": null,
+            "text_formatting": null,
+            "time_remap": null,
+            "track_matte": "None",
+            "trackers": [],
+            "transform": {
+              "anchor_point": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0
+                ]
+              },
+              "anchor_point_expression": null,
+              "opacity": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 85,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 88,
+                    "interpolation": "Linear",
+                    "value": 100.0
+                  },
+                  {
+                    "frame": 90,
+                    "interpolation": "Linear",
+                    "value": 70.0
+                  },
+                  {
+                    "frame": 95,
+                    "interpolation": "Linear",
+                    "value": 30.0
+                  },
+                  {
+                    "frame": 108,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  }
+                ]
               },
               "opacity_expression": null,
               "position": {
                 "type": "Constant",
                 "value": [
                   960.0,
-                  540.0
+                  480.0
                 ]
               },
               "position_expression": null,
@@ -671,10 +3906,48 @@
               },
               "rotation_expression": null,
               "scale": {
-                "type": "Constant",
+                "type": "Animated",
                 "value": [
-                  100.0,
-                  100.0
+                  {
+                    "frame": 85,
+                    "interpolation": "Linear",
+                    "value": [
+                      0.0,
+                      0.0
+                    ]
+                  },
+                  {
+                    "frame": 88,
+                    "interpolation": "Linear",
+                    "value": [
+                      8.0,
+                      8.0
+                    ]
+                  },
+                  {
+                    "frame": 90,
+                    "interpolation": "Linear",
+                    "value": [
+                      12.0,
+                      12.0
+                    ]
+                  },
+                  {
+                    "frame": 95,
+                    "interpolation": "Linear",
+                    "value": [
+                      14.0,
+                      14.0
+                    ]
+                  },
+                  {
+                    "frame": 108,
+                    "interpolation": "Linear",
+                    "value": [
+                      15.0,
+                      15.0
+                    ]
+                  }
                 ]
               },
               "scale_expression": null
@@ -748,7 +4021,7 @@
             },
             "motion_blur": false,
             "name": "Kagari Logo",
-            "out_frame": 240,
+            "out_frame": 270,
             "paint_strokes": [],
             "parent_id": null,
             "posterize_time": null,
@@ -889,7 +4162,7 @@
             "text_animator_stack": null,
             "text_formatting": null,
             "time_remap": null,
-            "track_matte": "AlphaMatte",
+            "track_matte": "None",
             "trackers": [],
             "transform": {
               "anchor_point": {
@@ -901,15 +4174,53 @@
               },
               "anchor_point_expression": null,
               "opacity": {
-                "type": "Constant",
-                "value": 100.0
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 88,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 112,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": null,
+                        "incoming": {
+                          "influence": 0.5,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.0,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": 100.0
+                  },
+                  {
+                    "frame": 215,
+                    "interpolation": "Linear",
+                    "value": 100.0
+                  },
+                  {
+                    "frame": 255,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  }
+                ]
               },
               "opacity_expression": null,
               "position": {
                 "type": "Constant",
                 "value": [
                   960.0,
-                  540.0
+                  480.0
                 ]
               },
               "position_expression": null,
@@ -925,17 +4236,25 @@
                     "frame": 0,
                     "interpolation": "Linear",
                     "value": [
-                      20.0,
-                      20.0
+                      0.0,
+                      0.0
                     ]
                   },
                   {
-                    "frame": 50,
+                    "frame": 88,
+                    "interpolation": "Linear",
+                    "value": [
+                      0.0,
+                      0.0
+                    ]
+                  },
+                  {
+                    "frame": 112,
                     "interpolation": {
                       "Bezier": {
                         "custom_bezier": null,
                         "incoming": {
-                          "influence": 0.41999998688697815,
+                          "influence": 0.550000011920929,
                           "speed": 0.0
                         },
                         "outgoing": {
@@ -945,12 +4264,12 @@
                       }
                     },
                     "value": [
-                      40.0,
-                      40.0
+                      38.0,
+                      38.0
                     ]
                   },
                   {
-                    "frame": 180,
+                    "frame": 200,
                     "interpolation": "Linear",
                     "value": [
                       40.0,
@@ -958,7 +4277,7 @@
                     ]
                   },
                   {
-                    "frame": 220,
+                    "frame": 250,
                     "interpolation": "Linear",
                     "value": [
                       38.0,
@@ -1057,7 +4376,7 @@
             },
             "motion_blur": false,
             "name": "Title",
-            "out_frame": 240,
+            "out_frame": 270,
             "paint_strokes": [],
             "parent_id": null,
             "posterize_time": null,
@@ -1213,22 +4532,22 @@
                 "type": "Animated",
                 "value": [
                   {
-                    "frame": 50,
+                    "frame": 108,
                     "interpolation": "Linear",
                     "value": 0.0
                   },
                   {
-                    "frame": 80,
+                    "frame": 138,
                     "interpolation": "Linear",
                     "value": 100.0
                   },
                   {
-                    "frame": 190,
+                    "frame": 218,
                     "interpolation": "Linear",
                     "value": 100.0
                   },
                   {
-                    "frame": 225,
+                    "frame": 252,
                     "interpolation": "Linear",
                     "value": 0.0
                   }
@@ -1239,20 +4558,20 @@
                 "type": "Animated",
                 "value": [
                   {
-                    "frame": 50,
+                    "frame": 108,
                     "interpolation": "Linear",
                     "value": [
                       960.0,
-                      560.0
+                      500.0
                     ]
                   },
                   {
-                    "frame": 80,
+                    "frame": 138,
                     "interpolation": {
                       "Bezier": {
                         "custom_bezier": null,
                         "incoming": {
-                          "influence": 0.41999998688697815,
+                          "influence": 0.6000000238418579,
                           "speed": 0.0
                         },
                         "outgoing": {
@@ -1263,7 +4582,7 @@
                     },
                     "value": [
                       960.0,
-                      380.0
+                      330.0
                     ]
                   }
                 ]
@@ -1322,7 +4641,7 @@
             "effects": [],
             "effects_enabled": true,
             "essential_properties": [],
-            "id": "vfx_text",
+            "id": "vfx",
             "in_frame": 0,
             "is_3d": false,
             "is_adjustment_layer": false,
@@ -1371,7 +4690,7 @@
             },
             "motion_blur": false,
             "name": "VFX",
-            "out_frame": 240,
+            "out_frame": 270,
             "paint_strokes": [],
             "parent_id": null,
             "posterize_time": null,
@@ -1527,22 +4846,22 @@
                 "type": "Animated",
                 "value": [
                   {
-                    "frame": 55,
+                    "frame": 112,
                     "interpolation": "Linear",
                     "value": 0.0
                   },
                   {
-                    "frame": 85,
+                    "frame": 142,
                     "interpolation": "Linear",
                     "value": 100.0
                   },
                   {
-                    "frame": 190,
+                    "frame": 218,
                     "interpolation": "Linear",
                     "value": 100.0
                   },
                   {
-                    "frame": 225,
+                    "frame": 252,
                     "interpolation": "Linear",
                     "value": 0.0
                   }
@@ -1553,20 +4872,20 @@
                 "type": "Animated",
                 "value": [
                   {
-                    "frame": 55,
+                    "frame": 112,
                     "interpolation": "Linear",
                     "value": [
                       960.0,
-                      560.0
+                      500.0
                     ]
                   },
                   {
-                    "frame": 85,
+                    "frame": 142,
                     "interpolation": {
                       "Bezier": {
                         "custom_bezier": null,
                         "incoming": {
-                          "influence": 0.41999998688697815,
+                          "influence": 0.6000000238418579,
                           "speed": 0.0
                         },
                         "outgoing": {
@@ -1577,7 +4896,7 @@
                     },
                     "value": [
                       960.0,
-                      470.0
+                      420.0
                     ]
                   }
                 ]
@@ -1636,7 +4955,7 @@
             "effects": [],
             "effects_enabled": true,
             "essential_properties": [],
-            "id": "tagline",
+            "id": "line",
             "in_frame": 0,
             "is_3d": false,
             "is_adjustment_layer": false,
@@ -1645,27 +4964,35 @@
             "is_shy": false,
             "label": "Red",
             "layer_type": {
-              "Text": {
-                "align": 1,
+              "Shape": {
+                "bevel_depth": 0.0,
                 "color": [
+                  0.8999999761581421,
                   0.6000000238418579,
-                  0.6000000238418579,
-                  0.6000000238418579,
+                  0.10000000149011612,
                   1.0
                 ],
-                "font_family": "SF Pro Display",
-                "font_size": 24,
-                "leading": 1.2000000476837158,
+                "extrusion_depth": 0.0,
+                "fill_type": "Solid",
+                "shape_type": {
+                  "Ellipse": {
+                    "height": {
+                      "type": "Constant",
+                      "value": 2.0
+                    },
+                    "width": {
+                      "type": "Constant",
+                      "value": 600.0
+                    }
+                  }
+                },
                 "stroke_color": [
                   0.0,
                   0.0,
                   0.0,
                   0.0
                 ],
-                "stroke_width": 0.0,
-                "text": "Motion Graphics & Compositing",
-                "text_on_path": false,
-                "tracking": 3.0
+                "stroke_width": 0.0
               }
             },
             "locked": false,
@@ -1684,8 +5011,8 @@
               "specular_exponent": 32.0
             },
             "motion_blur": false,
-            "name": "Tagline",
-            "out_frame": 240,
+            "name": "Line",
+            "out_frame": 270,
             "paint_strokes": [],
             "parent_id": null,
             "posterize_time": null,
@@ -1841,22 +5168,22 @@
                 "type": "Animated",
                 "value": [
                   {
-                    "frame": 90,
+                    "frame": 135,
                     "interpolation": "Linear",
                     "value": 0.0
                   },
                   {
-                    "frame": 115,
+                    "frame": 155,
                     "interpolation": "Linear",
                     "value": 100.0
                   },
                   {
-                    "frame": 190,
+                    "frame": 218,
                     "interpolation": "Linear",
                     "value": 100.0
                   },
                   {
-                    "frame": 225,
+                    "frame": 252,
                     "interpolation": "Linear",
                     "value": 0.0
                   }
@@ -1867,7 +5194,7 @@
                 "type": "Constant",
                 "value": [
                   960.0,
-                  680.0
+                  590.0
                 ]
               },
               "position_expression": null,
@@ -1921,51 +5248,10 @@
               "horizontal": "Left",
               "vertical": "Top"
             },
-            "effects": [
-              {
-                "effect_type": {
-                  "LinearWipe": {
-                    "angle": {
-                      "type": "Constant",
-                      "value": 90.0
-                    },
-                    "completion": {
-                      "type": "Animated",
-                      "value": [
-                        {
-                          "frame": 85,
-                          "interpolation": "Linear",
-                          "value": 100.0
-                        },
-                        {
-                          "frame": 110,
-                          "interpolation": {
-                            "Bezier": {
-                              "custom_bezier": null,
-                              "incoming": {
-                                "influence": 0.41999998688697815,
-                                "speed": 0.0
-                              },
-                              "outgoing": {
-                                "influence": 0.0,
-                                "speed": 0.0
-                              }
-                            }
-                          },
-                          "value": 0.0
-                        }
-                      ]
-                    }
-                  }
-                },
-                "enabled": true,
-                "id": "e_line_wipe",
-                "name": "LinearWipe"
-              }
-            ],
+            "effects": [],
             "effects_enabled": true,
             "essential_properties": [],
-            "id": "line_accent",
+            "id": "tag",
             "in_frame": 0,
             "is_3d": false,
             "is_adjustment_layer": false,
@@ -1974,13 +5260,27 @@
             "is_shy": false,
             "label": "Red",
             "layer_type": {
-              "Solid": {
+              "Text": {
+                "align": 1,
                 "color": [
-                  0.8999999761581421,
                   0.6000000238418579,
-                  0.10000000149011612,
-                  1.0
-                ]
+                  0.6000000238418579,
+                  0.6000000238418579,
+                  0.6000000238418579
+                ],
+                "font_family": "SF Pro Display",
+                "font_size": 24,
+                "leading": 1.2000000476837158,
+                "stroke_color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "stroke_width": 0.0,
+                "text": "Motion Graphics & Compositing",
+                "text_on_path": false,
+                "tracking": 3.0
               }
             },
             "locked": false,
@@ -1999,8 +5299,8 @@
               "specular_exponent": 32.0
             },
             "motion_blur": false,
-            "name": "Line",
-            "out_frame": 240,
+            "name": "Tagline",
+            "out_frame": 270,
             "paint_strokes": [],
             "parent_id": null,
             "posterize_time": null,
@@ -2156,22 +5456,22 @@
                 "type": "Animated",
                 "value": [
                   {
-                    "frame": 85,
+                    "frame": 150,
                     "interpolation": "Linear",
                     "value": 0.0
                   },
                   {
-                    "frame": 105,
+                    "frame": 175,
                     "interpolation": "Linear",
                     "value": 100.0
                   },
                   {
-                    "frame": 190,
+                    "frame": 218,
                     "interpolation": "Linear",
                     "value": 100.0
                   },
                   {
-                    "frame": 225,
+                    "frame": 252,
                     "interpolation": "Linear",
                     "value": 0.0
                   }
@@ -2182,7 +5482,7 @@
                 "type": "Constant",
                 "value": [
                   960.0,
-                  640.0
+                  630.0
                 ]
               },
               "position_expression": null,
@@ -2194,8 +5494,8 @@
               "scale": {
                 "type": "Constant",
                 "value": [
-                  300.0,
-                  0.15000000596046448
+                  100.0,
+                  100.0
                 ]
               },
               "scale_expression": null
