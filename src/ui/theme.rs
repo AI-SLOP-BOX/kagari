@@ -116,6 +116,7 @@ fn configure_fonts(ctx: &egui::Context) {
             "/System/Library/Fonts/Menlo-Regular.ttc",
         ];
         let jp_font_paths = [
+            "/System/Library/Fonts/ヒラギノ角ゴシック W4.ttc",
             "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc",
             "/System/Library/Fonts/STHeiti Light.ttc",
         ];

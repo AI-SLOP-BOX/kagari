@@ -1227,10 +1227,6 @@ impl eframe::App for KagariApp {
         crate::ui::automation_panel::draw(self, ctx);
         crate::ui::drop_import::handle_dropped_files(self, ctx);
         crate::ui::welcome::draw(self, ctx);
-        // Auto-open the walkthrough once per session for beginners on first run
-        if self.show_welcome && self.ui_mode.is_beginner() && self.tutorial.is_none() {
-            self.tutorial = Some(crate::ui::tutorial::TutorialState::default());
-        }
         crate::ui::tutorial::draw(self, ctx);
         crate::ui::new_comp_dialog::draw_new_comp_dialog(self, ctx);
         crate::ui::preferences_dialog::draw_preferences_dialog(self, ctx);
