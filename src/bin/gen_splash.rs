@@ -25,225 +25,300 @@ fn bez_both(a: f32, b: f32) -> InterpolationType {
     }
 }
 
-fn add_ring(
-    comp: &mut Composition, name: &str, color: [f32; 4],
-    ring_size: f32, thickness: f32,
-    appear: u32, expand_end: u32, fade_end: u32,
-) {
-    comp.add_layer(Layer::new(
-        name.into(), name.into(),
-        LayerType::Shape {
-            shape_type: ShapeType::Ellipse {
-                width: Animatable::new_constant(ring_size),
-                height: Animatable::new_constant(ring_size),
-            },
-            color: [color[0], color[1], color[2], 0.0],
-            stroke_color: color, stroke_width: thickness,
-            fill_type: ShapeFillType::Solid,
-            extrusion_depth: 0.0, bevel_depth: 0.0,
-        }, 180,
-    ));
-    let l = comp.layers.last_mut().unwrap();
-    l.transform.position = Animatable::new_constant([960.0, 480.0]);
-    l.transform.scale = Animatable::new_animated(vec![
-        Keyframe::new(0, [0.0, 0.0], InterpolationType::Linear),
-        Keyframe::new(appear, [0.0, 0.0], InterpolationType::Linear),
-        Keyframe::new(expand_end, [1.0, 1.0], bez_out(0.6)),
-        Keyframe::new(fade_end - 5, [1.1, 1.1], InterpolationType::Linear),
-        Keyframe::new(fade_end, [1.2, 1.2], InterpolationType::Linear),
-    ]);
-    l.transform.opacity = Animatable::new_animated(vec![
-        Keyframe::new(0, 0.0, InterpolationType::Linear),
-        Keyframe::new(appear, 0.0, InterpolationType::Linear),
-        Keyframe::new(appear + 3, 100.0, InterpolationType::Linear),
-        Keyframe::new(fade_end - 10, 100.0, InterpolationType::Linear),
-        Keyframe::new(fade_end, 0.0, InterpolationType::Linear),
-    ]);
-}
-
-fn add_particle(
-    comp: &mut Composition, name: &str, color: [f32; 4],
-    angle: f32, speed: f32, size: f32,
-    burst_frame: u32,
-) {
-    let rad = angle * std::f32::consts::PI / 180.0;
-    let dist = speed * 8.0;
-    let end_x = 960.0 + rad.cos() * dist;
-    let end_y = 480.0 + rad.sin() * dist;
-
-    comp.add_layer(Layer::new(
-        name.into(), name.into(),
-        LayerType::Shape {
-            shape_type: ShapeType::Ellipse {
-                width: Animatable::new_constant(size),
-                height: Animatable::new_constant(size),
-            },
-            color,
-            stroke_color: [0.0; 4], stroke_width: 0.0,
-            fill_type: ShapeFillType::Solid,
-            extrusion_depth: 0.0, bevel_depth: 0.0,
-        }, 180,
-    ));
-    let l = comp.layers.last_mut().unwrap();
-    l.transform.position = Animatable::new_animated(vec![
-        Keyframe::new(0, [960.0, 480.0], InterpolationType::Linear),
-        Keyframe::new(burst_frame, [960.0, 480.0], InterpolationType::Linear),
-        Keyframe::new(burst_frame + 20, [end_x, end_y], bez_out(0.4)),
-    ]);
-    l.transform.opacity = Animatable::new_animated(vec![
-        Keyframe::new(0, 0.0, InterpolationType::Linear),
-        Keyframe::new(burst_frame, 0.0, InterpolationType::Linear),
-        Keyframe::new(burst_frame + 2, 100.0, InterpolationType::Linear),
-        Keyframe::new(burst_frame + 12, 60.0, InterpolationType::Linear),
-        Keyframe::new(burst_frame + 25, 0.0, InterpolationType::Linear),
-    ]);
-}
-
 fn main() {
     let mut comp = Composition::new(
         "splash".into(), "Kagari VFX Splash".into(),
-        1920, 1080, 30, 180,
+        1920, 1080, 30, 150,
     );
 
-    // === BACKGROUND ===
+    // BG
     comp.add_layer(Layer::new("bg".into(), "BG".into(),
-        LayerType::Solid { color: [0.0; 4] }, 180));
+        LayerType::Solid { color: [0.0; 4] }, 150));
     comp.layers.last_mut().unwrap().transform.position =
         Animatable::new_constant([960.0, 540.0]);
 
-    // === PHASE 1: SPARK — a tiny bright dot pulses at center (frames 0-40) ===
-    comp.add_layer(Layer::new("spark_core".into(), "Spark".into(),
+    // Ambient glow
+    comp.add_layer(Layer::new("ambient".into(), "Ambient".into(),
         LayerType::Shape {
             shape_type: ShapeType::Ellipse {
-                width: Animatable::new_constant(6.0),
-                height: Animatable::new_constant(6.0),
+                width: Animatable::new_constant(800.0),
+                height: Animatable::new_constant(800.0),
+            },
+            color: [0.12, 0.06, 0.01, 1.0],
+            stroke_color: [0.0; 4], stroke_width: 0.0,
+            fill_type: ShapeFillType::Solid,
+            extrusion_depth: 0.0, bevel_depth: 0.0,
+        }, 150,
+    ));
+    {
+        let a = comp.layers.last_mut().unwrap();
+        a.transform.position = Animatable::new_constant([960.0, 480.0]);
+        a.transform.opacity = Animatable::new_constant(25.0);
+    }
+
+    // === SPARK: 2 layers (white core + orange glow) ===
+    comp.add_layer(Layer::new("spark1".into(), "Spark1".into(),
+        LayerType::Shape {
+            shape_type: ShapeType::Ellipse {
+                width: Animatable::new_constant(8.0),
+                height: Animatable::new_constant(8.0),
             },
             color: [1.0, 1.0, 0.9, 1.0],
             stroke_color: [0.0; 4], stroke_width: 0.0,
             fill_type: ShapeFillType::Solid,
             extrusion_depth: 0.0, bevel_depth: 0.0,
-        }, 180,
+        }, 150,
     ));
     {
         let s = comp.layers.last_mut().unwrap();
         s.transform.position = Animatable::new_constant([960.0, 480.0]);
-        // Pulse: grow-shrink-grow
         s.transform.scale = Animatable::new_animated(vec![
-            Keyframe::new(0, [50.0, 50.0], InterpolationType::Linear),
-            Keyframe::new(8, [120.0, 120.0], InterpolationType::Linear),
-            Keyframe::new(14, [80.0, 80.0], InterpolationType::Linear),
-            Keyframe::new(22, [150.0, 150.0], InterpolationType::Linear),
-            Keyframe::new(30, [60.0, 60.0], InterpolationType::Linear),
-            Keyframe::new(38, [200.0, 200.0], bez_in(0.5)),
-            Keyframe::new(48, [0.0, 0.0], InterpolationType::Linear),
+            Keyframe::new(0, [30.0, 30.0], InterpolationType::Linear),
+            Keyframe::new(8, [80.0, 80.0], InterpolationType::Linear),
+            Keyframe::new(14, [40.0, 40.0], InterpolationType::Linear),
+            Keyframe::new(22, [100.0, 100.0], InterpolationType::Linear),
+            Keyframe::new(30, [35.0, 35.0], InterpolationType::Linear),
+            Keyframe::new(38, [150.0, 150.0], bez_in(0.4)),
+            Keyframe::new(46, [0.0, 0.0], InterpolationType::Linear),
         ]);
         s.transform.opacity = Animatable::new_animated(vec![
             Keyframe::new(0, 0.0, InterpolationType::Linear),
             Keyframe::new(3, 100.0, InterpolationType::Linear),
             Keyframe::new(38, 100.0, InterpolationType::Linear),
-            Keyframe::new(48, 0.0, InterpolationType::Linear),
+            Keyframe::new(46, 0.0, InterpolationType::Linear),
         ]);
     }
 
-    // Spark glow (larger, softer)
-    comp.add_layer(Layer::new("spark_glow".into(), "SparkGlow".into(),
+    comp.add_layer(Layer::new("spark2".into(), "Spark2".into(),
         LayerType::Shape {
             shape_type: ShapeType::Ellipse {
-                width: Animatable::new_constant(40.0),
-                height: Animatable::new_constant(40.0),
+                width: Animatable::new_constant(50.0),
+                height: Animatable::new_constant(50.0),
             },
-            color: [1.0, 0.7, 0.2, 0.6],
+            color: [1.0, 0.5, 0.1, 0.7],
             stroke_color: [0.0; 4], stroke_width: 0.0,
             fill_type: ShapeFillType::Solid,
             extrusion_depth: 0.0, bevel_depth: 0.0,
-        }, 180,
+        }, 150,
     ));
     {
-        let g = comp.layers.last_mut().unwrap();
-        g.transform.position = Animatable::new_constant([960.0, 480.0]);
-        g.transform.scale = Animatable::new_animated(vec![
-            Keyframe::new(0, [20.0, 20.0], InterpolationType::Linear),
-            Keyframe::new(10, [60.0, 60.0], InterpolationType::Linear),
-            Keyframe::new(20, [30.0, 30.0], InterpolationType::Linear),
-            Keyframe::new(35, [80.0, 80.0], InterpolationType::Linear),
-            Keyframe::new(48, [0.0, 0.0], InterpolationType::Linear),
+        let s = comp.layers.last_mut().unwrap();
+        s.transform.position = Animatable::new_constant([960.0, 480.0]);
+        s.transform.scale = Animatable::new_animated(vec![
+            Keyframe::new(0, [15.0, 15.0], InterpolationType::Linear),
+            Keyframe::new(12, [50.0, 50.0], InterpolationType::Linear),
+            Keyframe::new(20, [25.0, 25.0], InterpolationType::Linear),
+            Keyframe::new(35, [70.0, 70.0], InterpolationType::Linear),
+            Keyframe::new(46, [0.0, 0.0], InterpolationType::Linear),
         ]);
-        g.transform.opacity = Animatable::new_animated(vec![
+        s.transform.opacity = Animatable::new_animated(vec![
             Keyframe::new(0, 0.0, InterpolationType::Linear),
-            Keyframe::new(5, 80.0, InterpolationType::Linear),
-            Keyframe::new(38, 80.0, InterpolationType::Linear),
-            Keyframe::new(48, 0.0, InterpolationType::Linear),
+            Keyframe::new(5, 70.0, InterpolationType::Linear),
+            Keyframe::new(38, 70.0, InterpolationType::Linear),
+            Keyframe::new(46, 0.0, InterpolationType::Linear),
         ]);
     }
 
-    // === PHASE 2: SHOCKWAVE RINGS expand outward from center (frames 38-80) ===
-    add_ring(&mut comp, "ring1", [1.0, 0.6, 0.1, 0.9], 800.0, 8.0, 38, 55, 75);
-    add_ring(&mut comp, "ring2", [1.0, 0.4, 0.05, 0.7], 1200.0, 5.0, 42, 62, 82);
-    add_ring(&mut comp, "ring3", [0.9, 0.2, 0.0, 0.5], 1600.0, 3.0, 46, 70, 88);
+    // === 8 ENERGY STREAKS ===
+    let streaks: [(f32, f32, [f32; 4], u32); 8] = [
+        (0.0,   500.0, [1.0, 0.8, 0.2, 1.0], 0),
+        (45.0,  420.0, [1.0, 0.5, 0.1, 0.9], 2),
+        (90.0,  480.0, [0.9, 0.3, 0.0, 0.8], 1),
+        (135.0, 440.0, [1.0, 0.7, 0.15, 1.0], 3),
+        (180.0, 510.0, [1.0, 0.4, 0.05, 0.9], 0),
+        (225.0, 430.0, [0.9, 0.2, 0.0, 0.8], 2),
+        (270.0, 470.0, [1.0, 0.6, 0.1, 1.0], 1),
+        (315.0, 450.0, [0.85, 0.25, 0.05, 0.9], 3),
+    ];
+    for (i, &(ang, len, color, delay)) in streaks.iter().enumerate() {
+        let rad = ang * std::f32::consts::PI / 180.0;
+        comp.add_layer(Layer::new(
+            format!("st{}", i).into(), format!("Streak {}", i).into(),
+            LayerType::Shape {
+                shape_type: ShapeType::FreeformBezier {
+                    points: vec![[-2.0, 0.0], [2.0, 0.0], [1.0, -len], [-1.0, -len]],
+                    tangents: vec![([0.0, 0.0], [0.0, 0.0]); 4],
+                    closed: true,
+                },
+                color,
+                stroke_color: [0.0; 4], stroke_width: 0.0,
+                fill_type: ShapeFillType::Solid,
+                extrusion_depth: 0.0, bevel_depth: 0.0,
+            }, 150,
+        ));
+        let l = comp.layers.last_mut().unwrap();
+        l.transform.position = Animatable::new_constant([960.0, 480.0]);
+        l.transform.rotation = Animatable::new_constant(ang + 180.0);
+        let app = 36 + delay;
+        l.transform.scale = Animatable::new_animated(vec![
+            Keyframe::new(0, [0.0, 0.0], InterpolationType::Linear),
+            Keyframe::new(app, [0.0, 0.0], InterpolationType::Linear),
+            Keyframe::new(app + 6, [100.0, 100.0], bez_out(0.5)),
+        ]);
+        l.transform.opacity = Animatable::new_animated(vec![
+            Keyframe::new(0, 0.0, InterpolationType::Linear),
+            Keyframe::new(app, 0.0, InterpolationType::Linear),
+            Keyframe::new(app + 4, 85.0, InterpolationType::Linear),
+            Keyframe::new(app + 18, 0.0, InterpolationType::Linear),
+        ]);
+    }
 
-    // Inner bright ring
-    add_ring(&mut comp, "ring_inner", [1.0, 0.9, 0.5, 1.0], 300.0, 4.0, 40, 58, 78);
+    // === 3 SHOCKWAVE RINGS ===
+    let rings: [(f32, f32, [f32; 4], u32, u32, u32); 3] = [
+        (400.0, 5.0, [1.0, 0.7, 0.2, 1.0], 38, 52, 70),
+        (900.0, 3.5, [1.0, 0.4, 0.05, 0.7], 42, 58, 76),
+        (1400.0, 2.0, [0.9, 0.2, 0.0, 0.4], 46, 64, 82),
+    ];
+    for (i, &(size, thick, color, app, exp, fade)) in rings.iter().enumerate() {
+        comp.add_layer(Layer::new(
+            format!("ring{}", i).into(), format!("Ring {}", i).into(),
+            LayerType::Shape {
+                shape_type: ShapeType::Ellipse {
+                    width: Animatable::new_constant(size),
+                    height: Animatable::new_constant(size),
+                },
+                color: [color[0], color[1], color[2], 0.0],
+                stroke_color: color, stroke_width: thick,
+                fill_type: ShapeFillType::Solid,
+                extrusion_depth: 0.0, bevel_depth: 0.0,
+            }, 150,
+        ));
+        let l = comp.layers.last_mut().unwrap();
+        l.transform.position = Animatable::new_constant([960.0, 480.0]);
+        l.transform.scale = Animatable::new_animated(vec![
+            Keyframe::new(0, [0.0, 0.0], InterpolationType::Linear),
+            Keyframe::new(app, [0.0, 0.0], InterpolationType::Linear),
+            Keyframe::new(exp, [1.0, 1.0], bez_out(0.55)),
+            Keyframe::new(fade, [1.1, 1.1], InterpolationType::Linear),
+        ]);
+        l.transform.opacity = Animatable::new_animated(vec![
+            Keyframe::new(0, 0.0, InterpolationType::Linear),
+            Keyframe::new(app, 0.0, InterpolationType::Linear),
+            Keyframe::new(app + 2, 100.0, InterpolationType::Linear),
+            Keyframe::new(fade - 6, 80.0, InterpolationType::Linear),
+            Keyframe::new(fade, 0.0, InterpolationType::Linear),
+        ]);
+    }
 
-    // === PHASE 3: LOGO REVEAL — fades in from center as rings expand (frames 50-180) ===
+    // === LOGO with scale overshoot ===
     comp.add_layer(Layer::new("logo".into(), "Logo".into(),
-        LayerType::Image { path: "assets/kagari_logo.png".into() }, 180));
+        LayerType::Image { path: "assets/kagari_logo.png".into() }, 150));
     {
         let logo = comp.layers.last_mut().unwrap();
         logo.transform.position = Animatable::new_constant([960.0, 480.0]);
         logo.transform.scale = Animatable::new_animated(vec![
             Keyframe::new(0, [0.0, 0.0], InterpolationType::Linear),
-            Keyframe::new(48, [0.0, 0.0], InterpolationType::Linear),
-            Keyframe::new(75, [42.0, 42.0], bez_both(0.15, 0.6)),
-            Keyframe::new(140, [44.0, 44.0], InterpolationType::Linear),
-            Keyframe::new(170, [42.0, 42.0], InterpolationType::Linear),
+            Keyframe::new(40, [0.0, 0.0], InterpolationType::Linear),
+            Keyframe::new(62, [46.0, 46.0], bez_both(0.1, 0.65)),
+            Keyframe::new(78, [42.0, 42.0], bez_in(0.4)),
+            Keyframe::new(130, [43.0, 43.0], InterpolationType::Linear),
+            Keyframe::new(150, [42.0, 42.0], InterpolationType::Linear),
         ]);
         logo.transform.opacity = Animatable::new_animated(vec![
             Keyframe::new(0, 0.0, InterpolationType::Linear),
-            Keyframe::new(48, 0.0, InterpolationType::Linear),
-            Keyframe::new(75, 100.0, bez_in(0.5)),
-            Keyframe::new(155, 100.0, InterpolationType::Linear),
-            Keyframe::new(180, 0.0, InterpolationType::Linear),
+            Keyframe::new(40, 0.0, InterpolationType::Linear),
+            Keyframe::new(58, 100.0, bez_in(0.4)),
+            Keyframe::new(135, 100.0, InterpolationType::Linear),
+            Keyframe::new(150, 0.0, InterpolationType::Linear),
         ]);
     }
 
-    // === PARTICLES — burst outward from center on ignition (frame 42) ===
-    let colors = [
-        [1.0, 0.7, 0.1, 1.0],
-        [1.0, 0.5, 0.0, 1.0],
-        [0.9, 0.3, 0.0, 1.0],
-        [1.0, 0.85, 0.3, 1.0],
-        [0.8, 0.15, 0.05, 1.0],
-    ];
-    let angles: [f32; 12] = [
-        0.0, 30.0, 60.0, 90.0, 120.0, 150.0,
-        180.0, 210.0, 240.0, 270.0, 300.0, 330.0,
-    ];
-    for (i, &angle) in angles.iter().enumerate() {
-        let color = colors[i % colors.len()];
-        let speed = 5.0 + (i as f32 * 1.1) % 4.0;
-        let size = 3.0 + (i as f32 * 1.5) % 5.0;
-        add_particle(&mut comp, &format!("p{}", i), color, angle, speed, size, 42);
+    // Center flash
+    comp.add_layer(Layer::new("flash".into(), "Flash".into(),
+        LayerType::Shape {
+            shape_type: ShapeType::Ellipse {
+                width: Animatable::new_constant(300.0),
+                height: Animatable::new_constant(300.0),
+            },
+            color: [1.0, 0.95, 0.7, 1.0],
+            stroke_color: [0.0; 4], stroke_width: 0.0,
+            fill_type: ShapeFillType::Solid,
+            extrusion_depth: 0.0, bevel_depth: 0.0,
+        }, 150,
+    ));
+    {
+        let f = comp.layers.last_mut().unwrap();
+        f.transform.position = Animatable::new_constant([960.0, 480.0]);
+        f.transform.scale = Animatable::new_animated(vec![
+            Keyframe::new(0, [0.0, 0.0], InterpolationType::Linear),
+            Keyframe::new(42, [0.0, 0.0], InterpolationType::Linear),
+            Keyframe::new(47, [8.0, 8.0], InterpolationType::Linear),
+            Keyframe::new(55, [12.0, 12.0], InterpolationType::Linear),
+            Keyframe::new(70, [14.0, 14.0], InterpolationType::Linear),
+        ]);
+        f.transform.opacity = Animatable::new_animated(vec![
+            Keyframe::new(0, 0.0, InterpolationType::Linear),
+            Keyframe::new(42, 0.0, InterpolationType::Linear),
+            Keyframe::new(46, 75.0, InterpolationType::Linear),
+            Keyframe::new(52, 35.0, InterpolationType::Linear),
+            Keyframe::new(70, 0.0, InterpolationType::Linear),
+        ]);
     }
 
-    // === PHASE 4: TEXT (frames 90-180) ===
+    // === 10 TRAIL PARTICLES ===
+    let pc = [
+        [1.0, 0.7, 0.1, 1.0], [1.0, 0.5, 0.0, 1.0],
+        [0.9, 0.3, 0.0, 1.0], [1.0, 0.85, 0.3, 1.0],
+        [0.8, 0.15, 0.05, 1.0],
+    ];
+    for i in 0..10 {
+        let ang = (i as f32) * 36.0;
+        let color = pc[i % pc.len()];
+        let speed = 5.0 + (i as f32 * 0.9) % 4.0;
+        let sz = 2.5 + (i as f32 * 0.5) % 3.0;
+        let rad = ang * std::f32::consts::PI / 180.0;
+        let dist = speed * 10.0;
+        let ex = 960.0 + rad.cos() * dist;
+        let ey = 480.0 + rad.sin() * dist;
+
+        comp.add_layer(Layer::new(
+            format!("pt{}", i).into(), format!("Particle {}", i).into(),
+            LayerType::Shape {
+                shape_type: ShapeType::Ellipse {
+                    width: Animatable::new_constant(sz),
+                    height: Animatable::new_constant(sz * 2.5),
+                },
+                color,
+                stroke_color: [0.0; 4], stroke_width: 0.0,
+                fill_type: ShapeFillType::Solid,
+                extrusion_depth: 0.0, bevel_depth: 0.0,
+            }, 150,
+        ));
+        let l = comp.layers.last_mut().unwrap();
+        l.transform.position = Animatable::new_animated(vec![
+            Keyframe::new(0, [960.0, 480.0], InterpolationType::Linear),
+            Keyframe::new(44, [960.0, 480.0], InterpolationType::Linear),
+            Keyframe::new(60, [ex, ey], bez_out(0.35)),
+        ]);
+        l.transform.rotation = Animatable::new_constant(ang + 90.0);
+        l.transform.opacity = Animatable::new_animated(vec![
+            Keyframe::new(0, 0.0, InterpolationType::Linear),
+            Keyframe::new(44, 0.0, InterpolationType::Linear),
+            Keyframe::new(46, 100.0, InterpolationType::Linear),
+            Keyframe::new(54, 50.0, InterpolationType::Linear),
+            Keyframe::new(65, 0.0, InterpolationType::Linear),
+        ]);
+    }
+
+    // === TEXT ===
     comp.add_layer(Layer::new("title".into(), "Title".into(),
         LayerType::Text {
             text: "KAGARI".into(), font_size: 80,
             color: [1.0; 4], font_family: "SF Pro Display".into(),
             tracking: 20.0, leading: 1.2, align: 1,
             stroke_color: [0.0; 4], stroke_width: 0.0, text_on_path: false,
-        }, 180));
+        }, 150));
     {
         let t = comp.layers.last_mut().unwrap();
         t.transform.position = Animatable::new_animated(vec![
-            Keyframe::new(85, [960.0, 510.0], InterpolationType::Linear),
-            Keyframe::new(110, [960.0, 330.0], bez_both(0.2, 0.6)),
+            Keyframe::new(75, [960.0, 520.0], InterpolationType::Linear),
+            Keyframe::new(100, [960.0, 330.0], bez_both(0.15, 0.65)),
         ]);
         t.transform.opacity = Animatable::new_animated(vec![
-            Keyframe::new(85, 0.0, InterpolationType::Linear),
-            Keyframe::new(110, 100.0, InterpolationType::Linear),
-            Keyframe::new(155, 100.0, InterpolationType::Linear),
-            Keyframe::new(180, 0.0, InterpolationType::Linear),
+            Keyframe::new(75, 0.0, InterpolationType::Linear),
+            Keyframe::new(100, 100.0, InterpolationType::Linear),
+            Keyframe::new(135, 100.0, InterpolationType::Linear),
+            Keyframe::new(150, 0.0, InterpolationType::Linear),
         ]);
     }
 
@@ -253,22 +328,22 @@ fn main() {
             color: [0.9, 0.6, 0.1, 1.0], font_family: "SF Pro Display".into(),
             tracking: 20.0, leading: 1.2, align: 1,
             stroke_color: [0.0; 4], stroke_width: 0.0, text_on_path: false,
-        }, 180));
+        }, 150));
     {
         let v = comp.layers.last_mut().unwrap();
         v.transform.position = Animatable::new_animated(vec![
-            Keyframe::new(88, [960.0, 510.0], InterpolationType::Linear),
-            Keyframe::new(115, [960.0, 420.0], bez_both(0.2, 0.6)),
+            Keyframe::new(78, [960.0, 520.0], InterpolationType::Linear),
+            Keyframe::new(105, [960.0, 420.0], bez_both(0.15, 0.65)),
         ]);
         v.transform.opacity = Animatable::new_animated(vec![
-            Keyframe::new(88, 0.0, InterpolationType::Linear),
-            Keyframe::new(115, 100.0, InterpolationType::Linear),
-            Keyframe::new(155, 100.0, InterpolationType::Linear),
-            Keyframe::new(180, 0.0, InterpolationType::Linear),
+            Keyframe::new(78, 0.0, InterpolationType::Linear),
+            Keyframe::new(105, 100.0, InterpolationType::Linear),
+            Keyframe::new(135, 100.0, InterpolationType::Linear),
+            Keyframe::new(150, 0.0, InterpolationType::Linear),
         ]);
     }
 
-    // Gold accent line
+    // Line
     comp.add_layer(Layer::new("line".into(), "Line".into(),
         LayerType::Shape {
             shape_type: ShapeType::Ellipse {
@@ -279,16 +354,16 @@ fn main() {
             stroke_color: [0.0; 4], stroke_width: 0.0,
             fill_type: ShapeFillType::Solid,
             extrusion_depth: 0.0, bevel_depth: 0.0,
-        }, 180,
+        }, 150,
     ));
     {
         let ln = comp.layers.last_mut().unwrap();
         ln.transform.position = Animatable::new_constant([960.0, 590.0]);
         ln.transform.opacity = Animatable::new_animated(vec![
-            Keyframe::new(110, 0.0, InterpolationType::Linear),
-            Keyframe::new(125, 100.0, InterpolationType::Linear),
-            Keyframe::new(155, 100.0, InterpolationType::Linear),
-            Keyframe::new(180, 0.0, InterpolationType::Linear),
+            Keyframe::new(100, 0.0, InterpolationType::Linear),
+            Keyframe::new(115, 100.0, InterpolationType::Linear),
+            Keyframe::new(135, 100.0, InterpolationType::Linear),
+            Keyframe::new(150, 0.0, InterpolationType::Linear),
         ]);
     }
 
@@ -299,15 +374,15 @@ fn main() {
             color: [0.6; 4], font_family: "SF Pro Display".into(),
             tracking: 3.0, leading: 1.2, align: 1,
             stroke_color: [0.0; 4], stroke_width: 0.0, text_on_path: false,
-        }, 180));
+        }, 150));
     {
         let tg = comp.layers.last_mut().unwrap();
         tg.transform.position = Animatable::new_constant([960.0, 630.0]);
         tg.transform.opacity = Animatable::new_animated(vec![
-            Keyframe::new(120, 0.0, InterpolationType::Linear),
+            Keyframe::new(110, 0.0, InterpolationType::Linear),
+            Keyframe::new(128, 100.0, InterpolationType::Linear),
             Keyframe::new(138, 100.0, InterpolationType::Linear),
-            Keyframe::new(155, 100.0, InterpolationType::Linear),
-            Keyframe::new(180, 0.0, InterpolationType::Linear),
+            Keyframe::new(150, 0.0, InterpolationType::Linear),
         ]);
     }
 
