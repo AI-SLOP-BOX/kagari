@@ -870,7 +870,12 @@ fn render_precomp_layers_inner(
             LayerType::Text { .. } => {
                 (precomp_comp.width as f32, precomp_comp.height as f32)
             }
-            LayerType::Shape { .. } | LayerType::Image { .. } | LayerType::Video { .. } => {
+            LayerType::Shape { .. } => {
+                // Shape units are uniform (composition-width referenced) so
+                // circles stay circular on non-square compositions.
+                (precomp_comp.width as f32, precomp_comp.width as f32)
+            }
+            LayerType::Image { .. } | LayerType::Video { .. } => {
                 (precomp_comp.width as f32, precomp_comp.height as f32)
             }
             _ => continue,
@@ -1862,7 +1867,12 @@ pub fn render_frame_to_pixels(
             LayerType::Text { .. } => {
                 (comp.width as f32, comp.height as f32)
             }
-            LayerType::Shape { .. } | LayerType::Image { .. } | LayerType::Video { .. } => {
+            LayerType::Shape { .. } => {
+                // Shape units are uniform (composition-width referenced) so
+                // circles stay circular on non-square compositions.
+                (comp.width as f32, comp.width as f32)
+            }
+            LayerType::Image { .. } | LayerType::Video { .. } => {
                 (comp.width as f32, comp.height as f32)
             }
             _ => continue, // Null or audio layers don't output visual pixels
@@ -4755,7 +4765,7 @@ mod watchdog_tests {
 mod shadow_tests {
     use super::*;
     use crate::core::property::Animatable;
-    use crate::core::timeline::{Composition, Layer, LayerType};
+    use crate::core::timeline::{Composition, Layer, LayerType, ShapeFillType};
 
     fn shadow_test_comp(caster_casts: bool) -> Composition {
         let mut comp = Composition::new("sh".into(), "Shadows".into(), 64, 64, 30, 30);
@@ -5141,6 +5151,48 @@ mod shadow_tests {
         // Corner pixel (2, 2): should remain transparent (A=0), not painted red
         let corner_idx = ((2 * 32 + 2) * 4) as usize;
         assert_eq!(px[corner_idx + 3], 0);
+    }
+
+    #[test]
+    fn test_shape_units_stay_circular_on_wide_comp() {
+        // Regression: shape units must be uniform (width-referenced) so an
+        // equal-width/height ellipse renders as a circle on 16:9 comps.
+        let mut comp = Composition::new("c".into(), "Wide".into(), 192, 108, 30, 2);
+        comp.background_color = [0.0, 0.0, 0.0, 1.0];
+        let mut layer = Layer::new(
+            "s".into(),
+            "Circle".into(),
+            LayerType::Shape {
+                shape_type: ShapeType::Ellipse {
+                    width: Animatable::new_constant(100.0),
+                    height: Animatable::new_constant(100.0),
+                },
+                color: [1.0, 1.0, 1.0, 1.0],
+                stroke_color: [0.0; 4],
+                stroke_width: 0.0,
+                fill_type: ShapeFillType::Solid,
+                extrusion_depth: 0.0,
+                bevel_depth: 0.0,
+            },
+            2,
+        );
+        layer.transform.position = Animatable::new_constant([96.0, 54.0]);
+        layer.transform.scale = Animatable::new_constant([100.0, 100.0]);
+        comp.layers.push(layer);
+
+        let px = render_frame_to_pixels(&comp, 0, 192, 108, 0.0, 0);
+        let bright = |x: u32, y: u32| px[((y * 192 + x) * 4) as usize] > 128;
+        // 100 units at scale 100 => 96px span on a 192-wide comp.
+        let row = (50..=142u32).filter(|&x| bright(x, 54)).count();
+        let col = (6..=102u32).filter(|&y| bright(96, y)).count();
+        assert!(
+            row >= 88 && row <= 100,
+            "circle width unexpected: {row}px",
+        );
+        assert!(
+            (row as i32 - col as i32).abs() <= 4,
+            "circle distorted on wide comp: w={row} h={col}",
+        );
     }
 
     #[test]
