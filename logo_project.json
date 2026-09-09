@@ -7709,7 +7709,7 @@
                 "type": "Constant",
                 "value": [
                   960.0,
-                  430.0
+                  540.0
                 ]
               },
               "position_expression": null,
@@ -8209,6 +8209,694 @@
             "effects": [],
             "effects_enabled": true,
             "essential_properties": [],
+            "id": "bed",
+            "in_frame": 0,
+            "is_3d": false,
+            "is_adjustment_layer": false,
+            "is_collapsed": false,
+            "is_guide_layer": false,
+            "is_shy": false,
+            "label": "Red",
+            "layer_type": {
+              "Shape": {
+                "bevel_depth": 0.0,
+                "color": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "extrusion_depth": 0.0,
+                "fill_type": {
+                  "RadialGradient": {
+                    "center": [
+                      0.0,
+                      0.0
+                    ],
+                    "colors": [
+                      [
+                        0.6499999761581421,
+                        0.2800000011920929,
+                        0.07999999821186066,
+                        0.6000000238418579
+                      ],
+                      [
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0
+                      ]
+                    ],
+                    "radius": 300.0,
+                    "stops": [
+                      0.0,
+                      1.0
+                    ]
+                  }
+                },
+                "shape_type": {
+                  "Ellipse": {
+                    "height": {
+                      "type": "Constant",
+                      "value": 120.0
+                    },
+                    "width": {
+                      "type": "Constant",
+                      "value": 120.0
+                    }
+                  }
+                },
+                "stroke_color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "stroke_width": 0.0
+              }
+            },
+            "locked": false,
+            "markers": [],
+            "masks": [],
+            "material": {
+              "accepts_lights": true,
+              "accepts_shadows": true,
+              "ambient": 0.30000001192092896,
+              "cast_shadows": true,
+              "diffuse": 0.800000011920929,
+              "emission": 0.0,
+              "light_transmission": 0.0,
+              "metalness": 0.0,
+              "specular": 0.5,
+              "specular_exponent": 32.0
+            },
+            "motion_blur": false,
+            "name": "bed",
+            "out_frame": 150,
+            "paint_strokes": [],
+            "parent_id": null,
+            "posterize_time": null,
+            "preserve_transparency": false,
+            "proxy": {
+              "enabled": false,
+              "proxy_path": null,
+              "resolution": "Full"
+            },
+            "puppet_pins": [],
+            "shape_repeater": null,
+            "solo": false,
+            "style": {
+              "bevel_emboss": {
+                "angle": 135.0,
+                "color_dark": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_light": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "depth": 3.0,
+                "enabled": false,
+                "highlight": 70.0,
+                "shadow": 50.0,
+                "size": 3.0
+              },
+              "color_overlay": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0
+              },
+              "drop_shadow": {
+                "angle": 0.0,
+                "blend_mode": "Normal",
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "gradient_overlay": {
+                "angle": 90.0,
+                "color_end": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_start": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "enabled": false,
+                "opacity": 100.0,
+                "scale": 100.0
+              },
+              "inner_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "inner_shadow": {
+                "angle": 0.0,
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "outer_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0,
+                "spread": 0.0
+              },
+              "satin": {
+                "angle": 90.0,
+                "color": [
+                  0.20000000298023224,
+                  0.20000000298023224,
+                  0.3499999940395355,
+                  1.0
+                ],
+                "distance": 12.0,
+                "enabled": false,
+                "opacity": 50.0,
+                "size": 16.0
+              },
+              "stroke": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "position": 0,
+                "size": 0.0
+              }
+            },
+            "text_animator": null,
+            "text_animator_stack": null,
+            "text_formatting": null,
+            "time_remap": null,
+            "track_matte": "None",
+            "trackers": [],
+            "transform": {
+              "anchor_point": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0
+                ]
+              },
+              "anchor_point_expression": null,
+              "opacity": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 46,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 60,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": [
+                          0.0,
+                          0.0,
+                          0.4000000059604645,
+                          1.0
+                        ],
+                        "incoming": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": 85.0
+                  },
+                  {
+                    "frame": 135,
+                    "interpolation": "Linear",
+                    "value": 85.0
+                  },
+                  {
+                    "frame": 150,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  }
+                ]
+              },
+              "opacity_expression": null,
+              "position": {
+                "type": "Constant",
+                "value": [
+                  960.0,
+                  430.0
+                ]
+              },
+              "position_expression": null,
+              "rotation": {
+                "type": "Constant",
+                "value": 0.0
+              },
+              "rotation_expression": null,
+              "scale": {
+                "type": "Constant",
+                "value": [
+                  100.0,
+                  100.0
+                ]
+              },
+              "scale_expression": null
+            },
+            "transform_3d": {
+              "position": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "rotation": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "scale": {
+                "type": "Constant",
+                "value": [
+                  100.0,
+                  100.0,
+                  100.0
+                ]
+              }
+            },
+            "trim_paths": null,
+            "visible": true
+          },
+          {
+            "auto_orient": "Off",
+            "blend_mode": "Normal",
+            "constraints": {
+              "horizontal": "Left",
+              "vertical": "Top"
+            },
+            "effects": [],
+            "effects_enabled": true,
+            "essential_properties": [],
+            "id": "skirt",
+            "in_frame": 0,
+            "is_3d": false,
+            "is_adjustment_layer": false,
+            "is_collapsed": false,
+            "is_guide_layer": false,
+            "is_shy": false,
+            "label": "Red",
+            "layer_type": {
+              "Shape": {
+                "bevel_depth": 0.0,
+                "color": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "extrusion_depth": 0.0,
+                "fill_type": {
+                  "RadialGradient": {
+                    "center": [
+                      0.0,
+                      0.0
+                    ],
+                    "colors": [
+                      [
+                        0.699999988079071,
+                        0.30000001192092896,
+                        0.07999999821186066,
+                        0.550000011920929
+                      ],
+                      [
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0
+                      ]
+                    ],
+                    "radius": 340.0,
+                    "stops": [
+                      0.0,
+                      1.0
+                    ]
+                  }
+                },
+                "shape_type": {
+                  "Ellipse": {
+                    "height": {
+                      "type": "Constant",
+                      "value": 120.0
+                    },
+                    "width": {
+                      "type": "Constant",
+                      "value": 120.0
+                    }
+                  }
+                },
+                "stroke_color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "stroke_width": 0.0
+              }
+            },
+            "locked": false,
+            "markers": [],
+            "masks": [],
+            "material": {
+              "accepts_lights": true,
+              "accepts_shadows": true,
+              "ambient": 0.30000001192092896,
+              "cast_shadows": true,
+              "diffuse": 0.800000011920929,
+              "emission": 0.0,
+              "light_transmission": 0.0,
+              "metalness": 0.0,
+              "specular": 0.5,
+              "specular_exponent": 32.0
+            },
+            "motion_blur": false,
+            "name": "skirt",
+            "out_frame": 150,
+            "paint_strokes": [],
+            "parent_id": null,
+            "posterize_time": null,
+            "preserve_transparency": false,
+            "proxy": {
+              "enabled": false,
+              "proxy_path": null,
+              "resolution": "Full"
+            },
+            "puppet_pins": [],
+            "shape_repeater": null,
+            "solo": false,
+            "style": {
+              "bevel_emboss": {
+                "angle": 135.0,
+                "color_dark": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_light": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "depth": 3.0,
+                "enabled": false,
+                "highlight": 70.0,
+                "shadow": 50.0,
+                "size": 3.0
+              },
+              "color_overlay": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0
+              },
+              "drop_shadow": {
+                "angle": 0.0,
+                "blend_mode": "Normal",
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "gradient_overlay": {
+                "angle": 90.0,
+                "color_end": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_start": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "enabled": false,
+                "opacity": 100.0,
+                "scale": 100.0
+              },
+              "inner_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "inner_shadow": {
+                "angle": 0.0,
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "outer_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0,
+                "spread": 0.0
+              },
+              "satin": {
+                "angle": 90.0,
+                "color": [
+                  0.20000000298023224,
+                  0.20000000298023224,
+                  0.3499999940395355,
+                  1.0
+                ],
+                "distance": 12.0,
+                "enabled": false,
+                "opacity": 50.0,
+                "size": 16.0
+              },
+              "stroke": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "position": 0,
+                "size": 0.0
+              }
+            },
+            "text_animator": null,
+            "text_animator_stack": null,
+            "text_formatting": null,
+            "time_remap": null,
+            "track_matte": "None",
+            "trackers": [],
+            "transform": {
+              "anchor_point": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0
+                ]
+              },
+              "anchor_point_expression": null,
+              "opacity": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 48,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 62,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": [
+                          0.0,
+                          0.0,
+                          0.4000000059604645,
+                          1.0
+                        ],
+                        "incoming": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": 55.0
+                  },
+                  {
+                    "frame": 135,
+                    "interpolation": "Linear",
+                    "value": 55.0
+                  },
+                  {
+                    "frame": 150,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  }
+                ]
+              },
+              "opacity_expression": null,
+              "position": {
+                "type": "Constant",
+                "value": [
+                  960.0,
+                  415.0
+                ]
+              },
+              "position_expression": null,
+              "rotation": {
+                "type": "Constant",
+                "value": 0.0
+              },
+              "rotation_expression": null,
+              "scale": {
+                "type": "Constant",
+                "value": [
+                  100.0,
+                  100.0
+                ]
+              },
+              "scale_expression": null
+            },
+            "transform_3d": {
+              "position": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "rotation": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "scale": {
+                "type": "Constant",
+                "value": [
+                  100.0,
+                  100.0,
+                  100.0
+                ]
+              }
+            },
+            "trim_paths": null,
+            "visible": true
+          },
+          {
+            "auto_orient": "Off",
+            "blend_mode": "Normal",
+            "constraints": {
+              "horizontal": "Left",
+              "vertical": "Top"
+            },
+            "effects": [],
+            "effects_enabled": true,
+            "essential_properties": [],
             "id": "seed",
             "in_frame": 0,
             "is_3d": false,
@@ -8247,7 +8935,7 @@
                         0.0
                       ]
                     ],
-                    "radius": 130.0,
+                    "radius": 150.0,
                     "stops": [
                       0.0,
                       1.0
@@ -8258,11 +8946,11 @@
                   "Ellipse": {
                     "height": {
                       "type": "Constant",
-                      "value": 26.0
+                      "value": 30.0
                     },
                     "width": {
                       "type": "Constant",
-                      "value": 26.0
+                      "value": 30.0
                     }
                   }
                 },
@@ -8513,7 +9201,7 @@
                 "type": "Constant",
                 "value": [
                   960.0,
-                  632.0
+                  733.0
                 ]
               },
               "position_expression": null,
@@ -8919,8 +9607,8 @@
                       }
                     },
                     "value": [
-                      20.0,
-                      20.0
+                      30.0,
+                      30.0
                     ]
                   },
                   {
@@ -8944,8 +9632,8 @@
                       }
                     },
                     "value": [
-                      24.0,
-                      24.0
+                      36.0,
+                      36.0
                     ]
                   },
                   {
@@ -9356,8 +10044,8 @@
                       }
                     },
                     "value": [
-                      1.0,
-                      1.0
+                      9.0,
+                      9.0
                     ]
                   },
                   {
@@ -9381,16 +10069,16 @@
                       }
                     },
                     "value": [
-                      1.1200000047683716,
-                      1.1200000047683716
+                      10.0,
+                      10.0
                     ]
                   },
                   {
                     "frame": 150,
                     "interpolation": "Linear",
                     "value": [
-                      1.1200000047683716,
-                      1.1200000047683716
+                      10.0,
+                      10.0
                     ]
                   }
                 ]
@@ -9735,16 +10423,16 @@
                     "frame": 0,
                     "interpolation": "Linear",
                     "value": [
-                      0.11999999731779099,
-                      0.11999999731779099
+                      0.18000000715255737,
+                      0.18000000715255737
                     ]
                   },
                   {
                     "frame": 69,
                     "interpolation": "Linear",
                     "value": [
-                      0.11999999731779099,
-                      0.11999999731779099
+                      0.18000000715255737,
+                      0.18000000715255737
                     ]
                   },
                   {
@@ -9768,16 +10456,16 @@
                       }
                     },
                     "value": [
-                      0.949999988079071,
-                      0.949999988079071
+                      8.5,
+                      8.5
                     ]
                   },
                   {
                     "frame": 150,
                     "interpolation": "Linear",
                     "value": [
-                      0.949999988079071,
-                      0.949999988079071
+                      8.5,
+                      8.5
                     ]
                   }
                 ]
@@ -10149,7 +10837,7 @@
                 "type": "Constant",
                 "value": [
                   960.0,
-                  470.0
+                  440.0
                 ]
               },
               "position_expression": null,
@@ -10609,7 +11297,7 @@
                 "type": "Constant",
                 "value": [
                   960.0,
-                  442.0
+                  444.0
                 ]
               },
               "position_expression": null,
@@ -10626,7 +11314,7 @@
                     "interpolation": "Linear",
                     "value": [
                       0.0,
-                      30.0
+                      45.0
                     ]
                   },
                   {
@@ -10634,7 +11322,7 @@
                     "interpolation": "Linear",
                     "value": [
                       0.0,
-                      30.0
+                      45.0
                     ]
                   },
                   {
@@ -10658,16 +11346,16 @@
                       }
                     },
                     "value": [
-                      33.0,
-                      30.0
+                      49.5,
+                      45.0
                     ]
                   },
                   {
                     "frame": 150,
                     "interpolation": "Linear",
                     "value": [
-                      33.0,
-                      30.0
+                      49.5,
+                      45.0
                     ]
                   }
                 ]
@@ -11044,7 +11732,7 @@
                 "type": "Constant",
                 "value": [
                   960.0,
-                  442.0
+                  444.0
                 ]
               },
               "position_expression": null,
@@ -11061,7 +11749,7 @@
                     "interpolation": "Linear",
                     "value": [
                       0.0,
-                      30.0
+                      45.0
                     ]
                   },
                   {
@@ -11069,7 +11757,7 @@
                     "interpolation": "Linear",
                     "value": [
                       0.0,
-                      30.0
+                      45.0
                     ]
                   },
                   {
@@ -11093,16 +11781,16 @@
                       }
                     },
                     "value": [
-                      33.0,
-                      30.0
+                      49.5,
+                      45.0
                     ]
                   },
                   {
                     "frame": 150,
                     "interpolation": "Linear",
                     "value": [
-                      33.0,
-                      30.0
+                      49.5,
+                      45.0
                     ]
                   }
                 ]
@@ -11405,18 +12093,18 @@
                     "value": 0.0
                   },
                   {
-                    "frame": 56,
+                    "frame": 64,
                     "interpolation": "Linear",
                     "value": 0.0
                   },
                   {
-                    "frame": 62,
+                    "frame": 68,
                     "interpolation": {
                       "Bezier": {
                         "custom_bezier": [
+                          0.30000001192092896,
                           0.0,
-                          0.0,
-                          0.4000000059604645,
+                          0.20000000298023224,
                           1.0
                         ],
                         "incoming": {
@@ -11451,20 +12139,20 @@
                     "frame": 0,
                     "interpolation": "Linear",
                     "value": [
-                      700.0,
+                      735.0,
                       430.0
                     ]
                   },
                   {
-                    "frame": 58,
+                    "frame": 56,
                     "interpolation": "Linear",
                     "value": [
-                      700.0,
+                      735.0,
                       430.0
                     ]
                   },
                   {
-                    "frame": 70,
+                    "frame": 68,
                     "interpolation": {
                       "Bezier": {
                         "custom_bezier": [
@@ -11484,12 +12172,12 @@
                       }
                     },
                     "value": [
-                      928.7999877929688,
+                      933.0,
                       430.0
                     ]
                   },
                   {
-                    "frame": 74,
+                    "frame": 72,
                     "interpolation": {
                       "Bezier": {
                         "custom_bezier": [
@@ -11533,12 +12221,12 @@
                     "value": -16.0
                   },
                   {
-                    "frame": 58,
+                    "frame": 56,
                     "interpolation": "Linear",
                     "value": -16.0
                   },
                   {
-                    "frame": 70,
+                    "frame": 68,
                     "interpolation": {
                       "Bezier": {
                         "custom_bezier": [
@@ -11560,7 +12248,7 @@
                     "value": 3.5199999809265137
                   },
                   {
-                    "frame": 76,
+                    "frame": 74,
                     "interpolation": {
                       "Bezier": {
                         "custom_bezier": [
@@ -11592,8 +12280,8 @@
               "scale": {
                 "type": "Constant",
                 "value": [
-                  30.0,
-                  30.0
+                  45.0,
+                  45.0
                 ]
               },
               "scale_expression": null
@@ -11894,18 +12582,18 @@
                     "value": 0.0
                   },
                   {
-                    "frame": 58,
+                    "frame": 66,
                     "interpolation": "Linear",
                     "value": 0.0
                   },
                   {
-                    "frame": 64,
+                    "frame": 70,
                     "interpolation": {
                       "Bezier": {
                         "custom_bezier": [
+                          0.30000001192092896,
                           0.0,
-                          0.0,
-                          0.4000000059604645,
+                          0.20000000298023224,
                           1.0
                         ],
                         "incoming": {
@@ -11940,20 +12628,20 @@
                     "frame": 0,
                     "interpolation": "Linear",
                     "value": [
-                      1220.0,
+                      1185.0,
                       430.0
                     ]
                   },
                   {
-                    "frame": 60,
+                    "frame": 58,
                     "interpolation": "Linear",
                     "value": [
-                      1220.0,
+                      1185.0,
                       430.0
                     ]
                   },
                   {
-                    "frame": 72,
+                    "frame": 70,
                     "interpolation": {
                       "Bezier": {
                         "custom_bezier": [
@@ -11973,12 +12661,12 @@
                       }
                     },
                     "value": [
-                      991.2000122070312,
+                      987.0,
                       430.0
                     ]
                   },
                   {
-                    "frame": 76,
+                    "frame": 74,
                     "interpolation": {
                       "Bezier": {
                         "custom_bezier": [
@@ -12022,12 +12710,12 @@
                     "value": 16.0
                   },
                   {
-                    "frame": 60,
+                    "frame": 58,
                     "interpolation": "Linear",
                     "value": 16.0
                   },
                   {
-                    "frame": 72,
+                    "frame": 70,
                     "interpolation": {
                       "Bezier": {
                         "custom_bezier": [
@@ -12049,7 +12737,7 @@
                     "value": -3.5199999809265137
                   },
                   {
-                    "frame": 78,
+                    "frame": 76,
                     "interpolation": {
                       "Bezier": {
                         "custom_bezier": [
@@ -12081,8 +12769,8 @@
               "scale": {
                 "type": "Constant",
                 "value": [
-                  30.0,
-                  30.0
+                  45.0,
+                  45.0
                 ]
               },
               "scale_expression": null
@@ -12397,18 +13085,18 @@
                     "value": 0.0
                   },
                   {
-                    "frame": 59,
+                    "frame": 67,
                     "interpolation": "Linear",
                     "value": 0.0
                   },
                   {
-                    "frame": 65,
+                    "frame": 71,
                     "interpolation": {
                       "Bezier": {
                         "custom_bezier": [
+                          0.30000001192092896,
                           0.0,
-                          0.0,
-                          0.4000000059604645,
+                          0.20000000298023224,
                           1.0
                         ],
                         "incoming": {
@@ -12443,20 +13131,20 @@
                     "frame": 0,
                     "interpolation": "Linear",
                     "value": [
-                      700.0,
+                      735.0,
                       430.0
                     ]
                   },
                   {
-                    "frame": 61,
+                    "frame": 59,
                     "interpolation": "Linear",
                     "value": [
-                      700.0,
+                      735.0,
                       430.0
                     ]
                   },
                   {
-                    "frame": 73,
+                    "frame": 71,
                     "interpolation": {
                       "Bezier": {
                         "custom_bezier": [
@@ -12476,12 +13164,12 @@
                       }
                     },
                     "value": [
-                      928.7999877929688,
+                      933.0,
                       430.0
                     ]
                   },
                   {
-                    "frame": 77,
+                    "frame": 75,
                     "interpolation": {
                       "Bezier": {
                         "custom_bezier": [
@@ -12525,12 +13213,12 @@
                     "value": -23.0
                   },
                   {
-                    "frame": 61,
+                    "frame": 59,
                     "interpolation": "Linear",
                     "value": -23.0
                   },
                   {
-                    "frame": 73,
+                    "frame": 71,
                     "interpolation": {
                       "Bezier": {
                         "custom_bezier": [
@@ -12552,7 +13240,7 @@
                     "value": 5.059999942779541
                   },
                   {
-                    "frame": 79,
+                    "frame": 77,
                     "interpolation": {
                       "Bezier": {
                         "custom_bezier": [
@@ -12582,10 +13270,82 @@
               },
               "rotation_expression": null,
               "scale": {
-                "type": "Constant",
+                "type": "Animated",
                 "value": [
-                  30.0,
-                  30.0
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": [
+                      15.75,
+                      45.0
+                    ]
+                  },
+                  {
+                    "frame": 67,
+                    "interpolation": "Linear",
+                    "value": [
+                      15.75,
+                      45.0
+                    ]
+                  },
+                  {
+                    "frame": 72,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": [
+                          0.30000001192092896,
+                          0.0,
+                          0.20000000298023224,
+                          1.0
+                        ],
+                        "incoming": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": [
+                      50.400001525878906,
+                      45.0
+                    ]
+                  },
+                  {
+                    "frame": 77,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": [
+                          0.0,
+                          0.0,
+                          0.4000000059604645,
+                          1.0
+                        ],
+                        "incoming": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": [
+                      45.0,
+                      45.0
+                    ]
+                  },
+                  {
+                    "frame": 150,
+                    "interpolation": "Linear",
+                    "value": [
+                      45.0,
+                      45.0
+                    ]
+                  }
                 ]
               },
               "scale_expression": null
@@ -12900,18 +13660,18 @@
                     "value": 0.0
                   },
                   {
-                    "frame": 61,
+                    "frame": 69,
                     "interpolation": "Linear",
                     "value": 0.0
                   },
                   {
-                    "frame": 67,
+                    "frame": 73,
                     "interpolation": {
                       "Bezier": {
                         "custom_bezier": [
+                          0.30000001192092896,
                           0.0,
-                          0.0,
-                          0.4000000059604645,
+                          0.20000000298023224,
                           1.0
                         ],
                         "incoming": {
@@ -12946,20 +13706,20 @@
                     "frame": 0,
                     "interpolation": "Linear",
                     "value": [
-                      1220.0,
+                      1185.0,
                       430.0
                     ]
                   },
                   {
-                    "frame": 63,
+                    "frame": 61,
                     "interpolation": "Linear",
                     "value": [
-                      1220.0,
+                      1185.0,
                       430.0
                     ]
                   },
                   {
-                    "frame": 75,
+                    "frame": 73,
                     "interpolation": {
                       "Bezier": {
                         "custom_bezier": [
@@ -12979,12 +13739,12 @@
                       }
                     },
                     "value": [
-                      991.2000122070312,
+                      987.0,
                       430.0
                     ]
                   },
                   {
-                    "frame": 79,
+                    "frame": 77,
                     "interpolation": {
                       "Bezier": {
                         "custom_bezier": [
@@ -13028,12 +13788,12 @@
                     "value": 23.0
                   },
                   {
-                    "frame": 63,
+                    "frame": 61,
                     "interpolation": "Linear",
                     "value": 23.0
                   },
                   {
-                    "frame": 75,
+                    "frame": 73,
                     "interpolation": {
                       "Bezier": {
                         "custom_bezier": [
@@ -13055,7 +13815,7 @@
                     "value": -5.059999942779541
                   },
                   {
-                    "frame": 81,
+                    "frame": 79,
                     "interpolation": {
                       "Bezier": {
                         "custom_bezier": [
@@ -13085,10 +13845,82 @@
               },
               "rotation_expression": null,
               "scale": {
-                "type": "Constant",
+                "type": "Animated",
                 "value": [
-                  30.0,
-                  30.0
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": [
+                      15.75,
+                      45.0
+                    ]
+                  },
+                  {
+                    "frame": 69,
+                    "interpolation": "Linear",
+                    "value": [
+                      15.75,
+                      45.0
+                    ]
+                  },
+                  {
+                    "frame": 74,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": [
+                          0.30000001192092896,
+                          0.0,
+                          0.20000000298023224,
+                          1.0
+                        ],
+                        "incoming": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": [
+                      50.400001525878906,
+                      45.0
+                    ]
+                  },
+                  {
+                    "frame": 79,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": [
+                          0.0,
+                          0.0,
+                          0.4000000059604645,
+                          1.0
+                        ],
+                        "incoming": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": [
+                      45.0,
+                      45.0
+                    ]
+                  },
+                  {
+                    "frame": 150,
+                    "interpolation": "Linear",
+                    "value": [
+                      45.0,
+                      45.0
+                    ]
+                  }
                 ]
               },
               "scale_expression": null
@@ -13161,7 +13993,7 @@
                         1.0,
                         0.800000011920929,
                         0.5,
-                        0.949999988079071
+                        1.0
                       ],
                       [
                         0.0,
@@ -13376,12 +14208,12 @@
                     "value": 0.0
                   },
                   {
-                    "frame": 66,
+                    "frame": 68,
                     "interpolation": "Linear",
                     "value": 0.0
                   },
                   {
-                    "frame": 70,
+                    "frame": 72,
                     "interpolation": {
                       "Bezier": {
                         "custom_bezier": [
@@ -13400,10 +14232,10 @@
                         }
                       }
                     },
-                    "value": 80.0
+                    "value": 100.0
                   },
                   {
-                    "frame": 78,
+                    "frame": 80,
                     "interpolation": {
                       "Bezier": {
                         "custom_bezier": [
@@ -13435,8 +14267,8 @@
               "position": {
                 "type": "Constant",
                 "value": [
-                  848.0,
-                  442.0
+                  792.0,
+                  445.0
                 ]
               },
               "position_expression": null,
@@ -13522,7 +14354,7 @@
                         1.0,
                         0.800000011920929,
                         0.5,
-                        0.949999988079071
+                        1.0
                       ],
                       [
                         0.0,
@@ -13737,12 +14569,12 @@
                     "value": 0.0
                   },
                   {
-                    "frame": 68,
+                    "frame": 70,
                     "interpolation": "Linear",
                     "value": 0.0
                   },
                   {
-                    "frame": 72,
+                    "frame": 74,
                     "interpolation": {
                       "Bezier": {
                         "custom_bezier": [
@@ -13761,10 +14593,10 @@
                         }
                       }
                     },
-                    "value": 80.0
+                    "value": 100.0
                   },
                   {
-                    "frame": 80,
+                    "frame": 82,
                     "interpolation": {
                       "Bezier": {
                         "custom_bezier": [
@@ -13796,8 +14628,8 @@
               "position": {
                 "type": "Constant",
                 "value": [
-                  1072.0,
-                  442.0
+                  1128.0,
+                  445.0
                 ]
               },
               "position_expression": null,
@@ -14172,7 +15004,7 @@
                     "interpolation": "Linear",
                     "value": [
                       960.0,
-                      650.0
+                      760.0
                     ]
                   },
                   {
@@ -14180,7 +15012,7 @@
                     "interpolation": "Linear",
                     "value": [
                       960.0,
-                      650.0
+                      760.0
                     ]
                   },
                   {
@@ -14252,8 +15084,8 @@
               "scale": {
                 "type": "Constant",
                 "value": [
-                  30.0,
-                  30.0
+                  45.0,
+                  45.0
                 ]
               },
               "scale_expression": null
@@ -14615,7 +15447,7 @@
                     "interpolation": "Linear",
                     "value": [
                       960.0,
-                      650.0
+                      760.0
                     ]
                   },
                   {
@@ -14623,7 +15455,7 @@
                     "interpolation": "Linear",
                     "value": [
                       960.0,
-                      650.0
+                      760.0
                     ]
                   },
                   {
@@ -14695,8 +15527,8 @@
               "scale": {
                 "type": "Constant",
                 "value": [
-                  30.0,
-                  30.0
+                  45.0,
+                  45.0
                 ]
               },
               "scale_expression": null
@@ -15013,8 +15845,8 @@
               "scale": {
                 "type": "Constant",
                 "value": [
-                  30.0,
-                  30.0
+                  45.0,
+                  45.0
                 ]
               },
               "scale_expression": null
@@ -15382,8 +16214,8 @@
               "scale": {
                 "type": "Constant",
                 "value": [
-                  30.0,
-                  30.0
+                  45.0,
+                  45.0
                 ]
               },
               "scale_expression": null
@@ -15751,8 +16583,8 @@
               "scale": {
                 "type": "Constant",
                 "value": [
-                  30.0,
-                  30.0
+                  45.0,
+                  45.0
                 ]
               },
               "scale_expression": null
@@ -16120,8 +16952,8 @@
               "scale": {
                 "type": "Constant",
                 "value": [
-                  30.0,
-                  30.0
+                  45.0,
+                  45.0
                 ]
               },
               "scale_expression": null
@@ -16489,8 +17321,8 @@
               "scale": {
                 "type": "Constant",
                 "value": [
-                  30.0,
-                  30.0
+                  45.0,
+                  45.0
                 ]
               },
               "scale_expression": null
@@ -16858,8 +17690,8 @@
               "scale": {
                 "type": "Constant",
                 "value": [
-                  30.0,
-                  30.0
+                  45.0,
+                  45.0
                 ]
               },
               "scale_expression": null
@@ -17227,8 +18059,8 @@
               "scale": {
                 "type": "Constant",
                 "value": [
-                  30.0,
-                  30.0
+                  45.0,
+                  45.0
                 ]
               },
               "scale_expression": null
@@ -17309,6 +18141,2477 @@
                     "value": 10.0
                   }
                 ]
+              }
+            },
+            "visible": true
+          },
+          {
+            "auto_orient": "Off",
+            "blend_mode": "Normal",
+            "constraints": {
+              "horizontal": "Left",
+              "vertical": "Top"
+            },
+            "effects": [],
+            "effects_enabled": true,
+            "essential_properties": [],
+            "id": "ring_lt_chg",
+            "in_frame": 0,
+            "is_3d": false,
+            "is_adjustment_layer": false,
+            "is_collapsed": false,
+            "is_guide_layer": false,
+            "is_shy": false,
+            "label": "Red",
+            "layer_type": {
+              "Shape": {
+                "bevel_depth": 0.0,
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "extrusion_depth": 0.0,
+                "fill_type": "Solid",
+                "shape_type": {
+                  "Ellipse": {
+                    "height": {
+                      "type": "Constant",
+                      "value": 140.0
+                    },
+                    "width": {
+                      "type": "Constant",
+                      "value": 140.0
+                    }
+                  }
+                },
+                "stroke_color": [
+                  1.0,
+                  0.8999999761581421,
+                  0.550000011920929,
+                  1.0
+                ],
+                "stroke_width": 16.0
+              }
+            },
+            "locked": false,
+            "markers": [],
+            "masks": [],
+            "material": {
+              "accepts_lights": true,
+              "accepts_shadows": true,
+              "ambient": 0.30000001192092896,
+              "cast_shadows": true,
+              "diffuse": 0.800000011920929,
+              "emission": 0.0,
+              "light_transmission": 0.0,
+              "metalness": 0.0,
+              "specular": 0.5,
+              "specular_exponent": 32.0
+            },
+            "motion_blur": false,
+            "name": "ring_lt_chg",
+            "out_frame": 150,
+            "paint_strokes": [],
+            "parent_id": null,
+            "posterize_time": null,
+            "preserve_transparency": false,
+            "proxy": {
+              "enabled": false,
+              "proxy_path": null,
+              "resolution": "Full"
+            },
+            "puppet_pins": [],
+            "shape_repeater": null,
+            "solo": false,
+            "style": {
+              "bevel_emboss": {
+                "angle": 135.0,
+                "color_dark": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_light": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "depth": 3.0,
+                "enabled": false,
+                "highlight": 70.0,
+                "shadow": 50.0,
+                "size": 3.0
+              },
+              "color_overlay": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0
+              },
+              "drop_shadow": {
+                "angle": 0.0,
+                "blend_mode": "Normal",
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "gradient_overlay": {
+                "angle": 90.0,
+                "color_end": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_start": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "enabled": false,
+                "opacity": 100.0,
+                "scale": 100.0
+              },
+              "inner_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "inner_shadow": {
+                "angle": 0.0,
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "outer_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0,
+                "spread": 0.0
+              },
+              "satin": {
+                "angle": 90.0,
+                "color": [
+                  0.20000000298023224,
+                  0.20000000298023224,
+                  0.3499999940395355,
+                  1.0
+                ],
+                "distance": 12.0,
+                "enabled": false,
+                "opacity": 50.0,
+                "size": 16.0
+              },
+              "stroke": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "position": 0,
+                "size": 0.0
+              }
+            },
+            "text_animator": null,
+            "text_animator_stack": null,
+            "text_formatting": null,
+            "time_remap": null,
+            "track_matte": "None",
+            "trackers": [],
+            "transform": {
+              "anchor_point": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0
+                ]
+              },
+              "anchor_point_expression": null,
+              "opacity": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 68,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 86,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": [
+                          0.0,
+                          0.0,
+                          0.4000000059604645,
+                          1.0
+                        ],
+                        "incoming": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": 80.0
+                  },
+                  {
+                    "frame": 100,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": [
+                          0.3700000047683716,
+                          0.0,
+                          0.6299999952316284,
+                          1.0
+                        ],
+                        "incoming": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": 48.0
+                  },
+                  {
+                    "frame": 135,
+                    "interpolation": "Linear",
+                    "value": 48.0
+                  },
+                  {
+                    "frame": 150,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  }
+                ]
+              },
+              "opacity_expression": null,
+              "position": {
+                "type": "Constant",
+                "value": [
+                  960.0,
+                  430.0
+                ]
+              },
+              "position_expression": null,
+              "rotation": {
+                "type": "Constant",
+                "value": 0.0
+              },
+              "rotation_expression": null,
+              "scale": {
+                "type": "Constant",
+                "value": [
+                  45.0,
+                  45.0
+                ]
+              },
+              "scale_expression": null
+            },
+            "transform_3d": {
+              "position": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "rotation": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "scale": {
+                "type": "Constant",
+                "value": [
+                  100.0,
+                  100.0,
+                  100.0
+                ]
+              }
+            },
+            "trim_paths": {
+              "end": {
+                "type": "Constant",
+                "value": 73.0
+              },
+              "offset": {
+                "type": "Constant",
+                "value": 0.0
+              },
+              "start": {
+                "type": "Constant",
+                "value": 60.0
+              }
+            },
+            "visible": true
+          },
+          {
+            "auto_orient": "Off",
+            "blend_mode": "Normal",
+            "constraints": {
+              "horizontal": "Left",
+              "vertical": "Top"
+            },
+            "effects": [],
+            "effects_enabled": true,
+            "essential_properties": [],
+            "id": "ring_lm_chg",
+            "in_frame": 0,
+            "is_3d": false,
+            "is_adjustment_layer": false,
+            "is_collapsed": false,
+            "is_guide_layer": false,
+            "is_shy": false,
+            "label": "Red",
+            "layer_type": {
+              "Shape": {
+                "bevel_depth": 0.0,
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "extrusion_depth": 0.0,
+                "fill_type": "Solid",
+                "shape_type": {
+                  "Ellipse": {
+                    "height": {
+                      "type": "Constant",
+                      "value": 140.0
+                    },
+                    "width": {
+                      "type": "Constant",
+                      "value": 140.0
+                    }
+                  }
+                },
+                "stroke_color": [
+                  1.0,
+                  0.6800000071525574,
+                  0.25,
+                  1.0
+                ],
+                "stroke_width": 16.0
+              }
+            },
+            "locked": false,
+            "markers": [],
+            "masks": [],
+            "material": {
+              "accepts_lights": true,
+              "accepts_shadows": true,
+              "ambient": 0.30000001192092896,
+              "cast_shadows": true,
+              "diffuse": 0.800000011920929,
+              "emission": 0.0,
+              "light_transmission": 0.0,
+              "metalness": 0.0,
+              "specular": 0.5,
+              "specular_exponent": 32.0
+            },
+            "motion_blur": false,
+            "name": "ring_lm_chg",
+            "out_frame": 150,
+            "paint_strokes": [],
+            "parent_id": null,
+            "posterize_time": null,
+            "preserve_transparency": false,
+            "proxy": {
+              "enabled": false,
+              "proxy_path": null,
+              "resolution": "Full"
+            },
+            "puppet_pins": [],
+            "shape_repeater": null,
+            "solo": false,
+            "style": {
+              "bevel_emboss": {
+                "angle": 135.0,
+                "color_dark": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_light": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "depth": 3.0,
+                "enabled": false,
+                "highlight": 70.0,
+                "shadow": 50.0,
+                "size": 3.0
+              },
+              "color_overlay": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0
+              },
+              "drop_shadow": {
+                "angle": 0.0,
+                "blend_mode": "Normal",
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "gradient_overlay": {
+                "angle": 90.0,
+                "color_end": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_start": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "enabled": false,
+                "opacity": 100.0,
+                "scale": 100.0
+              },
+              "inner_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "inner_shadow": {
+                "angle": 0.0,
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "outer_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0,
+                "spread": 0.0
+              },
+              "satin": {
+                "angle": 90.0,
+                "color": [
+                  0.20000000298023224,
+                  0.20000000298023224,
+                  0.3499999940395355,
+                  1.0
+                ],
+                "distance": 12.0,
+                "enabled": false,
+                "opacity": 50.0,
+                "size": 16.0
+              },
+              "stroke": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "position": 0,
+                "size": 0.0
+              }
+            },
+            "text_animator": null,
+            "text_animator_stack": null,
+            "text_formatting": null,
+            "time_remap": null,
+            "track_matte": "None",
+            "trackers": [],
+            "transform": {
+              "anchor_point": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0
+                ]
+              },
+              "anchor_point_expression": null,
+              "opacity": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 68,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 86,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": [
+                          0.0,
+                          0.0,
+                          0.4000000059604645,
+                          1.0
+                        ],
+                        "incoming": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": 80.0
+                  },
+                  {
+                    "frame": 100,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": [
+                          0.3700000047683716,
+                          0.0,
+                          0.6299999952316284,
+                          1.0
+                        ],
+                        "incoming": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": 48.0
+                  },
+                  {
+                    "frame": 135,
+                    "interpolation": "Linear",
+                    "value": 48.0
+                  },
+                  {
+                    "frame": 150,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  }
+                ]
+              },
+              "opacity_expression": null,
+              "position": {
+                "type": "Constant",
+                "value": [
+                  960.0,
+                  430.0
+                ]
+              },
+              "position_expression": null,
+              "rotation": {
+                "type": "Constant",
+                "value": 0.0
+              },
+              "rotation_expression": null,
+              "scale": {
+                "type": "Constant",
+                "value": [
+                  45.0,
+                  45.0
+                ]
+              },
+              "scale_expression": null
+            },
+            "transform_3d": {
+              "position": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "rotation": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "scale": {
+                "type": "Constant",
+                "value": [
+                  100.0,
+                  100.0,
+                  100.0
+                ]
+              }
+            },
+            "trim_paths": {
+              "end": {
+                "type": "Constant",
+                "value": 60.0
+              },
+              "offset": {
+                "type": "Constant",
+                "value": 0.0
+              },
+              "start": {
+                "type": "Constant",
+                "value": 40.0
+              }
+            },
+            "visible": true
+          },
+          {
+            "auto_orient": "Off",
+            "blend_mode": "Normal",
+            "constraints": {
+              "horizontal": "Left",
+              "vertical": "Top"
+            },
+            "effects": [],
+            "effects_enabled": true,
+            "essential_properties": [],
+            "id": "ring_lb_chg",
+            "in_frame": 0,
+            "is_3d": false,
+            "is_adjustment_layer": false,
+            "is_collapsed": false,
+            "is_guide_layer": false,
+            "is_shy": false,
+            "label": "Red",
+            "layer_type": {
+              "Shape": {
+                "bevel_depth": 0.0,
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "extrusion_depth": 0.0,
+                "fill_type": "Solid",
+                "shape_type": {
+                  "Ellipse": {
+                    "height": {
+                      "type": "Constant",
+                      "value": 140.0
+                    },
+                    "width": {
+                      "type": "Constant",
+                      "value": 140.0
+                    }
+                  }
+                },
+                "stroke_color": [
+                  1.0,
+                  0.4000000059604645,
+                  0.11999999731779099,
+                  1.0
+                ],
+                "stroke_width": 16.0
+              }
+            },
+            "locked": false,
+            "markers": [],
+            "masks": [],
+            "material": {
+              "accepts_lights": true,
+              "accepts_shadows": true,
+              "ambient": 0.30000001192092896,
+              "cast_shadows": true,
+              "diffuse": 0.800000011920929,
+              "emission": 0.0,
+              "light_transmission": 0.0,
+              "metalness": 0.0,
+              "specular": 0.5,
+              "specular_exponent": 32.0
+            },
+            "motion_blur": false,
+            "name": "ring_lb_chg",
+            "out_frame": 150,
+            "paint_strokes": [],
+            "parent_id": null,
+            "posterize_time": null,
+            "preserve_transparency": false,
+            "proxy": {
+              "enabled": false,
+              "proxy_path": null,
+              "resolution": "Full"
+            },
+            "puppet_pins": [],
+            "shape_repeater": null,
+            "solo": false,
+            "style": {
+              "bevel_emboss": {
+                "angle": 135.0,
+                "color_dark": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_light": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "depth": 3.0,
+                "enabled": false,
+                "highlight": 70.0,
+                "shadow": 50.0,
+                "size": 3.0
+              },
+              "color_overlay": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0
+              },
+              "drop_shadow": {
+                "angle": 0.0,
+                "blend_mode": "Normal",
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "gradient_overlay": {
+                "angle": 90.0,
+                "color_end": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_start": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "enabled": false,
+                "opacity": 100.0,
+                "scale": 100.0
+              },
+              "inner_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "inner_shadow": {
+                "angle": 0.0,
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "outer_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0,
+                "spread": 0.0
+              },
+              "satin": {
+                "angle": 90.0,
+                "color": [
+                  0.20000000298023224,
+                  0.20000000298023224,
+                  0.3499999940395355,
+                  1.0
+                ],
+                "distance": 12.0,
+                "enabled": false,
+                "opacity": 50.0,
+                "size": 16.0
+              },
+              "stroke": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "position": 0,
+                "size": 0.0
+              }
+            },
+            "text_animator": null,
+            "text_animator_stack": null,
+            "text_formatting": null,
+            "time_remap": null,
+            "track_matte": "None",
+            "trackers": [],
+            "transform": {
+              "anchor_point": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0
+                ]
+              },
+              "anchor_point_expression": null,
+              "opacity": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 68,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 86,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": [
+                          0.0,
+                          0.0,
+                          0.4000000059604645,
+                          1.0
+                        ],
+                        "incoming": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": 80.0
+                  },
+                  {
+                    "frame": 100,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": [
+                          0.3700000047683716,
+                          0.0,
+                          0.6299999952316284,
+                          1.0
+                        ],
+                        "incoming": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": 48.0
+                  },
+                  {
+                    "frame": 135,
+                    "interpolation": "Linear",
+                    "value": 48.0
+                  },
+                  {
+                    "frame": 150,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  }
+                ]
+              },
+              "opacity_expression": null,
+              "position": {
+                "type": "Constant",
+                "value": [
+                  960.0,
+                  430.0
+                ]
+              },
+              "position_expression": null,
+              "rotation": {
+                "type": "Constant",
+                "value": 0.0
+              },
+              "rotation_expression": null,
+              "scale": {
+                "type": "Constant",
+                "value": [
+                  45.0,
+                  45.0
+                ]
+              },
+              "scale_expression": null
+            },
+            "transform_3d": {
+              "position": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "rotation": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "scale": {
+                "type": "Constant",
+                "value": [
+                  100.0,
+                  100.0,
+                  100.0
+                ]
+              }
+            },
+            "trim_paths": {
+              "end": {
+                "type": "Constant",
+                "value": 40.0
+              },
+              "offset": {
+                "type": "Constant",
+                "value": 0.0
+              },
+              "start": {
+                "type": "Constant",
+                "value": 27.0
+              }
+            },
+            "visible": true
+          },
+          {
+            "auto_orient": "Off",
+            "blend_mode": "Normal",
+            "constraints": {
+              "horizontal": "Left",
+              "vertical": "Top"
+            },
+            "effects": [],
+            "effects_enabled": true,
+            "essential_properties": [],
+            "id": "ring_rt_chg",
+            "in_frame": 0,
+            "is_3d": false,
+            "is_adjustment_layer": false,
+            "is_collapsed": false,
+            "is_guide_layer": false,
+            "is_shy": false,
+            "label": "Red",
+            "layer_type": {
+              "Shape": {
+                "bevel_depth": 0.0,
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "extrusion_depth": 0.0,
+                "fill_type": "Solid",
+                "shape_type": {
+                  "Ellipse": {
+                    "height": {
+                      "type": "Constant",
+                      "value": 140.0
+                    },
+                    "width": {
+                      "type": "Constant",
+                      "value": 140.0
+                    }
+                  }
+                },
+                "stroke_color": [
+                  1.0,
+                  0.8999999761581421,
+                  0.550000011920929,
+                  1.0
+                ],
+                "stroke_width": 16.0
+              }
+            },
+            "locked": false,
+            "markers": [],
+            "masks": [],
+            "material": {
+              "accepts_lights": true,
+              "accepts_shadows": true,
+              "ambient": 0.30000001192092896,
+              "cast_shadows": true,
+              "diffuse": 0.800000011920929,
+              "emission": 0.0,
+              "light_transmission": 0.0,
+              "metalness": 0.0,
+              "specular": 0.5,
+              "specular_exponent": 32.0
+            },
+            "motion_blur": false,
+            "name": "ring_rt_chg",
+            "out_frame": 150,
+            "paint_strokes": [],
+            "parent_id": null,
+            "posterize_time": null,
+            "preserve_transparency": false,
+            "proxy": {
+              "enabled": false,
+              "proxy_path": null,
+              "resolution": "Full"
+            },
+            "puppet_pins": [],
+            "shape_repeater": null,
+            "solo": false,
+            "style": {
+              "bevel_emboss": {
+                "angle": 135.0,
+                "color_dark": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_light": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "depth": 3.0,
+                "enabled": false,
+                "highlight": 70.0,
+                "shadow": 50.0,
+                "size": 3.0
+              },
+              "color_overlay": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0
+              },
+              "drop_shadow": {
+                "angle": 0.0,
+                "blend_mode": "Normal",
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "gradient_overlay": {
+                "angle": 90.0,
+                "color_end": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_start": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "enabled": false,
+                "opacity": 100.0,
+                "scale": 100.0
+              },
+              "inner_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "inner_shadow": {
+                "angle": 0.0,
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "outer_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0,
+                "spread": 0.0
+              },
+              "satin": {
+                "angle": 90.0,
+                "color": [
+                  0.20000000298023224,
+                  0.20000000298023224,
+                  0.3499999940395355,
+                  1.0
+                ],
+                "distance": 12.0,
+                "enabled": false,
+                "opacity": 50.0,
+                "size": 16.0
+              },
+              "stroke": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "position": 0,
+                "size": 0.0
+              }
+            },
+            "text_animator": null,
+            "text_animator_stack": null,
+            "text_formatting": null,
+            "time_remap": null,
+            "track_matte": "None",
+            "trackers": [],
+            "transform": {
+              "anchor_point": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0
+                ]
+              },
+              "anchor_point_expression": null,
+              "opacity": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 68,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 86,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": [
+                          0.0,
+                          0.0,
+                          0.4000000059604645,
+                          1.0
+                        ],
+                        "incoming": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": 80.0
+                  },
+                  {
+                    "frame": 100,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": [
+                          0.3700000047683716,
+                          0.0,
+                          0.6299999952316284,
+                          1.0
+                        ],
+                        "incoming": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": 48.0
+                  },
+                  {
+                    "frame": 135,
+                    "interpolation": "Linear",
+                    "value": 48.0
+                  },
+                  {
+                    "frame": 150,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  }
+                ]
+              },
+              "opacity_expression": null,
+              "position": {
+                "type": "Constant",
+                "value": [
+                  960.0,
+                  430.0
+                ]
+              },
+              "position_expression": null,
+              "rotation": {
+                "type": "Constant",
+                "value": 0.0
+              },
+              "rotation_expression": null,
+              "scale": {
+                "type": "Constant",
+                "value": [
+                  45.0,
+                  45.0
+                ]
+              },
+              "scale_expression": null
+            },
+            "transform_3d": {
+              "position": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "rotation": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "scale": {
+                "type": "Constant",
+                "value": [
+                  100.0,
+                  100.0,
+                  100.0
+                ]
+              }
+            },
+            "trim_paths": {
+              "end": {
+                "type": "Constant",
+                "value": 90.0
+              },
+              "offset": {
+                "type": "Constant",
+                "value": 0.0
+              },
+              "start": {
+                "type": "Constant",
+                "value": 77.0
+              }
+            },
+            "visible": true
+          },
+          {
+            "auto_orient": "Off",
+            "blend_mode": "Normal",
+            "constraints": {
+              "horizontal": "Left",
+              "vertical": "Top"
+            },
+            "effects": [],
+            "effects_enabled": true,
+            "essential_properties": [],
+            "id": "ring_rm1_chg",
+            "in_frame": 0,
+            "is_3d": false,
+            "is_adjustment_layer": false,
+            "is_collapsed": false,
+            "is_guide_layer": false,
+            "is_shy": false,
+            "label": "Red",
+            "layer_type": {
+              "Shape": {
+                "bevel_depth": 0.0,
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "extrusion_depth": 0.0,
+                "fill_type": "Solid",
+                "shape_type": {
+                  "Ellipse": {
+                    "height": {
+                      "type": "Constant",
+                      "value": 140.0
+                    },
+                    "width": {
+                      "type": "Constant",
+                      "value": 140.0
+                    }
+                  }
+                },
+                "stroke_color": [
+                  1.0,
+                  0.6800000071525574,
+                  0.25,
+                  1.0
+                ],
+                "stroke_width": 16.0
+              }
+            },
+            "locked": false,
+            "markers": [],
+            "masks": [],
+            "material": {
+              "accepts_lights": true,
+              "accepts_shadows": true,
+              "ambient": 0.30000001192092896,
+              "cast_shadows": true,
+              "diffuse": 0.800000011920929,
+              "emission": 0.0,
+              "light_transmission": 0.0,
+              "metalness": 0.0,
+              "specular": 0.5,
+              "specular_exponent": 32.0
+            },
+            "motion_blur": false,
+            "name": "ring_rm1_chg",
+            "out_frame": 150,
+            "paint_strokes": [],
+            "parent_id": null,
+            "posterize_time": null,
+            "preserve_transparency": false,
+            "proxy": {
+              "enabled": false,
+              "proxy_path": null,
+              "resolution": "Full"
+            },
+            "puppet_pins": [],
+            "shape_repeater": null,
+            "solo": false,
+            "style": {
+              "bevel_emboss": {
+                "angle": 135.0,
+                "color_dark": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_light": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "depth": 3.0,
+                "enabled": false,
+                "highlight": 70.0,
+                "shadow": 50.0,
+                "size": 3.0
+              },
+              "color_overlay": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0
+              },
+              "drop_shadow": {
+                "angle": 0.0,
+                "blend_mode": "Normal",
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "gradient_overlay": {
+                "angle": 90.0,
+                "color_end": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_start": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "enabled": false,
+                "opacity": 100.0,
+                "scale": 100.0
+              },
+              "inner_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "inner_shadow": {
+                "angle": 0.0,
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "outer_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0,
+                "spread": 0.0
+              },
+              "satin": {
+                "angle": 90.0,
+                "color": [
+                  0.20000000298023224,
+                  0.20000000298023224,
+                  0.3499999940395355,
+                  1.0
+                ],
+                "distance": 12.0,
+                "enabled": false,
+                "opacity": 50.0,
+                "size": 16.0
+              },
+              "stroke": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "position": 0,
+                "size": 0.0
+              }
+            },
+            "text_animator": null,
+            "text_animator_stack": null,
+            "text_formatting": null,
+            "time_remap": null,
+            "track_matte": "None",
+            "trackers": [],
+            "transform": {
+              "anchor_point": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0
+                ]
+              },
+              "anchor_point_expression": null,
+              "opacity": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 68,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 86,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": [
+                          0.0,
+                          0.0,
+                          0.4000000059604645,
+                          1.0
+                        ],
+                        "incoming": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": 80.0
+                  },
+                  {
+                    "frame": 100,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": [
+                          0.3700000047683716,
+                          0.0,
+                          0.6299999952316284,
+                          1.0
+                        ],
+                        "incoming": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": 48.0
+                  },
+                  {
+                    "frame": 135,
+                    "interpolation": "Linear",
+                    "value": 48.0
+                  },
+                  {
+                    "frame": 150,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  }
+                ]
+              },
+              "opacity_expression": null,
+              "position": {
+                "type": "Constant",
+                "value": [
+                  960.0,
+                  430.0
+                ]
+              },
+              "position_expression": null,
+              "rotation": {
+                "type": "Constant",
+                "value": 0.0
+              },
+              "rotation_expression": null,
+              "scale": {
+                "type": "Constant",
+                "value": [
+                  45.0,
+                  45.0
+                ]
+              },
+              "scale_expression": null
+            },
+            "transform_3d": {
+              "position": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "rotation": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "scale": {
+                "type": "Constant",
+                "value": [
+                  100.0,
+                  100.0,
+                  100.0
+                ]
+              }
+            },
+            "trim_paths": {
+              "end": {
+                "type": "Constant",
+                "value": 100.0
+              },
+              "offset": {
+                "type": "Constant",
+                "value": 0.0
+              },
+              "start": {
+                "type": "Constant",
+                "value": 90.0
+              }
+            },
+            "visible": true
+          },
+          {
+            "auto_orient": "Off",
+            "blend_mode": "Normal",
+            "constraints": {
+              "horizontal": "Left",
+              "vertical": "Top"
+            },
+            "effects": [],
+            "effects_enabled": true,
+            "essential_properties": [],
+            "id": "ring_rm2_chg",
+            "in_frame": 0,
+            "is_3d": false,
+            "is_adjustment_layer": false,
+            "is_collapsed": false,
+            "is_guide_layer": false,
+            "is_shy": false,
+            "label": "Red",
+            "layer_type": {
+              "Shape": {
+                "bevel_depth": 0.0,
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "extrusion_depth": 0.0,
+                "fill_type": "Solid",
+                "shape_type": {
+                  "Ellipse": {
+                    "height": {
+                      "type": "Constant",
+                      "value": 140.0
+                    },
+                    "width": {
+                      "type": "Constant",
+                      "value": 140.0
+                    }
+                  }
+                },
+                "stroke_color": [
+                  1.0,
+                  0.6800000071525574,
+                  0.25,
+                  1.0
+                ],
+                "stroke_width": 16.0
+              }
+            },
+            "locked": false,
+            "markers": [],
+            "masks": [],
+            "material": {
+              "accepts_lights": true,
+              "accepts_shadows": true,
+              "ambient": 0.30000001192092896,
+              "cast_shadows": true,
+              "diffuse": 0.800000011920929,
+              "emission": 0.0,
+              "light_transmission": 0.0,
+              "metalness": 0.0,
+              "specular": 0.5,
+              "specular_exponent": 32.0
+            },
+            "motion_blur": false,
+            "name": "ring_rm2_chg",
+            "out_frame": 150,
+            "paint_strokes": [],
+            "parent_id": null,
+            "posterize_time": null,
+            "preserve_transparency": false,
+            "proxy": {
+              "enabled": false,
+              "proxy_path": null,
+              "resolution": "Full"
+            },
+            "puppet_pins": [],
+            "shape_repeater": null,
+            "solo": false,
+            "style": {
+              "bevel_emboss": {
+                "angle": 135.0,
+                "color_dark": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_light": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "depth": 3.0,
+                "enabled": false,
+                "highlight": 70.0,
+                "shadow": 50.0,
+                "size": 3.0
+              },
+              "color_overlay": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0
+              },
+              "drop_shadow": {
+                "angle": 0.0,
+                "blend_mode": "Normal",
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "gradient_overlay": {
+                "angle": 90.0,
+                "color_end": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_start": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "enabled": false,
+                "opacity": 100.0,
+                "scale": 100.0
+              },
+              "inner_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "inner_shadow": {
+                "angle": 0.0,
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "outer_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0,
+                "spread": 0.0
+              },
+              "satin": {
+                "angle": 90.0,
+                "color": [
+                  0.20000000298023224,
+                  0.20000000298023224,
+                  0.3499999940395355,
+                  1.0
+                ],
+                "distance": 12.0,
+                "enabled": false,
+                "opacity": 50.0,
+                "size": 16.0
+              },
+              "stroke": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "position": 0,
+                "size": 0.0
+              }
+            },
+            "text_animator": null,
+            "text_animator_stack": null,
+            "text_formatting": null,
+            "time_remap": null,
+            "track_matte": "None",
+            "trackers": [],
+            "transform": {
+              "anchor_point": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0
+                ]
+              },
+              "anchor_point_expression": null,
+              "opacity": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 68,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 86,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": [
+                          0.0,
+                          0.0,
+                          0.4000000059604645,
+                          1.0
+                        ],
+                        "incoming": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": 80.0
+                  },
+                  {
+                    "frame": 100,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": [
+                          0.3700000047683716,
+                          0.0,
+                          0.6299999952316284,
+                          1.0
+                        ],
+                        "incoming": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": 48.0
+                  },
+                  {
+                    "frame": 135,
+                    "interpolation": "Linear",
+                    "value": 48.0
+                  },
+                  {
+                    "frame": 150,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  }
+                ]
+              },
+              "opacity_expression": null,
+              "position": {
+                "type": "Constant",
+                "value": [
+                  960.0,
+                  430.0
+                ]
+              },
+              "position_expression": null,
+              "rotation": {
+                "type": "Constant",
+                "value": 0.0
+              },
+              "rotation_expression": null,
+              "scale": {
+                "type": "Constant",
+                "value": [
+                  45.0,
+                  45.0
+                ]
+              },
+              "scale_expression": null
+            },
+            "transform_3d": {
+              "position": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "rotation": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "scale": {
+                "type": "Constant",
+                "value": [
+                  100.0,
+                  100.0,
+                  100.0
+                ]
+              }
+            },
+            "trim_paths": {
+              "end": {
+                "type": "Constant",
+                "value": 10.0
+              },
+              "offset": {
+                "type": "Constant",
+                "value": 0.0
+              },
+              "start": {
+                "type": "Constant",
+                "value": 0.0
+              }
+            },
+            "visible": true
+          },
+          {
+            "auto_orient": "Off",
+            "blend_mode": "Normal",
+            "constraints": {
+              "horizontal": "Left",
+              "vertical": "Top"
+            },
+            "effects": [],
+            "effects_enabled": true,
+            "essential_properties": [],
+            "id": "ring_rb_chg",
+            "in_frame": 0,
+            "is_3d": false,
+            "is_adjustment_layer": false,
+            "is_collapsed": false,
+            "is_guide_layer": false,
+            "is_shy": false,
+            "label": "Red",
+            "layer_type": {
+              "Shape": {
+                "bevel_depth": 0.0,
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "extrusion_depth": 0.0,
+                "fill_type": "Solid",
+                "shape_type": {
+                  "Ellipse": {
+                    "height": {
+                      "type": "Constant",
+                      "value": 140.0
+                    },
+                    "width": {
+                      "type": "Constant",
+                      "value": 140.0
+                    }
+                  }
+                },
+                "stroke_color": [
+                  1.0,
+                  0.4000000059604645,
+                  0.11999999731779099,
+                  1.0
+                ],
+                "stroke_width": 16.0
+              }
+            },
+            "locked": false,
+            "markers": [],
+            "masks": [],
+            "material": {
+              "accepts_lights": true,
+              "accepts_shadows": true,
+              "ambient": 0.30000001192092896,
+              "cast_shadows": true,
+              "diffuse": 0.800000011920929,
+              "emission": 0.0,
+              "light_transmission": 0.0,
+              "metalness": 0.0,
+              "specular": 0.5,
+              "specular_exponent": 32.0
+            },
+            "motion_blur": false,
+            "name": "ring_rb_chg",
+            "out_frame": 150,
+            "paint_strokes": [],
+            "parent_id": null,
+            "posterize_time": null,
+            "preserve_transparency": false,
+            "proxy": {
+              "enabled": false,
+              "proxy_path": null,
+              "resolution": "Full"
+            },
+            "puppet_pins": [],
+            "shape_repeater": null,
+            "solo": false,
+            "style": {
+              "bevel_emboss": {
+                "angle": 135.0,
+                "color_dark": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_light": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "depth": 3.0,
+                "enabled": false,
+                "highlight": 70.0,
+                "shadow": 50.0,
+                "size": 3.0
+              },
+              "color_overlay": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0
+              },
+              "drop_shadow": {
+                "angle": 0.0,
+                "blend_mode": "Normal",
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "gradient_overlay": {
+                "angle": 90.0,
+                "color_end": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "color_start": [
+                  1.0,
+                  1.0,
+                  1.0,
+                  1.0
+                ],
+                "enabled": false,
+                "opacity": 100.0,
+                "scale": 100.0
+              },
+              "inner_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "inner_shadow": {
+                "angle": 0.0,
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "distance": 0.0,
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0
+              },
+              "outer_glow": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "opacity": 0.0,
+                "size": 0.0,
+                "spread": 0.0
+              },
+              "satin": {
+                "angle": 90.0,
+                "color": [
+                  0.20000000298023224,
+                  0.20000000298023224,
+                  0.3499999940395355,
+                  1.0
+                ],
+                "distance": 12.0,
+                "enabled": false,
+                "opacity": 50.0,
+                "size": 16.0
+              },
+              "stroke": {
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "enabled": false,
+                "position": 0,
+                "size": 0.0
+              }
+            },
+            "text_animator": null,
+            "text_animator_stack": null,
+            "text_formatting": null,
+            "time_remap": null,
+            "track_matte": "None",
+            "trackers": [],
+            "transform": {
+              "anchor_point": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0
+                ]
+              },
+              "anchor_point_expression": null,
+              "opacity": {
+                "type": "Animated",
+                "value": [
+                  {
+                    "frame": 0,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 68,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  },
+                  {
+                    "frame": 86,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": [
+                          0.0,
+                          0.0,
+                          0.4000000059604645,
+                          1.0
+                        ],
+                        "incoming": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": 80.0
+                  },
+                  {
+                    "frame": 100,
+                    "interpolation": {
+                      "Bezier": {
+                        "custom_bezier": [
+                          0.3700000047683716,
+                          0.0,
+                          0.6299999952316284,
+                          1.0
+                        ],
+                        "incoming": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        },
+                        "outgoing": {
+                          "influence": 0.33000001311302185,
+                          "speed": 0.0
+                        }
+                      }
+                    },
+                    "value": 48.0
+                  },
+                  {
+                    "frame": 135,
+                    "interpolation": "Linear",
+                    "value": 48.0
+                  },
+                  {
+                    "frame": 150,
+                    "interpolation": "Linear",
+                    "value": 0.0
+                  }
+                ]
+              },
+              "opacity_expression": null,
+              "position": {
+                "type": "Constant",
+                "value": [
+                  960.0,
+                  430.0
+                ]
+              },
+              "position_expression": null,
+              "rotation": {
+                "type": "Constant",
+                "value": 0.0
+              },
+              "rotation_expression": null,
+              "scale": {
+                "type": "Constant",
+                "value": [
+                  45.0,
+                  45.0
+                ]
+              },
+              "scale_expression": null
+            },
+            "transform_3d": {
+              "position": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "rotation": {
+                "type": "Constant",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "scale": {
+                "type": "Constant",
+                "value": [
+                  100.0,
+                  100.0,
+                  100.0
+                ]
+              }
+            },
+            "trim_paths": {
+              "end": {
+                "type": "Constant",
+                "value": 23.0
+              },
+              "offset": {
+                "type": "Constant",
+                "value": 0.0
+              },
+              "start": {
+                "type": "Constant",
+                "value": 10.0
               }
             },
             "visible": true
@@ -19062,11 +22365,11 @@
                   "Ellipse": {
                     "height": {
                       "type": "Constant",
-                      "value": 9.0
+                      "value": 7.0
                     },
                     "width": {
                       "type": "Constant",
-                      "value": 9.0
+                      "value": 7.0
                     }
                   }
                 },
@@ -19326,7 +22629,7 @@
                     "interpolation": "Linear",
                     "value": [
                       960.0,
-                      632.0
+                      733.0
                     ]
                   },
                   {
@@ -19334,7 +22637,7 @@
                     "interpolation": "Linear",
                     "value": [
                       960.0,
-                      632.0
+                      733.0
                     ]
                   },
                   {
@@ -19358,8 +22661,8 @@
                       }
                     },
                     "value": [
-                      873.9926147460938,
-                      612.7750854492188
+                      830.9888916015625,
+                      704.16259765625
                     ]
                   },
                   {
@@ -19383,8 +22686,8 @@
                       }
                     },
                     "value": [
-                      789.44580078125,
-                      538.237060546875
+                      704.1686401367188,
+                      592.3555908203125
                     ]
                   },
                   {
@@ -19408,8 +22711,8 @@
                       }
                     },
                     "value": [
-                      759.5928344726562,
-                      404.6827087402344
+                      659.3892822265625,
+                      392.0240478515625
                     ]
                   },
                   {
@@ -19433,8 +22736,8 @@
                       }
                     },
                     "value": [
-                      812.7483520507812,
-                      291.721435546875
+                      739.12255859375,
+                      222.58218383789062
                     ]
                   },
                   {
@@ -19458,8 +22761,8 @@
                       }
                     },
                     "value": [
-                      897.57861328125,
-                      237.88656616210938
+                      866.3679809570312,
+                      141.82986450195312
                     ]
                   },
                   {
@@ -19484,7 +22787,7 @@
                     },
                     "value": [
                       960.0,
-                      228.0
+                      127.0
                     ]
                   },
                   {
@@ -19509,7 +22812,7 @@
                     },
                     "value": [
                       960.0,
-                      330.0
+                      220.0
                     ]
                   },
                   {
@@ -20011,7 +23314,7 @@
                     "interpolation": "Linear",
                     "value": [
                       960.0,
-                      632.0
+                      733.0
                     ]
                   },
                   {
@@ -20019,7 +23322,7 @@
                     "interpolation": "Linear",
                     "value": [
                       960.0,
-                      632.0
+                      733.0
                     ]
                   },
                   {
@@ -20043,8 +23346,8 @@
                       }
                     },
                     "value": [
-                      873.9926147460938,
-                      612.7750854492188
+                      830.9888916015625,
+                      704.16259765625
                     ]
                   },
                   {
@@ -20068,8 +23371,8 @@
                       }
                     },
                     "value": [
-                      789.44580078125,
-                      538.237060546875
+                      704.1686401367188,
+                      592.3555908203125
                     ]
                   },
                   {
@@ -20093,8 +23396,8 @@
                       }
                     },
                     "value": [
-                      759.5928344726562,
-                      404.6827087402344
+                      659.3892822265625,
+                      392.0240478515625
                     ]
                   },
                   {
@@ -20118,8 +23421,8 @@
                       }
                     },
                     "value": [
-                      812.7483520507812,
-                      291.721435546875
+                      739.12255859375,
+                      222.58218383789062
                     ]
                   },
                   {
@@ -20143,8 +23446,8 @@
                       }
                     },
                     "value": [
-                      897.57861328125,
-                      237.88656616210938
+                      866.3679809570312,
+                      141.82986450195312
                     ]
                   },
                   {
@@ -20169,7 +23472,7 @@
                     },
                     "value": [
                       960.0,
-                      228.0
+                      127.0
                     ]
                   },
                   {
@@ -20194,7 +23497,7 @@
                     },
                     "value": [
                       960.0,
-                      330.0
+                      220.0
                     ]
                   },
                   {
@@ -20309,11 +23612,11 @@
                   "Ellipse": {
                     "height": {
                       "type": "Constant",
-                      "value": 9.0
+                      "value": 7.0
                     },
                     "width": {
                       "type": "Constant",
-                      "value": 9.0
+                      "value": 7.0
                     }
                   }
                 },
@@ -20573,7 +23876,7 @@
                     "interpolation": "Linear",
                     "value": [
                       960.0,
-                      632.0
+                      733.0
                     ]
                   },
                   {
@@ -20581,7 +23884,7 @@
                     "interpolation": "Linear",
                     "value": [
                       960.0,
-                      632.0
+                      733.0
                     ]
                   },
                   {
@@ -20605,8 +23908,8 @@
                       }
                     },
                     "value": [
-                      1022.4214477539062,
-                      622.1134033203125
+                      1053.632080078125,
+                      718.170166015625
                     ]
                   },
                   {
@@ -20630,8 +23933,8 @@
                       }
                     },
                     "value": [
-                      1123.42138671875,
-                      548.7326049804688
+                      1205.1322021484375,
+                      608.0989379882812
                     ]
                   },
                   {
@@ -20655,8 +23958,8 @@
                       }
                     },
                     "value": [
-                      1160.4072265625,
-                      455.31732177734375
+                      1260.6107177734375,
+                      467.9759521484375
                     ]
                   },
                   {
@@ -20680,8 +23983,8 @@
                       }
                     },
                     "value": [
-                      1147.8148193359375,
-                      355.63885498046875
+                      1241.7222900390625,
+                      318.458251953125
                     ]
                   },
                   {
@@ -20705,8 +24008,8 @@
                       }
                     },
                     "value": [
-                      1088.7596435546875,
-                      274.35638427734375
+                      1153.1395263671875,
+                      196.5345458984375
                     ]
                   },
                   {
@@ -20730,8 +24033,8 @@
                       }
                     },
                     "value": [
-                      1022.4214477539062,
-                      237.8865966796875
+                      1053.6322021484375,
+                      141.82989501953125
                     ]
                   },
                   {
@@ -20755,8 +24058,8 @@
                       }
                     },
                     "value": [
-                      985.3171997070312,
-                      229.5928192138672
+                      997.975830078125,
+                      129.38922119140625
                     ]
                   },
                   {
@@ -20781,7 +24084,7 @@
                     },
                     "value": [
                       962.0,
-                      330.0
+                      222.0
                     ]
                   },
                   {
@@ -21283,7 +24586,7 @@
                     "interpolation": "Linear",
                     "value": [
                       960.0,
-                      632.0
+                      733.0
                     ]
                   },
                   {
@@ -21291,7 +24594,7 @@
                     "interpolation": "Linear",
                     "value": [
                       960.0,
-                      632.0
+                      733.0
                     ]
                   },
                   {
@@ -21315,8 +24618,8 @@
                       }
                     },
                     "value": [
-                      1022.4214477539062,
-                      622.1134033203125
+                      1053.632080078125,
+                      718.170166015625
                     ]
                   },
                   {
@@ -21340,8 +24643,8 @@
                       }
                     },
                     "value": [
-                      1123.42138671875,
-                      548.7326049804688
+                      1205.1322021484375,
+                      608.0989379882812
                     ]
                   },
                   {
@@ -21365,8 +24668,8 @@
                       }
                     },
                     "value": [
-                      1160.4072265625,
-                      455.31732177734375
+                      1260.6107177734375,
+                      467.9759521484375
                     ]
                   },
                   {
@@ -21390,8 +24693,8 @@
                       }
                     },
                     "value": [
-                      1147.8148193359375,
-                      355.63885498046875
+                      1241.7222900390625,
+                      318.458251953125
                     ]
                   },
                   {
@@ -21415,8 +24718,8 @@
                       }
                     },
                     "value": [
-                      1088.7596435546875,
-                      274.35638427734375
+                      1153.1395263671875,
+                      196.5345458984375
                     ]
                   },
                   {
@@ -21440,8 +24743,8 @@
                       }
                     },
                     "value": [
-                      1022.4214477539062,
-                      237.8865966796875
+                      1053.6322021484375,
+                      141.82989501953125
                     ]
                   },
                   {
@@ -21465,8 +24768,8 @@
                       }
                     },
                     "value": [
-                      985.3171997070312,
-                      229.5928192138672
+                      997.975830078125,
+                      129.38922119140625
                     ]
                   },
                   {
@@ -21491,7 +24794,7 @@
                     },
                     "value": [
                       962.0,
-                      330.0
+                      222.0
                     ]
                   },
                   {
@@ -21598,7 +24901,7 @@
                     960.0,
                     430.0
                   ],
-                  "attract_strength": 950.0,
+                  "attract_strength": 1400.0,
                   "blend_mode": 1,
                   "collision_bounds": [
                     0.0,
@@ -21629,8 +24932,8 @@
                   ],
                   "drag": 1.2000000476837158,
                   "emitter_size": [
-                    404.0,
-                    404.0
+                    606.0,
+                    606.0
                   ],
                   "fade_curve": "EaseOut",
                   "gravity": [
@@ -22600,8 +25903,8 @@
                       }
                     },
                     "value": [
-                      6.599999904632568,
-                      3.8999998569488525
+                      9.899999618530273,
+                      5.849999904632568
                     ]
                   },
                   {
@@ -22625,8 +25928,8 @@
                       }
                     },
                     "value": [
-                      36.0,
-                      34.55999755859375
+                      54.000003814697266,
+                      51.840003967285156
                     ]
                   },
                   {
@@ -22650,8 +25953,8 @@
                       }
                     },
                     "value": [
-                      28.5,
-                      30.599998474121094
+                      42.75,
+                      45.89999771118164
                     ]
                   },
                   {
@@ -22675,8 +25978,8 @@
                       }
                     },
                     "value": [
-                      30.599998474121094,
-                      29.700000762939453
+                      45.89999771118164,
+                      44.54999923706055
                     ]
                   },
                   {
@@ -22700,8 +26003,8 @@
                       }
                     },
                     "value": [
-                      30.0,
-                      30.0
+                      45.0,
+                      45.0
                     ]
                   },
                   {
@@ -22725,8 +26028,8 @@
                       }
                     },
                     "value": [
-                      31.049999237060547,
-                      30.44999885559082
+                      46.57499694824219,
+                      45.67499923706055
                     ]
                   },
                   {
@@ -22750,8 +26053,8 @@
                       }
                     },
                     "value": [
-                      29.700000762939453,
-                      30.0
+                      44.54999923706055,
+                      45.0
                     ]
                   },
                   {
@@ -22775,8 +26078,8 @@
                       }
                     },
                     "value": [
-                      30.35999870300293,
-                      30.149999618530273
+                      45.53999710083008,
+                      45.224998474121094
                     ]
                   },
                   {
@@ -22800,16 +26103,16 @@
                       }
                     },
                     "value": [
-                      30.0,
-                      30.0
+                      45.0,
+                      45.0
                     ]
                   },
                   {
                     "frame": 150,
                     "interpolation": "Linear",
                     "value": [
-                      30.0,
-                      30.0
+                      45.0,
+                      45.0
                     ]
                   }
                 ]
@@ -23472,8 +26775,8 @@
                       }
                     },
                     "value": [
-                      6.599999904632568,
-                      3.8999998569488525
+                      9.899999618530273,
+                      5.849999904632568
                     ]
                   },
                   {
@@ -23497,8 +26800,8 @@
                       }
                     },
                     "value": [
-                      35.099998474121094,
-                      33.69599914550781
+                      52.64999771118164,
+                      50.54399490356445
                     ]
                   },
                   {
@@ -23522,8 +26825,8 @@
                       }
                     },
                     "value": [
-                      28.5,
-                      30.599998474121094
+                      42.75,
+                      45.89999771118164
                     ]
                   },
                   {
@@ -23547,8 +26850,8 @@
                       }
                     },
                     "value": [
-                      30.599998474121094,
-                      29.700000762939453
+                      45.89999771118164,
+                      44.54999923706055
                     ]
                   },
                   {
@@ -23572,8 +26875,8 @@
                       }
                     },
                     "value": [
-                      30.0,
-                      30.0
+                      45.0,
+                      45.0
                     ]
                   },
                   {
@@ -23597,8 +26900,8 @@
                       }
                     },
                     "value": [
-                      31.049999237060547,
-                      30.44999885559082
+                      46.57499694824219,
+                      45.67499923706055
                     ]
                   },
                   {
@@ -23622,8 +26925,8 @@
                       }
                     },
                     "value": [
-                      29.700000762939453,
-                      30.0
+                      44.54999923706055,
+                      45.0
                     ]
                   },
                   {
@@ -23647,8 +26950,8 @@
                       }
                     },
                     "value": [
-                      30.35999870300293,
-                      30.149999618530273
+                      45.53999710083008,
+                      45.224998474121094
                     ]
                   },
                   {
@@ -23672,16 +26975,16 @@
                       }
                     },
                     "value": [
-                      30.0,
-                      30.0
+                      45.0,
+                      45.0
                     ]
                   },
                   {
                     "frame": 150,
                     "interpolation": "Linear",
                     "value": [
-                      30.0,
-                      30.0
+                      45.0,
+                      45.0
                     ]
                   }
                 ]
@@ -24238,8 +27541,8 @@
                       }
                     },
                     "value": [
-                      6.599999904632568,
-                      3.8999998569488525
+                      9.899999618530273,
+                      5.849999904632568
                     ]
                   },
                   {
@@ -24263,8 +27566,8 @@
                       }
                     },
                     "value": [
-                      35.39999771118164,
-                      33.9839973449707
+                      53.099998474121094,
+                      50.97599792480469
                     ]
                   },
                   {
@@ -24288,8 +27591,8 @@
                       }
                     },
                     "value": [
-                      28.5,
-                      30.599998474121094
+                      42.75,
+                      45.89999771118164
                     ]
                   },
                   {
@@ -24313,8 +27616,8 @@
                       }
                     },
                     "value": [
-                      30.599998474121094,
-                      29.700000762939453
+                      45.89999771118164,
+                      44.54999923706055
                     ]
                   },
                   {
@@ -24338,8 +27641,8 @@
                       }
                     },
                     "value": [
-                      30.0,
-                      30.0
+                      45.0,
+                      45.0
                     ]
                   },
                   {
@@ -24363,8 +27666,8 @@
                       }
                     },
                     "value": [
-                      31.049999237060547,
-                      30.44999885559082
+                      46.57499694824219,
+                      45.67499923706055
                     ]
                   },
                   {
@@ -24388,8 +27691,8 @@
                       }
                     },
                     "value": [
-                      29.700000762939453,
-                      30.0
+                      44.54999923706055,
+                      45.0
                     ]
                   },
                   {
@@ -24413,8 +27716,8 @@
                       }
                     },
                     "value": [
-                      30.35999870300293,
-                      30.149999618530273
+                      45.53999710083008,
+                      45.224998474121094
                     ]
                   },
                   {
@@ -24438,16 +27741,16 @@
                       }
                     },
                     "value": [
-                      30.0,
-                      30.0
+                      45.0,
+                      45.0
                     ]
                   },
                   {
                     "frame": 150,
                     "interpolation": "Linear",
                     "value": [
-                      30.0,
-                      30.0
+                      45.0,
+                      45.0
                     ]
                   }
                 ]
@@ -25004,8 +28307,8 @@
                       }
                     },
                     "value": [
-                      6.599999904632568,
-                      3.8999998569488525
+                      9.899999618530273,
+                      5.849999904632568
                     ]
                   },
                   {
@@ -25029,8 +28332,8 @@
                       }
                     },
                     "value": [
-                      35.39999771118164,
-                      33.9839973449707
+                      53.099998474121094,
+                      50.97599792480469
                     ]
                   },
                   {
@@ -25054,8 +28357,8 @@
                       }
                     },
                     "value": [
-                      28.5,
-                      30.599998474121094
+                      42.75,
+                      45.89999771118164
                     ]
                   },
                   {
@@ -25079,8 +28382,8 @@
                       }
                     },
                     "value": [
-                      30.599998474121094,
-                      29.700000762939453
+                      45.89999771118164,
+                      44.54999923706055
                     ]
                   },
                   {
@@ -25104,8 +28407,8 @@
                       }
                     },
                     "value": [
-                      30.0,
-                      30.0
+                      45.0,
+                      45.0
                     ]
                   },
                   {
@@ -25129,8 +28432,8 @@
                       }
                     },
                     "value": [
-                      31.049999237060547,
-                      30.44999885559082
+                      46.57499694824219,
+                      45.67499923706055
                     ]
                   },
                   {
@@ -25154,8 +28457,8 @@
                       }
                     },
                     "value": [
-                      29.700000762939453,
-                      30.0
+                      44.54999923706055,
+                      45.0
                     ]
                   },
                   {
@@ -25179,8 +28482,8 @@
                       }
                     },
                     "value": [
-                      30.35999870300293,
-                      30.149999618530273
+                      45.53999710083008,
+                      45.224998474121094
                     ]
                   },
                   {
@@ -25204,16 +28507,16 @@
                       }
                     },
                     "value": [
-                      30.0,
-                      30.0
+                      45.0,
+                      45.0
                     ]
                   },
                   {
                     "frame": 150,
                     "interpolation": "Linear",
                     "value": [
-                      30.0,
-                      30.0
+                      45.0,
+                      45.0
                     ]
                   }
                 ]
@@ -25838,8 +29141,8 @@
                       }
                     },
                     "value": [
-                      6.599999904632568,
-                      3.8999998569488525
+                      9.899999618530273,
+                      5.849999904632568
                     ]
                   },
                   {
@@ -25863,8 +29166,8 @@
                       }
                     },
                     "value": [
-                      34.5,
-                      33.0
+                      51.75,
+                      49.5
                     ]
                   },
                   {
@@ -25888,8 +29191,8 @@
                       }
                     },
                     "value": [
-                      28.5,
-                      30.599998474121094
+                      42.75,
+                      45.89999771118164
                     ]
                   },
                   {
@@ -25913,8 +29216,8 @@
                       }
                     },
                     "value": [
-                      30.0,
-                      30.0
+                      45.0,
+                      45.0
                     ]
                   },
                   {
@@ -25938,8 +29241,8 @@
                       }
                     },
                     "value": [
-                      30.0,
-                      30.0
+                      45.0,
+                      45.0
                     ]
                   },
                   {
@@ -25963,8 +29266,8 @@
                       }
                     },
                     "value": [
-                      30.0,
-                      30.0
+                      45.0,
+                      45.0
                     ]
                   },
                   {
@@ -25988,8 +29291,8 @@
                       }
                     },
                     "value": [
-                      33.599998474121094,
-                      33.599998474121094
+                      50.400001525878906,
+                      50.400001525878906
                     ]
                   },
                   {
@@ -26013,8 +29316,8 @@
                       }
                     },
                     "value": [
-                      30.0,
-                      30.0
+                      45.0,
+                      45.0
                     ]
                   },
                   {
@@ -26038,16 +29341,16 @@
                       }
                     },
                     "value": [
-                      30.0,
-                      30.0
+                      45.0,
+                      45.0
                     ]
                   },
                   {
                     "frame": 150,
                     "interpolation": "Linear",
                     "value": [
-                      30.0,
-                      30.0
+                      45.0,
+                      45.0
                     ]
                   }
                 ]
@@ -26781,12 +30084,12 @@
                         }
                       }
                     },
-                    "value": 50.0
+                    "value": 65.0
                   },
                   {
                     "frame": 108,
                     "interpolation": "Linear",
-                    "value": 50.0
+                    "value": 65.0
                   },
                   {
                     "frame": 122,
@@ -26822,7 +30125,7 @@
                 "type": "Constant",
                 "value": [
                   960.0,
-                  500.0
+                  540.0
                 ]
               },
               "position_expression": null,
@@ -27136,7 +30439,7 @@
                     "interpolation": "Linear",
                     "value": [
                       960.0,
-                      600.0
+                      635.0
                     ]
                   },
                   {
@@ -27144,7 +30447,7 @@
                     "interpolation": "Linear",
                     "value": [
                       960.0,
-                      600.0
+                      635.0
                     ]
                   },
                   {
@@ -27169,7 +30472,7 @@
                     },
                     "value": [
                       960.0,
-                      808.0
+                      843.0
                     ]
                   },
                   {
@@ -27194,7 +30497,7 @@
                     },
                     "value": [
                       960.0,
-                      800.0
+                      835.0
                     ]
                   },
                   {
@@ -27202,7 +30505,7 @@
                     "interpolation": "Linear",
                     "value": [
                       960.0,
-                      800.0
+                      835.0
                     ]
                   }
                 ]
@@ -27518,7 +30821,7 @@
                     "interpolation": "Linear",
                     "value": [
                       960.0,
-                      680.0
+                      715.0
                     ]
                   },
                   {
@@ -27526,7 +30829,7 @@
                     "interpolation": "Linear",
                     "value": [
                       960.0,
-                      680.0
+                      715.0
                     ]
                   },
                   {
@@ -27551,7 +30854,7 @@
                     },
                     "value": [
                       960.0,
-                      888.0
+                      923.0
                     ]
                   },
                   {
@@ -27576,7 +30879,7 @@
                     },
                     "value": [
                       960.0,
-                      880.0
+                      915.0
                     ]
                   },
                   {
@@ -27584,7 +30887,7 @@
                     "interpolation": "Linear",
                     "value": [
                       960.0,
-                      880.0
+                      915.0
                     ]
                   }
                 ]
@@ -27942,7 +31245,7 @@
                 "type": "Constant",
                 "value": [
                   960.0,
-                  950.0
+                  965.0
                 ]
               },
               "position_expression": null,
@@ -28252,7 +31555,7 @@
                 "type": "Constant",
                 "value": [
                   960.0,
-                  995.0
+                  1010.0
                 ]
               },
               "position_expression": null,

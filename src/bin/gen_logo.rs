@@ -211,6 +211,7 @@ fn ring_layer(
     comp: &mut Composition,
     id: &str,
     color: [f32; 4],
+    diam: f32,
     start: Animatable<f32>,
     end: Animatable<f32>,
     pos: [f32; 2],
@@ -224,8 +225,8 @@ fn ring_layer(
         id.into(),
         LayerType::Shape {
             shape_type: ShapeType::Ellipse {
-                width: Animatable::new_constant(140.0),
-                height: Animatable::new_constant(140.0),
+                width: Animatable::new_constant(diam),
+                height: Animatable::new_constant(diam),
             },
             color: [0.0; 4],
             stroke_color: color,
@@ -339,7 +340,7 @@ fn build_still() -> Composition {
         ("ring_rb", 10.0, 23.0, [0.88, 0.22, 0.06, 1.0]),
     ];
     for (id, s, e, sc) in segs.iter().copied() {
-        ring_layer(&mut comp, id, sc, c1(s), c1(e), ctr, s100.clone(), o100.clone(), true, 2);
+        ring_layer(&mut comp, id, sc, 140.0, c1(s), c1(e), ctr, s100.clone(), o100.clone(), true, 2);
     }
 
     // flames
@@ -364,7 +365,8 @@ fn build_still() -> Composition {
 use kagari_vfx::core::particle_system::{EmitterShape, FadeCurve, ParticleEmitter};
 
 const R_CTR: [f32; 2] = [960.0, 430.0];
-const R_RING: f32 = 202.0;
+const R_RING: f32 = 303.0;
+const RING_U: f32 = 140.0;
 
 fn ez4(c: [f32; 4]) -> InterpolationType {
     InterpolationType::Bezier {
@@ -448,8 +450,8 @@ fn pulse_layer(
         id.into(),
         LayerType::Shape {
             shape_type: ShapeType::Ellipse {
-                width: Animatable::new_constant(140.0),
-                height: Animatable::new_constant(140.0),
+                width: Animatable::new_constant(RING_U),
+                height: Animatable::new_constant(RING_U),
             },
             color: [0.0; 4],
             stroke_color: [1.0, 0.92, 0.75, 1.0],
@@ -500,7 +502,7 @@ fn base_emitter() -> ParticleEmitter {
 fn build_reveal() -> Composition {
     let mut comp = Composition::new("LogoReveal".into(), "Kagari Logo Reveal".into(), 1920, 1080, 30, 150);
     let ctr = R_CTR;
-    let base = 30.0;
+    let base = 45.0;
     let lin = InterpolationType::Linear;
 
     comp.add_layer(Layer::new(
@@ -511,7 +513,7 @@ fn build_reveal() -> Composition {
         },
         150,
     ));
-    comp.layers.last_mut().unwrap().transform.position = c2(ctr);
+    comp.layers.last_mut().unwrap().transform.position = c2([960.0, 540.0]);
 
     // atmosphere: breathes with the ignition instead of a plain fade
     comp.add_layer(Layer::new(
@@ -557,8 +559,31 @@ fn build_reveal() -> Composition {
         ]);
     }
 
+    // luminous bed: tight warm light under the logo once ignited (two-component
+    // falloff with the wide atmosphere above). This carries the mid-tones.
+    halo(&mut comp, "bed", 120.0, 300.0, [0.65, 0.28, 0.08, 0.6], c2([960.0, 430.0]),
+        c2([100.0, 100.0]),
+        Animatable::new_animated(vec![
+            k1(0, 0.0, lin),
+            k1(46, 0.0, lin),
+            k1(60, 85.0, ez4(E_SMOOTH)),
+            k1(135, 85.0, lin),
+            k1(150, 0.0, lin),
+        ]), 150);
+
+    // flame skirt: tight hot light clinging to the flame body (permanent).
+    halo(&mut comp, "skirt", 120.0, 340.0, [0.7, 0.3, 0.08, 0.55], c2([960.0, 415.0]),
+        c2([100.0, 100.0]),
+        Animatable::new_animated(vec![
+            k1(0, 0.0, lin),
+            k1(48, 0.0, lin),
+            k1(62, 55.0, ez4(E_SMOOTH)),
+            k1(135, 55.0, lin),
+            k1(150, 0.0, lin),
+        ]), 150);
+
     // energy seed: a faint ember wakes at the ring bottom (f6)
-    halo(&mut comp, "seed", 26.0, 130.0, [1.0, 0.62, 0.2, 0.9], c2([960.0, 632.0]),
+    halo(&mut comp, "seed", 30.0, 150.0, [1.0, 0.62, 0.2, 0.9], c2([960.0, 733.0]),
         c2([100.0, 100.0]),
         Animatable::new_animated(vec![
             k1(0, 0.0, lin),
@@ -592,8 +617,8 @@ fn build_reveal() -> Composition {
         l.transform.scale = Animatable::new_animated(vec![
             k2(0, [0.0, 0.0], lin),
             k2(43, [0.0, 0.0], lin),
-            k2(46, [20.0, 20.0], ez4(E_SNAP)),
-            k2(54, [24.0, 24.0], ez4(E_SMOOTH)),
+            k2(46, [30.0, 30.0], ez4(E_SNAP)),
+            k2(54, [36.0, 36.0], ez4(E_SMOOTH)),
             k2(66, [0.0, 0.0], ez4(E_DRIFT)),
             k2(150, [0.0, 0.0], lin),
         ]);
@@ -631,9 +656,9 @@ fn build_reveal() -> Composition {
         l.transform.scale = Animatable::new_animated(vec![
             k2(0, [0.0, 0.0], lin),
             k2(44, [0.0, 0.0], lin),
-            k2(62, [1.0, 1.0], ez4(E_SMOOTH)),
-            k2(74, [1.12, 1.12], ez4(E_DRIFT)),
-            k2(150, [1.12, 1.12], lin),
+            k2(62, [9.0, 9.0], ez4(E_SMOOTH)),
+            k2(74, [10.0, 10.0], ez4(E_DRIFT)),
+            k2(150, [10.0, 10.0], lin),
         ]);
         l.transform.opacity = Animatable::new_animated(vec![
             k1(0, 0.0, lin),
@@ -667,10 +692,10 @@ fn build_reveal() -> Composition {
         let l = comp.layers.last_mut().unwrap();
         l.transform.position = c2(ctr);
         l.transform.scale = Animatable::new_animated(vec![
-            k2(0, [0.12, 0.12], lin),
-            k2(69, [0.12, 0.12], lin),
-            k2(92, [0.95, 0.95], ez4(E_SMOOTH)),
-            k2(150, [0.95, 0.95], lin),
+            k2(0, [0.18, 0.18], lin),
+            k2(69, [0.18, 0.18], lin),
+            k2(92, [8.5, 8.5], ez4(E_SMOOTH)),
+            k2(150, [8.5, 8.5], lin),
         ]);
         l.transform.opacity = Animatable::new_animated(vec![
             k1(0, 0.0, lin),
@@ -683,7 +708,7 @@ fn build_reveal() -> Composition {
     }
 
     // white-hot peak: the whole logo overexposes briefly, then decays
-    halo(&mut comp, "whitepeak", 240.0, 600.0, [1.0, 0.98, 0.94, 1.0], c2([960.0, 470.0]),
+    halo(&mut comp, "whitepeak", 240.0, 600.0, [1.0, 0.98, 0.94, 1.0], c2([960.0, 440.0]),
         Animatable::new_animated(vec![
             k2(0, [40.0, 40.0], lin),
             k2(80, [40.0, 40.0], lin),
@@ -708,7 +733,7 @@ fn build_reveal() -> Composition {
         let pts = vec![[0.0, -3.0], [dir * 46.0, -3.0], [dir * 46.0, 3.0], [0.0, 3.0]];
         let d = if side == "l" { 0 } else { 2 };
         apart(&mut comp, &id, pts.clone(), sharp(&pts), [1.0, 0.8, 0.45, 1.0],
-            ShapeFillType::Solid, c2([x0, 442.0]),
+            ShapeFillType::Solid, c2([x0, 444.0]),
             Animatable::new_animated(vec![
                 k2(0, [0.0, base], lin),
                 k2(52 + d, [0.0, base], lin),
@@ -724,8 +749,9 @@ fn build_reveal() -> Composition {
             ]), 150);
     }
 
-    // wings deploy from the streak impacts: dark mass first, bright blade
-    // follows 3f later with a wider swing (follow-through). Left leads by 2f.
+    // wings materialize at the streak impacts: short travel, then opacity pops
+    // at arrival (no long dark slides). Dark mass first, bright blade unfolds
+    // 3f later with a wider swing (follow-through). Left leads by 2f.
     let deploy = |from_x: f32, t0: u32, rot0: f32| {
         (Animatable::new_animated(vec![
             k2(0, [ctr[0] + from_x, ctr[1]], lin),
@@ -745,57 +771,66 @@ fn build_reveal() -> Composition {
     let wing_op = |t0: u32| {
         Animatable::new_animated(vec![
             k1(0, 0.0, lin),
-            k1(t0 - 2, 0.0, lin),
-            k1(t0 + 4, 100.0, ez4(E_SMOOTH)),
+            k1(t0 + 8, 0.0, lin),
+            k1(t0 + 12, 100.0, ez4(E_SNAP)),
             k1(135, 100.0, lin),
             k1(150, 0.0, lin),
         ])
     };
+    let unfold = |t0: u32| {
+        Animatable::new_animated(vec![
+            k2(0, [base * 0.35, base], lin),
+            k2(t0 + 8, [base * 0.35, base], lin),
+            k2(t0 + 13, [base * 1.12, base], ez4(E_SNAP)),
+            k2(t0 + 18, [base, base], ez4(E_SMOOTH)),
+            k2(150, [base, base], lin),
+        ])
+    };
     let wd = wing_dark_l_pts();
-    let (wp, wr) = deploy(-260.0, 58, -16.0);
+    let (wp, wr) = deploy(-225.0, 56, -16.0);
     apart(&mut comp, "wing_dl", wd.clone(), sharp(&wd), [0.08, 0.10, 0.16, 1.0], ShapeFillType::Solid,
-        wp, c2([base, base]), wing_op(58), 150);
+        wp, c2([base, base]), wing_op(56), 150);
     comp.layers.last_mut().unwrap().transform.rotation = wr;
     let wdr = mirror(&wd);
-    let (wp, wr) = deploy(260.0, 60, 16.0);
+    let (wp, wr) = deploy(225.0, 58, 16.0);
     apart(&mut comp, "wing_dr", wdr.clone(), sharp(&wdr), [0.08, 0.10, 0.16, 1.0], ShapeFillType::Solid,
-        wp, c2([base, base]), wing_op(60), 150);
+        wp, c2([base, base]), wing_op(58), 150);
     comp.layers.last_mut().unwrap().transform.rotation = wr;
     let wb = wing_blade_l_pts();
-    let (wp, wr) = deploy(-260.0, 61, -23.0);
+    let (wp, wr) = deploy(-225.0, 59, -23.0);
     apart(&mut comp, "wing_l", wb.clone(), sharp(&wb), [0.96, 0.95, 0.90, 1.0], ShapeFillType::Solid,
-        wp, c2([base, base]), wing_op(61), 150);
+        wp, unfold(59), wing_op(59), 150);
     comp.layers.last_mut().unwrap().transform.rotation = wr;
     let wbr = mirror(&wb);
-    let (wp, wr) = deploy(260.0, 63, 23.0);
+    let (wp, wr) = deploy(225.0, 61, 23.0);
     apart(&mut comp, "wing_r", wbr.clone(), sharp(&wbr), [0.96, 0.95, 0.90, 1.0], ShapeFillType::Solid,
-        wp, c2([base, base]), wing_op(63), 150);
+        wp, unfold(61), wing_op(61), 150);
     comp.layers.last_mut().unwrap().transform.rotation = wr;
 
-    // wing-root impact glows: reaction to each lock (left f70, right f72)
-    halo(&mut comp, "root_l", 40.0, 200.0, [1.0, 0.8, 0.5, 0.95], c2([848.0, 442.0]),
-        c2([100.0, 100.0]),
-        Animatable::new_animated(vec![
-            k1(0, 0.0, lin),
-            k1(66, 0.0, lin),
-            k1(70, 80.0, ez4(E_SNAP)),
-            k1(78, 0.0, ez4(E_SMOOTH)),
-            k1(150, 0.0, lin),
-        ]), 150);
-    halo(&mut comp, "root_r", 40.0, 200.0, [1.0, 0.8, 0.5, 0.95], c2([1072.0, 442.0]),
+    // wing-root impact glows: reaction to each lock (left f72, right f74)
+    halo(&mut comp, "root_l", 40.0, 200.0, [1.0, 0.8, 0.5, 1.0], c2([792.0, 445.0]),
         c2([100.0, 100.0]),
         Animatable::new_animated(vec![
             k1(0, 0.0, lin),
             k1(68, 0.0, lin),
-            k1(72, 80.0, ez4(E_SNAP)),
+            k1(72, 100.0, ez4(E_SNAP)),
             k1(80, 0.0, ez4(E_SMOOTH)),
+            k1(150, 0.0, lin),
+        ]), 150);
+    halo(&mut comp, "root_r", 40.0, 200.0, [1.0, 0.8, 0.5, 1.0], c2([1128.0, 445.0]),
+        c2([100.0, 100.0]),
+        Animatable::new_animated(vec![
+            k1(0, 0.0, lin),
+            k1(70, 0.0, lin),
+            k1(74, 100.0, ez4(E_SNAP)),
+            k1(82, 0.0, ez4(E_SMOOTH)),
             k1(150, 0.0, lin),
         ]), 150);
 
     // shield rises heavy: slow-in, small overshoot bounce, settles
     let rise = Animatable::new_animated(vec![
-        k2(0, [ctr[0], ctr[1] + 220.0], lin),
-        k2(60, [ctr[0], ctr[1] + 220.0], lin),
+        k2(0, [ctr[0], ctr[1] + 330.0], lin),
+        k2(60, [ctr[0], ctr[1] + 330.0], lin),
         k2(78, [ctr[0], ctr[1] - 7.0], ez4(E_HEAVY)),
         k2(84, ctr, ez4(E_SMOOTH)),
         k2(150, ctr, lin),
@@ -847,8 +882,60 @@ fn build_reveal() -> Composition {
         } else {
             (front(e, s, d0, d1), c1(e))
         };
-        ring_layer(&mut comp, id, sc, st, en, ctr,
+        ring_layer(&mut comp, id, sc, RING_U, st, en, ctr,
             c2([base, base]), ring_op.clone(), false, 150);
+    }
+
+    // ring charge: a thicker, hotter arc set fades in over the base ring as
+    // the climax charge (thin -> luminous band), then settles to a glow.
+    // Same segments, static trims — the base draw-on already ran.
+    let charge_op = Animatable::new_animated(vec![
+        k1(0, 0.0, lin),
+        k1(68, 0.0, lin),
+        k1(86, 80.0, ez4(E_SMOOTH)),
+        k1(100, 48.0, ez4(E_DRIFT)),
+        k1(135, 48.0, lin),
+        k1(150, 0.0, lin),
+    ]);
+    let charge_cols: &[[f32; 4]] = &[
+        [1.0, 0.90, 0.55, 1.0],
+        [1.0, 0.68, 0.25, 1.0],
+        [1.0, 0.40, 0.12, 1.0],
+    ];
+    for ((id, s, e, _, _, _), _) in ring_draws.iter().copied() {
+        let ci = if id == "ring_lt" || id == "ring_rt" {
+            0
+        } else if id == "ring_lb" || id == "ring_rb" {
+            2
+        } else {
+            1
+        };
+        let cid = format!("{id}_chg");
+        comp.add_layer(Layer::new(
+            cid.clone(), cid,
+            LayerType::Shape {
+                shape_type: ShapeType::Ellipse {
+                    width: Animatable::new_constant(RING_U),
+                    height: Animatable::new_constant(RING_U),
+                },
+                color: [0.0; 4],
+                stroke_color: charge_cols[ci.min(2)],
+                stroke_width: 16.0,
+                fill_type: ShapeFillType::Solid,
+                extrusion_depth: 0.0,
+                bevel_depth: 0.0,
+            },
+            150,
+        ));
+        let l = comp.layers.last_mut().unwrap();
+        l.transform.position = c2(ctr);
+        l.transform.scale = c2([base, base]);
+        l.transform.opacity = charge_op.clone();
+        l.trim_paths = Some(TrimPaths {
+            start: c1(s),
+            end: c1(e),
+            offset: Animatable::new_constant(0.0),
+        });
     }
 
     // traveling energy pulses: bright windows riding just ahead of each front.
@@ -888,7 +975,7 @@ fn build_reveal() -> Composition {
         k2(31, comet_pos(62.0), ez4(E_FASTIN)),
         k2(34, comet_pos(70.0), ez4(E_FASTIN)),
         k2(36, comet_pos(75.0), ez4(E_FASTIN)),
-        k2(40, [960.0, 330.0], ez4(E_FASTIN)),
+        k2(40, [960.0, 220.0], ez4(E_FASTIN)),
         k2(44, ctr, ez4(E_SNAP)),
         k2(150, ctr, lin),
     ];
@@ -903,7 +990,7 @@ fn build_reveal() -> Composition {
         k2(30, comet_pos(86.0), ez4(E_FASTIN)),
         k2(34, comet_pos(80.0), ez4(E_FASTIN)),
         k2(38, comet_pos(77.0), ez4(E_FASTIN)),
-        k2(42, [962.0, 330.0], ez4(E_FASTIN)),
+        k2(42, [962.0, 222.0], ez4(E_FASTIN)),
         k2(46, ctr, ez4(E_SNAP)),
         k2(150, ctr, lin),
     ];
@@ -921,8 +1008,8 @@ fn build_reveal() -> Composition {
             format!("Comet {side}"),
             LayerType::Shape {
                 shape_type: ShapeType::Ellipse {
-                    width: Animatable::new_constant(9.0),
-                    height: Animatable::new_constant(9.0),
+                    width: Animatable::new_constant(7.0),
+                    height: Animatable::new_constant(7.0),
                 },
                 color: [1.0, 0.98, 0.92, 1.0],
                 stroke_color: [0.0; 4],
@@ -969,7 +1056,7 @@ fn build_reveal() -> Composition {
         speed_variance: 0.6,
         spread_degrees: 360.0,
         shape: EmitterShape::Ring,
-        emitter_size: [404.0, 404.0],
+        emitter_size: [606.0, 606.0],
         gravity: [0.0, 0.0],
         wind: [0.0, 0.0],
         turbulence: 20.0,
@@ -980,7 +1067,7 @@ fn build_reveal() -> Composition {
         opacity_start: 1.0,
         opacity_end: 0.0,
         drag: 1.2,
-        attract_strength: 950.0,
+        attract_strength: 1400.0,
         attract_center: [960.0, 430.0],
         ..base_emitter()
     }, ctr,
@@ -1098,12 +1185,12 @@ fn build_reveal() -> Composition {
         size_end: 1.0,
         drag: 0.4,
         ..base_emitter()
-    }, [960.0, 500.0],
+    }, [960.0, 540.0],
     Animatable::new_animated(vec![
         k1(0, 0.0, lin),
         k1(46, 0.0, lin),
-        k1(58, 50.0, ez4(E_SMOOTH)),
-        k1(108, 50.0, lin),
+        k1(58, 65.0, ez4(E_SMOOTH)),
+        k1(108, 65.0, lin),
         k1(122, 0.0, ez4(E_DRIFT)),
         k1(150, 0.0, lin),
     ]), 150);
@@ -1136,7 +1223,7 @@ fn build_reveal() -> Composition {
         }, 150));
     {
         let t = comp.layers.last_mut().unwrap();
-        t.transform.position = title_rise(94, 800.0);
+        t.transform.position = title_rise(94, 835.0);
         t.transform.opacity = title_op(94);
     }
     comp.add_layer(Layer::new("vfx".into(), "VFX".into(),
@@ -1148,7 +1235,7 @@ fn build_reveal() -> Composition {
         }, 150));
     {
         let v = comp.layers.last_mut().unwrap();
-        v.transform.position = title_rise(98, 880.0);
+        v.transform.position = title_rise(98, 915.0);
         v.transform.opacity = title_op(98);
     }
     comp.add_layer(Layer::new("line".into(), "Line".into(),
@@ -1170,7 +1257,7 @@ fn build_reveal() -> Composition {
     ));
     {
         let l = comp.layers.last_mut().unwrap();
-        l.transform.position = Animatable::new_constant([960.0, 950.0]);
+        l.transform.position = Animatable::new_constant([960.0, 965.0]);
         l.transform.opacity = title_op(106);
     }
     comp.add_layer(Layer::new("tag".into(), "Tagline".into(),
@@ -1182,7 +1269,7 @@ fn build_reveal() -> Composition {
         }, 150));
     {
         let l = comp.layers.last_mut().unwrap();
-        l.transform.position = Animatable::new_constant([960.0, 995.0]);
+        l.transform.position = Animatable::new_constant([960.0, 1010.0]);
         l.transform.opacity = title_op(114);
     }
 
