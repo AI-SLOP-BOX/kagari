@@ -34,68 +34,109 @@ fn sharp(points: &[Pt2]) -> Vec<(Pt2, Pt2)> {
 
 fn flame_outer_pts() -> Vec<Pt2> {
     vec![
-        [0.0, -78.0],
-        [4.0, -64.0],
-        [9.0, -51.0],
-        [18.0, -39.0],
-        [27.0, -26.0],
-        [31.0, -13.0],
-        [31.0, -3.0],
-        [24.0, 16.0],
-        [8.0, 38.0],
-        [0.0, 44.0],
-        [-8.0, 38.0],
-        [-24.0, 16.0],
-        [-31.0, -3.0],
-        [-31.0, -13.0],
-        [-27.0, -26.0],
-        [-18.0, -39.0],
-        [-9.0, -51.0],
-        [-4.0, -64.0],
+        [-0.3, -71.7],
+        [1.3, -63.3],
+        [2.7, -54.9],
+        [4.4, -50.8],
+        [6.4, -46.8],
+        [8.8, -42.8],
+        [11.8, -38.7],
+        [14.8, -34.7],
+        [17.8, -30.6],
+        [20.9, -26.6],
+        [23.9, -22.6],
+        [26.3, -18.5],
+        [27.9, -14.5],
+        [29.3, -10.4],
+        [30.0, -6.4],
+        [30.0, -2.4],
+        [29.3, 1.7],
+        [27.6, 5.7],
+        [25.3, 9.8],
+        [22.2, 13.5],
+        [18.9, 17.2],
+        [14.8, 20.5],
+        [10.1, 23.9],
+        [5.4, 27.3],
+        [2.0, 31.3],
+        [-0.3, 35.4],
+        [-2.0, 38.7],
+        [-1.3, 39.1],
+        [-4.4, 35.4],
+        [-6.7, 31.3],
+        [-10.1, 27.3],
+        [-15.2, 21.9],
+        [-20.9, 17.8],
+        [-25.3, 13.5],
+        [-28.3, 9.8],
+        [-30.0, 5.7],
+        [-31.0, 1.7],
+        [-30.3, -2.7],
+        [-31.0, -6.4],
+        [-31.0, -10.4],
+        [-30.3, -14.5],
+        [-29.0, -18.5],
+        [-26.9, -22.6],
+        [-24.6, -26.6],
+        [-21.5, -30.6],
+        [-18.2, -34.7],
+        [-15.2, -38.7],
+        [-12.1, -42.8],
+        [-9.4, -46.8],
+        [-7.1, -50.8],
+        [-5.1, -54.9],
+        [-2.7, -63.3],
     ]
 }
 
 fn flame_mid_pts() -> Vec<Pt2> {
     vec![
-        [0.0, -44.0],
-        [3.0, -36.0],
-        [6.0, -28.0],
-        [11.0, -21.0],
-        [16.0, -13.0],
-        [19.0, -5.0],
-        [19.0, -2.0],
-        [14.0, 10.0],
-        [5.0, 23.0],
-        [0.0, 26.0],
-        [-5.0, 23.0],
-        [-14.0, 10.0],
-        [-19.0, -2.0],
-        [-19.0, -5.0],
-        [-16.0, -13.0],
-        [-11.0, -21.0],
-        [-6.0, -28.0],
-        [-3.0, -36.0],
+        [-0.3, -48.1],
+        [4.4, -38.0],
+        [8.8, -27.9],
+        [12.8, -17.8],
+        [16.2, -7.7],
+        [17.5, 2.4],
+        [16.2, 12.5],
+        [12.8, 20.9],
+        [7.7, 27.6],
+        [2.7, 32.7],
+        [0.0, 35.4],
+        [-2.7, 32.7],
+        [-7.7, 27.6],
+        [-12.8, 20.9],
+        [-16.2, 12.5],
+        [-17.5, 2.4],
+        [-16.2, -7.7],
+        [-12.8, -17.8],
+        [-8.8, -27.9],
+        [-4.4, -38.0],
     ]
 }
 
 fn flame_core_pts() -> Vec<Pt2> {
     vec![
-        [0.0, -22.0],
-        [2.0, -18.0],
-        [4.0, -14.0],
-        [7.0, -10.0],
-        [9.0, -4.0],
-        [9.0, 0.0],
-        [7.0, 6.0],
-        [3.0, 11.0],
-        [0.0, 13.0],
-        [-3.0, 11.0],
-        [-7.0, 6.0],
-        [-9.0, 0.0],
-        [-9.0, -4.0],
-        [-7.0, -10.0],
-        [-4.0, -14.0],
-        [-2.0, -18.0],
+        [0.3, -27.9],
+        [1.3, -23.9],
+        [3.7, -19.9],
+        [6.1, -15.8],
+        [8.8, -11.8],
+        [10.8, -7.7],
+        [12.1, -3.7],
+        [11.8, 0.3],
+        [10.8, 4.4],
+        [8.8, 8.4],
+        [6.1, 12.5],
+        [3.7, 16.5],
+        [1.7, 20.5],
+        [0.0, 23.2],
+        [-0.3, 19.2],
+        [-0.3, 12.5],
+        [-0.3, 5.7],
+        [-0.3, -1.0],
+        [-0.3, -7.7],
+        [-0.3, -14.5],
+        [-0.3, -21.2],
     ]
 }
 
@@ -150,52 +191,150 @@ fn mirror(pts: &[Pt2]) -> Vec<Pt2> {
     pts.iter().map(|p| [-p[0], p[1]]).collect()
 }
 
+fn shadow_ul_pts() -> Vec<Pt2> {
+    vec![
+        [-0.7, -71.0],
+        [-2.4, -63.3],
+        [-5.1, -54.9],
+        [-7.1, -50.8],
+        [-9.4, -46.8],
+        [-12.1, -42.8],
+        [-15.2, -38.7],
+        [-18.2, -34.7],
+        [-21.5, -30.6],
+        [-24.6, -26.6],
+        [-14.1, -24.6],
+        [-5.4, -23.6],
+        [-4.0, -26.3],
+        [-2.7, -29.0],
+        [-1.7, -31.6],
+        [-1.0, -34.3],
+        [-0.7, -44.8],
+        [-0.7, -61.6],
+    ]
+}
+
+fn shadow_ul_fill() -> ShapeFillType {
+    ShapeFillType::LinearGradient {
+        start: [0.0, -353.0],
+        end: [0.0, -123.0],
+        colors: vec![
+            [0.80, 0.25, 0.06, 1.0],
+            [0.95, 0.24, 0.04, 1.0],
+            [1.0, 0.28, 0.06, 1.0],
+        ],
+        stops: vec![0.0, 0.5, 1.0],
+    }
+}
+
 fn shield_l_pts() -> Vec<Pt2> {
-    vec![[0.0, 45.0], [-12.0, 51.0], [-12.0, 65.0], [0.0, 70.0]]
+    vec![[-13.5, 42.1], [-3.4, 42.1], [-3.4, 69.7], [-13.5, 69.7]]
+}
+
+fn cube_r_pts() -> Vec<Pt2> {
+    vec![[-3.4, 42.1], [6.7, 42.1], [6.7, 69.7], [-3.4, 69.7]]
 }
 
 fn wing_dark_l_pts() -> Vec<Pt2> {
-    vec![[-62.0, 12.0], [-39.0, 2.0], [-32.0, 31.0]]
+    vec![
+        [-57.2, 10.8],
+        [-52.5, 14.1],
+        [-47.8, 17.8],
+        [-43.1, 21.5],
+        [-38.0, 25.6],
+        [-32.7, 30.0],
+        [-27.6, 34.0],
+        [-22.9, 37.4],
+        [-18.9, 40.1],
+        [-16.2, 42.1],
+        [-13.5, 44.1],
+        [-10.8, 45.8],
+        [-6.1, 44.8],
+        [-1.3, 42.1],
+        [-1.3, 44.1],
+        [-7.5, 45.0],
+        [-12.5, 45.5],
+        [-16.2, 45.8],
+        [-17.5, 44.8],
+        [-20.9, 44.1],
+        [-26.3, 41.8],
+        [-31.6, 38.7],
+        [-37.0, 35.0],
+        [-42.4, 30.6],
+        [-47.8, 25.6],
+        [-53.2, 19.9],
+        [-57.2, 14.5],
+    ]
 }
 
 fn wing_blade_l_pts() -> Vec<Pt2> {
-    vec![[-60.0, 7.0], [-39.0, 2.0], [-42.0, 11.0], [-53.0, 9.0]]
+    vec![
+        [-60.6, 8.1],
+        [-54.5, 5.4],
+        [-48.5, 2.4],
+        [-43.4, -0.3],
+        [-39.7, -1.0],
+        [-38.7, 7.4],
+        [-38.0, 15.8],
+        [-35.0, 19.9],
+        [-31.6, 23.9],
+        [-27.6, 27.3],
+        [-23.6, 30.6],
+        [-19.5, 33.7],
+        [-15.5, 36.0],
+        [-12.1, 37.7],
+        [-10.1, 39.1],
+        [-6.1, 42.8],
+        [-8.1, 44.1],
+        [-10.8, 44.4],
+        [-13.5, 42.8],
+        [-16.2, 40.7],
+        [-18.9, 38.7],
+        [-22.9, 36.0],
+        [-27.6, 32.7],
+        [-32.7, 28.6],
+        [-38.0, 24.2],
+        [-43.1, 20.2],
+        [-47.8, 16.5],
+        [-52.5, 12.8],
+        [-57.2, 9.4],
+    ]
 }
 
 fn flame_outer_fill() -> ShapeFillType {
     ShapeFillType::LinearGradient {
-        start: [0.0, -370.0],
-        end: [0.0, 220.0],
+        start: [0.0, -358.0],
+        end: [0.0, 196.0],
         colors: vec![
-            [0.85, 0.14, 0.04, 1.0],
-            [1.0, 0.48, 0.10, 1.0],
-            [1.0, 0.74, 0.26, 1.0],
-            [1.0, 0.85, 0.45, 1.0],
+            [1.0, 0.75, 0.24, 1.0],
+            [1.0, 0.66, 0.21, 1.0],
+            [1.0, 0.55, 0.16, 1.0],
+            [1.0, 0.33, 0.08, 1.0],
+            [1.0, 0.48, 0.15, 1.0],
+            [1.0, 0.68, 0.23, 1.0],
+            [1.0, 0.82, 0.29, 1.0],
+            [1.0, 0.62, 0.18, 1.0],
+            [0.93, 0.27, 0.08, 1.0],
         ],
-        stops: vec![0.0, 0.45, 0.75, 1.0],
+        stops: vec![0.0, 0.20, 0.33, 0.42, 0.50, 0.60, 0.72, 0.85, 1.0],
     }
 }
 
 fn flame_mid_fill() -> ShapeFillType {
     ShapeFillType::LinearGradient {
-        start: [0.0, -220.0],
-        end: [0.0, 130.0],
+        start: [0.0, -240.0],
+        end: [0.0, 177.0],
         colors: vec![
-            [1.0, 0.74, 0.26, 1.0],
-            [1.0, 0.85, 0.45, 1.0],
-            [1.0, 0.96, 0.80, 1.0],
+            [1.0, 0.75, 0.43, 1.0],
+            [1.0, 0.84, 0.59, 1.0],
+            [1.0, 0.90, 0.73, 1.0],
         ],
         stops: vec![0.0, 0.55, 1.0],
     }
 }
 
 fn flame_core_fill() -> ShapeFillType {
-    ShapeFillType::RadialGradient {
-        center: [0.0, 30.0],
-        radius: 110.0,
-        colors: vec![[1.0, 1.0, 0.98, 1.0], [1.0, 0.90, 0.68, 1.0]],
-        stops: vec![0.0, 1.0],
-    }
+    ShapeFillType::Solid
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -241,6 +380,7 @@ fn ring_layer(
     id: &str,
     color: [f32; 4],
     diam: f32,
+    sw: f32,
     start: Animatable<f32>,
     end: Animatable<f32>,
     pos: [f32; 2],
@@ -259,7 +399,7 @@ fn ring_layer(
             },
             color: [0.0; 4],
             stroke_color: color,
-            stroke_width: 11.0,
+            stroke_width: sw,
             fill_type: ShapeFillType::Solid,
             extrusion_depth: 0.0,
             bevel_depth: 0.0,
@@ -303,7 +443,7 @@ fn c1(v: f32) -> Animatable<f32> {
 
 fn build_still() -> Composition {
     let mut comp = Composition::new("LogoStill".into(), "Kagari Vector Logo".into(), 1000, 1000, 30, 2);
-    let ctr = [500.0, 500.0];
+    let ctr = [492.0, 476.0];
     let s100 = c2([100.0, 100.0]);
     let o100 = c1(100.0);
 
@@ -311,78 +451,62 @@ fn build_still() -> Composition {
         "bg".into(),
         "BG".into(),
         LayerType::Solid {
-            color: [0.015, 0.01, 0.01, 1.0],
+            color: [0.247, 0.247, 0.247, 1.0],
         },
         2,
     ));
-    comp.layers.last_mut().unwrap().transform.position = c2(ctr);
+    comp.layers.last_mut().unwrap().transform.position = c2([500.0, 500.0]);
 
-    // atmosphere
-    comp.add_layer(Layer::new(
-        "atmos".into(),
-        "Atmosphere".into(),
-        LayerType::Shape {
-            shape_type: ShapeType::Ellipse {
-                width: Animatable::new_constant(170.0),
-                height: Animatable::new_constant(170.0),
-            },
-            color: [1.0; 4],
-            stroke_color: [0.0; 4],
-            stroke_width: 0.0,
-            fill_type: ShapeFillType::RadialGradient {
-                center: [0.0, 0.0],
-                radius: 430.0,
-                colors: vec![[0.55, 0.20, 0.04, 0.55], [0.0, 0.0, 0.0, 0.0]],
-                stops: vec![0.0, 1.0],
-            },
-            extrusion_depth: 0.0,
-            bevel_depth: 0.0,
-        },
-        2,
-    ));
-    comp.layers.last_mut().unwrap().transform.position = c2(ctr);
-
-    // shield
+    // cube pedestal (light left face / navy right face)
     let sl = shield_l_pts();
-    apart(&mut comp, "shield_l", sl.clone(), sharp(&sl), [0.76, 0.73, 0.66, 1.0], ShapeFillType::Solid, c2(ctr), s100.clone(), o100.clone(), 2);
-    let sr = mirror(&sl);
-    apart(&mut comp, "shield_r", sr.clone(), sharp(&sr), [0.09, 0.10, 0.15, 1.0], ShapeFillType::Solid, c2(ctr), s100.clone(), o100.clone(), 2);
+    apart(&mut comp, "cube_l", sl.clone(), sharp(&sl), [0.757, 0.722, 0.655, 1.0], ShapeFillType::Solid, c2(ctr), s100.clone(), o100.clone(), 2);
+    let sr = cube_r_pts();
+    apart(&mut comp, "cube_r", sr.clone(), sharp(&sr), [0.122, 0.141, 0.169, 1.0], ShapeFillType::Solid, c2(ctr), s100.clone(), o100.clone(), 2);
 
-    // wings
+    // wings (navy under, white blade over)
     let wd = wing_dark_l_pts();
-    apart(&mut comp, "wing_dl", wd.clone(), sharp(&wd), [0.08, 0.10, 0.16, 1.0], ShapeFillType::Solid, c2(ctr), s100.clone(), o100.clone(), 2);
+    apart(&mut comp, "wing_dl", wd.clone(), sharp(&wd), [0.122, 0.141, 0.169, 1.0], ShapeFillType::Solid, c2(ctr), s100.clone(), o100.clone(), 2);
     let wdr = mirror(&wd);
-    apart(&mut comp, "wing_dr", wdr.clone(), sharp(&wdr), [0.08, 0.10, 0.16, 1.0], ShapeFillType::Solid, c2(ctr), s100.clone(), o100.clone(), 2);
+    apart(&mut comp, "wing_dr", wdr.clone(), sharp(&wdr), [0.122, 0.141, 0.169, 1.0], ShapeFillType::Solid, c2(ctr), s100.clone(), o100.clone(), 2);
     let wb = wing_blade_l_pts();
-    apart(&mut comp, "wing_l", wb.clone(), sharp(&wb), [0.96, 0.95, 0.90, 1.0], ShapeFillType::Solid, c2(ctr), s100.clone(), o100.clone(), 2);
+    apart(&mut comp, "wing_l", wb.clone(), sharp(&wb), [1.0, 0.973, 0.910, 1.0], ShapeFillType::Solid, c2(ctr), s100.clone(), o100.clone(), 2);
     let wbr = mirror(&wb);
-    apart(&mut comp, "wing_r", wbr.clone(), sharp(&wbr), [0.96, 0.95, 0.90, 1.0], ShapeFillType::Solid, c2(ctr), s100.clone(), o100.clone(), 2);
+    apart(&mut comp, "wing_r", wbr.clone(), sharp(&wbr), [1.0, 0.973, 0.910, 1.0], ShapeFillType::Solid, c2(ctr), s100.clone(), o100.clone(), 2);
 
-    // ring arcs (static trims)
+    // ring arcs (two tapered gradient arcs, flat vector look)
     let segs: &[(&str, f32, f32, [f32; 4])] = &[
-        ("ring_lt", 60.0, 73.0, [1.0, 0.90, 0.40, 1.0]),
-        ("ring_lm", 40.0, 60.0, [1.0, 0.68, 0.20, 1.0]),
-        ("ring_lb", 27.0, 40.0, [1.0, 0.30, 0.08, 1.0]),
-        ("ring_rt", 77.0, 90.0, [1.0, 0.90, 0.40, 1.0]),
-        ("ring_rm1", 90.0, 100.0, [1.0, 0.68, 0.20, 1.0]),
-        ("ring_rm2", 0.0, 10.0, [1.0, 0.68, 0.20, 1.0]),
-        ("ring_rb", 10.0, 23.0, [1.0, 0.30, 0.08, 1.0]),
+        ("ring_lb2", 34.9, 36.5, [1.0, 0.235, 0.04, 1.0]),
+        ("ring_lb", 36.5, 39.0, [1.0, 0.267, 0.043, 1.0]),
+        ("ring_lb2x", 39.0, 41.5, [1.0, 0.373, 0.059, 1.0]),
+        ("ring_lb3", 41.5, 45.5, [1.0, 0.57, 0.106, 1.0]),
+        ("ring_lm3", 45.5, 50.0, [1.0, 0.765, 0.157, 1.0]),
+        ("ring_lm", 50.0, 54.5, [1.0, 0.745, 0.153, 1.0]),
+        ("ring_lm2b", 54.5, 60.5, [1.0, 0.66, 0.133, 1.0]),
+        ("ring_lm2a", 60.5, 66.5, [1.0, 0.62, 0.122, 1.0]),
+        ("ring_lt", 66.5, 71.3, [1.0, 0.63, 0.125, 1.0]),
+        ("ring_rt", 78.5, 84.0, [1.0, 0.64, 0.126, 1.0]),
+        ("ring_rm", 84.0, 89.5, [1.0, 0.628, 0.126, 1.0]),
+        ("ring_rm2", 89.5, 95.0, [1.0, 0.675, 0.137, 1.0]),
+        ("ring_rm3a", 95.0, 100.0, [1.0, 0.745, 0.153, 1.0]),
+        ("ring_rm3b", 0.0, 2.5, [1.0, 0.804, 0.161, 1.0]),
+        ("ring_rm4", 2.5, 6.5, [1.0, 0.698, 0.137, 1.0]),
+        ("ring_rb2", 6.5, 10.0, [1.0, 0.49, 0.09, 1.0]),
+        ("ring_rb3", 10.0, 12.5, [1.0, 0.306, 0.051, 1.0]),
+        ("ring_rb", 12.5, 15.1, [1.0, 0.235, 0.04, 1.0]),
     ];
     for (id, s, e, sc) in segs.iter().copied() {
-        ring_layer(&mut comp, id, sc, 140.0, c1(s), c1(e), ctr, s100.clone(), o100.clone(), true, 2);
+        ring_layer(&mut comp, id, sc, 137.5, 20.0, c1(s), c1(e), [487.7, 476.6], s100.clone(), o100.clone(), false, 2);
     }
 
-    // flames
+    // flames (flat vector zones: red shell / upper-left shadow / orange band / cream core)
     let fo = flame_outer_pts();
-    apart(&mut comp, "flame_outer", fo.clone(), smooth_closed(&fo, &[0, 9]), [1.0; 4], flame_outer_fill(), c2(ctr), s100.clone(), o100.clone(), 2);
+    apart(&mut comp, "flame_outer", fo.clone(), smooth_closed(&fo, &[0, 27]), [1.0; 4], flame_outer_fill(), c2(ctr), s100.clone(), o100.clone(), 2);
+    let su = shadow_ul_pts();
+    apart(&mut comp, "shade_ul", su.clone(), smooth_closed(&su, &[0, 11]), [1.0; 4], shadow_ul_fill(), c2(ctr), s100.clone(), o100.clone(), 2);
     let fm = flame_mid_pts();
-    apart(&mut comp, "flame_mid", fm.clone(), smooth_closed(&fm, &[0, 9]), [1.0; 4], flame_mid_fill(), c2(ctr), s100.clone(), o100.clone(), 2);
-    let sh = half_light_l_pts();
-    apart(&mut comp, "light_l", sh.clone(), smooth_closed(&sh, &[0, 9]), [1.0; 4], half_light_l_fill(), c2(ctr), s100.clone(), o100.clone(), 2);
-    let lr = mirror(&sh);
-    apart(&mut comp, "shade_r", lr.clone(), smooth_closed(&lr, &[0, 9]), [1.0; 4], half_shade_r_fill(), c2(ctr), s100.clone(), o100.clone(), 2);
+    apart(&mut comp, "flame_mid", fm.clone(), smooth_closed(&fm, &[0, 10]), [1.0; 4], flame_mid_fill(), c2(ctr), s100.clone(), o100.clone(), 2);
     let fc = flame_core_pts();
-    apart(&mut comp, "flame_core", fc.clone(), smooth_closed(&fc, &[0, 8]), [1.0; 4], flame_core_fill(), c2(ctr), s100.clone(), o100.clone(), 2);
+    apart(&mut comp, "flame_core", fc.clone(), smooth_closed(&fc, &[0, 13]), [1.0, 0.973, 0.910, 1.0], flame_core_fill(), c2(ctr), s100.clone(), o100.clone(), 2);
 
     comp
 }
@@ -872,10 +996,10 @@ fn build_reveal() -> Composition {
         k1(150, 0.0, lin),
     ]);
     let sl = shield_l_pts();
-    apart(&mut comp, "shield_l", sl.clone(), sharp(&sl), [0.76, 0.73, 0.66, 1.0], ShapeFillType::Solid,
+    apart(&mut comp, "cube_l", sl.clone(), sharp(&sl), [0.757, 0.722, 0.655, 1.0], ShapeFillType::Solid,
         rise.clone(), c2([base, base]), shield_op.clone(), 150);
-    let sr = mirror(&sl);
-    apart(&mut comp, "shield_r", sr.clone(), sharp(&sr), [0.09, 0.10, 0.15, 1.0], ShapeFillType::Solid,
+    let sr = cube_r_pts();
+    apart(&mut comp, "cube_r", sr.clone(), sharp(&sr), [0.122, 0.141, 0.169, 1.0], ShapeFillType::Solid,
         rise, c2([base, base]), shield_op, 150);
 
     // ring arcs IGNITE behind the traveling comets (fronts track comet angle).
@@ -897,13 +1021,24 @@ fn build_reveal() -> Composition {
     ]);
     // (id, fixed_start, front_end_anim, fixed_end, front_start_anim, color)
     let ring_draws: &[(RingDraw, bool)] = &[
-        (("ring_lt", 60.0, 73.0, [1.0, 0.90, 0.40, 1.0], 28, 35), true),
-        (("ring_lm", 40.0, 60.0, [1.0, 0.74, 0.26, 1.0], 17, 28), true),
-        (("ring_lb", 27.0, 40.0, [1.0, 0.30, 0.08, 1.0], 10, 17), true),
-        (("ring_rt", 77.0, 90.0, [1.0, 0.90, 0.40, 1.0], 30, 37), false),
-        (("ring_rm1", 90.0, 100.0, [1.0, 0.74, 0.26, 1.0], 25, 30), false),
-        (("ring_rm2", 0.0, 10.0, [1.0, 0.74, 0.26, 1.0], 20, 25), false),
-        (("ring_rb", 10.0, 23.0, [1.0, 0.30, 0.08, 1.0], 13, 20), false),
+        (("ring_lb2", 34.9, 36.5, [1.0, 0.235, 0.04, 1.0], 10, 15), true),
+        (("ring_lb", 36.5, 39.0, [1.0, 0.267, 0.043, 1.0], 13, 19), true),
+        (("ring_lb2x", 39.0, 41.5, [1.0, 0.373, 0.059, 1.0], 16, 21), true),
+        (("ring_lb3", 41.5, 45.5, [1.0, 0.57, 0.106, 1.0], 19, 24), true),
+        (("ring_lm3", 45.5, 50.0, [1.0, 0.765, 0.157, 1.0], 22, 27), true),
+        (("ring_lm", 50.0, 54.5, [1.0, 0.745, 0.153, 1.0], 25, 30), true),
+        (("ring_lm2b", 54.5, 60.5, [1.0, 0.66, 0.133, 1.0], 28, 32), true),
+        (("ring_lm2a", 60.5, 66.5, [1.0, 0.62, 0.122, 1.0], 31, 35), true),
+        (("ring_lt", 66.5, 71.3, [1.0, 0.63, 0.125, 1.0], 34, 38), true),
+        (("ring_rt", 78.5, 84.0, [1.0, 0.64, 0.126, 1.0], 34, 38), false),
+        (("ring_rm", 84.0, 89.5, [1.0, 0.628, 0.126, 1.0], 32, 36), false),
+        (("ring_rm2", 89.5, 95.0, [1.0, 0.675, 0.137, 1.0], 30, 34), false),
+        (("ring_rm3a", 95.0, 100.0, [1.0, 0.745, 0.153, 1.0], 28, 33), false),
+        (("ring_rm3b", 0.0, 2.5, [1.0, 0.804, 0.161, 1.0], 25, 30), false),
+        (("ring_rm4", 2.5, 6.5, [1.0, 0.698, 0.137, 1.0], 22, 27), false),
+        (("ring_rb2", 6.5, 10.0, [1.0, 0.49, 0.09, 1.0], 19, 24), false),
+        (("ring_rb3", 10.0, 12.5, [1.0, 0.306, 0.051, 1.0], 16, 21), false),
+        (("ring_rb", 12.5, 15.1, [1.0, 0.235, 0.04, 1.0], 13, 19), false),
     ];
     for ((id, s, e, sc, d0, d1), grow_end) in ring_draws.iter().copied() {
         let (st, en) = if grow_end {
@@ -911,7 +1046,7 @@ fn build_reveal() -> Composition {
         } else {
             (front(e, s, d0, d1), c1(e))
         };
-        ring_layer(&mut comp, id, sc, RING_U, st, en, ctr,
+        ring_layer(&mut comp, id, sc, RING_U, 11.0, st, en, ctr,
             c2([base, base]), ring_op.clone(), false, 150);
     }
 
@@ -934,7 +1069,7 @@ fn build_reveal() -> Composition {
     for ((id, s, e, _, _, _), _) in ring_draws.iter().copied() {
         let ci = if id == "ring_lt" || id == "ring_rt" {
             0
-        } else if id == "ring_lb" || id == "ring_rb" {
+        } else if id == "ring_lb" || id == "ring_lb2" || id == "ring_rb" || id == "ring_rb3" {
             2
         } else {
             1
@@ -1136,10 +1271,13 @@ fn build_reveal() -> Composition {
         ])
     };
     let fo = flame_outer_pts();
-    apart(&mut comp, "flame_outer", fo.clone(), smooth_closed(&fo, &[0, 9]), [1.0; 4], flame_outer_fill(),
+    apart(&mut comp, "flame_outer", fo.clone(), smooth_closed(&fo, &[0, 27]), [1.0; 4], flame_outer_fill(),
         c2(ctr), burst(0, base * 1.2), flame_op.clone(), 150);
+    let su = shadow_ul_pts();
+    apart(&mut comp, "shade_ul", su.clone(), smooth_closed(&su, &[0, 11]), [1.0; 4], shadow_ul_fill(),
+        c2(ctr), burst(1, base * 1.2), flame_op.clone(), 150);
     let fm = flame_mid_pts();
-    apart(&mut comp, "flame_mid", fm.clone(), smooth_closed(&fm, &[0, 9]), [1.0; 4], flame_mid_fill(),
+    apart(&mut comp, "flame_mid", fm.clone(), smooth_closed(&fm, &[0, 10]), [1.0; 4], flame_mid_fill(),
         c2(ctr), burst(3, base * 1.17), flame_op.clone(), 150);
     let sh = half_light_l_pts();
     apart(&mut comp, "light_l", sh.clone(), smooth_closed(&sh, &[0, 9]), [1.0; 4], half_light_l_fill(),
@@ -1163,7 +1301,7 @@ fn build_reveal() -> Composition {
         k2(150, [base, base], lin),
     ]);
     let fc = flame_core_pts();
-    apart(&mut comp, "flame_core", fc.clone(), smooth_closed(&fc, &[0, 8]), [1.0; 4], flame_core_fill(),
+    apart(&mut comp, "flame_core", fc.clone(), smooth_closed(&fc, &[0, 13]), [1.0, 0.973, 0.910, 1.0], flame_core_fill(),
         c2(ctr), core_scale, flame_op.clone(), 150);
 
     // ignition sparks: burst REACTING to the ignition (short life + opacity gate)
