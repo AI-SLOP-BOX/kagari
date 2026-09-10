@@ -144,7 +144,7 @@ pub fn start_export_cancelable<F>(
     render_frame_fn: F,
 ) -> Result<(), String>
 where
-    F: Fn(u32) -> Vec<u8> + Send + 'static,
+    F: Fn(u32) -> Vec<u8> + Send + Sync + 'static,
 {
     if !is_ffmpeg_available() {
         let msg = "FFmpeg not found. Install it via `brew install ffmpeg` (macOS) or your package manager.".to_string();
@@ -312,41 +312,61 @@ where
                 return;
             };
 
-            for frame_idx in 0..config.total_frames {
+            // Render frames in parallel chunks, feed FFmpeg stdin in order.
+            // Chunk size bounds memory (one RGBA frame = w*h*4 bytes).
+            let chunk_size = (384 * 1024 * 1024 / frame_bytes.max(1) as u64).clamp(2, 16) as u32;
+            let mut next_frame: u32 = 0;
+            while next_frame < config.total_frames {
                 if cancel_flag.load(Ordering::SeqCst) {
                     log::info!("[FFmpegExport] export canceled by user — terminating process");
                     let _ = tx.send(ExportEvent::Error("Export canceled by user".to_string()));
                     return; // guard.drop() kills and waits
                 }
 
-                // Render the frame to raw RGBA pixels (cancellable mid-frame)
-                let pixels = render_with_cancel(&cancel_flag, &render_frame_fn, frame_idx);
+                let chunk_end = (next_frame + chunk_size).min(config.total_frames);
+                // Indexed range keeps output order; install the cooperative
+                // cancel flag on each worker thread (it is thread-local).
+                use rayon::prelude::*;
+                let mut frames: Vec<(u32, Vec<u8>)> = (next_frame..chunk_end)
+                    .into_par_iter()
+                    .map(|frame_idx| {
+                        let flag = cancel_flag.clone();
+                        crate::core::software_renderer::set_render_cancel_flag(Some(flag));
+                        let pixels = render_frame_fn(frame_idx);
+                        crate::core::software_renderer::set_render_cancel_flag(None);
+                        (frame_idx, pixels)
+                    })
+                    .collect();
+                frames.sort_by_key(|(frame_idx, _)| *frame_idx);
 
-                if pixels.len() != frame_bytes {
-                    let _ = tx.send(ExportEvent::Error(format!(
-                        "Frame {} pixel data mismatch: expected {} bytes, got {}",
-                        frame_idx,
-                        frame_bytes,
-                        pixels.len()
-                    )));
-                    return;
+                for (frame_idx, pixels) in frames {
+                    if pixels.len() != frame_bytes {
+                        let _ = tx.send(ExportEvent::Error(format!(
+                            "Frame {} pixel data mismatch: expected {} bytes, got {}",
+                            frame_idx,
+                            frame_bytes,
+                            pixels.len()
+                        )));
+                        return;
+                    }
+
+                    // Write RGBA frame to FFmpeg stdin
+                    if let Err(e) = stdin.write_all(&pixels) {
+                        let _ = tx.send(ExportEvent::Error(format!(
+                            "Pipe write error at frame {}: {}",
+                            frame_idx, e
+                        )));
+                        return;
+                    }
+
+                    // Report progress (total_frames guaranteed > 0 here)
+                    let progress = (frame_idx + 1) as f32 / config.total_frames as f32;
+                    let _ = tx.send(ExportEvent::Progress(
+                        progress,
+                        format!("Encoding frame {}/{}", frame_idx + 1, config.total_frames),
+                    ));
                 }
-
-                // Write RGBA frame to FFmpeg stdin
-                if let Err(e) = stdin.write_all(&pixels) {
-                    let _ = tx.send(ExportEvent::Error(format!(
-                        "Pipe write error at frame {}: {}",
-                        frame_idx, e
-                    )));
-                    return;
-                }
-
-                // Report progress (total_frames guaranteed > 0 here)
-                let progress = (frame_idx + 1) as f32 / config.total_frames as f32;
-                let _ = tx.send(ExportEvent::Progress(
-                    progress,
-                    format!("Encoding frame {}/{}", frame_idx + 1, config.total_frames),
-                ));
+                next_frame = chunk_end;
             }
 
             // Close stdin to signal EOF to FFmpeg
@@ -684,7 +704,7 @@ pub fn start_export<F>(
     render_frame_fn: F,
 ) -> Result<(), String>
 where
-    F: Fn(u32) -> Vec<u8> + Send + 'static,
+    F: Fn(u32) -> Vec<u8> + Send + Sync + 'static,
 {
     start_export_cancelable(
         config,

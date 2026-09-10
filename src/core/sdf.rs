@@ -355,6 +355,88 @@ pub fn rasterize_shape_sdf_with_rotation(
     let rotation = (-rotation_deg).to_radians();
     let (sin_rotation, cos_rotation) = rotation.sin_cos();
     let mut any_written = false;
+    // Hoist all frame-invariant work out of the pixel loop: scalar property
+    // evaluation, bezier tessellation, and trim-path evaluation used to run
+    // per pixel (tessellation per pixel cost seconds per layer at 1080p).
+    enum SdfPrep {
+        Rect { hx: f32, hy: f32, cr: f32 },
+        Ellipse { hx: f32, hy: f32 },
+        Star { pts: u32, or: f32, ir: f32 },
+        Polygon { s: u32, r: f32 },
+        Free { pts: Vec<(f32, f32)> },
+        Empty,
+    }
+    let prep = match shape_type {
+        ShapeType::Rectangle {
+            width,
+            height,
+            corner_radius,
+        } => {
+            let w = width.evaluate(frame) / 100.0;
+            let h = height.evaluate(frame) / 100.0;
+            let cr = corner_radius.evaluate(frame) / 100.0;
+            SdfPrep::Rect {
+                hx: w * 0.5,
+                hy: h * 0.5,
+                cr,
+            }
+        }
+        ShapeType::Ellipse { width, height } => {
+            let w = width.evaluate(frame) / 100.0;
+            let h = height.evaluate(frame) / 100.0;
+            SdfPrep::Ellipse {
+                hx: w * 0.5,
+                hy: h * 0.5,
+            }
+        }
+        ShapeType::Star {
+            points,
+            inner_radius,
+            outer_radius,
+        } => {
+            let pts = (points.evaluate(frame) as u32).max(3);
+            let ir = inner_radius.evaluate(frame) / 100.0;
+            let or = outer_radius.evaluate(frame) / 100.0;
+            SdfPrep::Star { pts, or, ir }
+        }
+        ShapeType::Polygon { sides, radius } => {
+            let s = (sides.evaluate(frame) as u32).max(3);
+            let r = radius.evaluate(frame) / 100.0;
+            SdfPrep::Polygon { s, r }
+        }
+        ShapeType::FreeformBezier {
+            points,
+            tangents,
+            closed,
+        } => {
+            if points.len() < 3 {
+                SdfPrep::Empty
+            } else {
+                let tessellated = tessellate_bezier_path(points, tangents, *closed, 8);
+                let scale = 100.0;
+                let pts: Vec<(f32, f32)> = tessellated
+                    .iter()
+                    .map(|p| (p[0] / scale, p[1] / scale))
+                    .collect();
+                SdfPrep::Free { pts }
+            }
+        }
+    };
+    let (trim_s, trim_e, trim_on) = match trim_paths {
+        None => (0.0, 0.0, false),
+        Some(tp) => {
+            let start_pct = tp.start.evaluate(frame).clamp(0.0, 100.0) / 100.0;
+            let end_pct = tp.end.evaluate(frame).clamp(0.0, 100.0) / 100.0;
+            let offset_pct = (tp.offset.evaluate(frame) / 360.0).fract();
+            let s = (start_pct + offset_pct).fract();
+            let e = (end_pct + offset_pct).fract();
+            (s, e, true)
+        }
+    };
+    // Bounding-box early-out reach (stroke halo + AA fringe, normalized
+    // units; degenerate bounds yield +inf, i.e. never skip).
+    let reach_x = (stroke_width.max(0.0) + 4.0) / bounds_x;
+    let reach_y = (stroke_width.max(0.0) + 4.0) / bounds_y;
     for py in 0..bh {
         for px in 0..bw {
             let world_x = min_x + px;
@@ -366,88 +448,47 @@ pub fn rasterize_shape_sdf_with_rotation(
             let nx = local_x / bounds_x;
             let ny = local_y / bounds_y;
 
-            let dist = match shape_type {
-                ShapeType::Rectangle {
-                    width,
-                    height,
-                    corner_radius,
-                } => {
-                    let w = width.evaluate(frame) / 100.0;
-                    let h = height.evaluate(frame) / 100.0;
-                    let cr = corner_radius.evaluate(frame) / 100.0;
-                    let hx = w * 0.5;
-                    let hy = h * 0.5;
-                    if cr > 0.01 {
+            // The shape cannot cover pixels outside its normalized bounds.
+            if nx.abs() > 1.0 + reach_x || ny.abs() > 1.0 + reach_y {
+                continue;
+            }
+
+            let dist = match &prep {
+                SdfPrep::Rect { hx, hy, cr } => {
+                    if *cr > 0.01 {
                         let dx = nx.abs() - hx + cr;
                         let dy = ny.abs() - hy + cr;
                         let outside = (dx.max(0.0), dy.max(0.0));
                         let inside = dx.min(0.0).max(dy.min(0.0));
                         (outside.0 * outside.0 + outside.1 * outside.1).sqrt() + inside - cr
                     } else {
-                        sdf_rectangle(nx, ny, hx, hy)
+                        sdf_rectangle(nx, ny, *hx, *hy)
                     }
                 }
-                ShapeType::Ellipse { width, height } => {
-                    let w = width.evaluate(frame) / 100.0;
-                    let h = height.evaluate(frame) / 100.0;
-                    sdf_ellipse(nx, ny, w * 0.5, h * 0.5)
-                }
-                ShapeType::Star {
-                    points,
-                    inner_radius,
-                    outer_radius,
-                } => {
-                    let pts = (points.evaluate(frame) as u32).max(3);
-                    let ir = inner_radius.evaluate(frame) / 100.0;
-                    let or = outer_radius.evaluate(frame) / 100.0;
-                    sdf_star(nx, ny, pts, or, ir)
-                }
-                ShapeType::Polygon { sides, radius } => {
-                    let s = (sides.evaluate(frame) as u32).max(3);
-                    let r = radius.evaluate(frame) / 100.0;
-                    sdf_polygon(nx, ny, s, r)
-                }
-                ShapeType::FreeformBezier {
-                    points,
-                    tangents,
-                    closed,
-                } => {
-                    if points.len() < 3 {
-                        1.0
-                    } else {
-                        let tessellated = tessellate_bezier_path(points, tangents, *closed, 8);
-                        let scale = 100.0;
-                        let pts: Vec<(f32, f32)> = tessellated
-                            .iter()
-                            .map(|p| (p[0] / scale, p[1] / scale))
-                            .collect();
-                        sdf_polygon_points(nx, ny, &pts)
-                    }
-                }
+                SdfPrep::Ellipse { hx, hy } => sdf_ellipse(nx, ny, *hx, *hy),
+                SdfPrep::Star { pts, or, ir } => sdf_star(nx, ny, *pts, *or, *ir),
+                SdfPrep::Polygon { s, r } => sdf_polygon(nx, ny, *s, *r),
+                SdfPrep::Free { pts } => sdf_polygon_points(nx, ny, pts),
+                SdfPrep::Empty => 1.0,
             };
 
             let pixel_width = 4.0 / bounds_x;
             let mut alpha = (1.0 - (dist / pixel_width).clamp(0.0, 1.0)) * l_opacity;
 
-            if alpha > 0.001 {
-                if let Some(tp) = trim_paths {
-                    let angle = ny.atan2(nx);
-                    let angle_norm = (angle / (2.0 * std::f32::consts::PI) + 1.0).fract();
-                    let start_pct = tp.start.evaluate(frame).clamp(0.0, 100.0) / 100.0;
-                    let end_pct = tp.end.evaluate(frame).clamp(0.0, 100.0) / 100.0;
-                    let offset_pct = (tp.offset.evaluate(frame) / 360.0).fract();
-                    let s = (start_pct + offset_pct).fract();
-                    let e = (end_pct + offset_pct).fract();
-                    let in_trim = if (s - e).abs() < f32::EPSILON {
-                        false
-                    } else if s < e {
-                        angle_norm >= s && angle_norm <= e
-                    } else {
-                        angle_norm >= s || angle_norm <= e
-                    };
-                    if !in_trim {
-                        alpha = 0.0;
-                    }
+            if alpha > 0.001 && trim_on {
+                let angle = ny.atan2(nx);
+                let angle_norm = (angle / (2.0 * std::f32::consts::PI) + 1.0).fract();
+                let s = trim_s;
+                let e = trim_e;
+                let in_trim = if (s - e).abs() < f32::EPSILON {
+                    false
+                } else if s < e {
+                    angle_norm >= s && angle_norm <= e
+                } else {
+                    angle_norm >= s || angle_norm <= e
+                };
+                if !in_trim {
+                    alpha = 0.0;
                 }
             }
 
