@@ -84,16 +84,37 @@ impl FontRasterizer {
         self.fonts.contains_key(family_name)
     }
 
-    /// Returns the requested family if available, otherwise the first loaded font.
+    /// Returns the requested family if available, otherwise a deterministic
+    /// fallback (preferred list, then lexicographically smallest loaded family).
     /// Falls back to "Helvetica" only when no fonts are loaded at all.
+    /// Note: never use HashMap iteration order here — RandomState makes it
+    /// differ per process, which breaks byte-identical render determinism.
     pub fn resolve_family(&self, family_name: &str) -> String {
         if self.fonts.contains_key(family_name) {
-            family_name.to_string()
-        } else if let Some(first) = self.fonts.keys().next() {
-            first.clone()
-        } else {
-            "Helvetica".to_string()
+            return family_name.to_string();
         }
+        const PREFERRED: &[&str] = &[
+            "Helvetica",
+            "Helvetica Neue",
+            "Arial",
+            "Inter",
+            "Roboto",
+            "DejaVu Sans",
+            "Liberation Sans",
+            "Verdana",
+            "Tahoma",
+            "Menlo",
+        ];
+        if let Some(name) = PREFERRED
+            .iter()
+            .find(|name| self.fonts.contains_key(**name))
+        {
+            return name.to_string();
+        }
+        if let Some(first) = self.fonts.keys().min() {
+            return first.clone();
+        }
+        "Helvetica".to_string()
     }
 
     /// Sorted list of successfully loaded font families.

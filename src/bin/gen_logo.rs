@@ -99,22 +99,51 @@ fn flame_core_pts() -> Vec<Pt2> {
     ]
 }
 
-fn shade_l_pts() -> Vec<Pt2> {
+fn half_light_l_pts() -> Vec<Pt2> {
     vec![
-        [-9.0, -50.0],
-        [-18.0, -36.0],
-        [-26.0, -20.0],
-        [-31.0, -4.0],
-        [-30.0, 12.0],
-        [-24.0, 26.0],
-        [-14.0, 36.0],
-        [-10.0, 30.0],
-        [-20.0, 18.0],
-        [-24.0, 4.0],
-        [-22.0, -12.0],
-        [-15.0, -28.0],
-        [-7.0, -44.0],
+        [0.0, -78.0],
+        [-4.0, -64.0],
+        [-9.0, -51.0],
+        [-18.0, -39.0],
+        [-27.0, -26.0],
+        [-31.0, -13.0],
+        [-31.0, -3.0],
+        [-24.0, 16.0],
+        [-8.0, 38.0],
+        [0.0, 44.0],
+        [1.5, 20.0],
+        [1.5, -10.0],
+        [1.5, -40.0],
+        [1.5, -60.0],
     ]
+}
+
+fn half_light_l_fill() -> ShapeFillType {
+    ShapeFillType::LinearGradient {
+        start: [0.0, -370.0],
+        end: [0.0, 220.0],
+        colors: vec![
+            [1.0, 0.85, 0.55, 0.0],
+            [1.0, 0.85, 0.55, 0.0],
+            [1.0, 0.82, 0.50, 0.50],
+            [1.0, 0.82, 0.50, 0.52],
+        ],
+        stops: vec![0.0, 0.45, 0.75, 1.0],
+    }
+}
+
+fn half_shade_r_fill() -> ShapeFillType {
+    ShapeFillType::LinearGradient {
+        start: [0.0, -370.0],
+        end: [0.0, 220.0],
+        colors: vec![
+            [0.50, 0.05, 0.02, 0.0],
+            [0.50, 0.05, 0.02, 0.0],
+            [0.45, 0.04, 0.02, 0.40],
+            [0.45, 0.04, 0.02, 0.45],
+        ],
+        stops: vec![0.0, 0.45, 0.75, 1.0],
+    }
 }
 
 fn mirror(pts: &[Pt2]) -> Vec<Pt2> {
@@ -130,7 +159,7 @@ fn wing_dark_l_pts() -> Vec<Pt2> {
 }
 
 fn wing_blade_l_pts() -> Vec<Pt2> {
-    vec![[-60.0, 6.0], [-56.0, 8.0], [-39.0, 2.0], [-44.0, 10.0]]
+    vec![[-60.0, 7.0], [-39.0, 2.0], [-42.0, 11.0], [-53.0, 9.0]]
 }
 
 fn flame_outer_fill() -> ShapeFillType {
@@ -138,10 +167,10 @@ fn flame_outer_fill() -> ShapeFillType {
         start: [0.0, -370.0],
         end: [0.0, 220.0],
         colors: vec![
-            [0.72, 0.07, 0.03, 1.0],
-            [0.95, 0.28, 0.04, 1.0],
-            [1.0, 0.55, 0.08, 1.0],
-            [1.0, 0.76, 0.26, 1.0],
+            [0.85, 0.14, 0.04, 1.0],
+            [1.0, 0.48, 0.10, 1.0],
+            [1.0, 0.74, 0.26, 1.0],
+            [1.0, 0.85, 0.45, 1.0],
         ],
         stops: vec![0.0, 0.45, 0.75, 1.0],
     }
@@ -152,9 +181,9 @@ fn flame_mid_fill() -> ShapeFillType {
         start: [0.0, -220.0],
         end: [0.0, 130.0],
         colors: vec![
-            [1.0, 0.55, 0.08, 1.0],
-            [1.0, 0.78, 0.28, 1.0],
-            [1.0, 0.94, 0.70, 1.0],
+            [1.0, 0.74, 0.26, 1.0],
+            [1.0, 0.85, 0.45, 1.0],
+            [1.0, 0.96, 0.80, 1.0],
         ],
         stops: vec![0.0, 0.55, 1.0],
     }
@@ -315,7 +344,7 @@ fn build_still() -> Composition {
 
     // shield
     let sl = shield_l_pts();
-    apart(&mut comp, "shield_l", sl.clone(), sharp(&sl), [0.55, 0.53, 0.48, 1.0], ShapeFillType::Solid, c2(ctr), s100.clone(), o100.clone(), 2);
+    apart(&mut comp, "shield_l", sl.clone(), sharp(&sl), [0.76, 0.73, 0.66, 1.0], ShapeFillType::Solid, c2(ctr), s100.clone(), o100.clone(), 2);
     let sr = mirror(&sl);
     apart(&mut comp, "shield_r", sr.clone(), sharp(&sr), [0.09, 0.10, 0.15, 1.0], ShapeFillType::Solid, c2(ctr), s100.clone(), o100.clone(), 2);
 
@@ -331,13 +360,13 @@ fn build_still() -> Composition {
 
     // ring arcs (static trims)
     let segs: &[(&str, f32, f32, [f32; 4])] = &[
-        ("ring_lt", 60.0, 73.0, [1.0, 0.78, 0.25, 1.0]),
-        ("ring_lm", 40.0, 60.0, [1.0, 0.52, 0.10, 1.0]),
-        ("ring_lb", 27.0, 40.0, [0.88, 0.22, 0.06, 1.0]),
-        ("ring_rt", 77.0, 90.0, [1.0, 0.78, 0.25, 1.0]),
-        ("ring_rm1", 90.0, 100.0, [1.0, 0.52, 0.10, 1.0]),
-        ("ring_rm2", 0.0, 10.0, [1.0, 0.52, 0.10, 1.0]),
-        ("ring_rb", 10.0, 23.0, [0.88, 0.22, 0.06, 1.0]),
+        ("ring_lt", 60.0, 73.0, [1.0, 0.90, 0.40, 1.0]),
+        ("ring_lm", 40.0, 60.0, [1.0, 0.68, 0.20, 1.0]),
+        ("ring_lb", 27.0, 40.0, [1.0, 0.30, 0.08, 1.0]),
+        ("ring_rt", 77.0, 90.0, [1.0, 0.90, 0.40, 1.0]),
+        ("ring_rm1", 90.0, 100.0, [1.0, 0.68, 0.20, 1.0]),
+        ("ring_rm2", 0.0, 10.0, [1.0, 0.68, 0.20, 1.0]),
+        ("ring_rb", 10.0, 23.0, [1.0, 0.30, 0.08, 1.0]),
     ];
     for (id, s, e, sc) in segs.iter().copied() {
         ring_layer(&mut comp, id, sc, 140.0, c1(s), c1(e), ctr, s100.clone(), o100.clone(), true, 2);
@@ -348,10 +377,10 @@ fn build_still() -> Composition {
     apart(&mut comp, "flame_outer", fo.clone(), smooth_closed(&fo, &[0, 9]), [1.0; 4], flame_outer_fill(), c2(ctr), s100.clone(), o100.clone(), 2);
     let fm = flame_mid_pts();
     apart(&mut comp, "flame_mid", fm.clone(), smooth_closed(&fm, &[0, 9]), [1.0; 4], flame_mid_fill(), c2(ctr), s100.clone(), o100.clone(), 2);
-    let sh = shade_l_pts();
-    apart(&mut comp, "shade_l", sh.clone(), smooth_closed(&sh, &[]), [0.55, 0.05, 0.02, 0.38], ShapeFillType::Solid, c2(ctr), s100.clone(), o100.clone(), 2);
+    let sh = half_light_l_pts();
+    apart(&mut comp, "light_l", sh.clone(), smooth_closed(&sh, &[0, 9]), [1.0; 4], half_light_l_fill(), c2(ctr), s100.clone(), o100.clone(), 2);
     let lr = mirror(&sh);
-    apart(&mut comp, "light_r", lr.clone(), smooth_closed(&lr, &[]), [1.0, 0.75, 0.35, 0.30], ShapeFillType::Solid, c2(ctr), s100.clone(), o100.clone(), 2);
+    apart(&mut comp, "shade_r", lr.clone(), smooth_closed(&lr, &[0, 9]), [1.0; 4], half_shade_r_fill(), c2(ctr), s100.clone(), o100.clone(), 2);
     let fc = flame_core_pts();
     apart(&mut comp, "flame_core", fc.clone(), smooth_closed(&fc, &[0, 8]), [1.0; 4], flame_core_fill(), c2(ctr), s100.clone(), o100.clone(), 2);
 
@@ -843,7 +872,7 @@ fn build_reveal() -> Composition {
         k1(150, 0.0, lin),
     ]);
     let sl = shield_l_pts();
-    apart(&mut comp, "shield_l", sl.clone(), sharp(&sl), [0.55, 0.53, 0.48, 1.0], ShapeFillType::Solid,
+    apart(&mut comp, "shield_l", sl.clone(), sharp(&sl), [0.76, 0.73, 0.66, 1.0], ShapeFillType::Solid,
         rise.clone(), c2([base, base]), shield_op.clone(), 150);
     let sr = mirror(&sl);
     apart(&mut comp, "shield_r", sr.clone(), sharp(&sr), [0.09, 0.10, 0.15, 1.0], ShapeFillType::Solid,
@@ -868,13 +897,13 @@ fn build_reveal() -> Composition {
     ]);
     // (id, fixed_start, front_end_anim, fixed_end, front_start_anim, color)
     let ring_draws: &[(RingDraw, bool)] = &[
-        (("ring_lt", 60.0, 73.0, [1.0, 0.78, 0.25, 1.0], 28, 35), true),
-        (("ring_lm", 40.0, 60.0, [1.0, 0.52, 0.10, 1.0], 17, 28), true),
-        (("ring_lb", 27.0, 40.0, [0.88, 0.22, 0.06, 1.0], 10, 17), true),
-        (("ring_rt", 77.0, 90.0, [1.0, 0.78, 0.25, 1.0], 30, 37), false),
-        (("ring_rm1", 90.0, 100.0, [1.0, 0.52, 0.10, 1.0], 25, 30), false),
-        (("ring_rm2", 0.0, 10.0, [1.0, 0.52, 0.10, 1.0], 20, 25), false),
-        (("ring_rb", 10.0, 23.0, [0.88, 0.22, 0.06, 1.0], 13, 20), false),
+        (("ring_lt", 60.0, 73.0, [1.0, 0.90, 0.40, 1.0], 28, 35), true),
+        (("ring_lm", 40.0, 60.0, [1.0, 0.74, 0.26, 1.0], 17, 28), true),
+        (("ring_lb", 27.0, 40.0, [1.0, 0.30, 0.08, 1.0], 10, 17), true),
+        (("ring_rt", 77.0, 90.0, [1.0, 0.90, 0.40, 1.0], 30, 37), false),
+        (("ring_rm1", 90.0, 100.0, [1.0, 0.74, 0.26, 1.0], 25, 30), false),
+        (("ring_rm2", 0.0, 10.0, [1.0, 0.74, 0.26, 1.0], 20, 25), false),
+        (("ring_rb", 10.0, 23.0, [1.0, 0.30, 0.08, 1.0], 13, 20), false),
     ];
     for ((id, s, e, sc, d0, d1), grow_end) in ring_draws.iter().copied() {
         let (st, en) = if grow_end {
@@ -893,8 +922,8 @@ fn build_reveal() -> Composition {
         k1(0, 0.0, lin),
         k1(68, 0.0, lin),
         k1(86, 80.0, ez4(E_SMOOTH)),
-        k1(100, 48.0, ez4(E_DRIFT)),
-        k1(135, 48.0, lin),
+        k1(100, 55.0, ez4(E_DRIFT)),
+        k1(135, 55.0, lin),
         k1(150, 0.0, lin),
     ]);
     let charge_cols: &[[f32; 4]] = &[
@@ -1112,11 +1141,11 @@ fn build_reveal() -> Composition {
     let fm = flame_mid_pts();
     apart(&mut comp, "flame_mid", fm.clone(), smooth_closed(&fm, &[0, 9]), [1.0; 4], flame_mid_fill(),
         c2(ctr), burst(3, base * 1.17), flame_op.clone(), 150);
-    let sh = shade_l_pts();
-    apart(&mut comp, "shade_l", sh.clone(), smooth_closed(&sh, &[]), [0.55, 0.05, 0.02, 0.38], ShapeFillType::Solid,
+    let sh = half_light_l_pts();
+    apart(&mut comp, "light_l", sh.clone(), smooth_closed(&sh, &[0, 9]), [1.0; 4], half_light_l_fill(),
         c2(ctr), burst(2, base * 1.18), flame_op.clone(), 150);
     let lr = mirror(&sh);
-    apart(&mut comp, "light_r", lr.clone(), smooth_closed(&lr, &[]), [1.0, 0.75, 0.35, 0.30], ShapeFillType::Solid,
+    apart(&mut comp, "shade_r", lr.clone(), smooth_closed(&lr, &[0, 9]), [1.0; 4], half_shade_r_fill(),
         c2(ctr), burst(2, base * 1.18), flame_op.clone(), 150);
     // core flares again at the white-hot peak (reaction to the return sweep)
     let core_scale = Animatable::new_animated(vec![
@@ -1271,6 +1300,35 @@ fn build_reveal() -> Composition {
         let l = comp.layers.last_mut().unwrap();
         l.transform.position = Animatable::new_constant([960.0, 1010.0]);
         l.transform.opacity = title_op(114);
+    }
+
+    // photographic finish: subtle vignette + fine grain over everything.
+    // Grain ramps in with the light (deterministic, frame-seeded).
+    comp.add_layer(Layer::new(
+        "finish".into(),
+        "Finish".into(),
+        LayerType::AdjustmentLayer,
+        150,
+    ));
+    {
+        let l = comp.layers.last_mut().unwrap();
+        l.transform.position = c2([960.0, 540.0]);
+        l.effects.push(Effect {
+            id: "finish_grain".into(),
+            name: "Film Grain".into(),
+            effect_type: EffectType::FilmGrain {
+                intensity: Animatable::new_animated(vec![
+                    k1(0, 0.0, lin),
+                    k1(40, 0.0, lin),
+                    k1(70, 0.035, ez4(E_SMOOTH)),
+                    k1(135, 0.035, lin),
+                    k1(150, 0.0, lin),
+                ]),
+                grain_size: 1.0,
+                color_film: false,
+            },
+            enabled: true,
+        });
     }
 
     comp

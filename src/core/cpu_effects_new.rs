@@ -479,7 +479,7 @@ pub fn apply_film_grain(
     for by in 0..blocks_h {
         for bx in 0..blocks_w {
             let hash = pcg_hash(seed.wrapping_add(by * blocks_w + bx));
-            let val = ((hash as i32) % 512) - 256;
+            let val = ((hash as i32).rem_euclid(512)) - 256;
             let idx = (by * blocks_w + bx) as usize;
             if idx < noise_map.len() {
                 noise_map[idx] = val as i16;
