@@ -646,9 +646,6 @@ fn draw_effects_presets_tab(
     next_frame: &mut Option<u32>,
     slider_changed: &mut bool,
 ) {
-    ui.heading("Effects & Presets");
-    ui.separator();
-
     let presets = crate::ui::effects_controls::get_all_effect_presets();
     let search_q = app.ui_tabs.effects_search_query.to_lowercase();
 
