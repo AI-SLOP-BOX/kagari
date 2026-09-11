@@ -1603,6 +1603,9 @@ pub fn render_frame_to_pixels(
                 let adj_blend = layer.blend_mode;
                 for py in 0..height {
                     for px in 0..width {
+                        // Feathered masks scale the blend (not a hard gate):
+                        // coverage 0 keeps dst, 1 applies the full effect mix.
+                        let mut eff_op = l_opacity;
                         if use_mask {
                             let mask_alpha = compute_combined_mask_coverage(
                                 px as f32 + 0.5,
@@ -1612,6 +1615,7 @@ pub fn render_frame_to_pixels(
                             if mask_alpha <= 0.001 {
                                 continue;
                             }
+                            eff_op *= mask_alpha;
                         }
                         let i = ((py * width + px) * 4) as usize;
                         let src_r = adjusted[i] as f32 / 255.0;
@@ -1666,13 +1670,13 @@ pub fn render_frame_to_pixels(
                             }
                             _ => (src_r, src_g, src_b),
                         };
-                        buffer[i] = ((br * l_opacity + dst_r * (1.0 - l_opacity)) * 255.0)
+                        buffer[i] = ((br * eff_op + dst_r * (1.0 - eff_op)) * 255.0)
                             .round()
                             .clamp(0.0, 255.0) as u8;
-                        buffer[i + 1] = ((bg * l_opacity + dst_g * (1.0 - l_opacity)) * 255.0)
+                        buffer[i + 1] = ((bg * eff_op + dst_g * (1.0 - eff_op)) * 255.0)
                             .round()
                             .clamp(0.0, 255.0) as u8;
-                        buffer[i + 2] = ((bb * l_opacity + dst_b * (1.0 - l_opacity)) * 255.0)
+                        buffer[i + 2] = ((bb * eff_op + dst_b * (1.0 - eff_op)) * 255.0)
                             .round()
                             .clamp(0.0, 255.0) as u8;
                     }
@@ -2168,6 +2172,27 @@ pub fn render_frame_to_pixels(
                     effective_frame,
                     layer.trim_paths.as_ref(),
                 );
+                // Pre-effect mask (isolate): shape rasterization has no
+                // baked mask, so multiply it here before effects run.
+                // Solid/Text/Image bake coverage during their own raster;
+                // all types get a post-effect re-mask below (contain).
+                if !masks.is_empty() {
+                    for ly in 0..bh {
+                        for lx in 0..bw {
+                            let lidx = ((ly * bw + lx) * 4) as usize;
+                            if lidx + 3 >= layer_buf.len() || layer_buf[lidx + 3] == 0 {
+                                continue;
+                            }
+                            let cov = compute_combined_mask_coverage(
+                                (min_x + lx) as f32,
+                                (min_y + ly) as f32,
+                                masks,
+                            );
+                            layer_buf[lidx + 3] =
+                                (layer_buf[lidx + 3] as f32 * cov) as u8;
+                        }
+                    }
+                }
             }
         } else if let LayerType::Text {
             text,
@@ -2870,6 +2895,31 @@ pub fn render_frame_to_pixels(
                     layer_buf[lidx] = (layer_buf[lidx] as f32 * f) as u8;
                     layer_buf[lidx + 1] = (layer_buf[lidx + 1] as f32 * f) as u8;
                     layer_buf[lidx + 2] = (layer_buf[lidx + 2] as f32 * f) as u8;
+                }
+            }
+        }
+
+        // Phase 2.8: post-effect re-mask (contain). Effects (blur, glow,
+        // displacement) can spill pixels outside the masked region; re-cut
+        // here so the final composite respects the masks. This intentionally
+        // differs from AE's default (effects spill past masks): Kagari
+        // contains by default for predictable compositing. Pre-effect
+        // isolation happens during raster (baked) or just above (shapes).
+        if !masks.is_empty() {
+            for ly in 0..bh {
+                for lx in 0..bw {
+                    let lidx = ((ly * bw + lx) * 4) as usize;
+                    if lidx + 3 >= layer_buf.len() || layer_buf[lidx + 3] == 0 {
+                        continue;
+                    }
+                    let cov = compute_combined_mask_coverage(
+                        (min_x + lx) as f32,
+                        (min_y + ly) as f32,
+                        masks,
+                    );
+                    if cov < 0.999 {
+                        layer_buf[lidx + 3] = (layer_buf[lidx + 3] as f32 * cov) as u8;
+                    }
                 }
             }
         }
@@ -5520,6 +5570,298 @@ mod shadow_tests {
                 mean_r(&px) < 2.0,
                 "0% layer must be invisible, mean={}",
                 mean_r(&px)
+            );
+        }
+    }
+
+    /// Mask ordering regression tests.
+    ///
+    /// Model under test: pre-effect mask isolates (during raster), effects
+    /// run, then a post-effect re-mask contains the result before compositing
+    /// (Phase 2.8). Blur/glow/displacement must not leak outside the final
+    /// masked region. This intentionally differs from AE's default, where
+    /// effects spill past masks.
+    mod mask_ordering_tests {
+        use super::*;
+        use crate::core::timeline::Effect;
+
+        fn black_bg(w: u32, h: u32) -> Composition {
+            let mut comp = Composition::new("t".into(), "MaskTest".into(), w, h, 30, 30);
+            comp.background_color = [0.0, 0.0, 0.0, 1.0];
+            let mut bg = Layer::new(
+                "bg".into(),
+                "BG".into(),
+                LayerType::Solid {
+                    color: [0.0, 0.0, 0.0, 1.0],
+                },
+                30,
+            );
+            bg.transform.position =
+                Animatable::new_constant([w as f32 * 0.5, h as f32 * 0.5]);
+            comp.layers.push(bg);
+            comp
+        }
+
+        fn rect_mask(id: &str, x: f32, y: f32, w: f32, h: f32, feather: f32) -> crate::core::mask::Mask {
+            let mut m = crate::core::mask::Mask::new_rect(
+                id.into(),
+                id.into(),
+                x,
+                y,
+                w,
+                h,
+            );
+            m.feather = Animatable::new_constant(feather);
+            m
+        }
+
+        fn at(px: &[u8], w: u32, x: u32, y: u32) -> f32 {
+            px[((y * w + x) * 4) as usize] as f32
+        }
+
+        #[test]
+        fn blurred_masked_shape_does_not_leak() {
+            // White 32x32 rect + identical rect mask + blur 6: the blur would
+            // smear ~18px past the mask without the post-effect re-mask.
+            let mut comp = black_bg(64, 64);
+            let mut l = Layer::new(
+                "r".into(),
+                "Rect".into(),
+                LayerType::Shape {
+                    shape_type: crate::core::timeline::ShapeType::Rectangle {
+                        width: Animatable::new_constant(100.0),
+                        height: Animatable::new_constant(100.0),
+                        corner_radius: Animatable::new_constant(0.0),
+                    },
+                    color: [1.0, 1.0, 1.0, 1.0],
+                    stroke_color: [0.0; 4],
+                    stroke_width: 0.0,
+                    fill_type: Default::default(),
+                    extrusion_depth: 0.0,
+                    bevel_depth: 0.0,
+                },
+                30,
+            );
+            l.transform.position = Animatable::new_constant([32.0, 32.0]);
+            l.masks.push(rect_mask("m", 16.0, 16.0, 32.0, 32.0, 0.0));
+            l.effects.push(Effect {
+                id: "blur".into(),
+                name: "Blur".into(),
+                effect_type: crate::core::timeline::EffectType::GaussianBlur {
+                    blur_radius: Animatable::new_constant(12.0),
+                },
+                enabled: true,
+            });
+            comp.layers.push(l);
+            let px = render_frame_to_pixels(&comp, 0, 64, 64, 0.0, 0);
+            assert!(
+                at(&px, 64, 32, 32) > 150.0,
+                "masked interior must stay bright, got {}",
+                at(&px, 64, 32, 32)
+            );
+            // 4px outside the mask edge: blur spill would read ~40+ here
+            // without the post-effect re-mask.
+            assert!(
+                at(&px, 64, 12, 32) < 14.0,
+                "blur must not leak outside final mask, got {}",
+                at(&px, 64, 12, 32)
+            );
+        }
+
+        #[test]
+        fn glow_on_masked_layer_respects_final_mask() {
+            // Blur spreads alpha past the mask, then glow blooms the spill:
+            // without the post-effect re-mask the halo would show outside.
+            // (Pure glow alone cannot leak: RGB-only energy is gated by zero
+            // alpha at composite. The stack is the meaningful case.)
+            let mut comp = black_bg(64, 64);
+            let mut l = Layer::new(
+                "w".into(),
+                "White".into(),
+                LayerType::Solid {
+                    color: [1.0, 1.0, 1.0, 1.0],
+                },
+                30,
+            );
+            l.transform.position = Animatable::new_constant([32.0, 32.0]);
+            l.masks.push(rect_mask("m", 0.0, 0.0, 32.0, 64.0, 0.0));
+            l.effects.push(Effect {
+                id: "blur".into(),
+                name: "Blur".into(),
+                effect_type: crate::core::timeline::EffectType::GaussianBlur {
+                    blur_radius: Animatable::new_constant(6.0),
+                },
+                enabled: true,
+            });
+            l.effects.push(Effect {
+                id: "glow".into(),
+                name: "Glow".into(),
+                effect_type: crate::core::timeline::EffectType::Glow {
+                    threshold: Animatable::new_constant(30.0),
+                    radius: Animatable::new_constant(12.0),
+                    intensity: Animatable::new_constant(200.0),
+                    color: Animatable::new_constant([1.0, 1.0, 1.0, 1.0]),
+                },
+                enabled: true,
+            });
+            comp.layers.push(l);
+            let px = render_frame_to_pixels(&comp, 0, 64, 64, 0.0, 0);
+            assert!(
+                at(&px, 64, 16, 32) > 150.0,
+                "masked-in side must stay bright, got {}",
+                at(&px, 64, 16, 32)
+            );
+            // 4px past the mask edge: blur+glow halo would read bright here
+            // without the post-effect re-mask.
+            assert!(
+                at(&px, 64, 36, 32) < 15.0,
+                "glow must not leak past final mask, got {}",
+                at(&px, 64, 36, 32)
+            );
+        }
+
+        #[test]
+        fn displacement_on_masked_layer_stays_contained() {
+            // Masked white solid shifted +12px by Offset: without containment
+            // the shifted content would appear past the final mask edge.
+            // (TurbulentDisplace is covered by the same remask path; Offset
+            // is used here because its placement is exactly deterministic.)
+            let mut comp = black_bg(64, 64);
+            let mut l = Layer::new(
+                "w".into(),
+                "White".into(),
+                LayerType::Solid {
+                    color: [1.0, 1.0, 1.0, 1.0],
+                },
+                30,
+            );
+            l.transform.position = Animatable::new_constant([32.0, 32.0]);
+            l.masks.push(rect_mask("m", 16.0, 16.0, 32.0, 32.0, 0.0));
+            l.effects.push(Effect {
+                id: "off".into(),
+                name: "Offset".into(),
+                effect_type: crate::core::timeline::EffectType::Offset {
+                    shift_x: Animatable::new_constant(12.0),
+                    shift_y: Animatable::new_constant(0.0),
+                },
+                enabled: true,
+            });
+            comp.layers.push(l);
+            let px = render_frame_to_pixels(&comp, 0, 64, 64, 0.0, 0);
+            // Mask spans x16..48; content shifted +12 would reach x60.
+            assert!(
+                at(&px, 64, 52, 32) < 12.0,
+                "displaced content must not appear outside mask, got {}",
+                at(&px, 64, 52, 32)
+            );
+            assert!(
+                at(&px, 64, 56, 32) < 12.0,
+                "displaced content must not appear outside mask, got {}",
+                at(&px, 64, 56, 32)
+            );
+            assert!(
+                at(&px, 64, 32, 32) > 150.0,
+                "masked interior must stay bright, got {}",
+                at(&px, 64, 32, 32)
+            );
+        }
+
+        #[test]
+        fn feathered_mask_with_opacity() {
+            // Feathered rect + 50% opacity: soft edge survives the remask
+            // (squared falloff stays smooth), interior fades, exterior black.
+            let mut comp = black_bg(64, 64);
+            let mut l = Layer::new(
+                "w".into(),
+                "White".into(),
+                LayerType::Solid {
+                    color: [1.0, 1.0, 1.0, 1.0],
+                },
+                30,
+            );
+            l.transform.position = Animatable::new_constant([32.0, 32.0]);
+            l.transform.opacity = Animatable::new_constant(50.0);
+            l.masks.push(rect_mask("m", 0.0, 0.0, 32.0, 64.0, 8.0));
+            comp.layers.push(l);
+            let px = render_frame_to_pixels(&comp, 0, 64, 64, 0.0, 0);
+            let inside = at(&px, 64, 8, 32);
+            // Sample inside the feather band (rect edge x=32, feather 8):
+            // geometric edge itself is ~0 by definition.
+            let edge = at(&px, 64, 28, 32);
+            let outside = at(&px, 64, 56, 32);
+            assert!(
+                (100.0..150.0).contains(&inside),
+                "interior should fade to ~127, got {inside}"
+            );
+            assert!(
+                edge > 15.0 && edge < 240.0,
+                "feather edge must be a soft ramp, got {edge}"
+            );
+            assert!(outside < 8.0, "exterior must stay black, got {outside}");
+        }
+
+        #[test]
+        fn precomp_mask_with_inner_effects() {
+            // Mask on the precomp layer clips the sub-render (which runs its
+            // own inner effects); inner noise must show inside, never outside.
+            let mut sub = Composition::new("sub".into(), "Sub".into(), 64, 64, 30, 30);
+            sub.background_color = [0.0, 0.0, 0.0, 1.0];
+            let mut inner = Layer::new(
+                "g".into(),
+                "Gray".into(),
+                LayerType::Solid {
+                    color: [0.6, 0.6, 0.6, 1.0],
+                },
+                30,
+            );
+            inner.transform.position = Animatable::new_constant([32.0, 32.0]);
+            inner.effects.push(Effect {
+                id: "fbm".into(),
+                name: "Fractal Noise".into(),
+                effect_type: crate::core::timeline::EffectType::FractalNoise {
+                    fractal_type: Animatable::new_constant(0.0),
+                    contrast: Animatable::new_constant(0.6),
+                    brightness: Animatable::new_constant(0.5),
+                    complexity: Animatable::new_constant(2.0),
+                    evolution: Animatable::new_constant(0.0),
+                },
+                enabled: true,
+            });
+            sub.layers.push(inner);
+
+            let mut comp = black_bg(64, 64);
+            let mut pre = Layer::new(
+                "p".into(),
+                "Pre".into(),
+                LayerType::PreComp {
+                    comp_id: "sub".into(),
+                },
+                30,
+            );
+            pre.transform.position = Animatable::new_constant([32.0, 32.0]);
+            pre.masks.push(rect_mask("m", 16.0, 16.0, 32.0, 32.0, 0.0));
+            comp.layers.push(pre);
+            comp.sub_compositions.push(sub);
+
+            let px = render_frame_to_pixels(&comp, 0, 64, 64, 0.0, 0);
+            assert!(
+                at(&px, 64, 4, 4) < 8.0,
+                "masked-out side must stay black, got {}",
+                at(&px, 64, 4, 4)
+            );
+            // Inner noise must survive inside the mask (variance check).
+            let mut vals = Vec::new();
+            for y in 24..40 {
+                for x in 24..40 {
+                    vals.push(at(&px, 64, x, y));
+                }
+            }
+            let mean = vals.iter().sum::<f32>() / vals.len() as f32;
+            let var =
+                vals.iter().map(|v| (v - mean) * (v - mean)).sum::<f32>() / vals.len() as f32;
+            assert!(
+                mean > 10.0 && var > 5.0,
+                "inner effect result must show inside mask (mean={mean}, var={var})"
             );
         }
     }
