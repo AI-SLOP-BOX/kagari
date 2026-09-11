@@ -22,10 +22,10 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
             let active_comp_name = app.history.current().active_composition().name.clone();
 
             ui.horizontal(|ui| {
-                if crate::ui::theme::draw_custom_tab(ui, app.ui_tabs.bottom_dock_tab == 0, &format!("🎞 {}", active_comp_name)).clicked() {
+                if crate::ui::theme::draw_custom_tab(ui, app.ui_tabs.bottom_dock_tab == 0, &active_comp_name).clicked() {
                     app.ui_tabs.bottom_dock_tab = 0;
                 }
-                if crate::ui::theme::draw_custom_tab(ui, app.ui_tabs.bottom_dock_tab == 1, "🚀 Render Queue").clicked() {
+                if crate::ui::theme::draw_custom_tab(ui, app.ui_tabs.bottom_dock_tab == 1, "Render Queue").clicked() {
                     app.ui_tabs.bottom_dock_tab = 1;
                 }
             });

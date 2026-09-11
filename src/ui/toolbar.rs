@@ -80,6 +80,14 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     if is_selected {
                         ui.painter()
                             .rect_stroke(rect, 4.0, egui::Stroke::new(1.0_f32, accent));
+                        // Active-tool underline (matches tab active states)
+                        ui.painter().line_segment(
+                            [
+                                egui::pos2(rect.left() + 4.0, rect.bottom() - 1.0),
+                                egui::pos2(rect.right() - 4.0, rect.bottom() - 1.0),
+                            ],
+                            egui::Stroke::new(2.0_f32, accent),
+                        );
                     }
                     // Draw icon centered inside the button rect
                     let icon_rect = rect.shrink(4.0);
