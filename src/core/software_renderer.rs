@@ -957,7 +957,7 @@ fn render_precomp_layers_inner(
                     fill_type,
                     *stroke_color,
                     *stroke_width,
-                    l_opacity,
+                    1.0,
                     shape_type,
                     effective_frame,
                     layer.trim_paths.as_ref(),
@@ -992,7 +992,7 @@ fn render_precomp_layers_inner(
                                 }
                                 let lidx = (((py - min_y) * bw + (px - min_x)) * 4) as usize;
                                 if lidx + 3 < layer_buf.len() {
-                                    let src_a = (img.pixels[tidx + 3] as f32 / 255.0) * l_opacity;
+                                    let src_a = img.pixels[tidx + 3] as f32 / 255.0;
                                     layer_buf[lidx] = img.pixels[tidx];
                                     layer_buf[lidx + 1] = img.pixels[tidx + 1];
                                     layer_buf[lidx + 2] = img.pixels[tidx + 2];
@@ -1053,7 +1053,7 @@ fn render_precomp_layers_inner(
                                 }
                                 let lidx = (((py - min_y) * bw + (px - min_x)) * 4) as usize;
                                 if lidx + 3 < layer_buf.len() {
-                                    let src_a = glyph_a * l_opacity;
+                                    let src_a = glyph_a;
                                     layer_buf[lidx] = (text_color[0] * 255.0) as u8;
                                     layer_buf[lidx + 1] = (text_color[1] * 255.0) as u8;
                                     layer_buf[lidx + 2] = (text_color[2] * 255.0) as u8;
@@ -1075,7 +1075,7 @@ fn render_precomp_layers_inner(
                         if lx >= -bounds_x && lx <= bounds_x && ly >= -bounds_y && ly <= bounds_y {
                             let lidx = (((py - min_y) * bw + (px - min_x)) * 4) as usize;
                             if lidx + 3 < layer_buf.len() {
-                                let src_a = base_color[3] * l_opacity;
+                                let src_a = base_color[3];
                                 layer_buf[lidx] = (base_color[0] * 255.0) as u8;
                                 layer_buf[lidx + 1] = (base_color[1] * 255.0) as u8;
                                 layer_buf[lidx + 2] = (base_color[2] * 255.0) as u8;
@@ -1167,8 +1167,7 @@ fn render_precomp_layers_inner(
                 }
                 let buf_pts: Vec<[f32; 2]> =
                     stroke.points.iter().map(|&p| to_buf_local(p)).collect();
-                let mut col = stroke.color;
-                col[3] *= l_opacity;
+                let col = stroke.color;
                 crate::core::paint::draw_stroke(
                     &mut layer_buf,
                     bw,
@@ -1212,7 +1211,10 @@ fn render_precomp_layers_inner(
         for ly in 0..bh {
             for lx in 0..bw {
                 let lidx = ((ly * bw + lx) * 4) as usize;
-                let src_a = layer_buf[lidx + 3] as f32 / 255.0;
+                // Composite-time opacity: the layer's opacity scales its
+                // contribution here (once, for every blend path), instead of
+                // being baked into the raster where effects could clobber it.
+                let src_a = layer_buf[lidx + 3] as f32 / 255.0 * l_opacity;
                 if src_a <= 0.001 {
                     continue;
                 }
@@ -2046,7 +2048,7 @@ pub fn render_frame_to_pixels(
                     ft,
                     sc,
                     sw,
-                    l_opacity,
+                    1.0,
                     shape_type,
                     effective_frame,
                     layer.trim_paths.as_ref(),
@@ -2066,7 +2068,7 @@ pub fn render_frame_to_pixels(
                     ft,
                     sc,
                     sw,
-                    l_opacity,
+                    1.0,
                     shape_type,
                     effective_frame,
                     layer.trim_paths.as_ref(),
@@ -2107,7 +2109,7 @@ pub fn render_frame_to_pixels(
                         ft,
                         sc,
                         sw,
-                        l_opacity,
+                        1.0,
                         shape_type,
                         effective_frame,
                         layer.trim_paths.as_ref(),
@@ -2140,7 +2142,7 @@ pub fn render_frame_to_pixels(
                             ft,
                             sc,
                             sw,
-                            l_opacity,
+                            1.0,
                             shape_type,
                             effective_frame,
                             layer.trim_paths.as_ref(),
@@ -2161,7 +2163,7 @@ pub fn render_frame_to_pixels(
                     ft,
                     sc,
                     sw,
-                    l_opacity,
+                    1.0,
                     shape_type,
                     effective_frame,
                     layer.trim_paths.as_ref(),
@@ -2451,14 +2453,14 @@ pub fn render_frame_to_pixels(
                             let lidx = (((py - min_y) * bw + (px - min_x)) * 4) as usize;
                             if lidx + 3 < layer_buf.len() {
                                 if stroke_alpha > 0.001 {
-                                    let src_a = stroke_alpha * l_opacity * mask_alpha;
+                                    let src_a = stroke_alpha * mask_alpha;
                                     layer_buf[lidx] = (stroke_c[0] * 255.0) as u8;
                                     layer_buf[lidx + 1] = (stroke_c[1] * 255.0) as u8;
                                     layer_buf[lidx + 2] = (stroke_c[2] * 255.0) as u8;
                                     layer_buf[lidx + 3] = (src_a * 255.0) as u8;
                                 }
                                 if fill_alpha > 0.001 {
-                                    let src_a = fill_alpha * l_opacity * mask_alpha;
+                                    let src_a = fill_alpha * mask_alpha;
                                     layer_buf[lidx] = (text_color[0] * 255.0) as u8;
                                     layer_buf[lidx + 1] = (text_color[1] * 255.0) as u8;
                                     layer_buf[lidx + 2] = (text_color[2] * 255.0) as u8;
@@ -2527,9 +2529,7 @@ pub fn render_frame_to_pixels(
                                 if tidx + 3 < img.pixels.len() {
                                     let lidx = (((py - min_y) * bw + (px - min_x)) * 4) as usize;
                                     if lidx + 3 < layer_buf.len() {
-                                        let src_a = (img.pixels[tidx + 3] as f32 / 255.0)
-                                            * l_opacity
-                                            * mask_alpha;
+                                        let src_a = (img.pixels[tidx + 3] as f32 / 255.0) * mask_alpha;
                                         layer_buf[lidx] = img.pixels[tidx];
                                         layer_buf[lidx + 1] = img.pixels[tidx + 1];
                                         layer_buf[lidx + 2] = img.pixels[tidx + 2];
@@ -2566,7 +2566,7 @@ pub fn render_frame_to_pixels(
                         if lidx + 3 >= layer_buf.len() {
                             continue;
                         }
-                        let src_a = base_color[3] * l_opacity * mask_alpha;
+                        let src_a = base_color[3] * mask_alpha;
                         layer_buf[lidx] = (base_color[0] * 255.0) as u8;
                         layer_buf[lidx + 1] = (base_color[1] * 255.0) as u8;
                         layer_buf[lidx + 2] = (base_color[2] * 255.0) as u8;
@@ -3169,7 +3169,10 @@ pub fn render_frame_to_pixels(
         for ly in 0..bh {
             for lx in 0..bw {
                 let lidx = ((ly * bw + lx) * 4) as usize;
-                let mut src_a = layer_buf[lidx + 3] as f32 / 255.0;
+                // Composite-time opacity (see precomp path above): applied
+                // once here so effect stacks cannot destroy it, uniformly
+                // across all blend modes via the src_a lerp below.
+                let mut src_a = layer_buf[lidx + 3] as f32 / 255.0 * l_opacity;
                 if src_a <= 0.001 {
                     continue;
                 }
@@ -5272,5 +5275,252 @@ mod shadow_tests {
         let px = render_frame_to_pixels(&main_comp, 0, 32, 32, 0.0, 0);
         // Entire buffer should be empty / transparent since the only sub-layer was a guide layer
         assert!(px.iter().all(|&b| b == 0));
+    }
+
+    /// Composite-time opacity regression tests.
+    ///
+    /// Pipeline rule under test: layer opacity is applied ONCE during
+    /// compositing (Phase 3), never baked into raster alpha where effect
+    /// kernels could clobber it. These tests fail on the old bake-first
+    /// pipeline (e.g. generator + fade rendered at full strength).
+    mod alpha_composite_tests {
+        use super::*;
+        use crate::core::timeline::Effect;
+
+        fn black_bg(w: u32, h: u32) -> Composition {
+            let mut comp = Composition::new("t".into(), "AlphaTest".into(), w, h, 30, 30);
+            comp.background_color = [0.0, 0.0, 0.0, 1.0];
+            let mut bg = Layer::new(
+                "bg".into(),
+                "BG".into(),
+                LayerType::Solid {
+                    color: [0.0, 0.0, 0.0, 1.0],
+                },
+                30,
+            );
+            bg.transform.position =
+                Animatable::new_constant([w as f32 * 0.5, h as f32 * 0.5]);
+            comp.layers.push(bg);
+            comp
+        }
+
+        fn gray_solid(id: &str, opacity: f32) -> Layer {
+            let mut l = Layer::new(
+                id.into(),
+                id.into(),
+                LayerType::Solid {
+                    color: [0.5, 0.5, 0.5, 1.0],
+                },
+                30,
+            );
+            l.transform.position = Animatable::new_constant([32.0, 32.0]);
+            l.transform.opacity = Animatable::new_constant(opacity);
+            l
+        }
+
+        fn mean_r(px: &[u8]) -> f32 {
+            let n = px.len() / 4;
+            px.chunks_exact(4).map(|c| c[0] as f32).sum::<f32>() / n.max(1) as f32
+        }
+
+        #[test]
+        fn generator_with_opacity_fade_is_proportional() {
+            // FractalNoise used to force alpha=255, so a 50% layer rendered
+            // at full strength. Now the fade must (about) halve the energy.
+            let mut mk = |opacity: f32| {
+                let mut comp = black_bg(64, 64);
+                let mut l = gray_solid("n", opacity);
+                l.transform.position = Animatable::new_constant([32.0, 32.0]);
+                l.effects.push(Effect {
+                    id: "fbm".into(),
+                    name: "Fractal Noise".into(),
+                    effect_type: crate::core::timeline::EffectType::FractalNoise {
+                        fractal_type: Animatable::new_constant(0.0),
+                        contrast: Animatable::new_constant(0.6),
+                        brightness: Animatable::new_constant(0.5),
+                        complexity: Animatable::new_constant(2.0),
+                        evolution: Animatable::new_constant(0.0),
+                    },
+                    enabled: true,
+                });
+                comp.layers.push(l);
+                render_frame_to_pixels(&comp, 0, 64, 64, 0.0, 0)
+            };
+            let full = mean_r(&mk(100.0));
+            let half = mean_r(&mk(50.0));
+            assert!(
+                full > 20.0,
+                "noise must lift the frame, got {full}"
+            );
+            let ratio = half / full.max(1.0);
+            assert!(
+                (0.3..0.7).contains(&ratio),
+                "50% fade should roughly halve noise energy, ratio={ratio} (half={half}, full={full})"
+            );
+        }
+
+        #[test]
+        fn sparse_painter_with_opacity_fade_is_proportional() {
+            // StarField paints sparse bright pixels with full alpha; the
+            // layer fade must still dim them via composite-time opacity.
+            let mut mk = |opacity: f32| {
+                let mut comp = black_bg(64, 64);
+                let mut l = Layer::new(
+                    "s".into(),
+                    "Stars".into(),
+                    LayerType::Solid {
+                        color: [0.0, 0.0, 0.0, 1.0],
+                    },
+                    30,
+                );
+                l.transform.position = Animatable::new_constant([32.0, 32.0]);
+                l.transform.opacity = Animatable::new_constant(opacity);
+                l.effects.push(Effect {
+                    id: "sf".into(),
+                    name: "Star Field".into(),
+                    effect_type: crate::core::timeline::EffectType::StarField {
+                        num_stars: Animatable::new_constant(60.0),
+                        depth_speed: Animatable::new_constant(0.0),
+                    },
+                    enabled: true,
+                });
+                comp.layers.push(l);
+                render_frame_to_pixels(&comp, 0, 64, 64, 0.0, 0)
+            };
+            let full = mean_r(&mk(100.0));
+            let half = mean_r(&mk(50.0));
+            assert!(full > 1.0, "stars must lift the frame, got {full}");
+            let ratio = half / full.max(0.001);
+            assert!(
+                (0.3..0.7).contains(&ratio),
+                "50% fade should roughly halve star energy, ratio={ratio}"
+            );
+        }
+
+        #[test]
+        fn effect_stack_then_opacity_matches_manual_blend() {
+            // Gray solid + noise, faded to 50%: must equal a 50/50 mix of the
+            // full-strength result with black (linearity of composite-time op).
+            let mut mk = |opacity: f32| {
+                let mut comp = black_bg(64, 64);
+                let mut l = gray_solid("n", opacity);
+                l.transform.position = Animatable::new_constant([32.0, 32.0]);
+                l.effects.push(Effect {
+                    id: "fbm".into(),
+                    name: "Fractal Noise".into(),
+                    effect_type: crate::core::timeline::EffectType::FractalNoise {
+                        fractal_type: Animatable::new_constant(0.0),
+                        contrast: Animatable::new_constant(0.6),
+                        brightness: Animatable::new_constant(0.5),
+                        complexity: Animatable::new_constant(2.0),
+                        evolution: Animatable::new_constant(0.0),
+                    },
+                    enabled: true,
+                });
+                comp.layers.push(l);
+                render_frame_to_pixels(&comp, 0, 64, 64, 0.0, 0)
+            };
+            let full = mk(100.0);
+            let half = mk(50.0);
+            let mut max_dev = 0.0f32;
+            for (i, px) in half.chunks_exact(4).enumerate() {
+                let expect = full[i * 4] as f32 * 0.5;
+                max_dev = max_dev.max((px[0] as f32 - expect).abs());
+            }
+            assert!(
+                max_dev <= 3.0,
+                "faded stack must match manual 50% mix, max_dev={max_dev}"
+            );
+        }
+
+        #[test]
+        fn add_blend_with_partial_opacity() {
+            // White solid, Add over black at 50% -> ~127 gray everywhere.
+            let mut comp = black_bg(32, 32);
+            let mut l = Layer::new(
+                "w".into(),
+                "White".into(),
+                LayerType::Solid {
+                    color: [1.0, 1.0, 1.0, 1.0],
+                },
+                30,
+            );
+            l.transform.position = Animatable::new_constant([16.0, 16.0]);
+            l.transform.opacity = Animatable::new_constant(50.0);
+            l.blend_mode = crate::core::timeline::BlendMode::Add;
+            comp.layers.push(l);
+            let px = render_frame_to_pixels(&comp, 0, 32, 32, 0.0, 0);
+            let m = mean_r(&px);
+            assert!(
+                (115.0..140.0).contains(&m),
+                "Add@50% of white over black should be ~127, got {m}"
+            );
+        }
+
+        #[test]
+        fn mask_and_opacity_combine() {
+            // Left-half rect mask + 50% opacity: kept side fades, cut side
+            // stays at background black.
+            let mut comp = black_bg(64, 64);
+            let mut l = Layer::new(
+                "w".into(),
+                "White".into(),
+                LayerType::Solid {
+                    color: [1.0, 1.0, 1.0, 1.0],
+                },
+                30,
+            );
+            l.transform.position = Animatable::new_constant([32.0, 32.0]);
+            l.transform.opacity = Animatable::new_constant(50.0);
+            l.masks.push(crate::core::mask::Mask::new_rect(
+                "m".into(),
+                "Left".into(),
+                0.0,
+                0.0,
+                32.0,
+                64.0,
+            ));
+            comp.layers.push(l);
+            let px = render_frame_to_pixels(&comp, 0, 64, 64, 0.0, 0);
+            let at = |x: u32, y: u32| px[((y * 64 + x) * 4) as usize] as f32;
+            assert!(
+                (110.0..145.0).contains(&at(16, 32)),
+                "masked-in side should fade to ~127, got {}",
+                at(16, 32)
+            );
+            assert!(
+                at(48, 32) < 8.0,
+                "masked-out side must stay black, got {}",
+                at(48, 32)
+            );
+        }
+
+        #[test]
+        fn zero_opacity_layer_is_invisible() {
+            // Any layer at 0% must contribute nothing (no leaks, no residue
+            // from alpha-writing effects).
+            let mut comp = black_bg(32, 32);
+            let mut l = gray_solid("n", 0.0);
+            l.transform.position = Animatable::new_constant([16.0, 16.0]);
+            l.effects.push(Effect {
+                id: "fbm".into(),
+                name: "Fractal Noise".into(),
+                effect_type: crate::core::timeline::EffectType::FractalNoise {
+                    fractal_type: Animatable::new_constant(0.0),
+                    contrast: Animatable::new_constant(0.6),
+                    brightness: Animatable::new_constant(0.5),
+                    complexity: Animatable::new_constant(2.0),
+                    evolution: Animatable::new_constant(0.0),
+                },
+                enabled: true,
+            });
+            comp.layers.push(l);
+            let px = render_frame_to_pixels(&comp, 0, 32, 32, 0.0, 0);
+            assert!(
+                mean_r(&px) < 2.0,
+                "0% layer must be invisible, mean={}",
+                mean_r(&px)
+            );
+        }
     }
 }
