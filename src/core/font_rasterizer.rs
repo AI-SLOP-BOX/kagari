@@ -37,7 +37,16 @@ pub struct RasterizedGlyph {
 pub struct FontRasterizer {
     /// Loaded fonts keyed by family name
     fonts: HashMap<String, Vec<u8>>,
+    /// Glyph coverage bitmaps keyed by (family, char, font-size bits).
+    /// Text content is usually static across frames, so this turns per-frame
+    /// outline+tessellation into a hash lookup (critical for parallel export:
+    /// all text rendering serializes on the global rasterizer lock).
+    glyph_cache: std::cell::RefCell<HashMap<(String, char, u32), RasterizedGlyph>>,
 }
+
+/// Maximum cached glyph bitmaps before the cache is cleared (output is
+/// unaffected — misses simply re-rasterize deterministically).
+const GLYPH_CACHE_LIMIT: usize = 2048;
 
 impl Default for FontRasterizer {
     fn default() -> Self {
@@ -49,6 +58,7 @@ impl FontRasterizer {
     pub fn new() -> Self {
         Self {
             fonts: HashMap::new(),
+            glyph_cache: std::cell::RefCell::new(HashMap::new()),
         }
     }
 
@@ -301,6 +311,31 @@ impl FontRasterizer {
         if !font_size.is_finite() || !(0.1..=8192.0).contains(&font_size) {
             return None;
         }
+        let key = (
+            family_name.to_string(),
+            ch,
+            font_size.to_bits(),
+        );
+        if let Some(hit) = self.glyph_cache.borrow().get(&key) {
+            return Some(hit.clone());
+        }
+        let glyph = self.rasterize_glyph_uncached(family_name, ch, font_size)?;
+        {
+            let mut cache = self.glyph_cache.borrow_mut();
+            if cache.len() >= GLYPH_CACHE_LIMIT {
+                cache.clear();
+            }
+            cache.insert(key, glyph.clone());
+        }
+        Some(glyph)
+    }
+
+    fn rasterize_glyph_uncached(
+        &self,
+        family_name: &str,
+        ch: char,
+        font_size: f32,
+    ) -> Option<RasterizedGlyph> {
         let font_data = self.fonts.get(family_name)?;
         let font = parse_font(font_data)?;
         let scale = PxScale::from(font_size);
@@ -457,33 +492,31 @@ impl FontRasterizer {
                 let h_advance = scaled_font.h_advance(glyph_id);
 
                 if ch != ' ' {
-                    let glyph = glyph_id.with_scale_and_position(
-                        PxScale::from(font_size),
-                        ab_glyph::point(0.0, 0.0),
-                    );
-                    if let Some(outlined) = font.outline_glyph(glyph) {
-                        let bounds = outlined.px_bounds();
-                        let glyph_left = bounds.min.x as i32;
-                        let glyph_top = bounds.min.y as i32;
-
-                        outlined.draw(|x, y, coverage| {
-                            let dest_x = cursor_x as i32 + glyph_left + x as i32;
-                            let dest_y = cursor_y as i32 + max_top as i32 + glyph_top + y as i32;
-                            if dest_x >= 0
-                                && dest_y >= 0
-                                && (dest_x as u32) < buf_w
-                                && (dest_y as u32) < buf_h
-                            {
-                                let idx = ((dest_y as u32 * buf_w + dest_x as u32) * 4) as usize;
-                                if idx + 3 < pixels.len() {
-                                    let a = (coverage * 255.0) as u8;
-                                    pixels[idx] = r;
-                                    pixels[idx + 1] = g;
-                                    pixels[idx + 2] = b;
-                                    pixels[idx + 3] = a;
+                    // Cached coverage bitmap (bit-identical to outlining here:
+                    // same draw callback, alpha byte reused directly).
+                    if let Some(rg) = self.rasterize_glyph(family_name, ch, font_size) {
+                        for gy in 0..rg.height {
+                            for gx in 0..rg.width {
+                                let dest_x = cursor_x as i32 + rg.left + gx as i32;
+                                let dest_y =
+                                    cursor_y as i32 + max_top as i32 + rg.top + gy as i32;
+                                if dest_x >= 0
+                                    && dest_y >= 0
+                                    && (dest_x as u32) < buf_w
+                                    && (dest_y as u32) < buf_h
+                                {
+                                    let sidx = ((gy * rg.width + gx) * 4) as usize;
+                                    let didx =
+                                        ((dest_y as u32 * buf_w + dest_x as u32) * 4) as usize;
+                                    if sidx + 3 < rg.pixels.len() && didx + 3 < pixels.len() {
+                                        pixels[didx] = r;
+                                        pixels[didx + 1] = g;
+                                        pixels[didx + 2] = b;
+                                        pixels[didx + 3] = rg.pixels[sidx + 3];
+                                    }
                                 }
                             }
-                        });
+                        }
                     }
                 }
 

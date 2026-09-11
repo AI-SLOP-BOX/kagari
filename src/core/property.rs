@@ -30,6 +30,25 @@ impl<const N: usize> Interpolate for [f32; N] {
     }
 }
 
+impl Interpolate for Vec<[f32; 2]> {
+    /// Component-wise lerp over the shared prefix; a length mismatch
+    /// truncates (keyframe vertex counts should stay constant).
+    fn interpolate(start: &Self, end: &Self, t: f32) -> Self {
+        let n = start.len().min(end.len());
+        let mut out = Vec::with_capacity(n);
+        for i in 0..n {
+            out.push([
+                start[i][0] + (end[i][0] - start[i][0]) * t,
+                start[i][1] + (end[i][1] - start[i][1]) * t,
+            ]);
+        }
+        out
+    }
+    fn default_interpolate() -> Self {
+        Vec::new()
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", content = "value")]
 pub enum Animatable<T> {

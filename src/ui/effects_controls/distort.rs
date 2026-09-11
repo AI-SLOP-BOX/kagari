@@ -578,8 +578,7 @@ pub fn draw(
                 },
             );
         }
-        EffectType::GlitchDisplacement { seed, amount } => {
-            draw_prop(
+        EffectType::GlitchDisplacement { seed, amount } => {            draw_prop(
                 ui,
                 current_frame,
                 project_changed,
@@ -599,6 +598,174 @@ pub fn draw(
                 amount,
                 |ui, v| {
                     ui.add(egui::Slider::new(v, 0.0..=10.0));
+                },
+            );
+        }
+        EffectType::RGBSplit {
+            red_offset,
+            green_offset,
+            blue_offset,
+        } => {
+            for (label, track) in [
+                ("Red Offset", red_offset),
+                ("Green Offset", green_offset),
+                ("Blue Offset", blue_offset),
+            ] {
+                let before = track.clone();
+                if let Some(nf) = draw_property_ui(
+                    current_frame,
+                    ui,
+                    label,
+                    track,
+                    |ui, val: &mut [f32; 2]| {
+                        ui.horizontal(|ui| {
+                            ui.add(
+                                egui::DragValue::new(&mut val[0])
+                                    .speed(0.5)
+                                    .prefix("X: "),
+                            );
+                            ui.add(
+                                egui::DragValue::new(&mut val[1])
+                                    .speed(0.5)
+                                    .prefix("Y: "),
+                            );
+                        });
+                    },
+                ) {
+                    *next_frame = Some(nf);
+                }
+                if before != *track {
+                    *project_changed = true;
+                }
+            }
+        }
+        EffectType::Flicker {
+            amount,
+            speed,
+            seed,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Amount",
+                amount,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Speed",
+                speed,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=60.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Seed",
+                seed,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=9999.0));
+                },
+            );
+        }
+        EffectType::BlockGlitch {
+            block_size,
+            amount,
+            seed,
+            corruption,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Block Size",
+                block_size,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 1.0..=256.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Amount",
+                amount,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Seed",
+                seed,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=9999.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Corruption",
+                corruption,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                },
+            );
+        }
+        EffectType::SliceTear {
+            slices,
+            max_offset,
+            seed,
+            ..
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Slices",
+                slices,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=32.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Max Offset",
+                max_offset,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=400.0));
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Seed",
+                seed,
+                |ui, v| {
+                    ui.add(egui::Slider::new(v, 0.0..=9999.0));
                 },
             );
         }

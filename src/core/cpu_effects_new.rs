@@ -655,7 +655,8 @@ pub fn apply_fractal_noise(
                 pixels[idx] = gray;
                 pixels[idx + 1] = gray;
                 pixels[idx + 2] = gray;
-                pixels[idx + 3] = 255;
+                // Alpha untouched: layer opacity / mattes live in alpha and
+                // must survive generator effects (see BlockGlitch brief).
             }
         }
     }

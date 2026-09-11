@@ -154,6 +154,7 @@ pub mod ae_effects_pack_v26;
 pub mod ae_effects_pack_v27;
 pub mod ae_effects_pack_v28;
 pub mod ae_effects_pack_v29;
+pub mod ae_effects_pack_v30;
 pub mod ae_effects_pack_v3;
 pub mod ae_effects_pack_v4;
 pub mod ae_effects_pack_v5;

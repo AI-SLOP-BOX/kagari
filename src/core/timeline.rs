@@ -1494,6 +1494,28 @@ pub enum EffectType {
         jitter_amount: Animatable<f32>,
         seed: Animatable<f32>,
     },
+    RGBSplit {
+        red_offset: Animatable<[f32; 2]>,
+        green_offset: Animatable<[f32; 2]>,
+        blue_offset: Animatable<[f32; 2]>,
+    },
+    Flicker {
+        amount: Animatable<f32>,
+        speed: Animatable<f32>,
+        seed: Animatable<f32>,
+    },
+    BlockGlitch {
+        block_size: Animatable<f32>,
+        amount: Animatable<f32>,
+        seed: Animatable<f32>,
+        corruption: Animatable<f32>,
+    },
+    SliceTear {
+        slices: Animatable<f32>,
+        max_offset: Animatable<f32>,
+        seed: Animatable<f32>,
+        vertical: bool,
+    },
     /// Glass edge bevel with specular refraction on layer borders.
     GlassEdgeBevel {
         bevel_size: Animatable<f32>,

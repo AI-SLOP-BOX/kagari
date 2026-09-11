@@ -144,44 +144,17 @@ impl MaskPath {
     }
 
     /// Get evaluated vertices at a given frame.
+    /// Uses the standard [`Animatable`] evaluator so Hold/Bezier/Linear
+    /// keyframes behave exactly like every other animated property
+    /// (a previous hand-rolled linear-only version silently broke Hold).
     pub fn get_vertices(&self, frame: u32) -> Vec<[f32; 2]> {
         match &self.vertices {
             Animatable::Constant(v) => v.clone(),
             Animatable::Animated(kfs) => {
                 if kfs.is_empty() {
                     Vec::new()
-                } else if kfs.len() == 1 || frame <= kfs[0].frame {
-                    kfs[0].value.clone()
-                } else if let Some(last_kf) = kfs.last() {
-                    if frame >= last_kf.frame {
-                        last_kf.value.clone()
-                    } else {
-                        let mut prev = &kfs[0];
-                        let mut next = &kfs[0];
-                        for kf in kfs {
-                            if kf.frame <= frame {
-                                prev = kf;
-                            }
-                            if kf.frame >= frame {
-                                next = kf;
-                                break;
-                            }
-                        }
-                        if prev.frame == next.frame {
-                            prev.value.clone()
-                        } else {
-                            let t = (frame - prev.frame) as f32 / (next.frame - prev.frame) as f32;
-                            prev.value
-                                .iter()
-                                .zip(next.value.iter())
-                                .map(|(&p0, &p1)| {
-                                    [p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t]
-                                })
-                                .collect()
-                        }
-                    }
                 } else {
-                    Vec::new()
+                    self.vertices.value_at(frame)
                 }
             }
         }

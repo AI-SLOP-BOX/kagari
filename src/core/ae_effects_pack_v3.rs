@@ -262,7 +262,7 @@ pub fn apply_fractal_noise(pixels: &mut [u8], width: u32, height: u32, scale: f3
             pixels[idx] = val;
             pixels[idx + 1] = val;
             pixels[idx + 2] = val;
-            pixels[idx + 3] = 255;
+            // Alpha preserved (layer opacity lives in alpha).
         }
     }
 }
@@ -283,7 +283,7 @@ pub fn apply_cell_pattern(pixels: &mut [u8], width: u32, height: u32, cell_size:
             pixels[idx] = val;
             pixels[idx + 1] = val;
             pixels[idx + 2] = val;
-            pixels[idx + 3] = 255;
+            // Alpha preserved (layer opacity lives in alpha).
         }
     }
 }
@@ -302,6 +302,8 @@ mod tests {
         let mut pixels = vec![0u8; 64];
         apply_fractal_noise(&mut pixels, 4, 4, 10.0);
         assert_eq!(pixels.len(), 64);
-        assert_eq!(pixels[3], 255);
+        // Generator preserves alpha (layer opacity lives in alpha).
+        assert_eq!(pixels[3], 0);
+        assert!(pixels[0] > 0 || pixels[4] > 0);
     }
 }

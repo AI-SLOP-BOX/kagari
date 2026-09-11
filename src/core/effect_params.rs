@@ -370,6 +370,45 @@ impl EffectType {
                 push!("Seed", seed, Scalar);
                 push!("Amount", amount, Scalar);
             }
+            EffectType::RGBSplit {
+                red_offset,
+                green_offset,
+                blue_offset,
+                ..
+            } => {
+                push!("Red Offset", red_offset, Vec2);
+                push!("Green Offset", green_offset, Vec2);
+                push!("Blue Offset", blue_offset, Vec2);
+            }
+            EffectType::Flicker {
+                amount, speed, seed, ..
+            } => {
+                push!("Amount", amount, Scalar);
+                push!("Speed", speed, Scalar);
+                push!("Seed", seed, Scalar);
+            }
+            EffectType::BlockGlitch {
+                block_size,
+                amount,
+                seed,
+                corruption,
+                ..
+            } => {
+                push!("Block Size", block_size, Scalar);
+                push!("Amount", amount, Scalar);
+                push!("Seed", seed, Scalar);
+                push!("Corruption", corruption, Scalar);
+            }
+            EffectType::SliceTear {
+                slices,
+                max_offset,
+                seed,
+                ..
+            } => {
+                push!("Slices", slices, Scalar);
+                push!("Max Offset", max_offset, Scalar);
+                push!("Seed", seed, Scalar);
+            }
             EffectType::MatteChokeSpread { radius, .. } => push!("Radius", radius, Scalar),
             EffectType::AlphaFeather { radius, .. } => push!("Radius", radius, Scalar),
             EffectType::AlphaFromLuminance { .. } => {}
@@ -1428,6 +1467,45 @@ impl EffectType {
             EffectType::GlitchDisplacement { seed, amount, .. } => {
                 push!("Seed", seed, Scalar);
                 push!("Amount", amount, Scalar);
+            }
+            EffectType::RGBSplit {
+                red_offset,
+                green_offset,
+                blue_offset,
+                ..
+            } => {
+                push!("Red Offset", red_offset, Vec2);
+                push!("Green Offset", green_offset, Vec2);
+                push!("Blue Offset", blue_offset, Vec2);
+            }
+            EffectType::Flicker {
+                amount, speed, seed, ..
+            } => {
+                push!("Amount", amount, Scalar);
+                push!("Speed", speed, Scalar);
+                push!("Seed", seed, Scalar);
+            }
+            EffectType::BlockGlitch {
+                block_size,
+                amount,
+                seed,
+                corruption,
+                ..
+            } => {
+                push!("Block Size", block_size, Scalar);
+                push!("Amount", amount, Scalar);
+                push!("Seed", seed, Scalar);
+                push!("Corruption", corruption, Scalar);
+            }
+            EffectType::SliceTear {
+                slices,
+                max_offset,
+                seed,
+                ..
+            } => {
+                push!("Slices", slices, Scalar);
+                push!("Max Offset", max_offset, Scalar);
+                push!("Seed", seed, Scalar);
             }
             EffectType::MatteChokeSpread { radius, .. } => push!("Radius", radius, Scalar),
             EffectType::AlphaFeather { radius, .. } => push!("Radius", radius, Scalar),

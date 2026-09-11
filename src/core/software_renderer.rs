@@ -7,14 +7,18 @@ use rayon::prelude::*;
 
 #[derive(Default)]
 struct CpuMaskEntry {
+    /// Vertices with mask expansion already applied (expanded once per
+    /// layer render, never per pixel).
     vertices: Vec<[f32; 2]>,
     feather: f32,
-    expansion: f32,
     inverted: bool,
     mode: MaskMode,
 }
 
 /// Offset a polygon's vertices along their outward normals by `expansion` pixels.
+/// Positive expansion always grows the polygon regardless of vertex winding
+/// (a previous version assumed one winding, silently inverting expansion
+/// for the common TL,TR,BR,BL rect order).
 fn offset_polygon_vertices(vertices: &[[f32; 2]], expansion: f32) -> Vec<[f32; 2]> {
     if vertices.len() < 3 || !expansion.is_finite() || expansion.abs() < 0.01 {
         return vertices.to_vec();
@@ -25,7 +29,17 @@ fn offset_polygon_vertices(vertices: &[[f32; 2]], expansion: f32) -> Vec<[f32; 2
     {
         return vertices.to_vec();
     }
+    // Signed area: > 0 means visually clockwise in y-down screen coords,
+    // whose outward normal is RIGHT of the edge direction (flip of the
+    // default left normal).
     let n = vertices.len();
+    let mut area = 0.0f32;
+    for i in 0..n {
+        let p = vertices[i];
+        let q = vertices[(i + 1) % n];
+        area += p[0] * q[1] - q[0] * p[1];
+    }
+    let flip = area > 0.0;
     let mut result = Vec::with_capacity(n);
     for i in 0..n {
         let prev = vertices[(i + n - 1) % n];
@@ -37,8 +51,11 @@ fn offset_polygon_vertices(vertices: &[[f32; 2]], expansion: f32) -> Vec<[f32; 2
 
         let len1 = (e1[0] * e1[0] + e1[1] * e1[1]).sqrt().max(1e-6);
         let len2 = (e2[0] * e2[0] + e2[1] * e2[1]).sqrt().max(1e-6);
-        let n1 = [-e1[1] / len1, e1[0] / len1];
-        let n2 = [-e2[1] / len2, e2[0] / len2];
+        let (n1, n2) = if flip {
+            ([e1[1] / len1, -e1[0] / len1], [e2[1] / len2, -e2[0] / len2])
+        } else {
+            ([-e1[1] / len1, e1[0] / len1], [-e2[1] / len2, e2[0] / len2])
+        };
 
         let avg_n = [(n1[0] + n2[0]) * 0.5, (n1[1] + n2[1]) * 0.5];
         let avg_len = (avg_n[0] * avg_n[0] + avg_n[1] * avg_n[1]).sqrt().max(1e-6);
@@ -1008,8 +1025,19 @@ fn render_precomp_layers_inner(
                     {
                         let origin_x = (cx - tw as f32 * 0.5) as i32;
                         let origin_y = (cy - th as f32 * 0.5) as i32;
-                        for py in min_y..max_y {
-                            for px in min_x..max_x {
+                        // Tighten scan to bitmap bounds (same proof as above).
+                        let text_w = tw as i32;
+                        let text_h = th as i32;
+                        let qx0 = origin_x.max(min_x as i32).clamp(0, width as i32) as u32;
+                        let qy0 = origin_y.max(min_y as i32).clamp(0, height as i32) as u32;
+                        let qx1 = (origin_x + text_w)
+                            .clamp(min_x as i32, max_x as i32)
+                            .max(qx0 as i32) as u32;
+                        let qy1 = (origin_y + text_h)
+                            .clamp(min_y as i32, max_y as i32)
+                            .max(qy0 as i32) as u32;
+                        for py in qy0..qy1 {
+                            for px in qx0..qx1 {
                                 let tx = px as i32 - origin_x;
                                 let ty = py as i32 - origin_y;
                                 if tx < 0 || ty < 0 || (tx as u32) >= tw || (ty as u32) >= th {
@@ -1457,10 +1485,13 @@ pub fn render_frame_to_pixels(
                             frame as f32 / comp.fps.max(1) as f32,
                         );
                         if vertices.len() >= 3 {
+                            // Expand once per layer (not per pixel): the offset
+                            // used to be recomputed inside the per-pixel
+                            // coverage test, costing seconds per masked layer.
+                            let expansion = mask.expansion.evaluate(frame);
                             masks.push(CpuMaskEntry {
-                                vertices,
+                                vertices: offset_polygon_vertices(&vertices, expansion),
                                 feather: mask.feather.evaluate(frame),
-                                expansion: mask.expansion.evaluate(frame),
                                 inverted: mask.inverted,
                                 mode: mask.mode,
                             });
@@ -2342,9 +2373,26 @@ pub fn render_frame_to_pixels(
                     let origin_x = (cx - tw as f32 * 0.5) as i32;
                     let origin_y = (cy - th as f32 * 0.5) as i32;
                     let stroke_radius = (stroke_w * 0.5).ceil() as i32;
+                    // Tighten the scan to bitmap bounds (+ stroke neighbor
+                    // margin): pixels outside cannot receive coverage, so
+                    // skipping them is exactly identical output at a fraction
+                    // of the cost (also shrinks time spent under the global
+                    // font lock during parallel renders).
+                    let qx0 = (origin_x - stroke_radius)
+                        .max(min_x as i32)
+                        .clamp(0, width as i32) as u32;
+                    let qy0 = (origin_y - stroke_radius)
+                        .max(min_y as i32)
+                        .clamp(0, height as i32) as u32;
+                    let qx1 = (origin_x + text_w + stroke_radius)
+                        .clamp(min_x as i32, max_x as i32)
+                        .max(qx0 as i32) as u32;
+                    let qy1 = (origin_y + text_h + stroke_radius)
+                        .clamp(min_y as i32, max_y as i32)
+                        .max(qy0 as i32) as u32;
 
-                    for py in min_y..max_y {
-                        for px in min_x..max_x {
+                    for py in qy0..qy1 {
+                        for px in qx0..qx1 {
                             // Vector mask check
                             let mut mask_alpha = 1.0;
                             if !masks.is_empty() {
@@ -3687,10 +3735,9 @@ fn compute_combined_mask_coverage(px: f32, py: f32, masks: &[CpuMaskEntry]) -> f
         if mask.vertices.len() < 3 {
             continue;
         }
-        let expanded = offset_polygon_vertices(&mask.vertices, mask.expansion);
-        let inside = point_in_polygon(px, py, &expanded);
+        let inside = point_in_polygon(px, py, &mask.vertices);
         let mut cov = if mask.feather > 0.1 {
-            let dist = distance_to_polygon(px, py, &expanded);
+            let dist = distance_to_polygon(px, py, &mask.vertices);
             if inside {
                 (dist / mask.feather).clamp(0.0, 1.0)
             } else {

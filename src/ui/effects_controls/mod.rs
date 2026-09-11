@@ -90,6 +90,10 @@ pub fn draw_effect_type_ui(
         | EffectType::Fisheye { .. }
         | EffectType::LensCorrection { .. }
         | EffectType::GlitchDisplacement { .. }
+        | EffectType::RGBSplit { .. }
+        | EffectType::BlockGlitch { .. }
+        | EffectType::SliceTear { .. }
+        | EffectType::Flicker { .. }
         | EffectType::PinchPunch { .. }
         | EffectType::RefractionLens { .. }
         | EffectType::GlassEdgeBevel { .. }

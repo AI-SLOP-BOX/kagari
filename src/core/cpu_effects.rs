@@ -156,14 +156,17 @@ fn apply_one_ctx(
             let thr = threshold.evaluate(frame) / 100.0;
             let rad = radius.evaluate(frame).clamp(0.0, 1000.0) as u32;
             let inten = intensity.evaluate(frame) / 100.0;
-            if !crate::core::compute_pipeline::try_gpu_glow(
-                pixels,
-                width,
-                height,
-                thr,
-                rad.min(32),
-                inten,
-            ) {
+            // Zero intensity adds no energy: skip the (expensive) blur.
+            if inten > 0.001
+                && !crate::core::compute_pipeline::try_gpu_glow(
+                    pixels,
+                    width,
+                    height,
+                    thr,
+                    rad.min(32),
+                    inten,
+                )
+            {
                 pack::apply_glow(pixels, width, height, thr, rad, inten);
             }
         }
@@ -999,13 +1002,78 @@ fn apply_one_ctx(
         }
         EffectType::GlitchDisplacement { seed, amount } => {
             let s = seed.evaluate(frame).round().clamp(0.0, 99999.0) as f32;
-            let a = amount.evaluate(frame);
-            if !crate::core::compute_pipeline::try_gpu_glitch_displacement(
+            let a = amount.evaluate(frame);            if !crate::core::compute_pipeline::try_gpu_glitch_displacement(
                 pixels, width, height, a, s,
             ) {
                 use crate::core::ae_effects_pack_v13::apply_glitch_displacement;
                 apply_glitch_displacement(pixels, width, height, s as u32, a);
             }
+        }
+        EffectType::RGBSplit {
+            red_offset,
+            green_offset,
+            blue_offset,
+        } => {
+            use crate::core::ae_effects_pack_v30::apply_rgb_split;
+            apply_rgb_split(
+                pixels,
+                width,
+                height,
+                red_offset.evaluate(frame),
+                green_offset.evaluate(frame),
+                blue_offset.evaluate(frame),
+            );
+        }
+        EffectType::Flicker {
+            amount,
+            speed,
+            seed,
+        } => {
+            use crate::core::ae_effects_pack_v30::apply_flicker;
+            apply_flicker(
+                pixels,
+                amount.evaluate(frame),
+                speed.evaluate(frame),
+                seed.evaluate(frame).round().clamp(0.0, 99999.0) as u32,
+                frame,
+                fps,
+            );
+        }
+        EffectType::BlockGlitch {
+            block_size,
+            amount,
+            seed,
+            corruption,
+        } => {
+            use crate::core::ae_effects_pack_v30::apply_block_glitch;
+            apply_block_glitch(
+                pixels,
+                width,
+                height,
+                block_size.evaluate(frame),
+                amount.evaluate(frame),
+                seed.evaluate(frame).round().clamp(0.0, 99999.0) as u32,
+                frame,
+                corruption.evaluate(frame),
+            );
+        }
+        EffectType::SliceTear {
+            slices,
+            max_offset,
+            seed,
+            vertical,
+        } => {
+            use crate::core::ae_effects_pack_v30::apply_slice_tear;
+            apply_slice_tear(
+                pixels,
+                width,
+                height,
+                slices.evaluate(frame),
+                max_offset.evaluate(frame),
+                seed.evaluate(frame).round().clamp(0.0, 99999.0) as u32,
+                frame,
+                *vertical,
+            );
         }
         EffectType::MatteChokeSpread { radius, expand } => {
             use crate::core::ae_effects_pack_v22::apply_matte_choke;
