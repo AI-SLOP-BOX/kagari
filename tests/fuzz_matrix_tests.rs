@@ -239,21 +239,21 @@ fn fuzz_extreme_exposure_and_lut_do_not_panic() {
     // -100EV must crush everything to black (dither defaults off: exact zero).
     let black = render_frame_to_pixels(&comp, 0, 32, 32, -100.0, 0);
     assert!(
-        black.chunks_exact(4).all(|p| p[0] == 0 && p[1] == 0 && p[2] == 0),
+        black.as_chunks::<4>().0.iter().all(|p| p[0] == 0 && p[1] == 0 && p[2] == 0),
         "extreme negative exposure must produce black"
     );
     // +50EV must saturate every lit channel to white.
     let white = render_frame_to_pixels(&comp, 0, 32, 32, 50.0, 0);
     assert!(
-        white.chunks_exact(4).all(|p| p[0] == 255 && p[1] == 255 && p[2] == 255),
+        white.as_chunks::<4>().0.iter().all(|p| p[0] == 255 && p[1] == 255 && p[2] == 255),
         "extreme positive exposure must saturate to white"
     );
     // Exposure must be monotonic: -1EV nowhere brighter than 0EV.
     let dark = render_frame_to_pixels(&comp, 0, 32, 32, -1.0, 0);
     let base = render_frame_to_pixels(&comp, 0, 32, 32, 0.0, 0);
     assert!(
-        dark.chunks_exact(4)
-            .zip(base.chunks_exact(4))
+        dark.as_chunks::<4>().0.iter()
+            .zip(base.as_chunks::<4>().0.iter())
             .all(|(d, b)| d[0] <= b[0] && d[1] <= b[1] && d[2] <= b[2]),
         "lower exposure must not brighten any channel"
     );
