@@ -375,16 +375,47 @@ mod memory_bound_tests {
         }
     }
 
+    /// ~10MB per entry with a unique id per tag so consecutive commits are
+    /// distinct (identical snapshots are deduped and would never trim).
+    fn huge_project(tag: usize) -> Project {
+        let mut comp = Composition::new(format!("c{}", tag), "Big".into(), 64, 64, 30, 30);
+        for i in 0..10 {
+            let mut l = Layer::new(
+                format!("l{}_{}", tag, i),
+                format!("L{}", i),
+                LayerType::Solid { color: [1.0; 4] },
+                30,
+            );
+            let kfs2: Vec<Keyframe<[f32; 2]>> = (0..1000)
+                .map(|k| Keyframe::new(k, [k as f32, 0.0], InterpolationType::Linear))
+                .collect();
+            let kfs1: Vec<Keyframe<f32>> = (0..1000)
+                .map(|k| Keyframe::new(k, k as f32, InterpolationType::Linear))
+                .collect();
+            l.transform.position = Animatable::new_animated(kfs2.clone());
+            l.transform.scale = Animatable::new_animated(kfs2);
+            l.transform.rotation = Animatable::new_animated(kfs1.clone());
+            l.transform.opacity = Animatable::new_animated(kfs1);
+            comp.layers.push(l);
+        }
+        Project {
+            compositions: vec![comp],
+            active_composition_idx: 0,
+            assets: Vec::new(),
+            use_gpu_compute: false,
+        }
+    }
+
     #[test]
     fn test_byte_budget_trims_oldest_entries() {
-        let mut history = ProjectHistory::new(big_project(100, 100));
+        let mut history = ProjectHistory::new(huge_project(usize::MAX));
         let initial_bytes = history.approx_bytes();
         assert!(initial_bytes > 0, "estimate must be positive");
 
-        // Commit many large snapshots: 100 layers x 100 kfs ≈ 4.6MB each.
-        // 128MB budget → should trim well before 50 entries.
-        for i in 0..60 {
-            history.commit_action(big_project(100, 100), &format!("edit {}", i));
+        // ~10MB per distinct entry: 20 commits (~200MB) must exceed the
+        // 128MB budget, so the byte budget (not the 50-entry cap) trims first.
+        for i in 0..20 {
+            history.commit_action(huge_project(i), &format!("edit {}", i));
         }
 
         assert!(
@@ -393,12 +424,13 @@ mod memory_bound_tests {
             history.approx_bytes()
         );
         assert!(
-            history.stack.len() < 50,
+            history.stack.len() < 21,
             "byte budget should trim before entry limit, got {} entries",
             history.stack.len()
         );
-        // Current state must remain accessible
-        let _ = history.current_action_name();
+        // Current state must remain accessible and undo must survive eviction.
+        assert_eq!(history.current_action_name(), "edit 19");
+        assert!(history.can_undo());
     }
 
     #[test]

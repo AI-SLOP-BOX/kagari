@@ -232,38 +232,73 @@ fn history_nan_dedup_does_not_corrupt_state() {
 
 // ─── History: Byte Budget ──────────────────────────────────────────────────
 
-/// Regression: History byte budget should not underflow.
+/// Regression: History byte budget must actually trim oldest entries and the
+/// saturating accounting must never underflow, even with mixed-size projects.
 #[test]
 fn history_byte_budget_no_underflow() {
     use kagari_vfx::core::history::ProjectHistory;
+    use kagari_vfx::core::keyframe::{InterpolationType, Keyframe};
+    use kagari_vfx::core::property::Animatable;
 
-    let initial = Project::default();
-    let mut history = ProjectHistory::new(initial);
-
-    // Add many entries to trigger byte budget trimming
-    for i in 0..20 {
-        let mut comp = Composition::new("c1".into(), "Test".into(), 100, 100, 30, 30);
+    fn huge_project(tag: usize) -> Project {
+        let mut comp = Composition::new(
+            format!("c{}", tag),
+            "Test".into(),
+            100,
+            100,
+            30,
+            30,
+        );
+        // 10 layers x 4 animated channels x 1000 keyframes ~= 10MB per entry,
+        // so ~13 distinct commits exceed the 128MB budget and force eviction.
         for j in 0..10 {
-            comp.add_layer(Layer::new(
-                format!("l{}", j),
+            let mut layer = Layer::new(
+                format!("l{}_{}", tag, j),
                 format!("Layer {}", j),
                 LayerType::Solid {
                     color: [1.0, 0.0, 0.0, 1.0],
                 },
                 30,
-            ));
+            );
+            let kfs2: Vec<Keyframe<[f32; 2]>> = (0..1000)
+                .map(|k| Keyframe::new(k, [k as f32, 0.0], InterpolationType::Linear))
+                .collect();
+            let kfs1: Vec<Keyframe<f32>> = (0..1000)
+                .map(|k| Keyframe::new(k, k as f32, InterpolationType::Linear))
+                .collect();
+            layer.transform.position = Animatable::new_animated(kfs2.clone());
+            layer.transform.scale = Animatable::new_animated(kfs2);
+            layer.transform.rotation = Animatable::new_animated(kfs1.clone());
+            layer.transform.opacity = Animatable::new_animated(kfs1);
+            comp.add_layer(layer);
         }
-        let project = Project {
+        Project {
             compositions: vec![comp],
             ..Default::default()
-        };
-        history.commit_action(project, &format!("edit {}", i));
+        }
     }
 
-    // approx_bytes should be non-negative (usize, so always true)
-    // but more importantly, current should be valid
-    let current = history.current();
-    assert!(!current.compositions.is_empty());
+    let mut history = ProjectHistory::new(Project::default());
+
+    for i in 0..20 {
+        history.commit_action(huge_project(i), &format!("edit {}", i));
+    }
+
+    assert!(
+        history.approx_bytes() <= ProjectHistory::MAX_HISTORY_BYTES,
+        "budget must be enforced, got {} bytes",
+        history.approx_bytes()
+    );
+    assert!(
+        history.len() < 21,
+        "oldest entries must be evicted, kept {}",
+        history.len()
+    );
+    assert_eq!(history.current_action_name(), "edit 19");
+    // Eviction must not corrupt undo: oldest surviving entry is still reachable.
+    assert!(history.can_undo());
+    let _ = history.undo();
+    assert!(!history.current().compositions.is_empty());
 }
 
 // ─── Keyframe Interpolation ────────────────────────────────────────────────
