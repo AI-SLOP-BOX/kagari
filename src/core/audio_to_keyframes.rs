@@ -290,6 +290,70 @@ mod tests {
         // Non-existent path returns error gracefully
         let res = convert_audio_to_keyframes(&mut comp, "/invalid/path.wav");
         assert!(res.is_err());
+
+        // Valid tone WAV produces an Audio Amplitude layer with 3 sliders.
+        let path = std::env::temp_dir().join(format!(
+            "kagari_slider_test_{}.wav",
+            std::process::id()
+        ));
+        write_tone_wav(&path);
+        let before = comp.layers.len();
+        let name = convert_audio_to_keyframes(&mut comp, &path.to_string_lossy())
+            .expect("tone wav must convert");
+        assert_eq!(name, "Audio Amplitude");
+        assert_eq!(comp.layers.len(), before + 1);
+        let amp = comp.layers.last().unwrap();
+        assert_eq!(amp.effects.len(), 3);
+        for (want, fx) in ["Left Channel", "Right Channel", "Both Channels"]
+            .iter()
+            .zip(amp.effects.iter())
+        {
+            assert_eq!(&fx.name, want);
+            match &fx.effect_type {
+                crate::core::timeline::EffectType::SliderControl { value } => {
+                    let kfs = value.keyframes().expect("sliders must be animated");
+                    assert_eq!(kfs.len(), 60, "one keyframe per frame");
+                    assert!(
+                        kfs.iter().all(|k| k.value.is_finite()),
+                        "slider values must be finite"
+                    );
+                    assert!(
+                        kfs.iter().any(|k| k.value > 0.0),
+                        "tone must produce nonzero amplitude"
+                    );
+                }
+                other => panic!("expected SliderControl, got {:?}", other),
+            }
+        }
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// Minimal 16-bit PCM mono WAV writer (1s 440Hz tone) for tests.
+    fn write_tone_wav(path: &std::path::Path) {
+        use std::io::Write;
+        let rate = 48000u32;
+        let samples: Vec<f32> = (0..rate as usize)
+            .map(|i| 0.5 * (2.0 * std::f32::consts::PI * 440.0 * i as f32 / rate as f32).sin())
+            .collect();
+        let mut f = std::fs::File::create(path).unwrap();
+        let data_len = (samples.len() * 2) as u32;
+        f.write_all(b"RIFF").unwrap();
+        f.write_all(&(36 + data_len).to_le_bytes()).unwrap();
+        f.write_all(b"WAVE").unwrap();
+        f.write_all(b"fmt ").unwrap();
+        f.write_all(&16u32.to_le_bytes()).unwrap();
+        f.write_all(&1u16.to_le_bytes()).unwrap();
+        f.write_all(&1u16.to_le_bytes()).unwrap();
+        f.write_all(&rate.to_le_bytes()).unwrap();
+        f.write_all(&(rate * 2).to_le_bytes()).unwrap();
+        f.write_all(&2u16.to_le_bytes()).unwrap();
+        f.write_all(&16u16.to_le_bytes()).unwrap();
+        f.write_all(b"data").unwrap();
+        f.write_all(&data_len.to_le_bytes()).unwrap();
+        for s in &samples {
+            let v = (s.clamp(-1.0, 1.0) * 32767.0) as i16;
+            f.write_all(&v.to_le_bytes()).unwrap();
+        }
     }
 
     #[test]

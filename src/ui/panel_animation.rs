@@ -112,13 +112,30 @@ mod tests {
 
     #[test]
     fn test_animate_width_closed() {
+        let ctx = egui::Context::default();
         let a = PanelAnimation::new(false);
-        assert_eq!(a.progress * 300.0, 0.0);
+        assert_eq!(animate_panel_width(&ctx, &a, 300.0), 0.0);
+        assert_eq!(animate_panel_height(&ctx, &a, 200.0), 0.0);
     }
 
     #[test]
     fn test_animate_width_open() {
+        let ctx = egui::Context::default();
         let a = PanelAnimation::new(true);
-        assert_eq!(a.progress * 300.0, 300.0);
+        assert_eq!(animate_panel_width(&ctx, &a, 300.0), 300.0);
+        assert_eq!(animate_panel_height(&ctx, &a, 200.0), 200.0);
+    }
+
+    #[test]
+    fn test_animate_mid_progress_uses_ease() {
+        let ctx = egui::Context::default();
+        let mut a = PanelAnimation::new(false);
+        a.progress = 0.5;
+        // ease(0.5) = 1 - 0.5^3 = 0.875 > linear 0.5: proves easing applies.
+        assert_eq!(
+            animate_panel_width(&ctx, &a, 300.0),
+            300.0 * PanelAnimation::ease(0.5)
+        );
+        assert!(animate_panel_width(&ctx, &a, 300.0) > 150.0);
     }
 }
