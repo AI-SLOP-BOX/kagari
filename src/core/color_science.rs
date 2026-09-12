@@ -475,6 +475,16 @@ mod tests {
         // High contrast mapping
         let output = apply_levels(0.5, 0.2, 0.8, 1.0, 0.0, 1.0);
         assert!((output - 0.5).abs() < 1e-4);
+        // Black/white points pin the intercept: below-black clamps to out_black.
+        assert!((apply_levels(0.2, 0.2, 0.8, 1.0, 0.0, 1.0)).abs() < 1e-4);
+        assert!((apply_levels(0.8, 0.2, 0.8, 1.0, 0.0, 1.0) - 1.0).abs() < 1e-4);
+        assert!((apply_levels(0.0, 0.2, 0.8, 1.0, 0.0, 1.0)).abs() < 1e-4);
+        // Gamma: normalized 0.5 raised to 1/2.
+        let g = apply_levels(0.5, 0.0, 1.0, 2.0, 0.0, 1.0);
+        assert!((g - 0.5f32.sqrt()).abs() < 1e-4, "gamma curve wrong: {}", g);
+        // Output range remap: normalized 0.25 lands at 0.2 + 0.25 * 0.6.
+        let o = apply_levels(0.25, 0.0, 1.0, 1.0, 0.2, 0.8);
+        assert!((o - 0.35).abs() < 1e-4, "output range wrong: {}", o);
     }
 
     #[test]
@@ -548,6 +558,32 @@ mod tests {
             WorkingColorSpace::LinearSRGB,
         );
         assert_eq!(lin_black, [0.0, 0.0, 0.0]);
+
+        // Saturated primaries must survive a roundtrip: catches transposed or
+        // mis-scaled conversion matrices without needing reference values.
+        for primary in [[1.0f32, 0.0, 0.0], [0.0, 0.0, 1.0]] {
+            let there = convert_color_space(
+                primary,
+                WorkingColorSpace::Rec709,
+                WorkingColorSpace::DisplayP3,
+            );
+            // P3 gamut differs, so the roundtrip (not the forward hop) is pinned.
+            let back = convert_color_space(
+                there,
+                WorkingColorSpace::DisplayP3,
+                WorkingColorSpace::Rec709,
+            );
+            for c in 0..3 {
+                assert!(
+                    (back[c] - primary[c]).abs() < 1e-3,
+                    "roundtrip drifted channel {}: {:?} -> {:?} -> {:?}",
+                    c,
+                    primary,
+                    there,
+                    back
+                );
+            }
+        }
     }
 }
 

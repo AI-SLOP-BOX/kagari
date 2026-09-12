@@ -136,9 +136,22 @@ mod tests {
             point_type: ZigZagPointType::Smooth,
         };
         let res = apply_zigzag_to_points(&points, &params, false);
-        for pt in res {
+        for pt in &res {
             assert!(pt[0].is_finite());
             assert!(pt[1].is_finite());
         }
+        // Smooth mode must actually displace like Corner mode does: endpoints
+        // pinned, interior pushed off the segment, more points than input.
+        assert!(res.len() > 2, "smooth added no points");
+        assert_eq!(res[0], [0.0, 0.0]);
+        assert_eq!(res[res.len() - 1], [100.0, 100.0]);
+        let max_off = res
+            .iter()
+            .map(|p| ((p[0] - p[1]).abs()) / std::f32::consts::SQRT_2)
+            .fold(0.0f32, f32::max);
+        assert!(
+            max_off > 0.0,
+            "smooth zigzag left the diagonal undisplaced"
+        );
     }
 }
