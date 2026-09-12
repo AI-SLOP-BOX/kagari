@@ -63,21 +63,30 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
         .max_width(max_width)
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
-                if ui
-                    .selectable_label(app.ui_tabs.left_tab_idx == 0, "Project")
-                    .clicked()
+                if crate::ui::theme::draw_custom_tab(
+                    ui,
+                    app.ui_tabs.left_tab_idx == 0,
+                    "Project",
+                )
+                .clicked()
                 {
                     app.ui_tabs.left_tab_idx = 0;
                 }
-                if ui
-                    .selectable_label(app.ui_tabs.left_tab_idx == 1, "Effect Controls")
-                    .clicked()
+                if crate::ui::theme::draw_custom_tab(
+                    ui,
+                    app.ui_tabs.left_tab_idx == 1,
+                    "Effect Controls",
+                )
+                .clicked()
                 {
                     app.ui_tabs.left_tab_idx = 1;
                 }
-                if ui
-                    .selectable_label(app.ui_tabs.left_tab_idx == 2, "Flowchart")
-                    .clicked()
+                if crate::ui::theme::draw_custom_tab(
+                    ui,
+                    app.ui_tabs.left_tab_idx == 2,
+                    "Flowchart",
+                )
+                .clicked()
                 {
                     app.ui_tabs.left_tab_idx = 2;
                 }

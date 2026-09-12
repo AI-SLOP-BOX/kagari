@@ -126,23 +126,34 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                 ui.separator();
                 ui.add_space(4.0);
 
+                // Workspace tab strip (AE-style, left/right panel presets)
                 let workspaces = [
-                    ("Default", 0, 0), ("Learn", 0, 4), ("Assembly", 0, 2),
-                    ("Editing", 0, 1), ("Color", 1, 19), ("Effects", 1, 0),
-                    ("Audio", 0, 7), ("Libraries", 0, 20),
+                    ("Default", 0, 0),
+                    ("Compositing", 2, 0),
+                    ("Roto", 0, 9),
+                    ("Effects", 1, 0),
+                    ("Animation", 0, 8),
+                    ("Color", 0, 19),
                 ];
-                let active = workspaces.iter().find(|(_, left, right)|
-                    *left == app.ui_tabs.left_tab_idx && *right == app.ui_tabs.right_tab_idx)
-                    .map(|(name, _, _)| *name).unwrap_or("Custom");
-                egui::ComboBox::from_id_salt("toolbar_workspace")
-                    .selected_text(active).width(90.0).show_ui(ui, |ui| {
-                        for (name, left, right) in workspaces {
-                            if ui.selectable_label(active == name, name).clicked() {
-                                app.ui_tabs.left_tab_idx = left;
-                                app.ui_tabs.right_tab_idx = right;
-                            }
-                        }
-                    }).response.on_hover_text("Workspace layout");
+                let is_custom = workspaces
+                    .iter()
+                    .all(|(_, left, right)| {
+                        *left != app.ui_tabs.left_tab_idx
+                            || *right != app.ui_tabs.right_tab_idx
+                    });
+                for (name, left, right) in workspaces {
+                    let selected =
+                        !is_custom
+                            && left == app.ui_tabs.left_tab_idx
+                            && right == app.ui_tabs.right_tab_idx;
+                    if crate::ui::theme::draw_custom_tab(ui, selected, name).clicked() {
+                        app.ui_tabs.left_tab_idx = left;
+                        app.ui_tabs.right_tab_idx = right;
+                    }
+                }
+                if is_custom {
+                    crate::ui::theme::draw_custom_tab(ui, true, "Custom");
+                }
                 ui.menu_button("Align", |ui| {
                     crate::ui::align_hud::draw_alignment_hud(app, ui);
                 });
