@@ -3047,19 +3047,11 @@ impl Default for Project {
             ),
             ProjectItem::new(
                 "item_logo",
-                "Logo_Vector.svg",
+                "kagari_logo.png",
                 ProjectItemType::Image {
-                    path: "assets/logo.svg".to_string(),
-                    width: 512,
-                    height: 512,
-                },
-            ),
-            ProjectItem::new(
-                "item_audio",
-                "Intro_BGM.wav",
-                ProjectItemType::Audio {
-                    path: "assets/audio.wav".to_string(),
-                    duration_sec: 10.0,
+                    path: "assets/kagari_logo.png".to_string(),
+                    width: 1254,
+                    height: 1254,
                 },
             ),
             ProjectItem::new(
