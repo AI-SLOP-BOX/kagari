@@ -592,6 +592,18 @@ fn draw_asset_row(
             }
         });
         ui.weak(format!("({})", item_tag));
+        if item.is_media_missing() {
+            ui.label(
+                egui::RichText::new("⚠ Missing")
+                    .small()
+                    .strong()
+                    .color(colors::ACCENT_RED),
+            )
+            .on_hover_text(format!(
+                "File not found:\n{}\nRight-click → Replace Footage to relink.",
+                item.media_path().unwrap_or_default()
+            ));
+        }
 
         // Move-to-bin dropdown
         if !folders.is_empty() {

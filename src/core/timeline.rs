@@ -2951,6 +2951,24 @@ impl ProjectItem {
             parent_folder: None,
         }
     }
+
+    /// Filesystem path for file-backed footage, if any.
+    pub fn media_path(&self) -> Option<&str> {
+        match &self.item_type {
+            ProjectItemType::Image { path, .. }
+            | ProjectItemType::Video { path, .. }
+            | ProjectItemType::Audio { path, .. } => Some(path),
+            _ => None,
+        }
+    }
+
+    /// True when the item references a file that no longer exists on disk.
+    pub fn is_media_missing(&self) -> bool {
+        match self.media_path() {
+            Some(p) => !std::path::Path::new(p).is_file(),
+            None => false,
+        }
+    }
 }
 
 // ─── Project ───────────────────────────────────────────────────────────────
@@ -3329,6 +3347,34 @@ pub fn export_youtube_chapters(markers: &[TimelineMarker], fps: u32) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn project_item_missing_media_detection() {
+        let missing = ProjectItem::new(
+            "a",
+            "gone.png",
+            ProjectItemType::Image {
+                path: "/nonexistent/kagari_missing_001.png".into(),
+                width: 64,
+                height: 64,
+            },
+        );
+        assert_eq!(
+            missing.media_path(),
+            Some("/nonexistent/kagari_missing_001.png")
+        );
+        assert!(missing.is_media_missing());
+
+        let solid = ProjectItem::new(
+            "b",
+            "bg",
+            ProjectItemType::Solid {
+                color: [0.0; 4],
+            },
+        );
+        assert_eq!(solid.media_path(), None);
+        assert!(!solid.is_media_missing());
+    }
 
     #[test]
     fn test_remap_frame_for_loop_cycle() {
