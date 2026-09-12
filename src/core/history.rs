@@ -590,4 +590,37 @@ mod memory_bound_tests {
         assert_eq!(history.len(), 2);
         assert!(history.can_undo());
     }
+
+    #[test]
+    fn jump_to_lands_on_exact_state_and_rejects_garbage() {
+        let initial = big_project(1, 0);
+        let mut history = ProjectHistory::new(initial.clone());
+        for (i, name) in ["one", "two", "three"].iter().enumerate() {
+            let mut edited = initial.clone();
+            edited.compositions[0].layers[0].name = format!("M{}", i);
+            history.commit_action(edited, name);
+        }
+        assert_eq!(history.len(), 4);
+
+        let gen = history.generation();
+        assert!(history.jump_to(1));
+        assert_eq!(history.current_index(), 1);
+        assert_eq!(history.current_action_name(), "one");
+        assert_eq!(
+            history.current().compositions[0].layers[0].name,
+            "M0"
+        );
+        assert!(history.generation() > gen);
+
+        // Undo/redo stay coherent after a jump: redo walks forward again.
+        assert!(history.can_redo());
+        assert_eq!(history.redo_action_name(), Some("two"));
+
+        // No-ops: same index and out-of-range change nothing.
+        let gen2 = history.generation();
+        assert!(!history.jump_to(1));
+        assert!(!history.jump_to(99));
+        assert_eq!(history.current_index(), 1);
+        assert_eq!(history.generation(), gen2);
+    }
 }
