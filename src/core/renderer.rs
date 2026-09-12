@@ -1913,6 +1913,12 @@ impl WgpuRenderer {
         });
     }
 
+    /// Current layer uniform buffer size in bytes. Grows past the initial
+    /// `MAX_GPU_LAYERS` allocation when oversized compositions render.
+    pub fn layer_buffer_size(&self) -> u64 {
+        self.layer_buffer.size()
+    }
+
     /// Internal core rendering implementation for both primary preview and snapshot target views.
     fn render_internal(
         &mut self,

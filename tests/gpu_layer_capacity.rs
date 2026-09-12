@@ -46,7 +46,23 @@ fn gpu_renderer_expands_layer_buffer_past_legacy_limit() {
     }
 
     let mut renderer = WgpuRenderer::new(device, queue);
+    let before = renderer.layer_buffer_size();
     let (_view, _recreated) = renderer.render(&comp, 0, 0.0, 0);
+    let after = renderer.layer_buffer_size();
+    // The buffer must grow from its 256-layer allocation to fit all 257.
+    assert!(
+        after > before,
+        "layer buffer did not expand past the legacy limit: {} -> {}",
+        before,
+        after
+    );
+    assert_eq!(
+        after * 256,
+        before * 257,
+        "expanded buffer must fit exactly 257 layers, got {} (was {})",
+        after,
+        before
+    );
 }
 
 #[test]
