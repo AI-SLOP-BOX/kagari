@@ -2117,7 +2117,7 @@ mod tests {
 #[cfg(test)]
 mod render_size_guard_tests {
     use super::*;
-    use crate::core::timeline::{Composition, Layer, LayerType, ShapeType};
+    use crate::core::timeline::{Composition, Layer, LayerType};
 
     fn tiny_comp() -> Composition {
         let mut comp = Composition::new("c".into(), "Guard".into(), 32, 32, 30, 30);
@@ -2827,7 +2827,7 @@ mod shadow_tests {
         fn generator_with_opacity_fade_is_proportional() {
             // FractalNoise used to force alpha=255, so a 50% layer rendered
             // at full strength. Now the fade must (about) halve the energy.
-            let mut mk = |opacity: f32| {
+            let mk = |opacity: f32| {
                 let mut comp = black_bg(64, 64);
                 let mut l = gray_solid("n", opacity);
                 l.transform.position = Animatable::new_constant([32.0, 32.0]);
@@ -2863,7 +2863,7 @@ mod shadow_tests {
         fn sparse_painter_with_opacity_fade_is_proportional() {
             // StarField paints sparse bright pixels with full alpha; the
             // layer fade must still dim them via composite-time opacity.
-            let mut mk = |opacity: f32| {
+            let mk = |opacity: f32| {
                 let mut comp = black_bg(64, 64);
                 let mut l = Layer::new(
                     "s".into(),
@@ -2901,7 +2901,7 @@ mod shadow_tests {
         fn effect_stack_then_opacity_matches_manual_blend() {
             // Gray solid + noise, faded to 50%: must equal a 50/50 mix of the
             // full-strength result with black (linearity of composite-time op).
-            let mut mk = |opacity: f32| {
+            let mk = |opacity: f32| {
                 let mut comp = black_bg(64, 64);
                 let mut l = gray_solid("n", opacity);
                 l.transform.position = Animatable::new_constant([32.0, 32.0]);
