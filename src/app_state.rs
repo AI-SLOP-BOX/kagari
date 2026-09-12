@@ -409,7 +409,6 @@ pub struct KagariApp {
     pub script_console_command: String,
     /// Color management settings
     pub color_space_idx: usize,
-    pub bit_depth_idx: usize,
     pub display_sim_idx: usize,
     /// Custom saved workspaces
     pub custom_workspaces: Vec<crate::ui::workspace_manager::SavedWorkspace>,
@@ -602,7 +601,6 @@ impl Default for KagariApp {
             script_console_history: None,
             script_console_command: String::new(),
             color_space_idx: 0,
-            bit_depth_idx: 2,
             display_sim_idx: 0,
             custom_workspaces: Vec::new(),
             selected_expression_prop_idx: 0,
@@ -1068,12 +1066,8 @@ impl eframe::App for KagariApp {
                             .color(crate::ui::theme::colors::TEXT_SECONDARY),
                     );
                     ui.separator();
-                    let bpc_label = match self.bit_depth_idx {
-                        0 => "8-bpc",
-                        1 => "16-bpc",
-                        2 => "32-bpc Float",
-                        _ => "8-bpc",
-                    };
+                    let bpc_label =
+                        self.history.current().active_composition().bit_depth.short_label();
                     let cs_label = match self.color_space_idx {
                         0 => "Rec.709 sRGB",
                         1 => "Rec.2020",

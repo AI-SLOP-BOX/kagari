@@ -54,8 +54,13 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
     crate::ui::custom_widgets::ae_section_header(ui, "Bit Depth", "🔢");
     ui.horizontal(|ui| {
         let depth_labels = ["8-bpc", "16-bpc", "32-bpc Float"];
-        for (i, label) in depth_labels.iter().enumerate() {
-            let is_selected = app.bit_depth_idx == i;
+        let depths = [
+            crate::core::color_science::BitDepth::EightBit,
+            crate::core::color_science::BitDepth::SixteenBit,
+            crate::core::color_science::BitDepth::ThirtyTwoBitFloat,
+        ];
+        for (label, depth) in depth_labels.iter().zip(depths) {
+            let is_selected = comp.bit_depth == depth;
             if ui
                 .selectable_label(
                     is_selected,
@@ -67,13 +72,13 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
                 )
                 .clicked()
             {
-                app.bit_depth_idx = i;
+                comp.bit_depth = depth;
                 changed = true;
             }
         }
     });
 
-    if app.bit_depth_idx == 2 {
+    if comp.bit_depth == crate::core::color_science::BitDepth::ThirtyTwoBitFloat {
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("⚠").color(colors::ACCENT_ORANGE));
             ui.label(
