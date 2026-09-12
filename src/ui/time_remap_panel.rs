@@ -121,7 +121,6 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                         let src_dur = (out_frame - in_frame).max(1) as f32;
                         let mut kfs: Vec<Keyframe<f32>> = Vec::new();
                         let mut t = in_frame as f32;
-                        let mut cycle: u32 = 0;
                         while t < comp_dur as f32 {
                             match mode {
                                 0 => {
@@ -147,7 +146,6 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                                         src_dur - 1.0,
                                         InterpolationType::Linear,
                                     ));
-                                    cycle += 1;
                                     let back_start = t + src_dur;
                                     kfs.push(Keyframe::new(
                                         back_start as u32,
@@ -159,7 +157,6 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                                         0.0,
                                         InterpolationType::Linear,
                                     ));
-                                    let _ = cycle;
                                 }
                             }
                             t += src_dur * if mode == 0 { 1.0 } else { 2.0 };

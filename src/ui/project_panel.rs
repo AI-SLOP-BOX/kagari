@@ -181,7 +181,7 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
             }
 
             // Folder bins with nested children
-            for (fi, fid, fname) in &folders {
+            for (_fi, fid, fname) in &folders {
                 if !query.is_empty() && !fname.to_lowercase().contains(&query) {
                     continue;
                 }
@@ -226,7 +226,6 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
                             }
                         }
                     }
-                    let _ = fi;
                 });
             }
         });

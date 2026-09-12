@@ -36,7 +36,7 @@ fn apply_velocity_bezier<T: Clone + crate::core::property::Interpolate>(
     }
 }
 
-pub fn draw_speed_graph_options(app: &mut KagariApp, ui: &mut egui::Ui, current_frame: u32) {
+pub fn draw_speed_graph_options(app: &mut KagariApp, ui: &mut egui::Ui, _current_frame: u32) {
     ui.heading("Graph Editor Options & Keyframe Velocity");
     ui.separator();
 
@@ -175,7 +175,6 @@ pub fn draw_speed_graph_options(app: &mut KagariApp, ui: &mut egui::Ui, current_
             });
         }
     });
-    let _ = current_frame;
 }
 
 /// Applies an ease preset to the selected layer's graph property keyframes.

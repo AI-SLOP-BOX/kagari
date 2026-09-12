@@ -94,7 +94,7 @@ pub fn draw_expression_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     let mut script = current_expr.clone();
 
     // ── IntelliSense: completion popup + live syntax indicator ──
-    let completions = completions_for(&script);
+    let completions = completions();
     let cursor_prefix = script
         .rsplit(|c: char| c.is_alphanumeric() || c == '_' || c == '.')
         .next()
@@ -336,8 +336,8 @@ fn test_expression(
 }
 
 /// Static suggestion dictionary covering the AE-style API surface.
-fn completions_for(script: &str) -> Vec<&'static str> {
-    let _ = script;
+/// Filtering by the cursor prefix happens at the call site.
+fn completions() -> Vec<&'static str> {
     vec![
         "thisComp",
         "thisLayer",

@@ -1549,8 +1549,6 @@ pub fn draw_graph_editor(
                         _ => (0.33, 0.0, 0.67, 1.0),
                     }
                 }
-                let bezier_from_kfs = |get: Option<(f32, f32, f32, f32)>| get.unwrap_or((0.33, 0.0, 0.67, 1.0));
-                let _ = bezier_from_kfs;
                 let (bx1, by1, bx2, by2): (f32, f32, f32, f32) = with_keyframes!(layer, graph_prop, kfs => {
                     kfs.get(*kf_idx).map(bezier_pts).unwrap_or((0.33, 0.0, 0.67, 1.0))
                 }).unwrap_or((0.33, 0.0, 0.67, 1.0));
