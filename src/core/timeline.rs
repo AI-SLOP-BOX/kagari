@@ -3855,12 +3855,28 @@ mod robustness_tests {
         // Expression sandbox must reject resource-abusive scripts without panicking
         use crate::core::expression_engine::{build_engine, eval_f32};
         let engine = build_engine();
-        // Deep recursion attempt — should be capped or error out, never crash
+        // Deep recursion attempt — must be capped to the base fallback, never crash
         let evil = "fn f(n) { if n <= 0 { 0 } else { f(n-1) + 1 } } f(100000)";
-        let _ = eval_f32(&engine, evil, 0.0, 0, 30); // must return fallback, not crash
-                                                     // Huge loop via string building — capped by max_operations
-        let evil2 = "let s = \\\"\\\"; for i in 0..1000000 { s += \\\"x\\\"; } 42";
-        let _ = eval_f32(&engine, evil2, 0.0, 0, 30);
+        let r = eval_f32(&engine, evil, 0.0, 0, 30);
+        assert!(
+            r.is_finite(),
+            "recursion bomb must resolve to a finite fallback, got {}",
+            r
+        );
+        assert_eq!(
+            r, 0.0,
+            "uncapped recursion would return 100000; sandbox must fall back to base"
+        );
+        // Huge loop via string building — capped by max_operations
+        let evil2 = "let s = \"\"; for i in 0..1000000 { s += \"x\"; } 42";
+        let r2 = eval_f32(&engine, evil2, 7.5, 0, 30);
+        assert_eq!(
+            r2, 7.5,
+            "runaway loop must fall back to base, got {}",
+            r2
+        );
+        // Engine must not be poisoned: valid scripts still evaluate afterwards.
+        assert_eq!(eval_f32(&engine, "1 + 2", 0.0, 0, 30), 3.0);
     }
 }
 
