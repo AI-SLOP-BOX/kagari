@@ -206,6 +206,13 @@ mod tests {
         let mut pixels = [[0.5f32; 3]; 8];
         apply_lut_batch_f32(&lut, &mut pixels, &mut cache);
         assert_eq!(pixels.len(), 8);
+        // All-zero lattice maps every input to black: proves the lookup ran
+        // (a no-op passthrough would leave 0.5s in place).
+        assert!(
+            pixels.iter().all(|p| *p == [0.0; 3]),
+            "zero LUT must map 0.5 gray to black, got {:?}",
+            pixels[0]
+        );
     }
 
     #[test]

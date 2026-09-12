@@ -348,16 +348,50 @@ mod tests {
     #[test]
     fn test_audio_spectrum_generation_polar() {
         let samples = vec![0.8f32; 512];
+        let center = [200.0f32, 540.0];
         let opts = AudioSpectrumOptions {
             frequency_bands: 8,
             is_polar: true,
             polar_radius: 50.0,
             max_height: 50.0,
+            start_point: center,
             ..Default::default()
         };
 
         let bars = generate_audio_spectrum(&samples, &opts);
         assert_eq!(bars.len(), 8);
+        // Polar branch: every bar starts exactly on the base circle, proving
+        // radial layout ran (linear layout would scatter start points).
+        for (i, bar) in bars.iter().enumerate() {
+            let r_start =
+                ((bar.start[0] - center[0]).powi(2) + (bar.start[1] - center[1]).powi(2)).sqrt();
+            let r_end =
+                ((bar.end[0] - center[0]).powi(2) + (bar.end[1] - center[1]).powi(2)).sqrt();
+            assert!(
+                (r_start - 50.0).abs() < 1e-3,
+                "bar {} starts off the base circle: r={}",
+                i,
+                r_start
+            );
+            assert!(
+                r_end + 1e-3 >= r_start,
+                "bar {} extends inward: {} < {}",
+                i,
+                r_end,
+                r_start
+            );
+            assert!(
+                bar.magnitude.is_finite() && (0.0..=1.0).contains(&bar.magnitude),
+                "bar {} magnitude out of normalized range: {}",
+                i,
+                bar.magnitude
+            );
+        }
+        // DC-heavy input carries energy: at least one bar must be non-trivial.
+        assert!(
+            bars.iter().any(|b| b.magnitude > 0.01),
+            "constant signal produced only silence"
+        );
     }
 
     #[test]

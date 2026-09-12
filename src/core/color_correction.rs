@@ -519,12 +519,31 @@ mod tests {
             preserve_luminosity: true,
         };
         apply_color_balance(&mut buf, &wild);
+        // White pixel: shadow/midtone weights are 0, highlight shift clamps
+        // blue to 0, then luminosity preservation lifts it back to ~18.
+        // A missing intermediate clamp (or dropped preserve step) yields 0.
+        assert!(
+            buf.chunks_exact(4).all(|px| px[0] == 255 && px[1] == 255 && px[3] == 255),
+            "red/green/alpha must survive extreme balance, got {:?}",
+            &buf[..4]
+        );
+        assert!(
+            buf.chunks_exact(4).all(|px| px[2] == 18),
+            "clamped blue channel must be luminosity-lifted to 18, got {:?}",
+            &buf[..4]
+        );
 
         let huge = ChannelMixer {
             matrix: [[900.0, -400.0, 300.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
             monochrome: false,
         };
         apply_channel_mixer(&mut buf, &huge);
+        // (900*255 - 400*255 + 300*18)/100 saturates red; green/blue rows are 0.
+        assert!(
+            buf.chunks_exact(4).all(|px| *px == [255, 0, 0, 255]),
+            "huge mixer must saturate to pure red, got {:?}",
+            &buf[..4]
+        );
     }
 }
 
