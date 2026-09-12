@@ -248,6 +248,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
                         .clicked()
                     {
                         app.show_welcome = false;
+                        crate::ui::project_io::set_welcome_on_startup(false);
                     }
                 });
             });

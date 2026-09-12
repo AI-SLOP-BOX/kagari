@@ -582,7 +582,7 @@ impl Default for KagariApp {
             show_automation_panel: false,
             selected_automation_binding: None,
             quality_check_result: None,
-            show_welcome: true,
+            show_welcome: crate::ui::project_io::welcome_on_startup(),
             ui_mode: crate::ui::mode::load_mode(),
             tutorial: None,
             show_new_comp_dialog: false,

@@ -10,32 +10,66 @@ fn prefs_path() -> std::path::PathBuf {
         .join(".kagari_prefs.json")
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Default)]
+#[derive(serde::Serialize, serde::Deserialize)]
 struct RecentsFile {
     #[serde(default)]
     recent_projects: Vec<String>,
+    /// Whether the welcome screen shows on startup. Defaults to true for
+    /// prefs files written before this flag existed.
+    #[serde(default = "default_welcome_on_startup")]
+    show_welcome_on_startup: bool,
 }
 
-pub fn recent_projects() -> Vec<String> {
+impl Default for RecentsFile {
+    fn default() -> Self {
+        Self {
+            recent_projects: Vec::new(),
+            show_welcome_on_startup: true,
+        }
+    }
+}
+
+fn default_welcome_on_startup() -> bool {
+    true
+}
+
+fn read_prefs() -> RecentsFile {
     std::fs::read_to_string(prefs_path())
         .ok()
         .and_then(|s| serde_json::from_str::<RecentsFile>(&s).ok())
-        .map(|r| r.recent_projects)
         .unwrap_or_default()
+}
+
+fn write_prefs(prefs: &RecentsFile) {
+    if let Ok(json) = serde_json::to_string_pretty(prefs) {
+        let _ = std::fs::write(prefs_path(), json);
+    }
+}
+
+pub fn recent_projects() -> Vec<String> {
+    read_prefs().recent_projects
+}
+
+/// Whether the welcome screen should show on startup (persisted).
+pub fn welcome_on_startup() -> bool {
+    read_prefs().show_welcome_on_startup
+}
+
+/// Persist the welcome-on-startup preference ("Don't show again" writes false).
+pub fn set_welcome_on_startup(show: bool) {
+    let mut prefs = read_prefs();
+    prefs.show_welcome_on_startup = show;
+    write_prefs(&prefs);
 }
 
 /// Insert path at front of recents (deduped, capped at 8) and persist.
 pub fn push_recent(path: &std::path::Path) {
     let s = path.to_string_lossy().to_string();
-    let mut r = RecentsFile {
-        recent_projects: recent_projects(),
-    };
+    let mut r = read_prefs();
     r.recent_projects.retain(|p| p != &s);
     r.recent_projects.insert(0, s);
     r.recent_projects.truncate(8);
-    if let Ok(json) = serde_json::to_string_pretty(&r) {
-        let _ = std::fs::write(prefs_path(), json);
-    }
+    write_prefs(&r);
 }
 
 /// Load a project file into app state. Returns Ok(()) or an error message.
@@ -125,5 +159,23 @@ pub fn reveal_in_file_manager(path: &std::path::Path) {
         let _ = std::process::Command::new("explorer")
             .arg(format!("/select,{}", target.display()))
             .spawn();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_prefs_without_flag_default_to_showing_welcome() {
+        // Prefs files written before the flag existed must keep old behavior.
+        let parsed: RecentsFile = serde_json::from_str(r#"{"recent_projects":[]}"#).unwrap();
+        assert!(parsed.show_welcome_on_startup);
+        assert!(RecentsFile::default().show_welcome_on_startup);
+        // Explicit false survives a serde roundtrip.
+        let parsed: RecentsFile =
+            serde_json::from_str(r#"{"recent_projects":[],"show_welcome_on_startup":false}"#)
+                .unwrap();
+        assert!(!parsed.show_welcome_on_startup);
     }
 }
