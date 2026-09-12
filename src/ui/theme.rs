@@ -1,46 +1,60 @@
 use eframe::egui;
 
 /// VFX compositing Professional Dark Theme Palette
-/// Based on actual AE CC 2024 color measurements.
+/// Based on actual AE CC 2024 color measurements, refined for professional density.
 #[allow(dead_code)]
 pub mod colors {
     use eframe::egui::Color32;
 
     // ── Background Layers (darkest → lightest) ──
-    pub const BG_DEEPEST: Color32 = Color32::from_rgb(18, 20, 24); // Timeline bg
-    pub const BG_DARKEST: Color32 = Color32::from_rgb(24, 27, 33); // Panel bg
-    pub const BG_DARK: Color32 = Color32::from_rgb(28, 32, 39); // Header bg
-    pub const BG_MID: Color32 = Color32::from_rgb(34, 39, 47); // Surface bg
-    pub const BG_PANEL: Color32 = Color32::from_rgb(40, 46, 55); // Elevated surface
-    pub const BG_SURFACE: Color32 = Color32::from_rgb(44, 51, 61); // Input fields
-    pub const BG_ELEVATED: Color32 = Color32::from_rgb(60, 60, 60); // Dropdowns
+    /// Deepest background - timeline/panel base
+    pub const BG_DEEPEST: Color32 = Color32::from_rgb(16, 18, 20);
+    /// Darkest panel background
+    pub const BG_DARKEST: Color32 = Color32::from_rgb(20, 22, 28);
+    /// Standard panel/panel background
+    pub const BG_DARK: Color32 = Color32::from_rgb(26, 29, 34);
+    /// Slightly elevated surfaces (cards, inputs)
+    pub const BG_MID: Color32 = Color32::from_rgb(34, 40, 50);
+    /// Elevated surfaces, dropdowns, popovers
+    pub const BG_PANEL: Color32 = Color32::from_rgb(42, 48, 58);
+    /// Input fields, search boxes
+    pub const BG_SURFACE: Color32 = Color32::from_rgb(48, 54, 66);
+    /// Highest elevation - dropdowns, tooltips
+    pub const BG_ELEVATED: Color32 = Color32::from_rgb(56, 62, 76);
 
     // ── Interactive States ──
-    pub const BG_HOVER: Color32 = Color32::from_rgb(48, 58, 73); // Button hover
-    pub const BG_ACTIVE: Color32 = Color32::from_rgb(20, 115, 230); // Selection / active
-    pub const BG_PRESSED: Color32 = Color32::from_rgb(15, 90, 185); // Button pressed
+    pub const BG_HOVER: Color32 = Color32::from_rgb(52, 62, 82);
+    pub const BG_ACTIVE: Color32 = Color32::from_rgb(18, 100, 220); // Muted, professional blue
+    pub const BG_PRESSED: Color32 = Color32::from_rgb(12, 75, 165);
 
-    // ── AE Accent Colors ──
-    pub const ACCENT_BLUE: Color32 = Color32::from_rgb(0, 163, 255); // Primary accent
-    pub const ACCENT_CYAN: Color32 = Color32::from_rgb(0, 215, 255); // Timeline cursor
-    pub const ACCENT_YELLOW: Color32 = Color32::from_rgb(255, 214, 0); // Timecode
-    pub const ACCENT_GREEN: Color32 = Color32::from_rgb(0, 210, 90); // Success / Solo
-    pub const ACCENT_RED: Color32 = Color32::from_rgb(220, 50, 47); // Error / Mute
-    pub const ACCENT_ORANGE: Color32 = Color32::from_rgb(255, 140, 0); // Warning
-    pub const ACCENT_PURPLE: Color32 = Color32::from_rgb(160, 120, 255); // Expression
+    // ── Accent Colors (Restrained Professional Palette) ──
+    /// Primary accent - muted, professional blue. Used ONLY for active selection, play state, primary actions.
+    pub const ACCENT_BLUE: Color32 = Color32::from_rgb(14, 120, 220);
+    /// Cyan accent - timeline cursor, motion paths
+    pub const ACCENT_CYAN: Color32 = Color32::from_rgb(0, 185, 220);
+    /// Yellow/Gold - timecode, warnings, keyframes
+    pub const ACCENT_YELLOW: Color32 = Color32::from_rgb(255, 195, 0);
+    /// Green - success, solo, recording
+    pub const ACCENT_GREEN: Color32 = Color32::from_rgb(0, 185, 95);
+    /// Red - error, mute, recording
+    pub const ACCENT_RED: Color32 = Color32::from_rgb(210, 55, 55);
+    /// Orange/Gold - warning, keyframe, brand accent
+    pub const ACCENT_ORANGE: Color32 = Color32::from_rgb(245, 155, 0);
+    /// Purple - expressions, advanced
+    pub const ACCENT_PURPLE: Color32 = Color32::from_rgb(155, 110, 230);
 
     // ── Borders (crisp 1px) ──
-    pub const BORDER_SUBTLE: Color32 = Color32::from_rgb(38, 44, 53); // Panel dividers
-    pub const BORDER_MEDIUM: Color32 = Color32::from_rgb(55, 63, 75); // Input borders
-    pub const BORDER_STRONG: Color32 = Color32::from_rgb(75, 75, 75); // Active borders
-    pub const BORDER_ACTIVE: Color32 = Color32::from_rgb(0, 163, 255); // Focused input
+    pub const BORDER_SUBTLE: Color32 = Color32::from_rgb(36, 42, 54);
+    pub const BORDER_MEDIUM: Color32 = Color32::from_rgb(52, 58, 72);
+    pub const BORDER_STRONG: Color32 = Color32::from_rgb(72, 80, 92);
+    pub const BORDER_ACTIVE: Color32 = Color32::from_rgb(14, 120, 220);
 
-    // ── Typography ──
-    pub const TEXT_PRIMARY: Color32 = Color32::from_rgb(225, 230, 238); // Main text
-    pub const TEXT_SECONDARY: Color32 = Color32::from_rgb(164, 175, 191); // Labels
-    pub const TEXT_MUTED: Color32 = Color32::from_rgb(126, 138, 154); // Disabled
-    pub const TEXT_ACCENT: Color32 = Color32::from_rgb(0, 180, 255); // Links / values
-    pub const TEXT_ON_ACCENT: Color32 = Color32::from_rgb(255, 255, 255); // On blue bg
+    // ── Typography Colors ──
+    pub const TEXT_PRIMARY: Color32 = Color32::from_rgb(235, 238, 245);
+    pub const TEXT_SECONDARY: Color32 = Color32::from_rgb(158, 170, 192);
+    pub const TEXT_MUTED: Color32 = Color32::from_rgb(112, 124, 144);
+    pub const TEXT_ACCENT: Color32 = Color32::from_rgb(14, 160, 240);
+    pub const TEXT_ON_ACCENT: Color32 = Color32::from_rgb(255, 255, 255);
 
     // ── Layer Label Colors (AE standard) ──
     pub const LABEL_RED: Color32 = Color32::from_rgb(255, 60, 60);
@@ -53,56 +67,57 @@ pub mod colors {
     pub const LABEL_MAGENTA: Color32 = Color32::from_rgb(230, 80, 200);
 
     // ── Viewport Overlay Colors ──
-    pub const GRID_LINE: Color32 = Color32::from_rgba_premultiplied(255, 255, 255, 30);
-    pub const MOTION_PATH: Color32 = Color32::from_rgb(0, 200, 255);
-    pub const KEYFRAME_DOT: Color32 = Color32::from_rgb(255, 200, 0);
-    pub const GUIDE_LINE: Color32 = Color32::from_rgb(0, 200, 230);
-    pub const HUD_BG: Color32 = Color32::from_rgba_premultiplied(15, 22, 32, 220);
-    pub const HUD_STROKE: Color32 = Color32::from_rgb(0, 200, 255);
-    pub const HUD_TEXT: Color32 = Color32::from_rgb(200, 235, 255);
-    pub const HUD_STATUS_TEXT: Color32 = Color32::from_rgb(200, 220, 255);
-    pub const FPS_GOOD: Color32 = Color32::from_rgb(0, 200, 255);
-    pub const FPS_BAD: Color32 = Color32::from_rgb(255, 100, 80);
+    pub const GRID_LINE: Color32 = Color32::from_rgba_premultiplied(255, 255, 255, 28);
+    pub const MOTION_PATH: Color32 = Color32::from_rgb(0, 180, 230);
+    pub const KEYFRAME_DOT: Color32 = Color32::from_rgb(255, 200, 60);
+    pub const GUIDE_LINE: Color32 = Color32::from_rgb(0, 180, 220);
+    pub const HUD_BG: Color32 = Color32::from_rgba_premultiplied(14, 20, 30, 220);
+    pub const HUD_STROKE: Color32 = Color32::from_rgb(0, 180, 230);
+    pub const HUD_TEXT: Color32 = Color32::from_rgb(200, 230, 250);
+    pub const HUD_STATUS_TEXT: Color32 = Color32::from_rgb(190, 215, 240);
+    pub const FPS_GOOD: Color32 = Color32::from_rgb(0, 180, 230);
+    pub const FPS_BAD: Color32 = Color32::from_rgb(255, 90, 70);
 
     // ── 3D Gizmo Colors ──
-    pub const GIZMO_X: Color32 = Color32::from_rgb(240, 70, 70);
-    pub const GIZMO_Y: Color32 = Color32::from_rgb(60, 220, 80);
-    pub const GIZMO_Z: Color32 = Color32::from_rgb(60, 150, 255);
-    pub const BBOX_STROKE: Color32 = Color32::from_rgb(0, 180, 255);
+    pub const GIZMO_X: Color32 = Color32::from_rgb(235, 70, 70);
+    pub const GIZMO_Y: Color32 = Color32::from_rgb(60, 210, 80);
+    pub const GIZMO_Z: Color32 = Color32::from_rgb(60, 140, 245);
+    pub const BBOX_STROKE: Color32 = Color32::from_rgb(0, 160, 240);
     pub const HANDLE_NORMAL: Color32 = Color32::WHITE;
-    pub const HANDLE_HOVER_FILL: Color32 = Color32::from_rgb(255, 230, 100);
+    pub const HANDLE_HOVER_FILL: Color32 = Color32::from_rgb(255, 225, 90);
     pub const HANDLE_HOVER_STROKE: Color32 = Color32::from_rgb(255, 100, 0);
-    pub const CENTER_DOT: Color32 = Color32::from_rgb(255, 215, 0);
-    pub const CENTER_HOVER_RING: Color32 = Color32::from_rgb(60, 140, 255);
+    pub const CENTER_DOT: Color32 = Color32::from_rgb(255, 210, 0);
+    pub const CENTER_HOVER_RING: Color32 = Color32::from_rgb(60, 130, 245);
 
     // ── Timeline Overlay Colors ──
-    pub const TIMELINE_PLAYHEAD: Color32 = Color32::from_rgb(0, 200, 255);
-    pub const TIMELINE_KEYFRAME: Color32 = Color32::from_rgb(255, 200, 60);
-    pub const TIMELINE_WAVEFORM: Color32 = Color32::from_rgb(80, 200, 120);
-    pub const TIMELINE_SELECTION: Color32 = Color32::from_rgba_premultiplied(0, 120, 255, 40);
+    pub const TIMELINE_PLAYHEAD: Color32 = Color32::from_rgb(0, 180, 230);
+    pub const TIMELINE_KEYFRAME: Color32 = Color32::from_rgb(255, 195, 60);
+    pub const TIMELINE_WAVEFORM: Color32 = Color32::from_rgb(70, 185, 115);
+    pub const TIMELINE_SELECTION: Color32 = Color32::from_rgba_premultiplied(0, 100, 240, 38);
 }
 
 /// Layout & Spacing Constants for Pro Density
 #[allow(dead_code)]
 pub mod layout {
     pub const SIDEBAR_DEFAULT_WIDTH: f32 = 280.0;
-    pub const TOOLBAR_HEIGHT: f32 = 34.0;
+    pub const TOOLBAR_HEIGHT: f32 = 32.0;
     pub const TIMELINE_LEFT_PANE_WIDTH: f32 = 260.0;
-    pub const BOTTOM_TIMELINE_HEIGHT: f32 = 300.0;
-    pub const STATUS_BAR_HEIGHT: f32 = 22.0;
+    pub const BOTTOM_TIMELINE_HEIGHT: f32 = 280.0;
+    pub const STATUS_BAR_HEIGHT: f32 = 20.0;
 
-    pub const FONT_SIZE_SMALL: f32 = 11.0;
-    pub const FONT_SIZE_BODY: f32 = 12.0;
-    pub const FONT_SIZE_HEADING: f32 = 13.0;
-    pub const FONT_SIZE_TITLE: f32 = 15.0;
+    pub const FONT_SIZE_SMALL: f32 = 10.5;
+    pub const FONT_SIZE_BODY: f32 = 12.5;
+    pub const FONT_SIZE_HEADING: f32 = 13.5;
+    pub const FONT_SIZE_TITLE: f32 = 14.5;
 }
 
 /// Configure fonts for professional appearance.
-/// Loads system fonts on macOS (SF Pro, Menlo) for AE-quality typography.
+/// Loads Inter for Latin UI, LINE Seed JP / Hiragino for Japanese UI.
+/// Falls back to system fonts gracefully.
 fn configure_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
 
-    // Load macOS system fonts for professional appearance
+    // Load system fonts for professional appearance
     #[cfg(target_os = "macos")]
     {
         let sf_pro_paths = [
@@ -120,28 +135,50 @@ fn configure_fonts(ctx: &egui::Context) {
             "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc",
             "/System/Library/Fonts/STHeiti Light.ttc",
         ];
+        let inter_paths = [
+            "/Library/Fonts/Inter.ttf",
+            "/System/Library/Fonts/Supplemental/Inter.ttf",
+            "/Library/Fonts/Inter-Regular.ttf",
+        ];
 
-        // Try to load a proportional font (SF Pro → Helvetica fallback)
-        let mut loaded_prop = false;
-        for path in &sf_pro_paths {
+        // Try to load Inter for Latin UI (primary)
+        let mut loaded_inter = false;
+        for path in &inter_paths {
             if let Ok(data) = std::fs::read(path) {
                 fonts
                     .font_data
-                    .insert("SFPro".to_string(), egui::FontData::from_owned(data));
+                    .insert("Inter".to_string(), egui::FontData::from_owned(data));
                 fonts
                     .families
                     .entry(egui::FontFamily::Proportional)
                     .or_default()
-                    .insert(0, "SFPro".to_string());
-                loaded_prop = true;
+                    .insert(0, "Inter".to_string());
+                loaded_inter = true;
                 break;
             }
         }
-        if !loaded_prop {
+        // Fallback to SF Pro if Inter not available
+        if !loaded_inter {
+            for path in &sf_pro_paths {
+                if let Ok(data) = std::fs::read(path) {
+                    fonts
+                        .font_data
+                        .insert("SFPro".to_string(), egui::FontData::from_owned(data));
+                    fonts
+                        .families
+                        .entry(egui::FontFamily::Proportional)
+                        .or_default()
+                        .insert(0, "SFPro".to_string());
+                    loaded_inter = true;
+                    break;
+                }
+            }
+        }
+        if !loaded_inter {
             log::info!("Using egui default proportional font (system fonts not found)");
         }
 
-        // Try to load a monospace font (Menlo)
+        // Load monospace font (Menlo)
         let mut loaded_mono = false;
         for path in &menlo_paths {
             if let Ok(data) = std::fs::read(path) {
@@ -161,17 +198,17 @@ fn configure_fonts(ctx: &egui::Context) {
             log::info!("Using egui default monospace font (Menlo not found)");
         }
 
-        // Load Japanese fallback font for CJK glyph support
+        // Load Japanese font (Hiragino / LINE Seed JP fallback)
         for path in &jp_font_paths {
             if let Ok(data) = std::fs::read(path) {
                 fonts
                     .font_data
-                    .insert("JpFont".to_string(), egui::FontData::from_owned(data));
+                    .insert("LineSeedJP".to_string(), egui::FontData::from_owned(data));
                 fonts
                     .families
                     .entry(egui::FontFamily::Proportional)
                     .or_default()
-                    .push("JpFont".to_string());
+                    .push("LineSeedJP".to_string());
                 break;
             }
         }
@@ -300,11 +337,11 @@ pub fn configure_ae_theme(ctx: &egui::Context) {
     visuals.panel_fill = colors::BG_DARKEST;
     visuals.window_fill = colors::BG_DARK;
     visuals.faint_bg_color = colors::BG_DEEPEST;
-    visuals.extreme_bg_color = egui::Color32::from_rgb(12, 12, 12);
+    visuals.extreme_bg_color = egui::Color32::from_rgb(10, 10, 12);
 
     // ── Selection ──
     visuals.selection.bg_fill = colors::BG_ACTIVE;
-    visuals.selection.stroke = egui::Stroke::new(1.0_f32, colors::ACCENT_BLUE);
+    visuals.selection.stroke = egui::Stroke::new(1.0_f32, colors::ACCENT_CYAN);
 
     // ── Widget states ──
     // Noninteractive (labels, static text)
@@ -312,42 +349,42 @@ pub fn configure_ae_theme(ctx: &egui::Context) {
     visuals.widgets.noninteractive.bg_fill = colors::BG_DARKEST;
     visuals.widgets.noninteractive.weak_bg_fill = colors::BG_DARKEST;
     visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE);
-    visuals.widgets.noninteractive.rounding = egui::Rounding::same(2.0);
+    visuals.widgets.noninteractive.rounding = egui::Rounding::same(3.0);
 
     // Inactive (buttons, sliders at rest)
     visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0_f32, colors::TEXT_PRIMARY);
     visuals.widgets.inactive.bg_fill = colors::BG_MID;
     visuals.widgets.inactive.weak_bg_fill = colors::BG_MID;
     visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM);
-    visuals.widgets.inactive.rounding = egui::Rounding::same(3.0);
+    visuals.widgets.inactive.rounding = egui::Rounding::same(4.0);
 
     // Hovered
     visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.0_f32, egui::Color32::WHITE);
     visuals.widgets.hovered.bg_fill = colors::BG_HOVER;
     visuals.widgets.hovered.weak_bg_fill = colors::BG_HOVER;
     visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0_f32, colors::BORDER_STRONG);
-    visuals.widgets.hovered.rounding = egui::Rounding::same(3.0);
+    visuals.widgets.hovered.rounding = egui::Rounding::same(4.0);
 
     // Active (pressed)
     visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0_f32, egui::Color32::WHITE);
     visuals.widgets.active.bg_fill = colors::BG_PRESSED;
     visuals.widgets.active.weak_bg_fill = colors::BG_PRESSED;
-    visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0_f32, colors::ACCENT_BLUE);
-    visuals.widgets.active.rounding = egui::Rounding::same(3.0);
+    visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0_f32, colors::ACCENT_CYAN);
+    visuals.widgets.active.rounding = egui::Rounding::same(4.0);
 
     // Open (expanded menus, popups)
     visuals.widgets.open.fg_stroke = egui::Stroke::new(1.0_f32, egui::Color32::WHITE);
     visuals.widgets.open.bg_fill = colors::BG_PANEL;
     visuals.widgets.open.weak_bg_fill = colors::BG_PANEL;
     visuals.widgets.open.bg_stroke = egui::Stroke::new(1.0_f32, colors::BORDER_STRONG);
-    visuals.widgets.open.rounding = egui::Rounding::same(3.0);
+    visuals.widgets.open.rounding = egui::Rounding::same(4.0);
 
     // ── Warning/Error colors ──
     visuals.warn_fg_color = colors::ACCENT_ORANGE;
     visuals.error_fg_color = colors::ACCENT_RED;
 
     // ── Resize handle styling ──
-    visuals.resize_corner_size = 8.0;
+    visuals.resize_corner_size = 6.0;
 
     ctx.set_visuals(visuals);
 
@@ -355,13 +392,35 @@ pub fn configure_ae_theme(ctx: &egui::Context) {
     ctx.style_mut(|style| {
         // Tighter spacing for pro density
         style.spacing.item_spacing = egui::vec2(6.0, 4.0);
-        style.spacing.button_padding = egui::vec2(8.0, 4.0);
-        style.spacing.indent = 14.0;
-        style.spacing.scroll.bar_width = 6.0;
+        style.spacing.button_padding = egui::vec2(10.0, 5.0);
+        style.spacing.indent = 12.0;
+        style.spacing.scroll.bar_width = 5.0;
         style.spacing.scroll.bar_inner_margin = 2.0;
         style.spacing.scroll.bar_outer_margin = 1.0;
         style.spacing.menu_margin = egui::Margin::symmetric(6.0, 4.0);
-        style.spacing.window_margin = egui::Margin::same(8.0);
+        style.spacing.window_margin = egui::Margin::same(6.0);
+
+        // Slightly smaller default text style
+        style.text_styles.insert(
+            egui::TextStyle::Body,
+            egui::FontId::new(layout::FONT_SIZE_BODY, egui::FontFamily::Proportional),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Small,
+            egui::FontId::new(layout::FONT_SIZE_SMALL, egui::FontFamily::Proportional),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Button,
+            egui::FontId::new(layout::FONT_SIZE_BODY, egui::FontFamily::Proportional),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Heading,
+            egui::FontId::new(layout::FONT_SIZE_HEADING, egui::FontFamily::Proportional),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Monospace,
+            egui::FontId::new(layout::FONT_SIZE_BODY, egui::FontFamily::Monospace),
+        );
     });
 }
 
@@ -398,10 +457,10 @@ pub fn draw_custom_tab(ui: &mut egui::Ui, selected: bool, title: &str) -> egui::
         let rect = response.rect;
         ui.painter().line_segment(
             [
-                egui::pos2(rect.left(), rect.bottom() - 1.5),
-                egui::pos2(rect.right(), rect.bottom() - 1.5),
+                egui::pos2(rect.left(), rect.bottom() - 1.0),
+                egui::pos2(rect.right(), rect.bottom() - 1.0),
             ],
-            egui::Stroke::new(2.0_f32, colors::ACCENT_CYAN),
+            egui::Stroke::new(1.5_f32, colors::ACCENT_CYAN),
         );
     }
     response
