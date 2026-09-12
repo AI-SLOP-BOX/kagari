@@ -127,6 +127,22 @@ mod tests {
         };
         assert!(ep.overridden);
         assert_eq!(ep.prop_type, EssentialPropertyType::Slider);
+        // Legacy JSON without the newer fields must still parse with defaults.
+        let legacy: EssentialProperty =
+            serde_json::from_str(r#"{"name":"Old","prop_type":"Slider"}"#).unwrap();
+        assert!(!legacy.overridden);
+        assert_eq!(legacy.min_value, 0.0);
+        assert_eq!(legacy.max_value, 100.0);
+        assert!(legacy.options.is_empty());
+        // Full roundtrip preserves every field.
+        let back: EssentialProperty =
+            serde_json::from_str(&serde_json::to_string(&ep).unwrap()).unwrap();
+        assert_eq!(back.name, "Master Opacity");
+        match back.value {
+            EssentialValue::Float(f) => assert_eq!(f, 50.0),
+            _ => panic!("value did not survive roundtrip"),
+        }
+        assert!(back.overridden);
     }
 
     #[test]
