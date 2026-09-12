@@ -60,11 +60,19 @@ pub fn apply_motion_blur_vector(
     vel_x: f32,
     vel_y: f32,
     samples: u32,
+    phase_offset: f32,
 ) {
     if vel_x.abs() < 0.001 && vel_y.abs() < 0.001 || samples == 0 {
         return;
     }
     let temp = pixels.to_vec();
+    // Phase shifts the sampling window along the motion vector in units of
+    // the smear length: 0.0 samples symmetrically around the frame time.
+    let phase = if phase_offset.is_finite() {
+        phase_offset.clamp(-1.0, 1.0)
+    } else {
+        0.0
+    };
 
     for y in 0..height {
         for x in 0..width {
@@ -73,7 +81,7 @@ pub fn apply_motion_blur_vector(
             let mut b = 0.0f32;
 
             for s in 0..samples {
-                let t = (s as f32 / (samples - 1) as f32) - 0.5;
+                let t = (s as f32 / (samples - 1) as f32) - 0.5 + phase;
                 let sx = (x as f32 + vel_x * t).clamp(0.0, (width - 1) as f32) as usize;
                 let sy = (y as f32 + vel_y * t).clamp(0.0, (height - 1) as f32) as usize;
                 let s_idx = (sy * width as usize + sx) * 4;
@@ -206,5 +214,41 @@ mod tests {
         let mut pixels = vec![100u8; 64 * 4];
         apply_emboss(&mut pixels, 8, 8, 45.0, 1.0);
         assert_eq!(pixels.len(), 64 * 4);
+    }
+
+    fn half_white_frame() -> Vec<u8> {
+        // Left half white, right half black: asymmetric content makes a
+        // shifted sampling window observable.
+        let mut pixels = vec![0u8; 16 * 4 * 4];
+        for y in 0..4 {
+            for x in 0..8 {
+                let idx = (y * 16 + x) * 4;
+                pixels[idx] = 255;
+                pixels[idx + 1] = 255;
+                pixels[idx + 2] = 255;
+                pixels[idx + 3] = 255;
+            }
+        }
+        pixels
+    }
+
+    #[test]
+    fn test_motion_blur_phase_shifts_sampling_window() {
+        let run = |phase: f32| {
+            let mut pixels = half_white_frame();
+            apply_motion_blur_vector(&mut pixels, 16, 4, 8.0, 0.0, 9, phase);
+            pixels
+        };
+        let centered = run(0.0);
+        let leading = run(0.5);
+        let trailing = run(-0.5);
+        // A shifted window must change the output versus centered sampling.
+        assert_ne!(centered, leading, "positive phase changed nothing");
+        assert_ne!(centered, trailing, "negative phase changed nothing");
+        // Opposite shifts must disagree with each other.
+        assert_ne!(leading, trailing, "phase direction has no effect");
+        // Non-finite phase degrades to centered instead of producing garbage.
+        let nan_phase = run(f32::NAN);
+        assert_eq!(centered, nan_phase, "NaN phase must fall back to centered");
     }
 }

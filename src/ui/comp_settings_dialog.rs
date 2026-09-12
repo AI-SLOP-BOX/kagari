@@ -194,6 +194,31 @@ pub fn draw_comp_settings_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                 ui.label("🌀 Motion Blur Shutter Angle:");
                 ui.add(egui::Slider::new(&mut comp.motion_blur_shutter_angle, 0.0..=720.0).suffix("°"));
             });
+            ui.horizontal(|ui| {
+                ui.label("🌀 Motion Blur Shutter Phase:");
+                ui.add(egui::Slider::new(&mut comp.motion_blur_shutter_phase, -360.0..=360.0).suffix("°"))
+                    .on_hover_text("Shifts the shutter window relative to the frame time");
+            });
+            ui.horizontal(|ui| {
+                ui.label("🎨 Background Color:");
+                let c = &mut comp.background_color;
+                let mut col = egui::Color32::from_rgba_premultiplied(
+                    (c[0].clamp(0.0, 1.0) * 255.0) as u8,
+                    (c[1].clamp(0.0, 1.0) * 255.0) as u8,
+                    (c[2].clamp(0.0, 1.0) * 255.0) as u8,
+                    (c[3].clamp(0.0, 1.0) * 255.0) as u8,
+                );
+                if ui.color_edit_button_srgba(&mut col).changed() {
+                    let [r, g, b, a] = col.to_array();
+                    *c = [
+                        r as f32 / 255.0,
+                        g as f32 / 255.0,
+                        b as f32 / 255.0,
+                        a as f32 / 255.0,
+                    ];
+                    crate::core::frame_cache::bump_version();
+                }
+            });
 
             ui.add_space(10.0);
             ui.separator();

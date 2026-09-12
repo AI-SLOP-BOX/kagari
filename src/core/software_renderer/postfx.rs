@@ -101,6 +101,9 @@ pub(crate) fn apply_post_fx(ctx: PostFxCtx<'_>) {
         if speed > 0.05 {
             let shutter = (comp.motion_blur_shutter_angle / 360.0).clamp(0.0, 2.0);
             let samples = ((speed * shutter).ceil() as u32).clamp(2, 32);
+            // Shutter phase shifts the sampling window along the smear.
+            // Default -90° maps to a centered window, preserving legacy output.
+            let phase_offset = (comp.motion_blur_shutter_phase + 90.0) / 360.0;
             crate::core::ae_effects_pack_v17::apply_motion_blur_vector(
                 &mut *layer_buf,
                 bw,
@@ -108,6 +111,7 @@ pub(crate) fn apply_post_fx(ctx: PostFxCtx<'_>) {
                 vel_x * shutter * fps as f32 / 24.0,
                 vel_y * shutter * fps as f32 / 24.0,
                 samples,
+                phase_offset,
             );
         }
     }
