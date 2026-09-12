@@ -237,6 +237,11 @@ mod tests {
     fn test_import_rejects_without_ffmpeg_gracefully() {
         // If ffmpeg is absent we get a clean error, never a panic
         let result = import_video("/dev/null", Path::new("/tmp/kagari_vid_test2"), 30.0);
-        let _ = result; // Ok or Err both fine — just must not panic
+        let err = result.expect_err("/dev/null is never a valid video source");
+        assert!(
+            err.contains("ffmpeg not found") || err.contains("source file not found"),
+            "unexpected import failure mode: {}",
+            err
+        );
     }
 }

@@ -840,8 +840,8 @@ mod tests {
 
     #[test]
     fn test_ffmpeg_availability_check() {
-        // Just test that the function runs without panicking.
-        let _available = is_ffmpeg_available();
+        // PATH probing must be pure: repeated calls agree with each other.
+        assert_eq!(is_ffmpeg_available(), is_ffmpeg_available());
     }
 
     #[test]

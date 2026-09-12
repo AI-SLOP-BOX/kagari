@@ -124,13 +124,14 @@ fn smooth_output_non_negative_for_positive_inputs() {
 
 // ─── FFmpeg Export Config Validation ────────────────────────────────────────
 
-/// Regression: ExportConfig with audio_wav starting with '-' should be rejected
-/// by the export function (we test the validation logic indirectly).
+/// Regression: ExportConfig with audio_wav starting with '-' must be rejected
+/// by the export function before any frame renders (FFmpeg arg injection).
 #[test]
 fn ffmpeg_audio_wav_dash_rejected() {
-    // The validation happens inside start_export_cancelable, but we can verify
-    // that the path validation logic exists by checking the function compiles
-    // and the ExportConfig can be created. The actual spawn test requires FFmpeg.
+    use kagari_vfx::core::ffmpeg_export::start_export_cancelable;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::Arc;
+
     let config = kagari_vfx::core::ffmpeg_export::ExportConfig {
         output_path: "output.mp4".into(),
         width: 1920,
@@ -140,13 +141,37 @@ fn ffmpeg_audio_wav_dash_rejected() {
         audio_wav: Some("-i".into()),
         codec: Default::default(),
     };
-    // The config itself should be creatable; the validation happens at export time
-    assert_eq!(config.audio_wav.as_deref(), Some("-i"));
+    let (tx, _rx) = std::sync::mpsc::channel();
+    let rendered = Arc::new(AtomicUsize::new(0));
+    let probe = Arc::clone(&rendered);
+    let err = start_export_cancelable(
+        config,
+        tx,
+        Arc::new(AtomicBool::new(false)),
+        move |_| {
+            probe.fetch_add(1, Ordering::SeqCst);
+            vec![0u8; 1920 * 1080 * 4]
+        },
+    )
+    .expect_err("dash-prefixed audio_wav must be rejected");
+    // Validation must precede spawning: no frame may render.
+    assert_eq!(rendered.load(Ordering::SeqCst), 0, "rejected export rendered frames");
+    if kagari_vfx::core::ffmpeg_export::is_ffmpeg_available() {
+        assert!(
+            err.contains("must not start with"),
+            "unexpected rejection reason: {}",
+            err
+        );
+    }
 }
 
-/// Regression: ExportConfig with output_path starting with '-' should be rejected.
+/// Regression: ExportConfig with output_path starting with '-' must be rejected.
 #[test]
 fn ffmpeg_output_path_dash_rejected() {
+    use kagari_vfx::core::ffmpeg_export::start_export_cancelable;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::Arc;
+
     let config = kagari_vfx::core::ffmpeg_export::ExportConfig {
         output_path: "-y".into(),
         width: 1920,
@@ -156,5 +181,25 @@ fn ffmpeg_output_path_dash_rejected() {
         audio_wav: None,
         codec: Default::default(),
     };
-    assert!(config.output_path.starts_with('-'));
+    let (tx, _rx) = std::sync::mpsc::channel();
+    let rendered = Arc::new(AtomicUsize::new(0));
+    let probe = Arc::clone(&rendered);
+    let err = start_export_cancelable(
+        config,
+        tx,
+        Arc::new(AtomicBool::new(false)),
+        move |_| {
+            probe.fetch_add(1, Ordering::SeqCst);
+            vec![0u8; 1920 * 1080 * 4]
+        },
+    )
+    .expect_err("dash-prefixed output_path must be rejected");
+    assert_eq!(rendered.load(Ordering::SeqCst), 0, "rejected export rendered frames");
+    if kagari_vfx::core::ffmpeg_export::is_ffmpeg_available() {
+        assert!(
+            err.contains("must not start with"),
+            "unexpected rejection reason: {}",
+            err
+        );
+    }
 }
