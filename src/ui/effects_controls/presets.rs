@@ -1330,3 +1330,43 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
         },
     ]
 }
+
+/// Factory-fresh default `EffectType` for the same variant as `effect_type`.
+///
+/// Used by the Effect Controls "Reset" action: the first registry preset with
+/// a matching variant discriminant supplies the defaults. Returns `None` when
+/// no preset covers the variant (e.g. script-defined effects).
+pub fn fresh_default_for(effect_type: &EffectType) -> Option<EffectType> {
+    let want = std::mem::discriminant(effect_type);
+    get_all_effect_presets()
+        .iter()
+        .map(|p| (p.create_fn)(0))
+        .find(|e| std::mem::discriminant(&e.effect_type) == want)
+        .map(|e| e.effect_type)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_registry_preset_resolves_a_fresh_default() {
+        let presets = get_all_effect_presets();
+        assert!(!presets.is_empty());
+        for p in presets {
+            let effect = (p.create_fn)(0);
+            let fresh = fresh_default_for(&effect.effect_type);
+            assert!(
+                fresh.is_some(),
+                "Reset has no factory defaults for '{}'",
+                p.name
+            );
+            assert_eq!(
+                std::mem::discriminant(&fresh.unwrap()),
+                std::mem::discriminant(&effect.effect_type),
+                "Reset changed the variant for '{}'",
+                p.name
+            );
+        }
+    }
+}

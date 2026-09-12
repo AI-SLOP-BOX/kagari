@@ -405,6 +405,7 @@ fn draw_effect_controls(
         let mut fx_move_down: Option<usize> = None;
         let mut fx_dup: Option<usize> = None;
         let mut fx_del: Option<usize> = None;
+        let mut fx_reset: Option<usize> = None;
         let mut fx_toggle: Option<(usize, bool)> = None;
 
         // Render effect list in a block scope so the mutable borrow on
@@ -454,6 +455,13 @@ fn draw_effect_controls(
                                 .clicked()
                             {
                                 fx_del = Some(e_idx);
+                            }
+                            if ui
+                                .small_button("Reset")
+                                .on_hover_text("Reset effect to factory defaults")
+                                .clicked()
+                            {
+                                fx_reset = Some(e_idx);
                             }
                         });
 
@@ -571,6 +579,32 @@ fn draw_effect_controls(
                 comp.layers[idx].effects.remove(i);
             }
             session.commit();
+        }
+        if let Some(i) = fx_reset {
+            let mut session = EditorSession::new(&mut app.history, "Reset Effect");
+            let comp = session.current_mut().active_composition_mut();
+            let mut reset_name: Option<String> = None;
+            let mut missing_name: Option<String> = None;
+            if idx < comp.layers.len() && i < comp.layers[idx].effects.len() {
+                let fx = &mut comp.layers[idx].effects[i];
+                match crate::ui::effects_controls::presets::fresh_default_for(&fx.effect_type)
+                {
+                    Some(fresh) => {
+                        fx.effect_type = fresh;
+                        reset_name = Some(fx.name.clone());
+                    }
+                    None => {
+                        missing_name = Some(fx.name.clone());
+                    }
+                }
+            }
+            session.commit();
+            if let Some(name) = reset_name {
+                app.toasts.info(format!("Reset '{}' to defaults", name));
+            } else if let Some(name) = missing_name {
+                app.toasts
+                    .error(format!("No factory defaults for '{}'", name));
+            }
         }
         if let Some((e_idx, new_enabled)) = fx_toggle {
             let mut session = EditorSession::new(&mut app.history, "Toggle Effect");
