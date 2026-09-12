@@ -1096,6 +1096,20 @@ impl eframe::App for KagariApp {
                         .color(crate::ui::theme::colors::TEXT_MUTED),
                     );
                     ui.separator();
+                    let render_ms = self.playback.preview_render_ema_ms;
+                    let frame_budget_ms =
+                        1000.0 / self.history.current().active_composition().fps.max(1) as f32;
+                    let ms_color = if render_ms <= frame_budget_ms {
+                        crate::ui::theme::colors::ACCENT_GREEN
+                    } else {
+                        crate::ui::theme::colors::ACCENT_ORANGE
+                    };
+                    ui.label(
+                        egui::RichText::new(format!("Render: {:.1} ms", render_ms))
+                            .small()
+                            .color(ms_color),
+                    );
+                    ui.separator();
                     // Selection summary: layers + keyframes
                     let kf_count = self.selected_keyframes.len();
                     let layer_count = self.selection.selected_layers.len();
@@ -1183,9 +1197,12 @@ impl eframe::App for KagariApp {
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.label(
-                            egui::RichText::new("Kagari VFX v0.1.0")
-                                .small()
-                                .color(egui::Color32::from_gray(120)),
+                            egui::RichText::new(format!(
+                                "Kagari VFX v{}",
+                                env!("CARGO_PKG_VERSION")
+                            ))
+                            .small()
+                            .color(egui::Color32::from_gray(120)),
                         );
                         ui.separator();
                         ui.label(
