@@ -430,6 +430,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                         renderer.clear_shadow_map();
                     }
                     let (view, rec) = renderer.render(comp, current_frame, exposure_ev, lut_idx as u32);
+                    app.gpu_rendered = true;
                     (Some(view), rec)
                 };
                 let render_ms = render_started.elapsed().as_secs_f32() * 1000.0;
