@@ -41,7 +41,6 @@ impl MltExporter {
         ));
         xml.push_str("  </producer>\n");
 
-        let mut producer_count = 0usize;
         for (idx, layer) in comp.layers.iter().enumerate() {
             let resource = match &layer.layer_type {
                 LayerType::Image { path } => Some(path.clone()),
@@ -49,12 +48,12 @@ impl MltExporter {
                 LayerType::Audio { path, .. } => Some(path.clone()),
                 LayerType::Solid { color } => {
                     // Solids become color producers so the grade survives roundtrip
-                    let _ = color;
+                    let to_hex = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
                     Some(format!(
                         "color:{:02x}{:02x}{:02x}",
-                        (layer.label.to_rgb()[0] * 255.0) as u8,
-                        0,
-                        0
+                        to_hex(color[0]),
+                        to_hex(color[1]),
+                        to_hex(color[2]),
                     ))
                 }
                 _ => None,
@@ -97,7 +96,6 @@ impl MltExporter {
                 escape_xml(&layer.name)
             ));
             xml.push_str("  </producer>\n");
-            producer_count += 1;
         }
 
         // Playlist track referencing all produced entries
@@ -140,7 +138,6 @@ impl MltExporter {
         ));
         xml.push_str("    <track producer=\"background\"/>\n");
         xml.push_str("    <track producer=\"playlist0\"/>\n");
-        let _ = producer_count;
         xml.push_str("  </tractor>\n");
         xml.push_str("</mlt>\n");
         xml
@@ -168,7 +165,6 @@ fn escape_xml(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::property::Animatable;
 
     #[test]
     fn test_mlt_export_structure() {
@@ -188,7 +184,6 @@ mod tests {
             },
             30,
         );
-        let _ = Animatable::<f32>::new_constant(0.0);
         comp.layers.push(img);
 
         let xml = MltExporter::export_to_xml(&comp);
@@ -206,6 +201,25 @@ mod tests {
         assert!(xml.contains("id=\"producer1\""));
         assert!(xml.contains("<entry producer=\"producer1\""));
         assert!(xml.contains("<track producer=\"playlist0\"/>"));
+    }
+
+    #[test]
+    fn test_mlt_solid_exports_actual_color_not_label() {
+        let mut comp = Composition::new("c".into(), "C".into(), 320, 180, 30, 30);
+        comp.layers.push(Layer::new(
+            "s".into(),
+            "Green".into(),
+            LayerType::Solid {
+                color: [0.0, 1.0, 0.0, 1.0],
+            },
+            30,
+        ));
+        let xml = MltExporter::export_to_xml(&comp);
+        assert!(
+            xml.contains("color:00ff00"),
+            "solid must export its own color, got:\n{}",
+            xml
+        );
     }
 
     #[test]
