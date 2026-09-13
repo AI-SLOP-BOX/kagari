@@ -621,3 +621,63 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
 
     app.export.show_export_dialog = open;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app_state::QueueItemStatus;
+
+    fn drive_events(app: &mut crate::KagariApp) {
+        let ctx = egui::Context::default();
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            draw(app, ctx);
+        });
+    }
+
+    #[test]
+    fn finished_event_marks_queue_item_done_and_advances_batch() {
+        let mut app = crate::KagariApp::default();
+        let comp_name = app.history.current().active_composition().name.clone();
+        app.render_queue_items = vec![comp_name.clone()];
+        app.batch_queue = vec![comp_name.clone()];
+        app.batch_idx = 0;
+        app.render_item_status
+            .insert(comp_name.clone(), QueueItemStatus::Rendering);
+        app.export.is_exporting = true;
+        app.export.export_comp_name = Some(comp_name.clone());
+        let (tx, rx) = std::sync::mpsc::channel();
+        tx.send(crate::ExportEvent::Finished("ok".into())).unwrap();
+        app.export.export_rx = Some(rx);
+
+        drive_events(&mut app);
+
+        assert_eq!(
+            app.render_item_status.get(&comp_name),
+            Some(&QueueItemStatus::Done)
+        );
+        assert!(!app.export.is_exporting);
+        assert!(app.batch_queue.is_empty());
+    }
+
+    #[test]
+    fn error_event_marks_queue_item_failed_and_aborts_batch() {
+        let mut app = crate::KagariApp::default();
+        let comp_name = app.history.current().active_composition().name.clone();
+        app.render_queue_items = vec![comp_name.clone(), "Next".into()];
+        app.batch_queue = vec![comp_name.clone(), "Next".into()];
+        app.batch_idx = 0;
+        app.export.is_exporting = true;
+        app.export.export_comp_name = Some(comp_name.clone());
+        let (tx, rx) = std::sync::mpsc::channel();
+        tx.send(crate::ExportEvent::Error("boom".into())).unwrap();
+        app.export.export_rx = Some(rx);
+
+        drive_events(&mut app);
+
+        assert_eq!(
+            app.render_item_status.get(&comp_name),
+            Some(&QueueItemStatus::Failed)
+        );
+        assert!(app.batch_queue.is_empty());
+    }
+}
