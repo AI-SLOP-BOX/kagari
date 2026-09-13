@@ -340,8 +340,8 @@ pub fn configure_ae_theme(ctx: &egui::Context) {
     visuals.faint_bg_color = colors::BG_DEEPEST;
     visuals.extreme_bg_color = egui::Color32::from_rgb(10, 10, 12);
 
-    // ── Selection ──
-    visuals.selection.bg_fill = colors::BG_ACTIVE;
+    // ── Selection (calm dark blue; bright pills read as toy UI) ──
+    visuals.selection.bg_fill = egui::Color32::from_rgb(18, 52, 102);
     visuals.selection.stroke = egui::Stroke::new(1.0_f32, colors::ACCENT_BLUE);
 
     // ── Widget states ──
@@ -442,18 +442,20 @@ pub fn draw_section_header(ui: &mut egui::Ui, title: &str, icon: &str) {
     ui.add_space(2.0);
 }
 
-/// Helper: Draw a pro tab with dynamic bottom cyan border when selected.
+/// Helper: Draw a calm pro tab: plain text with a thin blue underline when
+/// selected. Deliberately no filled background (avoids heavy pill tabs).
 pub fn draw_custom_tab(ui: &mut egui::Ui, selected: bool, title: &str) -> egui::Response {
     let text = egui::RichText::new(title)
         .small()
-        .strong()
         .color(if selected {
             colors::TEXT_PRIMARY
         } else {
             colors::TEXT_SECONDARY
         });
 
-    let response = ui.selectable_label(selected, text);
+    let response = ui.add(
+        egui::Label::new(text).sense(egui::Sense::click()),
+    );
     if selected {
         let rect = response.rect;
         ui.painter().line_segment(
@@ -463,6 +465,9 @@ pub fn draw_custom_tab(ui: &mut egui::Ui, selected: bool, title: &str) -> egui::
             ],
             egui::Stroke::new(1.5_f32, colors::ACCENT_BLUE),
         );
+    }
+    if response.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
     response
 }

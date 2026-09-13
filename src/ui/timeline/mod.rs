@@ -522,7 +522,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
                         }
 
                         // Calculate exact estimated height for this layer based on expanded rows
-                        let mut layer_height = 24.0;
+                        let mut layer_height = 22.0;
                         if app.selection.expanded_layers.contains(&i) {
                             let prop_count = 5 + layer.effects.len() + layer.masks.len();
                             layer_height += prop_count as f32 * 20.0;
@@ -540,7 +540,10 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
                         }
 
                         ui.horizontal(|ui| {
-                            ui.allocate_ui(egui::vec2(left_pane_w, 24.0), |ui| {
+                            // Denser rows: shrink button padding for the pill
+                            // controls (Switches/Modes/reorder) in this row.
+                            ui.style_mut().spacing.button_padding = egui::vec2(4.0, 1.0);
+                            ui.allocate_ui(egui::vec2(left_pane_w, 22.0), |ui| {
                                 ui.set_min_width(left_pane_w);
                                 ui.horizontal(|ui| {
                                     ui.label(egui::RichText::new(format!("{:02}", i + 1)).small().strong().color(colors::TEXT_SECONDARY));
@@ -621,7 +624,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         }
                                     }
 
-                                    ui.menu_button("Switches", |ui| {
+                                    ui.menu_button(egui::RichText::new("Switches").small(), |ui| {
                                     // ── AE Layer Color Label Square Picker ──
                                     let label_rgb = layer.label.to_rgb();
                                     let label_c32 = egui::Color32::from_rgb(
@@ -823,7 +826,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                     });
                                     let is_selected = app.selection.selected_layers.contains(&i) || app.selection.selected_layer_idx == Some(i);
                                     ui.style_mut().visuals.override_text_color = Some(colors::TEXT_PRIMARY);
-                                    let click_resp = ui.add_sized([110.0, 24.0], egui::SelectableLabel::new(is_selected, &layer.name));
+                                    let click_resp = ui.add_sized([110.0, 22.0], egui::SelectableLabel::new(is_selected, &layer.name));
 
                                     // ── Pick Whip: clicking a layer in pick mode sets it as parent ──
                                     if click_resp.clicked() && app.pick_whip_mode {
@@ -1119,7 +1122,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                     });
                                     ui.style_mut().visuals.override_text_color = None;
 
-                                    ui.menu_button("Modes", |ui| {
+                                    ui.menu_button(egui::RichText::new("Modes").small(), |ui| {
                                     // ── Blend Mode Dropdown ──
                                     let bm_text = format!("{:?}", layer.blend_mode);
                                     egui::ComboBox::from_id_salt(format!("tl_blend_{}", i))
@@ -1218,7 +1221,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                             // Render Layer Bar Span & Waveform + parent link line
                             let avail_w = ui.available_width();
                             let (bar_rect, _bar_sense) = ui.allocate_exact_size(
-                                egui::vec2(avail_w, 24.0),
+                                egui::vec2(avail_w, 22.0),
                                 egui::Sense::hover().union(egui::Sense::drag()),
                             );
                             // Draw parent connection if this layer has a parent
@@ -1239,23 +1242,25 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                             let norm_out = (layer.out_frame.saturating_sub(start_frame)) as f32 / zoom_span as f32;
 
                             let layer_rect = egui::Rect::from_min_max(
-                                egui::pos2(bar_rect.left() + norm_in * bar_rect.width(), bar_rect.top() + 3.0),
-                                egui::pos2(bar_rect.left() + norm_out * bar_rect.width(), bar_rect.bottom() - 3.0),
+                                egui::pos2(bar_rect.left() + norm_in * bar_rect.width(), bar_rect.top() + 4.0),
+                                egui::pos2(bar_rect.left() + norm_out * bar_rect.width(), bar_rect.bottom() - 4.0),
                             );
 
                             let fill_c = if app.selection.selected_layer_idx == Some(i) {
+                                // Selected: label color at reduced gain, never neon.
                                 let [r, g, b] = layer.label.to_rgb();
                                 egui::Color32::from_rgb(
-                                    (r * 255.0) as u8,
-                                    (g * 255.0) as u8,
-                                    (b * 255.0) as u8,
+                                    (r * 170.0) as u8,
+                                    (g * 170.0) as u8,
+                                    (b * 170.0) as u8,
                                 )
                             } else {
+                                // Muted toward the panel background unless selected.
                                 let [r, g, b] = layer.label.to_rgb();
                                 egui::Color32::from_rgb(
-                                    (r * 120.0) as u8,
-                                    (g * 120.0) as u8,
-                                    (b * 120.0) as u8,
+                                    (r * 115.0 + 14.0) as u8,
+                                    (g * 115.0 + 16.0) as u8,
+                                    (b * 115.0 + 19.0) as u8,
                                 )
                             };
 
