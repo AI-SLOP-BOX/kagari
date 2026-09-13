@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "🦀 Building AEVFX Studio release binary..."
-cargo build --release --features gui --bin aftereffects-oss
+echo "🦀 Building Kagari Studio release binary..."
+cargo build --release --features gui --bin kagari-studio
 
 echo "📦 Packaging macOS App Bundle..."
-BUNDLE_DIR="target/bundle/AEVFX Studio.app/Contents"
+BUNDLE_DIR="target/bundle/Kagari Studio.app/Contents"
 mkdir -p "${BUNDLE_DIR}/MacOS"
 mkdir -p "${BUNDLE_DIR}/Resources"
 
-cp "target/release/aftereffects-oss" "${BUNDLE_DIR}/MacOS/AEVFX Studio"
-chmod +x "${BUNDLE_DIR}/MacOS/AEVFX Studio"
+cp "target/release/kagari-studio" "${BUNDLE_DIR}/MacOS/Kagari Studio"
+chmod +x "${BUNDLE_DIR}/MacOS/Kagari Studio"
 
 cat << 'PLIST' > "${BUNDLE_DIR}/Info.plist"
 <?xml version="1.0" encoding="UTF-8"?>
@@ -18,11 +18,11 @@ cat << 'PLIST' > "${BUNDLE_DIR}/Info.plist"
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>AEVFX Studio</string>
+    <string>Kagari Studio</string>
     <key>CFBundleIdentifier</key>
-    <string>org.aevfx.studio</string>
+    <string>org.kagari.studio</string>
     <key>CFBundleName</key>
-    <string>AEVFX Studio</string>
+    <string>Kagari Studio</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -36,6 +36,6 @@ cat << 'PLIST' > "${BUNDLE_DIR}/Info.plist"
 PLIST
 
 echo "💿 Creating macOS DMG disk image..."
-hdiutil create -volname "AEVFX Studio" -srcfolder "target/bundle/AEVFX Studio.app" -ov -format UDZO "AEVFX-Studio-macOS.dmg"
+hdiutil create -volname "Kagari Studio" -srcfolder "target/bundle/Kagari Studio.app" -ov -format UDZO "Kagari-Studio-macOS.dmg"
 
-echo "✅ DMG build complete: AEVFX-Studio-macOS.dmg"
+echo "✅ DMG build complete: Kagari-Studio-macOS.dmg"
