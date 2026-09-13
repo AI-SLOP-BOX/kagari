@@ -1,0 +1,75 @@
+# Third-Party Notices — Kagari VFX
+
+Kagari VFX itself is licensed `MIT OR Apache-2.0` (see LICENSE-MIT,
+LICENSE-APACHE). This file records the licenses of third-party components
+linked into the binaries, and runtime tools invoked but never distributed.
+
+Audit method: every entry of `Cargo.lock` resolved against the vendored
+crate metadata (`cargo registry`), 2026-09-13. All other dependencies are
+MIT / Apache-2.0 / BSD / Zlib / ISC licensed.
+
+## 1. MPL-2.0 components (statically linked, unmodified)
+
+The following crates are used **unmodified** from crates.io. Under MPL-2.0
+§3.2–3.3 you may obtain their source from the links below; no MPL-licensed
+file in this repository has been changed.
+
+- `resvg 0.37` + `usvg`, `usvg-parser`, `usvg-tree` — SVG icon rendering
+  (pulled in by the `egui_extras/svg` feature).
+  Upstream: https://github.com/linebender/resvg (MPL-2.0)
+- `symphonia 0.5.5` + `symphonia-bundle-mp3`, `symphonia-core`,
+  `symphonia-metadata` — audio decoding for AV preview (via `rodio`).
+  Upstream: https://github.com/pdeljanov/Symphonia (MPL-2.0)
+- `smartstring 1.0.1` — small-string optimization (via `rhai`).
+  Upstream: https://github.com/bodil/smartstring (MPL-2.0 **or later**)
+
+If you redistribute Kagari VFX binaries, keep this file alongside them and
+do not remove the copyright headers above. That satisfies the MPL-2.0
+notice and Larger-Work requirements for unmodified use.
+
+## 2. Embedded fonts (attribution required)
+
+- egui default fonts (`epaint_default_fonts 0.29`):
+  OFL-1.1 **and** LicenseRef-UFL-1.0 (Ubuntu Font Licence). Rendered
+  glyphs are fine; do not redistribute the font files standalone for a fee,
+  and do not ship modified versions under the original names.
+- Phosphor icon font (loaded at runtime by `egui-phosphor`, OFL-1.1
+  upstream at https://github.com/phosphor-icons). Same OFL conditions.
+
+## 3. Unicode data
+
+ICU crates (`zerovec`, `zerotrie`, `yoke`, `writeable`, …) carry
+`Unicode-3.0` (Unicode DFS) data tables. See
+https://www.unicode.org/license.html.
+
+## 4. FFmpeg — external tool, NOT distributed (license-relevant)
+
+Video import/export shells out to an `ffmpeg` binary found on `PATH`.
+Kagari VFX **does not link, embed, or ship FFmpeg**:
+
+- No `ffmpeg-sys` / statically linked libav* anywhere in `Cargo.lock`.
+- `bundle_dmg.sh` and `.github/workflows/ci.yml` bundle only the
+  Kagari binaries (verified 2026-09-13).
+- Our invocations request encoders such as `libx264`, `libx265`,
+  `prores_ks`, and `aac`. Whether those exist — and under which license
+  the local FFmpeg was built (e.g. Homebrew `--enable-gpl`) — is purely
+  a property of **the user's own FFmpeg install**, not of this project.
+- If you redistribute Kagari VFX **together with** an FFmpeg binary
+  (e.g. an all-in-one installer), that bundle triggers FFmpeg's own
+  GPL/LGPL obligations. Either ship `ffmpeg`'s sources + build scripts
+  alongside, or switch our invocations to non-GPL encoders
+  (`mpeg4`, `libvpx-vp9`, `aac` via the native encoder) before bundling.
+
+## 5. Coverage gaps in this audit
+
+41 platform-specific crates (Linux `alsa`/`zbus`/`wayland-backend`,
+Windows `windows-*`, Android `ndk`/`oboe`, plus `cc`, `futures-*`,
+`nix`, `quick-xml`) were not present in the local registry cache and
+could not be machine-verified here. They are all published under MIT /
+Apache-2.0 upstream, but re-run the scan (`Cargo.lock` → registry
+metadata) before cutting release binaries for those targets.
+
+## 6. Dual/triple-licensed crates
+
+`r-efi` is `MIT OR Apache-2.0 OR LGPL-2.1-or-later`; this project uses it
+under the MIT/Apache-2.0 alternatives, so no LGPL obligations arise.

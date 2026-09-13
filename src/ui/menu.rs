@@ -1509,6 +1509,8 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
             .show(ctx, |ui| {
                 ui.heading("Kagari Studio (篝)");
                 ui.label(format!("Version: {} (Open Source)", env!("CARGO_PKG_VERSION")));
+                ui.label("Licensed MIT OR Apache-2.0 — see LICENSE-MIT, LICENSE-APACHE,");
+                ui.label("and THIRD-PARTY-NOTICES in the repository root.");
                 ui.label("A high-performance Motion Graphics & 32bpc HDR Visual Effects engine written in Rust.");
                 ui.add_space(8.0);
                 ui.separator();
