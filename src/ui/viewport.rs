@@ -84,10 +84,10 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
 
             ui.add_space(8.0);
             let mode_2d = app.viewport_mode == ViewportMode::Comp2D;
-            if ui.selectable_label(mode_2d, "2D").clicked() {
+            if crate::ui::theme::draw_custom_tab(ui, mode_2d, "2D").clicked() {
                 app.viewport_mode = ViewportMode::Comp2D;
             }
-            if ui.selectable_label(!mode_2d, "3D Camera").clicked() {
+            if crate::ui::theme::draw_custom_tab(ui, !mode_2d, "3D Camera").clicked() {
                 app.viewport_mode = ViewportMode::Camera3D;
             }
             ui.menu_button("Overlays", |ui| {
@@ -110,7 +110,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 let is_active = idx == active_comp_idx;
                 let c_name = app.history.current().compositions[idx].name.clone();
                 let tab_text = c_name;
-                if ui.selectable_label(is_active, tab_text).clicked() {
+                if crate::ui::theme::draw_custom_tab(ui, is_active, &tab_text).clicked() {
                     let mut p = app.history.current().clone();
                     p.active_composition_idx = idx;
                     app.history.commit(p);

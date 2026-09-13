@@ -1142,12 +1142,9 @@ impl KagariApp {
                     ui.separator();
                     let cached_cnt = self.frame_cache.cached_count();
                     ui.label(
-                        egui::RichText::new(format!(
-                            "RAM Preview: {}/{} frames cached",
-                            cached_cnt, total_frames
-                        ))
-                        .small()
-                        .color(crate::ui::theme::colors::TEXT_MUTED),
+                        egui::RichText::new(format!("RAM {}/{}", cached_cnt, total_frames))
+                            .small()
+                            .color(crate::ui::theme::colors::TEXT_MUTED),
                     );
                     ui.separator();
                     let render_ms = self.playback.preview_render_ema_ms;

@@ -92,8 +92,24 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                 });
             });
             ui.horizontal(|ui| {
-                ui.selectable_value(&mut app.ui_tabs.right_tab_idx, 0, "Browse effects");
-                ui.selectable_value(&mut app.ui_tabs.right_tab_idx, 30, "Properties");
+                if crate::ui::theme::draw_custom_tab(
+                    ui,
+                    app.ui_tabs.right_tab_idx == 0,
+                    "Browse effects",
+                )
+                .clicked()
+                {
+                    app.ui_tabs.right_tab_idx = 0;
+                }
+                if crate::ui::theme::draw_custom_tab(
+                    ui,
+                    app.ui_tabs.right_tab_idx == 30,
+                    "Properties",
+                )
+                .clicked()
+                {
+                    app.ui_tabs.right_tab_idx = 30;
+                }
             });
             ui.separator();
 
