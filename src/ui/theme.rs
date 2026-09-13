@@ -24,7 +24,7 @@ pub mod colors {
 
     // ── Interactive States ──
     pub const BG_HOVER: Color32 = Color32::from_rgb(52, 62, 82);
-    pub const BG_ACTIVE: Color32 = Color32::from_rgb(18, 100, 220); // Muted, professional blue
+    pub const BG_ACTIVE: Color32 = Color32::from_rgb(22, 82, 178); // Muted selection blue
     pub const BG_PRESSED: Color32 = Color32::from_rgb(12, 75, 165);
 
     // ── Accent Colors (Restrained Professional Palette) ──
@@ -349,35 +349,35 @@ pub fn configure_ae_theme(ctx: &egui::Context) {
     visuals.widgets.noninteractive.bg_fill = colors::BG_DARKEST;
     visuals.widgets.noninteractive.weak_bg_fill = colors::BG_DARKEST;
     visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE);
-    visuals.widgets.noninteractive.rounding = egui::Rounding::same(3.0);
+    visuals.widgets.noninteractive.rounding = egui::Rounding::same(2.0);
 
     // Inactive (buttons, sliders at rest)
     visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0_f32, colors::TEXT_PRIMARY);
     visuals.widgets.inactive.bg_fill = colors::BG_MID;
     visuals.widgets.inactive.weak_bg_fill = colors::BG_MID;
     visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM);
-    visuals.widgets.inactive.rounding = egui::Rounding::same(4.0);
+    visuals.widgets.inactive.rounding = egui::Rounding::same(2.0);
 
     // Hovered
     visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.0_f32, egui::Color32::WHITE);
     visuals.widgets.hovered.bg_fill = colors::BG_HOVER;
     visuals.widgets.hovered.weak_bg_fill = colors::BG_HOVER;
     visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0_f32, colors::BORDER_STRONG);
-    visuals.widgets.hovered.rounding = egui::Rounding::same(4.0);
+    visuals.widgets.hovered.rounding = egui::Rounding::same(2.0);
 
     // Active (pressed)
     visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0_f32, egui::Color32::WHITE);
     visuals.widgets.active.bg_fill = colors::BG_PRESSED;
     visuals.widgets.active.weak_bg_fill = colors::BG_PRESSED;
     visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0_f32, colors::ACCENT_CYAN);
-    visuals.widgets.active.rounding = egui::Rounding::same(4.0);
+    visuals.widgets.active.rounding = egui::Rounding::same(2.0);
 
     // Open (expanded menus, popups)
     visuals.widgets.open.fg_stroke = egui::Stroke::new(1.0_f32, egui::Color32::WHITE);
     visuals.widgets.open.bg_fill = colors::BG_PANEL;
     visuals.widgets.open.weak_bg_fill = colors::BG_PANEL;
     visuals.widgets.open.bg_stroke = egui::Stroke::new(1.0_f32, colors::BORDER_STRONG);
-    visuals.widgets.open.rounding = egui::Rounding::same(4.0);
+    visuals.widgets.open.rounding = egui::Rounding::same(2.0);
 
     // ── Warning/Error colors ──
     visuals.warn_fg_color = colors::ACCENT_ORANGE;
@@ -460,7 +460,7 @@ pub fn draw_custom_tab(ui: &mut egui::Ui, selected: bool, title: &str) -> egui::
                 egui::pos2(rect.left(), rect.bottom() - 1.0),
                 egui::pos2(rect.right(), rect.bottom() - 1.0),
             ],
-            egui::Stroke::new(1.5_f32, colors::ACCENT_CYAN),
+            egui::Stroke::new(1.5_f32, colors::ACCENT_ORANGE),
         );
     }
     response

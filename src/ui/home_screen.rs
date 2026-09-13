@@ -373,22 +373,12 @@ fn draw_hero(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui::Context) {
                 );
                 ui.add_space(10.0);
                 ui.horizontal(|ui| {
-                    if ui
-                        .add(
-                            egui::Button::new(
-                                egui::RichText::new("📁  New Project").strong(),
-                            )
-                            .min_size(egui::vec2(150.0, 38.0)),
-                        )
+                    if crate::ui::custom_widgets::ae_button_accent(ui, "📁  New Project")
                         .clicked()
                     {
                         enter_studio_new_project(app);
                     }
-                    if ui
-                        .add(
-                            egui::Button::new("Open Project")
-                                .min_size(egui::vec2(150.0, 38.0)),
-                        )
+                    if crate::ui::custom_widgets::ae_button(ui, "Open Project")
                         .clicked()
                     {
                         enter_studio_open_dialog(app);

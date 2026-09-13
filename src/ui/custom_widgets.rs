@@ -144,22 +144,27 @@ pub fn ae_button(ui: &mut egui::Ui, label: &str) -> egui::Response {
 
 /// Accent button (blue background)
 pub fn ae_button_accent(ui: &mut egui::Ui, label: &str) -> egui::Response {
+    // Primary action: solid amber like the reference (dark text on orange).
     let text = egui::RichText::new(label)
         .small()
         .strong()
-        .color(colors::TEXT_ON_ACCENT);
+        .color(egui::Color32::from_rgb(24, 18, 8));
 
     let button = egui::Button::new(text)
-        .fill(colors::BG_ACTIVE)
-        .stroke(egui::Stroke::new(1.0_f32, colors::ACCENT_BLUE))
-        .rounding(egui::Rounding::same(3.0))
+        .fill(colors::ACCENT_ORANGE)
+        .stroke(egui::Stroke::new(1.0_f32, colors::ACCENT_ORANGE))
+        .rounding(egui::Rounding::same(2.0))
         .min_size(egui::vec2(60.0, 22.0));
 
     let response = ui.add(button);
 
     if response.hovered() {
         let rect = response.rect;
-        ui.painter().rect_filled(rect, 3.0, colors::BG_PRESSED);
+        ui.painter().rect_filled(
+            rect,
+            2.0,
+            egui::Color32::from_rgb(255, 175, 40),
+        );
     }
 
     response

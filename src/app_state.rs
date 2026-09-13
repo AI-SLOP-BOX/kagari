@@ -759,11 +759,32 @@ impl KagariApp {
 #[cfg(feature = "gui")]
 impl eframe::App for KagariApp {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
-        use eframe::egui;
-
         // Re-assert the dark AE theme every frame (cheap, and guards against
         // eframe's system-theme following resetting visuals)
         crate::ui::theme::configure_ae_theme(ctx);
+
+        self.update_panels(ctx);
+    }
+
+    fn on_exit(&mut self) {
+        // Clean exit — remove the dirty-exit marker so next launch doesn't
+        // show the recovery dialog
+        let _ = std::fs::remove_file(std::env::temp_dir().join("kagari_dirty_exit"));
+        if let Some(ref flag) = self.export_cancel_flag {
+            flag.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+        if let Some(ref flag) = self.tracker_cancel_flag {
+            flag.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+        log::info!("Cleaned up background thread lifecycle flags on exit");
+    }
+}
+
+impl KagariApp {
+    /// Panel and dialog drawing extracted from [`eframe::App::update`] so the
+    /// full UI can run headlessly in tests (`_frame` was unused).
+    pub fn update_panels(&mut self, ctx: &eframe::egui::Context) {
+        use eframe::egui;
 
         // Global drag safety net: any pointer release while a transaction is
         // open seals it, even if the owning widget missed the release event
@@ -1302,17 +1323,47 @@ impl eframe::App for KagariApp {
         self.toasts.draw(ctx);
         self.playback.current_frame = current_frame;
     }
+}
 
-    fn on_exit(&mut self) {
-        // Clean exit — remove the dirty-exit marker so next launch doesn't
-        // show the recovery dialog
-        let _ = std::fs::remove_file(std::env::temp_dir().join("kagari_dirty_exit"));
-        if let Some(ref flag) = self.export_cancel_flag {
-            flag.store(true, std::sync::atomic::Ordering::SeqCst);
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn drive_frames(app: &mut KagariApp, n: usize) {
+        let ctx = eframe::egui::Context::default();
+        for _ in 0..n {
+            let _ = ctx.run(
+                eframe::egui::RawInput {
+                    screen_rect: Some(eframe::egui::Rect::from_min_size(
+                        eframe::egui::Pos2::ZERO,
+                        eframe::egui::vec2(1600.0, 900.0),
+                    )),
+                    ..Default::default()
+                },
+                |ctx| {
+                    crate::ui::theme::configure_ae_theme(ctx);
+                    app.update_panels(ctx);
+                },
+            );
         }
-        if let Some(ref flag) = self.tracker_cancel_flag {
-            flag.store(true, std::sync::atomic::Ordering::SeqCst);
-        }
-        log::info!("Cleaned up background thread lifecycle flags on exit");
+    }
+
+    #[test]
+    fn full_studio_frame_renders_without_panic_or_leak() {
+        let mut app = KagariApp::default();
+        app.show_home = false;
+        app.show_welcome = false;
+        drive_frames(&mut app, 2);
+        assert!(!app.drag_active(), "no transaction left open");
+        assert_eq!(app.playback.current_frame, 0, "playhead must not drift");
+    }
+
+    #[test]
+    fn full_home_frame_renders_without_panic() {
+        let mut app = KagariApp::default();
+        app.show_home = true;
+        app.home_dir = std::env::temp_dir();
+        drive_frames(&mut app, 2);
+        assert!(app.show_home, "home must stay up without input");
     }
 }
