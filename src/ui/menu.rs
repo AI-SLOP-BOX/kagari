@@ -1395,7 +1395,7 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         ui.close_menu();
                     }
                     if ui.button("VFX & Color").clicked() {
-                        app.ui_tabs.right_tab_idx = 30; // Effect Controls
+                        app.ui_tabs.right_tab_idx = 30; // Properties
                         app.show_graph_editor = false;
                         ui.close_menu();
                     }

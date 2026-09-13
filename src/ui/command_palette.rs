@@ -951,7 +951,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
             }),
         },
         PaletteCommand {
-            name: "View: Switch to Effect Controls Panel",
+            name: "View: Switch to Properties Panel",
             category: "View",
             shortcut_hint: "F3",
             action: Box::new(|app| {

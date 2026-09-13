@@ -19,7 +19,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                 (
                     "Core",
                     &[
-                        (30, "Effect Controls"),
+                        (30, "Properties"),
                         (0, "Effects & Presets"),
                         (4, "Preview"),
                         (2, "Info"),
@@ -93,7 +93,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
             });
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut app.ui_tabs.right_tab_idx, 0, "Browse effects");
-                ui.selectable_value(&mut app.ui_tabs.right_tab_idx, 30, "Layer controls");
+                ui.selectable_value(&mut app.ui_tabs.right_tab_idx, 30, "Properties");
             });
             ui.separator();
 
@@ -318,7 +318,7 @@ fn draw_effect_controls(
     next_frame: &mut Option<u32>,
     slider_changed: &mut bool,
 ) {
-    ui.heading("Effect Controls");
+    ui.heading("Properties");
     ui.separator();
 
     let Some(idx) = app.selection.selected_layer_idx else {
@@ -347,6 +347,37 @@ fn draw_effect_controls(
             .color(colors::ACCENT_CYAN),
     );
     ui.add_space(4.0);
+
+    // ── Layer Transform (same controls as the inspector; separate egui ID
+    // scope so both panels can stay open on the same layer) ──
+    ui.push_id("right_props_transform", |ui| {
+        let fps = app.history.current().active_composition().fps;
+        let mut changed = false;
+        let mut nf = None;
+        {
+            let temp_project = app.history.current_mut();
+            let comp = temp_project.active_composition_mut();
+            if let Some(layer) = comp.layers.get_mut(idx) {
+                crate::ui::inspector_layer::draw_layer_transforms(
+                    ui,
+                    layer,
+                    current_frame,
+                    fps,
+                    &mut changed,
+                    &mut nf,
+                );
+            }
+        }
+        if changed {
+            *slider_changed = true;
+        }
+        if nf.is_some() {
+            *next_frame = nf;
+        }
+    });
+    ui.add_space(4.0);
+    ui.heading("Effects");
+    ui.separator();
 
     // ── Drop zone for effects ──
     if let Some((ref effect_name, _)) = drag_info {
