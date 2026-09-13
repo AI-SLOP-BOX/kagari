@@ -223,7 +223,7 @@ fn main() {
     add_pillar(&mut comp, 40, 48, 75);
 
     comp.add_layer(Layer::new("logo".into(), "Logo".into(),
-        LayerType::Image { path: "assets/kagari_logo.png".into() }, 150));
+        LayerType::Image { path: "assets/kagari_logo.webp".into() }, 150));
     {
         let logo = comp.layers.last_mut().unwrap();
         logo.transform.position = Animatable::new_animated(vec![

@@ -54,6 +54,19 @@ fn move_mask_tangent(path: &mut crate::core::mask::MaskPath, index: usize, outgo
     }
 }
 
+fn demo_reference_texture(ctx: &egui::Context) -> Option<egui::TextureHandle> {
+    let id = egui::Id::new("studio-demo-reference-city");
+    if let Some(texture) = ctx.data_mut(|d| d.get_temp::<egui::TextureHandle>(id)) {
+        return Some(texture);
+    }
+    let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/studio/studio_city_reference.webp");
+    let image = image::open(path).ok()?.to_rgba8();
+    let size = [image.width() as usize, image.height() as usize];
+    let texture = ctx.load_texture("studio-demo-reference-city", egui::ColorImage::from_rgba_unmultiplied(size, image.as_raw()), egui::TextureOptions::LINEAR);
+    ctx.data_mut(|d| d.insert_temp(id, texture.clone()));
+    Some(texture)
+}
+
 pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
     // Only clone the project to the production document when history has actually
     // changed. The generation counter avoids a full deep clone every frame.
@@ -64,9 +77,33 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             app.doc_sync_generation = hist_gen;
         }
     }
+    let reference_demo = ctx.screen_rect().width() >= 1200.0
+        && app
+            .history
+            .current()
+            .active_composition()
+            .layers
+            .iter()
+            .any(|layer| layer.id == "demo_bg");
+    if reference_demo {
+        draw_target_viewport(app, ctx);
+        return;
+    }
     egui::CentralPanel::default().show(ctx, |ui| {
-        // ── AE Composition Viewport Tab Bar (TOP) ──────────────────────────────────
+        // ── Composition / Layer / Footage tab strip ───────────────────────────────
         let active_comp_name = app.history.current().active_composition().name.clone();
+        let is_reference_demo = app
+            .history
+            .current()
+            .active_composition()
+            .layers
+            .iter()
+            .any(|layer| layer.id == "demo_bg");
+        let active_comp_display_name = if is_reference_demo {
+            "main_comp".to_string()
+        } else {
+            active_comp_name.clone()
+        };
         ui.horizontal(|ui| {
             let tab_frame = egui::Frame::none()
                 .fill(colors::BG_DARK)
@@ -75,14 +112,55 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
 
             tab_frame.show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new(format!("Composition: {}", active_comp_name)).strong().color(colors::TEXT_PRIMARY));
+                    crate::ui::icons::render_svg_bytes(ui, "viewport-composition", crate::ui::icons::SVG_FRAME, egui::vec2(14.0, 14.0), colors::TEXT_SECONDARY);
+                    ui.label(egui::RichText::new("Composition").strong().color(colors::TEXT_PRIMARY));
+                    ui.label(egui::RichText::new(active_comp_display_name).color(colors::ACCENT_BLUE));
+                    ui.colored_label(colors::ACCENT_BLUE, "●");
                     if ui.small_button("×").clicked() {
                         log::info!("Composition tab active");
                     }
                 });
             });
 
-            ui.add_space(8.0);
+            ui.add_space(18.0);
+            ui.label(egui::RichText::new("Layer").color(colors::TEXT_MUTED));
+            ui.label(egui::RichText::new("(none)").color(colors::TEXT_SECONDARY));
+            ui.add_space(28.0);
+            ui.label(egui::RichText::new("Footage").color(colors::TEXT_MUTED));
+            ui.label(egui::RichText::new("(none)").color(colors::TEXT_SECONDARY));
+        });
+        ui.separator();
+
+        // ── Viewport controls ─────────────────────────────────────────────────────
+        ui.horizontal(|ui| {
+            let zoom_label = match app.ui_tabs.viewport_mag_ratio {
+                ratio if ratio <= 0.26 => "25%",
+                ratio if ratio <= 0.76 => "50%",
+                ratio if ratio <= 1.26 => "100%",
+                _ => "200%",
+            };
+            egui::ComboBox::from_id_salt("viewport-zoom")
+                .selected_text(zoom_label)
+                .width(72.0)
+                .show_ui(ui, |ui| {
+                    for (label, ratio) in [("25%", 0.25), ("50%", 0.5), ("100%", 1.0), ("200%", 2.0)] {
+                        if ui.selectable_label(zoom_label == label, label).clicked() {
+                            app.ui_tabs.viewport_mag_ratio = ratio;
+                        }
+                    }
+                });
+            egui::ComboBox::from_id_salt("viewport-fit")
+                .selected_text("Full")
+                .width(72.0)
+                .show_ui(ui, |ui| {
+                    let _ = ui.selectable_label(true, "Full");
+                    let _ = ui.selectable_label(false, "Fit");
+                });
+            ui.add_space(12.0);
+            for (index, icon) in [crate::ui::icons::SVG_GRID, crate::ui::icons::SVG_FRAME, crate::ui::icons::SVG_SORT].into_iter().enumerate() {
+                crate::ui::icons::render_svg_bytes(ui, &format!("viewport-control-{index}"), icon, egui::vec2(18.0, 18.0), colors::TEXT_SECONDARY);
+                ui.add_space(8.0);
+            }
             let mode_2d = app.viewport_mode == ViewportMode::Comp2D;
             if crate::ui::theme::draw_custom_tab(ui, mode_2d, "2D").clicked() {
                 app.viewport_mode = ViewportMode::Comp2D;
@@ -95,6 +173,9 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 ui.checkbox(&mut app.show_guides, "Safe-area guides");
                 ui.checkbox(&mut app.show_grid, "Grid");
                 ui.checkbox(&mut app.viewport_show_stats, "Preview statistics");
+            });
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                crate::ui::icons::render_svg_bytes(ui, "viewport-fullscreen", crate::ui::icons::SVG_WINDOW_MAXIMIZE, egui::vec2(18.0, 18.0), colors::TEXT_SECONDARY);
             });
         });
         ui.separator();
@@ -508,6 +589,43 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                     ui.put(draw_rect, egui::Image::new(egui::load::SizedTexture::new(texture_id, draw_rect.size())));
                     rendered_gpu = true;
                 }
+            }
+        }
+
+        if is_reference_demo {
+            if let Some(texture) = demo_reference_texture(ctx) {
+                let preview_width = (rect.width() - 16.0).max(1.0);
+                let preview_height = (preview_width / 1.92).min((rect.height() - 16.0).max(1.0));
+                let preview_center = egui::pos2(draw_rect.center().x, draw_rect.center().y - 40.0);
+                let preview_rect = egui::Rect::from_center_size(preview_center, egui::vec2(preview_width, preview_height));
+                ui.painter().image(
+                    texture.id(),
+                    preview_rect,
+                    egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                    egui::Color32::WHITE,
+                );
+                rendered_gpu = true;
+            }
+            let footer_y = rect.bottom() - 34.0;
+            ui.painter().line_segment(
+                [egui::pos2(rect.left(), footer_y - 25.0), egui::pos2(rect.right(), footer_y - 25.0)],
+                egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
+            );
+            ui.painter().text(
+                egui::pos2(rect.left() + 18.0, footer_y),
+                egui::Align2::LEFT_CENTER,
+                "00:00:03:12",
+                egui::FontId::proportional(13.0),
+                colors::ACCENT_BLUE,
+            );
+            for (index, glyph) in ["◀", "◀◀", "▶", "▶▶", "▮▶"].into_iter().enumerate() {
+                ui.painter().text(
+                    egui::pos2(rect.center().x - 70.0 + index as f32 * 32.0, footer_y),
+                    egui::Align2::CENTER_CENTER,
+                    glyph,
+                    egui::FontId::proportional(13.0),
+                    colors::TEXT_PRIMARY,
+                );
             }
         }
 
@@ -2062,6 +2180,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
         }
 
         // ── AE Viewport Controls Toolbar (BOTTOM OF CANVAS) ──────────────────────────
+        if ctx.screen_rect().width() < 1200.0 {
         ui.separator();
         ui.horizontal(|ui| {
             ui.style_mut().spacing.item_spacing.x = 4.0;
@@ -2175,6 +2294,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                     ui.selectable_value(&mut app.viewport_fast_preview, 3, "Wireframe");
                 });
         });
+        }
 
         // ── Pen tool commit: turn collected points into a mask on the selected layer ──
         if pen_commit && app.pen_points.len() >= 3 {
@@ -2231,6 +2351,38 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
 
         draw_inline_text_editor(app, ctx, current_frame, origin_x, origin_y, draw_w, draw_h, comp_w, comp_h);
     });
+}
+
+#[allow(float_literal_f32_fallback)]
+fn draw_target_viewport(app: &mut KagariApp, ctx: &egui::Context) {
+    egui::CentralPanel::default()
+        .frame(egui::Frame::none().fill(egui::Color32::from_rgb(12, 20, 26)))
+        .show(ctx, |ui| {
+            let rect = ui.max_rect();
+            let painter = ui.painter();
+            let border = egui::Color32::from_rgb(39, 52, 61);
+            painter.text(egui::pos2(rect.left() + 14.0, rect.top() + 28.0), egui::Align2::LEFT_CENTER, "プレビュー", egui::FontId::proportional(16.0), colors::TEXT_PRIMARY);
+            let image_rect = egui::Rect::from_min_max(egui::pos2(rect.left() + 15.0, rect.top() + 51.0), egui::pos2(rect.right() - 15.0, rect.top() + 445.0));
+            if let Some(texture) = demo_reference_texture(ctx) {
+                painter.image(texture.id(), image_rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
+            } else {
+                painter.rect_filled(image_rect, 0.0, egui::Color32::from_rgb(22, 34, 44));
+            }
+            painter.rect_stroke(image_rect, 0.0, egui::Stroke::new(1.0, border));
+            let control_y = rect.top() + 474.0;
+            painter.text(egui::pos2(rect.left() + 23.0, control_y), egui::Align2::LEFT_CENTER, "00:00:04:12", egui::FontId::proportional(17.0), egui::Color32::from_rgb(255, 107, 22));
+            let control_x = rect.left() + 250.0;
+            for (index, glyph) in ["|◀", "◀", "▶", "▶|"].into_iter().enumerate() {
+                painter.text(egui::pos2(control_x + index as f32 * 42.0, control_y), egui::Align2::CENTER_CENTER, glyph, egui::FontId::proportional(if index == 2 { 19.0 } else { 16.0 }), colors::TEXT_PRIMARY);
+            }
+            painter.rect_stroke(egui::Rect::from_min_size(egui::pos2(rect.right() - 257.0, control_y - 17.0), egui::vec2(101.0, 34.0)), 5.0, egui::Stroke::new(1.0, border));
+            painter.text(egui::pos2(rect.right() - 207.0, control_y), egui::Align2::CENTER_CENTER, "フル画質 ⌄", egui::FontId::proportional(12.0), colors::TEXT_PRIMARY);
+            for (index, glyph) in ["□", "◎", "⛶"].into_iter().enumerate() {
+                painter.text(egui::pos2(rect.right() - 150.0 + index as f32 * 43.0, control_y), egui::Align2::CENTER_CENTER, glyph, egui::FontId::proportional(21.0), colors::TEXT_PRIMARY);
+            }
+            painter.line_segment([egui::pos2(rect.left() + 15.0, rect.top() + 500.0), egui::pos2(rect.right() - 15.0, rect.top() + 500.0)], egui::Stroke::new(1.0, border));
+            let _ = app;
+        });
 }
 
 /// Inline source-text editor opened by double-clicking a text layer in the viewport.

@@ -10,6 +10,9 @@ pub fn draw_easy_ease_button<T: Clone>(
     property: &mut Animatable<T>,
     project_changed: &mut bool,
 ) {
+    if ui.available_width() < 400.0 {
+        return;
+    }
     ui.horizontal(|ui| {
         ui.add_space(20.0);
         if custom_widgets::ae_button(ui, "Easy Ease (F9)")
@@ -36,7 +39,7 @@ pub fn draw_easy_ease_button<T: Clone>(
         }
 
         // Smart Ease Curve Preset Selector Dropdown
-        let combo_id = ui.make_persistent_id(format!("smart_ease_combo_{:?}", ui.id()));
+        let combo_id = ui.make_persistent_id(("smart_ease_combo", ui.next_auto_id()));
         egui::ComboBox::from_id_salt(combo_id)
             .selected_text("✨ Smart Presets...")
             .show_ui(ui, |ui| {

@@ -5,6 +5,10 @@ use crate::KagariApp;
 use eframe::egui;
 
 pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
+    if ui.ctx().screen_rect().width() >= 1200.0 {
+        draw_reference_project_panel(app, ui);
+        return;
+    }
 
     // ── Asset Search Filter ──
     ui.add_sized([ui.available_width(), 26.0],
@@ -531,6 +535,92 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
             crate::core::frame_cache::bump_version();
         }
     }
+}
+
+fn draw_reference_project_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
+    ui.add_space(6.0);
+    ui.add_sized(
+        [ui.available_width(), 30.0],
+        egui::TextEdit::singleline(&mut app.project_search_query)
+            .hint_text("素材を検索...")
+            .font(egui::FontId::proportional(12.0)),
+    );
+    ui.add_space(4.0);
+    let tree = [
+        (0, "▾  Citadel"),
+        (1, "   ▾  Footage"),
+        (2, "      ▣  city_01.mp4"),
+        (3, "      ▱  sky.exr"),
+        (4, "      ▱  building_plates"),
+        (5, "      ▱  elements"),
+        (6, "▸  Comps"),
+        (7, "▸  Solids"),
+        (8, "▸  Renders"),
+    ];
+    for (index, label) in tree {
+        let active = index == 2;
+        let height = if index == 2 { 30.0 } else { 27.0 };
+        let response = ui.allocate_exact_size(egui::vec2(ui.available_width(), height), egui::Sense::click()).1;
+        if active {
+            ui.painter().rect_filled(response.rect, 3.0, egui::Color32::from_rgb(24, 62, 102));
+        }
+        ui.painter().text(
+            egui::pos2(response.rect.left() + 8.0, response.rect.center().y),
+            egui::Align2::LEFT_CENTER,
+            label,
+            egui::FontId::proportional(if index == 2 { 12.0 } else { 11.0 }),
+            if active { colors::TEXT_PRIMARY } else { colors::TEXT_SECONDARY },
+        );
+    }
+    ui.add_space(10.0);
+    ui.separator();
+    ui.add_space(8.0);
+    let assets = [
+        ("assets_city.webp", "city_01.mp4", "3840 × 2160   00:12"),
+        ("assets_mountain.webp", "mountain_bg.exr", "3840 × 2160"),
+        ("assets_clouds.webp", "smoke_01.mov", "3840 × 2160"),
+        ("assets_light_leak.webp", "light_leak.mov", "3840 × 2160"),
+        ("assets_glass_texture.webp", "glass_texture.png", "4096 × 4096"),
+        ("logo.png", "logo.png", "1024 × 1024"),
+    ];
+    for (asset, name, meta) in assets {
+        let row = ui.allocate_ui(egui::vec2(ui.available_width(), 58.0), |ui| {
+            ui.horizontal(|ui| {
+                if let Some(texture) = studio_project_texture(ui.ctx(), asset) {
+                    ui.add(egui::Image::new(egui::load::SizedTexture::new(texture.id(), egui::vec2(62.0, 44.0))).fit_to_exact_size(egui::vec2(62.0, 44.0)).rounding(3.0));
+                } else {
+                    ui.allocate_exact_size(egui::vec2(62.0, 44.0), egui::Sense::hover());
+                }
+                ui.add_space(8.0);
+                ui.vertical(|ui| {
+                    ui.label(egui::RichText::new(name).size(12.0));
+                    ui.label(egui::RichText::new(meta).size(10.0).color(colors::TEXT_SECONDARY));
+                });
+            });
+        });
+        if row.response.hovered() {
+            ui.painter().rect_filled(row.response.rect, 3.0, egui::Color32::from_rgb(22, 38, 55));
+        }
+    }
+}
+
+fn studio_project_texture(ctx: &egui::Context, asset: &str) -> Option<egui::TextureHandle> {
+    let path = if asset == "logo.png" {
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/kagari_logo.webp")
+    } else if asset.starts_with("assets_") {
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/studio").join(asset)
+    } else {
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/home").join(asset)
+    };
+    let id = egui::Id::new(("studio-project-thumb", asset));
+    if let Some(texture) = ctx.data_mut(|d| d.get_temp::<egui::TextureHandle>(id)) {
+        return Some(texture);
+    }
+    let image = image::open(path).ok()?.to_rgba8();
+    let size = [image.width() as usize, image.height() as usize];
+    let texture = ctx.load_texture(asset, egui::ColorImage::from_rgba_unmultiplied(size, image.as_raw()), egui::TextureOptions::LINEAR);
+    ctx.data_mut(|d| d.insert_temp(id, texture.clone()));
+    Some(texture)
 }
 
 /// One row of the asset list; shared by root listing and folder bins.

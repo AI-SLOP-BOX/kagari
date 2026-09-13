@@ -1,6 +1,245 @@
 use eframe::egui;
 
 pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
+    if !app.show_home && ctx.screen_rect().width() >= 1200.0 {
+        draw_reference_studio_header(app, ctx);
+        return;
+    }
+    draw_studio_header(app, ctx);
+}
+
+fn draw_reference_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context) {
+    egui::TopBottomPanel::top("studio_header")
+        .exact_height(92.0)
+        .resizable(false)
+        .frame(egui::Frame::none().fill(egui::Color32::from_rgb(10, 18, 24)))
+        .show(ctx, |ui| {
+            let rect = ui.max_rect();
+            ui.painter().line_segment(
+                [egui::pos2(rect.left(), rect.bottom() - 1.0), egui::pos2(rect.right(), rect.bottom() - 1.0)],
+                egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(43, 55, 65)),
+            );
+            for (x, color) in [(23.0, egui::Color32::from_rgb(255, 78, 76)), (45.0, egui::Color32::from_rgb(255, 190, 42)), (67.0, egui::Color32::from_rgb(40, 204, 81))] {
+                ui.painter().circle_filled(egui::pos2(x, rect.top() + 18.0), 6.5, color);
+            }
+            ui.painter().line_segment(
+                [egui::pos2(rect.left(), rect.top() + 36.0), egui::pos2(rect.right(), rect.top() + 36.0)],
+                egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(36, 48, 58)),
+            );
+            let content_rect = egui::Rect::from_min_max(
+                egui::pos2(rect.left(), rect.top() + 36.0),
+                rect.right_bottom(),
+            );
+            ui.allocate_new_ui(
+                egui::UiBuilder::new().max_rect(content_rect).layout(egui::Layout::left_to_right(egui::Align::Center)),
+                |ui| {
+                    ui.add_space(17.0);
+                    if app.home_banner.is_none() {
+                        if let Ok(img) = image::open(std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/kagari_logo.webp")) {
+                            app.home_banner = crate::ui::home_screen::load_logo_texture(ctx, img);
+                        }
+                    }
+                    if let Some(texture) = app.home_banner.as_ref() {
+                        ui.add(egui::Image::new(egui::load::SizedTexture::new(texture.id(), egui::vec2(44.0, 44.0))));
+                    }
+                    ui.add_space(7.0);
+                    ui.label(egui::RichText::new("Kagari VFX").size(22.0).strong().color(crate::ui::theme::colors::TEXT_PRIMARY));
+                    ui.add_space(28.0);
+                    crate::ui::icons::render_svg_bytes(ui, "studio-breadcrumb-arrow", crate::ui::icons::SVG_CHEVRON_RIGHT, egui::vec2(18.0, 18.0), crate::ui::theme::colors::TEXT_SECONDARY);
+                    ui.add_space(18.0);
+                    ui.painter().line_segment([egui::pos2(ui.cursor().left(), rect.top() + 28.0), egui::pos2(ui.cursor().left(), rect.bottom() - 28.0)], egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(42, 54, 64)));
+                    ui.add_space(18.0);
+                    crate::ui::icons::render_svg_bytes(ui, "studio-project-folder", crate::ui::icons::SVG_FOLDER, egui::vec2(22.0, 22.0), egui::Color32::from_rgb(174, 190, 207));
+                    ui.add_space(16.0);
+                    ui.label(egui::RichText::new("Sample Project").size(16.0).color(crate::ui::theme::colors::TEXT_SECONDARY));
+                    ui.label(egui::RichText::new("•").size(16.0).color(crate::ui::theme::colors::TEXT_SECONDARY));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let export = egui::Button::new(egui::RichText::new("⇧  エクスポート").size(16.0).strong().color(egui::Color32::WHITE))
+                            .fill(egui::Color32::from_rgb(255, 99, 26))
+                            .rounding(7.0)
+                            .min_size(egui::vec2(168.0, 36.0));
+                        ui.add(export);
+                        ui.add_space(24.0);
+                        let mut zoom = "50%";
+                        egui::ComboBox::from_id_salt("studio-reference-zoom").selected_text(zoom).width(112.0).show_ui(ui, |ui| { ui.selectable_value(&mut zoom, "50%", "50%"); });
+                        ui.add_space(18.0);
+                        let mut resolution = "1080p";
+                        egui::ComboBox::from_id_salt("studio-reference-resolution").selected_text(resolution).width(110.0).show_ui(ui, |ui| { ui.selectable_value(&mut resolution, "1080p", "1080p"); });
+                        ui.add_space(32.0);
+                        ui.label(egui::RichText::new("保存済み 10:24").size(14.0).color(crate::ui::theme::colors::TEXT_SECONDARY));
+                    });
+                },
+            );
+        });
+}
+
+fn draw_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context) {
+    let compact_header = ctx.screen_rect().width() < 900.0;
+    let workspace_id = egui::Id::new("studio_active_workspace");
+    let inferred_workspace = if app.show_home {
+        0_usize
+    } else if app.ui_tabs.left_tab_idx == 1 && app.ui_tabs.right_tab_idx == 1 {
+        4
+    } else if app.ui_tabs.left_tab_idx == 1 && app.ui_tabs.right_tab_idx == 0 {
+        2
+    } else {
+        1
+    };
+    let mut active_workspace = ctx
+        .data_mut(|data| data.get_temp::<usize>(workspace_id))
+        .unwrap_or(inferred_workspace);
+    if app.show_home {
+        active_workspace = 0;
+    } else if active_workspace == 0 {
+        active_workspace = inferred_workspace;
+        ctx.data_mut(|data| data.insert_temp(workspace_id, active_workspace));
+    }
+    let workspaces = [
+        ("Home", crate::ui::home_screen::HomeNav::Home),
+        ("Compositing", crate::ui::home_screen::HomeNav::Compositing),
+        ("Effects", crate::ui::home_screen::HomeNav::Effects),
+        ("Assets", crate::ui::home_screen::HomeNav::Projects),
+        ("Render", crate::ui::home_screen::HomeNav::Render),
+    ];
+    egui::TopBottomPanel::top("studio_header")
+        .exact_height(66.0)
+        .frame(
+            egui::Frame::none()
+                .fill(crate::ui::theme::colors::BG_DEEPEST)
+                .stroke(egui::Stroke::new(1.0_f32, crate::ui::theme::colors::BORDER_SUBTLE))
+                .inner_margin(egui::Margin::symmetric(if compact_header { 8.0 } else { 24.0 }, 0.0)),
+        )
+        .show(ctx, |ui| {
+            let header_size = ui.available_size();
+            ui.allocate_ui_with_layout(
+                header_size,
+                egui::Layout::left_to_right(egui::Align::Center),
+                |ui| {
+                if app.home_banner.is_none() {
+                    if let Ok(img) = image::open(
+                        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                            .join("assets/kagari_logo.webp"),
+                    ) {
+                        app.home_banner = crate::ui::home_screen::load_logo_texture(ctx, img);
+                    }
+                }
+                if let Some(texture) = app.home_banner.as_ref() {
+                    ui.add(egui::Image::new(egui::load::SizedTexture::new(
+                        texture.id(),
+                        egui::vec2(if compact_header { 28.0 } else { 38.0 }, if compact_header { 28.0 } else { 38.0 }),
+                    )));
+                }
+                ui.add_space(if compact_header { 6.0 } else { 10.0 });
+                ui.label(
+                    egui::RichText::new("Kagari VFX")
+                        .size(if compact_header { 15.0 } else { 20.0 })
+                        .color(crate::ui::theme::colors::TEXT_PRIMARY),
+                );
+                ui.add_space(if compact_header { 18.0 } else { 56.0 });
+                for (workspace_index, (label, nav)) in workspaces.into_iter().enumerate() {
+                    if ctx.screen_rect().width() < 600.0
+                        && !matches!(nav, crate::ui::home_screen::HomeNav::Compositing)
+                    {
+                        continue;
+                    }
+                    let active = active_workspace == workspace_index;
+                    let response = crate::ui::theme::draw_custom_tab(ui, active, label);
+                    if response.clicked() {
+                        active_workspace = workspace_index;
+                        ctx.data_mut(|data| data.insert_temp(workspace_id, active_workspace));
+                        match nav {
+                            crate::ui::home_screen::HomeNav::Home => app.show_home = true,
+                            crate::ui::home_screen::HomeNav::Compositing => {
+                                app.show_home = false;
+                                app.ui_tabs.left_tab_idx = 0;
+                                app.ui_tabs.right_tab_idx = 30;
+                            }
+                            crate::ui::home_screen::HomeNav::Effects => {
+                                app.show_home = false;
+                                app.ui_tabs.left_tab_idx = 1;
+                                app.ui_tabs.right_tab_idx = 0;
+                            }
+                            crate::ui::home_screen::HomeNav::Projects => {
+                                app.show_home = false;
+                                app.ui_tabs.left_tab_idx = 0;
+                                app.ui_tabs.right_tab_idx = 30;
+                            }
+                            crate::ui::home_screen::HomeNav::Render => {
+                                app.show_home = false;
+                                app.ui_tabs.left_tab_idx = 1;
+                                app.ui_tabs.right_tab_idx = 1;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                let right_header_width = if compact_header { 210.0 } else { 510.0 };
+                ui.add_space((ui.available_width() - right_header_width).max(0.0));
+                ui.allocate_ui_with_layout(
+                    egui::vec2(right_header_width, header_size.y),
+                    egui::Layout::right_to_left(egui::Align::Center),
+                    |ui| {
+                    crate::ui::icons::render_svg_bytes(
+                        ui,
+                        "studio-window-close",
+                        crate::ui::icons::SVG_WINDOW_CLOSE,
+                        egui::vec2(18.0, 18.0),
+                        crate::ui::theme::colors::TEXT_SECONDARY,
+                    );
+                    ui.add_space(if compact_header { 8.0 } else { 20.0 });
+                    crate::ui::icons::render_svg_bytes(
+                        ui,
+                        "studio-window-maximize",
+                        crate::ui::icons::SVG_WINDOW_MAXIMIZE,
+                        egui::vec2(16.0, 16.0),
+                        crate::ui::theme::colors::TEXT_SECONDARY,
+                    );
+                    ui.add_space(if compact_header { 8.0 } else { 20.0 });
+                    crate::ui::icons::render_svg_bytes(
+                        ui,
+                        "studio-window-minimize",
+                        crate::ui::icons::SVG_WINDOW_MINIMIZE,
+                        egui::vec2(16.0, 16.0),
+                        crate::ui::theme::colors::TEXT_SECONDARY,
+                    );
+                    ui.add_space(if compact_header { 7.0 } else { 14.0 });
+                    crate::ui::icons::render_svg_bytes(
+                        ui,
+                        "studio-settings",
+                        crate::ui::icons::SVG_SETTINGS,
+                        egui::vec2(if compact_header { 14.0 } else { 18.0 }, if compact_header { 14.0 } else { 18.0 }),
+                        crate::ui::theme::colors::TEXT_SECONDARY,
+                    );
+                    ui.add_space(if compact_header { 7.0 } else { 14.0 });
+                    crate::ui::icons::render_svg_bytes(
+                        ui,
+                        "studio-project-status",
+                        crate::ui::icons::SVG_FRAME,
+                        egui::vec2(if compact_header { 13.0 } else { 17.0 }, if compact_header { 13.0 } else { 17.0 }),
+                        crate::ui::theme::colors::TEXT_SECONDARY,
+                    );
+                    if !compact_header {
+                        ui.add_space(24.0);
+                        ui.vertical(|ui| {
+                            ui.label(egui::RichText::new("Citadel").size(12.0));
+                            ui.label(
+                                egui::RichText::new("Auto-saved 2 minutes ago")
+                                    .size(11.0)
+                                    .color(crate::ui::theme::colors::TEXT_MUTED),
+                            );
+                        });
+                        ui.add_space(14.0);
+                    }
+                    ui.colored_label(crate::ui::theme::colors::ACCENT_BLUE, "●");
+                    },
+                );
+                },
+            );
+        });
+}
+
+#[allow(dead_code)]
+fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
     egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
         egui::menu::bar(ui, |ui| {
             ui.menu_button("File", |ui| {
@@ -182,7 +421,7 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                 }
                 if ui.button("Import Video (FFmpeg)...").clicked() {
                     if let Some(path) = rfd::FileDialog::new()
-                        .add_filter("Video Files", &["mp4", "mov", "avi", "mkv", "webm"])
+                        .add_filter("Video Files", &["mp4", "mov", "avi", "mkv", "webm", "av1"])
                         .pick_file()
                     {
                         // Extract at the active composition's fps so 1 seq frame == 1 comp frame

@@ -42,7 +42,7 @@ png = { version = "0.17", optional = true }
 # ab_glyph: font loading and glyph rasterization for text layers
 ab_glyph = "0.2"
 # image: loading JPEG/PNG image layers
-image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 # libc: disk usage stats (statvfs) for the Home storage panel
 libc = "=0.2.189"
 # naga: runtime WGSL syntax and type validation for custom shader plugins

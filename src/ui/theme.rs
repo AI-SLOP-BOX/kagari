@@ -8,24 +8,24 @@ pub mod colors {
 
     // ── Background Layers (darkest → lightest) ──
     /// Deepest background - timeline/panel base
-    pub const BG_DEEPEST: Color32 = Color32::from_rgb(16, 18, 20);
+    pub const BG_DEEPEST: Color32 = Color32::from_rgb(10, 17, 24);
     /// Darkest panel background
-    pub const BG_DARKEST: Color32 = Color32::from_rgb(20, 22, 28);
+    pub const BG_DARKEST: Color32 = Color32::from_rgb(13, 22, 31);
     /// Standard panel/panel background
-    pub const BG_DARK: Color32 = Color32::from_rgb(26, 29, 34);
+    pub const BG_DARK: Color32 = Color32::from_rgb(18, 29, 40);
     /// Slightly elevated surfaces (cards, inputs)
-    pub const BG_MID: Color32 = Color32::from_rgb(34, 40, 50);
+    pub const BG_MID: Color32 = Color32::from_rgb(24, 37, 50);
     /// Elevated surfaces, dropdowns, popovers
-    pub const BG_PANEL: Color32 = Color32::from_rgb(42, 48, 58);
+    pub const BG_PANEL: Color32 = Color32::from_rgb(29, 44, 58);
     /// Input fields, search boxes
-    pub const BG_SURFACE: Color32 = Color32::from_rgb(48, 54, 66);
+    pub const BG_SURFACE: Color32 = Color32::from_rgb(35, 51, 66);
     /// Highest elevation - dropdowns, tooltips
-    pub const BG_ELEVATED: Color32 = Color32::from_rgb(56, 62, 76);
+    pub const BG_ELEVATED: Color32 = Color32::from_rgb(43, 60, 76);
 
     // ── Interactive States ──
-    pub const BG_HOVER: Color32 = Color32::from_rgb(52, 62, 82);
-    pub const BG_ACTIVE: Color32 = Color32::from_rgb(22, 82, 178); // Muted selection blue
-    pub const BG_PRESSED: Color32 = Color32::from_rgb(12, 75, 165);
+    pub const BG_HOVER: Color32 = Color32::from_rgb(35, 64, 94);
+    pub const BG_ACTIVE: Color32 = Color32::from_rgb(22, 82, 145); // Muted selection blue
+    pub const BG_PRESSED: Color32 = Color32::from_rgb(15, 68, 132);
 
     // ── Accent Colors (Restrained Production Palette) ──
     /// Primary accent - muted steel blue. Active tabs, selection, playhead,
@@ -45,9 +45,9 @@ pub mod colors {
     pub const ACCENT_PURPLE: Color32 = Color32::from_rgb(155, 110, 230);
 
     // ── Borders (crisp 1px) ──
-    pub const BORDER_SUBTLE: Color32 = Color32::from_rgb(36, 42, 54);
-    pub const BORDER_MEDIUM: Color32 = Color32::from_rgb(52, 58, 72);
-    pub const BORDER_STRONG: Color32 = Color32::from_rgb(72, 80, 92);
+    pub const BORDER_SUBTLE: Color32 = Color32::from_rgb(37, 52, 67);
+    pub const BORDER_MEDIUM: Color32 = Color32::from_rgb(50, 68, 84);
+    pub const BORDER_STRONG: Color32 = Color32::from_rgb(70, 88, 105);
     pub const BORDER_ACTIVE: Color32 = Color32::from_rgb(14, 120, 220);
 
     // ── Typography Colors ──
@@ -122,10 +122,10 @@ fn configure_fonts(ctx: &egui::Context) {
     #[cfg(target_os = "macos")]
     {
         let sf_pro_paths = [
-            "/System/Library/Fonts/SFCompact.ttf",
             "/System/Library/Fonts/SFNS.ttf",
             "/Library/Fonts/SF-Pro-Display-Regular.otf",
             "/System/Library/Fonts/Helvetica.ttc",
+            "/System/Library/Fonts/SFCompact.ttf",
         ];
         let menlo_paths = [
             "/System/Library/Fonts/Menlo.ttc",
@@ -298,6 +298,21 @@ fn configure_fonts(ctx: &egui::Context) {
         }
     }
 
+    // Keep the product UI visually consistent even when the host OS does not
+    // provide Inter. The bundled variable font contains the requested UI weights.
+    let bundled_inter = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("assets/fonts/Inter.ttf");
+    if let Ok(data) = std::fs::read(bundled_inter) {
+        fonts
+            .font_data
+            .insert("KagariInter".to_string(), egui::FontData::from_owned(data));
+        fonts
+            .families
+            .entry(egui::FontFamily::Proportional)
+            .or_default()
+            .insert(0, "KagariInter".to_string());
+    }
+
     // Phosphor icon glyphs (used across panels for crisp vector icons)
     egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
 
@@ -438,6 +453,18 @@ pub fn draw_section_header(ui: &mut egui::Ui, title: &str, icon: &str) {
                 .strong()
                 .color(colors::TEXT_PRIMARY),
         );
+    });
+    ui.add_space(2.0);
+}
+
+pub fn draw_section_header_svg(ui: &mut egui::Ui, title: &str, icon: &'static str) {
+    ui.horizontal(|ui| {
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(3.0, 16.0), egui::Sense::hover());
+        ui.painter().rect_filled(rect, 1.0, colors::ACCENT_BLUE);
+        ui.add_space(4.0);
+        crate::ui::icons::render_svg_bytes(ui, title, icon, egui::vec2(14.0, 14.0), colors::TEXT_PRIMARY);
+        ui.add_space(4.0);
+        ui.label(egui::RichText::new(title).small().strong().color(colors::TEXT_PRIMARY));
     });
     ui.add_space(2.0);
 }

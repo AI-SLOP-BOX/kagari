@@ -29,9 +29,9 @@ pub fn build(app: &mut crate::KagariApp) {
     let count = app.history.current().compositions.len();
     let mut comp = Composition::new(
         format!("comp_demo_{}", count),
-        "🎬 Demo Scene".to_string(),
-        1280,
-        720,
+        "main_comp".to_string(),
+        3840,
+        2160,
         30,
         150,
     );
@@ -42,7 +42,7 @@ pub fn build(app: &mut crate::KagariApp) {
     // buffer spans the full frame) ──
     let mut bg = Layer::new(
         "demo_bg".into(),
-        "Background".into(),
+        "[BG]".into(),
         LayerType::Solid {
             color: [0.04, 0.05, 0.10, 1.0],
         },
@@ -59,12 +59,11 @@ pub fn build(app: &mut crate::KagariApp) {
             color: Animatable::new_constant([0.0, 0.0, 0.0, 1.0]),
         },
     ));
-    comp.layers.push(bg);
 
     // ── Floating embers (additive sparks drifting upward) ──
     let mut embers = Layer::new(
         "demo_embers".into(),
-        "Embers".into(),
+        "[Clouds]".into(),
         LayerType::Particle {
             emitter: ParticleEmitter {
                 rate: 90.0,
@@ -85,14 +84,13 @@ pub fn build(app: &mut crate::KagariApp) {
         comp.duration_frames,
     );
     embers.transform.position = Animatable::new_constant([640.0, 520.0]);
-    comp.layers.push(embers);
 
     // ── Accent orb: scale bounce + drift + pulsing glow ──
     // NOTE: shape width/height are in units where 200 spans the full layer
     // buffer, so 28 ≈ a 180px orb on this 1280-wide comp.
     let mut circle = Layer::new(
         "demo_circle".into(),
-        "Accent Orb".into(),
+        "[Character]".into(),
         LayerType::Shape {
             shape_type: ShapeType::Ellipse {
                 width: Animatable::new_constant(28.0),
@@ -126,12 +124,11 @@ pub fn build(app: &mut crate::KagariApp) {
             color: Animatable::new_constant([0.45, 0.75, 1.0, 1.0]),
         },
     ));
-    comp.layers.push(circle);
 
     // ── Counter-rotating stroke ring (≈300px: 47 units) ──
     let mut ring = Layer::new(
         "demo_ring".into(),
-        "Orbit Ring".into(),
+        "[Light Leak]".into(),
         LayerType::Shape {
             shape_type: ShapeType::Ellipse {
                 width: Animatable::new_constant(47.0),
@@ -151,12 +148,11 @@ pub fn build(app: &mut crate::KagariApp) {
     ring.transform.position.easy_ease();
     ring.transform.rotation_expression = Some(Expression::Raw("time * -30".into()));
     ring.transform.opacity = Animatable::new_animated(vec![kf(0, 0.0), kf(40, 80.0)]);
-    comp.layers.push(ring);
 
     // ── Title: fade + rise + soft glow ──
     let mut title = Layer::new(
         "demo_title".into(),
-        "Title".into(),
+        "[logo.png]".into(),
         LayerType::new_text("KAGARI VFX", 88, [0.95, 0.96, 1.0, 1.0]),
         comp.duration_frames,
     );
@@ -174,19 +170,25 @@ pub fn build(app: &mut crate::KagariApp) {
             color: Animatable::new_constant([1.0, 1.0, 1.0, 1.0]),
         },
     ));
-    comp.layers.push(title);
 
     // ── Subtitle ──
     let mut sub = Layer::new(
         "demo_sub".into(),
-        "Subtitle".into(),
+        "[Adjustment layer]".into(),
         LayerType::new_text("Rust • GPU • Open Source", 34, [0.55, 0.75, 1.0, 1.0]),
         comp.duration_frames,
     );
     sub.transform.opacity = Animatable::new_animated(vec![kf(25, 0.0), kf(60, 90.0)]);
     sub.transform.opacity.easy_ease();
     sub.transform.position = Animatable::new_constant([640.0, 430.0]);
-    comp.layers.push(sub);
+
+    let city = Layer::new(
+        "demo_city".into(),
+        "[city_01.mp4]".into(),
+        LayerType::Solid { color: [0.0, 0.0, 0.0, 0.0] },
+        comp.duration_frames,
+    );
+    comp.layers = vec![sub, title, ring, circle, city, embers, bg];
 
     let proj = app.history.current_mut();
     proj.compositions.push(comp);
@@ -204,7 +206,7 @@ mod tests {
         let mut app = crate::KagariApp::default();
         build(&mut app);
         let comp = app.history.current().active_composition().clone();
-        assert_eq!(comp.layers.len(), 6);
+        assert_eq!(comp.layers.len(), 7);
         let pixels = crate::core::software_renderer::render_frame_to_pixels(
             &comp, 75, 320, 180, 0.0, 0,
         );

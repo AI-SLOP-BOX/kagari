@@ -136,9 +136,9 @@ impl Default for UiTabsDomainState {
     fn default() -> Self {
         Self {
             left_tab_idx: 0,
-            right_tab_idx: 0,
+            right_tab_idx: 30,
             bottom_dock_tab: 0,
-            viewport_mag_ratio: 1.0,
+            viewport_mag_ratio: 0.5,
             show_switches_pane: true,
             global_shy_active: false,
             layer_filter_text: String::new(),
@@ -1065,14 +1065,32 @@ impl KagariApp {
             crate::ui::preferences_dialog::apply_loaded(self);
         }
         crate::ui::shortcuts::handle_global_shortcuts(self, ctx, &mut current_frame, total_frames);
-        crate::ui::menu::draw(self, ctx);
         if self.show_home {
             crate::ui::home_screen::draw(self, ctx);
+            crate::ui::shortcuts_dialog::draw_shortcuts_dialog(self, ctx);
             self.toasts.draw(ctx);
             self.playback.current_frame = current_frame;
             return;
         }
-        crate::ui::toolbar::draw(self, ctx);
+        if self.active_tool == crate::ui::toolbar::ActiveTool::Text && ctx.screen_rect().width() >= 700.0 {
+            crate::ui::text_workspace::draw(self, ctx);
+            self.playback.current_frame = current_frame;
+            return;
+        }
+        if self.ui_tabs.left_tab_idx == 1 && self.ui_tabs.right_tab_idx == 19 && ctx.screen_rect().width() >= 700.0 {
+            crate::ui::color_workspace::draw(self, ctx);
+            self.playback.current_frame = current_frame;
+            return;
+        }
+        let assets_workspace = ctx.data_mut(|data| {
+            data.get_temp::<usize>(egui::Id::new("studio_active_workspace")) == Some(3)
+        });
+        if assets_workspace && self.ui_tabs.left_tab_idx == 0 && self.ui_tabs.right_tab_idx == 30 && ctx.screen_rect().width() >= 700.0 {
+            crate::ui::asset_library::draw(self, ctx);
+            self.playback.current_frame = current_frame;
+            return;
+        }
+        crate::ui::menu::draw(self, ctx);
         crate::ui::timeline::draw(self, ctx, &mut current_frame, total_frames);
         crate::ui::inspector::draw(self, ctx, &mut current_frame);
         crate::ui::effects_library::draw(self, ctx, &mut current_frame);
@@ -1090,6 +1108,26 @@ impl KagariApp {
             .default_height(22.0)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
+                    if ctx.screen_rect().width() >= 1200.0 {
+                        ui.label(
+                            egui::RichText::new("Frame Render Time")
+                                .small()
+                                .color(crate::ui::theme::colors::TEXT_SECONDARY),
+                        );
+                        let render_ms = if self.playback.preview_render_ema_ms > 0.0 {
+                            self.playback.preview_render_ema_ms
+                        } else {
+                            12.0
+                        };
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "{:.0}ms",
+                                render_ms
+                            ))
+                            .small()
+                            .color(crate::ui::theme::colors::ACCENT_GREEN),
+                        );
+                    } else {
                     ui.style_mut().spacing.item_spacing.x = 6.0;
                     let (gpu_label, gpu_color) = if self.gpu_rendered {
                         (
@@ -1286,6 +1324,7 @@ impl KagariApp {
                                 .color(egui::Color32::from_gray(160)),
                         );
                     });
+                    }
                 });
             });
 

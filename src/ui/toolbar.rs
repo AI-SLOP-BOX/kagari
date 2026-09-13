@@ -25,21 +25,15 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
     use crate::ui::theme::colors;
     let frame = egui::Frame::none()
         .fill(colors::BG_DARK)
-        .inner_margin(egui::Margin::symmetric(8.0, 4.0))
+        .inner_margin(egui::Margin::symmetric(8.0, 5.0))
         .stroke(egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE));
 
     egui::TopBottomPanel::top("ae_toolbar")
         .frame(frame)
-        .default_height(32.0)
+        .default_height(42.0)
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.style_mut().spacing.item_spacing.x = 3.0;
-
-                // App logo mark
-                crate::ui::icons::draw_logo(ui, 20.0);
-                ui.add_space(4.0);
-                ui.separator();
-                ui.add_space(2.0);
 
                 // Vector tool icons with hover tooltips
                 let tools: [(ActiveTool, &'static str, &'static str); 14] = [
@@ -126,34 +120,6 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                 ui.separator();
                 ui.add_space(4.0);
 
-                // Workspace tab strip (AE-style, left/right panel presets)
-                let workspaces = [
-                    ("Default", 0, 0),
-                    ("Compositing", 2, 0),
-                    ("Roto", 0, 9),
-                    ("Effects", 1, 0),
-                    ("Animation", 0, 8),
-                    ("Color", 0, 19),
-                ];
-                let is_custom = workspaces
-                    .iter()
-                    .all(|(_, left, right)| {
-                        *left != app.ui_tabs.left_tab_idx
-                            || *right != app.ui_tabs.right_tab_idx
-                    });
-                for (name, left, right) in workspaces {
-                    let selected =
-                        !is_custom
-                            && left == app.ui_tabs.left_tab_idx
-                            && right == app.ui_tabs.right_tab_idx;
-                    if crate::ui::theme::draw_custom_tab(ui, selected, name).clicked() {
-                        app.ui_tabs.left_tab_idx = left;
-                        app.ui_tabs.right_tab_idx = right;
-                    }
-                }
-                if is_custom {
-                    crate::ui::theme::draw_custom_tab(ui, true, "Custom");
-                }
                 ui.menu_button("Align", |ui| {
                     crate::ui::align_hud::draw_alignment_hud(app, ui);
                 });

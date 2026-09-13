@@ -81,13 +81,62 @@ pub fn draw_preferences_dialog(app: &mut KagariApp, ctx: &egui::Context) {
     egui::Window::new("⚙ Preferences")
         .open(&mut open)
         .collapsible(false)
-        .resizable(false)
+        .resizable(true)
+        .default_size(egui::vec2(760.0, 560.0))
+        .min_size(egui::vec2(620.0, 440.0))
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
         .show(ctx, |ui| {
             let id = egui::Id::new("ae_prefs_draft");
             let mut p = ctx.data_mut(|d| d.get_temp::<Prefs>(id).unwrap_or_else(load));
+            let category_id = egui::Id::new("ae_prefs_category");
+            let mut category = ctx
+                .data_mut(|d| d.get_temp::<usize>(category_id))
+                .unwrap_or(0);
 
-            ui.add_space(2.0);
+            ui.horizontal(|ui| {
+                egui::Frame::none()
+                    .fill(colors::BG_DARKEST)
+                    .inner_margin(egui::Margin::same(8.0))
+                    .show(ui, |ui| {
+                        ui.set_width(154.0);
+                        ui.label(egui::RichText::new("SETTINGS").small().color(colors::TEXT_MUTED));
+                        ui.add_space(6.0);
+                        for (index, label) in [
+                            "General",
+                            "Performance",
+                            "Cache",
+                            "CPU",
+                            "Color Management",
+                            "Auto-save",
+                            "UI Appearance",
+                            "Keyboard Shortcuts",
+                            "Plugins",
+                        ]
+                        .into_iter()
+                        .enumerate()
+                        {
+                            let selected = category == index;
+                            let response = ui.add_sized(
+                                [138.0, 28.0],
+                                egui::Button::new(
+                                    egui::RichText::new(label)
+                                        .size(12.0)
+                                        .color(if selected { colors::TEXT_PRIMARY } else { colors::TEXT_SECONDARY }),
+                                )
+                                .fill(if selected { colors::BG_ACTIVE } else { egui::Color32::TRANSPARENT })
+                                .rounding(4.0),
+                            );
+                            if response.clicked() {
+                                category = index;
+                            }
+                        }
+                    });
+                ui.separator();
+                ui.vertical(|ui| {
+                    ui.set_min_width((ui.available_width() - 8.0).max(360.0));
+                    ui.add_space(2.0);
+                    ui.label(egui::RichText::new(["General", "Performance", "Cache", "CPU", "Color Management", "Auto-save", "UI Appearance", "Keyboard Shortcuts", "Plugins"][category]).size(16.0));
+                    ui.add_space(8.0);
 
             // ── Performance ──
             ui.label(
@@ -210,8 +259,11 @@ pub fn draw_preferences_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                     );
                 });
             });
+                });
+            });
 
             ctx.data_mut(|d| d.insert_temp(id, p));
+            ctx.data_mut(|d| d.insert_temp(category_id, category));
         });
 
     app.show_preferences = open && keep_open;

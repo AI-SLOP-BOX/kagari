@@ -119,7 +119,7 @@ pub fn handle_dropped_files(app: &mut KagariApp, ctx: &egui::Context) {
                 layer.out_frame = app.history.current().active_composition().duration_frames;
                 insert_layer(app, layer, &format!("audio '{}'", name));
             }
-            "mp4" | "mov" | "mkv" | "avi" | "webm" => {
+            "mp4" | "mov" | "mkv" | "avi" | "webm" | "av1" => {
                 if !crate::core::video_import::ffmpeg_available() {
                     app.toasts.error("Video import needs ffmpeg on PATH");
                     continue;

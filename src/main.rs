@@ -5,9 +5,9 @@ fn main() -> eframe::Result<()> {
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1200.0, 800.0])
-            .with_min_inner_size([960.0, 640.0])
-            .with_title("Kagari VFX — Motion Graphics & Compositing (Experimental)"),
+            .with_inner_size([1536.0, 1024.0])
+            .with_min_inner_size([300.0, 220.0])
+            .with_title("Kagari VFX"),
         ..Default::default()
     };
 

@@ -29,7 +29,7 @@ fn import_media_dialog(app: &mut KagariApp) {
             "Media",
             &[
                 "png", "jpg", "jpeg", "bmp", "tga", "webp", "mp4", "mov", "mkv", "avi",
-                "webm", "wav",
+                "webm", "av1", "wav",
             ],
         )
         .pick_file() else {
@@ -78,7 +78,7 @@ fn import_media_dialog(app: &mut KagariApp) {
             app.toasts.info(format!("Imported audio: {}", name));
             app.show_welcome = false;
         }
-        "mp4" | "mov" | "mkv" | "avi" | "webm" => {
+        "mp4" | "mov" | "mkv" | "avi" | "webm" | "av1" => {
             let fps = app.history.current().active_composition().fps as f32;
             let dest = std::env::temp_dir().join("kagari_media").join(&name);
             match crate::core::video_import::import_video(&src, &dest, fps) {

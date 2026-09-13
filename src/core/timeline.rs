@@ -3049,9 +3049,9 @@ impl Default for Project {
             ),
             ProjectItem::new(
                 "item_logo",
-                "kagari_logo.png",
+                "kagari_logo.webp",
                 ProjectItemType::Image {
-                    path: "assets/kagari_logo.png".to_string(),
+                    path: "assets/kagari_logo.webp".to_string(),
                     width: 1254,
                     height: 1254,
                 },
