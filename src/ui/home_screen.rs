@@ -298,7 +298,7 @@ fn draw_nav(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui::Context) {
             ui.add(
                 egui::ProgressBar::new(frac)
                     .desired_width(ui.available_width())
-                    .fill(colors::ACCENT_ORANGE),
+                    .fill(egui::Color32::from_rgb(70, 135, 190)),
             );
         }
     }

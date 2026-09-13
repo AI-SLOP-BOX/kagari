@@ -27,20 +27,21 @@ pub mod colors {
     pub const BG_ACTIVE: Color32 = Color32::from_rgb(22, 82, 178); // Muted selection blue
     pub const BG_PRESSED: Color32 = Color32::from_rgb(12, 75, 165);
 
-    // ── Accent Colors (Restrained Professional Palette) ──
-    /// Primary accent - muted, professional blue. Used ONLY for active selection, play state, primary actions.
+    // ── Accent Colors (Restrained Production Palette) ──
+    /// Primary accent - muted steel blue. Active tabs, selection, playhead,
+    /// focus states and primary actions. The only saturated hue in the UI.
     pub const ACCENT_BLUE: Color32 = Color32::from_rgb(14, 120, 220);
-    /// Cyan accent - timeline cursor, motion paths
-    pub const ACCENT_CYAN: Color32 = Color32::from_rgb(0, 185, 220);
-    /// Yellow/Gold - timecode, warnings, keyframes
-    pub const ACCENT_YELLOW: Color32 = Color32::from_rgb(255, 195, 0);
-    /// Green - success, solo, recording
-    pub const ACCENT_GREEN: Color32 = Color32::from_rgb(0, 185, 95);
-    /// Red - error, mute, recording
+    /// Desaturated cyan - motion paths, guides, secondary indicators.
+    pub const ACCENT_CYAN: Color32 = Color32::from_rgb(75, 135, 175);
+    /// Muted amber - timecode, warnings, keyframes.
+    pub const ACCENT_YELLOW: Color32 = Color32::from_rgb(215, 175, 75);
+    /// Muted green - success, solo states.
+    pub const ACCENT_GREEN: Color32 = Color32::from_rgb(75, 155, 105);
+    /// Red - error, mute. Kept readable; errors must pop.
     pub const ACCENT_RED: Color32 = Color32::from_rgb(210, 55, 55);
-    /// Orange/Gold - warning, keyframe, brand accent
+    /// Orange - warnings only. Never a primary action color.
     pub const ACCENT_ORANGE: Color32 = Color32::from_rgb(245, 155, 0);
-    /// Purple - expressions, advanced
+    /// Purple - expressions, advanced.
     pub const ACCENT_PURPLE: Color32 = Color32::from_rgb(155, 110, 230);
 
     // ── Borders (crisp 1px) ──
@@ -50,10 +51,10 @@ pub mod colors {
     pub const BORDER_ACTIVE: Color32 = Color32::from_rgb(14, 120, 220);
 
     // ── Typography Colors ──
-    pub const TEXT_PRIMARY: Color32 = Color32::from_rgb(235, 238, 245);
+    pub const TEXT_PRIMARY: Color32 = Color32::from_rgb(225, 228, 235);
     pub const TEXT_SECONDARY: Color32 = Color32::from_rgb(158, 170, 192);
     pub const TEXT_MUTED: Color32 = Color32::from_rgb(112, 124, 144);
-    pub const TEXT_ACCENT: Color32 = Color32::from_rgb(14, 160, 240);
+    pub const TEXT_ACCENT: Color32 = Color32::from_rgb(85, 145, 205);
     pub const TEXT_ON_ACCENT: Color32 = Color32::from_rgb(255, 255, 255);
 
     // ── Layer Label Colors (AE standard) ──
@@ -66,33 +67,33 @@ pub mod colors {
     pub const LABEL_PURPLE: Color32 = Color32::from_rgb(160, 110, 255);
     pub const LABEL_MAGENTA: Color32 = Color32::from_rgb(230, 80, 200);
 
-    // ── Viewport Overlay Colors ──
+    // ── Viewport Overlay Colors (desaturated; overlays must not glow) ──
     pub const GRID_LINE: Color32 = Color32::from_rgba_premultiplied(255, 255, 255, 28);
-    pub const MOTION_PATH: Color32 = Color32::from_rgb(0, 180, 230);
-    pub const KEYFRAME_DOT: Color32 = Color32::from_rgb(255, 200, 60);
-    pub const GUIDE_LINE: Color32 = Color32::from_rgb(0, 180, 220);
+    pub const MOTION_PATH: Color32 = Color32::from_rgb(75, 135, 175);
+    pub const KEYFRAME_DOT: Color32 = Color32::from_rgb(205, 170, 95);
+    pub const GUIDE_LINE: Color32 = Color32::from_rgb(75, 135, 175);
     pub const HUD_BG: Color32 = Color32::from_rgba_premultiplied(14, 20, 30, 220);
-    pub const HUD_STROKE: Color32 = Color32::from_rgb(0, 180, 230);
-    pub const HUD_TEXT: Color32 = Color32::from_rgb(200, 230, 250);
-    pub const HUD_STATUS_TEXT: Color32 = Color32::from_rgb(190, 215, 240);
-    pub const FPS_GOOD: Color32 = Color32::from_rgb(0, 180, 230);
-    pub const FPS_BAD: Color32 = Color32::from_rgb(255, 90, 70);
+    pub const HUD_STROKE: Color32 = Color32::from_rgb(75, 135, 175);
+    pub const HUD_TEXT: Color32 = Color32::from_rgb(175, 195, 215);
+    pub const HUD_STATUS_TEXT: Color32 = Color32::from_rgb(165, 185, 205);
+    pub const FPS_GOOD: Color32 = Color32::from_rgb(75, 155, 115);
+    pub const FPS_BAD: Color32 = Color32::from_rgb(220, 110, 95);
 
     // ── 3D Gizmo Colors ──
     pub const GIZMO_X: Color32 = Color32::from_rgb(235, 70, 70);
     pub const GIZMO_Y: Color32 = Color32::from_rgb(60, 210, 80);
     pub const GIZMO_Z: Color32 = Color32::from_rgb(60, 140, 245);
-    pub const BBOX_STROKE: Color32 = Color32::from_rgb(0, 160, 240);
+    pub const BBOX_STROKE: Color32 = Color32::from_rgb(70, 135, 190);
     pub const HANDLE_NORMAL: Color32 = Color32::WHITE;
-    pub const HANDLE_HOVER_FILL: Color32 = Color32::from_rgb(255, 225, 90);
-    pub const HANDLE_HOVER_STROKE: Color32 = Color32::from_rgb(255, 100, 0);
-    pub const CENTER_DOT: Color32 = Color32::from_rgb(255, 210, 0);
-    pub const CENTER_HOVER_RING: Color32 = Color32::from_rgb(60, 130, 245);
+    pub const HANDLE_HOVER_FILL: Color32 = Color32::from_rgb(215, 185, 110);
+    pub const HANDLE_HOVER_STROKE: Color32 = Color32::from_rgb(225, 110, 60);
+    pub const CENTER_DOT: Color32 = Color32::from_rgb(210, 175, 85);
+    pub const CENTER_HOVER_RING: Color32 = Color32::from_rgb(70, 135, 190);
 
     // ── Timeline Overlay Colors ──
-    pub const TIMELINE_PLAYHEAD: Color32 = Color32::from_rgb(0, 180, 230);
-    pub const TIMELINE_KEYFRAME: Color32 = Color32::from_rgb(255, 195, 60);
-    pub const TIMELINE_WAVEFORM: Color32 = Color32::from_rgb(70, 185, 115);
+    pub const TIMELINE_PLAYHEAD: Color32 = Color32::from_rgb(70, 140, 210);
+    pub const TIMELINE_KEYFRAME: Color32 = Color32::from_rgb(205, 165, 90);
+    pub const TIMELINE_WAVEFORM: Color32 = Color32::from_rgb(85, 145, 105);
     pub const TIMELINE_SELECTION: Color32 = Color32::from_rgba_premultiplied(0, 100, 240, 38);
 }
 
@@ -341,7 +342,7 @@ pub fn configure_ae_theme(ctx: &egui::Context) {
 
     // ── Selection ──
     visuals.selection.bg_fill = colors::BG_ACTIVE;
-    visuals.selection.stroke = egui::Stroke::new(1.0_f32, colors::ACCENT_CYAN);
+    visuals.selection.stroke = egui::Stroke::new(1.0_f32, colors::ACCENT_BLUE);
 
     // ── Widget states ──
     // Noninteractive (labels, static text)
@@ -369,7 +370,7 @@ pub fn configure_ae_theme(ctx: &egui::Context) {
     visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0_f32, egui::Color32::WHITE);
     visuals.widgets.active.bg_fill = colors::BG_PRESSED;
     visuals.widgets.active.weak_bg_fill = colors::BG_PRESSED;
-    visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0_f32, colors::ACCENT_CYAN);
+    visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0_f32, colors::ACCENT_BLUE);
     visuals.widgets.active.rounding = egui::Rounding::same(2.0);
 
     // Open (expanded menus, popups)
@@ -429,7 +430,7 @@ pub fn configure_ae_theme(ctx: &egui::Context) {
 pub fn draw_section_header(ui: &mut egui::Ui, title: &str, icon: &str) {
     ui.horizontal(|ui| {
         let (rect, _) = ui.allocate_exact_size(egui::vec2(3.0, 16.0), egui::Sense::hover());
-        ui.painter().rect_filled(rect, 1.0, colors::ACCENT_CYAN);
+        ui.painter().rect_filled(rect, 1.0, colors::ACCENT_BLUE);
         ui.add_space(4.0);
         ui.label(
             egui::RichText::new(format!("{} {}", icon, title))
@@ -460,7 +461,7 @@ pub fn draw_custom_tab(ui: &mut egui::Ui, selected: bool, title: &str) -> egui::
                 egui::pos2(rect.left(), rect.bottom() - 1.0),
                 egui::pos2(rect.right(), rect.bottom() - 1.0),
             ],
-            egui::Stroke::new(1.5_f32, colors::ACCENT_ORANGE),
+            egui::Stroke::new(1.5_f32, colors::ACCENT_BLUE),
         );
     }
     response
