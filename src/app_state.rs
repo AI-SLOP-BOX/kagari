@@ -398,6 +398,15 @@ pub struct KagariApp {
     pub renaming_layer: Option<usize>,
     /// Tracker panel: target layer index for Apply Motion.
     pub tracker_apply_target: Option<usize>,
+    /// Home screen (landing): browser directory, selection, search.
+    pub show_home: bool,
+    pub home_dir: std::path::PathBuf,
+    pub home_selected: Option<std::path::PathBuf>,
+    pub home_search: String,
+    /// Cached home-screen textures: banner art, file thumbnails, preview.
+    pub home_banner: Option<eframe::egui::TextureHandle>,
+    pub home_thumbs: std::collections::HashMap<std::path::PathBuf, eframe::egui::TextureHandle>,
+    pub home_preview: Option<(std::path::PathBuf, eframe::egui::TextureHandle)>,
     /// Real render queue entries (composition names awaiting export).
     pub render_queue_items: Vec<String>,
     /// Per-item queue outcome, keyed by composition name.
@@ -580,6 +589,15 @@ impl Default for KagariApp {
             audio_meter: (0.0, 0.0),
             gpu_rendered: false,
             renaming_layer: None,
+            show_home: crate::ui::project_io::welcome_on_startup(),
+            home_dir: std::env::var("HOME")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|_| std::env::temp_dir()),
+            home_selected: None,
+            home_search: String::new(),
+            home_banner: None,
+            home_thumbs: std::collections::HashMap::new(),
+            home_preview: None,
             tracker_apply_target: None,
             render_queue_items: Vec::new(),
             render_item_status: std::collections::HashMap::new(),
@@ -1027,6 +1045,12 @@ impl eframe::App for KagariApp {
         }
         crate::ui::shortcuts::handle_global_shortcuts(self, ctx, &mut current_frame, total_frames);
         crate::ui::menu::draw(self, ctx);
+        if self.show_home {
+            crate::ui::home_screen::draw(self, ctx);
+            self.toasts.draw(ctx);
+            self.playback.current_frame = current_frame;
+            return;
+        }
         crate::ui::toolbar::draw(self, ctx);
         crate::ui::timeline::draw(self, ctx, &mut current_frame, total_frames);
         crate::ui::inspector::draw(self, ctx, &mut current_frame);

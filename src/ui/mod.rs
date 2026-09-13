@@ -34,6 +34,7 @@ pub mod focus;
 pub mod font_picker;
 pub mod graph_editor;
 pub mod history_panel;
+pub mod home_screen;
 pub mod icons;
 pub mod inspector;
 pub mod inspector_camera;
