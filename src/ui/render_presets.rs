@@ -40,7 +40,9 @@ pub fn draw_render_presets(app: &mut KagariApp, ui: &mut egui::Ui) {
     if !app.render_queue_items.contains(&target)
         && custom_add_button(ui, "＋ Add Active Comp to Queue")
     {
-        app.render_queue_items.push(target);
+        app.render_queue_items.push(target.clone());
+        app.render_item_status
+            .insert(target, crate::app_state::QueueItemStatus::Queued);
     }
     ui.weak(
         egui::RichText::new("Presets apply to the next render started from the Render Queue.")

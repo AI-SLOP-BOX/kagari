@@ -15,6 +15,10 @@ pub fn start_comp_export(app: &mut crate::KagariApp, ctx: &egui::Context, comp_n
     else {
         app.toasts
             .error(format!("Queue comp not found: {}", comp_name));
+        app.render_item_status.insert(
+            comp_name.to_string(),
+            crate::app_state::QueueItemStatus::Failed,
+        );
         return;
     };
     let comp_total = comp.duration_frames;
@@ -37,6 +41,11 @@ pub fn start_comp_export(app: &mut crate::KagariApp, ctx: &egui::Context, comp_n
     app.export.is_exporting = true;
     app.export.export_progress = 0.0;
     app.export.export_status = Some(format!("Rendering '{}'…", comp.name));
+    app.export.export_comp_name = Some(comp.name.clone());
+    app.render_item_status.insert(
+        comp.name.clone(),
+        crate::app_state::QueueItemStatus::Rendering,
+    );
 
     // Mux the first video layer's extracted WAV when present AND enabled
     let include_audio = ctx.data_mut(|d| {
@@ -225,6 +234,10 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     app.export.export_status = Some(msg.clone());
                     app.export.is_exporting = false;
                     finished_export = true;
+                    if let Some(name) = app.export.export_comp_name.clone() {
+                        app.render_item_status
+                            .insert(name, crate::app_state::QueueItemStatus::Done);
+                    }
                     app.toasts.info(format!("Export Complete: {}", msg));
                     // ── Batch runner: advance to the next queued comp ──
                     app.batch_idx += 1;
@@ -241,6 +254,10 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     app.export.export_status = Some(format!("Error: {}", msg));
                     app.export.is_exporting = false;
                     finished_export = true;
+                    if let Some(name) = app.export.export_comp_name.clone() {
+                        app.render_item_status
+                            .insert(name, crate::app_state::QueueItemStatus::Failed);
+                    }
                     app.toasts.error(format!("Export Failed: {}", msg));
                     // A failed item aborts the batch to avoid cascading failures
                     if !app.batch_queue.is_empty() {

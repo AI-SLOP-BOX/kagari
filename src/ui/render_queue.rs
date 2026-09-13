@@ -38,6 +38,8 @@ pub fn draw_render_queue_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
         {
             if app.render_queue_items.is_empty() {
                 app.render_queue_items.push(comp_name.clone());
+                app.render_item_status
+                    .insert(comp_name.clone(), crate::app_state::QueueItemStatus::Queued);
             }
             // Sequential background batch: each item runs the real FFmpeg
             // export; the next starts automatically when the previous finishes.
@@ -53,6 +55,8 @@ pub fn draw_render_queue_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
             && !app.render_queue_items.contains(&comp_name)
         {
             app.render_queue_items.push(comp_name.clone());
+            app.render_item_status
+                .insert(comp_name.clone(), crate::app_state::QueueItemStatus::Queued);
         }
         if custom_widgets::ae_button(ui, "Clear Queue")
             .on_hover_text("Remove all items from the queue")
@@ -60,6 +64,7 @@ pub fn draw_render_queue_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
             && !app.export.is_exporting
         {
             app.render_queue_items.clear();
+            app.render_item_status.clear();
         }
 
         if custom_widgets::ae_button(ui, "📡 Submit to Deadline Farm")
@@ -78,10 +83,31 @@ pub fn draw_render_queue_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
 
     // Queue Items List Display
     if !app.render_queue_items.is_empty() {
+        let (done, rendering, failed) = app.render_queue_items.iter().fold(
+            (0, 0, 0),
+            |(done, rendering, failed), name| {
+                match app
+                    .render_item_status
+                    .get(name)
+                    .copied()
+                    .unwrap_or(crate::app_state::QueueItemStatus::Queued)
+                {
+                    crate::app_state::QueueItemStatus::Done => (done + 1, rendering, failed),
+                    crate::app_state::QueueItemStatus::Rendering => (done, rendering + 1, failed),
+                    crate::app_state::QueueItemStatus::Failed => (done, rendering, failed + 1),
+                    crate::app_state::QueueItemStatus::Queued => (done, rendering, failed),
+                }
+            },
+        );
+        let queued = app.render_queue_items.len() - done - rendering - failed;
         ui.label(
             egui::RichText::new(format!(
-                "QUEUED COMPOSITIONS ({})",
-                app.render_queue_items.len()
+                "QUEUED COMPOSITIONS ({}) — {} done · {} rendering · {} queued · {} failed",
+                app.render_queue_items.len(),
+                done,
+                rendering,
+                queued,
+                failed
             ))
             .small()
             .strong()
@@ -95,6 +121,25 @@ pub fn draw_render_queue_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
             .show(ui, |ui| {
                 for (idx, q_name) in app.render_queue_items.iter().enumerate() {
                     let is_active = q_name == &comp_name;
+                    let (status_text, status_color) = match app
+                        .render_item_status
+                        .get(q_name)
+                        .copied()
+                        .unwrap_or(crate::app_state::QueueItemStatus::Queued)
+                    {
+                        crate::app_state::QueueItemStatus::Queued => {
+                            ("Queued", colors::TEXT_MUTED)
+                        }
+                        crate::app_state::QueueItemStatus::Rendering => {
+                            ("Rendering", colors::ACCENT_GREEN)
+                        }
+                        crate::app_state::QueueItemStatus::Done => {
+                            ("Done", colors::ACCENT_CYAN)
+                        }
+                        crate::app_state::QueueItemStatus::Failed => {
+                            ("Failed", colors::ACCENT_RED)
+                        }
+                    };
                     ui.horizontal(|ui| {
                         let text = format!("{}. {}", idx + 1, q_name);
                         let label = if is_active {
@@ -107,6 +152,7 @@ pub fn draw_render_queue_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                         if ui.selectable_label(is_active, label).clicked() && !is_active {
                             switch_comp = Some(q_name.clone());
                         }
+                        ui.label(egui::RichText::new(status_text).small().color(status_color));
                         if !app.export.is_exporting && ui.small_button("✖").clicked() {
                             remove_idx = Some(idx);
                         }
@@ -116,7 +162,8 @@ pub fn draw_render_queue_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
 
         if let Some(idx) = remove_idx {
             if idx < app.render_queue_items.len() {
-                app.render_queue_items.remove(idx);
+                let removed = app.render_queue_items.remove(idx);
+                app.render_item_status.remove(&removed);
             }
         }
         if let Some(name) = switch_comp {
@@ -352,4 +399,44 @@ pub fn draw_render_queue_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
             );
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app_state::QueueItemStatus;
+
+    #[test]
+    fn queue_list_renders_mixed_statuses_without_panic() {
+        let mut app = KagariApp::default();
+        let comp_name = app.history.current().active_composition().name.clone();
+        app.render_queue_items = vec![comp_name.clone(), "Missing Comp".into()];
+        app.render_item_status
+            .insert(comp_name, QueueItemStatus::Rendering);
+        app.render_item_status.insert(
+            "Missing Comp".into(),
+            QueueItemStatus::Failed,
+        );
+
+        let ctx = egui::Context::default();
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(400.0, 600.0),
+                )),
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    draw_render_queue_panel(&mut app, ui);
+                });
+            },
+        );
+        // Statuses survive the draw; unknown names default to Queued.
+        assert_eq!(
+            app.render_item_status.get("Missing Comp"),
+            Some(&QueueItemStatus::Failed)
+        );
+    }
 }

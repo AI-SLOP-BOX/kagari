@@ -147,12 +147,22 @@ impl Default for UiTabsDomainState {
     }
 }
 
+/// Outcome of a single render queue item, keyed by composition name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QueueItemStatus {
+    Queued,
+    Rendering,
+    Done,
+    Failed,
+}
 pub struct ExportDomainState {
     pub show_export_dialog: bool,
     pub export_status: Option<String>,
     pub export_progress: f32,
     pub export_fps: u32,
     pub export_output_path: String,
+    /// Composition currently rendering (for per-item queue status).
+    pub export_comp_name: Option<String>,
     pub is_exporting: bool,
     pub export_rx: Option<Receiver<ExportEvent>>,
     pub tracker_rx: Option<Receiver<TrackerEvent>>,
@@ -166,6 +176,7 @@ impl Default for ExportDomainState {
             export_progress: 0.0,
             export_fps: 30,
             export_output_path: String::new(),
+            export_comp_name: None,
             is_exporting: false,
             export_rx: None,
             tracker_rx: None,
@@ -389,6 +400,8 @@ pub struct KagariApp {
     pub tracker_apply_target: Option<usize>,
     /// Real render queue entries (composition names awaiting export).
     pub render_queue_items: Vec<String>,
+    /// Per-item queue outcome, keyed by composition name.
+    pub render_item_status: std::collections::HashMap<String, QueueItemStatus>,
     /// Sequential batch export: remaining comps to render after the current one.
     pub batch_queue: Vec<String>,
     /// Index of the comp currently rendering within the original queue snapshot.
@@ -523,6 +536,7 @@ impl Default for KagariApp {
                 export_progress: 0.0,
                 export_fps: 30,
                 export_output_path: "output.mp4".to_string(),
+                export_comp_name: None,
                 is_exporting: false,
                 export_rx: None,
                 tracker_rx: None,
@@ -568,6 +582,7 @@ impl Default for KagariApp {
             renaming_layer: None,
             tracker_apply_target: None,
             render_queue_items: Vec::new(),
+            render_item_status: std::collections::HashMap::new(),
             batch_queue: Vec::new(),
             batch_idx: 0,
             camera_view_layout: 0,
