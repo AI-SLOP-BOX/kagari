@@ -295,7 +295,11 @@ fn draw_nav(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui::Context) {
                     .small()
                     .color(colors::TEXT_SECONDARY),
             );
-            ui.add(egui::ProgressBar::new(frac).desired_width(ui.available_width()));
+            ui.add(
+                egui::ProgressBar::new(frac)
+                    .desired_width(ui.available_width())
+                    .fill(colors::ACCENT_ORANGE),
+            );
         }
     }
     let _ = ctx;
