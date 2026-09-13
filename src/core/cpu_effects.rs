@@ -403,9 +403,10 @@ fn apply_one_ctx(
             feather,
             color,
         } => {
-            let i = intensity.evaluate(frame);
+            // Slider units are 0..100 like Glow; the kernel works in 0..1.
+            let i = (intensity.evaluate(frame) / 100.0).clamp(0.0, 1.0);
             let r = roundness.evaluate(frame);
-            let f = feather.evaluate(frame);
+            let f = (feather.evaluate(frame) / 100.0).clamp(0.0, 1.0);
             if !crate::core::compute_pipeline::try_gpu_vignette(pixels, width, height, r, f) {
                 crate::core::cpu_effects_new::apply_vignette(
                     pixels,
@@ -1979,6 +1980,46 @@ mod tests {
             effect_type: et,
             enabled: true,
         }
+    }
+
+    #[test]
+    fn test_vignette_slider_units_do_not_crush_to_black() {
+        // Slider units are 0..100: intensity 45 must darken corners gently,
+        // not multiply the frame by 45 (which crushed everything but the
+        // exact center pixel to black).
+        let mut px = solid_layer(64, 64, 128, 128, 128);
+        apply_layer_effects(
+            None,
+            None,
+            &mut px,
+            64,
+            64,
+            &[effect(
+                "vig",
+                EffectType::Vignette {
+                    intensity: Animatable::new_constant(45.0),
+                    roundness: Animatable::new_constant(0.55),
+                    feather: Animatable::new_constant(60.0),
+                    color: Animatable::new_constant([0.0, 0.0, 0.0, 1.0]),
+                },
+            )],
+            0,
+            30,
+        );
+        let at = |x: u32, y: u32| px[((y * 64 + x) * 4) as usize];
+        let center = at(32, 32);
+        let corner = at(0, 0);
+        assert!(
+            (120..=128).contains(&center),
+            "center must survive, got {}",
+            center
+        );
+        assert!(
+            (20..=115).contains(&corner),
+            "corner must be darkened but not crushed, got {}",
+            corner
+        );
+        assert!(corner < center, "vignette must darken outward");
     }
 
     #[test]

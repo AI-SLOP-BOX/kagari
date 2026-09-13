@@ -997,8 +997,10 @@ pub enum EffectType {
         iris_linked: bool,
     },
     Vignette {
+        /// Darkening strength, slider units 0..100 (normalized at dispatch).
         intensity: Animatable<f32>,
         roundness: Animatable<f32>,
+        /// Edge softness, slider units 0..100 (normalized at dispatch).
         feather: Animatable<f32>,
         color: Animatable<[f32; 4]>,
     },
