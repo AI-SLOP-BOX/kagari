@@ -441,6 +441,73 @@ fn layer_velocity(
     }
 }
 
+fn draw_ease_thumbnail(
+    ui: &mut egui::Ui,
+    preset: crate::core::keyframe::EasePreset,
+) -> egui::Response {
+    let want = egui::vec2(48.0, 28.0);
+    let (rect, resp) = ui.allocate_exact_size(want, egui::Sense::click());
+    if !ui.is_rect_visible(rect) {
+        return resp;
+    }
+    let pts = preset.control_points();
+    let bg = if resp.hovered() {
+        colors::BG_HOVER
+    } else {
+        colors::BG_SURFACE
+    };
+    ui.painter().rect_filled(rect, 3.0, bg);
+    ui.painter().rect_stroke(
+        rect,
+        3.0,
+        egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM),
+    );
+    let pad = 4.0;
+    let inner = egui::Rect::from_min_max(
+        rect.min + egui::vec2(pad, pad),
+        rect.max - egui::vec2(pad, pad),
+    );
+    let w = inner.width().max(0.01);
+    let h = inner.height().max(0.01);
+    // Faint diagonal reference (linear) so the easing shape reads instantly.
+    ui.painter().line_segment(
+        [
+            egui::pos2(inner.min.x, inner.max.y),
+            egui::pos2(inner.max.x, inner.min.y),
+        ],
+        egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM),
+    );
+    let stroke_col = if resp.hovered() {
+        colors::TEXT_ACCENT
+    } else {
+        colors::ACCENT_BLUE
+    };
+    let mut prev: Option<egui::Pos2> = None;
+    for step in 0..=16 {
+        let x = step as f32 / 16.0;
+        let t = crate::core::keyframe::solve_bezier_eased_time(x, pts[0], pts[1], pts[2], pts[3]);
+        if !t.is_finite() {
+            prev = None;
+            continue;
+        }
+        let omt = 1.0 - t;
+        let y = 3.0 * omt * omt * t * pts[1] + 3.0 * omt * t * t * pts[3] + t * t * t;
+        if !y.is_finite() {
+            prev = None;
+            continue;
+        }
+        let y_clamped = y.clamp(-0.35, 1.35);
+        let norm = (y_clamped + 0.35) / 1.7;
+        let p = egui::pos2(inner.min.x + x * w, inner.max.y - norm * h);
+        if let Some(pr) = prev {
+            ui.painter()
+                .line_segment([pr, p], egui::Stroke::new(1.5_f32, stroke_col));
+        }
+        prev = Some(p);
+    }
+    resp
+}
+
 pub fn draw_graph_editor(
     selected_property: &mut Option<String>,
     ui: &mut egui::Ui,
@@ -565,21 +632,28 @@ pub fn draw_graph_editor(
 
             let active_prop = selected_property.clone().unwrap_or_else(|| "Position X".to_string());
 
-            for (lbl, preset, tip) in [
-                ("⚡ Easy Ease (F9)", crate::core::keyframe::EasePreset::Standard, "Standard symmetric ease [0.25, 0.1, 0.25, 1.0]"),
-                ("↗ In", crate::core::keyframe::EasePreset::EaseIn, "Ease In (slow start, fast end)"),
-                ("↘ Out", crate::core::keyframe::EasePreset::EaseOut, "Ease Out (fast start, slow end)"),
-                ("🌊 Sine", crate::core::keyframe::EasePreset::Sine, "Ultra smooth Sine ease"),
-                ("🚀 Fast Out", crate::core::keyframe::EasePreset::FastOut, "Quick initial burst then smooth decelerate"),
-                ("🎯 Overshoot", crate::core::keyframe::EasePreset::Overshoot, "Spring overshoot past target value"),
-                ("🏀 Bounce", crate::core::keyframe::EasePreset::Bounce, "Physical single bounce easing"),
-                ("🪀 Elastic", crate::core::keyframe::EasePreset::Elastic, "Elastic spring recoil easing"),
-            ] {
-                if ui.small_button(lbl).on_hover_text(tip).clicked() {
-                    apply_preset_to_layer(layer, &active_prop, preset);
-                    *project_changed = true;
+            ui.horizontal_wrapped(|ui| {
+                for (lbl, short, preset, tip) in [
+                    ("⚡ Easy Ease (F9)", "Easy Ease", crate::core::keyframe::EasePreset::Standard, "Standard symmetric ease [0.25, 0.1, 0.25, 1.0]"),
+                    ("↗ In", "In", crate::core::keyframe::EasePreset::EaseIn, "Ease In (slow start, fast end)"),
+                    ("↘ Out", "Out", crate::core::keyframe::EasePreset::EaseOut, "Ease Out (fast start, slow end)"),
+                    ("🌊 Sine", "Sine", crate::core::keyframe::EasePreset::Sine, "Ultra smooth Sine ease"),
+                    ("🚀 Fast Out", "Fast Out", crate::core::keyframe::EasePreset::FastOut, "Quick initial burst then smooth decelerate"),
+                    ("🎯 Overshoot", "Overshoot", crate::core::keyframe::EasePreset::Overshoot, "Spring overshoot past target value"),
+                    ("🏀 Bounce", "Bounce", crate::core::keyframe::EasePreset::Bounce, "Physical single bounce easing"),
+                    ("🪀 Elastic", "Elastic", crate::core::keyframe::EasePreset::Elastic, "Elastic spring recoil easing"),
+                ] {
+                    ui.vertical(|ui| {
+                        ui.set_min_width(52.0);
+                        let thumb = draw_ease_thumbnail(ui, preset).on_hover_text(format!("{lbl}\n{tip}"));
+                        let label = ui.small_button(short).on_hover_text(format!("{lbl}\n{tip}"));
+                        if thumb.clicked() || label.clicked() {
+                            apply_preset_to_layer(layer, &active_prop, preset);
+                            *project_changed = true;
+                        }
+                    });
                 }
-            }
+            });
 
             ui.add_space(4.0);
             if ui.button("〰 Rove Across Time").on_hover_text("Evenly distribute keyframes in time based on spatial path distance").clicked() {
