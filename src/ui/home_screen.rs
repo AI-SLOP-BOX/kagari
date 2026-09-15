@@ -3034,13 +3034,22 @@ fn landing_nav_row(
         },
         egui::pos2(rect.left() + 44.0, rect.center().y - 12.0),
     );
-    ui.painter().text(
-        egui::pos2(rect.left() + 92.0, rect.center().y),
-        egui::Align2::LEFT_CENTER,
-        label,
-        egui::FontId::proportional(16.0),
-        if active { colors::TEXT_PRIMARY } else { egui::Color32::from_rgb(193, 205, 218) },
+    let label_rect = egui::Rect::from_min_max(
+        egui::pos2(rect.left() + 92.0, rect.top()),
+        egui::pos2(rect.right() - 18.0, rect.bottom()),
     );
+    ui.allocate_new_ui(egui::UiBuilder::new().max_rect(label_rect), |label_ui| {
+        label_ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |label_ui| {
+            label_ui.add(
+                egui::Label::new(
+                    egui::RichText::new(label)
+                        .size(16.0)
+                        .color(if active { colors::TEXT_PRIMARY } else { egui::Color32::from_rgb(193, 205, 218) }),
+                )
+                .truncate(),
+            );
+        });
+    });
     if response.clicked() {
         set_home_nav(ctx, nav);
     }
