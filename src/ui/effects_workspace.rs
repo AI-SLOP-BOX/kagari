@@ -50,7 +50,7 @@ fn draw_sidebar(ui: &mut egui::Ui, rect: egui::Rect, width: f32, compact: bool, 
         p.rect_filled(side, 0.0, egui::Color32::from_rgb(13, 23, 30));
         p.line_segment([egui::pos2(side.right(), side.top()), egui::pos2(side.right(), side.bottom())], egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE));
     }
-    icons::render_svg_at(ui, "effects-heading".to_string(), icons::SVG_LIGHT, egui::vec2(30.0, 30.0), colors::TEXT_PRIMARY, egui::pos2(side.left() + 20.0, side.top() + 29.0));
+    icons::render_svg_at(ui, "effects-heading".to_string(), icons::SVG_EFFECTS, egui::vec2(30.0, 30.0), colors::TEXT_PRIMARY, egui::pos2(side.left() + 20.0, side.top() + 29.0));
     for (i, icon) in [icons::SVG_LAYERS, icons::SVG_STAR, icons::SVG_CLOCK].into_iter().enumerate() { icons::render_svg_at(ui, format!("effects-nav-{i}"), icon, egui::vec2(22.0, 22.0), colors::TEXT_PRIMARY, egui::pos2(side.left() + 25.0, side.top() + 91.0 + i as f32 * 42.0)); }
     for i in 0..10 { let icon = if i == 7 { icons::SVG_LIGHT } else { icons::SVG_FOLDER }; icons::render_svg_at(ui, format!("effects-category-{i}"), icon, egui::vec2(20.0, 20.0), if i == 7 { ORANGE } else { colors::TEXT_PRIMARY }, egui::pos2(side.left() + 25.0, side.top() + 265.0 + i as f32 * 34.0)); }
     let p = ui.painter();
@@ -81,15 +81,17 @@ fn draw_sidebar(ui: &mut egui::Ui, rect: egui::Rect, width: f32, compact: bool, 
 }
 
 fn draw_center(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, compact: bool, mobile: bool, app: &mut KagariApp) {
-    let p = ui.painter();
     let pad = if mobile { 16.0 } else if compact { 18.0 } else { 30.0 };
+    let search = egui::Rect::from_min_size(egui::pos2(rect.left() + pad, rect.top() + 105.0), egui::vec2((rect.width() - pad * 2.0 - 176.0).max(130.0), 42.0));
+    icons::render_svg_at(ui, "effects-search".to_string(), icons::SVG_SEARCH, egui::vec2(20.0, 20.0), colors::TEXT_SECONDARY, egui::pos2(search.left() + 12.0, search.top() + 11.0));
+    icons::render_svg_at(ui, "effects-sort-chevron".to_string(), icons::SVG_CHEVRON_DOWN, egui::vec2(16.0, 16.0), colors::TEXT_PRIMARY, egui::pos2(search.right() + 117.0, search.top() + 13.0));
+    let p = ui.painter();
     p.text(egui::pos2(rect.left() + pad, rect.top() + 43.0), egui::Align2::LEFT_CENTER, "エフェクト", egui::FontId::proportional(if mobile { 28.0 } else { 36.0 }), colors::TEXT_PRIMARY);
     p.text(egui::pos2(rect.left() + pad, rect.top() + 76.0), egui::Align2::LEFT_CENTER, "映像表現を広げる、豊富なエフェクトライブラリ", egui::FontId::proportional(15.0), colors::TEXT_SECONDARY);
-    let search = egui::Rect::from_min_size(egui::pos2(rect.left() + pad, rect.top() + 105.0), egui::vec2((rect.width() - pad * 2.0 - 176.0).max(130.0), 42.0));
     p.rect(search, 6.0, egui::Color32::from_rgb(16, 29, 38), egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM));
-    p.text(egui::pos2(search.left() + 16.0, search.center().y), egui::Align2::LEFT_CENTER, "⌕   エフェクトを検索...", egui::FontId::proportional(14.0), colors::TEXT_SECONDARY);
+    p.text(egui::pos2(search.left() + 42.0, search.center().y), egui::Align2::LEFT_CENTER, "エフェクトを検索...", egui::FontId::proportional(14.0), colors::TEXT_SECONDARY);
     p.rect(egui::Rect::from_min_size(egui::pos2(search.right() + 18.0, search.top()), egui::vec2(125.0, 42.0)), 6.0, egui::Color32::from_rgb(16, 29, 38), egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM));
-    p.text(egui::pos2(search.right() + 80.0, search.center().y), egui::Align2::CENTER_CENTER, "人気順  ⌄", egui::FontId::proportional(13.0), colors::TEXT_PRIMARY);
+    p.text(egui::pos2(search.right() + 67.0, search.center().y), egui::Align2::CENTER_CENTER, "人気順", egui::FontId::proportional(13.0), colors::TEXT_PRIMARY);
     p.text(egui::pos2(rect.right() - pad - 44.0, search.center().y), egui::Align2::CENTER_CENTER, "GRID  LIST", egui::FontId::proportional(10.0), colors::TEXT_PRIMARY);
     let cards = [("Gaussian Blur", "assets/studio/assets_smoke.webp"), ("Glow", "assets/studio/assets_light_leak.webp"), ("Film Grain", "assets/studio/assets_glass_texture.webp"), ("Color Balance", "assets/studio/assets_particles.webp"), ("Vignette", "assets/studio/assets_mountain.webp"), ("Lens Flare", "assets/studio/assets_light_leak.webp"), ("Chromatic Aberration", "assets/studio/assets_city.webp"), ("Light Leak", "assets/studio/assets_light_leak.webp"), ("Halftone", "assets/studio/assets_floor_ref.webp")];
     let cols = if mobile { 1 } else { 3 };
@@ -111,12 +113,12 @@ fn draw_center(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, compact
 }
 
 fn draw_detail(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, compact: bool, _app: &mut KagariApp) {
-    let p = ui.painter();
     let pad = if compact { 16.0 } else { 22.0 };
     let card = egui::Rect::from_min_max(egui::pos2(rect.left() + pad, rect.top() + 18.0), egui::pos2(rect.right() - pad, rect.bottom() * 0.53));
+    icons::render_svg_at(ui, "effect-detail-star".to_string(), icons::SVG_STAR, egui::vec2(25.0, 25.0), ORANGE, egui::pos2(card.right() - 37.0, card.top() + 23.0));
+    let p = ui.painter();
     p.rect(card, 8.0, PANEL, egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE));
     p.text(egui::pos2(card.left() + 20.0, card.top() + 35.0), egui::Align2::LEFT_CENTER, "Glow", egui::FontId::proportional(if compact { 24.0 } else { 30.0 }), colors::TEXT_PRIMARY);
-    p.text(egui::pos2(card.right() - 24.0, card.top() + 35.0), egui::Align2::CENTER_CENTER, "★", egui::FontId::proportional(26.0), ORANGE);
     p.text(egui::pos2(card.left() + 20.0, card.top() + 70.0), egui::Align2::LEFT_CENTER, "明るい部分にじむような発光を適用します。", egui::FontId::proportional(13.0), colors::TEXT_PRIMARY);
     for (i, tag) in ["光・発光", "スタイライズ", "よく使う"].into_iter().enumerate() { let x = card.left() + 20.0 + i as f32 * 97.0; p.rect(egui::Rect::from_min_size(egui::pos2(x, card.top() + 96.0), egui::vec2(86.0, 31.0)), 15.0, egui::Color32::from_rgb(28, 43, 55), egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE)); p.text(egui::pos2(x + 43.0, card.top() + 111.0), egui::Align2::CENTER_CENTER, tag, egui::FontId::proportional(10.0), colors::TEXT_PRIMARY); }
     let rows = [("しきい値", "0.60"), ("強さ", "5.00"), ("拡散", "1.00")];

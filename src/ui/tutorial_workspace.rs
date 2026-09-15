@@ -39,6 +39,12 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
 }
 
 fn draw_topbar(ui: &mut egui::Ui, width: f32, mobile: bool) {
+    if !mobile && width >= 1100.0 {
+        let right = width - 32.0;
+        icons::render_svg_at(ui, "tutorial-open-project".to_string(), icons::SVG_FOLDER, egui::vec2(20.0, 20.0), colors::TEXT_SECONDARY, egui::pos2(right - 270.0, 14.0));
+        icons::render_svg_at(ui, "tutorial-new-project".to_string(), icons::SVG_FILE_PLUS, egui::vec2(20.0, 20.0), colors::TEXT_SECONDARY, egui::pos2(right - 92.0, 14.0));
+        icons::render_svg_at(ui, "tutorial-settings".to_string(), icons::SVG_SETTINGS, egui::vec2(20.0, 20.0), colors::TEXT_SECONDARY, egui::pos2(right + 4.0, 14.0));
+    }
     let p = ui.painter();
     for (x, c) in [(23.0, (255, 82, 78)), (46.0, (255, 190, 45)), (69.0, (42, 211, 86))] {
         p.circle_filled(egui::pos2(x, 24.0), 6.5, egui::Color32::from_rgb(c.0, c.1, c.2));
@@ -48,9 +54,9 @@ fn draw_topbar(ui: &mut egui::Ui, width: f32, mobile: bool) {
         p.line_segment([egui::pos2(264.0, 14.0), egui::pos2(264.0, 45.0)], egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE));
         p.text(egui::pos2(291.0, 24.0), egui::Align2::LEFT_CENTER, "映像に、まだ見ぬ世界を。", egui::FontId::proportional(14.0), colors::TEXT_PRIMARY);
         let right = width - 32.0;
-        p.text(egui::pos2(right - 270.0, 24.0), egui::Align2::LEFT_CENTER, "▱  プロジェクトを開く", egui::FontId::proportional(13.0), colors::TEXT_SECONDARY);
-        p.text(egui::pos2(right - 92.0, 24.0), egui::Align2::LEFT_CENTER, "⊞  新規プロジェクト", egui::FontId::proportional(13.0), colors::TEXT_SECONDARY);
-        p.text(egui::pos2(right + 4.0, 24.0), egui::Align2::LEFT_CENTER, "⚙  設定", egui::FontId::proportional(13.0), colors::TEXT_SECONDARY);
+        p.text(egui::pos2(right - 244.0, 24.0), egui::Align2::LEFT_CENTER, "プロジェクトを開く", egui::FontId::proportional(13.0), colors::TEXT_SECONDARY);
+        p.text(egui::pos2(right - 66.0, 24.0), egui::Align2::LEFT_CENTER, "新規プロジェクト", egui::FontId::proportional(13.0), colors::TEXT_SECONDARY);
+        p.text(egui::pos2(right + 30.0, 24.0), egui::Align2::LEFT_CENTER, "設定", egui::FontId::proportional(13.0), colors::TEXT_SECONDARY);
         p.text(egui::pos2(width - 18.0, 24.0), egui::Align2::RIGHT_CENTER, "×", egui::FontId::proportional(18.0), colors::TEXT_MUTED);
     }
 }
@@ -111,19 +117,21 @@ fn draw_main(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, compact: 
     if let Some(id) = texture(ctx, "assets/studio/studio_city_reference.webp", "tutorial-hero") { p.image(id, hero, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE); }
     p.rect_stroke(hero, 8.0, egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM));
     p.circle_stroke(hero.center(), hero.height().min(hero.width()) * 0.16, egui::Stroke::new(2.0_f32, egui::Color32::WHITE));
-    p.text(hero.center(), egui::Align2::CENTER_CENTER, "▶", egui::FontId::proportional(34.0), egui::Color32::WHITE);
     p.text(egui::pos2(hero.left() + 22.0, hero.bottom() - 38.0), egui::Align2::LEFT_CENTER, "Kagari VFX で、\n想像を超えた映像をつくる", egui::FontId::proportional(14.0), egui::Color32::WHITE);
     p.text(egui::pos2(hero.right() - 18.0, hero.bottom() - 22.0), egui::Align2::RIGHT_CENTER, "03:24", egui::FontId::proportional(13.0), egui::Color32::WHITE);
+    let _ = p;
+    icons::render_svg_at(ui, "tutorial-hero-play".to_string(), icons::SVG_PLAY, egui::vec2(42.0, 42.0), egui::Color32::WHITE, egui::pos2(hero.center().x - 21.0, hero.center().y - 21.0));
     let timeline_top = hero.bottom() + 18.0;
     let timeline_h = if mobile { 112.0 } else if compact { 120.0 } else { 190.0 };
-    let _ = p;
     draw_timeline(ui, egui::Rect::from_min_max(egui::pos2(rect.left() + pad, timeline_top), egui::pos2(rect.right() - pad, timeline_top + timeline_h)), mobile);
     let p = ui.painter();
     let button = egui::Rect::from_min_size(egui::pos2(rect.center().x - 194.0, timeline_top + timeline_h + 22.0), egui::vec2(388.0, 62.0));
     let response = ui.interact(button, egui::Id::new("tutorial-play"), egui::Sense::click());
     p.rect_filled(button, 10.0, if response.hovered() { egui::Color32::from_rgb(255, 125, 32) } else { ORANGE });
-    p.text(button.center(), egui::Align2::CENTER_CENTER, "▶  チュートリアルを再生", egui::FontId::proportional(if mobile { 18.0 } else { 21.0 }), egui::Color32::WHITE);
+    p.text(egui::pos2(button.left() + 82.0, button.center().y), egui::Align2::LEFT_CENTER, "チュートリアルを再生", egui::FontId::proportional(if mobile { 18.0 } else { 21.0 }), egui::Color32::WHITE);
     p.text(egui::pos2(rect.center().x, button.bottom() + 30.0), egui::Align2::CENTER_CENTER, "Kagari VFX の基本とワークフローを動画で学びましょう", egui::FontId::proportional(13.0), colors::TEXT_SECONDARY);
+    let _ = p;
+    icons::render_svg_at(ui, "tutorial-button-play".to_string(), icons::SVG_PLAY, egui::vec2(22.0, 22.0), egui::Color32::WHITE, egui::pos2(button.left() + 48.0, button.center().y - 11.0));
     if response.clicked() { crate::ui::tutorial::restart(app); }
 }
 
