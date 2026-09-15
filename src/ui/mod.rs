@@ -80,6 +80,7 @@ pub mod toolbar;
 pub mod tracker_panel;
 pub mod transport_panel;
 pub mod tutorial;
+pub mod tutorial_workspace;
 pub mod vectorscope;
 pub mod viewport;
 pub mod viewport_camera_3d;

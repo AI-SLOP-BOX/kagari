@@ -1072,6 +1072,11 @@ impl KagariApp {
             self.playback.current_frame = current_frame;
             return;
         }
+        if self.show_guided_tutorial && ctx.screen_rect().width() >= 700.0 {
+            crate::ui::tutorial_workspace::draw(self, ctx);
+            self.playback.current_frame = current_frame;
+            return;
+        }
         if self.active_tool == crate::ui::toolbar::ActiveTool::Text && ctx.screen_rect().width() >= 700.0 {
             crate::ui::text_workspace::draw(self, ctx);
             self.playback.current_frame = current_frame;
