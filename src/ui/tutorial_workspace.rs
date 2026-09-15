@@ -1,4 +1,5 @@
 use crate::ui::theme::colors;
+use crate::ui::icons;
 use crate::KagariApp;
 use eframe::egui;
 
@@ -55,9 +56,15 @@ fn draw_topbar(ui: &mut egui::Ui, width: f32, mobile: bool) {
 }
 
 fn draw_chapters(ui: &mut egui::Ui, rect: egui::Rect, width: f32, compact: bool, app: &mut KagariApp) {
+    {
+        let p = ui.painter();
+        p.rect_filled(egui::Rect::from_min_max(rect.min, egui::pos2(rect.left() + width, rect.bottom())), 0.0, egui::Color32::from_rgb(13, 22, 29));
+        p.line_segment([egui::pos2(rect.left() + width, rect.top()), egui::pos2(rect.left() + width, rect.bottom())], egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE));
+    }
+    icons::render_svg_at(ui, "tutorial-chapter-heading".to_string(), icons::SVG_LAYERS, egui::vec2(55.0, 55.0), colors::TEXT_PRIMARY, egui::pos2(rect.left() + 30.0, rect.top() + 20.0));
+    let chapter_icons = [icons::SVG_HOME, icons::SVG_FILE, icons::SVG_LAYERS, icons::SVG_MARKER, icons::SVG_LIGHT, icons::SVG_PALETTE, icons::SVG_FILE_PLUS, icons::SVG_BOOK];
+    for (i, icon) in chapter_icons.into_iter().enumerate() { icons::render_svg_at(ui, format!("tutorial-chapter-{i}"), icon, egui::vec2(30.0, 30.0), if i == 0 { ORANGE } else { colors::TEXT_PRIMARY }, egui::pos2(rect.left() + 28.0, rect.top() + 97.0 + i as f32 * if compact { 61.0 } else { 78.0 })); }
     let p = ui.painter();
-    p.rect_filled(egui::Rect::from_min_max(rect.min, egui::pos2(rect.left() + width, rect.bottom())), 0.0, egui::Color32::from_rgb(13, 22, 29));
-    p.line_segment([egui::pos2(rect.left() + width, rect.top()), egui::pos2(rect.left() + width, rect.bottom())], egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE));
     let logo_rect = egui::Rect::from_min_size(egui::pos2(rect.left() + 36.0, rect.top() + 20.0), egui::vec2(55.0, 55.0));
     if let Some(id) = texture(ctx_for(ui), "assets/kagari_logo.webp", "tutorial-logo") {
         p.image(id, logo_rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
@@ -65,12 +72,12 @@ fn draw_chapters(ui: &mut egui::Ui, rect: egui::Rect, width: f32, compact: bool,
     p.text(egui::pos2(rect.left() + 105.0, rect.top() + 48.0), egui::Align2::LEFT_CENTER, "Kagari", egui::FontId::proportional(27.0), colors::TEXT_PRIMARY);
     p.text(egui::pos2(rect.left() + 185.0, rect.top() + 48.0), egui::Align2::LEFT_CENTER, "VFX", egui::FontId::proportional(27.0), colors::TEXT_SECONDARY);
     let chapters = [
-        ("⌂", "はじめに", "Kagari VFX の紹介"), ("▧", "基本操作", "画面の見方・操作方法"),
-        ("▣", "レイヤー", "合成の基本"), ("♡", "マスクとトラック", "マスク・モーショントラッキング"),
-        ("✣", "エフェクト", "VFX エフェクトの使い方"), ("◉", "カラーグレーディング", "色調補正・ルック開発"),
-        ("□", "書き出し", "レンダリング・書き出し設定"), ("▱", "チュートリアル", "すべてのチュートリアル"),
+        ("はじめに", "Kagari VFX の紹介"), ("基本操作", "画面の見方・操作方法"),
+        ("レイヤー", "合成の基本"), ("マスクとトラック", "マスク・モーショントラッキング"),
+        ("エフェクト", "VFX エフェクトの使い方"), ("カラーグレーディング", "色調補正・ルック開発"),
+        ("書き出し", "レンダリング・書き出し設定"), ("チュートリアル", "すべてのチュートリアル"),
     ];
-    for (i, (icon, title, sub)) in chapters.into_iter().enumerate() {
+    for (i, (title, sub)) in chapters.into_iter().enumerate() {
         let item_h = if compact { 57.0 } else { 72.0 };
         let y = rect.top() + 25.0 + i as f32 * if compact { 61.0 } else { 78.0 } + 72.0;
         let item = egui::Rect::from_min_size(egui::pos2(rect.left() + 13.0, y), egui::vec2(width - 25.0, item_h));
@@ -81,7 +88,6 @@ fn draw_chapters(ui: &mut egui::Ui, rect: egui::Rect, width: f32, compact: bool,
         } else if response.hovered() {
             p.rect_filled(item, 7.0, egui::Color32::from_rgb(23, 31, 38));
         }
-        p.text(egui::pos2(item.left() + 30.0, item.top() + item_h * 0.42), egui::Align2::CENTER_CENTER, icon, egui::FontId::proportional(if compact { 22.0 } else { 29.0 }), if i == 0 { ORANGE } else { colors::TEXT_PRIMARY });
         p.text(egui::pos2(item.left() + 62.0, item.top() + item_h * 0.36), egui::Align2::LEFT_CENTER, title, egui::FontId::proportional(if compact { 13.0 } else { 16.0 }), colors::TEXT_PRIMARY);
         p.text(egui::pos2(item.left() + 62.0, item.top() + item_h * 0.72), egui::Align2::LEFT_CENTER, sub, egui::FontId::proportional(if compact { 9.0 } else { 12.0 }), colors::TEXT_SECONDARY);
         if response.clicked() { app.tutorial_step = i; }

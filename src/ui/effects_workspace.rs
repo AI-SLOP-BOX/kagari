@@ -1,4 +1,5 @@
 use crate::core::editor::EditorSession;
+use crate::ui::icons;
 use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
@@ -43,18 +44,22 @@ fn draw_topbar(ui: &mut egui::Ui, width: f32, mobile: bool) {
 }
 
 fn draw_sidebar(ui: &mut egui::Ui, rect: egui::Rect, width: f32, compact: bool, _app: &mut KagariApp) {
-    let p = ui.painter();
     let side = egui::Rect::from_min_max(rect.min, egui::pos2(rect.left() + width, rect.bottom()));
-    p.rect_filled(side, 0.0, egui::Color32::from_rgb(13, 23, 30));
-    p.line_segment([egui::pos2(side.right(), side.top()), egui::pos2(side.right(), side.bottom())], egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE));
-    p.text(egui::pos2(side.left() + 31.0, side.top() + 44.0), egui::Align2::LEFT_CENTER, "☷", egui::FontId::proportional(30.0), colors::TEXT_PRIMARY);
+    {
+        let p = ui.painter();
+        p.rect_filled(side, 0.0, egui::Color32::from_rgb(13, 23, 30));
+        p.line_segment([egui::pos2(side.right(), side.top()), egui::pos2(side.right(), side.bottom())], egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE));
+    }
+    icons::render_svg_at(ui, "effects-heading".to_string(), icons::SVG_LIGHT, egui::vec2(30.0, 30.0), colors::TEXT_PRIMARY, egui::pos2(side.left() + 20.0, side.top() + 29.0));
+    for (i, icon) in [icons::SVG_LAYERS, icons::SVG_STAR, icons::SVG_CLOCK].into_iter().enumerate() { icons::render_svg_at(ui, format!("effects-nav-{i}"), icon, egui::vec2(22.0, 22.0), colors::TEXT_PRIMARY, egui::pos2(side.left() + 25.0, side.top() + 91.0 + i as f32 * 42.0)); }
+    for i in 0..10 { let icon = if i == 7 { icons::SVG_LIGHT } else { icons::SVG_FOLDER }; icons::render_svg_at(ui, format!("effects-category-{i}"), icon, egui::vec2(20.0, 20.0), if i == 7 { ORANGE } else { colors::TEXT_PRIMARY }, egui::pos2(side.left() + 25.0, side.top() + 265.0 + i as f32 * 34.0)); }
+    let p = ui.painter();
     p.text(egui::pos2(side.left() + 84.0, side.top() + 44.0), egui::Align2::LEFT_CENTER, "エフェクト", egui::FontId::proportional(if compact { 20.0 } else { 23.0 }), colors::TEXT_PRIMARY);
     let top = side.top() + 82.0;
-    for (i, (icon, label)) in [("▦", "すべて"), ("★", "お気に入り"), ("◷", "最近使用")].into_iter().enumerate() {
+    for (i, label) in ["すべて", "お気に入り", "最近使用"].into_iter().enumerate() {
         let y = top + i as f32 * 42.0;
         let active = i == 0;
         if active { p.rect_filled(egui::Rect::from_min_size(egui::pos2(side.left() + 10.0, y), egui::vec2(width - 20.0, 40.0)), 6.0, egui::Color32::from_rgb(28, 43, 55)); p.rect_filled(egui::Rect::from_min_size(egui::pos2(side.left() + 10.0, y), egui::vec2(4.0, 40.0)), 2.0, ORANGE); }
-        p.text(egui::pos2(side.left() + 36.0, y + 20.0), egui::Align2::CENTER_CENTER, icon, egui::FontId::proportional(20.0), if active { colors::TEXT_PRIMARY } else { colors::TEXT_SECONDARY });
         p.text(egui::pos2(side.left() + 78.0, y + 20.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(14.0), colors::TEXT_PRIMARY);
     }
     p.line_segment([egui::pos2(side.left() + 20.0, top + 145.0), egui::pos2(side.right() - 20.0, top + 145.0)], egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE));
@@ -64,14 +69,12 @@ fn draw_sidebar(ui: &mut egui::Ui, rect: egui::Rect, width: f32, compact: bool, 
             if i == 0 { p.text(egui::pos2(side.left() + 20.0, y), egui::Align2::LEFT_CENTER, "ビデオエフェクト", egui::FontId::proportional(14.0), colors::TEXT_PRIMARY); p.text(egui::pos2(side.right() - 22.0, y), egui::Align2::RIGHT_CENTER, "⌃", egui::FontId::proportional(13.0), colors::TEXT_SECONDARY); y += 28.0; }
             let active = i == 7;
             if active { p.rect_filled(egui::Rect::from_min_size(egui::pos2(side.left() + 10.0, y - 18.0), egui::vec2(width - 20.0, 43.0)), 5.0, egui::Color32::from_rgb(50, 38, 31)); p.rect_filled(egui::Rect::from_min_size(egui::pos2(side.left() + 10.0, y - 18.0), egui::vec2(4.0, 43.0)), 2.0, ORANGE); }
-            p.text(egui::pos2(side.left() + 35.0, y), egui::Align2::CENTER_CENTER, if active { "☼" } else { "▰" }, egui::FontId::proportional(18.0), if active { ORANGE } else { colors::TEXT_PRIMARY });
             p.text(egui::pos2(side.left() + 76.0, y), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(13.0), if active { ORANGE } else { colors::TEXT_PRIMARY });
             p.text(egui::pos2(side.right() - 24.0, y), egui::Align2::RIGHT_CENTER, format!("{}", [12,18,10,9,12,11,16,14,9,10][i]), egui::FontId::proportional(11.0), colors::TEXT_SECONDARY); y += 34.0;
     }
     p.line_segment([egui::pos2(side.left() + 20.0, y - 9.0), egui::pos2(side.right() - 20.0, y - 9.0)], egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE)); y += 22.0;
     p.text(egui::pos2(side.left() + 20.0, y), egui::Align2::LEFT_CENTER, "プリセット", egui::FontId::proportional(14.0), colors::TEXT_PRIMARY); p.text(egui::pos2(side.right() - 22.0, y), egui::Align2::RIGHT_CENTER, "⌃", egui::FontId::proportional(13.0), colors::TEXT_SECONDARY); y += 28.0;
     for (i, label) in ["ユーザープリセット", "内蔵プリセット"].into_iter().enumerate() {
-            p.text(egui::pos2(side.left() + 35.0, y), egui::Align2::CENTER_CENTER, "▰", egui::FontId::proportional(18.0), colors::TEXT_PRIMARY);
             p.text(egui::pos2(side.left() + 76.0, y), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(13.0), colors::TEXT_PRIMARY);
             p.text(egui::pos2(side.right() - 24.0, y), egui::Align2::RIGHT_CENTER, if i == 0 { "5" } else { "24" }, egui::FontId::proportional(11.0), colors::TEXT_SECONDARY); y += 34.0;
     }
@@ -87,7 +90,7 @@ fn draw_center(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, compact
     p.text(egui::pos2(search.left() + 16.0, search.center().y), egui::Align2::LEFT_CENTER, "⌕   エフェクトを検索...", egui::FontId::proportional(14.0), colors::TEXT_SECONDARY);
     p.rect(egui::Rect::from_min_size(egui::pos2(search.right() + 18.0, search.top()), egui::vec2(125.0, 42.0)), 6.0, egui::Color32::from_rgb(16, 29, 38), egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM));
     p.text(egui::pos2(search.right() + 80.0, search.center().y), egui::Align2::CENTER_CENTER, "人気順  ⌄", egui::FontId::proportional(13.0), colors::TEXT_PRIMARY);
-    p.text(egui::pos2(rect.right() - pad - 44.0, search.center().y), egui::Align2::CENTER_CENTER, "▦  ☰", egui::FontId::proportional(22.0), colors::TEXT_PRIMARY);
+    p.text(egui::pos2(rect.right() - pad - 44.0, search.center().y), egui::Align2::CENTER_CENTER, "GRID  LIST", egui::FontId::proportional(10.0), colors::TEXT_PRIMARY);
     let cards = [("Gaussian Blur", "assets/studio/assets_smoke.webp"), ("Glow", "assets/studio/assets_light_leak.webp"), ("Film Grain", "assets/studio/assets_glass_texture.webp"), ("Color Balance", "assets/studio/assets_particles.webp"), ("Vignette", "assets/studio/assets_mountain.webp"), ("Lens Flare", "assets/studio/assets_light_leak.webp"), ("Chromatic Aberration", "assets/studio/assets_city.webp"), ("Light Leak", "assets/studio/assets_light_leak.webp"), ("Halftone", "assets/studio/assets_floor_ref.webp")];
     let cols = if mobile { 1 } else { 3 };
     let gap = if compact { 14.0 } else { 20.0 };
