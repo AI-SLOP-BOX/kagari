@@ -484,7 +484,7 @@ fn new_composition(app: &mut KagariApp) {
     app.show_new_comp_dialog = true;
 }
 
-fn import_footage_dialog(app: &mut KagariApp) {
+pub(crate) fn import_footage_dialog(app: &mut KagariApp) {
     if let Some(path) = rfd::FileDialog::new()
         .add_filter(
             "Footage",
