@@ -610,9 +610,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
             HomeNav::Home if landing_mode => draw_landing_home(app, ui, ctx),
             HomeNav::Home | HomeNav::Compositing => draw_reference_home(app, ui, ctx),
             HomeNav::NewProject => draw_reference_new_project_page(app, ui, ctx),
-            HomeNav::Projects | HomeNav::Recent | HomeNav::Starred => {
-                draw_reference_projects_page(app, ui, ctx)
-            }
+            HomeNav::Projects | HomeNav::Recent | HomeNav::Starred => draw_reference_project_browser_page(app, ui, ctx),
             HomeNav::Templates => draw_reference_templates_page(app, ui, ctx),
             HomeNav::Effects => draw_reference_effects_page(app, ui, ctx),
             HomeNav::Render => draw_reference_render_page(app, ui, ctx),
@@ -1230,6 +1228,81 @@ fn draw_reference_assets_narrow(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
         ui.painter().text(egui::pos2(detail.right() - 5.0, y), egui::Align2::RIGHT_CENTER, value, egui::FontId::proportional(5.3), colors::TEXT_SECONDARY);
     }
     ui.allocate_space(egui::vec2(egui::Rect::from_min_size(top, egui::vec2(322.0, panel_h)).width(), panel_h));
+}
+
+fn draw_reference_project_browser_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui::Context) {
+    let compact = ui.available_height() < 900.0;
+    let narrow = reference_narrow(ui);
+    ui.painter().rect_filled(ui.max_rect(), 0.0, egui::Color32::from_rgb(11, 19, 26));
+    egui::Frame::none().inner_margin(egui::Margin::symmetric(if narrow { 8.0 } else { reference_content_margin(ui) }, 0.0)).show(ui, |ui| {
+        draw_reference_topbar(app, ui, ctx);
+        ui.add_space(if narrow { 8.0 } else if compact { 22.0 } else { 42.0 });
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new("プロジェクト").size(if narrow { 22.0 } else { 30.0 }).strong());
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.add(egui::Button::new(egui::RichText::new("＋ 新規プロジェクト").size(if narrow { 9.0 } else { 12.0 })).fill(colors::ACCENT_ORANGE).rounding(5.0)).clicked() {
+                    enter_studio_new_project(app);
+                    app.show_new_comp_dialog = true;
+                }
+                ui.add_space(8.0);
+                if ui.add(egui::Button::new(egui::RichText::new("▱ プロジェクトを開く").size(if narrow { 9.0 } else { 12.0 })).rounding(5.0)).clicked() {
+                    enter_studio_open_dialog(app);
+                }
+            });
+        });
+        ui.add_space(8.0);
+        ui.label(egui::RichText::new("保存済みのプロジェクトを管理し、前回の作業を続けます。").size(if narrow { 9.0 } else { 13.0 }).color(colors::TEXT_SECONDARY));
+        ui.add_space(if compact { 12.0 } else { 18.0 });
+        reference_search_field(ui, &mut app.home_search, "プロジェクトを検索...", ui.available_width().min(480.0), if narrow { 26.0 } else { 34.0 });
+        ui.add_space(if compact { 12.0 } else { 22.0 });
+        let query = app.home_search.trim().to_ascii_lowercase();
+        let projects = recent_project_entries(ctx).into_iter().filter(|project| query.is_empty() || project.name.to_ascii_lowercase().contains(&query)).collect::<Vec<_>>();
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new(format!("最近のプロジェクト  ({})", projects.len())).size(if narrow { 13.0 } else { 18.0 }).strong());
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                reference_select_button(ui, "更新日時", if narrow { 76.0 } else { 108.0 }, narrow);
+                ui.add_space(6.0);
+                reference_select_button(ui, "すべて", if narrow { 58.0 } else { 82.0 }, narrow);
+            });
+        });
+        ui.add_space(10.0);
+        if projects.is_empty() {
+            let empty_height = if compact { 190.0 } else { 280.0 };
+            fixed_card_with_inset(ui, egui::vec2(ui.available_width(), empty_height), egui::Color32::TRANSPARENT, egui::Color32::from_rgb(54, 70, 83), 7.0, 18.0, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.add_space(if compact { 28.0 } else { 52.0 });
+                    crate::ui::icons::render_svg_bytes(ui, "projects-empty-folder", crate::ui::icons::SVG_FOLDER, egui::vec2(44.0, 44.0), colors::TEXT_SECONDARY);
+                    ui.add_space(12.0);
+                    ui.label(egui::RichText::new(if query.is_empty() { "まだプロジェクトはありません" } else { "一致するプロジェクトはありません" }).size(if narrow { 14.0 } else { 19.0 }).strong());
+                    ui.label(egui::RichText::new(if query.is_empty() { "新規プロジェクトを作成して、はじめましょう。" } else { "検索条件を変更してください。" }).size(if narrow { 10.0 } else { 13.0 }).color(colors::TEXT_SECONDARY));
+                    if query.is_empty() {
+                        ui.add_space(14.0);
+                        if reference_cta_button(ui, "新規プロジェクト", compact).clicked() { enter_studio_new_project(app); app.show_new_comp_dialog = true; }
+                    }
+                });
+            });
+        } else {
+            let columns = if narrow { 1.0 } else if ui.available_width() < 820.0 { 2.0 } else { 3.0 };
+            let gap = if compact { 10.0 } else { 16.0 };
+            let card_width = ((ui.available_width() - gap * (columns - 1.0)) / columns).max(170.0);
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
+                for (index, project) in projects.iter().enumerate() {
+                    let card = fixed_card_with_inset(ui, egui::vec2(card_width, if compact { 154.0 } else { 204.0 }), egui::Color32::from_rgb(22, 32, 42), egui::Color32::from_rgb(43, 60, 76), 6.0, 0.0, |ui| {
+                        if let Some(id) = reference_texture(app, ctx, ["recent_project_eclipse.webp", "recent_project_citadel.webp", "recent_project_rift.webp", "recent_project_atlas.webp"][index % 4]) { reference_cover_image(ui, id, egui::vec2(card_width, if compact { 72.0 } else { 112.0 }), 2.64); }
+                        ui.add_space(10.0);
+                        ui.horizontal(|ui| { ui.add_space(12.0); ui.label(egui::RichText::new(&project.name).size(if compact { 13.0 } else { 16.0 }).strong()); });
+                        let comp_name = project.summary.as_ref().and_then(|summary| summary.comp_names.get(summary.active_idx)).map(String::as_str).unwrap_or("Project");
+                        ui.horizontal(|ui| { ui.add_space(12.0); ui.label(egui::RichText::new(comp_name).size(11.0).color(colors::TEXT_SECONDARY)); });
+                        let age = project.modified.map(fmt_age).unwrap_or_else(|| "Not found".to_string());
+                        ui.horizontal(|ui| { ui.add_space(12.0); ui.label(egui::RichText::new(age).size(11.0).color(colors::TEXT_MUTED)); });
+                    });
+                    if card.clicked() { open_project_path(app, &project.path); }
+                    if index % columns as usize != columns as usize - 1 { ui.add_space(gap); }
+                }
+            });
+        }
+    });
 }
 
 fn draw_reference_projects_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui::Context) {
