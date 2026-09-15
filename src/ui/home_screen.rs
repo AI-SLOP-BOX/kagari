@@ -1882,14 +1882,32 @@ fn draw_reference_render_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui
             });
             ui.add_space(4.0);
             ui.separator();
-            for (index, asset, name, settings, output, status) in [("1", "recent_project_citadel.webp", "main_comp", "H.264 · 3840×2160 / 24 fps", "/renders/main.mp4", "Queued"), ("2", "recent_project_rift.webp", "teaser", "ProRes 422 · 1920×1080 / 24 fps", "/renders/teaser.mov", "Queued"), ("3", "recent_project_atlas.webp", "social_vertical", "H.264 · 1080×1920 / 30 fps", "/renders/social_vertical.mp4", "Queued")] {
+            let queue_names = if app.render_queue_items.is_empty() {
+                vec![app.history.current().active_composition().name.clone()]
+            } else {
+                app.render_queue_items.clone()
+            };
+            for (row_index, name) in queue_names.iter().enumerate() {
+                let index = (row_index + 1).to_string();
+                let asset = ["recent_project_citadel.webp", "recent_project_rift.webp", "recent_project_atlas.webp"][row_index % 3];
+                let settings = format!("{} · {} fps", match app.export_format_preset { 1 => "ProRes 422", 2 => "PNG Sequence", _ => "H.264" }, app.export.export_fps);
+                let output = if app.export.export_output_path.is_empty() { "output.mp4".to_string() } else { app.export.export_output_path.clone() };
+                let status = if app.export.is_exporting && app.export.export_comp_name.as_deref() == Some(name.as_str()) {
+                    "Rendering"
+                } else {
+                    match app.render_item_status.get(name) {
+                        Some(crate::app_state::QueueItemStatus::Done) => "Done",
+                        Some(crate::app_state::QueueItemStatus::Failed) => "Failed",
+                        Some(crate::app_state::QueueItemStatus::Rendering) => "Rendering",
+                        _ => "Queued",
+                    }
+                };
                 ui.horizontal(|ui| {
                     let row_font = if narrow { 7.0 } else { 12.0 };
-                    let row_index = index.parse::<usize>().unwrap_or(1).saturating_sub(1);
                     if narrow {
                         ui.spacing_mut().item_spacing.x = 0.0;
                         ui.allocate_ui(egui::vec2(12.0, 30.0), |ui| {
-                            ui.vertical_centered(|ui| { ui.label(egui::RichText::new(index).size(row_font).color(colors::TEXT_MUTED)); });
+                            ui.vertical_centered(|ui| { ui.label(egui::RichText::new(index.as_str()).size(row_font).color(colors::TEXT_MUTED)); });
                         });
                         ui.add_space(4.0);
                         if let Some(id) = reference_texture(app, ctx, asset) {
@@ -1907,7 +1925,7 @@ fn draw_reference_render_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui
                         let mut settings_parts = settings.split('·').map(str::trim);
                         ui.allocate_ui(egui::vec2(58.0, 30.0), |ui| {
                             ui.vertical(|ui| {
-                                ui.label(egui::RichText::new(settings_parts.next().unwrap_or(settings)).size(row_font).color(colors::TEXT_SECONDARY));
+                                ui.label(egui::RichText::new(settings_parts.next().unwrap_or(&settings)).size(row_font).color(colors::TEXT_SECONDARY));
                                 if let Some(detail) = settings_parts.next() {
                                     ui.label(egui::RichText::new(detail).size(6.0).color(colors::TEXT_SECONDARY));
                                 }
@@ -1944,7 +1962,7 @@ fn draw_reference_render_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui
                         });
                     }
                 });
-                if index != "3" { ui.separator(); }
+                if row_index + 1 < queue_names.len() { ui.separator(); }
             }
         });
         ctx.data_mut(|d| d.insert_temp(selected_id, selected));
@@ -2012,7 +2030,7 @@ fn draw_reference_render_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui
                 ui.vertical_centered(|ui| {
                     ui.label(egui::RichText::new("Progress").size(if narrow { 9.0 } else { 14.0 }));
                     ui.add_space(if narrow { 3.0 } else { 16.0 });
-                    let progress = if started { 0.34_f32 } else { 0.0 };
+                    let progress = app.export.export_progress.clamp(0.0, 1.0);
                     let ring_size = if narrow { 62.0 } else { 96.0 };
                     let (ring_rect, _) = ui.allocate_exact_size(egui::vec2(ring_size, ring_size), egui::Sense::hover());
                     let center = ring_rect.center();
@@ -2030,7 +2048,7 @@ fn draw_reference_render_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui
                     }
                     ui.painter().text(center, egui::Align2::CENTER_CENTER, format!("{}%", (progress * 100.0) as u32), egui::FontId::proportional(if narrow { 10.0 } else { 12.0 }), colors::TEXT_PRIMARY);
                     ui.add_space(if narrow { 2.0 } else { 6.0 });
-                    ui.label(egui::RichText::new(if started { "Rendering main_comp" } else { "No render in progress" }).small().color(colors::TEXT_MUTED));
+                    ui.label(egui::RichText::new(if app.export.is_exporting { format!("Rendering {}", app.export.export_comp_name.as_deref().unwrap_or("composition")) } else if app.export.export_status.is_some() { "Render finished".to_string() } else { "No render in progress".to_string() }).small().color(colors::TEXT_MUTED));
                 });
             });
         });
