@@ -2105,6 +2105,9 @@ fn draw_reference_settings_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
     let compact = ui.available_height() < 900.0;
     let narrow = reference_narrow(ui);
     let settings_margin = if narrow { 8.0 } else { reference_content_margin(ui) };
+    let prefs_id = egui::Id::new("reference_settings_prefs");
+    let initial_prefs = ctx.data_mut(|d| d.get_temp::<crate::ui::preferences_dialog::Prefs>(prefs_id).unwrap_or_else(crate::ui::preferences_dialog::load));
+    let mut prefs = initial_prefs.clone();
     ui.painter().rect_filled(ui.max_rect(), 0.0, egui::Color32::from_rgb(11, 19, 26));
     egui::Frame::none().inner_margin(egui::Margin::symmetric(settings_margin, 0.0)).show(ui, |ui| {
         draw_reference_topbar(app, ui, ctx);
@@ -2186,14 +2189,39 @@ fn draw_reference_settings_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
                     ui.add_space(10.0);
                     ui.separator();
                     ui.add_space(12.0);
-                    for (label, value) in [("Enabled", "On"), ("Quality", "Balanced"), ("Location", "Default"), ("Limit", "Automatic")] {
-                        ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new(label).size(12.0).color(colors::TEXT_SECONDARY));
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                reference_select_button(ui, value, if narrow { 118.0 } else { 220.0 }, narrow);
-                            });
-                        });
-                        ui.add_space(7.0);
+                    match selected_section {
+                        1 => {
+                            ui.label(egui::RichText::new("Preview Quality").size(if narrow { 9.0 } else { 12.0 }).color(colors::TEXT_SECONDARY));
+                            ui.checkbox(&mut prefs.adaptive_preview, "Adaptive preview quality");
+                            ui.label(egui::RichText::new(format!("Frame cache budget: {} MB", prefs.cache_mb)).size(if narrow { 8.0 } else { 11.0 }).color(colors::TEXT_SECONDARY));
+                            ui.add(egui::Slider::new(&mut prefs.cache_mb, 128..=2048).step_by(64.0).suffix(" MB"));
+                        }
+                        2 => {
+                            ui.label(egui::RichText::new("Disk Cache").size(if narrow { 9.0 } else { 12.0 }).color(colors::TEXT_SECONDARY));
+                            ui.label(egui::RichText::new(format!("Maximum disk cache: {} GB", prefs.disk_cache_gb)).size(if narrow { 8.0 } else { 11.0 }).color(colors::TEXT_SECONDARY));
+                            ui.add(egui::Slider::new(&mut prefs.disk_cache_gb, 10..=500).suffix(" GB"));
+                        }
+                        5 => {
+                            ui.label(egui::RichText::new("Automatic Save").size(if narrow { 9.0 } else { 12.0 }).color(colors::TEXT_SECONDARY));
+                            ui.label(egui::RichText::new(format!("Save interval: {} seconds", prefs.autosave_secs)).size(if narrow { 8.0 } else { 11.0 }).color(colors::TEXT_SECONDARY));
+                            ui.add(egui::Slider::new(&mut prefs.autosave_secs, 5..=600).suffix(" s"));
+                        }
+                        6 => {
+                            ui.label(egui::RichText::new("Interface").size(if narrow { 9.0 } else { 12.0 }).color(colors::TEXT_SECONDARY));
+                            ui.label(egui::RichText::new("Dark theme").size(if narrow { 8.0 } else { 11.0 }).color(colors::TEXT_PRIMARY));
+                            ui.label(egui::RichText::new("Kagari VFX uses the dark production workspace.").small().color(colors::TEXT_MUTED));
+                        }
+                        _ => {
+                            for (label, value) in [("Enabled", "On"), ("Quality", "Balanced"), ("Location", "Default"), ("Limit", "Automatic")] {
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new(label).size(12.0).color(colors::TEXT_SECONDARY));
+                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                        reference_select_button(ui, value, if narrow { 118.0 } else { 220.0 }, narrow);
+                                    });
+                                });
+                                ui.add_space(7.0);
+                            }
+                        }
                     }
                     ui.add_space(12.0);
                     ui.label(egui::RichText::new("Changes are saved automatically").small().color(colors::TEXT_MUTED));
@@ -2230,6 +2258,11 @@ fn draw_reference_settings_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
             });
         });
     });
+    if prefs != initial_prefs {
+        crate::ui::preferences_dialog::apply(app, &prefs);
+        crate::ui::preferences_dialog::save(&prefs);
+    }
+    ctx.data_mut(|d| d.insert_temp(prefs_id, prefs));
 }
 
 fn draw_reference_template_catalog(app: &mut KagariApp, ctx: &egui::Context, ui: &mut egui::Ui, compact: bool, selected_filter: usize, query: &str) {

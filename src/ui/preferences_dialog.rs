@@ -4,7 +4,7 @@ use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Prefs {
     pub cache_mb: usize,
     pub undo_steps: usize,
@@ -39,14 +39,14 @@ fn prefs_path() -> std::path::PathBuf {
         .join(".kagari_prefs.json")
 }
 
-fn load() -> Prefs {
+pub(crate) fn load() -> Prefs {
     std::fs::read_to_string(prefs_path())
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_default()
 }
 
-fn save(p: &Prefs) {
+pub(crate) fn save(p: &Prefs) {
     if let Ok(json) = serde_json::to_string_pretty(p) {
         let _ = std::fs::write(prefs_path(), json);
     }
@@ -58,7 +58,7 @@ pub fn apply_loaded(app: &mut KagariApp) {
     apply(app, &p);
 }
 
-fn apply(app: &mut KagariApp, p: &Prefs) {
+pub(crate) fn apply(app: &mut KagariApp, p: &Prefs) {
     app.frame_cache.max_memory_bytes = p.cache_mb * 1024 * 1024;
     crate::core::frame_cache::disk_cache::set_max_disk_bytes(
         p.disk_cache_gb as u64 * 1024 * 1024 * 1024,
