@@ -25,6 +25,7 @@ pub mod demo_scene;
 pub mod drop_import;
 pub mod effects_controls;
 pub mod effects_library;
+pub mod effects_workspace;
 pub mod essential_graphics;
 pub mod essential_properties_panel;
 pub mod export_dialog;

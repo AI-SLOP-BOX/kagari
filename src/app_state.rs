@@ -1077,6 +1077,11 @@ impl KagariApp {
             self.playback.current_frame = current_frame;
             return;
         }
+        if self.ui_tabs.left_tab_idx == 1 && self.ui_tabs.right_tab_idx == 0 && ctx.screen_rect().width() >= 700.0 {
+            crate::ui::effects_workspace::draw(self, ctx);
+            self.playback.current_frame = current_frame;
+            return;
+        }
         if self.active_tool == crate::ui::toolbar::ActiveTool::Text && ctx.screen_rect().width() >= 700.0 {
             crate::ui::text_workspace::draw(self, ctx);
             self.playback.current_frame = current_frame;
