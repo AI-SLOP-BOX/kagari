@@ -3022,22 +3022,18 @@ fn landing_nav_row(
             },
         );
     }
-    ui.allocate_new_ui(egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(
-        egui::pos2(rect.left() + 43.0, rect.center().y - 14.0),
-        egui::vec2(28.0, 28.0),
-    )), |icon_ui| {
-        crate::ui::icons::render_svg_bytes(
-            icon_ui,
-            &format!("landing-nav-{label}"),
-            icon,
-            egui::vec2(24.0, 24.0),
-            if active {
-                if active_orange { egui::Color32::from_rgb(255, 145, 50) } else { colors::TEXT_PRIMARY }
-            } else {
-                egui::Color32::from_rgb(193, 205, 218)
-            },
-        );
-    });
+    crate::ui::icons::render_svg_at(
+        ui,
+        format!("landing-nav-{label}"),
+        icon,
+        egui::vec2(24.0, 24.0),
+        if active {
+            if active_orange { egui::Color32::from_rgb(255, 145, 50) } else { colors::TEXT_PRIMARY }
+        } else {
+            egui::Color32::from_rgb(193, 205, 218)
+        },
+        egui::pos2(rect.left() + 44.0, rect.center().y - 12.0),
+    );
     ui.painter().text(
         egui::pos2(rect.left() + 92.0, rect.center().y),
         egui::Align2::LEFT_CENTER,
