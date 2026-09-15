@@ -1756,16 +1756,25 @@ fn draw_reference_render_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui
         let selected_id = egui::Id::new("reference_render_selected");
         let mut selected = ctx.data_mut(|d| d.get_temp::<usize>(selected_id)).unwrap_or(0);
         let started_id = egui::Id::new("reference_render_started");
-        let mut started = ctx.data_mut(|d| d.get_temp::<bool>(started_id)).unwrap_or(false);
+        let mut started = app.export.is_exporting;
         egui::Frame::none().fill(egui::Color32::from_rgb(16, 27, 38)).stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(37, 52, 67))).rounding(4.0).inner_margin(egui::Margin::same(10.0)).show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new("Render Queue").size(if narrow { 12.0 } else { 24.0 }).strong());
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.add(egui::Button::new(egui::RichText::new(if started { "Rendering..." } else { "✦ Start Render" }).size(if narrow { 8.0 } else { 12.0 }).color(egui::Color32::WHITE)).fill(colors::ACCENT_BLUE).min_size(egui::vec2(if narrow { 54.0 } else { 0.0 }, if narrow { 20.0 } else { 0.0 })).rounding(5.0)).clicked() {
-                        started = true;
+                    if ui.add(egui::Button::new(egui::RichText::new(if started { "Rendering..." } else { "✦ Start Render" }).size(if narrow { 8.0 } else { 12.0 }).color(egui::Color32::WHITE)).fill(colors::ACCENT_BLUE).min_size(egui::vec2(if narrow { 54.0 } else { 0.0 }, if narrow { 20.0 } else { 0.0 })).rounding(5.0)).clicked() && !app.export.is_exporting {
+                        let comp_name = app.history.current().active_composition().name.clone();
+                        crate::ui::export_dialog::start_comp_export(app, ctx, &comp_name);
+                        started = app.export.is_exporting;
                     }
                     ui.add_space(if narrow { 4.0 } else { 8.0 });
-                    ui.add(egui::Button::new(egui::RichText::new("+ Add to Queue").size(if narrow { 8.0 } else { 12.0 })).min_size(egui::vec2(if narrow { 58.0 } else { 0.0 }, if narrow { 20.0 } else { 0.0 })).rounding(5.0));
+                    if ui.add(egui::Button::new(egui::RichText::new("+ Add to Queue").size(if narrow { 8.0 } else { 12.0 })).min_size(egui::vec2(if narrow { 58.0 } else { 0.0 }, if narrow { 20.0 } else { 0.0 })).rounding(5.0)).clicked() {
+                        let comp_name = app.history.current().active_composition().name.clone();
+                        if !app.render_queue_items.contains(&comp_name) {
+                            app.render_queue_items.push(comp_name.clone());
+                            app.render_item_status.insert(comp_name, crate::app_state::QueueItemStatus::Queued);
+                            app.toasts.info("Composition added to render queue");
+                        }
+                    }
                 });
             });
             ctx.data_mut(|d| d.insert_temp(started_id, started));
@@ -1886,6 +1895,25 @@ fn draw_reference_render_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui
                             });
                         });
                     });
+                    match label {
+                        "Format" => {
+                            app.export_format_preset = match selected_value.as_str() {
+                                "ProRes 422" => 1,
+                                "PNG Sequence" => 2,
+                                _ => 0,
+                            };
+                            app.export_codec_idx = if app.export_format_preset == 1 { 1 } else if app.export_format_preset == 2 { 3 } else { 0 };
+                        }
+                        "Resolution" => {
+                            app.export_resolution_scale = if selected_value.contains("1920") { 1 } else if selected_value.contains("1080 × 1920") { 2 } else { 0 };
+                            let scale = match app.export_resolution_scale { 1 => 0.5, 2 => 0.5, _ => 1.0 };
+                            ctx.data_mut(|d| d.insert_temp(egui::Id::new("ae_export_res_scale"), scale));
+                        }
+                        "Frame Rate" => {
+                            app.export.export_fps = selected_value.split_whitespace().next().and_then(|v| v.parse().ok()).unwrap_or(24);
+                        }
+                        _ => {}
+                    }
                     ctx.data_mut(|d| d.insert_temp(id, selected_value));
                     ui.add_space(if narrow { 1.0 } else { 5.0 });
                 }
@@ -1898,6 +1926,7 @@ fn draw_reference_render_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui
                         reference_icon_button(ui, "render-output-folder", crate::ui::icons::SVG_FOLDER, if narrow { 18.0 } else { 24.0 });
                     });
                 });
+                app.export.export_output_path = output_path.clone();
                 ctx.data_mut(|d| d.insert_temp(path_id, output_path));
                 let open_folder_id = egui::Id::new("reference_render_open_folder");
                 let mut open_folder = ctx.data_mut(|d| d.get_temp::<bool>(open_folder_id)).unwrap_or(true);
@@ -2195,7 +2224,7 @@ fn draw_reference_settings_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
                 ui.checkbox(&mut startup, egui::RichText::new("Remember last project on startup").size(if narrow { 8.0 } else { 11.0 }));
                 ui.checkbox(&mut splash, egui::RichText::new("Show startup screen").size(if narrow { 8.0 } else { 11.0 }));
                 ui.add_space(if narrow { 4.0 } else { 10.0 });
-                ui.horizontal(|ui| { ui.label(egui::RichText::new("Settings are saved automatically").small().color(colors::TEXT_MUTED)); ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| { ui.add(egui::Button::new("Reset to Defaults").rounding(4.0)); }); });
+                ui.horizontal(|ui| { ui.label(egui::RichText::new("Settings are saved automatically").small().color(colors::TEXT_MUTED)); ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| { if ui.add(egui::Button::new("Reset to Defaults").rounding(4.0)).clicked() { crate::ui::preferences_dialog::reset_to_defaults(app); } }); });
                 ctx.data_mut(|d| { d.insert_temp(updates_id, updates); d.insert_temp(anonymous_id, anonymous); d.insert_temp(startup_id, startup); d.insert_temp(splash_id, splash); });
                 }
             });

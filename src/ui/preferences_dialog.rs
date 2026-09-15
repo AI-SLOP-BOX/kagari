@@ -71,6 +71,14 @@ fn apply(app: &mut KagariApp, p: &Prefs) {
     }
 }
 
+/// Restore the persisted preferences and the live runtime state to defaults.
+pub fn reset_to_defaults(app: &mut KagariApp) {
+    let defaults = Prefs::default();
+    apply(app, &defaults);
+    save(&defaults);
+    app.toasts.info("Preferences reset to defaults");
+}
+
 pub fn draw_preferences_dialog(app: &mut KagariApp, ctx: &egui::Context) {
     if !app.show_preferences {
         return;
