@@ -3082,11 +3082,11 @@ fn draw_landing_sidebar(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui::Cont
     landing_nav_row(ui, ctx, current, HomeNav::Projects, crate::ui::icons::SVG_DOCUMENT, "ドキュメント", false);
     let side = ui.max_rect();
     let settings_rect = egui::Rect::from_min_size(
-        egui::pos2(side.left(), side.bottom() - 410.0),
+        egui::pos2(side.left(), side.bottom() - 180.0),
         egui::vec2(side.width(), 56.0),
     );
     let exit_rect = egui::Rect::from_min_size(
-        egui::pos2(side.left(), side.bottom() - 354.0),
+        egui::pos2(side.left(), side.bottom() - 124.0),
         egui::vec2(side.width(), 56.0),
     );
     ui.allocate_new_ui(egui::UiBuilder::new().max_rect(settings_rect), |settings_ui| {
