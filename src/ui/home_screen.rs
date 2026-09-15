@@ -3085,7 +3085,7 @@ fn draw_landing_dashed_rect(painter: &egui::Painter, rect: egui::Rect, color: eg
     draw_axis(rect.left_bottom(), rect.left_top());
 }
 
-fn draw_landing_home(_app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui::Context) {
+fn draw_landing_home(app: &mut KagariApp, ui: &mut egui::Ui, _ctx: &egui::Context) {
     let content = ui.max_rect();
     ui.painter().rect_filled(content, 0.0, egui::Color32::from_rgb(12, 19, 24));
     let mobile = content.width() < 1080.0;
@@ -3102,8 +3102,13 @@ fn draw_landing_home(_app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui::Contex
     let button_top = hero.top() + 254.0;
     let first_button = egui::Rect::from_min_size(egui::pos2(hero.left(), button_top), egui::vec2(button_width, 62.0));
     let second_button = egui::Rect::from_min_size(egui::pos2(hero.left() + button_width + 23.0, button_top), egui::vec2(button_width, 62.0));
-    if landing_button_rect(ui, first_button, "新規プロジェクト", crate::ui::icons::SVG_FILE_PLUS, true).clicked() { set_home_nav(ctx, HomeNav::NewProject); }
-    if landing_button_rect(ui, second_button, "プロジェクトを開く", crate::ui::icons::SVG_OPEN_FOLDER, false).clicked() { set_home_nav(ctx, HomeNav::Projects); }
+    if landing_button_rect(ui, first_button, "新規プロジェクト", crate::ui::icons::SVG_FILE_PLUS, true).clicked() {
+        enter_studio_new_project(app);
+        app.show_new_comp_dialog = true;
+    }
+    if landing_button_rect(ui, second_button, "プロジェクトを開く", crate::ui::icons::SVG_OPEN_FOLDER, false).clicked() {
+        enter_studio_open_dialog(app);
+    }
 
     let section_top = hero.bottom() + 23.0;
     ui.painter().line_segment([egui::pos2(content.left() + margin, section_top), egui::pos2(content.right() - right_margin, section_top)], egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(48, 61, 71)));
@@ -3137,7 +3142,8 @@ fn draw_landing_home(_app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui::Contex
         egui::vec2(228.0, 62.0),
     );
     if landing_button_rect(ui, empty_button, "新規プロジェクト", crate::ui::icons::SVG_FILE_PLUS, true).clicked() {
-        set_home_nav(ctx, HomeNav::NewProject);
+        enter_studio_new_project(app);
+        app.show_new_comp_dialog = true;
     }
     let lower_top = recent.bottom() + 45.0;
     let lower_width = content.width() - margin - right_margin;
