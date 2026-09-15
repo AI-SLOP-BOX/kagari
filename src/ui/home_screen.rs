@@ -2448,22 +2448,25 @@ fn draw_reference_nav(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui::Contex
     let compact_sidebar = ui.available_width() < 130.0;
     for (nav, icon, label) in [(HomeNav::Home, crate::ui::icons::SVG_HOME, "Home"), (HomeNav::Projects, crate::ui::icons::SVG_FOLDER, "Projects"), (HomeNav::Templates, crate::ui::icons::SVG_LAYERS, "Templates")] {
         let active = current == nav;
-        let frame = egui::Frame::none().fill(if active { egui::Color32::from_rgb(24, 62, 102) } else { egui::Color32::TRANSPARENT }).rounding(6.0).inner_margin(egui::Margin::symmetric(8.0, 15.0));
-        let clicked = ui.horizontal(|ui| {
-            ui.add_space(10.0);
-            let row_width = (ui.available_width() + 23.0).max(90.0);
-            ui.allocate_ui(egui::vec2(row_width, 50.0), |ui| {
-                frame.show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.add_space(if compact_sidebar { 4.0 } else { 6.0 });
-                        crate::ui::icons::render_svg_bytes(ui, label, icon, egui::vec2(if compact_sidebar { 18.0 } else { 20.0 }, if compact_sidebar { 18.0 } else { 20.0 }), if active { colors::TEXT_PRIMARY } else { colors::TEXT_SECONDARY });
-                        ui.add_space(if compact_sidebar { 8.0 } else { 16.0 });
-                        ui.label(egui::RichText::new(label).size(13.0).color(if active { colors::TEXT_PRIMARY } else { colors::TEXT_SECONDARY }));
-                    });
-                }).response.interact(egui::Sense::click())
-            }).inner.clicked()
-        }).inner;
-        if clicked { set_home_nav(ctx, nav); }
+        let (row_rect, response) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 50.0), egui::Sense::click());
+        if active {
+            ui.painter().rect_filled(row_rect.shrink2(egui::vec2(0.0, 1.0)), 6.0, egui::Color32::from_rgb(24, 62, 102));
+        }
+        let icon_size = if compact_sidebar { 18.0 } else { 20.0 };
+        crate::ui::icons::render_svg_at(
+            ui,
+            format!("reference-sidebar-{label}"),
+            icon,
+            egui::vec2(icon_size, icon_size),
+            if active { colors::TEXT_PRIMARY } else { colors::TEXT_SECONDARY },
+            egui::pos2(row_rect.left() + if compact_sidebar { 12.0 } else { 18.0 }, row_rect.center().y - icon_size * 0.5),
+        );
+        let label_left = row_rect.left() + if compact_sidebar { 40.0 } else { 54.0 };
+        ui.put(
+            egui::Rect::from_min_max(egui::pos2(label_left, row_rect.top()), egui::pos2(row_rect.right() - 10.0, row_rect.bottom())),
+            egui::Label::new(egui::RichText::new(label).size(13.0).color(if active { colors::TEXT_PRIMARY } else { colors::TEXT_SECONDARY })).truncate(),
+        );
+        if response.clicked() { set_home_nav(ctx, nav); }
         ui.add_space(3.0);
     }
     ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
