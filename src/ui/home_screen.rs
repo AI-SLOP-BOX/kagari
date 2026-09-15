@@ -573,13 +573,6 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
     }
     let landing_mode = matches!(home_nav(ctx), HomeNav::Home)
         && ctx.screen_rect().width() >= 900.0;
-    if landing_mode {
-        egui::TopBottomPanel::top("landing_window_bar")
-            .exact_height(46.0)
-            .resizable(false)
-            .frame(egui::Frame::none().fill(egui::Color32::from_rgb(24, 31, 37)))
-            .show(ctx, draw_landing_window_bar);
-    }
     let sidebar_width = if landing_mode {
         293.0
     } else if ctx.screen_rect().width() < 1100.0 {
@@ -3003,34 +2996,6 @@ fn draw_reference_continue_details(
             open_project_path(app, &top.path);
         }
     }
-}
-
-fn draw_landing_window_bar(ui: &mut egui::Ui) {
-    ui.add_space(9.0);
-    ui.horizontal(|ui| {
-        ui.add_space(17.0);
-        for color in [
-            egui::Color32::from_rgb(255, 82, 78),
-            egui::Color32::from_rgb(255, 190, 45),
-            egui::Color32::from_rgb(42, 211, 86),
-        ] {
-            ui.painter().circle_filled(
-                egui::pos2(ui.cursor().left() + 7.0, ui.cursor().center().y),
-                7.0,
-                color,
-            );
-            ui.allocate_space(egui::vec2(15.0, 28.0));
-        }
-        ui.add_space(17.0);
-        ui.label(egui::RichText::new("Kagari VFX").size(14.0).color(colors::TEXT_PRIMARY));
-    });
-    ui.painter().line_segment(
-        [
-            egui::pos2(ui.min_rect().left(), ui.min_rect().bottom() - 1.0),
-            egui::pos2(ui.max_rect().right(), ui.min_rect().bottom() - 1.0),
-        ],
-        egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(48, 59, 69)),
-    );
 }
 
 fn landing_nav_row(
