@@ -4324,6 +4324,7 @@ mod tests {
             HomeNav::NewProject,
             HomeNav::Templates,
             HomeNav::Settings,
+            HomeNav::Documentation,
         ] {
             set_home_nav(&ctx, nav);
             let _ = ctx.run(
@@ -4337,6 +4338,26 @@ mod tests {
                 |ctx| draw(&mut app, ctx),
             );
         }
+    }
+
+    #[test]
+    fn tutorial_navigation_enters_guided_workspace() {
+        let mut app = KagariApp::default();
+        app.show_home = true;
+        let ctx = egui::Context::default();
+        set_home_nav(&ctx, HomeNav::Tutorial);
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(900.0, 600.0),
+                )),
+                ..Default::default()
+            },
+            |ctx| draw(&mut app, ctx),
+        );
+        assert!(!app.show_home);
+        assert!(app.show_guided_tutorial);
     }
 
     #[test]
