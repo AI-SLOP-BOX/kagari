@@ -496,7 +496,8 @@ pub fn draw_property_ui<
     draw_value_widget: impl FnOnce(&mut egui::Ui, &mut T),
 ) -> Option<u32> {
     let mut next_frame = None;
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
         ui.label(label);
 
         let has_keyframes = property.keyframes().is_some();
@@ -510,7 +511,7 @@ pub fn draw_property_ui<
             }
         }
 
-        let stopwatch_btn = if has_keyframes { "[K]" } else { "[+]" };
+        let stopwatch_btn = if has_keyframes { "◆" } else { "◇" };
         if custom_widgets::ae_button(ui, stopwatch_btn)
             .on_hover_text(if has_keyframes {
                 "Disable Keyframes"

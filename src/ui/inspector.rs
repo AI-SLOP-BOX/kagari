@@ -90,7 +90,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
             if reference_demo {
                 ui.add_space(19.0);
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("プロジェクト").size(16.0).strong().color(colors::TEXT_PRIMARY));
+                    ui.label(egui::RichText::new("Project").size(16.0).strong().color(colors::TEXT_PRIMARY));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.label(egui::RichText::new("＋").size(23.0).color(colors::TEXT_PRIMARY));
                     });
@@ -142,8 +142,11 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                 return;
             }
 
-            if app.ui_tabs.left_tab_idx == 2 {
-                crate::ui::flowchart_inspector::draw_flowchart_inspector(app, ui);
+            // The left dock is reserved for project/media browsing. Any
+            // legacy or unknown workspace index falls back to Project rather
+            // than resurrecting the old Layer Properties panel here.
+            if app.ui_tabs.left_tab_idx != 0 {
+                crate::ui::project_panel::draw(app, ui);
                 return;
             }
 
@@ -935,14 +938,14 @@ fn draw_reference_studio_nav(app: &mut KagariApp, ui: &mut egui::Ui) {
     let text = colors::TEXT_PRIMARY;
     let muted = colors::TEXT_SECONDARY;
     let rows = [
-        ("ホーム", crate::ui::icons::SVG_HOME),
-        ("編集", crate::ui::icons::SVG_COMPOSITION),
-        ("エフェクト", crate::ui::icons::SVG_LIGHT),
-        ("素材", crate::ui::icons::SVG_FOLDER),
-        ("オーディオ", crate::ui::icons::SVG_AUDIO),
-        ("テキスト", crate::ui::icons::SVG_TOOL_TEXT),
-        ("トランジション", crate::ui::icons::SVG_ARROW_RIGHT),
-        ("カラー", crate::ui::icons::SVG_PALETTE),
+        ("Home", crate::ui::icons::SVG_HOME),
+        ("Compositing", crate::ui::icons::SVG_COMPOSITION),
+        ("Effects", crate::ui::icons::SVG_LIGHT),
+        ("Assets", crate::ui::icons::SVG_FOLDER),
+        ("Audio", crate::ui::icons::SVG_AUDIO),
+        ("Text", crate::ui::icons::SVG_TOOL_TEXT),
+        ("Transitions", crate::ui::icons::SVG_ARROW_RIGHT),
+        ("Color", crate::ui::icons::SVG_PALETTE),
     ];
     let top = rect.top() + 35.0;
     for (index, (label, icon)) in rows.into_iter().enumerate() {
@@ -971,6 +974,6 @@ fn draw_reference_studio_nav(app: &mut KagariApp, ui: &mut egui::Ui) {
     let settings_y = rect.bottom() - 72.0;
     let settings_rect = egui::Rect::from_min_size(egui::pos2(rect.left() + 24.0, settings_y), egui::vec2(22.0, 22.0));
     crate::ui::icons::render_svg_at(ui, "reference-nav-settings".to_string(), crate::ui::icons::SVG_SETTINGS, settings_rect.size(), muted, settings_rect.min);
-    ui.painter().text(egui::pos2(rect.left() + 63.0, settings_y + 11.0), egui::Align2::LEFT_CENTER, "設定", egui::FontId::proportional(14.0), muted);
+    ui.painter().text(egui::pos2(rect.left() + 63.0, settings_y + 11.0), egui::Align2::LEFT_CENTER, "Settings", egui::FontId::proportional(14.0), muted);
     let _ = app;
 }

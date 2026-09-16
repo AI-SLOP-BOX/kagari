@@ -657,7 +657,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         }
                                     }
 
-                                    ui.menu_button(egui::RichText::new("Switches").small(), |ui| {
+                                    ui.menu_button(egui::RichText::new("S").small(), |ui| {
                                     // ── AE Layer Color Label Square Picker ──
                                     let label_rgb = layer.label.to_rgb();
                                     let label_c32 = egui::Color32::from_rgb(
@@ -1155,7 +1155,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                     });
                                     ui.style_mut().visuals.override_text_color = None;
 
-                                    ui.menu_button(egui::RichText::new("Modes").small(), |ui| {
+                                    ui.menu_button(egui::RichText::new("M").small(), |ui| {
                                     // ── Blend Mode Dropdown ──
                                     let bm_text = format!("{:?}", layer.blend_mode);
                                     egui::ComboBox::from_id_salt(format!("tl_blend_{}", i))
@@ -1741,21 +1741,21 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
 
             crate::ui::timeline::pending_actions::apply_effect_drops(app, pending_effect_drops, &mut project_changed);
 
-            // ── AE Timeline Bottom Controls Bar (Toggle Switches / Modes F4) ──
+            // ── AE Timeline Bottom Controls Bar ──
             ui.add_space(2.0);
             ui.horizontal(|ui| {
-                if ui.selectable_label(app.ui_tabs.show_switches_pane, "[◧] Switches").on_hover_text("Expand / Collapse Layer Switches Pane").clicked() {
+                ui.small(egui::RichText::new("Controls").strong().color(colors::TEXT_SECONDARY));
+                if ui.selectable_label(app.ui_tabs.show_switches_pane, "Switches").on_hover_text("Show layer switches").clicked() {
                     app.ui_tabs.show_switches_pane = true;
                 }
-                if ui.selectable_label(!app.ui_tabs.show_switches_pane, "[⇆] Modes").on_hover_text("Expand / Collapse Transfer Controls Pane (Blend Modes & Track Mattes)").clicked() {
+                if ui.selectable_label(!app.ui_tabs.show_switches_pane, "Modes").on_hover_text("Show blend modes and track mattes").clicked() {
                     app.ui_tabs.show_switches_pane = false;
                 }
-                if ui.button("Toggle Switches / Modes (F4)").on_hover_text("Toggle between Layer Switches and Transfer Modes (Shortcut: F4)").clicked() ||
-                   ui.input(|i| i.key_pressed(egui::Key::F4)) {
+                if ui.input(|i| i.key_pressed(egui::Key::F4)) {
                     app.ui_tabs.show_switches_pane = !app.ui_tabs.show_switches_pane;
                 }
                 ui.separator();
-                ui.small(egui::RichText::new("Double-click a layer to rename · Space to preview").color(colors::TEXT_SECONDARY));
+                ui.small(egui::RichText::new("F4 toggles · Double-click to rename · Space to preview").color(colors::TEXT_SECONDARY));
             });
 
             crate::ui::timeline::pending_actions::apply(
@@ -1825,9 +1825,13 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
 
 #[allow(float_literal_f32_fallback)]
 fn draw_target_timeline(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, total_frames: u32) {
+    let screen_height = ctx.screen_rect().height();
+    let timeline_height = (screen_height * 0.38).clamp(300.0, 394.0);
     egui::TopBottomPanel::bottom("timeline_panel")
-        .resizable(false)
-        .exact_height(394.0)
+        .resizable(true)
+        .min_height(260.0)
+        .max_height((screen_height * 0.56).max(300.0))
+        .default_height(timeline_height)
         .frame(egui::Frame::none().fill(egui::Color32::from_rgb(13, 21, 27)))
         .show(ctx, |ui| {
             let rect = ui.max_rect();
@@ -1843,9 +1847,9 @@ fn draw_target_timeline(app: &mut KagariApp, ctx: &egui::Context, current_frame:
             painter.line_segment([egui::pos2(rect.left(), rect.top() + header_h + tools_h), egui::pos2(rect.right(), rect.top() + header_h + tools_h)], egui::Stroke::new(1.0, border));
             painter.line_segment([egui::pos2(rect.left(), rect.top() + header_h + tools_h + ruler_h), egui::pos2(rect.right(), rect.top() + header_h + tools_h + ruler_h)], egui::Stroke::new(1.0, border));
             painter.line_segment([egui::pos2(rect.left() + left_width, rect.top()), egui::pos2(rect.left() + left_width, rect.bottom())], egui::Stroke::new(1.0, border));
-            painter.text(egui::pos2(rect.left() + 24.0, rect.top() + 21.0), egui::Align2::LEFT_CENTER, "タイムライン", egui::FontId::proportional(14.0), colors::TEXT_PRIMARY);
+            painter.text(egui::pos2(rect.left() + 24.0, rect.top() + 21.0), egui::Align2::LEFT_CENTER, "Timeline", egui::FontId::proportional(14.0), colors::TEXT_PRIMARY);
             painter.line_segment([egui::pos2(rect.left() + 16.0, rect.top() + 40.0), egui::pos2(rect.left() + 116.0, rect.top() + 40.0)], egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 107, 22)));
-            painter.text(egui::pos2(rect.left() + 146.0, rect.top() + 21.0), egui::Align2::LEFT_CENTER, "シーケンス", egui::FontId::proportional(13.0), muted);
+            painter.text(egui::pos2(rect.left() + 146.0, rect.top() + 21.0), egui::Align2::LEFT_CENTER, "Sequence", egui::FontId::proportional(13.0), muted);
             for (index, glyph) in ["↖", "♧", "⌁", "✥", "⌁", "↻", "▱", "⊙"].into_iter().enumerate() {
                 painter.text(egui::pos2(rect.left() + 31.0 + index as f32 * 34.0, rect.top() + header_h + 21.0), egui::Align2::CENTER_CENTER, glyph, egui::FontId::proportional(16.0), if index == 0 { egui::Color32::from_rgb(255, 107, 22) } else { muted });
             }

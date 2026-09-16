@@ -2406,7 +2406,7 @@ fn draw_target_viewport(app: &mut KagariApp, ctx: &egui::Context) {
                 painter.text(egui::pos2(control_x + index as f32 * 42.0, control_y), egui::Align2::CENTER_CENTER, glyph, egui::FontId::proportional(if index == 2 { 19.0 } else { 16.0 }), colors::TEXT_PRIMARY);
             }
             painter.rect_stroke(egui::Rect::from_min_size(egui::pos2(rect.right() - 257.0, control_y - 17.0), egui::vec2(101.0, 34.0)), 5.0, egui::Stroke::new(1.0, border));
-            painter.text(egui::pos2(rect.right() - 207.0, control_y), egui::Align2::CENTER_CENTER, "フル画質 ⌄", egui::FontId::proportional(12.0), colors::TEXT_PRIMARY);
+            painter.text(egui::pos2(rect.right() - 207.0, control_y), egui::Align2::CENTER_CENTER, "Full Quality ⌄", egui::FontId::proportional(12.0), colors::TEXT_PRIMARY);
             for (index, glyph) in ["□", "◎", "⛶"].into_iter().enumerate() {
                 painter.text(egui::pos2(rect.right() - 150.0 + index as f32 * 43.0, control_y), egui::Align2::CENTER_CENTER, glyph, egui::FontId::proportional(21.0), colors::TEXT_PRIMARY);
             }
