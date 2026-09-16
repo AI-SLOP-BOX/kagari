@@ -40,10 +40,13 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
 
 fn draw_topbar(ui: &mut egui::Ui, width: f32, mobile: bool) {
     if !mobile && width >= 1100.0 {
-        let right = width - 32.0;
-        icons::render_svg_at(ui, "tutorial-open-project".to_string(), icons::SVG_FOLDER, egui::vec2(20.0, 20.0), colors::TEXT_SECONDARY, egui::pos2(right - 270.0, 14.0));
-        icons::render_svg_at(ui, "tutorial-new-project".to_string(), icons::SVG_FILE_PLUS, egui::vec2(20.0, 20.0), colors::TEXT_SECONDARY, egui::pos2(right - 92.0, 14.0));
-        icons::render_svg_at(ui, "tutorial-settings".to_string(), icons::SVG_SETTINGS, egui::vec2(20.0, 20.0), colors::TEXT_SECONDARY, egui::pos2(right + 4.0, 14.0));
+        let right = width - 18.0;
+        let settings = egui::Rect::from_min_max(egui::pos2(right - 72.0, 5.0), egui::pos2(right, 55.0));
+        let new_project = egui::Rect::from_min_max(egui::pos2(settings.left() - 152.0, 5.0), egui::pos2(settings.left() - 8.0, 55.0));
+        let open_project = egui::Rect::from_min_max(egui::pos2(new_project.left() - 182.0, 5.0), egui::pos2(new_project.left() - 8.0, 55.0));
+        tutorial_header_action(ui, open_project, icons::SVG_FOLDER, "プロジェクトを開く", "tutorial-open-project");
+        tutorial_header_action(ui, new_project, icons::SVG_FILE_PLUS, "新規プロジェクト", "tutorial-new-project");
+        tutorial_header_action(ui, settings, icons::SVG_SETTINGS, "設定", "tutorial-settings");
     }
     let p = ui.painter();
     for (x, c) in [(23.0, (255, 82, 78)), (46.0, (255, 190, 45)), (69.0, (42, 211, 86))] {
@@ -53,12 +56,19 @@ fn draw_topbar(ui: &mut egui::Ui, width: f32, mobile: bool) {
     if !mobile && width >= 1100.0 {
         p.line_segment([egui::pos2(264.0, 14.0), egui::pos2(264.0, 45.0)], egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE));
         p.text(egui::pos2(291.0, 24.0), egui::Align2::LEFT_CENTER, "映像に、まだ見ぬ世界を。", egui::FontId::proportional(14.0), colors::TEXT_PRIMARY);
-        let right = width - 32.0;
-        p.text(egui::pos2(right - 244.0, 24.0), egui::Align2::LEFT_CENTER, "プロジェクトを開く", egui::FontId::proportional(13.0), colors::TEXT_SECONDARY);
-        p.text(egui::pos2(right - 66.0, 24.0), egui::Align2::LEFT_CENTER, "新規プロジェクト", egui::FontId::proportional(13.0), colors::TEXT_SECONDARY);
-        p.text(egui::pos2(right + 30.0, 24.0), egui::Align2::LEFT_CENTER, "設定", egui::FontId::proportional(13.0), colors::TEXT_SECONDARY);
         p.text(egui::pos2(width - 18.0, 24.0), egui::Align2::RIGHT_CENTER, "×", egui::FontId::proportional(18.0), colors::TEXT_MUTED);
     }
+}
+
+fn tutorial_header_action(ui: &mut egui::Ui, rect: egui::Rect, icon: &'static str, label: &str, id: &str) {
+    let response = ui.interact(rect, egui::Id::new(id), egui::Sense::click());
+    if response.hovered() {
+        ui.painter().rect_filled(rect, 6.0, egui::Color32::from_rgba_unmultiplied(48, 61, 72, 110));
+    }
+    let icon_size = egui::vec2(20.0, 20.0);
+    icons::render_svg_at(ui, id.to_string(), icon, icon_size, colors::TEXT_SECONDARY, egui::pos2(rect.left() + 8.0, rect.center().y - 10.0));
+    let text_rect = egui::Rect::from_min_max(egui::pos2(rect.left() + 36.0, rect.top()), egui::pos2(rect.right() - 4.0, rect.bottom()));
+    ui.put(text_rect, egui::Label::new(egui::RichText::new(label).size(13.0).color(colors::TEXT_SECONDARY)).truncate());
 }
 
 fn draw_chapters(ui: &mut egui::Ui, rect: egui::Rect, width: f32, compact: bool, app: &mut KagariApp) {
@@ -70,7 +80,7 @@ fn draw_chapters(ui: &mut egui::Ui, rect: egui::Rect, width: f32, compact: bool,
     icons::render_svg_at(ui, "tutorial-chapter-heading".to_string(), icons::SVG_LAYERS, egui::vec2(55.0, 55.0), colors::TEXT_PRIMARY, egui::pos2(rect.left() + 30.0, rect.top() + 20.0));
     let chapter_icons = [icons::SVG_HOME, icons::SVG_FILE, icons::SVG_LAYERS, icons::SVG_MARKER, icons::SVG_LIGHT, icons::SVG_PALETTE, icons::SVG_FILE_PLUS, icons::SVG_BOOK];
     for (i, icon) in chapter_icons.into_iter().enumerate() { icons::render_svg_at(ui, format!("tutorial-chapter-{i}"), icon, egui::vec2(30.0, 30.0), if i == 0 { ORANGE } else { colors::TEXT_PRIMARY }, egui::pos2(rect.left() + 28.0, rect.top() + 97.0 + i as f32 * if compact { 61.0 } else { 78.0 })); }
-    let p = ui.painter();
+    let p = ui.painter().clone();
     let logo_rect = egui::Rect::from_min_size(egui::pos2(rect.left() + 36.0, rect.top() + 20.0), egui::vec2(55.0, 55.0));
     if let Some(id) = texture(ctx_for(ui), "assets/kagari_logo.webp", "tutorial-logo") {
         p.image(id, logo_rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
@@ -94,8 +104,16 @@ fn draw_chapters(ui: &mut egui::Ui, rect: egui::Rect, width: f32, compact: bool,
         } else if response.hovered() {
             p.rect_filled(item, 7.0, egui::Color32::from_rgb(23, 31, 38));
         }
-        p.text(egui::pos2(item.left() + 62.0, item.top() + item_h * 0.36), egui::Align2::LEFT_CENTER, title, egui::FontId::proportional(if compact { 13.0 } else { 16.0 }), colors::TEXT_PRIMARY);
-        p.text(egui::pos2(item.left() + 62.0, item.top() + item_h * 0.72), egui::Align2::LEFT_CENTER, sub, egui::FontId::proportional(if compact { 9.0 } else { 12.0 }), colors::TEXT_SECONDARY);
+        let label_left = item.left() + 62.0;
+        let label_right = item.right() - 12.0;
+        ui.put(
+            egui::Rect::from_min_max(egui::pos2(label_left, item.top() + 3.0), egui::pos2(label_right, item.top() + item_h * 0.53)),
+            egui::Label::new(egui::RichText::new(title).size(if compact { 13.0 } else { 16.0 }).color(colors::TEXT_PRIMARY)).truncate(),
+        );
+        ui.put(
+            egui::Rect::from_min_max(egui::pos2(label_left, item.top() + item_h * 0.49), egui::pos2(label_right, item.bottom() - 2.0)),
+            egui::Label::new(egui::RichText::new(sub).size(if compact { 9.0 } else { 12.0 }).color(colors::TEXT_SECONDARY)).truncate(),
+        );
         if response.clicked() { app.tutorial_step = i; }
     }
     if compact { return; }

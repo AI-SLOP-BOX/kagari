@@ -176,6 +176,7 @@ fn draw_nav(ui: &mut egui::Ui, left: egui::Rect, r: egui::Rect, narrow: bool) {
         } else {
             29.0
         };
+        let center_y = y + 15.0;
         icons::render_svg_at(
             ui,
             format!("asset-nav-{i}"),
@@ -186,19 +187,23 @@ fn draw_nav(ui: &mut egui::Ui, left: egui::Rect, r: egui::Rect, narrow: bool) {
             } else {
                 egui::Color32::from_rgb(193, 205, 218)
             },
-            egui::pos2(x, y + 4.0),
+            egui::pos2(x, center_y - 11.0),
         );
         if !narrow {
-            ui.painter().text(
-                egui::pos2(73.0, y + 15.0),
-                egui::Align2::LEFT_CENTER,
-                label,
-                egui::FontId::proportional(14.0),
-                if active {
-                    colors::TEXT_PRIMARY
-                } else {
-                    egui::Color32::from_rgb(193, 205, 218)
-                },
+            let label_rect = egui::Rect::from_min_max(
+                egui::pos2(73.0, y),
+                egui::pos2(left.right() - 12.0, y + 30.0),
+            );
+            ui.put(
+                label_rect,
+                egui::Label::new(
+                    egui::RichText::new(label).size(14.0).color(if active {
+                        colors::TEXT_PRIMARY
+                    } else {
+                        egui::Color32::from_rgb(193, 205, 218)
+                    }),
+                )
+                .truncate(),
             );
         }
     }
