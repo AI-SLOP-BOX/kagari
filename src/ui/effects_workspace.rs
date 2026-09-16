@@ -32,15 +32,31 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
 }
 
 fn draw_topbar(ui: &mut egui::Ui, width: f32, mobile: bool) {
-    let p = ui.painter();
+    let p = ui.painter().clone();
     for (x, c) in [(23.0, (255, 82, 78)), (46.0, (255, 190, 45)), (69.0, (42, 211, 86))] { p.circle_filled(egui::pos2(x, 23.0), 6.5, egui::Color32::from_rgb(c.0, c.1, c.2)); }
     p.text(egui::pos2(96.0, 23.0), egui::Align2::LEFT_CENTER, "Kagari VFX", egui::FontId::proportional(14.0), colors::TEXT_PRIMARY);
     if !mobile && width >= 1100.0 {
         p.line_segment([egui::pos2(270.0, 12.0), egui::pos2(270.0, 47.0)], egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE));
         p.text(egui::pos2(290.0, 23.0), egui::Align2::LEFT_CENTER, "映像に、まだ見ぬ世界を。", egui::FontId::proportional(14.0), colors::TEXT_PRIMARY);
-        p.text(egui::pos2(width - 380.0, 23.0), egui::Align2::LEFT_CENTER, "▱  プロジェクトを開く   │   ⊞  新規プロジェクト   │   ⚙  設定", egui::FontId::proportional(13.0), colors::TEXT_SECONDARY);
+        let right = width - 18.0;
+        let settings = egui::Rect::from_min_max(egui::pos2(right - 72.0, 5.0), egui::pos2(right, 55.0));
+        let new_project = egui::Rect::from_min_max(egui::pos2(settings.left() - 152.0, 5.0), egui::pos2(settings.left() - 8.0, 55.0));
+        let open_project = egui::Rect::from_min_max(egui::pos2(new_project.left() - 182.0, 5.0), egui::pos2(new_project.left() - 8.0, 55.0));
+        effects_header_action(ui, open_project, icons::SVG_FOLDER, "プロジェクトを開く", "effects-open-project");
+        effects_header_action(ui, new_project, icons::SVG_FILE_PLUS, "新規プロジェクト", "effects-new-project");
+        effects_header_action(ui, settings, icons::SVG_SETTINGS, "設定", "effects-settings");
         p.text(egui::pos2(width - 18.0, 23.0), egui::Align2::RIGHT_CENTER, "×", egui::FontId::proportional(18.0), colors::TEXT_MUTED);
     }
+}
+
+fn effects_header_action(ui: &mut egui::Ui, rect: egui::Rect, icon: &'static str, label: &str, id: &str) {
+    let response = ui.interact(rect, egui::Id::new(id), egui::Sense::click());
+    if response.hovered() {
+        ui.painter().rect_filled(rect, 6.0, egui::Color32::from_rgba_unmultiplied(48, 61, 72, 110));
+    }
+    icons::render_svg_at(ui, id.to_string(), icon, egui::vec2(20.0, 20.0), colors::TEXT_SECONDARY, egui::pos2(rect.left() + 8.0, rect.center().y - 10.0));
+    let text_rect = egui::Rect::from_min_max(egui::pos2(rect.left() + 36.0, rect.top()), egui::pos2(rect.right() - 4.0, rect.bottom()));
+    ui.put(text_rect, egui::Label::new(egui::RichText::new(label).size(13.0).color(colors::TEXT_SECONDARY)).truncate());
 }
 
 fn draw_sidebar(ui: &mut egui::Ui, rect: egui::Rect, width: f32, compact: bool, _app: &mut KagariApp) {
@@ -53,14 +69,15 @@ fn draw_sidebar(ui: &mut egui::Ui, rect: egui::Rect, width: f32, compact: bool, 
     icons::render_svg_at(ui, "effects-heading".to_string(), icons::SVG_EFFECTS, egui::vec2(30.0, 30.0), colors::TEXT_PRIMARY, egui::pos2(side.left() + 20.0, side.top() + 29.0));
     for (i, icon) in [icons::SVG_LAYERS, icons::SVG_STAR, icons::SVG_CLOCK].into_iter().enumerate() { icons::render_svg_at(ui, format!("effects-nav-{i}"), icon, egui::vec2(22.0, 22.0), colors::TEXT_PRIMARY, egui::pos2(side.left() + 25.0, side.top() + 91.0 + i as f32 * 42.0)); }
     for i in 0..10 { let icon = if i == 7 { icons::SVG_LIGHT } else { icons::SVG_FOLDER }; icons::render_svg_at(ui, format!("effects-category-{i}"), icon, egui::vec2(20.0, 20.0), if i == 7 { ORANGE } else { colors::TEXT_PRIMARY }, egui::pos2(side.left() + 25.0, side.top() + 265.0 + i as f32 * 34.0)); }
-    let p = ui.painter();
+    let p = ui.painter().clone();
     p.text(egui::pos2(side.left() + 84.0, side.top() + 44.0), egui::Align2::LEFT_CENTER, "エフェクト", egui::FontId::proportional(if compact { 20.0 } else { 23.0 }), colors::TEXT_PRIMARY);
     let top = side.top() + 82.0;
     for (i, label) in ["すべて", "お気に入り", "最近使用"].into_iter().enumerate() {
         let y = top + i as f32 * 42.0;
         let active = i == 0;
         if active { p.rect_filled(egui::Rect::from_min_size(egui::pos2(side.left() + 10.0, y), egui::vec2(width - 20.0, 40.0)), 6.0, egui::Color32::from_rgb(28, 43, 55)); p.rect_filled(egui::Rect::from_min_size(egui::pos2(side.left() + 10.0, y), egui::vec2(4.0, 40.0)), 2.0, ORANGE); }
-        p.text(egui::pos2(side.left() + 78.0, y + 20.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(14.0), colors::TEXT_PRIMARY);
+        let label_rect = egui::Rect::from_min_max(egui::pos2(side.left() + 78.0, y + 2.0), egui::pos2(side.right() - 18.0, y + 38.0));
+        ui.put(label_rect, egui::Label::new(egui::RichText::new(label).size(14.0).color(colors::TEXT_PRIMARY)).truncate());
     }
     p.line_segment([egui::pos2(side.left() + 20.0, top + 145.0), egui::pos2(side.right() - 20.0, top + 145.0)], egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE));
     let video_rows = ["ぼかし", "カラー補正", "キーイング", "ノイズ＆グレイン", "スタイライズ", "ディストーション", "生成", "発光", "時間", "ユーティリティ"];
@@ -69,13 +86,15 @@ fn draw_sidebar(ui: &mut egui::Ui, rect: egui::Rect, width: f32, compact: bool, 
             if i == 0 { p.text(egui::pos2(side.left() + 20.0, y), egui::Align2::LEFT_CENTER, "ビデオエフェクト", egui::FontId::proportional(14.0), colors::TEXT_PRIMARY); p.text(egui::pos2(side.right() - 22.0, y), egui::Align2::RIGHT_CENTER, "⌃", egui::FontId::proportional(13.0), colors::TEXT_SECONDARY); y += 28.0; }
             let active = i == 7;
             if active { p.rect_filled(egui::Rect::from_min_size(egui::pos2(side.left() + 10.0, y - 18.0), egui::vec2(width - 20.0, 43.0)), 5.0, egui::Color32::from_rgb(50, 38, 31)); p.rect_filled(egui::Rect::from_min_size(egui::pos2(side.left() + 10.0, y - 18.0), egui::vec2(4.0, 43.0)), 2.0, ORANGE); }
-            p.text(egui::pos2(side.left() + 76.0, y), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(13.0), if active { ORANGE } else { colors::TEXT_PRIMARY });
+            let label_rect = egui::Rect::from_min_max(egui::pos2(side.left() + 76.0, y - 16.0), egui::pos2(side.right() - 45.0, y + 16.0));
+            ui.put(label_rect, egui::Label::new(egui::RichText::new(label).size(13.0).color(if active { ORANGE } else { colors::TEXT_PRIMARY })).truncate());
             p.text(egui::pos2(side.right() - 24.0, y), egui::Align2::RIGHT_CENTER, format!("{}", [12,18,10,9,12,11,16,14,9,10][i]), egui::FontId::proportional(11.0), colors::TEXT_SECONDARY); y += 34.0;
     }
     p.line_segment([egui::pos2(side.left() + 20.0, y - 9.0), egui::pos2(side.right() - 20.0, y - 9.0)], egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE)); y += 22.0;
     p.text(egui::pos2(side.left() + 20.0, y), egui::Align2::LEFT_CENTER, "プリセット", egui::FontId::proportional(14.0), colors::TEXT_PRIMARY); p.text(egui::pos2(side.right() - 22.0, y), egui::Align2::RIGHT_CENTER, "⌃", egui::FontId::proportional(13.0), colors::TEXT_SECONDARY); y += 28.0;
     for (i, label) in ["ユーザープリセット", "内蔵プリセット"].into_iter().enumerate() {
-            p.text(egui::pos2(side.left() + 76.0, y), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(13.0), colors::TEXT_PRIMARY);
+            let label_rect = egui::Rect::from_min_max(egui::pos2(side.left() + 76.0, y - 16.0), egui::pos2(side.right() - 45.0, y + 16.0));
+            ui.put(label_rect, egui::Label::new(egui::RichText::new(label).size(13.0).color(colors::TEXT_PRIMARY)).truncate());
             p.text(egui::pos2(side.right() - 24.0, y), egui::Align2::RIGHT_CENTER, if i == 0 { "5" } else { "24" }, egui::FontId::proportional(11.0), colors::TEXT_SECONDARY); y += 34.0;
     }
 }
