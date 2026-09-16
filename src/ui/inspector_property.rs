@@ -10,10 +10,13 @@ pub fn draw_easy_ease_button<T: Clone>(
     property: &mut Animatable<T>,
     project_changed: &mut bool,
 ) {
-    if ui.available_width() < 400.0 {
+    // The dedicated keyframe row already exposes the compact Ease menu. Keep
+    // the expanded preset strip for wide inspector docks only so it never
+    // forces the right panel to overflow on compact editor layouts.
+    if ui.available_width() < 650.0 {
         return;
     }
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.add_space(20.0);
         if custom_widgets::ae_button(ui, "Easy Ease (F9)")
             .on_hover_text("Symmetrical Bezier Ease (F9)")

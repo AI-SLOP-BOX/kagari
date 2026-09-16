@@ -25,7 +25,7 @@ pub fn draw_layer_transforms(
                 "Position (XYZ)",
                 &mut layer.transform_3d.position,
                 |ui, val| {
-                    ui.horizontal(|ui| {
+                    ui.horizontal_wrapped(|ui| {
                         ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
                         ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
                         ui.add(egui::DragValue::new(&mut val[2]).speed(1.0).prefix("Z: "));
@@ -47,7 +47,7 @@ pub fn draw_layer_transforms(
                 "Rotation (YPR)",
                 &mut layer.transform_3d.rotation,
                 |ui, val| {
-                    ui.horizontal(|ui| {
+                    ui.horizontal_wrapped(|ui| {
                         ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).suffix("° P"));
                         ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).suffix("° Y"));
                         ui.add(egui::DragValue::new(&mut val[2]).speed(1.0).suffix("° R"));
@@ -69,7 +69,7 @@ pub fn draw_layer_transforms(
                 "Scale (XYZ)",
                 &mut layer.transform_3d.scale,
                 |ui, val| {
-                    ui.horizontal(|ui| {
+                    ui.horizontal_wrapped(|ui| {
                         ui.add(egui::DragValue::new(&mut val[0]).speed(0.1).suffix("% X"));
                         ui.add(egui::DragValue::new(&mut val[1]).speed(0.1).suffix("% Y"));
                         ui.add(egui::DragValue::new(&mut val[2]).speed(0.1).suffix("% Z"));
@@ -158,7 +158,7 @@ pub fn draw_layer_transforms(
                 "Anchor Point",
                 &mut layer.transform.anchor_point,
                 |ui, val| {
-                    ui.horizontal(|ui| {
+                    ui.horizontal_wrapped(|ui| {
                         ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
                         ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
                     });
@@ -168,7 +168,7 @@ pub fn draw_layer_transforms(
             }
 
             // 🎯 3x3 Anchor Point Quick Grid Picker
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 ui.add_space(20.0);
                 ui.small("Snap Grid: ");
                 let b_size = layer.bounding_size();
@@ -218,7 +218,7 @@ pub fn draw_layer_transforms(
                 "Position",
                 &mut layer.transform.position,
                 |ui, val| {
-                    ui.horizontal(|ui| {
+                    ui.horizontal_wrapped(|ui| {
                         ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
                         ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
                     });
@@ -247,7 +247,7 @@ pub fn draw_layer_transforms(
                 "Scale",
                 &mut layer.transform.scale,
                 |ui, val| {
-                    ui.horizontal(|ui| {
+                    ui.horizontal_wrapped(|ui| {
                         ui.add(egui::DragValue::new(&mut val[0]).speed(0.1).suffix("% X"));
                         ui.add(egui::DragValue::new(&mut val[1]).speed(0.1).suffix("% Y"));
                     });
@@ -303,7 +303,7 @@ pub fn draw_layer_transforms(
                     AutoOrientMode::OrientAlongPath => "Orient Along Path",
                     AutoOrientMode::OrientTowardsPoint { .. } => "Orient Towards Point",
                 };
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.label(
                         egui::RichText::new("Auto-Orient")
                             .small()
@@ -351,7 +351,7 @@ pub fn draw_layer_transforms(
                 });
                 if let AutoOrientMode::OrientTowardsPoint { target_point } = &mut layer.auto_orient
                 {
-                    ui.horizontal(|ui| {
+                    ui.horizontal_wrapped(|ui| {
                         ui.label(
                             egui::RichText::new("Target")
                                 .small()

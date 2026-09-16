@@ -947,13 +947,16 @@ fn draw_reference_studio_nav(app: &mut KagariApp, ui: &mut egui::Ui) {
         ("Transitions", crate::ui::icons::SVG_ARROW_RIGHT),
         ("Color", crate::ui::icons::SVG_PALETTE),
     ];
-    let top = rect.top() + 35.0;
+    let compact = rect.height() < 520.0;
+    let row_step = if compact { 38.0 } else { 52.0 };
+    let row_height = if compact { 34.0 } else { 48.0 };
+    let top = rect.top() + if compact { 10.0 } else { 35.0 };
     for (index, (label, icon)) in rows.into_iter().enumerate() {
-        let y = top + index as f32 * 52.0;
+        let y = top + index as f32 * row_step;
         let active = index == 1;
         let row = egui::Rect::from_min_max(
             egui::pos2(rect.left() + 4.0, y),
-            egui::pos2(rect.right(), y + 48.0),
+            egui::pos2(rect.right(), y + row_height),
         );
         if active {
             ui.painter().rect_filled(row, 4.0, egui::Color32::from_rgb(28, 35, 43));
@@ -963,17 +966,22 @@ fn draw_reference_studio_nav(app: &mut KagariApp, ui: &mut egui::Ui) {
                 egui::Color32::from_rgb(255, 107, 22),
             );
         }
-        let icon_rect = egui::Rect::from_min_size(egui::pos2(rect.left() + 24.0, y + 14.0), egui::vec2(22.0, 22.0));
+        let icon_size = if compact { 18.0 } else { 22.0 };
+        let icon_rect = egui::Rect::from_min_size(
+            egui::pos2(rect.left() + if compact { 18.0 } else { 24.0 }, y + (row_height - icon_size) * 0.5),
+            egui::vec2(icon_size, icon_size),
+        );
         crate::ui::icons::render_svg_at(ui, format!("reference-nav-icon-{index}"), icon, icon_rect.size(), if active { egui::Color32::from_rgb(255, 107, 22) } else { muted }, icon_rect.min);
-        ui.painter().text(egui::pos2(rect.left() + 63.0, y + 24.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(14.0), if active { text } else { muted });
+        ui.painter().text(egui::pos2(rect.left() + if compact { 50.0 } else { 63.0 }, y + row_height * 0.5), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(if compact { 12.0 } else { 14.0 }), if active { text } else { muted });
     }
     ui.painter().line_segment(
-        [egui::pos2(rect.left() + 38.0, top + 8.0 * 52.0 - 4.0), egui::pos2(rect.right() - 20.0, top + 8.0 * 52.0 - 4.0)],
+        [egui::pos2(rect.left() + if compact { 24.0 } else { 38.0 }, top + rows.len() as f32 * row_step - 4.0), egui::pos2(rect.right() - if compact { 12.0 } else { 20.0 }, top + rows.len() as f32 * row_step - 4.0)],
         egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
     );
-    let settings_y = rect.bottom() - 72.0;
-    let settings_rect = egui::Rect::from_min_size(egui::pos2(rect.left() + 24.0, settings_y), egui::vec2(22.0, 22.0));
+    let settings_size = if compact { 18.0 } else { 22.0 };
+    let settings_y = rect.bottom() - if compact { 32.0 } else { 72.0 };
+    let settings_rect = egui::Rect::from_min_size(egui::pos2(rect.left() + if compact { 18.0 } else { 24.0 }, settings_y), egui::vec2(settings_size, settings_size));
     crate::ui::icons::render_svg_at(ui, "reference-nav-settings".to_string(), crate::ui::icons::SVG_SETTINGS, settings_rect.size(), muted, settings_rect.min);
-    ui.painter().text(egui::pos2(rect.left() + 63.0, settings_y + 11.0), egui::Align2::LEFT_CENTER, "Settings", egui::FontId::proportional(14.0), muted);
+    ui.painter().text(egui::pos2(rect.left() + if compact { 50.0 } else { 63.0 }, settings_y + settings_size * 0.5), egui::Align2::LEFT_CENTER, "Settings", egui::FontId::proportional(if compact { 12.0 } else { 14.0 }), muted);
     let _ = app;
 }

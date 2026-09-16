@@ -15,20 +15,27 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
             .layers
             .iter()
             .any(|layer| layer.id == "demo_bg");
-    let right_width = if reference_demo { 359.0 } else { 344.0 };
+    let compact_right_dock = ctx.screen_rect().width() >= 950.0 && ctx.screen_rect().width() < 1200.0;
+    let right_width = if reference_demo {
+        359.0
+    } else if compact_right_dock {
+        350.0
+    } else {
+        344.0
+    };
     let max_width = if reference_demo {
         359.0
     } else if ctx.screen_rect().width() >= 1200.0 {
         388.0
     } else {
-        (ctx.screen_rect().width() * 0.28).max(230.0)
+        (ctx.screen_rect().width() * 0.28).max(if compact_right_dock { 350.0 } else { 230.0 })
     };
 
     egui::SidePanel::right("right_panel")
         .resizable(!reference_demo)
         .default_width(right_width)
-        .min_width(if reference_demo { 359.0 } else { 230.0 })
-        .max_width(if reference_demo { 359.0 } else { max_width.max(320.0) })
+        .min_width(if reference_demo { 359.0 } else if compact_right_dock { 350.0 } else { 230.0 })
+        .max_width(if reference_demo { 359.0 } else if compact_right_dock { 350.0 } else { max_width.max(320.0) })
         .frame(if reference_demo {
             egui::Frame::none()
                 .fill(egui::Color32::from_rgb(13, 22, 29))

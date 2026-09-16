@@ -2391,26 +2391,43 @@ fn draw_target_viewport(app: &mut KagariApp, ctx: &egui::Context) {
             let rect = ui.max_rect();
             let painter = ui.painter();
             let border = egui::Color32::from_rgb(39, 52, 61);
-            painter.text(egui::pos2(rect.left() + 14.0, rect.top() + 28.0), egui::Align2::LEFT_CENTER, "プレビュー", egui::FontId::proportional(16.0), colors::TEXT_PRIMARY);
-            let image_rect = egui::Rect::from_min_max(egui::pos2(rect.left() + 15.0, rect.top() + 51.0), egui::pos2(rect.right() - 15.0, rect.top() + 445.0));
+            painter.text(egui::pos2(rect.left() + 14.0, rect.top() + 28.0), egui::Align2::LEFT_CENTER, "Preview", egui::FontId::proportional(16.0), colors::TEXT_PRIMARY);
+            let image_area = egui::vec2((rect.width() - 30.0).max(80.0), (rect.height() - 135.0).max(80.0));
+            let image_width = image_area.x.min(image_area.y * 1.7778);
+            let image_height = (image_width / 1.7778).min(image_area.y);
+            let image_rect = egui::Rect::from_center_size(
+                egui::pos2(rect.center().x, rect.top() + 51.0 + image_height * 0.5),
+                egui::vec2(image_width, image_height),
+            );
             if let Some(texture) = demo_reference_texture(ctx) {
                 painter.image(texture.id(), image_rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
             } else {
                 painter.rect_filled(image_rect, 0.0, egui::Color32::from_rgb(22, 34, 44));
             }
             painter.rect_stroke(image_rect, 0.0, egui::Stroke::new(1.0, border));
-            let control_y = rect.top() + 474.0;
+            let control_y = (image_rect.bottom() + 34.0).min(rect.bottom() - 48.0);
             painter.text(egui::pos2(rect.left() + 23.0, control_y), egui::Align2::LEFT_CENTER, "00:00:04:12", egui::FontId::proportional(17.0), egui::Color32::from_rgb(255, 107, 22));
-            let control_x = rect.left() + 250.0;
+            let compact = rect.width() < 600.0;
+            let control_x = if compact { rect.left() + 133.0 } else { rect.left() + (rect.width() * 0.5).max(160.0) - 80.0 };
+            let control_step = if compact { 22.0 } else { 42.0 };
             for (index, glyph) in ["|◀", "◀", "▶", "▶|"].into_iter().enumerate() {
-                painter.text(egui::pos2(control_x + index as f32 * 42.0, control_y), egui::Align2::CENTER_CENTER, glyph, egui::FontId::proportional(if index == 2 { 19.0 } else { 16.0 }), colors::TEXT_PRIMARY);
+                painter.text(egui::pos2(control_x + index as f32 * control_step, control_y), egui::Align2::CENTER_CENTER, glyph, egui::FontId::proportional(if index == 2 { 19.0 } else { 16.0 }), colors::TEXT_PRIMARY);
             }
-            painter.rect_stroke(egui::Rect::from_min_size(egui::pos2(rect.right() - 257.0, control_y - 17.0), egui::vec2(101.0, 34.0)), 5.0, egui::Stroke::new(1.0, border));
-            painter.text(egui::pos2(rect.right() - 207.0, control_y), egui::Align2::CENTER_CENTER, "Full Quality ⌄", egui::FontId::proportional(12.0), colors::TEXT_PRIMARY);
-            for (index, glyph) in ["□", "◎", "⛶"].into_iter().enumerate() {
-                painter.text(egui::pos2(rect.right() - 150.0 + index as f32 * 43.0, control_y), egui::Align2::CENTER_CENTER, glyph, egui::FontId::proportional(21.0), colors::TEXT_PRIMARY);
+            let quality_rect = if compact {
+                egui::Rect::from_min_size(egui::pos2(rect.right() - 150.0, control_y - 17.0), egui::vec2(100.0, 34.0))
+            } else {
+                egui::Rect::from_min_size(egui::pos2(rect.right() - 257.0, control_y - 17.0), egui::vec2(101.0, 34.0))
+            };
+            painter.rect_stroke(quality_rect, 5.0, egui::Stroke::new(1.0, border));
+            painter.text(quality_rect.center(), egui::Align2::CENTER_CENTER, "Full Quality ⌄", egui::FontId::proportional(12.0), colors::TEXT_PRIMARY);
+            if compact {
+                painter.text(egui::pos2(rect.right() - 22.0, control_y), egui::Align2::CENTER_CENTER, "⛶", egui::FontId::proportional(18.0), colors::TEXT_PRIMARY);
+            } else {
+                for (index, glyph) in ["□", "◎", "⛶"].into_iter().enumerate() {
+                    painter.text(egui::pos2(rect.right() - 150.0 + index as f32 * 43.0, control_y), egui::Align2::CENTER_CENTER, glyph, egui::FontId::proportional(21.0), colors::TEXT_PRIMARY);
+                }
             }
-            painter.line_segment([egui::pos2(rect.left() + 15.0, rect.top() + 500.0), egui::pos2(rect.right() - 15.0, rect.top() + 500.0)], egui::Stroke::new(1.0, border));
+            painter.line_segment([egui::pos2(rect.left() + 15.0, control_y + 27.0), egui::pos2(rect.right() - 15.0, control_y + 27.0)], egui::Stroke::new(1.0, border));
             let _ = app;
         });
 }

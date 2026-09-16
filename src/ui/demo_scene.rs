@@ -63,7 +63,7 @@ pub fn build(app: &mut crate::KagariApp) {
     // ── Floating embers (additive sparks drifting upward) ──
     let mut embers = Layer::new(
         "demo_embers".into(),
-        "[Clouds]".into(),
+        "Particles".into(),
         LayerType::Particle {
             emitter: ParticleEmitter {
                 rate: 90.0,
@@ -90,7 +90,7 @@ pub fn build(app: &mut crate::KagariApp) {
     // buffer, so 28 ≈ a 180px orb on this 1280-wide comp.
     let mut circle = Layer::new(
         "demo_circle".into(),
-        "[Character]".into(),
+        "Character".into(),
         LayerType::Shape {
             shape_type: ShapeType::Ellipse {
                 width: Animatable::new_constant(28.0),
@@ -128,7 +128,7 @@ pub fn build(app: &mut crate::KagariApp) {
     // ── Counter-rotating stroke ring (≈300px: 47 units) ──
     let mut ring = Layer::new(
         "demo_ring".into(),
-        "[Light Leak]".into(),
+        "Light Leak".into(),
         LayerType::Shape {
             shape_type: ShapeType::Ellipse {
                 width: Animatable::new_constant(47.0),
@@ -152,7 +152,7 @@ pub fn build(app: &mut crate::KagariApp) {
     // ── Title: fade + rise + soft glow ──
     let mut title = Layer::new(
         "demo_title".into(),
-        "[logo.png]".into(),
+        "Main Title".into(),
         LayerType::new_text("KAGARI VFX", 88, [0.95, 0.96, 1.0, 1.0]),
         comp.duration_frames,
     );
@@ -174,7 +174,7 @@ pub fn build(app: &mut crate::KagariApp) {
     // ── Subtitle ──
     let mut sub = Layer::new(
         "demo_sub".into(),
-        "[Adjustment layer]".into(),
+        "Subtitle".into(),
         LayerType::new_text("Rust • GPU • Open Source", 34, [0.55, 0.75, 1.0, 1.0]),
         comp.duration_frames,
     );
@@ -184,7 +184,7 @@ pub fn build(app: &mut crate::KagariApp) {
 
     let city = Layer::new(
         "demo_city".into(),
-        "[city_01.mp4]".into(),
+        "Footage".into(),
         LayerType::Solid { color: [0.0, 0.0, 0.0, 0.0] },
         comp.duration_frames,
     );
@@ -193,6 +193,56 @@ pub fn build(app: &mut crate::KagariApp) {
     let proj = app.history.current_mut();
     proj.compositions.push(comp);
     proj.active_composition_idx = proj.compositions.len() - 1;
+    let demo_comp_idx = proj.active_composition_idx;
+    let footage_folder_id = "folder_demo_footage";
+    let audio_folder_id = "folder_demo_audio";
+    let footage_folder = crate::core::timeline::ProjectItem::new(
+        footage_folder_id,
+        "Footage",
+        crate::core::timeline::ProjectItemType::Folder { name: "Footage".into() },
+    );
+    let audio_folder = crate::core::timeline::ProjectItem::new(
+        audio_folder_id,
+        "Audio",
+        crate::core::timeline::ProjectItemType::Folder { name: "Audio".into() },
+    );
+    let mut city_asset = crate::core::timeline::ProjectItem::new(
+        "item_demo_city",
+        "city_01.mp4",
+        crate::core::timeline::ProjectItemType::Video { path: "assets/studio/studio_city_reference.webp".into(), duration_sec: 5.0 },
+    );
+    city_asset.parent_folder = Some(footage_folder_id.into());
+    let mut mountain_asset = crate::core::timeline::ProjectItem::new(
+        "item_demo_mountain",
+        "mountain.exr",
+        crate::core::timeline::ProjectItemType::Image { path: "assets/studio/assets_mountain.webp".into(), width: 3840, height: 2160 },
+    );
+    mountain_asset.parent_folder = Some(footage_folder_id.into());
+    let mut particles_asset = crate::core::timeline::ProjectItem::new(
+        "item_demo_particles",
+        "particles.mp4",
+        crate::core::timeline::ProjectItemType::Video { path: "assets/studio/assets_particles.webp".into(), duration_sec: 5.0 },
+    );
+    particles_asset.parent_folder = Some(footage_folder_id.into());
+    let mut audio_asset = crate::core::timeline::ProjectItem::new(
+        "item_demo_audio",
+        "ambient.wav",
+        crate::core::timeline::ProjectItemType::Audio { path: "assets/studio/assets_city.webp".into(), duration_sec: 5.0 },
+    );
+    audio_asset.parent_folder = Some(audio_folder_id.into());
+    proj.assets.extend([
+        crate::core::timeline::ProjectItem::new(
+            "item_demo_comp",
+            "main_comp",
+            crate::core::timeline::ProjectItemType::Composition { comp_idx: demo_comp_idx },
+        ),
+        footage_folder,
+        city_asset,
+        mountain_asset,
+        particles_asset,
+        audio_folder,
+        audio_asset,
+    ]);
     crate::core::frame_cache::bump_version();
     app.toasts.info("Demo scene loaded — press Space to play!");
 }
@@ -207,6 +257,9 @@ mod tests {
         build(&mut app);
         let comp = app.history.current().active_composition().clone();
         assert_eq!(comp.layers.len(), 7);
+        assert_eq!(comp.layers[1].name, "Main Title");
+        assert!(app.history.current().assets.iter().any(|item| item.name == "city_01.mp4"));
+        assert!(app.history.current().assets.iter().any(|item| item.name == "Footage"));
         let pixels = crate::core::software_renderer::render_frame_to_pixels(
             &comp, 75, 320, 180, 0.0, 0,
         );
