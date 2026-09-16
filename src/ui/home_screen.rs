@@ -2220,7 +2220,7 @@ fn draw_reference_settings_narrow(ui: &mut egui::Ui) {
     let stroke = egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(37, 52, 67));
     ui.painter().rect(left, 4.0, fill, stroke);
     ui.painter().rect(content, 4.0, fill, stroke);
-    let nav = [(crate::ui::icons::SVG_SETTINGS, "General"), (crate::ui::icons::SVG_SORT, "Performance"), (crate::ui::icons::SVG_FOLDER, "Cache"), (crate::ui::icons::SVG_CPU, "CPU"), (crate::ui::icons::SVG_PALETTE, "Color Management"), (crate::ui::icons::SVG_CLOCK, "Auto-save"), (crate::ui::icons::SVG_LAYERS, "UI Appearance"), (crate::ui::icons::SVG_KEYBOARD, "Keyboard Shortcuts"), (crate::ui::icons::SVG_HELP, "Plugins")];
+    let nav = [(crate::ui::icons::SVG_SETTINGS, "General"), (crate::ui::icons::SVG_SORT, "Performance"), (crate::ui::icons::SVG_FOLDER, "Cache"), (crate::ui::icons::SVG_PALETTE, "Color Management"), (crate::ui::icons::SVG_CLOCK, "Auto-save"), (crate::ui::icons::SVG_LAYERS, "UI Appearance"), (crate::ui::icons::SVG_KEYBOARD, "Keyboard Shortcuts"), (crate::ui::icons::SVG_HELP, "Plugins")];
     for (index, (icon, label)) in nav.into_iter().enumerate() {
         let y = left.top() + 5.0 + index as f32 * 20.0;
         if index == 0 { ui.painter().rect(egui::Rect::from_min_size(egui::pos2(left.left() + 5.0, y - 1.0), egui::vec2(87.0, 19.0)), 3.0, egui::Color32::from_rgb(24, 62, 102), egui::Stroke::NONE); }
@@ -2287,12 +2287,11 @@ fn draw_reference_settings_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
                 ui.label(egui::RichText::new("SETTINGS").size(10.0).color(colors::TEXT_MUTED));
                 ui.add_space(6.0);
                 let section_id = egui::Id::new("reference_settings_section");
-                let mut selected = ctx.data_mut(|d| d.get_temp::<usize>(section_id)).unwrap_or(0);
+                let mut selected = ctx.data_mut(|d| d.get_temp::<usize>(section_id)).unwrap_or(0).min(7);
                 for (index, (icon, label)) in [
                     (crate::ui::icons::SVG_SETTINGS, "General"),
                     (crate::ui::icons::SVG_GPU, "Performance"),
                     (crate::ui::icons::SVG_FOLDER, "Cache"),
-                    (crate::ui::icons::SVG_CPU, "CPU"),
                     (crate::ui::icons::SVG_PALETTE, "Color Management"),
                     (crate::ui::icons::SVG_CLOCK, "Auto-save"),
                     (crate::ui::icons::SVG_SCREEN, "UI Appearance"),
@@ -2329,13 +2328,12 @@ fn draw_reference_settings_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
                 ctx.data_mut(|d| d.insert_temp(section_id, selected));
             });
             ui.add_space(if narrow { 6.0 } else { 12.0 });
-            let selected_section = ctx.data_mut(|d| d.get_temp::<usize>(egui::Id::new("reference_settings_section")).unwrap_or(0));
-            let section_names = ["General", "Performance", "Cache", "CPU", "Color Management", "Auto-save", "UI Appearance", "Keyboard Shortcuts", "Plugins"];
+            let selected_section = ctx.data_mut(|d| d.get_temp::<usize>(egui::Id::new("reference_settings_section")).unwrap_or(0).min(7));
+            let section_names = ["General", "Performance", "Cache", "Color Management", "Auto-save", "UI Appearance", "Keyboard Shortcuts", "Plugins"];
             let section_descriptions = [
                 "Application language, startup behavior, and project defaults.",
                 "Preview quality, playback performance, and GPU preferences.",
                 "Disk cache location, size limits, and cleanup behavior.",
-                "CPU rendering and processing preferences.",
                 "Color profiles, display transforms, and working space.",
                 "Automatic project save intervals and recovery behavior.",
                 "Interface density, theme, and panel appearance.",
@@ -2364,12 +2362,12 @@ fn draw_reference_settings_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
                             ui.label(egui::RichText::new(format!("Maximum disk cache: {} GB", prefs.disk_cache_gb)).size(if narrow { 8.0 } else { 11.0 }).color(colors::TEXT_SECONDARY));
                             ui.add(egui::Slider::new(&mut prefs.disk_cache_gb, 10..=500).suffix(" GB"));
                         }
-                        5 => {
+                        4 => {
                             ui.label(egui::RichText::new("Automatic Save").size(if narrow { 9.0 } else { 12.0 }).color(colors::TEXT_SECONDARY));
                             ui.label(egui::RichText::new(format!("Save interval: {} seconds", prefs.autosave_secs)).size(if narrow { 8.0 } else { 11.0 }).color(colors::TEXT_SECONDARY));
                             ui.add(egui::Slider::new(&mut prefs.autosave_secs, 5..=600).suffix(" s"));
                         }
-                        6 => {
+                        5 => {
                             ui.label(egui::RichText::new("Interface").size(if narrow { 9.0 } else { 12.0 }).color(colors::TEXT_SECONDARY));
                             ui.label(egui::RichText::new("Dark theme").size(if narrow { 8.0 } else { 11.0 }).color(colors::TEXT_PRIMARY));
                             ui.label(egui::RichText::new("Kagari VFX uses the dark production workspace.").small().color(colors::TEXT_MUTED));
