@@ -308,7 +308,12 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
         }
 
         // Render background
-        ui.painter().rect_filled(rect, 4.0, egui::Color32::from_gray(20));
+        ui.painter().rect_filled(rect, 4.0, colors::BG_DEEPEST);
+        ui.painter().rect_stroke(
+            rect,
+            4.0,
+            egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
+        );
 
         let active_comp_idx = app.history.current().active_composition_idx;
         let binding_snapshot = app
@@ -321,6 +326,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             });
         let history_comp = app.history.current().active_composition();
         let comp = binding_snapshot.as_ref().unwrap_or(history_comp);
+        let comp_is_empty = comp.layers.is_empty();
         let aspect = comp.width as f32 / comp.height as f32;
 
         // ── One-shot bbox focus request (Shift+Z with selection) ──
@@ -667,6 +673,30 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
         crate::ui::viewport_overlays::draw_viewport_overlays(
             ui, app, ctx, current_frame, origin_x, origin_y, draw_w, draw_h, comp_w, comp_h, rendered_gpu,
         );
+
+        if comp_is_empty {
+            let empty_rect = egui::Rect::from_center_size(
+                rect.center(),
+                egui::vec2(240.0, 74.0),
+            );
+            ui.painter().rect_filled(
+                empty_rect,
+                6.0,
+                egui::Color32::from_rgba_premultiplied(13, 22, 31, 220),
+            );
+            ui.painter().rect_stroke(
+                empty_rect,
+                6.0,
+                egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
+            );
+            ui.painter().text(
+                empty_rect.center_top() + egui::vec2(0.0, 22.0),
+                egui::Align2::CENTER_CENTER,
+                "Drop media here",
+                egui::FontId::proportional(14.0),
+                colors::TEXT_SECONDARY,
+            );
+        }
 
         // ── Rectangle tool rubber-band preview ──
         if app.active_tool == crate::ui::toolbar::ActiveTool::Rectangle {

@@ -15,7 +15,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
             .layers
             .iter()
             .any(|layer| layer.id == "demo_bg");
-    let right_width = if reference_demo { 359.0 } else { 388.0 };
+    let right_width = if reference_demo { 359.0 } else { 344.0 };
     let max_width = if reference_demo {
         359.0
     } else if ctx.screen_rect().width() >= 1200.0 {
@@ -28,22 +28,19 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
         .resizable(!reference_demo)
         .default_width(right_width)
         .min_width(if reference_demo { 359.0 } else { 230.0 })
-        .max_width(max_width)
+        .max_width(if reference_demo { 359.0 } else { max_width.max(320.0) })
         .frame(if reference_demo {
             egui::Frame::none()
                 .fill(egui::Color32::from_rgb(13, 22, 29))
                 .inner_margin(egui::Margin::symmetric(21.0, 0.0))
         } else {
             egui::Frame::default()
+                .inner_margin(egui::Margin::symmetric(8.0, 0.0))
         })
         .show(ctx, |ui| {
             ui.add_space(7.0);
             ui.horizontal(|ui| {
-                let labels = if reference_demo {
-                    [(30, "プロパティ"), (0, "エフェクト"), (2, "情報")]
-                } else {
-                    [(30, "Properties"), (0, "Effect Controls"), (2, "Info")]
-                };
+                let labels = [(30, "Properties"), (0, "Effect Controls"), (2, "Info")];
                 for (index, label) in labels {
                     if crate::ui::theme::draw_custom_tab(ui, app.ui_tabs.right_tab_idx == index, label).clicked() {
                         app.ui_tabs.right_tab_idx = index;
@@ -52,11 +49,6 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
             });
             ui.add_space(7.0);
             ui.separator();
-
-            if ctx.screen_rect().width() >= 1200.0 && app.ui_tabs.right_tab_idx == 30 {
-                draw_reference_properties_panel(ui);
-                return;
-            }
 
             egui::ScrollArea::vertical().id_salt("panel_content").show(ui, |ui| {
             let mut next_frame = None;
@@ -263,62 +255,6 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
             crate::ui::effects_controls::draw_particle_emitter_controls(app, ui);
             });
         });
-}
-
-fn draw_reference_properties_panel(ui: &mut egui::Ui) {
-    ui.add_space(8.0);
-    ui.horizontal(|ui| {
-        crate::ui::icons::render_svg_bytes(ui, "reference-footage", crate::ui::icons::SVG_FILE, egui::vec2(16.0, 16.0), colors::TEXT_SECONDARY);
-        ui.label(egui::RichText::new("city_01.mp4").size(13.0));
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.add(egui::Button::new("Open in Viewer").rounding(4.0));
-        });
-    });
-    ui.add_space(8.0);
-    ui.separator();
-    egui::CollapsingHeader::new(egui::RichText::new("Transform").size(13.0).strong()).default_open(true).show(ui, |ui| {
-        reference_property_row(ui, "◈  Position", "X: 960.0     Y: 540.0");
-        reference_property_row(ui, "◷  Scale", "S 100.0%     Y 100.0%");
-        reference_property_row(ui, "◌  Rotation", "0.0°");
-        reference_property_row(ui, "◒  Opacity", "100.0%");
-    });
-    ui.separator();
-    egui::CollapsingHeader::new(egui::RichText::new("Color").size(13.0).strong()).default_open(true).show(ui, |ui| {
-        for (label, value) in [("Exposure", 0.0), ("Contrast", 0.10), ("Highlights", -0.20), ("Shadows", 0.30), ("Saturation", 1.0)] {
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(label).size(11.0).color(colors::TEXT_SECONDARY));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(egui::RichText::new(format!("{value:.2}")).size(11.0).color(colors::ACCENT_BLUE));
-                    let mut value_copy = value;
-                    ui.add_sized([120.0, 16.0], egui::Slider::new(&mut value_copy, -1.0..=1.0).show_value(false));
-                });
-            });
-            ui.add_space(3.0);
-        }
-    });
-    ui.separator();
-    egui::CollapsingHeader::new(egui::RichText::new("Effects").size(13.0).strong()).default_open(true).show(ui, |ui| {
-        for effect in ["Lumetri Color", "Mist", "Glow"] {
-            ui.horizontal(|ui| {
-                ui.label("›");
-                ui.checkbox(&mut true, "");
-                ui.label(egui::RichText::new(effect).size(11.0));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| { ui.label("⋮"); });
-            });
-        }
-        ui.add_space(5.0);
-        ui.add_sized([ui.available_width(), 26.0], egui::Button::new("Add Effect").rounding(4.0));
-    });
-}
-
-fn reference_property_row(ui: &mut egui::Ui, label: &str, value: &str) {
-    ui.horizontal(|ui| {
-        ui.label(egui::RichText::new(label).size(11.0).color(colors::TEXT_SECONDARY));
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(egui::RichText::new(value).size(11.0));
-        });
-    });
-    ui.add_space(6.0);
 }
 
 /// Effect Controls panel (tab 30).

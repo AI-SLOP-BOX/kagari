@@ -27,9 +27,14 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
         draw_target_timeline(app, ctx, current_frame, total_frames);
         return;
     }
+    let screen_height = ctx.screen_rect().height();
+    let timeline_default_height = (screen_height * 0.38).clamp(214.0, 362.0);
+    let timeline_max_height = (screen_height * 0.56).max(260.0);
     egui::TopBottomPanel::bottom("timeline_panel")
         .resizable(true)
-        .default_height(362.0)
+        .default_height(timeline_default_height)
+        .min_height(190.0)
+        .max_height(timeline_max_height)
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
                 let compositions: Vec<(usize, String)> = app

@@ -10,7 +10,7 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
 
 fn draw_reference_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context) {
     egui::TopBottomPanel::top("studio_header")
-        .exact_height(92.0)
+        .exact_height(68.0)
         .resizable(false)
         .frame(egui::Frame::none().fill(egui::Color32::from_rgb(10, 18, 24)))
         .show(ctx, |ui| {
@@ -20,14 +20,14 @@ fn draw_reference_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context)
                 egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(43, 55, 65)),
             );
             for (x, color) in [(23.0, egui::Color32::from_rgb(255, 78, 76)), (45.0, egui::Color32::from_rgb(255, 190, 42)), (67.0, egui::Color32::from_rgb(40, 204, 81))] {
-                ui.painter().circle_filled(egui::pos2(x, rect.top() + 18.0), 6.5, color);
+                ui.painter().circle_filled(egui::pos2(x, rect.top() + 16.0), 6.0, color);
             }
             ui.painter().line_segment(
-                [egui::pos2(rect.left(), rect.top() + 36.0), egui::pos2(rect.right(), rect.top() + 36.0)],
+                [egui::pos2(rect.left(), rect.top() + 30.0), egui::pos2(rect.right(), rect.top() + 30.0)],
                 egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(36, 48, 58)),
             );
             let content_rect = egui::Rect::from_min_max(
-                egui::pos2(rect.left(), rect.top() + 36.0),
+                egui::pos2(rect.left(), rect.top() + 30.0),
                 rect.right_bottom(),
             );
             ui.allocate_new_ui(
@@ -40,33 +40,33 @@ fn draw_reference_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context)
                         }
                     }
                     if let Some(texture) = app.home_banner.as_ref() {
-                        ui.add(egui::Image::new(egui::load::SizedTexture::new(texture.id(), egui::vec2(44.0, 44.0))));
+                        ui.add(egui::Image::new(egui::load::SizedTexture::new(texture.id(), egui::vec2(34.0, 34.0))));
                     }
                     ui.add_space(7.0);
-                    ui.label(egui::RichText::new("Kagari VFX").size(22.0).strong().color(crate::ui::theme::colors::TEXT_PRIMARY));
-                    ui.add_space(28.0);
+                    ui.label(egui::RichText::new("Kagari VFX").size(17.0).strong().color(crate::ui::theme::colors::TEXT_PRIMARY));
+                    ui.add_space(22.0);
                     crate::ui::icons::render_svg_bytes(ui, "studio-breadcrumb-arrow", crate::ui::icons::SVG_CHEVRON_RIGHT, egui::vec2(18.0, 18.0), crate::ui::theme::colors::TEXT_SECONDARY);
                     ui.add_space(18.0);
                     ui.painter().line_segment([egui::pos2(ui.cursor().left(), rect.top() + 28.0), egui::pos2(ui.cursor().left(), rect.bottom() - 28.0)], egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(42, 54, 64)));
                     ui.add_space(18.0);
-                    crate::ui::icons::render_svg_bytes(ui, "studio-project-folder", crate::ui::icons::SVG_FOLDER, egui::vec2(22.0, 22.0), egui::Color32::from_rgb(174, 190, 207));
-                    ui.add_space(16.0);
-                    ui.label(egui::RichText::new("Sample Project").size(16.0).color(crate::ui::theme::colors::TEXT_SECONDARY));
-                    ui.label(egui::RichText::new("•").size(16.0).color(crate::ui::theme::colors::TEXT_SECONDARY));
+                    crate::ui::icons::render_svg_bytes(ui, "studio-project-folder", crate::ui::icons::SVG_FOLDER, egui::vec2(18.0, 18.0), egui::Color32::from_rgb(174, 190, 207));
+                    ui.add_space(10.0);
+                    ui.label(egui::RichText::new("Sample Project").size(14.0).color(crate::ui::theme::colors::TEXT_SECONDARY));
+                    ui.label(egui::RichText::new("•").size(14.0).color(crate::ui::theme::colors::TEXT_SECONDARY));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let export = egui::Button::new(egui::RichText::new("⇧  エクスポート").size(16.0).strong().color(egui::Color32::WHITE))
-                            .fill(egui::Color32::from_rgb(255, 99, 26))
-                            .rounding(7.0)
-                            .min_size(egui::vec2(168.0, 36.0));
+                        let export = egui::Button::new(egui::RichText::new("Export").size(13.0).color(egui::Color32::WHITE))
+                            .fill(crate::ui::theme::colors::ACCENT_BLUE)
+                            .rounding(4.0)
+                            .min_size(egui::vec2(112.0, 30.0));
                         ui.add(export);
-                        ui.add_space(24.0);
+                        ui.add_space(14.0);
                         let mut zoom = "50%";
-                        egui::ComboBox::from_id_salt("studio-reference-zoom").selected_text(zoom).width(112.0).show_ui(ui, |ui| { ui.selectable_value(&mut zoom, "50%", "50%"); });
-                        ui.add_space(18.0);
+                        egui::ComboBox::from_id_salt("studio-reference-zoom").selected_text(zoom).width(82.0).show_ui(ui, |ui| { ui.selectable_value(&mut zoom, "50%", "50%"); });
+                        ui.add_space(10.0);
                         let mut resolution = "1080p";
-                        egui::ComboBox::from_id_salt("studio-reference-resolution").selected_text(resolution).width(110.0).show_ui(ui, |ui| { ui.selectable_value(&mut resolution, "1080p", "1080p"); });
-                        ui.add_space(32.0);
-                        ui.label(egui::RichText::new("保存済み 10:24").size(14.0).color(crate::ui::theme::colors::TEXT_SECONDARY));
+                        egui::ComboBox::from_id_salt("studio-reference-resolution").selected_text(resolution).width(82.0).show_ui(ui, |ui| { ui.selectable_value(&mut resolution, "1080p", "1080p"); });
+                        ui.add_space(16.0);
+                        ui.label(egui::RichText::new("Saved 10:24").size(12.0).color(crate::ui::theme::colors::TEXT_SECONDARY));
                     });
                 },
             );

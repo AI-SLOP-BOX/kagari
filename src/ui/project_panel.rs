@@ -542,7 +542,7 @@ fn draw_reference_project_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.add_sized(
         [ui.available_width(), 30.0],
         egui::TextEdit::singleline(&mut app.project_search_query)
-            .hint_text("素材を検索...")
+            .hint_text("Search project assets")
             .font(egui::FontId::proportional(12.0)),
     );
     ui.add_space(4.0);

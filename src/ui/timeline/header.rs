@@ -41,6 +41,7 @@ pub fn draw_timeline_header(
     let mut goto_frame: Option<u32> = None;
 
     ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 6.0;
         let fps = comp.fps.max(1);
         let secs = *current_frame / fps;
         let sub_f = *current_frame % fps;
@@ -80,9 +81,17 @@ pub fn draw_timeline_header(
         if ui.small_button("◀").on_hover_text("Previous Frame (PageUp / Left)").clicked() {
             *current_frame = current_frame.saturating_sub(1);
         }
-        let play_btn_text = if *state.is_playing { "⏸ Pause" } else { "▶ Play" };
+        let play_btn_text = if *state.is_playing { "⏸" } else { "▶" };
         if ui
-            .button(egui::RichText::new(play_btn_text).strong().color(if *state.is_playing { colors::ACCENT_YELLOW } else { colors::ACCENT_GREEN }))
+            .add(
+                egui::Button::new(
+                    egui::RichText::new(play_btn_text)
+                        .strong()
+                        .color(colors::TEXT_PRIMARY),
+                )
+                .fill(colors::BG_MID)
+                .min_size(egui::vec2(30.0, 24.0)),
+            )
             .on_hover_text("Play / Pause RAM Preview (Spacebar)")
             .clicked()
         {
@@ -97,7 +106,16 @@ pub fn draw_timeline_header(
 
     });
 
+    ui.separator();
     ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 6.0;
+        ui.label(
+            egui::RichText::new("Timeline")
+                .small()
+                .strong()
+                .color(colors::TEXT_SECONDARY),
+        );
+        ui.separator();
         use crate::ui::icons::*;
         ui.label("Zoom");
         ui.add(egui::DragValue::new(state.timeline_zoom)
@@ -220,7 +238,7 @@ pub fn draw_timeline_header(
                 .desired_width(110.0),
         );
 
-        ui.menu_button("Add layer", |ui| {
+        ui.menu_button("+ Add Layer", |ui| {
         if ui.button("+ Solid").clicked() {
             let id = format!("layer_{}", comp.layers.len());
             let name = format!("Solid {}", comp.layers.len());

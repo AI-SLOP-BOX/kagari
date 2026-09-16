@@ -84,6 +84,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                 .inner_margin(egui::Margin::symmetric(17.0, 0.0))
         } else {
             egui::Frame::default()
+                .inner_margin(egui::Margin::symmetric(8.0, 0.0))
         })
         .show(ctx, |ui| {
             if reference_demo {
@@ -133,6 +134,11 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
 
             if app.ui_tabs.left_tab_idx == 0 {
                 crate::ui::project_panel::draw(app, ui);
+                return;
+            }
+
+            if app.ui_tabs.left_tab_idx == 1 {
+                draw_effect_browser(ui);
                 return;
             }
 
@@ -808,6 +814,118 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                 }
             } else {
                 ui.weak("Select a layer in the timeline to view properties");
+            }
+        });
+}
+
+fn draw_effect_browser(ui: &mut egui::Ui) {
+    ui.add_space(4.0);
+    ui.heading(egui::RichText::new("Effects").size(16.0).strong());
+    ui.label(
+        egui::RichText::new("Search, preview, and apply effects")
+            .small()
+            .color(colors::TEXT_MUTED),
+    );
+    ui.add_space(8.0);
+
+    let search_id = ui.make_persistent_id("left_effect_search");
+    let mut search = ui.ctx().data_mut(|d| {
+        d.get_temp_mut_or_insert_with(search_id, String::new).clone()
+    });
+    let response = ui.add_sized(
+        [ui.available_width(), 28.0],
+        egui::TextEdit::singleline(&mut search).hint_text("Search effects"),
+    );
+    if response.changed() {
+        ui.ctx().data_mut(|d| d.insert_temp(search_id, search.clone()));
+    }
+    ui.add_space(10.0);
+
+    let categories = [
+        (crate::ui::icons::SVG_STAR, "Favorites"),
+        (crate::ui::icons::SVG_CLOCK, "Recent"),
+        (crate::ui::icons::SVG_PALETTE, "Color"),
+        (crate::ui::icons::SVG_TOOL_ZOOM, "Blur & Sharpen"),
+        (crate::ui::icons::SVG_TOOL_SHAPE, "Distort"),
+        (crate::ui::icons::SVG_LIGHT, "Generate"),
+        (crate::ui::icons::SVG_KEYING, "Keying"),
+        (crate::ui::icons::SVG_TOOL_PEN, "Stylize"),
+        (crate::ui::icons::SVG_ARROW_RIGHT, "Transition"),
+        (crate::ui::icons::SVG_SETTINGS, "Utility"),
+    ];
+    egui::ScrollArea::vertical()
+        .id_salt("left_effect_browser_scroll")
+        .show(ui, |ui| {
+            for (index, (icon, category)) in categories.iter().enumerate() {
+                let active = index == 2;
+                let row = ui.allocate_ui(egui::vec2(ui.available_width(), 28.0), |ui| {
+                    ui.horizontal(|ui| {
+                        let icon_id = format!("left-effect-category-{index}");
+                        crate::ui::icons::render_svg_bytes(
+                            ui,
+                            &icon_id,
+                            icon,
+                            egui::vec2(15.0, 15.0),
+                            if active { colors::ACCENT_BLUE } else { colors::TEXT_SECONDARY },
+                        );
+                        let _ = ui.selectable_label(
+                            active,
+                            egui::RichText::new(*category)
+                                .size(12.0)
+                                .color(if active {
+                                    colors::TEXT_PRIMARY
+                                } else {
+                                    colors::TEXT_SECONDARY
+                                }),
+                        );
+                    });
+                });
+                if row.response.hovered() {
+                    ui.painter().rect_filled(
+                        row.response.rect,
+                        3.0,
+                        colors::BG_HOVER.linear_multiply(0.65),
+                    );
+                }
+            }
+
+            ui.add_space(10.0);
+            ui.separator();
+            ui.add_space(6.0);
+            ui.label(
+                egui::RichText::new("Available effects")
+                    .size(12.0)
+                    .strong()
+                    .color(colors::TEXT_PRIMARY),
+            );
+
+            let query = search.trim().to_lowercase();
+            for preset in crate::ui::effects_controls::presets::get_all_effect_presets()
+                .iter()
+                .filter(|preset| query.is_empty() || preset.name.to_lowercase().contains(&query))
+                .take(14)
+            {
+                let row = ui.allocate_ui(egui::vec2(ui.available_width(), 30.0), |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            egui::RichText::new("◇")
+                                .color(colors::ACCENT_CYAN)
+                                .size(12.0),
+                        );
+                        ui.label(
+                            egui::RichText::new(preset.name)
+                                .size(12.0)
+                                .color(colors::TEXT_PRIMARY),
+                        );
+                    });
+                });
+                if row.response.hovered() {
+                    ui.painter().rect_filled(
+                        row.response.rect,
+                        3.0,
+                        colors::BG_HOVER.linear_multiply(0.65),
+                    );
+                }
             }
         });
 }
