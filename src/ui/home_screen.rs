@@ -563,7 +563,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
         ctx.data_mut(|d| d.remove::<bool>(search_reset_id));
         app.home_search.clear();
     }
-    if matches!(home_nav(ctx), HomeNav::Settings) && ctx.screen_rect().width() >= 700.0 {
+    if matches!(home_nav(ctx), HomeNav::Settings) {
         if ctx.screen_rect().width() >= 1200.0 {
             draw_settings_target(app, ctx);
         } else {
@@ -571,11 +571,17 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
         }
         return;
     }
-    if matches!(home_nav(ctx), HomeNav::Render) && ctx.screen_rect().width() >= 700.0 {
-        draw_export_target(app, ctx);
+    if matches!(home_nav(ctx), HomeNav::Render) {
+        if ctx.screen_rect().width() < 500.0 {
+            egui::CentralPanel::default()
+                .frame(egui::Frame::none().fill(egui::Color32::from_rgb(11, 19, 26)))
+                .show(ctx, |ui| draw_reference_render_page(app, ui, ctx));
+        } else {
+            draw_export_target(app, ctx);
+        }
         return;
     }
-    if matches!(home_nav(ctx), HomeNav::Tutorial) && ctx.screen_rect().width() >= 700.0 {
+    if matches!(home_nav(ctx), HomeNav::Tutorial) {
         app.show_home = false;
         app.show_guided_tutorial = true;
         app.tutorial_step = 0;
@@ -742,7 +748,111 @@ fn draw_settings_target_responsive(app: &mut KagariApp, ctx: &egui::Context) {
             crate::ui::icons::render_svg_at(ui, format!("settings-responsive-category-{index}"), icon, egui::vec2(21.0, 21.0), if index == 0 { egui::Color32::from_rgb(255, 128, 30) } else { colors::TEXT_SECONDARY }, egui::pos2(if narrow { category.left() + (category_width - 21.0) * 0.5 } else { category.left() + 20.0 }, y + 12.0));
             if !narrow { ui.painter().text(egui::pos2(category.left() + 53.0, y + 23.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(13.0), if index == 0 { colors::TEXT_PRIMARY } else { colors::TEXT_SECONDARY }); }
         }
-        draw_settings_responsive_content(ui, content, narrow);
+        if narrow {
+            draw_settings_responsive_narrow_content(ui, content);
+        } else {
+            draw_settings_responsive_content(ui, content, false);
+        }
+    });
+}
+
+fn draw_settings_responsive_narrow_content(ui: &mut egui::Ui, content: egui::Rect) {
+    ui.allocate_new_ui(egui::UiBuilder::new().max_rect(content), |ui| {
+        egui::ScrollArea::vertical()
+            .id_salt("settings_responsive_narrow_scroll")
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width().max(180.0));
+                ui.add_space(12.0);
+                ui.label(egui::RichText::new("一般").size(20.0).strong());
+                ui.label(
+                    egui::RichText::new("アプリケーションの基本設定")
+                        .size(11.0)
+                        .color(colors::TEXT_SECONDARY),
+                );
+                ui.add_space(10.0);
+                let cards = [
+                    (
+                        "インターフェース",
+                        [("テーマ", "ダーク"), ("言語", "日本語"), ("UIのスケール", "100%（推奨）")],
+                    ),
+                    (
+                        "プロジェクトと保存",
+                        [("自動保存の間隔", "5分"), ("保持数", "10個"), ("既定の保存先", "~/Kagari VFX/Projects")],
+                    ),
+                    (
+                        "パフォーマンス",
+                        [("GPUアクセラレーション", "オン"), ("使用するGPU", "自動選択（推奨）"), ("メモリ上限", "75%")],
+                    ),
+                    (
+                        "メディアとタイムライン",
+                        [("プロキシメディア", "自動生成"), ("プロキシ解像度", "1/2（推奨）"), ("フレームレート", "30 fps")],
+                    ),
+                    (
+                        "書き出しの既定設定",
+                        [("フォーマット", "H.264 (MP4)"), ("解像度", "1920 × 1080"), ("品質", "高品質")],
+                    ),
+                    (
+                        "プラグイン",
+                        [
+                            ("プラグインの管理", "フォルダを開く"),
+                            ("利用可能なプラグイン", "スキャン"),
+                            ("状態", "有効"),
+                        ],
+                    ),
+                ];
+                for (title, rows) in cards {
+                    egui::Frame::none()
+                        .fill(egui::Color32::from_rgb(15, 26, 33))
+                        .stroke(egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE))
+                        .rounding(7.0)
+                        .inner_margin(egui::Margin::same(12.0))
+                        .show(ui, |ui| {
+                            ui.label(egui::RichText::new(title).size(14.0).strong());
+                            ui.add_space(5.0);
+                            for (label, value) in rows {
+                                ui.horizontal(|ui| {
+                                    let label_width = (ui.available_width() * 0.42).max(92.0);
+                                    ui.add_sized(
+                                        [label_width, 25.0],
+                                        egui::Label::new(
+                                            egui::RichText::new(label)
+                                                .size(10.0)
+                                                .color(colors::TEXT_SECONDARY),
+                                        )
+                                        .truncate(),
+                                    );
+                                    ui.add_sized(
+                                        [ui.available_width(), 25.0],
+                                        egui::Button::new(
+                                            egui::RichText::new(value)
+                                                .size(10.0)
+                                                .color(colors::TEXT_PRIMARY),
+                                        )
+                                        .fill(egui::Color32::from_rgb(20, 32, 41))
+                                        .stroke(egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE))
+                                        .rounding(4.0),
+                                    );
+                                });
+                                ui.add_space(4.0);
+                            }
+                        });
+                    ui.add_space(8.0);
+                }
+                egui::Frame::none()
+                    .fill(egui::Color32::from_rgb(15, 26, 33))
+                    .stroke(egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE))
+                    .rounding(6.0)
+                    .inner_margin(egui::Margin::same(10.0))
+                    .show(ui, |ui| {
+                        ui.label(
+                            egui::RichText::new("Kagari VFX v0.1.0")
+                                .size(10.0)
+                                .color(colors::TEXT_SECONDARY),
+                        );
+                    });
+                ui.add_space(12.0);
+            });
     });
 }
 

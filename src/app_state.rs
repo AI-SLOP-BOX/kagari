@@ -1072,22 +1072,22 @@ impl KagariApp {
             self.playback.current_frame = current_frame;
             return;
         }
-        if self.show_guided_tutorial && ctx.screen_rect().width() >= 700.0 {
+        if self.show_guided_tutorial {
             crate::ui::tutorial_workspace::draw(self, ctx);
             self.playback.current_frame = current_frame;
             return;
         }
-        if self.ui_tabs.left_tab_idx == 1 && self.ui_tabs.right_tab_idx == 0 && ctx.screen_rect().width() >= 700.0 {
+        if self.ui_tabs.left_tab_idx == 1 && self.ui_tabs.right_tab_idx == 0 {
             crate::ui::effects_workspace::draw(self, ctx);
             self.playback.current_frame = current_frame;
             return;
         }
-        if self.active_tool == crate::ui::toolbar::ActiveTool::Text && ctx.screen_rect().width() >= 700.0 {
+        if self.active_tool == crate::ui::toolbar::ActiveTool::Text {
             crate::ui::text_workspace::draw(self, ctx);
             self.playback.current_frame = current_frame;
             return;
         }
-        if self.ui_tabs.left_tab_idx == 1 && self.ui_tabs.right_tab_idx == 19 && ctx.screen_rect().width() >= 700.0 {
+        if self.ui_tabs.left_tab_idx == 1 && self.ui_tabs.right_tab_idx == 19 {
             crate::ui::color_workspace::draw(self, ctx);
             self.playback.current_frame = current_frame;
             return;
@@ -1095,7 +1095,7 @@ impl KagariApp {
         let assets_workspace = ctx.data_mut(|data| {
             data.get_temp::<usize>(egui::Id::new("studio_active_workspace")) == Some(3)
         });
-        if assets_workspace && self.ui_tabs.left_tab_idx == 0 && self.ui_tabs.right_tab_idx == 30 && ctx.screen_rect().width() >= 700.0 {
+        if assets_workspace && self.ui_tabs.left_tab_idx == 0 && self.ui_tabs.right_tab_idx == 30 {
             crate::ui::asset_library::draw(self, ctx);
             self.playback.current_frame = current_frame;
             return;
