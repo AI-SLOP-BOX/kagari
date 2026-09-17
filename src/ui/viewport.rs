@@ -113,7 +113,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             tab_frame.show(ui, |ui| {
                 ui.horizontal(|ui| {
                     crate::ui::icons::render_svg_bytes(ui, "viewport-composition", crate::ui::icons::SVG_FRAME, egui::vec2(14.0, 14.0), colors::TEXT_SECONDARY);
-                    ui.label(egui::RichText::new("Composition").strong().color(colors::TEXT_PRIMARY));
+                    ui.label(egui::RichText::new("Viewer").strong().color(colors::TEXT_PRIMARY));
                     ui.label(egui::RichText::new(active_comp_display_name).color(colors::ACCENT_BLUE));
                     ui.colored_label(colors::ACCENT_BLUE, "●");
                     if ui.small_button("×").clicked() {
@@ -2391,7 +2391,7 @@ fn draw_target_viewport(app: &mut KagariApp, ctx: &egui::Context) {
             let rect = ui.max_rect();
             let painter = ui.painter();
             let border = egui::Color32::from_rgb(39, 52, 61);
-            painter.text(egui::pos2(rect.left() + 14.0, rect.top() + 28.0), egui::Align2::LEFT_CENTER, "Preview", egui::FontId::proportional(16.0), colors::TEXT_PRIMARY);
+            painter.text(egui::pos2(rect.left() + 14.0, rect.top() + 28.0), egui::Align2::LEFT_CENTER, "Viewer", egui::FontId::proportional(16.0), colors::TEXT_PRIMARY);
             let image_area = egui::vec2((rect.width() - 30.0).max(80.0), (rect.height() - 135.0).max(80.0));
             let image_width = image_area.x.min(image_area.y * 1.7778);
             let image_height = (image_width / 1.7778).min(image_area.y);

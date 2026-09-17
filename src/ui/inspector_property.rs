@@ -272,8 +272,12 @@ pub fn draw_expression_selector(
     current_frame: Option<u32>,
     fps: Option<u32>,
 ) {
-    ui.horizontal(|ui| {
-        ui.small("Expression: ");
+    let active = expr_opt.is_some();
+    egui::CollapsingHeader::new(if active { "Expression • Active" } else { "Expression" })
+        .id_salt(("expression_section", label))
+        .default_open(active)
+        .show(ui, |ui| {
+        ui.horizontal(|ui| {
         let expr_text = match expr_opt {
             Some(Expression::Wiggle {
                 frequency,
@@ -341,7 +345,8 @@ pub fn draw_expression_selector(
         if before != *expr_opt {
             *project_changed = true;
         }
-    });
+        });
+        });
 
     // Inline script editor for Raw expressions
     let mut remove_requested = false;

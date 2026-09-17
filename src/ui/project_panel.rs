@@ -550,6 +550,7 @@ fn draw_asset_row(
         ui.add_space(20.0);
         return;
     }
+    let show_row_actions = is_selected || ui.rect_contains_pointer(row_probe);
 
     use ProjectItemType as T;
     let (icon_svg, item_tag) = match &item.item_type {
@@ -611,7 +612,7 @@ fn draw_asset_row(
         }
 
         // Move-to-bin dropdown
-        if !folders.is_empty() {
+        if !folders.is_empty() && show_row_actions {
             let mb = ui.menu_button("📁→", |ui| {
                 if ui
                     .selectable_label(item.parent_folder.is_none(), "(project root)")

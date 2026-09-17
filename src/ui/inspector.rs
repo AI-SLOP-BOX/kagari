@@ -954,6 +954,13 @@ fn draw_reference_studio_nav(app: &mut KagariApp, ui: &mut egui::Ui) {
     for (index, (label, icon)) in rows.into_iter().enumerate() {
         let y = top + index as f32 * row_step;
         let active = index == 1;
+        let row_text = if active {
+            text
+        } else if label == "Transitions" {
+            colors::TEXT_MUTED
+        } else {
+            muted
+        };
         let row = egui::Rect::from_min_max(
             egui::pos2(rect.left() + 4.0, y),
             egui::pos2(rect.right(), y + row_height),
@@ -972,7 +979,7 @@ fn draw_reference_studio_nav(app: &mut KagariApp, ui: &mut egui::Ui) {
             egui::vec2(icon_size, icon_size),
         );
         crate::ui::icons::render_svg_at(ui, format!("reference-nav-icon-{index}"), icon, icon_rect.size(), if active { egui::Color32::from_rgb(255, 107, 22) } else { muted }, icon_rect.min);
-        ui.painter().text(egui::pos2(rect.left() + if compact { 50.0 } else { 63.0 }, y + row_height * 0.5), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(if compact { 12.0 } else { 14.0 }), if active { text } else { muted });
+        ui.painter().text(egui::pos2(rect.left() + if compact { 50.0 } else { 63.0 }, y + row_height * 0.5), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(if compact { 12.0 } else { 14.0 }), row_text);
     }
     ui.painter().line_segment(
         [egui::pos2(rect.left() + if compact { 24.0 } else { 38.0 }, top + rows.len() as f32 * row_step - 4.0), egui::pos2(rect.right() - if compact { 12.0 } else { 20.0 }, top + rows.len() as f32 * row_step - 4.0)],
@@ -981,7 +988,7 @@ fn draw_reference_studio_nav(app: &mut KagariApp, ui: &mut egui::Ui) {
     let settings_size = if compact { 18.0 } else { 22.0 };
     let settings_y = rect.bottom() - if compact { 32.0 } else { 72.0 };
     let settings_rect = egui::Rect::from_min_size(egui::pos2(rect.left() + if compact { 18.0 } else { 24.0 }, settings_y), egui::vec2(settings_size, settings_size));
-    crate::ui::icons::render_svg_at(ui, "reference-nav-settings".to_string(), crate::ui::icons::SVG_SETTINGS, settings_rect.size(), muted, settings_rect.min);
-    ui.painter().text(egui::pos2(rect.left() + if compact { 50.0 } else { 63.0 }, settings_y + settings_size * 0.5), egui::Align2::LEFT_CENTER, "Settings", egui::FontId::proportional(if compact { 12.0 } else { 14.0 }), muted);
+    crate::ui::icons::render_svg_at(ui, "reference-nav-settings".to_string(), crate::ui::icons::SVG_SETTINGS, settings_rect.size(), colors::TEXT_MUTED, settings_rect.min);
+    ui.painter().text(egui::pos2(rect.left() + if compact { 50.0 } else { 63.0 }, settings_y + settings_size * 0.5), egui::Align2::LEFT_CENTER, "Settings", egui::FontId::proportional(if compact { 12.0 } else { 14.0 }), colors::TEXT_MUTED);
     let _ = app;
 }
