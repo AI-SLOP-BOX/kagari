@@ -5,11 +5,14 @@ fn main() {
     let args: Vec<_> = std::env::args().collect();
     let path = args
         .get(1)
-        .expect("usage: ui_snapshot output.png [width height] [home|assets|effects|render|templates|settings]");
+        .expect("usage: ui_snapshot output.png [width height] [normal|expanded|graph|expression|effects_panel|home|assets|render|templates|settings]");
     let width: u32 = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(1440);
     let height: u32 = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(900);
-    let page = args.get(4).map(String::as_str);
-    let home = page.is_some();
+    let mode = args.get(4).map(String::as_str).unwrap_or("normal");
+    let home = matches!(
+        mode,
+        "home" | "assets" | "effects" | "render" | "templates" | "settings"
+    );
     let ctx = egui::Context::default();
     ui::theme::configure_ae_theme(&ctx);
     ui::icons::init_image_loaders(&ctx);
@@ -17,6 +20,18 @@ fn main() {
     ui::demo_scene::build(&mut app);
     app.playback.is_playing = false;
     app.show_home = home;
+    if !home {
+        app.show_graph_editor = mode == "graph";
+        if mode == "expression" {
+            app.ui_tabs.right_tab_idx = 10;
+        }
+        if mode == "effects_panel" {
+            app.ui_tabs.left_tab_idx = 1;
+        }
+        if mode == "expanded" {
+            app.selection.expanded_layers.insert(1);
+        }
+    }
     app.show_welcome = false;
     let mut frame = 30;
     let duration = app.history.current().active_composition().duration_frames;
@@ -37,10 +52,12 @@ fn main() {
             ..Default::default()
         }, |ctx| {
             if home {
-                if let Some(page) = page {
-                    ui::home_screen::set_reference_page(ctx, page);
+                if !matches!(mode, "home") {
+                    ui::home_screen::set_reference_page(ctx, mode);
                 }
                 ui::home_screen::draw(&mut app, ctx);
+            } else if mode == "effects_panel" {
+                ui::effects_workspace::draw(&mut app, ctx);
             } else {
                 ui::menu::draw(&mut app, ctx);
                 ui::timeline::draw(&mut app, ctx, &mut frame, duration);
