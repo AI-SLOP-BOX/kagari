@@ -1385,13 +1385,17 @@ mod tests {
     use super::*;
 
     fn drive_frames(app: &mut KagariApp, n: usize) {
+        drive_frames_at_size(app, n, 1600.0, 900.0);
+    }
+
+    fn drive_frames_at_size(app: &mut KagariApp, n: usize, width: f32, height: f32) {
         let ctx = eframe::egui::Context::default();
         for _ in 0..n {
             let _ = ctx.run(
                 eframe::egui::RawInput {
                     screen_rect: Some(eframe::egui::Rect::from_min_size(
                         eframe::egui::Pos2::ZERO,
-                        eframe::egui::vec2(1600.0, 900.0),
+                        eframe::egui::vec2(width, height),
                     )),
                     ..Default::default()
                 },
@@ -1411,6 +1415,17 @@ mod tests {
         drive_frames(&mut app, 2);
         assert!(!app.drag_active(), "no transaction left open");
         assert_eq!(app.playback.current_frame, 0, "playhead must not drift");
+    }
+
+    #[test]
+    fn responsive_studio_frames_render_without_panic() {
+        for (width, height) in [(900.0, 700.0), (640.0, 480.0)] {
+            let mut app = KagariApp::default();
+            app.show_home = false;
+            app.show_welcome = false;
+            drive_frames_at_size(&mut app, 2, width, height);
+            assert_eq!(app.playback.current_frame, 0, "playhead must not drift at {width}px");
+        }
     }
 
     #[test]
