@@ -145,14 +145,10 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                         }
                     }
                 });
-            egui::ComboBox::from_id_salt("viewport-fit")
-                .selected_text("Full")
-                .width(72.0)
-                .show_ui(ui, |ui| {
-                    let _ = ui.selectable_label(true, "Full");
-                    let _ = ui.selectable_label(false, "Fit");
-            });
-            ui.add_space(12.0);
+            // Fit is already a mode in the zoom control. Keep the toolbar
+            // focused on real viewer actions instead of a duplicate inert
+            // dropdown.
+            ui.add_space(10.0);
             for (index, (icon, tooltip, active)) in [
                 (crate::ui::icons::SVG_GRID, "Toggle composition grid", app.show_grid),
                 (crate::ui::icons::SVG_FRAME, "Toggle safe-area guides", app.show_guides),
@@ -195,6 +191,9 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 }
                 ui.add_space(8.0);
             }
+            ui.add_space(4.0);
+            ui.separator();
+            ui.add_space(4.0);
             let mode_2d = app.viewport_mode == ViewportMode::Comp2D;
             if crate::ui::theme::draw_custom_tab(ui, mode_2d, "2D").clicked() {
                 app.viewport_mode = ViewportMode::Comp2D;
@@ -202,7 +201,10 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             if crate::ui::theme::draw_custom_tab(ui, !mode_2d, "3D Camera").clicked() {
                 app.viewport_mode = ViewportMode::Camera3D;
             }
-            ui.menu_button("Overlays", |ui| {
+            ui.add_space(4.0);
+            ui.separator();
+            ui.add_space(4.0);
+            ui.menu_button("View", |ui| {
                 ui.checkbox(&mut app.show_handles, "Layer handles");
                 ui.checkbox(&mut app.show_guides, "Safe-area guides");
                 ui.checkbox(&mut app.show_grid, "Grid");

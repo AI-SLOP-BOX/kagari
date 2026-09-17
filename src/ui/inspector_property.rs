@@ -273,7 +273,7 @@ pub fn draw_expression_selector(
     fps: Option<u32>,
 ) {
     let active = expr_opt.is_some();
-    egui::CollapsingHeader::new(if active { "fx  Expression • Active" } else { "fx  Expression" })
+    egui::CollapsingHeader::new(if active { "fx  Expression • Active" } else { "fx" })
         .id_salt(("expression_section", label))
         .default_open(false)
         .show(ui, |ui| {
@@ -509,6 +509,35 @@ pub fn draw_property_ui<
         ui.label(label);
 
         let has_keyframes = property.keyframes().is_some();
+
+        // The current value is the primary editing surface. Keep it directly
+        // beside the property label; animation controls follow as secondary
+        // affordances so the Inspector reads like a parameter editor first.
+        let mut temp_val = property.evaluate(current_frame);
+        draw_value_widget(ui, &mut temp_val);
+        match property {
+            Animatable::Constant(val) => {
+                if *val != temp_val {
+                    *val = temp_val;
+                }
+            }
+            Animatable::Animated(keyframes) => {
+                let existing_idx = keyframes.iter().position(|kf| kf.frame == current_frame);
+                if let Some(idx) = existing_idx {
+                    keyframes[idx].value = temp_val;
+                } else {
+                    let evaluated = property.evaluate(current_frame);
+                    if temp_val != evaluated {
+                        property.add_keyframe(Keyframe::new(
+                            current_frame,
+                            temp_val,
+                            InterpolationType::Linear,
+                        ));
+                    }
+                }
+            }
+        }
+
         if has_keyframes
             && custom_widgets::ae_icon_button(ui, "◀", "Jump to Previous Keyframe (J)").clicked()
         {
@@ -645,31 +674,6 @@ pub fn draw_property_ui<
             }
         });
 
-        let mut temp_val = property.evaluate(current_frame);
-        draw_value_widget(ui, &mut temp_val);
-
-        match property {
-            Animatable::Constant(val) => {
-                if *val != temp_val {
-                    *val = temp_val;
-                }
-            }
-            Animatable::Animated(keyframes) => {
-                let existing_idx = keyframes.iter().position(|kf| kf.frame == current_frame);
-                if let Some(idx) = existing_idx {
-                    keyframes[idx].value = temp_val;
-                } else {
-                    let evaluated = property.evaluate(current_frame);
-                    if temp_val != evaluated {
-                        property.add_keyframe(Keyframe::new(
-                            current_frame,
-                            temp_val,
-                            InterpolationType::Linear,
-                        ));
-                    }
-                }
-            }
-        }
     });
 
     next_frame

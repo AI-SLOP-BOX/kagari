@@ -29,7 +29,7 @@ pub fn draw_expression_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
         comp.layers[layer_idx].name.clone()
     };
 
-    crate::ui::custom_widgets::ae_section_header(ui, "Expression", "📝");
+    crate::ui::custom_widgets::ae_section_header(ui, "Expression", "fx");
 
     ui.horizontal(|ui| {
         ui.label(
@@ -89,7 +89,7 @@ pub fn draw_expression_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
 
     // Expression editor
     ui.add_space(4.0);
-    crate::ui::custom_widgets::ae_section_header(ui, "Script Editor", "💻");
+    crate::ui::custom_widgets::ae_section_header(ui, "Script Editor", "{}");
 
     let mut script = current_expr.clone();
 

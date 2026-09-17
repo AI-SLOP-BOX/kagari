@@ -174,7 +174,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                 ui.horizontal(|ui| {
                     ui.label(
                         egui::RichText::new(format!(
-                            "📐 {}×{}  ⏱ {:.0}fps",
+                            "Comp  {}×{}  ·  {:.0}fps",
                             comp.width, comp.height, comp.fps
                         ))
                         .small()
@@ -246,7 +246,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                         }
                         project_changed = true;
                     }
-                    if ui.button("📋 Copy Expression Ref").clicked() {
+                    if ui.button("Copy Expression Ref").clicked() {
                         ui.output_mut(|o| {
                             o.copied_text =
                                 "thisComp.layer(thisLayer).transform.position".to_string()
@@ -610,7 +610,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                     egui::Frame::none()
                         .inner_margin(egui::Margin::symmetric(0.0, 4.0))
                         .show(ui, |ui| {
-                        ui.collapsing("🎭 Masks", |ui| {
+                        ui.collapsing("Masks", |ui| {
                             ui.horizontal(|ui| {
                                 if ui.button("+ Add Rect Mask").clicked() {
                                     let mask_idx = layer.masks.len() + 1;

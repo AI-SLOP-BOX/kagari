@@ -17,7 +17,10 @@ use utils::maybe_snap_frame;
 pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, total_frames: u32) {
     let screen_height = ctx.screen_rect().height();
     let narrow_timeline = ctx.screen_rect().width() < 950.0;
-    let timeline_default_height = (screen_height * 0.38).clamp(214.0, 362.0);
+    // Leave the Viewer the dominant surface on first open. The timeline can
+    // still be resized upward, while 900px layouts retain a compact editor
+    // strip instead of losing the composition to a giant dock.
+    let timeline_default_height = (screen_height * 0.30).clamp(206.0, 320.0);
     let timeline_max_height = (screen_height * 0.56).max(260.0);
     egui::TopBottomPanel::bottom("timeline_panel")
         .resizable(true)

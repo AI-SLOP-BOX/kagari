@@ -14,9 +14,9 @@ pub fn draw_layer_transforms(
     project_changed: &mut bool,
     next_frame: &mut Option<u32>,
 ) {
-    ui.group(|ui| {
+    egui::Frame::none().show(ui, |ui| {
         if layer.is_3d {
-            ui.label("Transform 3D");
+            ui.label(egui::RichText::new("Transform 3D").strong().color(colors::TEXT_PRIMARY));
 
             let pos_before = layer.transform_3d.position.clone();
             if let Some(nf) = draw_property_ui(
@@ -85,7 +85,7 @@ pub fn draw_layer_transforms(
 
             // ── 3D Material Options ──
             ui.add_space(4.0);
-            ui.collapsing("🧱 Material Options", |ui| {
+            ui.collapsing("Material Options", |ui| {
                 let mat = &mut layer.material;
                 if ui
                     .checkbox(&mut mat.cast_shadows, "Casts Shadows")
@@ -149,7 +149,7 @@ pub fn draw_layer_transforms(
                 });
             });
         } else {
-            ui.label("Transform 2D");
+            ui.label(egui::RichText::new("Transform 2D").strong().color(colors::TEXT_PRIMARY));
 
             let val_before = layer.transform.anchor_point.clone();
             if let Some(nf) = draw_property_ui(

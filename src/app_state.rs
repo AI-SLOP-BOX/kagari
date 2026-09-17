@@ -138,7 +138,9 @@ impl Default for UiTabsDomainState {
             left_tab_idx: 0,
             right_tab_idx: 30,
             bottom_dock_tab: 0,
-            viewport_mag_ratio: 0.5,
+            // Fit keeps the composition legible on first open and lets the
+            // Viewer remain the visual center at every window size.
+            viewport_mag_ratio: 0.0,
             show_switches_pane: true,
             global_shy_active: false,
             layer_filter_text: String::new(),
