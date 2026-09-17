@@ -61,6 +61,7 @@ pub fn draw_timeline_header(
     });
     let mut goto_frame: Option<u32> = None;
     let compact = ui.ctx().screen_rect().width() < 950.0;
+    let very_narrow = ui.ctx().screen_rect().width() < 700.0;
 
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 6.0;
@@ -241,19 +242,21 @@ pub fn draw_timeline_header(
 
         });
 
-        use crate::ui::custom_widgets::ae_svg_toggle;
-
-        ae_svg_toggle(
-            ui,
-            state.snap_to_keyframes,
-            SVG_SNAP,
-            "snap_btn_header",
-            egui::vec2(22.0, 22.0),
-            colors::ACCENT_CYAN,
-            "Toggle Keyframe & Marker Snapping (Shift+S)",
-        );
+        if !very_narrow {
+            use crate::ui::custom_widgets::ae_svg_toggle;
+            ae_svg_toggle(
+                ui,
+                state.snap_to_keyframes,
+                SVG_SNAP,
+                "snap_btn_header",
+                egui::vec2(22.0, 22.0),
+                colors::ACCENT_CYAN,
+                "Toggle Keyframe & Marker Snapping (Shift+S)",
+            );
+        }
 
         // ── 8bpc / 16bpc / 32bpc (Float) HDR Color Depth Quick Toggle ──
+        if !very_narrow {
         ui.add_space(4.0);
         let depth_badge_color = match comp.bit_depth {
             crate::core::color_science::BitDepth::EightBit => egui::Color32::from_rgb(140, 140, 150),
@@ -275,21 +278,24 @@ pub fn draw_timeline_header(
             crate::core::frame_cache::bump_version();
             project_changed = true;
         }
+        }
 
         // ── AE Timeline Layer Filter ──
-        ui.add_space(8.0);
-        ui.label(
-            egui::RichText::new("Filter:")
-                .small()
-                .color(crate::ui::theme::colors::TEXT_SECONDARY),
-        );
+        ui.add_space(if very_narrow { 3.0 } else { 8.0 });
+        if !very_narrow {
+            ui.label(
+                egui::RichText::new("Filter:")
+                    .small()
+                    .color(crate::ui::theme::colors::TEXT_SECONDARY),
+            );
+        }
         ui.add(
             egui::TextEdit::singleline(state.layer_filter_text)
                 .hint_text("Search layers...")
-                .desired_width(110.0),
+                .desired_width(if very_narrow { 76.0 } else { 110.0 }),
         );
 
-        ui.menu_button("+ Add Layer", |ui| {
+        ui.menu_button(if very_narrow { "+" } else { "+ Add Layer" }, |ui| {
         if ui.button("+ Solid").clicked() {
             let id = format!("layer_{}", comp.layers.len());
             let name = format!("Solid {}", comp.layers.len());

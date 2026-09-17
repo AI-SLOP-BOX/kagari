@@ -245,22 +245,25 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
         crate::ui::comp_settings_dialog::draw_comp_settings_dialog(app, ctx);
 
         // ── AE Viewport Composition Top Tabs & Breadcrumbs Bar ──
-        let active_comp_idx = app.history.current().active_composition_idx;
-        let comps_count = app.history.current().compositions.len();
-        ui.horizontal(|ui| {
-            for idx in 0..comps_count {
-                let is_active = idx == active_comp_idx;
-                let c_name = app.history.current().compositions[idx].name.clone();
-                let tab_text = c_name;
-                if crate::ui::theme::draw_custom_tab(ui, is_active, &tab_text).clicked() {
-                    let mut p = app.history.current().clone();
-                    p.active_composition_idx = idx;
-                    app.history.commit(p);
+        // The active composition is already present in the compact header;
+        // removing this duplicate strip below 700px keeps a usable Viewer.
+        if ctx.screen_rect().width() >= 700.0 {
+            let active_comp_idx = app.history.current().active_composition_idx;
+            let comps_count = app.history.current().compositions.len();
+            ui.horizontal(|ui| {
+                for idx in 0..comps_count {
+                    let is_active = idx == active_comp_idx;
+                    let c_name = app.history.current().compositions[idx].name.clone();
+                    let tab_text = c_name;
+                    if crate::ui::theme::draw_custom_tab(ui, is_active, &tab_text).clicked() {
+                        let mut p = app.history.current().clone();
+                        p.active_composition_idx = idx;
+                        app.history.commit(p);
+                    }
                 }
-            }
-
-        });
-        ui.separator();
+            });
+            ui.separator();
+        }
 
         let size = ui.available_size();
         let (rect, viewport_response) = ui.allocate_exact_size(size, egui::Sense::click_and_drag());
@@ -661,9 +664,20 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
 
         if is_reference_demo {
             if let Some(texture) = demo_reference_texture(ctx) {
+                let compact_reference_viewer = ctx.screen_rect().width() < 700.0;
+                let footer_reserve = if compact_reference_viewer {
+                    8.0
+                } else if rect.height() >= 140.0 {
+                    56.0
+                } else {
+                    14.0
+                };
                 let preview_area = egui::Rect::from_min_max(
                     rect.left_top() + egui::vec2(8.0, 8.0),
-                    rect.right_bottom() - egui::vec2(8.0, 56.0),
+                    egui::pos2(
+                        (rect.right() - 8.0).max(rect.left() + 9.0),
+                        (rect.bottom() - footer_reserve).max(rect.top() + 9.0),
+                    ),
                 );
                 let max_preview_width = preview_area.width().max(1.0);
                 let max_preview_height = preview_area.height().max(1.0);
@@ -679,26 +693,28 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 );
                 rendered_gpu = true;
             }
-            let footer_y = rect.bottom() - 34.0;
-            ui.painter().line_segment(
-                [egui::pos2(rect.left(), footer_y - 25.0), egui::pos2(rect.right(), footer_y - 25.0)],
-                egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
-            );
-            ui.painter().text(
-                egui::pos2(rect.left() + 18.0, footer_y),
-                egui::Align2::LEFT_CENTER,
-                "00:00:03:12",
-                egui::FontId::proportional(13.0),
-                colors::ACCENT_BLUE,
-            );
-            for (index, glyph) in ["◀", "◀◀", "▶", "▶▶", "▮▶"].into_iter().enumerate() {
-                ui.painter().text(
-                    egui::pos2(rect.center().x - 70.0 + index as f32 * 32.0, footer_y),
-                    egui::Align2::CENTER_CENTER,
-                    glyph,
-                    egui::FontId::proportional(13.0),
-                    colors::TEXT_PRIMARY,
+            if ctx.screen_rect().width() >= 700.0 {
+                let footer_y = rect.bottom() - 34.0;
+                ui.painter().line_segment(
+                    [egui::pos2(rect.left(), footer_y - 25.0), egui::pos2(rect.right(), footer_y - 25.0)],
+                    egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
                 );
+                ui.painter().text(
+                    egui::pos2(rect.left() + 18.0, footer_y),
+                    egui::Align2::LEFT_CENTER,
+                    "00:00:03:12",
+                    egui::FontId::proportional(13.0),
+                    colors::ACCENT_BLUE,
+                );
+                for (index, glyph) in ["◀", "◀◀", "▶", "▶▶", "▮▶"].into_iter().enumerate() {
+                    ui.painter().text(
+                        egui::pos2(rect.center().x - 70.0 + index as f32 * 32.0, footer_y),
+                        egui::Align2::CENTER_CENTER,
+                        glyph,
+                        egui::FontId::proportional(13.0),
+                        colors::TEXT_PRIMARY,
+                    );
+                }
             }
         }
 

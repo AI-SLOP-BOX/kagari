@@ -516,7 +516,9 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
             let mut pending_effect_drops: Vec<(usize, String, usize)> = Vec::new();
             let mut pending_select_label_group: Option<crate::core::timeline::LabelColor> = None;
 
-            let layer_scroll_height = if narrow_timeline {
+            let layer_scroll_height = if narrow_timeline && ui.ctx().screen_rect().width() < 700.0 {
+                36.0
+            } else if narrow_timeline {
                 80.0
             } else if ui.ctx().screen_rect().width() <= 1200.0 {
                 120.0
@@ -1728,21 +1730,27 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
             crate::ui::timeline::pending_actions::apply_effect_drops(app, pending_effect_drops, &mut project_changed);
 
             // ── AE Timeline Bottom Controls Bar ──
-            ui.add_space(2.0);
-            ui.horizontal(|ui| {
-                ui.small(egui::RichText::new("Controls").strong().color(colors::TEXT_SECONDARY));
-                if ui.selectable_label(app.ui_tabs.show_switches_pane, "Switches").on_hover_text("Show layer switches").clicked() {
-                    app.ui_tabs.show_switches_pane = true;
-                }
-                if ui.selectable_label(!app.ui_tabs.show_switches_pane, "Modes").on_hover_text("Show blend modes and track mattes").clicked() {
-                    app.ui_tabs.show_switches_pane = false;
-                }
+            if narrow_timeline && ui.ctx().screen_rect().width() < 700.0 {
                 if ui.input(|i| i.key_pressed(egui::Key::F4)) {
                     app.ui_tabs.show_switches_pane = !app.ui_tabs.show_switches_pane;
                 }
-                ui.separator();
-                ui.small(egui::RichText::new("F4 toggles · Double-click to rename · Space to preview").color(colors::TEXT_SECONDARY));
-            });
+            } else {
+                ui.add_space(2.0);
+                ui.horizontal(|ui| {
+                    ui.small(egui::RichText::new("Controls").strong().color(colors::TEXT_SECONDARY));
+                    if ui.selectable_label(app.ui_tabs.show_switches_pane, "Switches").on_hover_text("Show layer switches").clicked() {
+                        app.ui_tabs.show_switches_pane = true;
+                    }
+                    if ui.selectable_label(!app.ui_tabs.show_switches_pane, "Modes").on_hover_text("Show blend modes and track mattes").clicked() {
+                        app.ui_tabs.show_switches_pane = false;
+                    }
+                    if ui.input(|i| i.key_pressed(egui::Key::F4)) {
+                        app.ui_tabs.show_switches_pane = !app.ui_tabs.show_switches_pane;
+                    }
+                    ui.separator();
+                    ui.small(egui::RichText::new("F4 toggles · Double-click to rename · Space to preview").color(colors::TEXT_SECONDARY));
+                });
+            }
 
             crate::ui::timeline::pending_actions::apply(
                 app,
