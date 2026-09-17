@@ -195,6 +195,20 @@ fn draw_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     if ui.small_button(drawer_label).clicked() {
                         ctx.data_mut(|data| data.insert_temp(drawer_id, !drawer_open));
                     }
+                    if ctx.screen_rect().width() < 950.0 {
+                        let inspector_id = egui::Id::new("compact_inspector_drawer");
+                        let inspector_open = ctx
+                            .data(|data| data.get_temp::<bool>(inspector_id))
+                            .unwrap_or(false);
+                        let inspector_label = if inspector_open {
+                            "Hide Inspector"
+                        } else {
+                            "Inspector"
+                        };
+                        if ui.small_button(inspector_label).clicked() {
+                            ctx.data_mut(|data| data.insert_temp(inspector_id, !inspector_open));
+                        }
+                    }
                 }
                 let right_header_width = if compact_header { 220.0 } else { 390.0 };
                 ui.add_space((ui.available_width() - right_header_width).max(0.0));

@@ -17,6 +17,12 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
             .any(|layer| layer.id == "demo_bg");
     let compact_right_dock = ctx.screen_rect().width() >= 950.0 && ctx.screen_rect().width() < 1200.0;
     let narrow_right_dock = ctx.screen_rect().width() < 950.0;
+    let compact_inspector_drawer = ctx
+        .data(|data| data.get_temp::<bool>(egui::Id::new("compact_inspector_drawer")))
+        .unwrap_or(false);
+    if narrow_right_dock && !compact_inspector_drawer {
+        return;
+    }
     let right_width = if reference_demo {
         359.0
     } else if compact_right_dock {
