@@ -20,6 +20,73 @@ pub enum ActiveTool {
     PuppetPin,
 }
 
+/// Compact tool strip for the composition Viewer. The full editing tool set
+/// remains available through the overflow menu on narrow workspaces.
+pub fn draw_viewer_tool_strip(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
+    use crate::ui::icons::*;
+    use crate::ui::theme::colors;
+
+    let tools: [(ActiveTool, &'static str, &'static str); 8] = [
+        (ActiveTool::Selection, SVG_TOOL_SELECT, "Select (V)"),
+        (ActiveTool::Hand, SVG_TOOL_HAND, "Hand (H)"),
+        (ActiveTool::Zoom, SVG_TOOL_ZOOM, "Zoom (Z)"),
+        (ActiveTool::Rotation, SVG_TOOL_ROTATE, "Rotate (W)"),
+        (ActiveTool::AnchorPoint, SVG_TOOL_ANCHOR, "Anchor Point (Y)"),
+        (ActiveTool::Pen, SVG_TOOL_PEN, "Pen (G)"),
+        (ActiveTool::Text, SVG_TOOL_TEXT, "Text (Cmd+T)"),
+        (ActiveTool::Camera3D, SVG_TOOL_CAMERA, "Camera (C)"),
+    ];
+    let compact = ui.available_width() < 680.0;
+    let visible_count = if compact { 3 } else { tools.len() };
+
+    for (index, (tool, svg, tooltip)) in tools.into_iter().enumerate() {
+        if index == 3 && !compact {
+            ui.separator();
+        }
+        if index >= visible_count {
+            break;
+        }
+        let selected = app.active_tool == tool;
+        let (rect, response) = ui.allocate_exact_size(egui::vec2(25.0, 25.0), egui::Sense::click());
+        let fill = if selected || response.hovered() {
+            colors::BG_HOVER
+        } else {
+            egui::Color32::TRANSPARENT
+        };
+        ui.painter().rect_filled(rect, 3.0, fill);
+        if selected {
+            ui.painter().rect_stroke(rect, 3.0, egui::Stroke::new(1.0_f32, colors::ACCENT_ORANGE));
+            ui.painter().line_segment(
+                [egui::pos2(rect.left() + 4.0, rect.bottom() - 1.0), egui::pos2(rect.right() - 4.0, rect.bottom() - 1.0)],
+                egui::Stroke::new(2.0_f32, colors::ACCENT_ORANGE),
+            );
+        }
+        let _ = crate::ui::icons::render_svg_at(
+            ui,
+            format!("viewer_tool_{tool:?}"),
+            svg,
+            rect.shrink(4.0).size(),
+            if selected { colors::ACCENT_ORANGE } else { colors::TEXT_SECONDARY },
+            rect.shrink(4.0).min,
+        );
+        if response.clicked() {
+            app.active_tool = tool;
+        }
+        response.on_hover_text(tooltip);
+    }
+
+    if compact {
+        ui.menu_button("Tools", |ui| {
+            for (tool, _svg, tooltip) in tools.into_iter().skip(3) {
+                if ui.selectable_label(app.active_tool == tool, tooltip).clicked() {
+                    app.active_tool = tool;
+                    ui.close_menu();
+                }
+            }
+        });
+    }
+}
+
 #[allow(dead_code)]
 pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
     use crate::ui::theme::colors;

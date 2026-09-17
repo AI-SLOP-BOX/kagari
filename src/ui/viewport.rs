@@ -122,17 +122,21 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 });
             });
 
-            ui.add_space(18.0);
-            ui.label(egui::RichText::new("Layer").color(colors::TEXT_MUTED));
-            ui.label(egui::RichText::new("(none)").color(colors::TEXT_SECONDARY));
-            ui.add_space(28.0);
-            ui.label(egui::RichText::new("Footage").color(colors::TEXT_MUTED));
-            ui.label(egui::RichText::new("(none)").color(colors::TEXT_SECONDARY));
+            if ctx.screen_rect().width() >= 950.0 {
+                ui.add_space(18.0);
+                ui.label(egui::RichText::new("Layer").color(colors::TEXT_MUTED));
+                ui.label(egui::RichText::new("(none)").color(colors::TEXT_SECONDARY));
+                ui.add_space(28.0);
+                ui.label(egui::RichText::new("Footage").color(colors::TEXT_MUTED));
+                ui.label(egui::RichText::new("(none)").color(colors::TEXT_SECONDARY));
+            }
         });
         ui.separator();
 
         // ── Viewport controls ─────────────────────────────────────────────────────
         ui.horizontal(|ui| {
+            crate::ui::toolbar::draw_viewer_tool_strip(app, ui);
+            ui.separator();
             let zoom_label = match app.ui_tabs.viewport_mag_ratio {
                 ratio if ratio <= 0.26 => "25%",
                 ratio if ratio <= 0.76 => "50%",
@@ -173,6 +177,33 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 ui.checkbox(&mut app.show_guides, "Safe-area guides");
                 ui.checkbox(&mut app.show_grid, "Grid");
                 ui.checkbox(&mut app.viewport_show_stats, "Preview statistics");
+                if let Some(idx) = app.selection.selected_layer_idx {
+                    ui.separator();
+                    ui.menu_button("Anchor snapping", |ui| {
+                        for (label, x, y) in [
+                            ("Top left", 0.0, 0.0),
+                            ("Top center", 0.5, 0.0),
+                            ("Top right", 1.0, 0.0),
+                            ("Center left", 0.0, 0.5),
+                            ("Center", 0.5, 0.5),
+                            ("Center right", 1.0, 0.5),
+                            ("Bottom left", 0.0, 1.0),
+                            ("Bottom center", 0.5, 1.0),
+                            ("Bottom right", 1.0, 1.0),
+                        ] {
+                            if ui.button(label).clicked() {
+                                let comp = app.history.current_mut().active_composition_mut();
+                                if let Some(layer) = comp.layers.get_mut(idx) {
+                                    let [width, height] = layer.bounding_size();
+                                    layer.transform.anchor_point = crate::core::property::Animatable::new_constant([width * x, height * y]);
+                                    app.autosave.mark_dirty();
+                                    crate::core::frame_cache::bump_version();
+                                }
+                                ui.close_menu();
+                            }
+                        }
+                    });
+                }
             });
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 crate::ui::icons::render_svg_bytes(ui, "viewport-fullscreen", crate::ui::icons::SVG_WINDOW_MAXIMIZE, egui::vec2(18.0, 18.0), colors::TEXT_SECONDARY);
@@ -2392,6 +2423,16 @@ fn draw_target_viewport(app: &mut KagariApp, ctx: &egui::Context) {
             let painter = ui.painter();
             let border = egui::Color32::from_rgb(39, 52, 61);
             painter.text(egui::pos2(rect.left() + 14.0, rect.top() + 28.0), egui::Align2::LEFT_CENTER, "Viewer", egui::FontId::proportional(16.0), colors::TEXT_PRIMARY);
+            for (index, glyph) in ["↖", "✋", "⌕", "□", "✎"].into_iter().enumerate() {
+                painter.text(
+                    egui::pos2(rect.left() + 104.0 + index as f32 * 25.0, rect.top() + 28.0),
+                    egui::Align2::CENTER_CENTER,
+                    glyph,
+                    egui::FontId::proportional(14.0),
+                    if index == 0 { colors::ACCENT_ORANGE } else { colors::TEXT_SECONDARY },
+                );
+            }
+            painter.text(egui::pos2(rect.right() - 90.0, rect.top() + 28.0), egui::Align2::RIGHT_CENTER, "1080p  ·  50%", egui::FontId::proportional(11.0), colors::TEXT_SECONDARY);
             let image_area = egui::vec2((rect.width() - 30.0).max(80.0), (rect.height() - 135.0).max(80.0));
             let image_width = image_area.x.min(image_area.y * 1.7778);
             let image_height = (image_width / 1.7778).min(image_area.y);

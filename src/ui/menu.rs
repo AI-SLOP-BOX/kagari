@@ -51,22 +51,15 @@ fn draw_reference_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context)
                     ui.add_space(18.0);
                     crate::ui::icons::render_svg_bytes(ui, "studio-project-folder", crate::ui::icons::SVG_FOLDER, egui::vec2(18.0, 18.0), egui::Color32::from_rgb(174, 190, 207));
                     ui.add_space(10.0);
-                    ui.label(egui::RichText::new("Sample Project").size(14.0).color(crate::ui::theme::colors::TEXT_SECONDARY));
-                    ui.label(egui::RichText::new("•").size(14.0).color(crate::ui::theme::colors::TEXT_SECONDARY));
+                    ui.label(egui::RichText::new("Sample Project / main_comp").size(14.0).color(crate::ui::theme::colors::TEXT_SECONDARY));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let export = egui::Button::new(egui::RichText::new("Export").size(13.0).color(egui::Color32::WHITE))
-                            .fill(crate::ui::theme::colors::ACCENT_BLUE)
+                        let export = egui::Button::new(egui::RichText::new("Render").size(13.0).color(egui::Color32::WHITE))
+                            .fill(crate::ui::theme::colors::ACCENT_ORANGE)
                             .rounding(4.0)
-                            .min_size(egui::vec2(112.0, 30.0));
+                            .min_size(egui::vec2(88.0, 30.0));
                         ui.add(export);
                         ui.add_space(14.0);
-                        let mut zoom = "50%";
-                        egui::ComboBox::from_id_salt("studio-reference-zoom").selected_text(zoom).width(82.0).show_ui(ui, |ui| { ui.selectable_value(&mut zoom, "50%", "50%"); });
-                        ui.add_space(10.0);
-                        let mut resolution = "1080p";
-                        egui::ComboBox::from_id_salt("studio-reference-resolution").selected_text(resolution).width(82.0).show_ui(ui, |ui| { ui.selectable_value(&mut resolution, "1080p", "1080p"); });
-                        ui.add_space(16.0);
-                        ui.label(egui::RichText::new("Saved 10:24").size(12.0).color(crate::ui::theme::colors::TEXT_SECONDARY));
+                        ui.label(egui::RichText::new("Autosaved 10:24").size(12.0).color(crate::ui::theme::colors::TEXT_SECONDARY));
                     });
                 },
             );
@@ -74,7 +67,7 @@ fn draw_reference_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context)
 }
 
 fn draw_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context) {
-    let compact_header = ctx.screen_rect().width() < 900.0;
+    let compact_header = ctx.screen_rect().width() < 1200.0;
     let workspace_id = egui::Id::new("studio_active_workspace");
     let inferred_workspace = if app.show_home {
         0_usize
@@ -148,8 +141,8 @@ fn draw_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     crate::ui::theme::colors::TEXT_SECONDARY,
                 );
                 ui.add_space(6.0);
-                ui.label(egui::RichText::new("Sample Project").size(if compact_header { 12.0 } else { 14.0 }).color(crate::ui::theme::colors::TEXT_SECONDARY));
-                ui.label(egui::RichText::new("/").size(12.0).color(crate::ui::theme::colors::TEXT_MUTED));
+                ui.label(egui::RichText::new("Sample Project / main_comp").size(if compact_header { 12.0 } else { 14.0 }).color(crate::ui::theme::colors::TEXT_SECONDARY));
+                ui.add_space(6.0);
                 ui.menu_button(egui::RichText::new(workspace_label).size(if compact_header { 12.0 } else { 13.0 }).color(crate::ui::theme::colors::TEXT_PRIMARY), |ui| {
                     for (workspace_index, (label, nav)) in workspaces.iter().enumerate() {
                         if ui.selectable_label(active_workspace == workspace_index, *label).clicked() {
@@ -183,25 +176,33 @@ fn draw_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         }
                     }
                 });
+                if compact_header {
+                    let drawer_id = egui::Id::new("compact_project_drawer");
+                    let drawer_open = ctx.data(|data| data.get_temp::<bool>(drawer_id)).unwrap_or(false);
+                    let drawer_label = if drawer_open {
+                        "Close Panel"
+                    } else if app.ui_tabs.left_tab_idx == 1 {
+                        "Effects"
+                    } else {
+                        "Project"
+                    };
+                    if ui.small_button(drawer_label).clicked() {
+                        ctx.data_mut(|data| data.insert_temp(drawer_id, !drawer_open));
+                    }
+                }
                 let right_header_width = if compact_header { 220.0 } else { 390.0 };
                 ui.add_space((ui.available_width() - right_header_width).max(0.0));
                 ui.allocate_ui_with_layout(
                     egui::vec2(right_header_width, header_size.y),
                     egui::Layout::right_to_left(egui::Align::Center),
                     |ui| {
-                        let export = egui::Button::new(egui::RichText::new("Export").size(if compact_header { 12.0 } else { 13.0 }).color(egui::Color32::WHITE))
-                            .fill(crate::ui::theme::colors::ACCENT_BLUE)
+                        let export = egui::Button::new(egui::RichText::new("Render").size(if compact_header { 12.0 } else { 13.0 }).color(egui::Color32::WHITE))
+                            .fill(crate::ui::theme::colors::ACCENT_ORANGE)
                             .rounding(4.0)
-                            .min_size(egui::vec2(if compact_header { 78.0 } else { 96.0 }, 28.0));
+                            .min_size(egui::vec2(if compact_header { 78.0 } else { 88.0 }, 28.0));
                         ui.add(export);
-                        ui.add_space(8.0);
-                        let mut zoom = "50%";
-                        egui::ComboBox::from_id_salt("studio-compact-zoom").selected_text(zoom).width(if compact_header { 62.0 } else { 72.0 }).show_ui(ui, |ui| { ui.selectable_value(&mut zoom, "50%", "50%"); });
-                        ui.add_space(6.0);
-                        let mut resolution = "1080p";
-                        egui::ComboBox::from_id_salt("studio-compact-resolution").selected_text(resolution).width(if compact_header { 68.0 } else { 76.0 }).show_ui(ui, |ui| { ui.selectable_value(&mut resolution, "1080p", "1080p"); });
-                        ui.add_space(10.0);
-                        ui.label(egui::RichText::new("Saved").size(11.0).color(crate::ui::theme::colors::TEXT_MUTED));
+                        ui.add_space(12.0);
+                        ui.label(egui::RichText::new("Autosaved").size(11.0).color(crate::ui::theme::colors::TEXT_MUTED));
                     },
                 );
                 },

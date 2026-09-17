@@ -68,25 +68,30 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
     if reference_demo {
         egui::SidePanel::left("studio_global_nav")
             .resizable(false)
-            .exact_width(147.0)
+            .exact_width(54.0)
             .frame(egui::Frame::none().fill(egui::Color32::from_rgb(12, 20, 27)))
             .show(ctx, |ui| draw_reference_studio_nav(app, ui));
     }
 
-    egui::SidePanel::left("left_panel")
-        .resizable(!reference_demo)
-        .default_width(if reference_demo { 294.0 } else { 312.0 })
-        .min_width(if reference_demo { 294.0 } else { 210.0 })
-        .max_width(if reference_demo { 294.0 } else { max_width })
-        .frame(if reference_demo {
-            egui::Frame::none()
-                .fill(egui::Color32::from_rgb(13, 22, 29))
-                .inner_margin(egui::Margin::symmetric(17.0, 0.0))
-        } else {
-            egui::Frame::default()
-                .inner_margin(egui::Margin::symmetric(8.0, 0.0))
-        })
-        .show(ctx, |ui| {
+    let compact_workspace = ctx.screen_rect().width() < 950.0;
+    let compact_project_drawer = ctx
+        .data(|data| data.get_temp::<bool>(egui::Id::new("compact_project_drawer")))
+        .unwrap_or(false);
+    if !compact_workspace || compact_project_drawer {
+        egui::SidePanel::left("left_panel")
+            .resizable(!reference_demo)
+            .default_width(if reference_demo { 294.0 } else { 312.0 })
+            .min_width(if reference_demo { 294.0 } else { 210.0 })
+            .max_width(if reference_demo { 294.0 } else { max_width })
+            .frame(if reference_demo {
+                egui::Frame::none()
+                    .fill(egui::Color32::from_rgb(13, 22, 29))
+                    .inner_margin(egui::Margin::symmetric(17.0, 0.0))
+            } else {
+                egui::Frame::default()
+                    .inner_margin(egui::Margin::symmetric(8.0, 0.0))
+            })
+            .show(ctx, |ui| {
             if reference_demo {
                 ui.add_space(19.0);
                 ui.horizontal(|ui| {
@@ -818,7 +823,8 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
             } else {
                 ui.weak("Select a layer in the timeline to view properties");
             }
-        });
+            });
+    }
 }
 
 fn draw_effect_browser(ui: &mut egui::Ui) {
@@ -947,6 +953,49 @@ fn draw_reference_studio_nav(app: &mut KagariApp, ui: &mut egui::Ui) {
         ("Transitions", crate::ui::icons::SVG_ARROW_RIGHT),
         ("Color", crate::ui::icons::SVG_PALETTE),
     ];
+    if rect.width() < 80.0 {
+        let icon_size = 20.0;
+        let row_step = 42.0;
+        let top = rect.top() + 18.0;
+        for (index, (_label, icon)) in rows.into_iter().enumerate() {
+            let y = top + index as f32 * row_step;
+            let row = egui::Rect::from_min_size(
+                egui::pos2(rect.left() + 2.0, y),
+                egui::vec2(rect.width() - 4.0, 34.0),
+            );
+            if index == 1 {
+                ui.painter().rect_filled(row, 4.0, egui::Color32::from_rgb(28, 35, 43));
+                ui.painter().rect_filled(
+                    egui::Rect::from_min_size(row.left_top(), egui::vec2(3.0, row.height())),
+                    2.0,
+                    egui::Color32::from_rgb(255, 107, 22),
+                );
+            }
+            let icon_rect = egui::Rect::from_center_size(row.center(), egui::vec2(icon_size, icon_size));
+            crate::ui::icons::render_svg_at(
+                ui,
+                format!("reference-nav-icon-{index}"),
+                icon,
+                icon_rect.size(),
+                if index == 1 { egui::Color32::from_rgb(255, 107, 22) } else { muted },
+                icon_rect.min,
+            );
+        }
+        let settings_rect = egui::Rect::from_center_size(
+            egui::pos2(rect.center().x, rect.bottom() - 28.0),
+            egui::vec2(icon_size, icon_size),
+        );
+        crate::ui::icons::render_svg_at(
+            ui,
+            "reference-nav-settings".to_string(),
+            crate::ui::icons::SVG_SETTINGS,
+            settings_rect.size(),
+            colors::TEXT_MUTED,
+            settings_rect.min,
+        );
+        let _ = app;
+        return;
+    }
     let compact = rect.height() < 520.0;
     let row_step = if compact { 38.0 } else { 52.0 };
     let row_height = if compact { 34.0 } else { 48.0 };

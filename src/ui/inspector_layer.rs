@@ -167,36 +167,6 @@ pub fn draw_layer_transforms(
                 *next_frame = Some(nf);
             }
 
-            // 🎯 3x3 Anchor Point Quick Grid Picker
-            ui.horizontal_wrapped(|ui| {
-                ui.add_space(20.0);
-                ui.small("Snap Grid: ");
-                let b_size = layer.bounding_size();
-                let (w, h) = (b_size[0], b_size[1]);
-
-                for (label, ax, ay) in [
-                    ("◤", 0.0, 0.0),          // Top-Left
-                    ("▲", w * 0.5, 0.0),      // Top-Center
-                    ("◥", w, 0.0),            // Top-Right
-                    ("◀", 0.0, h * 0.5),      // Mid-Left
-                    ("🎯", w * 0.5, h * 0.5), // Center
-                    ("▶", w, h * 0.5),        // Mid-Right
-                    ("◣", 0.0, h),            // Bottom-Left
-                    ("▼", w * 0.5, h),        // Bottom-Center
-                    ("◢", w, h),              // Bottom-Right
-                ] {
-                    if ui
-                        .small_button(label)
-                        .on_hover_text(format!("Snap Anchor Point to ({:.0}, {:.0})", ax, ay))
-                        .clicked()
-                    {
-                        layer.transform.anchor_point =
-                            crate::core::property::Animatable::new_constant([ax, ay]);
-                        *project_changed = true;
-                    }
-                }
-            });
-
             if val_before != layer.transform.anchor_point {
                 *project_changed = true;
             }

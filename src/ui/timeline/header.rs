@@ -109,13 +109,21 @@ pub fn draw_timeline_header(
     ui.separator();
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 6.0;
-        ui.label(
-            egui::RichText::new("Timeline")
-                .small()
-                .strong()
-                .color(colors::TEXT_SECONDARY),
-        );
+        if ui
+            .selectable_label(!*state.show_graph_editor, egui::RichText::new("Timeline").small().strong())
+            .on_hover_text("Layer timeline")
+            .clicked()
+        {
+            *state.show_graph_editor = false;
+        }
         ui.separator();
+        if ui
+            .selectable_label(*state.show_graph_editor, egui::RichText::new("Graph").small().strong())
+            .on_hover_text("Graph Editor / Speed Curves")
+            .clicked()
+        {
+            *state.show_graph_editor = true;
+        }
         use crate::ui::icons::*;
         ui.label("Zoom");
         ui.add(egui::DragValue::new(state.timeline_zoom)
@@ -190,16 +198,6 @@ pub fn draw_timeline_header(
             egui::vec2(22.0, 22.0),
             colors::ACCENT_CYAN,
             "Toggle Keyframe & Marker Snapping (Shift+S)",
-        );
-
-        ae_svg_toggle(
-            ui,
-            state.show_graph_editor,
-            SVG_GRAPH_EDITOR,
-            "graph_btn_header",
-            egui::vec2(22.0, 22.0),
-            colors::ACCENT_BLUE,
-            "Toggle Graph Editor / Speed Curves (Shift+F3)",
         );
 
         // ── 8bpc / 16bpc / 32bpc (Float) HDR Color Depth Quick Toggle ──
