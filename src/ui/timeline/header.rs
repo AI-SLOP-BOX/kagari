@@ -18,6 +18,27 @@ pub struct TimelineHeaderState<'a> {
     pub fit_all: &'a mut bool,
 }
 
+fn draw_transport_icon_button(
+    ui: &mut egui::Ui,
+    id: &'static str,
+    svg: &'static str,
+    tooltip: &'static str,
+) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(24.0, 24.0), egui::Sense::click());
+    if response.hovered() {
+        ui.painter().rect_filled(rect, 2.0, colors::BG_HOVER);
+    }
+    crate::ui::icons::render_svg_at(
+        ui,
+        id.to_string(),
+        svg,
+        egui::vec2(16.0, 16.0),
+        colors::TEXT_SECONDARY,
+        rect.center() - egui::vec2(8.0, 8.0),
+    );
+    response.on_hover_text(tooltip)
+}
+
 pub fn draw_timeline_header(
     state: &mut TimelineHeaderState,
     ui: &mut egui::Ui,
@@ -75,32 +96,59 @@ pub fn draw_timeline_header(
         .on_hover_text("Click or Drag to set current frame timecode");
         ui.add_space(8.0);
 
-        if ui.small_button("⏮").on_hover_text("Go to First Frame (Home)").clicked() {
+        if draw_transport_icon_button(
+            ui,
+            "timeline-first-frame",
+            crate::ui::icons::SVG_STEP_BACK,
+            "Go to First Frame (Home)",
+        )
+        .clicked()
+        {
             *current_frame = 0;
         }
-        if ui.small_button("◀").on_hover_text("Previous Frame (PageUp / Left)").clicked() {
+        if draw_transport_icon_button(
+            ui,
+            "timeline-previous-frame",
+            crate::ui::icons::SVG_STEP_BACK,
+            "Previous Frame (PageUp / Left)",
+        )
+        .clicked()
+        {
             *current_frame = current_frame.saturating_sub(1);
         }
-        let play_btn_text = if *state.is_playing { "⏸" } else { "▶" };
-        if ui
-            .add(
-                egui::Button::new(
-                    egui::RichText::new(play_btn_text)
-                        .strong()
-                        .color(colors::TEXT_PRIMARY),
-                )
-                .fill(colors::BG_MID)
-                .min_size(egui::vec2(30.0, 24.0)),
-            )
-            .on_hover_text("Play / Pause RAM Preview (Spacebar)")
-            .clicked()
+        let play_svg = if *state.is_playing {
+            crate::ui::icons::SVG_PAUSE
+        } else {
+            crate::ui::icons::SVG_PLAY
+        };
+        if draw_transport_icon_button(
+            ui,
+            "timeline-play-pause",
+            play_svg,
+            "Play / Pause RAM Preview (Spacebar)",
+        )
+        .clicked()
         {
             *state.is_playing = !*state.is_playing;
         }
-        if ui.small_button("▶").on_hover_text("Next Frame (PageDown / Right)").clicked() {
+        if draw_transport_icon_button(
+            ui,
+            "timeline-next-frame",
+            crate::ui::icons::SVG_STEP_FORWARD,
+            "Next Frame (PageDown / Right)",
+        )
+        .clicked()
+        {
             *current_frame = (*current_frame + 1).min(total_frames);
         }
-        if ui.small_button("⏭").on_hover_text("Go to Last Frame (End)").clicked() {
+        if draw_transport_icon_button(
+            ui,
+            "timeline-last-frame",
+            crate::ui::icons::SVG_STEP_FORWARD,
+            "Go to Last Frame (End)",
+        )
+        .clicked()
+        {
             *current_frame = total_frames;
         }
 

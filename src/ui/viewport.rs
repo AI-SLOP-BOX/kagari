@@ -150,7 +150,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 });
             ui.add_space(12.0);
             for (index, icon) in [crate::ui::icons::SVG_GRID, crate::ui::icons::SVG_FRAME, crate::ui::icons::SVG_SORT].into_iter().enumerate() {
-                crate::ui::icons::render_svg_bytes(ui, &format!("viewport-control-{index}"), icon, egui::vec2(18.0, 18.0), colors::TEXT_SECONDARY);
+                crate::ui::icons::render_svg_bytes(ui, &format!("viewport-control-{index}"), icon, egui::vec2(16.0, 16.0), colors::TEXT_SECONDARY);
                 ui.add_space(8.0);
             }
             let mode_2d = app.viewport_mode == ViewportMode::Comp2D;
@@ -194,7 +194,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 }
             });
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                crate::ui::icons::render_svg_bytes(ui, "viewport-fullscreen", crate::ui::icons::SVG_WINDOW_MAXIMIZE, egui::vec2(18.0, 18.0), colors::TEXT_SECONDARY);
+                crate::ui::icons::render_svg_bytes(ui, "viewport-fullscreen", crate::ui::icons::SVG_WINDOW_MAXIMIZE, egui::vec2(16.0, 16.0), colors::TEXT_SECONDARY);
             });
         });
         ui.separator();
