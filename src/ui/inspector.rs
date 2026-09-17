@@ -79,10 +79,10 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
         .unwrap_or(false);
     if !compact_workspace || compact_project_drawer {
         egui::SidePanel::left("left_panel")
-            .resizable(!reference_demo)
+            .resizable(true)
             .default_width(if reference_demo { 294.0 } else { 312.0 })
-            .min_width(if reference_demo { 294.0 } else { 210.0 })
-            .max_width(if reference_demo { 294.0 } else { max_width })
+            .min_width(if reference_demo { 250.0 } else { 210.0 })
+            .max_width(if reference_demo { 380.0 } else { max_width })
             .frame(if reference_demo {
                 egui::Frame::none()
                     .fill(egui::Color32::from_rgb(13, 22, 29))

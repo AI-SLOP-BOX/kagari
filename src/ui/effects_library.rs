@@ -37,10 +37,10 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
     };
 
     egui::SidePanel::right("right_panel")
-        .resizable(!reference_demo)
+        .resizable(true)
         .default_width(right_width)
-        .min_width(if reference_demo { 359.0 } else if compact_right_dock { 350.0 } else if narrow_right_dock { 250.0 } else { 230.0 })
-        .max_width(if reference_demo { 359.0 } else if compact_right_dock { 350.0 } else if narrow_right_dock { 300.0 } else { max_width.max(320.0) })
+        .min_width(if reference_demo { 300.0 } else if compact_right_dock { 350.0 } else if narrow_right_dock { 250.0 } else { 230.0 })
+        .max_width(if reference_demo { 430.0 } else if compact_right_dock { 350.0 } else if narrow_right_dock { 300.0 } else { max_width.max(320.0) })
         .frame(if reference_demo {
             egui::Frame::none()
                 .fill(egui::Color32::from_rgb(13, 22, 29))
