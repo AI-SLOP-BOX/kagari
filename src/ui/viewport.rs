@@ -657,9 +657,15 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
 
         if is_reference_demo {
             if let Some(texture) = demo_reference_texture(ctx) {
-                let preview_width = (rect.width() - 16.0).max(1.0);
-                let preview_height = (preview_width / 1.92).min((rect.height() - 16.0).max(1.0));
-                let preview_center = egui::pos2(draw_rect.center().x, draw_rect.center().y - 40.0);
+                let preview_area = egui::Rect::from_min_max(
+                    rect.left_top() + egui::vec2(8.0, 8.0),
+                    rect.right_bottom() - egui::vec2(8.0, 56.0),
+                );
+                let max_preview_width = preview_area.width().max(1.0);
+                let max_preview_height = preview_area.height().max(1.0);
+                let preview_width = max_preview_width.min(max_preview_height * 1.92);
+                let preview_height = preview_width / 1.92;
+                let preview_center = preview_area.center();
                 let preview_rect = egui::Rect::from_center_size(preview_center, egui::vec2(preview_width, preview_height));
                 ui.painter().image(
                     texture.id(),

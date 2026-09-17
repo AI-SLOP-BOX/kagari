@@ -16,6 +16,7 @@ use utils::maybe_snap_frame;
 
 pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, total_frames: u32) {
     let screen_height = ctx.screen_rect().height();
+    let narrow_timeline = ctx.screen_rect().width() < 950.0;
     let timeline_default_height = (screen_height * 0.38).clamp(214.0, 362.0);
     let timeline_max_height = (screen_height * 0.56).max(260.0);
     egui::TopBottomPanel::bottom("timeline_panel")
@@ -24,33 +25,35 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
         .min_height(190.0)
         .max_height(timeline_max_height)
         .show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                let compositions: Vec<(usize, String)> = app
-                    .history
-                    .current()
-                    .compositions
-                    .iter()
-                    .enumerate()
-                    .map(|(index, composition)| (index, composition.name.clone()))
-                    .collect();
-                for (index, name) in compositions {
-                    let active = app.ui_tabs.bottom_dock_tab == 0
-                        && index == app.history.current().active_composition_idx;
-                    if crate::ui::theme::draw_custom_tab(ui, active, &name).clicked() {
-                        app.ui_tabs.bottom_dock_tab = 0;
-                        if index != app.history.current().active_composition_idx {
-                            let mut project = app.history.current().clone();
-                            project.active_composition_idx = index;
-                            app.history.commit(project);
+            if !narrow_timeline {
+                ui.horizontal(|ui| {
+                    let compositions: Vec<(usize, String)> = app
+                        .history
+                        .current()
+                        .compositions
+                        .iter()
+                        .enumerate()
+                        .map(|(index, composition)| (index, composition.name.clone()))
+                        .collect();
+                    for (index, name) in compositions {
+                        let active = app.ui_tabs.bottom_dock_tab == 0
+                            && index == app.history.current().active_composition_idx;
+                        if crate::ui::theme::draw_custom_tab(ui, active, &name).clicked() {
+                            app.ui_tabs.bottom_dock_tab = 0;
+                            if index != app.history.current().active_composition_idx {
+                                let mut project = app.history.current().clone();
+                                project.active_composition_idx = index;
+                                app.history.commit(project);
+                            }
                         }
                     }
-                }
-                let _ = ui.small_button("+");
-                if crate::ui::theme::draw_custom_tab(ui, app.ui_tabs.bottom_dock_tab == 1, "Render Queue").clicked() {
-                    app.ui_tabs.bottom_dock_tab = 1;
-                }
-            });
-            ui.separator();
+                    let _ = ui.small_button("+");
+                    if crate::ui::theme::draw_custom_tab(ui, app.ui_tabs.bottom_dock_tab == 1, "Render Queue").clicked() {
+                        app.ui_tabs.bottom_dock_tab = 1;
+                    }
+                });
+                ui.separator();
+            }
 
             if app.ui_tabs.bottom_dock_tab == 1 {
                 crate::ui::render_queue::draw_render_queue_panel(app, ui);
@@ -513,7 +516,14 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
             let mut pending_effect_drops: Vec<(usize, String, usize)> = Vec::new();
             let mut pending_select_label_group: Option<crate::core::timeline::LabelColor> = None;
 
-            let _scroll_resp = egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
+            let layer_scroll_height = if narrow_timeline {
+                80.0
+            } else if ui.ctx().screen_rect().width() <= 1200.0 {
+                120.0
+            } else {
+                200.0
+            };
+            let _scroll_resp = egui::ScrollArea::vertical().max_height(layer_scroll_height).show(ui, |ui| {
                 let layers_len = comp.layers.len();
                 let comp_w_f = comp.width as f32;
                 let parent_choices: Vec<(String, String)> = comp.layers.iter().map(|l| (l.id.clone(), l.name.clone())).collect();

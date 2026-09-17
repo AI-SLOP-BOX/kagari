@@ -60,6 +60,7 @@ pub fn draw_timeline_header(
         .clone()
     });
     let mut goto_frame: Option<u32> = None;
+    let compact = ui.ctx().screen_rect().width() < 950.0;
 
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 6.0;
@@ -86,15 +87,19 @@ pub fn draw_timeline_header(
             show_tc_popup = !show_tc_popup;
             tc_input_buf = current_frame.to_string();
         }
-        ui.add_space(4.0);
-        ui.add(
-            egui::DragValue::new(current_frame)
-                .range(0..=total_frames)
-                .prefix("Frame: ")
-                .suffix(format!(" / {}", total_frames)),
-        )
-        .on_hover_text("Click or Drag to set current frame timecode");
-        ui.add_space(8.0);
+        if !compact {
+            ui.add_space(4.0);
+            ui.add(
+                egui::DragValue::new(current_frame)
+                    .range(0..=total_frames)
+                    .prefix("Frame: ")
+                    .suffix(format!(" / {}", total_frames)),
+            )
+            .on_hover_text("Click or Drag to set current frame timecode");
+            ui.add_space(8.0);
+        } else {
+            ui.add_space(4.0);
+        }
 
         if draw_transport_icon_button(
             ui,
