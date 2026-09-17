@@ -426,8 +426,10 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
         // ── Checkerboard transparency grid behind comp canvas (Batched single Mesh) ──
         {
             let cell = 20.0f32;
-            let light = egui::Color32::from_rgb(180, 180, 180);
-            let dark = egui::Color32::from_rgb(130, 130, 130);
+            // Keep transparency legible without competing with the footage.
+            // A bright checkerboard makes Fit mode read like a debug canvas.
+            let light = egui::Color32::from_rgb(48, 59, 70);
+            let dark = egui::Color32::from_rgb(32, 42, 52);
             let cols = (draw_w / cell).ceil() as i32;
             let rows = (draw_h / cell).ceil() as i32;
             let p = ui.painter();
