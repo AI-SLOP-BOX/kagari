@@ -126,6 +126,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             crate::ui::toolbar::draw_viewer_tool_strip(app, ui);
             ui.separator();
             let zoom_label = match app.ui_tabs.viewport_mag_ratio {
+                ratio if ratio <= 0.001 => "Fit",
                 ratio if ratio <= 0.26 => "25%",
                 ratio if ratio <= 0.76 => "50%",
                 ratio if ratio <= 1.26 => "100%",
@@ -135,9 +136,12 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 .selected_text(zoom_label)
                 .width(72.0)
                 .show_ui(ui, |ui| {
-                    for (label, ratio) in [("25%", 0.25), ("50%", 0.5), ("100%", 1.0), ("200%", 2.0)] {
+                    for (label, ratio) in [("Fit", 0.0), ("25%", 0.25), ("50%", 0.5), ("100%", 1.0), ("200%", 2.0)] {
                         if ui.selectable_label(zoom_label == label, label).clicked() {
                             app.ui_tabs.viewport_mag_ratio = ratio;
+                            if ratio == 0.0 {
+                                app.playback.viewport_pan = egui::Vec2::ZERO;
+                            }
                         }
                     }
                 });
