@@ -4,6 +4,27 @@ use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
 
+fn project_icon_action(
+    ui: &mut egui::Ui,
+    id: &'static str,
+    svg: &'static str,
+    tooltip: &'static str,
+) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(26.0, 24.0), egui::Sense::click());
+    if response.hovered() {
+        ui.painter().rect_filled(rect, 2.0, colors::BG_HOVER);
+    }
+    crate::ui::icons::render_svg_at(
+        ui,
+        id.to_string(),
+        svg,
+        egui::vec2(16.0, 16.0),
+        colors::TEXT_SECONDARY,
+        rect.center() - egui::vec2(8.0, 8.0),
+    );
+    response.on_hover_text(tooltip)
+}
+
 pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
     // ── Asset Search Filter ──
     ui.add_sized([ui.available_width(), 26.0],
@@ -84,14 +105,23 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
     let mut reduce_project_requested = false;
 
     ui.horizontal(|ui| {
-        if custom_widgets::ae_icon_button(ui, "+", "Create a new composition")
-            .on_hover_text("Create New Composition")
-            .clicked()
-        {
+        if project_icon_action(
+            ui,
+            "project-new-comp",
+            crate::ui::icons::SVG_FILE_PLUS,
+            "Create New Composition",
+        )
+        .clicked() {
             add_comp_requested = true;
         }
 
-        if custom_widgets::ae_icon_button(ui, "↓", "Import footage or audio").clicked() {
+        if project_icon_action(
+            ui,
+            "project-import",
+            crate::ui::icons::SVG_IMPORT,
+            "Import footage or audio",
+        )
+        .clicked() {
             if let Some(path) = rfd::FileDialog::new()
                 .add_filter(
                     "Media Footage",
