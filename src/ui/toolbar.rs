@@ -40,8 +40,10 @@ pub fn draw_viewer_tool_strip(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
     let visible_count = if compact { 3 } else { tools.len() };
 
     for (index, (tool, svg, tooltip)) in tools.into_iter().enumerate() {
-        if index == 3 && !compact {
+        if (index == 3 || index == 7) && !compact {
+            ui.add_space(8.0);
             ui.separator();
+            ui.add_space(4.0);
         }
         if index >= visible_count {
             break;
@@ -55,7 +57,6 @@ pub fn draw_viewer_tool_strip(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
         };
         ui.painter().rect_filled(rect, 3.0, fill);
         if selected {
-            ui.painter().rect_stroke(rect, 3.0, egui::Stroke::new(1.0_f32, colors::ACCENT_ORANGE));
             ui.painter().line_segment(
                 [egui::pos2(rect.left() + 4.0, rect.bottom() - 1.0), egui::pos2(rect.right() - 4.0, rect.bottom() - 1.0)],
                 egui::Stroke::new(2.0_f32, colors::ACCENT_ORANGE),

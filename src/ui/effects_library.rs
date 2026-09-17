@@ -825,8 +825,21 @@ fn draw_effects_presets_tab(
                         .iter()
                         .position(|pp| std::ptr::eq(pp, *p))
                         .unwrap_or(pi);
-                    let resp =
-                        crate::ui::custom_widgets::ae_button(ui, &format!(" {}", p.button_label));
+                    let row_width = ui.available_width();
+                    let resp = ui.add_sized(
+                        [row_width, 22.0],
+                        egui::Button::new(
+                            egui::RichText::new(format!("{}  {}", "•", p.button_label))
+                                .small()
+                                .color(colors::TEXT_PRIMARY),
+                        )
+                        .fill(egui::Color32::TRANSPARENT)
+                        .stroke(egui::Stroke::NONE)
+                        .rounding(egui::Rounding::same(2.0)),
+                    );
+                    if resp.hovered() {
+                        ui.painter().rect_filled(resp.rect, 2.0, colors::BG_HOVER);
+                    }
 
                     if resp.drag_started() {
                         app.dragging_effect = Some((p.name.to_string(), preset_idx));

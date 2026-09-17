@@ -39,7 +39,7 @@ pub fn draw_layer_transforms(
                 *project_changed = true;
             }
 
-            ui.separator();
+            ui.add_space(3.0);
             let rot_before = layer.transform_3d.rotation.clone();
             if let Some(nf) = draw_property_ui(
                 current_frame,
@@ -61,7 +61,7 @@ pub fn draw_layer_transforms(
                 *project_changed = true;
             }
 
-            ui.separator();
+            ui.add_space(3.0);
             let scale_before = layer.transform_3d.scale.clone();
             if let Some(nf) = draw_property_ui(
                 current_frame,
@@ -180,7 +180,7 @@ pub fn draw_layer_transforms(
                 Some(fps),
             );
 
-            ui.separator();
+            ui.add_space(3.0);
             let pos_before = layer.transform.position.clone();
             if let Some(nf) = draw_property_ui(
                 current_frame,
@@ -209,7 +209,7 @@ pub fn draw_layer_transforms(
                 *project_changed = true;
             }
 
-            ui.separator();
+            ui.add_space(3.0);
             let scale_before = layer.transform.scale.clone();
             if let Some(nf) = draw_property_ui(
                 current_frame,
@@ -238,7 +238,7 @@ pub fn draw_layer_transforms(
                 *project_changed = true;
             }
 
-            ui.separator();
+            ui.add_space(3.0);
             let rot_before = layer.transform.rotation.clone();
             if let Some(nf) = draw_property_ui(
                 current_frame,
@@ -344,7 +344,7 @@ pub fn draw_layer_transforms(
                 }
             }
 
-            ui.separator();
+            ui.add_space(3.0);
             let _op_before = layer.transform.opacity.clone();
             if let Some(nf) = draw_property_ui(
                 current_frame,

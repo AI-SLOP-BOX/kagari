@@ -105,10 +105,6 @@ pub fn draw_prop_row_ext(
         let avail_w = ui.available_width();
         let (rect, response) =
             ui.allocate_exact_size(egui::vec2(avail_w, 18.0), egui::Sense::click_and_drag());
-        ui.painter().line_segment(
-            [rect.left_top(), rect.right_top()],
-            egui::Stroke::new(0.5_f32, crate::ui::theme::colors::BORDER_SUBTLE),
-        );
 
         if response.hovered() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);

@@ -520,12 +520,15 @@ pub fn draw_property_ui<
         }
 
         let stopwatch_btn = if has_keyframes { "◆" } else { "◇" };
-        if custom_widgets::ae_button(ui, stopwatch_btn)
-            .on_hover_text(if has_keyframes {
+        if custom_widgets::ae_icon_button(
+            ui,
+            stopwatch_btn,
+            if has_keyframes {
                 "Disable Keyframes"
             } else {
                 "Enable Keyframes / Add Keyframe"
-            })
+            },
+        )
             .clicked()
         {
             if has_keyframes {
@@ -615,9 +618,9 @@ pub fn draw_property_ui<
             });
         }
 
-        // 🔗 Property Link / Quick Presets (@)
-        ui.menu_button("@", |ui| {
-            ui.label(egui::RichText::new("🔗 Motion Presets (@)").strong());
+        // Secondary property actions stay behind a quiet overflow affordance.
+        ui.menu_button("⋯", |ui| {
+            ui.label(egui::RichText::new("Advanced property actions").strong());
             if ui.button("⚡ Easy Ease (F9)").clicked() {
                 property.easy_ease();
                 ui.close_menu();
