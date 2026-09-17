@@ -273,9 +273,9 @@ pub fn draw_expression_selector(
     fps: Option<u32>,
 ) {
     let active = expr_opt.is_some();
-    egui::CollapsingHeader::new(if active { "Expression • Active" } else { "Expression" })
+    egui::CollapsingHeader::new(if active { "fx  Expression • Active" } else { "fx  Expression" })
         .id_salt(("expression_section", label))
-        .default_open(active)
+        .default_open(false)
         .show(ui, |ui| {
         ui.horizontal(|ui| {
         let expr_text = match expr_opt {
@@ -327,11 +327,11 @@ pub fn draw_expression_selector(
                 );
             });
 
-        // Expression Pickwhip button (@)
+        // Keep the helper available without the ambiguous pickwhip glyph.
         if custom_widgets::ae_icon_button(
             ui,
-            "🌀",
-            "Expression Pickwhip (@): Pick property to auto-generate script expression",
+            "fx",
+            "Create a starter expression for this property",
         )
         .clicked()
         {

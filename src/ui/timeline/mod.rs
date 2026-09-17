@@ -15,18 +15,6 @@ use header::draw_timeline_header;
 use utils::maybe_snap_frame;
 
 pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, total_frames: u32) {
-    let reference_demo = ctx.screen_rect().width() >= 1200.0
-        && app
-            .history
-            .current()
-            .active_composition()
-            .layers
-            .iter()
-            .any(|layer| layer.id == "demo_bg");
-    if reference_demo && app.ui_tabs.bottom_dock_tab == 0 {
-        draw_target_timeline(app, ctx, current_frame, total_frames);
-        return;
-    }
     let screen_height = ctx.screen_rect().height();
     let timeline_default_height = (screen_height * 0.38).clamp(214.0, 362.0);
     let timeline_max_height = (screen_height * 0.56).max(260.0);
@@ -162,25 +150,13 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
                 .map(|binding| binding.curve.clone());
             let temp_project = app.history.current_mut();
 
-            // Dual Mode: Graph Editor (Curves) & Node Graph (Network Pipeline)
+            // Graph mode is the animation curve workspace; dependency nodes are
+            // intentionally kept out of the compositing timeline.
             if app.show_graph_editor {
-                {
-                    let comp = temp_project.active_composition();
-                    crate::ui::flowchart_graph::draw_node_graph_panel(
-                        ui,
-                        comp,
-                        &mut app.selection.selected_layer_idx,
-                        &mut app.selection.selected_layers,
-                        &mut app.show_graph_editor,
-                    );
-                }
-                ui.add_space(4.0);
-
                 if let Some(selected_idx) = app.selection.selected_layer_idx {
                     let duration_f = temp_project.active_composition().duration_frames;
-                    let fps = temp_project.active_composition().fps;
                     if let Some(layer) = temp_project.active_composition_mut().layers.get_mut(selected_idx) {
-                        crate::ui::graph_editor::draw_graph_editor(&mut app.selection.selected_property, ui, duration_f, fps, layer, &mut project_changed, &mut app.linked_tangent);
+                        crate::ui::graph_editor::draw_animation_graph_editor(&mut app.selection.selected_property, ui, duration_f, layer, current_frame);
                     }
                     if let Some(curve) = automation_curve.as_mut() {
                         crate::ui::graph_editor::draw_automation_curve(ui, curve, &mut project_changed);
@@ -219,8 +195,8 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
 
             // ── Responsive Width Calculation ──
             let total_w = ui.available_width();
-            let left_pane_w = (total_w * 0.32)
-                .clamp(420.0, 460.0)
+            let left_pane_w = (total_w * 0.28)
+                .clamp(280.0, 360.0)
                 .min((total_w - 180.0).max(0.0));
 
             // ── Work Area (In / Out) Handles Bar ──
@@ -1824,6 +1800,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
 }
 
 #[allow(float_literal_f32_fallback)]
+#[allow(dead_code)]
 fn draw_target_timeline(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, total_frames: u32) {
     let screen_height = ctx.screen_rect().height();
     let timeline_height = (screen_height * 0.38).clamp(300.0, 394.0);

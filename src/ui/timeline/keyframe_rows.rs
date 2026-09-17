@@ -45,6 +45,10 @@ pub fn draw_expanded_rows(
     let scale_kfs = get_kfs(&layer.transform.scale);
     let rot_kfs = get_kfs(&layer.transform.rotation);
     let op_kfs = get_kfs(&layer.transform.opacity);
+    let position_value = layer.transform.position.evaluate(*current_frame);
+    let scale_value = layer.transform.scale.evaluate(*current_frame);
+    let rotation_value = layer.transform.rotation.evaluate(*current_frame);
+    let opacity_value = layer.transform.opacity.evaluate(*current_frame);
 
     // Keyframes selected for this layer: (prop_key, frame)
     let prop_sel: std::collections::HashSet<(String, u32)> = selected_keyframes
@@ -131,7 +135,7 @@ pub fn draw_expanded_rows(
         if show_transform_rows && (!kf_only || !pos_kfs.is_empty()) {
             draw_prop_row_ext(
                 ui,
-                "  ⏱ Position",
+                &format!("  Position    {:.0}, {:.0}", position_value[0], position_value[1]),
                 &pos_kfs,
                 current_frame,
                 start_frame,
@@ -154,7 +158,7 @@ pub fn draw_expanded_rows(
         if show_transform_rows && (!kf_only || !scale_kfs.is_empty()) {
             draw_prop_row_ext(
                 ui,
-                "  ⏱ Scale",
+                &format!("  Scale       {:.0}%, {:.0}%", scale_value[0], scale_value[1]),
                 &scale_kfs,
                 current_frame,
                 start_frame,
@@ -177,7 +181,7 @@ pub fn draw_expanded_rows(
         if show_transform_rows && (!kf_only || !rot_kfs.is_empty()) {
             draw_prop_row_ext(
                 ui,
-                "  ⏱ Rotation",
+                &format!("  Rotation    {:.1}°", rotation_value),
                 &rot_kfs,
                 current_frame,
                 start_frame,
@@ -200,7 +204,7 @@ pub fn draw_expanded_rows(
         if show_transform_rows && (!kf_only || !op_kfs.is_empty()) {
             draw_prop_row_ext(
                 ui,
-                "  ⏱ Opacity",
+                &format!("  Opacity     {:.0}%", opacity_value),
                 &op_kfs,
                 current_frame,
                 start_frame,

@@ -77,18 +77,6 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             app.doc_sync_generation = hist_gen;
         }
     }
-    let reference_demo = ctx.screen_rect().width() >= 1200.0
-        && app
-            .history
-            .current()
-            .active_composition()
-            .layers
-            .iter()
-            .any(|layer| layer.id == "demo_bg");
-    if reference_demo {
-        draw_target_viewport(app, ctx);
-        return;
-    }
     egui::CentralPanel::default().show(ctx, |ui| {
         // ── Composition / Layer / Footage tab strip ───────────────────────────────
         let active_comp_name = app.history.current().active_composition().name.clone();
@@ -698,6 +686,16 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                     None,
                 );
             }
+        }
+
+        // CPU fallback keeps the Viewer useful when a GPU texture is not
+        // available, including CPU-only builds and software preview mode.
+        if app.viewport_mode == ViewportMode::Comp2D && !rendered_gpu && !is_comparing {
+            crate::ui::viewport_canvas::draw_software_canvas(
+                ui, app, current_frame, draw_rect, origin_x, origin_y,
+                draw_w, draw_h, comp_w, comp_h, None,
+            );
+            rendered_gpu = true;
         }
 
         // ── Viewport Overlays (Grid, Safe Guides, HUD Badges, 3D Gizmo, Snapshot Wipe) ──
@@ -2415,6 +2413,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
 }
 
 #[allow(float_literal_f32_fallback)]
+#[allow(dead_code)]
 fn draw_target_viewport(app: &mut KagariApp, ctx: &egui::Context) {
     egui::CentralPanel::default()
         .frame(egui::Frame::none().fill(egui::Color32::from_rgb(12, 20, 26)))
