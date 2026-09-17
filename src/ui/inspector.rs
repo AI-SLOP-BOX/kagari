@@ -289,7 +289,9 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                     });
 
                     // AE Layer Options (Solo, Motion Blur, Label, Parent, 3D Layer, Blend Mode)
-                    ui.group(|ui| {
+                    egui::Frame::none()
+                        .inner_margin(egui::Margin::symmetric(0.0, 4.0))
+                        .show(ui, |ui| {
                         ui.label("AE Layer Controls");
 
                         ui.horizontal(|ui| {
@@ -493,7 +495,9 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                     ui.add_space(8.0);
 
                     // ── AE Motion Tracking Panel ──
-                    ui.group(|ui| {
+                    egui::Frame::none()
+                        .inner_margin(egui::Margin::symmetric(0.0, 4.0))
+                        .show(ui, |ui| {
                         ui.horizontal(|ui| {
                             ui.label(egui::RichText::new("Motion Tracker").strong());
                             if ui.button("+ Add Track Point").clicked() {
@@ -508,7 +512,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
 
                         let trackers_len = layer.trackers.len();
                         for t_idx in 0..trackers_len {
-                            ui.separator();
+                            ui.add_space(3.0);
                             let mut trigger_async_track = false;
                             {
                                 let tp = &layer.trackers[t_idx];
@@ -603,7 +607,9 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
 
                     // ── Masks Control Section ──
                     ui.add_space(6.0);
-                    ui.group(|ui| {
+                    egui::Frame::none()
+                        .inner_margin(egui::Margin::symmetric(0.0, 4.0))
+                        .show(ui, |ui| {
                         ui.collapsing("🎭 Masks", |ui| {
                             ui.horizontal(|ui| {
                                 if ui.button("+ Add Rect Mask").clicked() {
@@ -639,7 +645,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                             } else {
                                 let mut mask_to_remove = None;
                                 for (m_idx, mask) in layer.masks.iter_mut().enumerate() {
-                                    ui.separator();
+                                    ui.add_space(3.0);
                                     ui.horizontal(|ui| {
                                         ui.checkbox(&mut mask.enabled, "");
                                         ui.text_edit_singleline(&mut mask.name);
