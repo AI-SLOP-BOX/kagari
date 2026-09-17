@@ -1138,20 +1138,23 @@ impl KagariApp {
                             .color(crate::ui::theme::colors::ACCENT_GREEN),
                         );
                     } else {
+                    let status_width = ctx.screen_rect().width();
                     ui.style_mut().spacing.item_spacing.x = 6.0;
-                    let (gpu_label, gpu_color) = if self.gpu_rendered {
-                        (
-                            "● Metal GPU Render Engine",
-                            crate::ui::theme::colors::ACCENT_GREEN,
-                        )
-                    } else {
-                        (
-                            "○ CPU Software Renderer",
-                            crate::ui::theme::colors::ACCENT_ORANGE,
-                        )
-                    };
-                    ui.label(egui::RichText::new(gpu_label).small().color(gpu_color));
-                    ui.separator();
+                    if status_width >= 950.0 {
+                        let (gpu_label, gpu_color) = if self.gpu_rendered {
+                            (
+                                "● Metal GPU Render Engine",
+                                crate::ui::theme::colors::ACCENT_GREEN,
+                            )
+                        } else {
+                            (
+                                "○ CPU Software Renderer",
+                                crate::ui::theme::colors::ACCENT_ORANGE,
+                            )
+                        };
+                        ui.label(egui::RichText::new(gpu_label).small().color(gpu_color));
+                        ui.separator();
+                    }
                     // Timecode
                     let fps = self.history.current().active_composition().fps.max(1);
                     let cf = self.playback.current_frame;
@@ -1173,77 +1176,80 @@ impl KagariApp {
                             .small()
                             .color(crate::ui::theme::colors::TEXT_SECONDARY),
                     );
-                    ui.separator();
-                    let bpc_label =
-                        self.history.current().active_composition().bit_depth.short_label();
-                    let cs_label = match self.color_space_idx {
-                        0 => "Rec.709 sRGB",
-                        1 => "Rec.2020",
-                        2 => "P3 D65",
-                        _ => "Rec.709 sRGB",
-                    };
-                    ui.label(
-                        egui::RichText::new(format!("{} | {}", bpc_label, cs_label))
-                            .small()
-                            .color(crate::ui::theme::colors::TEXT_MUTED),
-                    );
-                    ui.separator();
-                    let cached_cnt = self.frame_cache.cached_count();
-                    ui.label(
-                        egui::RichText::new(format!("RAM {}/{}", cached_cnt, total_frames))
-                            .small()
-                            .color(crate::ui::theme::colors::TEXT_MUTED),
-                    );
-                    ui.separator();
-                    let render_ms = self.playback.preview_render_ema_ms;
-                    let frame_budget_ms =
-                        1000.0 / self.history.current().active_composition().fps.max(1) as f32;
-                    let ms_color = if render_ms <= frame_budget_ms {
-                        crate::ui::theme::colors::ACCENT_GREEN
-                    } else {
-                        crate::ui::theme::colors::ACCENT_ORANGE
-                    };
-                    ui.label(
-                        egui::RichText::new(format!("Render: {:.1} ms", render_ms))
-                            .small()
-                            .color(ms_color),
-                    );
-                    ui.separator();
-                    // Selection summary: layers + keyframes
-                    let kf_count = self.selected_keyframes.len();
-                    let layer_count = self.selection.selected_layers.len();
-                    if kf_count > 0 {
+                    if status_width >= 950.0 {
+                        ui.separator();
+                        let bpc_label =
+                            self.history.current().active_composition().bit_depth.short_label();
+                        let cs_label = match self.color_space_idx {
+                            0 => "Rec.709 sRGB",
+                            1 => "Rec.2020",
+                            2 => "P3 D65",
+                            _ => "Rec.709 sRGB",
+                        };
                         ui.label(
-                            egui::RichText::new(format!(
-                                "{} keyframes selected (, . move | Del delete | Cmd+C/V)",
-                                kf_count
-                            ))
-                            .small()
-                            .color(crate::ui::theme::colors::ACCENT_ORANGE),
+                            egui::RichText::new(format!("{} | {}", bpc_label, cs_label))
+                                .small()
+                                .color(crate::ui::theme::colors::TEXT_MUTED),
                         );
-                    } else if layer_count > 0 {
+                        ui.separator();
+                        let cached_cnt = self.frame_cache.cached_count();
                         ui.label(
-                            egui::RichText::new(format!(
-                                "{} layer{} selected",
-                                layer_count,
-                                if layer_count > 1 { "s" } else { "" }
-                            ))
-                            .small()
-                            .color(crate::ui::theme::colors::ACCENT_BLUE),
+                            egui::RichText::new(format!("RAM {}/{}", cached_cnt, total_frames))
+                                .small()
+                                .color(crate::ui::theme::colors::TEXT_MUTED),
                         );
+                        ui.separator();
+                        let render_ms = self.playback.preview_render_ema_ms;
+                        let frame_budget_ms =
+                            1000.0 / self.history.current().active_composition().fps.max(1) as f32;
+                        let ms_color = if render_ms <= frame_budget_ms {
+                            crate::ui::theme::colors::ACCENT_GREEN
+                        } else {
+                            crate::ui::theme::colors::ACCENT_ORANGE
+                        };
+                        ui.label(
+                            egui::RichText::new(format!("Render: {:.1} ms", render_ms))
+                                .small()
+                                .color(ms_color),
+                        );
+                        ui.separator();
+                        // Selection summary: layers + keyframes
+                        let kf_count = self.selected_keyframes.len();
+                        let layer_count = self.selection.selected_layers.len();
+                        if kf_count > 0 {
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "{} keyframes selected (, . move | Del delete | Cmd+C/V)",
+                                    kf_count
+                                ))
+                                .small()
+                                .color(crate::ui::theme::colors::ACCENT_ORANGE),
+                            );
+                        } else if layer_count > 0 {
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "{} layer{} selected",
+                                    layer_count,
+                                    if layer_count > 1 { "s" } else { "" }
+                                ))
+                                .small()
+                                .color(crate::ui::theme::colors::ACCENT_BLUE),
+                            );
+                        }
                     }
-                    let pointer_pos = ctx.pointer_hover_pos().unwrap_or(egui::pos2(960.0, 540.0));
-                    ui.separator();
-                    ui.label(
-                        egui::RichText::new(format!(
-                            "X: {:.0} Y: {:.0} px",
-                            pointer_pos.x, pointer_pos.y
-                        ))
-                        .small()
-                        .color(egui::Color32::from_rgb(0, 180, 255)),
-                    );
-                    ui.separator();
-                    let pixel_rgba = {
+                    if status_width >= 1150.0 {
+                        let pointer_pos = ctx.pointer_hover_pos().unwrap_or(egui::pos2(960.0, 540.0));
+                        ui.separator();
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "X: {:.0} Y: {:.0} px",
+                                pointer_pos.x, pointer_pos.y
+                            ))
+                            .small()
+                            .color(egui::Color32::from_rgb(0, 180, 255)),
+                        );
+                        ui.separator();
+                        let pixel_rgba = {
                         let comp = self.history.current().active_composition();
                         let px = pointer_pos.x as i32;
                         let py = pointer_pos.y as i32;
@@ -1280,19 +1286,20 @@ impl KagariApp {
                         } else {
                             None
                         }
-                    };
-                    if let Some([r, g, b, a]) = pixel_rgba {
-                        ui.label(
-                            egui::RichText::new(format!("R: {} G: {} B: {} A: {}", r, g, b, a))
-                                .small()
-                                .color(egui::Color32::from_rgb(255, 200, 100)),
-                        );
-                    } else {
-                        ui.label(
-                            egui::RichText::new("R: – G: – B: – A: –")
-                                .small()
-                                .color(egui::Color32::from_rgb(255, 200, 100)),
-                        );
+                        };
+                        if let Some([r, g, b, a]) = pixel_rgba {
+                            ui.label(
+                                egui::RichText::new(format!("R: {} G: {} B: {} A: {}", r, g, b, a))
+                                    .small()
+                                    .color(egui::Color32::from_rgb(255, 200, 100)),
+                            );
+                        } else {
+                            ui.label(
+                                egui::RichText::new("R: – G: – B: – A: –")
+                                    .small()
+                                    .color(egui::Color32::from_rgb(255, 200, 100)),
+                            );
+                        }
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.label(
@@ -1303,36 +1310,38 @@ impl KagariApp {
                             .small()
                             .color(egui::Color32::from_gray(120)),
                         );
-                        ui.separator();
-                        ui.label(
-                            egui::RichText::new("Tool: Selection (V)")
-                                .small()
-                                .color(egui::Color32::from_rgb(255, 230, 0)),
-                        );
-                        ui.separator();
-                        let dl_status = if cfg!(feature = "gui") {
-                            "Available"
-                        } else {
-                            "N/A"
-                        };
-                        ui.label(
-                            egui::RichText::new(format!("Dynamic Link: {}", dl_status))
-                                .small()
-                                .color(egui::Color32::from_rgb(100, 180, 255)),
-                        );
-                        ui.separator();
-                        let mem_usage = {
-                            let comp = self.history.current().active_composition();
-                            let layer_count = comp.layers.len();
-                            let _total_frames = comp.duration_frames;
-                            let cached = self.frame_cache.cached_count();
-                            format!("{} layers | {} frames cached", layer_count, cached)
-                        };
-                        ui.label(
-                            egui::RichText::new(format!("RAM: {}", mem_usage))
-                                .small()
-                                .color(egui::Color32::from_gray(160)),
-                        );
+                        if status_width >= 1150.0 {
+                            ui.separator();
+                            ui.label(
+                                egui::RichText::new("Tool: Selection (V)")
+                                    .small()
+                                    .color(egui::Color32::from_rgb(255, 230, 0)),
+                            );
+                            ui.separator();
+                            let dl_status = if cfg!(feature = "gui") {
+                                "Available"
+                            } else {
+                                "N/A"
+                            };
+                            ui.label(
+                                egui::RichText::new(format!("Dynamic Link: {}", dl_status))
+                                    .small()
+                                    .color(egui::Color32::from_rgb(100, 180, 255)),
+                            );
+                            ui.separator();
+                            let mem_usage = {
+                                let comp = self.history.current().active_composition();
+                                let layer_count = comp.layers.len();
+                                let _total_frames = comp.duration_frames;
+                                let cached = self.frame_cache.cached_count();
+                                format!("{} layers | {} frames cached", layer_count, cached)
+                            };
+                            ui.label(
+                                egui::RichText::new(format!("RAM: {}", mem_usage))
+                                    .small()
+                                    .color(egui::Color32::from_gray(160)),
+                            );
+                        }
                     });
                     }
                 });
