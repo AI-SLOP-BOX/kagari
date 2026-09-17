@@ -113,21 +113,40 @@ fn draw_center(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, compact
     p.rect(egui::Rect::from_min_size(egui::pos2(search.right() + 18.0, search.top()), egui::vec2(125.0, 42.0)), 6.0, egui::Color32::from_rgb(16, 29, 38), egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM));
     p.text(egui::pos2(search.right() + 67.0, search.center().y), egui::Align2::CENTER_CENTER, "人気順", egui::FontId::proportional(13.0), colors::TEXT_PRIMARY);
     p.text(egui::pos2(rect.right() - pad - 44.0, search.center().y), egui::Align2::CENTER_CENTER, "GRID  LIST", egui::FontId::proportional(10.0), colors::TEXT_PRIMARY);
-    let cards = [("Gaussian Blur", "assets/studio/assets_smoke.webp"), ("Glow", "assets/studio/assets_light_leak.webp"), ("Film Grain", "assets/studio/assets_glass_texture.webp"), ("Color Balance", "assets/studio/assets_particles.webp"), ("Vignette", "assets/studio/assets_mountain.webp"), ("Lens Flare", "assets/studio/assets_light_leak.webp"), ("Chromatic Aberration", "assets/studio/assets_city.webp"), ("Light Leak", "assets/studio/assets_light_leak.webp"), ("Halftone", "assets/studio/assets_floor_ref.webp")];
-    let cols = if mobile { 1 } else { 3 };
-    let gap = if compact { 14.0 } else { 20.0 };
-    let card_w = ((rect.width() - pad * 2.0 - gap * (cols as f32 - 1.0)) / cols as f32).max(130.0);
-    let card_h = if mobile { 130.0 } else { 155.0 };
-    for (i, (name, asset)) in cards.into_iter().enumerate() {
-        let x = rect.left() + pad + (i % cols) as f32 * (card_w + gap);
-        let y = rect.top() + 170.0 + (i / cols) as f32 * (card_h + 32.0);
-        let card = egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(card_w, card_h));
-        let response = ui.interact(card, egui::Id::new(("effect-card", i)), egui::Sense::click());
-        let selected = i == ctx.data_mut(|d| d.get_temp::<usize>(egui::Id::new("effect-selected")).unwrap_or(1));
-        p.rect(card, 7.0, PANEL, egui::Stroke::new(if selected { 2.0_f32 } else { 1.0_f32 }, if selected { ORANGE } else { colors::BORDER_SUBTLE }));
-        if let Some(id) = texture(ctx, asset, &format!("effect-card-{i}")) { p.image(id, egui::Rect::from_min_size(egui::pos2(x + 2.0, y + 2.0), egui::vec2(card_w - 4.0, card_h - 40.0)), egui::Rect::from_min_max(egui::pos2(0.0,0.0), egui::pos2(1.0,1.0)), egui::Color32::WHITE); }
-        p.text(egui::pos2(x, card.bottom() + 18.0), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(15.0), colors::TEXT_PRIMARY);
-        if selected { p.text(egui::pos2(card.right() - 18.0, y + 18.0), egui::Align2::CENTER_CENTER, "★", egui::FontId::proportional(23.0), ORANGE); }
+    let effects = [
+        ("Gaussian Blur", "Blur", "assets/studio/assets_smoke.webp"),
+        ("Glow", "Light", "assets/studio/assets_light_leak.webp"),
+        ("Film Grain", "Texture", "assets/studio/assets_glass_texture.webp"),
+        ("Color Balance", "Color", "assets/studio/assets_particles.webp"),
+        ("Vignette", "Blur", "assets/studio/assets_mountain.webp"),
+        ("Lens Flare", "Light", "assets/studio/assets_light_leak.webp"),
+        ("Chromatic Aberration", "Distort", "assets/studio/assets_city.webp"),
+        ("Light Leak", "Light", "assets/studio/assets_light_leak.webp"),
+        ("Halftone", "Stylize", "assets/studio/assets_floor_ref.webp"),
+    ];
+    let cols = if mobile { 1 } else { 2 };
+    let gap = if compact { 10.0 } else { 16.0 };
+    let row_h = if mobile { 54.0 } else { 58.0 };
+    let row_w = ((rect.width() - pad * 2.0 - gap * (cols as f32 - 1.0)) / cols as f32).max(150.0);
+    let list_top = rect.top() + if mobile { 154.0 } else { 170.0 };
+    let selected_index = ctx.data_mut(|d| d.get_temp::<usize>(egui::Id::new("effect-selected")).unwrap_or(1));
+    for (i, (name, category, asset)) in effects.into_iter().enumerate() {
+        let x = rect.left() + pad + (i % cols) as f32 * (row_w + gap);
+        let y = list_top + (i / cols) as f32 * (row_h + 4.0);
+        let row = egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(row_w, row_h));
+        let response = ui.interact(row, egui::Id::new(("effect-row", i)), egui::Sense::click());
+        let selected = i == selected_index;
+        let hovered = response.hovered();
+        if selected || hovered {
+            p.rect_filled(row, 4.0, if selected { egui::Color32::from_rgba_premultiplied(34, 50, 62, 210) } else { egui::Color32::from_rgba_premultiplied(24, 38, 48, 170) });
+        }
+        if selected { p.rect_filled(egui::Rect::from_min_size(row.min, egui::vec2(3.0, row.height())), 1.5, ORANGE); }
+        if let Some(id) = texture(ctx, asset, &format!("effect-row-{i}")) {
+            p.image(id, egui::Rect::from_min_size(egui::pos2(x + 12.0, y + 8.0), egui::vec2(68.0, row_h - 16.0)), egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
+        }
+        p.text(egui::pos2(x + 92.0, y + 21.0), egui::Align2::LEFT_CENTER, name, egui::FontId::proportional(if compact { 13.0 } else { 14.0 }), colors::TEXT_PRIMARY);
+        p.text(egui::pos2(x + 92.0, y + 41.0), egui::Align2::LEFT_CENTER, category, egui::FontId::proportional(11.0), colors::TEXT_MUTED);
+        p.line_segment([egui::pos2(x + 92.0, row.bottom()), egui::pos2(row.right(), row.bottom())], egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE));
         if response.clicked() { ctx.data_mut(|d| d.insert_temp(egui::Id::new("effect-selected"), i)); apply_effect(app, name); }
     }
 }

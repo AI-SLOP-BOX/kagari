@@ -238,7 +238,22 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 }
             });
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                crate::ui::icons::render_svg_bytes(ui, "viewport-fullscreen", crate::ui::icons::SVG_WINDOW_MAXIMIZE, egui::vec2(16.0, 16.0), colors::TEXT_SECONDARY);
+                let (button_rect, button_response) = ui.allocate_exact_size(egui::vec2(24.0, 24.0), egui::Sense::click());
+                if button_response.hovered() {
+                    ui.painter().rect_filled(button_rect, 2.0, colors::BG_HOVER);
+                }
+                crate::ui::icons::render_svg_at(
+                    ui,
+                    "viewport-fullscreen".to_string(),
+                    crate::ui::icons::SVG_WINDOW_MAXIMIZE,
+                    egui::vec2(16.0, 16.0),
+                    colors::TEXT_SECONDARY,
+                    button_rect.center() - egui::vec2(8.0, 8.0),
+                );
+                if button_response.clicked() {
+                    app.viewer_maximized = !app.viewer_maximized;
+                }
+                button_response.on_hover_text(if app.viewer_maximized { "Restore panels" } else { "Maximize Viewer" });
             });
         });
         ui.separator();

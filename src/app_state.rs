@@ -274,6 +274,7 @@ pub struct KagariApp {
     pub show_grid: bool,
     pub show_guides: bool,
     pub viewport_show_stats: bool,
+    pub viewer_maximized: bool,
     pub show_handles: bool,
     pub show_comp_settings: bool,
     /// Working copy for the composition settings dialog. Keeping this outside
@@ -497,6 +498,7 @@ impl Default for KagariApp {
             show_grid: false,
             show_guides: false,
             viewport_show_stats: false,
+            viewer_maximized: false,
             show_handles: true,
             show_comp_settings: false,
             comp_settings_draft: None,
@@ -1099,6 +1101,12 @@ impl KagariApp {
         });
         if assets_workspace && self.ui_tabs.left_tab_idx == 0 && self.ui_tabs.right_tab_idx == 30 {
             crate::ui::asset_library::draw(self, ctx);
+            self.playback.current_frame = current_frame;
+            return;
+        }
+        if self.viewer_maximized {
+            crate::ui::menu::draw(self, ctx);
+            crate::ui::viewport::draw(self, ctx, current_frame);
             self.playback.current_frame = current_frame;
             return;
         }
