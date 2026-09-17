@@ -147,10 +147,48 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 .show_ui(ui, |ui| {
                     let _ = ui.selectable_label(true, "Full");
                     let _ = ui.selectable_label(false, "Fit");
-                });
+            });
             ui.add_space(12.0);
-            for (index, icon) in [crate::ui::icons::SVG_GRID, crate::ui::icons::SVG_FRAME, crate::ui::icons::SVG_SORT].into_iter().enumerate() {
-                crate::ui::icons::render_svg_bytes(ui, &format!("viewport-control-{index}"), icon, egui::vec2(16.0, 16.0), colors::TEXT_SECONDARY);
+            for (index, (icon, tooltip, active)) in [
+                (crate::ui::icons::SVG_GRID, "Toggle composition grid", app.show_grid),
+                (crate::ui::icons::SVG_FRAME, "Toggle safe-area guides", app.show_guides),
+                (crate::ui::icons::SVG_SORT, "Fit composition in Viewer", app.ui_tabs.viewport_mag_ratio == 0.0),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let (control_rect, control_response) = ui.allocate_exact_size(
+                    egui::vec2(24.0, 24.0),
+                    egui::Sense::click(),
+                );
+                if active || control_response.hovered() {
+                    ui.painter().rect_filled(
+                        control_rect,
+                        2.0,
+                        if active { colors::BG_HOVER } else { colors::BG_DARK },
+                    );
+                }
+                crate::ui::icons::render_svg_at(
+                    ui,
+                    format!("viewport-control-{index}"),
+                    icon,
+                    egui::vec2(16.0, 16.0),
+                    if active { colors::ACCENT_BLUE } else { colors::TEXT_SECONDARY },
+                    control_rect.center() - egui::vec2(8.0, 8.0),
+                );
+                let clicked = control_response.clicked();
+                control_response.on_hover_text(tooltip);
+                if clicked {
+                    match index {
+                        0 => app.show_grid = !app.show_grid,
+                        1 => app.show_guides = !app.show_guides,
+                        2 => {
+                            app.ui_tabs.viewport_mag_ratio = 0.0;
+                            app.playback.viewport_pan = egui::Vec2::ZERO;
+                        }
+                        _ => {}
+                    }
+                }
                 ui.add_space(8.0);
             }
             let mode_2d = app.viewport_mode == ViewportMode::Comp2D;
