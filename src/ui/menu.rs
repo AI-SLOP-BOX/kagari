@@ -1,5 +1,20 @@
 use eframe::egui;
 
+fn draw_header_action(ui: &mut egui::Ui, label: &str, width: f32, size: f32) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(width, 28.0), egui::Sense::click());
+    if response.hovered() {
+        ui.painter().rect_filled(rect, 4.0, crate::ui::theme::colors::BG_HOVER);
+    }
+    ui.painter().text(
+        rect.center(),
+        egui::Align2::CENTER_CENTER,
+        label,
+        egui::FontId::proportional(size),
+        crate::ui::theme::colors::TEXT_SECONDARY,
+    );
+    response.on_hover_text("Open Render Queue")
+}
+
 pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
     if !app.show_home && ctx.screen_rect().width() >= 1200.0 {
         draw_reference_studio_header(app, ctx);
@@ -53,11 +68,8 @@ fn draw_reference_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context)
                     ui.add_space(10.0);
                     ui.label(egui::RichText::new("Sample Project / main_comp").size(14.0).color(crate::ui::theme::colors::TEXT_SECONDARY));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let render = egui::Button::new(egui::RichText::new("Render").size(13.0).color(egui::Color32::WHITE))
-                            .fill(crate::ui::theme::colors::ACCENT_ORANGE)
-                            .rounding(4.0)
-                            .min_size(egui::vec2(88.0, 30.0));
-                        if ui.add(render).clicked() {
+                        let render_response = draw_header_action(ui, "Render", 68.0, 13.0);
+                        if render_response.clicked() {
                             app.show_home = false;
                             app.ui_tabs.bottom_dock_tab = 1;
                         }
@@ -216,11 +228,13 @@ fn draw_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     egui::vec2(right_header_width, header_size.y),
                     egui::Layout::right_to_left(egui::Align::Center),
                     |ui| {
-                        let render = egui::Button::new(egui::RichText::new("Render").size(if compact_header { 12.0 } else { 13.0 }).color(egui::Color32::WHITE))
-                            .fill(crate::ui::theme::colors::ACCENT_ORANGE)
-                            .rounding(4.0)
-                            .min_size(egui::vec2(if compact_header { 78.0 } else { 88.0 }, 28.0));
-                        if ui.add(render).clicked() {
+                        let render_response = draw_header_action(
+                            ui,
+                            "Render",
+                            if compact_header { 68.0 } else { 76.0 },
+                            if compact_header { 12.0 } else { 13.0 },
+                        );
+                        if render_response.clicked() {
                             app.show_home = false;
                             app.ui_tabs.bottom_dock_tab = 1;
                         }
