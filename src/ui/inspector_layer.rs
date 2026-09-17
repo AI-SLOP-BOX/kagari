@@ -757,7 +757,9 @@ pub fn draw_layer_type_specs(
     next_frame: &mut Option<u32>,
     comp_fps: f32,
 ) {
-    ui.group(|ui| {
+    egui::Frame::none()
+        .inner_margin(egui::Margin::symmetric(0.0, 4.0))
+        .show(ui, |ui| {
         ui.label("Layer Specs");
         match &mut layer.layer_type {
             LayerType::Solid { color } => {

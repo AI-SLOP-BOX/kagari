@@ -240,7 +240,9 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
     // ── Selected Asset Metadata Preview Header ──
     if let Some(idx) = selected_asset_idx {
         if let Some(item) = current_project.assets.get(idx) {
-            ui.group(|ui| {
+            egui::Frame::none()
+                .inner_margin(egui::Margin::symmetric(0.0, 4.0))
+                .show(ui, |ui| {
                 ui.label(egui::RichText::new(&item.name).strong());
                 match &item.item_type {
                     ProjectItemType::Composition { comp_idx } => {
