@@ -874,7 +874,9 @@ fn draw_effects_presets_tab(
         });
 
     ui.label("Add Effect to Selected Layer:");
-    ui.group(|ui| {
+    egui::Frame::none()
+        .inner_margin(egui::Margin::symmetric(0.0, 4.0))
+        .show(ui, |ui| {
         ui.label(
             egui::RichText::new("Motion VFX Presets")
                 .strong()
