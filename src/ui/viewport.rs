@@ -94,9 +94,9 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
         };
         ui.horizontal(|ui| {
             let tab_frame = egui::Frame::none()
-                .fill(colors::BG_DARK)
-                .inner_margin(egui::Margin::symmetric(10.0, 4.0))
-                .stroke(egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE));
+                .fill(egui::Color32::TRANSPARENT)
+                .inner_margin(egui::Margin::symmetric(4.0, 4.0))
+                .stroke(egui::Stroke::NONE);
 
             tab_frame.show(ui, |ui| {
                 ui.horizontal(|ui| {
