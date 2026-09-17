@@ -84,14 +84,14 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
     let mut reduce_project_requested = false;
 
     ui.horizontal(|ui| {
-        if custom_widgets::ae_button(ui, "+ New Comp")
+        if custom_widgets::ae_icon_button(ui, "+", "Create a new composition")
             .on_hover_text("Create New Composition")
             .clicked()
         {
             add_comp_requested = true;
         }
 
-        if custom_widgets::ae_button(ui, "+ Import File...").clicked() {
+        if custom_widgets::ae_icon_button(ui, "↓", "Import footage or audio").clicked() {
             if let Some(path) = rfd::FileDialog::new()
                 .add_filter(
                     "Media Footage",
@@ -103,19 +103,19 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
             }
         }
 
-        ui.menu_button("More", |ui| {
-        if custom_widgets::ae_button(ui, "New folder").clicked() {
+        ui.menu_button("…", |ui| {
+        if ui.button("New folder").clicked() {
             add_folder_requested = true;
         }
 
-        if custom_widgets::ae_button(ui, "🧹 Remove Unused")
+        if ui.button("Remove unused")
             .on_hover_text("Remove unused footage and assets from project")
             .clicked()
         {
             remove_unused_requested = true;
         }
 
-        if custom_widgets::ae_button(ui, "🗜 Reduce Project")
+        if ui.button("Reduce project")
             .on_hover_text("Keep only the active composition and its dependencies")
             .clicked()
         {

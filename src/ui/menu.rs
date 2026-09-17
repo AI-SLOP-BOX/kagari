@@ -53,11 +53,14 @@ fn draw_reference_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context)
                     ui.add_space(10.0);
                     ui.label(egui::RichText::new("Sample Project / main_comp").size(14.0).color(crate::ui::theme::colors::TEXT_SECONDARY));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let export = egui::Button::new(egui::RichText::new("Render").size(13.0).color(egui::Color32::WHITE))
+                        let render = egui::Button::new(egui::RichText::new("Render").size(13.0).color(egui::Color32::WHITE))
                             .fill(crate::ui::theme::colors::ACCENT_ORANGE)
                             .rounding(4.0)
                             .min_size(egui::vec2(88.0, 30.0));
-                        ui.add(export);
+                        if ui.add(render).clicked() {
+                            app.show_home = false;
+                            app.ui_tabs.bottom_dock_tab = 1;
+                        }
                         ui.add_space(14.0);
                         ui.label(egui::RichText::new("Autosaved 10:24").size(12.0).color(crate::ui::theme::colors::TEXT_SECONDARY));
                     });
@@ -68,6 +71,7 @@ fn draw_reference_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context)
 
 fn draw_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context) {
     let compact_header = ctx.screen_rect().width() < 1200.0;
+    let composition_label = app.history.current().active_composition().name.clone();
     let workspace_id = egui::Id::new("studio_active_workspace");
     let inferred_workspace = if app.show_home {
         0_usize
@@ -141,7 +145,9 @@ fn draw_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     crate::ui::theme::colors::TEXT_SECONDARY,
                 );
                 ui.add_space(6.0);
-                ui.label(egui::RichText::new("Sample Project / main_comp").size(if compact_header { 12.0 } else { 14.0 }).color(crate::ui::theme::colors::TEXT_SECONDARY));
+                ui.label(egui::RichText::new(format!("Sample Project / {composition_label}"))
+                    .size(if compact_header { 12.0 } else { 14.0 })
+                    .color(crate::ui::theme::colors::TEXT_SECONDARY));
                 ui.add_space(6.0);
                 ui.menu_button(egui::RichText::new(workspace_label).size(if compact_header { 12.0 } else { 13.0 }).color(crate::ui::theme::colors::TEXT_PRIMARY), |ui| {
                     for (workspace_index, (label, nav)) in workspaces.iter().enumerate() {
@@ -196,11 +202,14 @@ fn draw_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     egui::vec2(right_header_width, header_size.y),
                     egui::Layout::right_to_left(egui::Align::Center),
                     |ui| {
-                        let export = egui::Button::new(egui::RichText::new("Render").size(if compact_header { 12.0 } else { 13.0 }).color(egui::Color32::WHITE))
+                        let render = egui::Button::new(egui::RichText::new("Render").size(if compact_header { 12.0 } else { 13.0 }).color(egui::Color32::WHITE))
                             .fill(crate::ui::theme::colors::ACCENT_ORANGE)
                             .rounding(4.0)
                             .min_size(egui::vec2(if compact_header { 78.0 } else { 88.0 }, 28.0));
-                        ui.add(export);
+                        if ui.add(render).clicked() {
+                            app.show_home = false;
+                            app.ui_tabs.bottom_dock_tab = 1;
+                        }
                         ui.add_space(12.0);
                         ui.label(egui::RichText::new("Autosaved").size(11.0).color(crate::ui::theme::colors::TEXT_MUTED));
                     },

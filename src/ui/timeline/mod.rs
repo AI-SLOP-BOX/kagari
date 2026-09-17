@@ -23,7 +23,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
             .layers
             .iter()
             .any(|layer| layer.id == "demo_bg");
-    if reference_demo {
+    if reference_demo && app.ui_tabs.bottom_dock_tab == 0 {
         draw_target_timeline(app, ctx, current_frame, total_frames);
         return;
     }
