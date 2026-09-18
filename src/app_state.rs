@@ -1132,7 +1132,7 @@ impl KagariApp {
                         ui.label(
                             egui::RichText::new("Frame Render Time")
                                 .small()
-                                .color(crate::ui::theme::colors::TEXT_SECONDARY),
+                                .color(crate::ui::theme::colors::TEXT_MUTED),
                         );
                         let render_ms = if self.playback.preview_render_ema_ms > 0.0 {
                             self.playback.preview_render_ema_ms
@@ -1145,7 +1145,7 @@ impl KagariApp {
                                 render_ms
                             ))
                             .small()
-                            .color(crate::ui::theme::colors::ACCENT_GREEN),
+                            .color(crate::ui::theme::colors::TEXT_MUTED),
                         );
                     } else {
                     let status_width = ctx.screen_rect().width();
@@ -1154,7 +1154,7 @@ impl KagariApp {
                         let (gpu_label, gpu_color) = if self.gpu_rendered {
                             (
                                 "● Metal GPU Render Engine",
-                                crate::ui::theme::colors::ACCENT_GREEN,
+                                crate::ui::theme::colors::TEXT_MUTED,
                             )
                         } else {
                             (
@@ -1212,10 +1212,10 @@ impl KagariApp {
                         let render_ms = self.playback.preview_render_ema_ms;
                         let frame_budget_ms =
                             1000.0 / self.history.current().active_composition().fps.max(1) as f32;
-                        let ms_color = if render_ms <= frame_budget_ms {
-                            crate::ui::theme::colors::ACCENT_GREEN
-                        } else {
+                        let ms_color = if render_ms > frame_budget_ms {
                             crate::ui::theme::colors::ACCENT_ORANGE
+                        } else {
+                            crate::ui::theme::colors::TEXT_MUTED
                         };
                         ui.label(
                             egui::RichText::new(format!("Render: {:.1} ms", render_ms))
