@@ -224,7 +224,7 @@ pub fn draw_expression_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
 
     let mut preset_expr = None;
     egui::ScrollArea::vertical()
-        .max_height(100.0)
+        .max_height(160.0)
         .show(ui, |ui| {
             for (expr, label) in presets {
                 if ui
