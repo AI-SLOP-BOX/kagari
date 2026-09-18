@@ -77,7 +77,7 @@ pub fn draw_viewer_tool_strip(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
     }
 
     if compact {
-        ui.menu_button("Tools", |ui| {
+        ui.menu_button("...", |ui| {
             for (tool, _svg, tooltip) in tools.into_iter().skip(3) {
                 if ui.selectable_label(app.active_tool == tool, tooltip).clicked() {
                     app.active_tool = tool;
