@@ -6,7 +6,7 @@ use eframe::egui;
 pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
     let width = ctx.screen_rect().width();
     let narrow = width < 1100.0;
-    let left_w = if narrow { 150.0 } else { 231.0 };
+    let left_w = if narrow { 72.0 } else { 231.0 };
     let preset_w = if narrow { 230.0 } else { 364.0 };
     egui::TopBottomPanel::top("text_workspace_window_bar")
         .exact_height(43.0)
@@ -77,7 +77,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
             draw_presets(ui, ctx, preset);
             draw_preview(app, ui, ctx, center, timeline_top, narrow);
             draw_inspector(app, ui, inspector, narrow);
-            draw_timeline(app, ui, timeline_top, center.left(), r.right(), narrow);
+            draw_timeline(app, ui, timeline_top, center.left(), center.right(), narrow);
         });
 }
 
@@ -232,16 +232,17 @@ fn texture(ctx: &egui::Context, name: &str) -> Option<egui::TextureId> {
 }
 
 fn draw_presets(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect) {
+    let compact = rect.width() < 250.0;
     ui.painter().text(
         egui::pos2(rect.left() + 17.0, rect.top() + 28.0),
         egui::Align2::LEFT_CENTER,
         "タイトルプリセット",
-        egui::FontId::proportional(18.0),
+        egui::FontId::proportional(if compact { 16.0 } else { 18.0 }),
         colors::TEXT_PRIMARY,
     );
     let search = egui::Rect::from_min_size(
-        egui::pos2(rect.left() + 17.0, rect.top() + 51.0),
-        egui::vec2(rect.width() - 30.0, 36.0),
+        egui::pos2(rect.left() + 17.0, rect.top() + if compact { 48.0 } else { 51.0 }),
+        egui::vec2(rect.width() - 30.0, if compact { 32.0 } else { 36.0 }),
     );
     ui.painter().rect(
         search,
@@ -253,7 +254,7 @@ fn draw_presets(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect) {
         egui::pos2(search.left() + 12.0, search.center().y),
         egui::Align2::LEFT_CENTER,
         "⌕  プリセットを検索...",
-        egui::FontId::proportional(12.0),
+        egui::FontId::proportional(if compact { 11.0 } else { 12.0 }),
         colors::TEXT_SECONDARY,
     );
     for (i, label) in [
@@ -271,30 +272,31 @@ fn draw_presets(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect) {
     .into_iter()
     .enumerate()
     {
-        let y = rect.top() + 92.0 + i as f32 * 28.0;
+        let y = rect.top() + if compact { 82.0 } else { 92.0 }
+            + i as f32 * if compact { 21.0 } else { 28.0 };
         if i == 0 {
             ui.painter().rect_filled(
                 egui::Rect::from_min_size(
-                    egui::pos2(rect.left() + 10.0, y - 14.0),
-                    egui::vec2(rect.width() - 20.0, 34.0),
+                    egui::pos2(rect.left() + 10.0, y - if compact { 11.0 } else { 14.0 }),
+                    egui::vec2(rect.width() - 20.0, if compact { 28.0 } else { 34.0 }),
                 ),
                 4.0,
                 egui::Color32::from_rgb(27, 35, 42),
             );
             ui.painter().rect_filled(
                 egui::Rect::from_min_size(
-                    egui::pos2(rect.left() + 10.0, y - 14.0),
-                    egui::vec2(4.0, 34.0),
+                    egui::pos2(rect.left() + 10.0, y - if compact { 11.0 } else { 14.0 }),
+                    egui::vec2(4.0, if compact { 28.0 } else { 34.0 }),
                 ),
                 1.0,
                 egui::Color32::from_rgb(255, 111, 28),
             );
         }
         ui.painter().text(
-            egui::pos2(rect.left() + 38.0, y),
+            egui::pos2(rect.left() + if compact { 30.0 } else { 38.0 }, y),
             egui::Align2::LEFT_CENTER,
             label,
-            egui::FontId::proportional(12.0),
+            egui::FontId::proportional(if compact { 10.0 } else { 12.0 }),
             if i == 0 {
                 colors::TEXT_PRIMARY
             } else {
@@ -313,8 +315,11 @@ fn draw_presets(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect) {
     let cw = (rect.width() - 47.0) * 0.5;
     for (i, (asset, label)) in cards.into_iter().enumerate() {
         let x = rect.left() + 17.0 + (i % 2) as f32 * (cw + 14.0);
-        let y = rect.top() + 378.0 + (i / 2) as f32 * 106.0;
-        let card = egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(cw, 83.0));
+        let y = rect.top()
+            + if compact { 305.0 } else { 378.0 }
+            + (i / 2) as f32 * if compact { 77.0 } else { 106.0 };
+        let card_h = if compact { 64.0 } else { 83.0 };
+        let card = egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(cw, card_h));
         ui.painter().rect(
             card,
             6.0,
@@ -331,16 +336,19 @@ fn draw_presets(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect) {
         if let Some(id) = texture(ctx, asset) {
             ui.painter().image(
                 id,
-                egui::Rect::from_min_size(egui::pos2(x + 2.0, y + 2.0), egui::vec2(cw - 4.0, 57.0)),
+                egui::Rect::from_min_size(
+                    egui::pos2(x + 2.0, y + 2.0),
+                    egui::vec2(cw - 4.0, if compact { 43.0 } else { 57.0 }),
+                ),
                 egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
                 egui::Color32::WHITE,
             );
         }
         ui.painter().text(
-            egui::pos2(x + 4.0, y + 76.0),
+            egui::pos2(x + 4.0, y + if compact { 59.0 } else { 76.0 }),
             egui::Align2::LEFT_CENTER,
             label,
-            egui::FontId::proportional(10.0),
+            egui::FontId::proportional(if compact { 9.0 } else { 10.0 }),
             colors::TEXT_SECONDARY,
         );
     }
@@ -593,10 +601,17 @@ fn draw_timeline(
     );
     for i in 0..8 {
         ui.painter().text(
-            egui::pos2(left + 145.0 + i as f32 * 80.0, ruler - 15.0),
+            egui::pos2(
+                left + 145.0 + i as f32 * if narrow { 45.0 } else { 80.0 },
+                ruler - 15.0,
+            ),
             egui::Align2::CENTER_CENTER,
-            format!("00:00:{:02}:00", i * 5),
-            egui::FontId::proportional(10.0),
+            if narrow {
+                format!("00:{:02}", i * 5)
+            } else {
+                format!("00:00:{:02}:00", i * 5)
+            },
+            egui::FontId::proportional(if narrow { 8.0 } else { 10.0 }),
             colors::TEXT_SECONDARY,
         );
     }
@@ -629,6 +644,8 @@ fn draw_timeline(
             "mountain.mp4".to_string(),
         ),
     ];
+    let lane_left = left + if narrow { 120.0 } else { 190.0 };
+    let lane_step = if narrow { 58.0 } else { 95.0 };
     for (i, (name, span, color, value)) in rows.into_iter().enumerate() {
         let y = ruler + 14.0 + i as f32 * 43.0;
         ui.painter().line_segment(
@@ -642,9 +659,11 @@ fn draw_timeline(
             egui::FontId::proportional(if narrow { 9.0 } else { 12.0 }),
             colors::TEXT_PRIMARY,
         );
+        let bar_left = lane_left + i as f32 * lane_step;
+        let bar_width = span.min((right - bar_left - 8.0).max(32.0));
         let bar = egui::Rect::from_min_size(
-            egui::pos2(left + 190.0 + i as f32 * 95.0, y + 4.0),
-            egui::vec2(span.min(right - left - 205.0), 30.0),
+            egui::pos2(bar_left, y + 4.0),
+            egui::vec2(bar_width, if narrow { 24.0 } else { 30.0 }),
         );
         ui.painter().rect_filled(bar, 4.0, color);
         ui.painter().text(

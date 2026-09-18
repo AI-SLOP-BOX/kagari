@@ -8,9 +8,9 @@ use eframe::egui;
 pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
     let width = ctx.screen_rect().width();
     let narrow = width < 1100.0;
-    let sidebar_w = if narrow { 150.0 } else { 231.0 };
-    let shot_w = if narrow { 190.0 } else { 219.0 };
-    let right_w = if narrow { 370.0 } else { 521.0 };
+    let sidebar_w = if narrow { 72.0 } else { 231.0 };
+    let shot_w = if narrow { 150.0 } else { 219.0 };
+    let right_w = if narrow { 300.0 } else { 521.0 };
     egui::TopBottomPanel::top("color_workspace_window_bar")
         .exact_height(43.0)
         .frame(egui::Frame::none().fill(egui::Color32::from_rgb(24, 31, 37)))
@@ -239,6 +239,7 @@ fn asset(ctx: &egui::Context, name: &str) -> Option<egui::TextureId> {
 
 fn draw_shots(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect) {
     let p = ui.painter().clone();
+    let compact = rect.width() < 180.0;
     p.text(
         egui::pos2(rect.left() + 18.0, rect.top() + 30.0),
         egui::Align2::LEFT_CENTER,
@@ -260,13 +261,13 @@ fn draw_shots(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect) {
         ("04", "sky_replace.mp4", "00:00:24:17"),
     ];
     for (i, (num, name, time)) in rows.into_iter().enumerate() {
-        let y = rect.top() + 55.0 + i as f32 * 70.0;
+        let y = rect.top() + 55.0 + i as f32 * if compact { 62.0 } else { 70.0 };
         let active = i == 0;
         if active {
             p.rect(
                 egui::Rect::from_min_size(
                     egui::pos2(rect.left() + 10.0, y),
-                    egui::vec2(rect.width() - 20.0, 68.0),
+                    egui::vec2(rect.width() - 20.0, if compact { 60.0 } else { 68.0 }),
                 ),
                 6.0,
                 egui::Color32::from_rgb(20, 32, 41),
@@ -286,29 +287,29 @@ fn draw_shots(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect) {
             p.image(
                 id,
                 egui::Rect::from_min_size(
-                    egui::pos2(rect.left() + 18.0, y + 9.0),
-                    egui::vec2(66.0, 48.0),
+                    egui::pos2(rect.left() + if compact { 12.0 } else { 18.0 }, y + if compact { 8.0 } else { 9.0 }),
+                    egui::vec2(if compact { 48.0 } else { 66.0 }, if compact { 38.0 } else { 48.0 }),
                 ),
                 egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
                 egui::Color32::WHITE,
             );
         }
         p.text(
-            egui::pos2(rect.left() + 93.0, y + 17.0),
+            egui::pos2(rect.left() + if compact { 68.0 } else { 93.0 }, y + 15.0),
             egui::Align2::LEFT_CENTER,
             num,
-            egui::FontId::proportional(15.0),
+            egui::FontId::proportional(if compact { 12.0 } else { 15.0 }),
             colors::TEXT_PRIMARY,
         );
         p.text(
-            egui::pos2(rect.left() + 93.0, y + 37.0),
+            egui::pos2(rect.left() + if compact { 68.0 } else { 93.0 }, y + 34.0),
             egui::Align2::LEFT_CENTER,
             name,
-            egui::FontId::proportional(12.0),
+            egui::FontId::proportional(if compact { 10.0 } else { 12.0 }),
             colors::TEXT_SECONDARY,
         );
         p.text(
-            egui::pos2(rect.left() + 93.0, y + 54.0),
+            egui::pos2(rect.left() + if compact { 68.0 } else { 93.0 }, y + 51.0),
             egui::Align2::LEFT_CENTER,
             time,
             egui::FontId::proportional(10.0),
@@ -319,6 +320,7 @@ fn draw_shots(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect) {
 
 fn draw_viewer(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, lower_top: f32) {
     let p = ui.painter().clone();
+    let compact = rect.height() < 500.0;
     p.text(
         egui::pos2(rect.left() + 15.0, rect.top() + 29.0),
         egui::Align2::LEFT_CENTER,
@@ -326,9 +328,10 @@ fn draw_viewer(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, lower_t
         egui::FontId::proportional(18.0),
         colors::TEXT_PRIMARY,
     );
+    let image_bottom = if compact { lower_top - 170.0 } else { rect.top() + 328.0 };
     let image = egui::Rect::from_min_max(
         egui::pos2(rect.left() + 13.0, rect.top() + 42.0),
-        egui::pos2(rect.right() - 14.0, rect.top() + 328.0),
+        egui::pos2(rect.right() - 14.0, image_bottom.max(rect.top() + 100.0)),
     );
     if let Some(id) = asset(ctx, "assets_mountain.webp") {
         p.image(
@@ -344,7 +347,7 @@ fn draw_viewer(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, lower_t
         egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
     );
     p.text(
-        egui::pos2(rect.left() + 18.0, rect.top() + 355.0),
+        egui::pos2(rect.left() + 18.0, if compact { image.bottom() + 25.0 } else { rect.top() + 355.0 }),
         egui::Align2::LEFT_CENTER,
         "00:00:12:17",
         egui::FontId::proportional(16.0),
@@ -365,10 +368,10 @@ fn draw_viewer(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, lower_t
             icon,
             egui::vec2(16.0, 16.0),
             colors::TEXT_PRIMARY,
-            egui::pos2(rect.center().x - 76.0 + i as f32 * 43.0, rect.top() + 347.0),
+            egui::pos2(rect.center().x - 76.0 + i as f32 * 43.0, if compact { image.bottom() + 17.0 } else { rect.top() + 347.0 }),
         );
     }
-    let ty = lower_top - 171.0;
+    let ty = if compact { lower_top - 125.0 } else { lower_top - 171.0 };
     p.text(
         egui::pos2(rect.left() + 18.0, ty),
         egui::Align2::LEFT_CENTER,
@@ -384,7 +387,7 @@ fn draw_viewer(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, lower_t
         egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
     );
     p.text(
-        egui::pos2(rect.left() + 60.0, ty + 63.0),
+        egui::pos2(rect.left() + 60.0, ty + if compact { 38.0 } else { 63.0 }),
         egui::Align2::CENTER_CENTER,
         "00:00        00:05        00:10        00:15        00:20        00:25        00:30",
         egui::FontId::proportional(10.0),
@@ -392,21 +395,21 @@ fn draw_viewer(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, lower_t
     );
     p.rect_filled(
         egui::Rect::from_min_size(
-            egui::pos2(rect.left() + 59.0, ty + 78.0),
-            egui::vec2(rect.width() - 75.0, 42.0),
+        egui::pos2(rect.left() + 59.0, ty + if compact { 50.0 } else { 78.0 }),
+            egui::vec2(rect.width() - 75.0, if compact { 24.0 } else { 42.0 }),
         ),
         4.0,
         egui::Color32::from_rgb(23, 39, 50),
     );
     p.text(
-        egui::pos2(rect.left() + 20.0, ty + 98.0),
+        egui::pos2(rect.left() + 20.0, ty + if compact { 64.0 } else { 98.0 }),
         egui::Align2::LEFT_CENTER,
         "V1",
         egui::FontId::proportional(13.0),
         colors::TEXT_PRIMARY,
     );
     p.text(
-        egui::pos2(rect.left() + 20.0, ty + 145.0),
+        egui::pos2(rect.left() + 20.0, ty + if compact { 90.0 } else { 145.0 }),
         egui::Align2::LEFT_CENTER,
         "A1",
         egui::FontId::proportional(13.0),
@@ -414,24 +417,24 @@ fn draw_viewer(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, lower_t
     );
     p.rect_filled(
         egui::Rect::from_min_size(
-            egui::pos2(rect.left() + 59.0, ty + 84.0),
-            egui::vec2(rect.width() - 90.0, 30.0),
+            egui::pos2(rect.left() + 59.0, ty + if compact { 53.0 } else { 84.0 }),
+            egui::vec2(rect.width() - 90.0, if compact { 17.0 } else { 30.0 }),
         ),
         3.0,
         egui::Color32::from_rgb(63, 103, 137),
     );
     p.rect_filled(
         egui::Rect::from_min_size(
-            egui::pos2(rect.left() + 59.0, ty + 128.0),
-            egui::vec2(rect.width() - 80.0, 25.0),
+            egui::pos2(rect.left() + 59.0, ty + if compact { 79.0 } else { 128.0 }),
+            egui::vec2(rect.width() - 80.0, if compact { 17.0 } else { 25.0 }),
         ),
         3.0,
         egui::Color32::from_rgb(89, 111, 123),
     );
     p.line_segment(
         [
-            egui::pos2(rect.left() + rect.width() * 0.42, ty + 70.0),
-            egui::pos2(rect.left() + rect.width() * 0.42, ty + 165.0),
+            egui::pos2(rect.left() + rect.width() * 0.42, ty + if compact { 40.0 } else { 70.0 }),
+            egui::pos2(rect.left() + rect.width() * 0.42, ty + if compact { 103.0 } else { 165.0 }),
         ],
         egui::Stroke::new(2.0_f32, egui::Color32::from_rgb(255, 107, 22)),
     );
@@ -439,13 +442,26 @@ fn draw_viewer(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, lower_t
 
 fn draw_color_inspector(app: &mut KagariApp, ui: &mut egui::Ui, rect: egui::Rect, narrow: bool) {
     let p = ui.painter().clone();
-    p.text(
-        egui::pos2(rect.left() + 18.0, rect.top() + 28.0),
-        egui::Align2::LEFT_CENTER,
-        "カラー        LUT        ショットマッチ        情報",
-        egui::FontId::proportional(if narrow { 10.0 } else { 14.0 }),
-        colors::TEXT_PRIMARY,
-    );
+    if narrow {
+        for (i, label) in ["カラー", "LUT", "ショット", "情報"].into_iter().enumerate() {
+            let tab_w = (rect.width() - 20.0) / 4.0;
+            p.text(
+                egui::pos2(rect.left() + 10.0 + tab_w * (i as f32 + 0.5), rect.top() + 28.0),
+                egui::Align2::CENTER_CENTER,
+                label,
+                egui::FontId::proportional(10.0),
+                colors::TEXT_PRIMARY,
+            );
+        }
+    } else {
+        p.text(
+            egui::pos2(rect.left() + 18.0, rect.top() + 28.0),
+            egui::Align2::LEFT_CENTER,
+            "カラー        LUT        ショットマッチ        情報",
+            egui::FontId::proportional(14.0),
+            colors::TEXT_PRIMARY,
+        );
+    }
     p.line_segment(
         [
             egui::pos2(rect.left() + 10.0, rect.top() + 45.0),
@@ -460,11 +476,11 @@ fn draw_color_inspector(app: &mut KagariApp, ui: &mut egui::Ui, rect: egui::Rect
         egui::FontId::proportional(18.0),
         colors::TEXT_PRIMARY,
     );
-    let boxes = [
-        ("波形モニター", 0),
-        ("ベクトルスコープ", 1),
-        ("ヒストグラム", 2),
-    ];
+    let boxes = if narrow {
+        [("波形", 0), ("ベクトル", 1), ("ヒスト", 2)]
+    } else {
+        [("波形モニター", 0), ("ベクトルスコープ", 1), ("ヒストグラム", 2)]
+    };
     let bw = (rect.width() - 50.0) / 3.0;
     for (i, (label, _)) in boxes.into_iter().enumerate() {
         let x = rect.left() + 12.0 + i as f32 * (bw + 8.0);
@@ -537,6 +553,16 @@ fn draw_color_inspector(app: &mut KagariApp, ui: &mut egui::Ui, rect: egui::Rect
                 );
             }
         }
+    }
+    if narrow {
+        let add_rect = egui::Rect::from_min_size(
+            egui::pos2(rect.left() + 18.0, rect.bottom() - 40.0),
+            egui::vec2(rect.width() - 36.0, 30.0),
+        );
+        ui.allocate_new_ui(egui::UiBuilder::new().max_rect(add_rect), |ui| {
+            ui.add_enabled(true, egui::Button::new("カラー補正を追加"));
+        });
+        return;
     }
     p.text(
         egui::pos2(rect.left() + 18.0, rect.top() + 319.0),
@@ -715,17 +741,19 @@ fn draw_color_inspector(app: &mut KagariApp, ui: &mut egui::Ui, rect: egui::Rect
 
 fn draw_lower(ui: &mut egui::Ui, _ctx: &egui::Context, rect: egui::Rect, narrow: bool) {
     let p = ui.painter();
-    let w = (rect.width() - 30.0) / if narrow { 2.0 } else { 4.0 };
-    let cards = [
-        (rect.left() + 10.0, w, "カラーホイール"),
-        (rect.left() + 20.0 + w, w, "カーブ"),
-        (rect.left() + 30.0 + w * 2.0, w, "LUT"),
-        (rect.left() + 40.0 + w * 3.0, w, "ショットマッチ"),
-    ];
-    for (i, (x, cw, title)) in cards.into_iter().enumerate() {
+    let columns = if narrow { 2 } else { 4 };
+    let gap = 10.0;
+    let card_w = (rect.width() - gap * (columns as f32 + 1.0)) / columns as f32;
+    let card_h = if narrow { (rect.height() - gap * 3.0) / 2.0 } else { rect.height() - 20.0 };
+    let titles = ["カラーホイール", "カーブ", "LUT", "ショットマッチ"];
+    for (i, title) in titles.into_iter().enumerate() {
+        let col = i % columns;
+        let row = if narrow { i / columns } else { 0 };
+        let x = rect.left() + gap + col as f32 * (card_w + gap);
+        let y = rect.top() + gap + row as f32 * (card_h + gap);
         let b = egui::Rect::from_min_size(
-            egui::pos2(x, rect.top() + 10.0),
-            egui::vec2(cw - 10.0, rect.height() - 20.0),
+            egui::pos2(x, y),
+            egui::vec2(card_w, card_h),
         );
         p.rect(
             b,
@@ -741,40 +769,41 @@ fn draw_lower(ui: &mut egui::Ui, _ctx: &egui::Context, rect: egui::Rect, narrow:
             colors::TEXT_PRIMARY,
         );
         if i == 0 {
+            let radius = if narrow { 28.0 } else { 50.0 };
             for j in 0..3 {
                 let c = egui::pos2(
-                    b.left() + 72.0 + j as f32 * (b.width() - 120.0) / 2.0,
-                    b.top() + 126.0,
+                    b.left() + if narrow { 55.0 } else { 72.0 } + j as f32 * (b.width() - if narrow { 110.0 } else { 120.0 }) / 2.0,
+                    b.top() + if narrow { 76.0 } else { 126.0 },
                 );
                 p.circle_stroke(
                     c,
-                    50.0,
-                    egui::Stroke::new(5.0_f32, egui::Color32::from_rgb(37, 191, 179)),
+                    radius,
+                    egui::Stroke::new(if narrow { 3.0_f32 } else { 5.0_f32 }, egui::Color32::from_rgb(37, 191, 179)),
                 );
-                p.circle_filled(c, 5.0, egui::Color32::from_rgb(210, 220, 230));
+                p.circle_filled(c, if narrow { 4.0 } else { 5.0 }, egui::Color32::from_rgb(210, 220, 230));
                 p.text(
-                    egui::pos2(c.x, b.top() + 57.0),
+                    egui::pos2(c.x, b.top() + if narrow { 31.0 } else { 57.0 }),
                     egui::Align2::CENTER_CENTER,
                     ["リフト", "ガンマ", "ゲイン"][j],
-                    egui::FontId::proportional(12.0),
+                    egui::FontId::proportional(if narrow { 10.0 } else { 12.0 }),
                     colors::TEXT_PRIMARY,
                 );
             }
         } else if i == 1 {
             p.line_segment(
                 [
-                    egui::pos2(b.left() + 25.0, b.bottom() - 35.0),
-                    egui::pos2(b.right() - 25.0, b.top() + 55.0),
+                    egui::pos2(b.left() + 25.0, b.bottom() - if narrow { 20.0 } else { 35.0 }),
+                    egui::pos2(b.right() - 25.0, b.top() + if narrow { 38.0 } else { 55.0 }),
                 ],
                 egui::Stroke::new(2.0_f32, egui::Color32::WHITE),
             );
         } else if i == 2 {
             for j in 0..3 {
                 for k in 0..3 {
-                    let x2 = b.left() + 45.0 + j as f32 * 70.0;
-                    let y2 = b.top() + 64.0 + k as f32 * 56.0;
+                    let x2 = b.left() + if narrow { 25.0 } else { 45.0 } + j as f32 * if narrow { 55.0 } else { 70.0 };
+                    let y2 = b.top() + if narrow { 40.0 } else { 64.0 } + k as f32 * if narrow { 28.0 } else { 56.0 };
                     p.rect(
-                        egui::Rect::from_min_size(egui::pos2(x2, y2), egui::vec2(62.0, 42.0)),
+                        egui::Rect::from_min_size(egui::pos2(x2, y2), egui::vec2(if narrow { 48.0 } else { 62.0 }, if narrow { 30.0 } else { 42.0 })),
                         4.0,
                         egui::Color32::from_rgb(24, 46, 60),
                         egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
