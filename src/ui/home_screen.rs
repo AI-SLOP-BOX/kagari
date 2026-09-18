@@ -597,6 +597,32 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
         136.0
     };
     let show_home_sidebar = ctx.screen_rect().width() >= 500.0;
+    if landing_mode {
+        egui::TopBottomPanel::top("landing_window_bar")
+            .exact_height(46.0)
+            .resizable(false)
+            .frame(
+                egui::Frame::none()
+                    .fill(egui::Color32::from_rgb(24, 31, 37))
+                    .stroke(egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE)),
+            )
+            .show(ctx, |ui| {
+                for (x, color) in [
+                    (23.0, egui::Color32::from_rgb(255, 82, 78)),
+                    (46.0, egui::Color32::from_rgb(255, 190, 45)),
+                    (69.0, egui::Color32::from_rgb(42, 211, 86)),
+                ] {
+                    ui.painter().circle_filled(egui::pos2(x, 23.0), 7.0, color);
+                }
+                ui.painter().text(
+                    egui::pos2(96.0, 23.0),
+                    egui::Align2::LEFT_CENTER,
+                    "Kagari VFX",
+                    egui::FontId::proportional(14.0),
+                    colors::TEXT_PRIMARY,
+                );
+            });
+    }
     if show_home_sidebar && matches!(home_nav(ctx), HomeNav::Home | HomeNav::Compositing) {
         egui::SidePanel::left("home_nav")
             .resizable(false)
@@ -3280,12 +3306,13 @@ fn draw_landing_sidebar(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui::Cont
     landing_nav_row(ui, ctx, current, HomeNav::Tutorial, crate::ui::icons::SVG_BOOK, "チュートリアル", false);
     landing_nav_row(ui, ctx, current, HomeNav::Documentation, crate::ui::icons::SVG_DOCUMENT, "ドキュメント", false);
     let side = ui.max_rect();
+    let short_sidebar = side.height() < 760.0;
     let settings_rect = egui::Rect::from_min_size(
-        egui::pos2(side.left(), side.bottom() - 180.0),
+        egui::pos2(side.left(), side.bottom() - if short_sidebar { 126.0 } else { 180.0 }),
         egui::vec2(side.width(), 56.0),
     );
     let exit_rect = egui::Rect::from_min_size(
-        egui::pos2(side.left(), side.bottom() - 124.0),
+        egui::pos2(side.left(), side.bottom() - if short_sidebar { 70.0 } else { 124.0 }),
         egui::vec2(side.width(), 56.0),
     );
     ui.allocate_new_ui(egui::UiBuilder::new().max_rect(settings_rect), |settings_ui| {
@@ -3294,13 +3321,15 @@ fn draw_landing_sidebar(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui::Cont
     ui.allocate_new_ui(egui::UiBuilder::new().max_rect(exit_rect), |exit_ui| {
         landing_nav_row(exit_ui, ctx, current, HomeNav::Compositing, crate::ui::icons::SVG_POWER, "終了", false);
     });
-    ui.painter().text(
-        egui::pos2(side.left() + 38.0, side.bottom() - 31.0),
-        egui::Align2::LEFT_CENTER,
-        "Kagari VFX   v0.1.0",
-        egui::FontId::proportional(14.0),
-        egui::Color32::from_rgb(157, 169, 183),
-    );
+    if !short_sidebar {
+        ui.painter().text(
+            egui::pos2(side.left() + 38.0, side.bottom() - 31.0),
+            egui::Align2::LEFT_CENTER,
+            "Kagari VFX   v0.1.0",
+            egui::FontId::proportional(14.0),
+            egui::Color32::from_rgb(157, 169, 183),
+        );
+    }
 }
 
 fn landing_button_rect(ui: &mut egui::Ui, rect: egui::Rect, label: &str, icon: &'static str, accent: bool) -> egui::Response {
@@ -3401,39 +3430,41 @@ fn draw_landing_home(app: &mut KagariApp, ui: &mut egui::Ui, _ctx: &egui::Contex
     let section_top = hero.bottom() + 23.0;
     ui.painter().line_segment([egui::pos2(content.left() + margin, section_top), egui::pos2(content.right() - right_margin, section_top)], egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(48, 61, 71)));
     ui.painter().text(egui::pos2(content.left() + margin, section_top + 36.0), egui::Align2::LEFT_CENTER, "最近のプロジェクト", egui::FontId::proportional(21.0), colors::TEXT_PRIMARY);
-    let recent = egui::Rect::from_min_size(egui::pos2(content.left() + margin, section_top + 53.0), egui::vec2(content.width() - margin - right_margin, if mobile { 188.0 } else { 232.0 }));
+    let compact_mobile = mobile && content.height() < 760.0;
+    let recent_height = if compact_mobile { 196.0 } else if mobile { 188.0 } else { 232.0 };
+    let recent = egui::Rect::from_min_size(egui::pos2(content.left() + margin, section_top + 53.0), egui::vec2(content.width() - margin - right_margin, recent_height));
     ui.painter().rect_filled(recent, 7.0, egui::Color32::from_rgb(14, 22, 28));
     draw_landing_dashed_rect(ui.painter(), recent, egui::Color32::from_rgb(58, 72, 81));
     let empty_center = recent.center().x;
     ui.allocate_new_ui(egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(
-        egui::pos2(empty_center - 22.0, recent.top() + 33.0),
+        egui::pos2(empty_center - 22.0, recent.top() + if compact_mobile { 22.0 } else { 33.0 }),
         egui::vec2(44.0, 44.0),
     )), |empty_ui| {
         crate::ui::icons::render_svg_bytes(empty_ui, "landing-empty-folder", crate::ui::icons::SVG_FOLDER, egui::vec2(44.0, 44.0), egui::Color32::from_rgb(161, 176, 194));
     });
     ui.painter().text(
-        egui::pos2(empty_center, recent.top() + 108.0),
+        egui::pos2(empty_center, recent.top() + if compact_mobile { 94.0 } else { 108.0 }),
         egui::Align2::CENTER_CENTER,
         "まだプロジェクトはありません",
         egui::FontId::proportional(18.0),
         colors::TEXT_PRIMARY,
     );
     ui.painter().text(
-        egui::pos2(empty_center, recent.top() + 140.0),
+        egui::pos2(empty_center, recent.top() + if compact_mobile { 119.0 } else { 140.0 }),
         egui::Align2::CENTER_CENTER,
         "新規プロジェクトを作成して、はじめましょう。",
         egui::FontId::proportional(14.0),
         egui::Color32::from_rgb(163, 175, 187),
     );
     let empty_button = egui::Rect::from_min_size(
-        egui::pos2(recent.center().x - 114.0, recent.center().y + 52.0),
+        egui::pos2(recent.center().x - 114.0, if compact_mobile { recent.bottom() - 62.0 } else { recent.center().y + 52.0 }),
         egui::vec2(228.0, 62.0),
     );
     if landing_button_rect(ui, empty_button, "新規プロジェクト", crate::ui::icons::SVG_FILE_PLUS, true).clicked() {
         enter_studio_new_project(app);
         app.show_new_comp_dialog = true;
     }
-    let lower_top = recent.bottom() + 45.0;
+    let lower_top = recent.bottom() + if compact_mobile { 24.0 } else { 45.0 };
     let lower_width = content.width() - margin - right_margin;
     let col_gap = 44.0;
     let left_width = if mobile { lower_width } else { (lower_width - col_gap) * 0.567 };
