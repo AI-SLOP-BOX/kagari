@@ -99,6 +99,90 @@ fn draw_view_menu_contents(ui: &mut egui::Ui, app: &mut KagariApp) {
             }
         });
     }
+    if ui.ctx().screen_rect().width() < 950.0 {
+        ui.separator();
+        ui.label(egui::RichText::new("Viewport").small().color(colors::TEXT_MUTED));
+        egui::ComboBox::from_id_salt("compact_cam_view_menu")
+            .selected_text(match app.viewport_cam_view {
+                0 => "Active Camera",
+                1 => "Front",
+                2 => "Left",
+                3 => "Top",
+                _ => "Custom View",
+            })
+            .show_ui(ui, |ui| {
+                if ui.selectable_value(&mut app.viewport_cam_view, 0, "Active Camera").clicked() {
+                    app.viewport_mode = ViewportMode::Comp2D;
+                }
+                if ui.selectable_value(&mut app.viewport_cam_view, 1, "Front").clicked() {
+                    app.viewport_mode = ViewportMode::Camera3D;
+                    app.camera_orbit = (0.0, 0.0, 1000.0);
+                }
+                if ui.selectable_value(&mut app.viewport_cam_view, 2, "Left").clicked() {
+                    app.viewport_mode = ViewportMode::Camera3D;
+                    app.camera_orbit = (-90.0, 0.0, 1000.0);
+                }
+                if ui.selectable_value(&mut app.viewport_cam_view, 3, "Top").clicked() {
+                    app.viewport_mode = ViewportMode::Camera3D;
+                    app.camera_orbit = (0.0, -89.0, 1000.0);
+                }
+            });
+        egui::ComboBox::from_id_salt("compact_resolution_menu")
+            .selected_text(match app.viewport_render_resolution {
+                0 => "Full",
+                1 => "Half",
+                2 => "Third",
+                _ => "Quarter",
+            })
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut app.viewport_render_resolution, 0, "Full");
+                ui.selectable_value(&mut app.viewport_render_resolution, 1, "Half");
+                ui.selectable_value(&mut app.viewport_render_resolution, 2, "Third");
+                ui.selectable_value(&mut app.viewport_render_resolution, 3, "Quarter");
+            });
+        egui::ComboBox::from_id_salt("compact_channel_menu")
+            .selected_text(match app.viewport_color_channel {
+                0 => "RGB Color",
+                1 => "Red",
+                2 => "Green",
+                3 => "Blue",
+                _ => "Alpha",
+            })
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut app.viewport_color_channel, 0, "RGB Color");
+                ui.selectable_value(&mut app.viewport_color_channel, 1, "Red");
+                ui.selectable_value(&mut app.viewport_color_channel, 2, "Green");
+                ui.selectable_value(&mut app.viewport_color_channel, 3, "Blue");
+                ui.selectable_value(&mut app.viewport_color_channel, 4, "Alpha");
+            });
+        egui::ComboBox::from_id_salt("compact_quality_menu")
+            .selected_text(match app.viewport_fast_preview {
+                0 => "Final Quality",
+                1 => "Adaptive",
+                2 => "Fast Draft",
+                _ => "Wireframe",
+            })
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut app.viewport_fast_preview, 0, "Final Quality");
+                ui.selectable_value(&mut app.viewport_fast_preview, 1, "Adaptive Resolution");
+                ui.selectable_value(&mut app.viewport_fast_preview, 2, "Fast Draft");
+                ui.selectable_value(&mut app.viewport_fast_preview, 3, "Wireframe");
+            });
+        if ui.button("Take Snapshot").clicked() {
+            let frame = app.playback.current_frame;
+            crate::ui::viewport_state::set_snap_frame(ui.ctx(), frame);
+            app.toasts.info(format!("Snapshot saved at frame {}", frame));
+            ui.close_menu();
+        }
+        let comparing = crate::ui::viewport_state::is_comparing(ui.ctx());
+        if ui.selectable_label(comparing, "Compare Snapshot").clicked() {
+            if crate::ui::viewport_state::snap_frame(ui.ctx()).is_some() {
+                crate::ui::viewport_state::toggle_comparing(ui.ctx());
+            } else {
+                app.toasts.warning("Take a snapshot first");
+            }
+        }
+    }
 }
 
 pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
@@ -2385,7 +2469,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
         }
 
         // ── AE Viewport Controls Toolbar (BOTTOM OF CANVAS) ──────────────────────────
-        if ctx.screen_rect().width() < 1200.0 {
+        if ctx.screen_rect().width() >= 950.0 && ctx.screen_rect().width() < 1200.0 {
         let narrow_canvas_controls = ctx.screen_rect().width() < 950.0;
         ui.separator();
         if narrow_canvas_controls {
