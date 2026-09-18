@@ -421,16 +421,22 @@ fn draw_preview(
         ],
         egui::Stroke::new(3.0_f32, egui::Color32::from_rgb(255, 107, 22)),
     );
-    for (i, g) in ["|◀", "◀", "▶", "▶|"].into_iter().enumerate() {
-        ui.painter().text(
-            egui::pos2(
-                rect.center().x - 76.0 + i as f32 * 42.0,
-                timeline_top - 26.0,
-            ),
-            egui::Align2::CENTER_CENTER,
-            g,
-            egui::FontId::proportional(16.0),
+    for (i, icon) in [
+        crate::ui::icons::SVG_JUMP_BACK,
+        crate::ui::icons::SVG_STEP_BACK,
+        crate::ui::icons::SVG_PLAY,
+        crate::ui::icons::SVG_STEP_FORWARD,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        crate::ui::icons::render_svg_at(
+            ui,
+            format!("text-preview-transport-{i}"),
+            icon,
+            egui::vec2(16.0, 16.0),
             colors::TEXT_PRIMARY,
+            egui::pos2(rect.center().x - 84.0 + i as f32 * 42.0, timeline_top - 34.0),
         );
     }
 }

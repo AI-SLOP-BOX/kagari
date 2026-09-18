@@ -63,6 +63,10 @@ pub const SVG_STEP_BACK: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewB
 #[allow(dead_code)]
 pub const SVG_STEP_FORWARD: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 5v14"/><path d="m6 6 8 6-8 6Z"/></svg>"#;
 #[allow(dead_code)]
+pub const SVG_JUMP_BACK: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><rect x="3" y="4" width="2" height="16" rx="1"/><path d="M19 5 10 12l9 7Z"/><path d="M12 5 3 12l9 7Z"/></svg>"#;
+#[allow(dead_code)]
+pub const SVG_JUMP_FORWARD: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><rect x="19" y="4" width="2" height="16" rx="1"/><path d="m5 5 9 7-9 7Z"/><path d="m12 5 9 7-9 7Z"/></svg>"#;
+#[allow(dead_code)]
 pub const SVG_PAUSE: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>"#;
 #[allow(dead_code)]
 pub const SVG_MARKER: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="orange"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15" stroke="orange" stroke-width="2"/></svg>"#;

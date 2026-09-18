@@ -318,7 +318,7 @@ fn draw_shots(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect) {
 }
 
 fn draw_viewer(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, lower_top: f32) {
-    let p = ui.painter();
+    let p = ui.painter().clone();
     p.text(
         egui::pos2(rect.left() + 15.0, rect.top() + 29.0),
         egui::Align2::LEFT_CENTER,
@@ -350,13 +350,22 @@ fn draw_viewer(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, lower_t
         egui::FontId::proportional(16.0),
         egui::Color32::from_rgb(255, 107, 22),
     );
-    for (i, g) in ["|◀", "◀", "▶", "▶|"].into_iter().enumerate() {
-        p.text(
-            egui::pos2(rect.center().x - 68.0 + i as f32 * 43.0, rect.top() + 355.0),
-            egui::Align2::CENTER_CENTER,
-            g,
-            egui::FontId::proportional(16.0),
+    for (i, icon) in [
+        crate::ui::icons::SVG_JUMP_BACK,
+        crate::ui::icons::SVG_STEP_BACK,
+        crate::ui::icons::SVG_PLAY,
+        crate::ui::icons::SVG_STEP_FORWARD,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        crate::ui::icons::render_svg_at(
+            ui,
+            format!("color-preview-transport-{i}"),
+            icon,
+            egui::vec2(16.0, 16.0),
             colors::TEXT_PRIMARY,
+            egui::pos2(rect.center().x - 76.0 + i as f32 * 43.0, rect.top() + 347.0),
         );
     }
     let ty = lower_top - 171.0;

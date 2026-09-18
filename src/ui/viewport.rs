@@ -750,13 +750,25 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                     egui::FontId::proportional(13.0),
                     colors::ACCENT_BLUE,
                 );
-                for (index, glyph) in ["◀", "◀◀", "▶", "▶▶", "▮▶"].into_iter().enumerate() {
-                    ui.painter().text(
-                        egui::pos2(rect.center().x - 70.0 + index as f32 * 32.0, footer_y),
-                        egui::Align2::CENTER_CENTER,
-                        glyph,
-                        egui::FontId::proportional(13.0),
+                let transport_icons = [
+                    crate::ui::icons::SVG_JUMP_BACK,
+                    crate::ui::icons::SVG_STEP_BACK,
+                    if app.playback.is_playing {
+                        crate::ui::icons::SVG_PAUSE
+                    } else {
+                        crate::ui::icons::SVG_PLAY
+                    },
+                    crate::ui::icons::SVG_STEP_FORWARD,
+                    crate::ui::icons::SVG_JUMP_FORWARD,
+                ];
+                for (index, icon) in transport_icons.into_iter().enumerate() {
+                    crate::ui::icons::render_svg_at(
+                        ui,
+                        format!("reference-transport-{index}"),
+                        icon,
+                        egui::vec2(16.0, 16.0),
                         colors::TEXT_PRIMARY,
+                        egui::pos2(rect.center().x - 70.0 + index as f32 * 32.0 - 8.0, footer_y - 8.0),
                     );
                 }
             }

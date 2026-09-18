@@ -185,7 +185,15 @@ fn draw_detail(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, compact
     p.rect(preview, 8.0, PANEL, egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE));
     p.text(egui::pos2(preview.left() + 18.0, preview.top() + 28.0), egui::Align2::LEFT_CENTER, "プレビュー", egui::FontId::proportional(18.0), colors::TEXT_PRIMARY);
     if let Some(id) = texture(ctx, "assets/home/continue_working_preview.webp", "effect-preview") { p.image(id, egui::Rect::from_min_max(egui::pos2(preview.left() + 12.0, preview.top() + 48.0), egui::pos2(preview.right() - 12.0, preview.bottom() - 66.0)), egui::Rect::from_min_max(egui::pos2(0.0,0.0), egui::pos2(1.0,1.0)), egui::Color32::WHITE); }
-    p.text(egui::pos2(preview.left() + 18.0, preview.bottom() - 31.0), egui::Align2::LEFT_CENTER, "▶     00:00 / 00:10", egui::FontId::proportional(12.0), colors::TEXT_SECONDARY);
+    crate::ui::icons::render_svg_at(
+        ui,
+        "effects-preview-play".to_string(),
+        crate::ui::icons::SVG_PLAY,
+        egui::vec2(14.0, 14.0),
+        colors::TEXT_PRIMARY,
+        egui::pos2(preview.left() + 12.0, preview.bottom() - 38.0),
+    );
+    p.text(egui::pos2(preview.left() + 34.0, preview.bottom() - 31.0), egui::Align2::LEFT_CENTER, "00:00 / 00:10", egui::FontId::proportional(12.0), colors::TEXT_SECONDARY);
 }
 
 fn draw_footer(ui: &mut egui::Ui, width: f32, mobile: bool) { let p = ui.painter(); p.text(egui::pos2(28.0, if mobile { 17.0 } else { 25.0 }), egui::Align2::LEFT_CENTER, "Kagari VFX  |  映像で、まだ見ぬ世界を。", egui::FontId::proportional(11.0), colors::TEXT_SECONDARY); if !mobile { p.text(egui::pos2(width * 0.5, 25.0), egui::Align2::CENTER_CENTER, "エフェクトライブラリ", egui::FontId::proportional(19.0), colors::TEXT_PRIMARY); p.text(egui::pos2(width - 28.0, 25.0), egui::Align2::RIGHT_CENTER, "VFX  /  COMPOSITING  /  MORE POSSIBILITIES", egui::FontId::proportional(9.0), colors::TEXT_MUTED); } }
