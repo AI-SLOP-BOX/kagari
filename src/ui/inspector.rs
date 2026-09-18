@@ -862,7 +862,7 @@ fn draw_effect_browser(ui: &mut egui::Ui) {
         (crate::ui::icons::SVG_PALETTE, "Color"),
         (crate::ui::icons::SVG_TOOL_ZOOM, "Blur & Sharpen"),
         (crate::ui::icons::SVG_TOOL_SHAPE, "Distort"),
-        (crate::ui::icons::SVG_LIGHT, "Generate"),
+        (crate::ui::icons::SVG_EFFECTS, "Generate"),
         (crate::ui::icons::SVG_KEYING, "Keying"),
         (crate::ui::icons::SVG_TOOL_PEN, "Stylize"),
         (crate::ui::icons::SVG_ARROW_RIGHT, "Transition"),
@@ -952,7 +952,7 @@ fn draw_reference_studio_nav(app: &mut KagariApp, ui: &mut egui::Ui) {
     let rows = [
         ("Home", crate::ui::icons::SVG_HOME),
         ("Compositing", crate::ui::icons::SVG_COMPOSITION),
-        ("Effects", crate::ui::icons::SVG_LIGHT),
+        ("Effects", crate::ui::icons::SVG_EFFECTS),
         ("Assets", crate::ui::icons::SVG_FOLDER),
         ("Audio", crate::ui::icons::SVG_AUDIO),
         ("Text", crate::ui::icons::SVG_TOOL_TEXT),

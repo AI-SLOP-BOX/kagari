@@ -146,7 +146,7 @@ fn draw_nav(ui: &mut egui::Ui, left: egui::Rect, r: egui::Rect, narrow: bool) {
         (icons::SVG_FILE_PLUS, "新規プロジェクト"),
         (icons::SVG_BOOK, "チュートリアル"),
         (icons::SVG_DOCUMENT, "ドキュメント"),
-        (icons::SVG_LIGHT, "エフェクト"),
+        (icons::SVG_EFFECTS, "エフェクト"),
         (icons::SVG_FOLDER, "素材"),
         (icons::SVG_AUDIO, "オーディオ"),
         (icons::SVG_TOOL_TEXT, "テキスト"),

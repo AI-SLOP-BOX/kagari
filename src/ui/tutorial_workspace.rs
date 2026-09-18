@@ -78,7 +78,7 @@ fn draw_chapters(ui: &mut egui::Ui, rect: egui::Rect, width: f32, compact: bool,
         p.line_segment([egui::pos2(rect.left() + width, rect.top()), egui::pos2(rect.left() + width, rect.bottom())], egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE));
     }
     icons::render_svg_at(ui, "tutorial-chapter-heading".to_string(), icons::SVG_LAYERS, egui::vec2(55.0, 55.0), colors::TEXT_PRIMARY, egui::pos2(rect.left() + 30.0, rect.top() + 20.0));
-    let chapter_icons = [icons::SVG_HOME, icons::SVG_FILE, icons::SVG_LAYERS, icons::SVG_MARKER, icons::SVG_LIGHT, icons::SVG_PALETTE, icons::SVG_FILE_PLUS, icons::SVG_BOOK];
+    let chapter_icons = [icons::SVG_HOME, icons::SVG_FILE, icons::SVG_LAYERS, icons::SVG_MARKER, icons::SVG_EFFECTS, icons::SVG_PALETTE, icons::SVG_FILE_PLUS, icons::SVG_BOOK];
     for (i, icon) in chapter_icons.into_iter().enumerate() { icons::render_svg_at(ui, format!("tutorial-chapter-{i}"), icon, egui::vec2(30.0, 30.0), if i == 0 { ORANGE } else { colors::TEXT_PRIMARY }, egui::pos2(rect.left() + 28.0, rect.top() + 97.0 + i as f32 * if compact { 61.0 } else { 78.0 })); }
     let p = ui.painter().clone();
     let logo_rect = egui::Rect::from_min_size(egui::pos2(rect.left() + 36.0, rect.top() + 20.0), egui::vec2(55.0, 55.0));
