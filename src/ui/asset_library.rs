@@ -8,9 +8,9 @@ use eframe::egui;
 pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
     let width = ctx.screen_rect().width();
     let narrow = width < 1100.0;
-    let sidebar_w = if narrow { 150.0 } else { 246.0 };
-    let folder_w = if narrow { 180.0 } else { 252.0 };
-    let detail_w = if narrow { 290.0 } else { 394.0 };
+    let sidebar_w = if narrow { 72.0 } else { 246.0 };
+    let folder_w = if narrow { 150.0 } else { 252.0 };
+    let detail_w = if narrow { 260.0 } else { 394.0 };
     egui::TopBottomPanel::top("asset_library_window_bar")
         .exact_height(40.0)
         .frame(egui::Frame::none().fill(egui::Color32::from_rgb(24, 31, 37)))
@@ -43,7 +43,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
             let r = ui.max_rect();
             let left = egui::Rect::from_min_max(r.min, egui::pos2(sidebar_w, r.bottom()));
             let folder = egui::Rect::from_min_max(
-                egui::pos2(left.right(), r.top() + 52.0),
+                egui::pos2(left.right(), r.top() + 176.0),
                 egui::pos2(left.right() + folder_w, r.bottom() - 18.0),
             );
             let grid = egui::Rect::from_min_max(
@@ -80,9 +80,9 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
             );
             draw_logo(app, ctx, ui, left, narrow);
             draw_nav(ui, left, r, narrow);
-        draw_header(app, ui, r, folder.right(), grid.right(), narrow);
+            draw_header(app, ui, r, folder.right(), grid.right(), narrow);
             draw_folders(ui, folder);
-            draw_grid(ui, ctx, grid);
+            draw_grid(ui, ctx, grid, narrow);
             draw_detail(ui, ctx, detail, narrow);
         });
 }
@@ -196,13 +196,11 @@ fn draw_nav(ui: &mut egui::Ui, left: egui::Rect, r: egui::Rect, narrow: bool) {
             );
             ui.put(
                 label_rect,
-                egui::Label::new(
-                    egui::RichText::new(label).size(14.0).color(if active {
-                        colors::TEXT_PRIMARY
-                    } else {
-                        egui::Color32::from_rgb(193, 205, 218)
-                    }),
-                )
+                egui::Label::new(egui::RichText::new(label).size(14.0).color(if active {
+                    colors::TEXT_PRIMARY
+                } else {
+                    egui::Color32::from_rgb(193, 205, 218)
+                }))
                 .truncate(),
             );
         }
@@ -237,7 +235,14 @@ fn texture(ctx: &egui::Context, name: &str) -> Option<egui::TextureId> {
     Some(out)
 }
 
-fn draw_header(app: &mut KagariApp, ui: &mut egui::Ui, r: egui::Rect, base: f32, right: f32, narrow: bool) {
+fn draw_header(
+    app: &mut KagariApp,
+    ui: &mut egui::Ui,
+    r: egui::Rect,
+    base: f32,
+    right: f32,
+    narrow: bool,
+) {
     let p = ui.painter().clone();
     p.line_segment(
         [
@@ -246,27 +251,37 @@ fn draw_header(app: &mut KagariApp, ui: &mut egui::Ui, r: egui::Rect, base: f32,
         ],
         egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
     );
+    icons::render_svg_at(
+        ui,
+        "asset-breadcrumb-folder".to_string(),
+        icons::SVG_FOLDER,
+        egui::vec2(18.0, 18.0),
+        colors::TEXT_SECONDARY,
+        egui::pos2(base + 14.0, r.top() + 18.0),
+    );
     p.text(
-        egui::pos2(275.0, r.top() + 27.0),
+        egui::pos2(base + 40.0, r.top() + 27.0),
         egui::Align2::LEFT_CENTER,
-        "▰   素材ライブラリ    ›    すべての素材",
+        "素材ライブラリ    ›    すべての素材",
         egui::FontId::proportional(if narrow { 12.0 } else { 14.0 }),
         colors::TEXT_PRIMARY,
     );
     p.text(
-        egui::pos2(270.0, r.top() + 88.0),
+        egui::pos2(base + 14.0, r.top() + 88.0),
         egui::Align2::LEFT_CENTER,
         "素材ライブラリ",
         egui::FontId::proportional(if narrow { 24.0 } else { 28.0 }),
         colors::TEXT_PRIMARY,
     );
-    p.text(
-        egui::pos2(474.0, r.top() + 88.0),
-        egui::Align2::LEFT_CENTER,
-        "映像、画像、オーディオ、3Dモデルなどの素材を管理し、創造の可能性を広げましょう。",
-        egui::FontId::proportional(13.0),
-        colors::TEXT_SECONDARY,
-    );
+    if !narrow {
+        p.text(
+            egui::pos2(base + 218.0, r.top() + 88.0),
+            egui::Align2::LEFT_CENTER,
+            "映像、画像、オーディオ、3Dモデルなどの素材を管理し、創造の可能性を広げましょう。",
+            egui::FontId::proportional(13.0),
+            colors::TEXT_SECONDARY,
+        );
+    }
     p.rect(
         egui::Rect::from_min_size(
             egui::pos2(r.right() - 350.0, r.top() + 63.0),
@@ -276,10 +291,18 @@ fn draw_header(app: &mut KagariApp, ui: &mut egui::Ui, r: egui::Rect, base: f32,
         egui::Color32::from_rgb(18, 29, 37),
         egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
     );
+    icons::render_svg_at(
+        ui,
+        "asset-create-folder".to_string(),
+        icons::SVG_FOLDER,
+        egui::vec2(18.0, 18.0),
+        colors::TEXT_PRIMARY,
+        egui::pos2(r.right() - 338.0, r.top() + 75.0),
+    );
     p.text(
         egui::pos2(r.right() - 278.0, r.top() + 84.0),
         egui::Align2::CENTER_CENTER,
-        "▱  フォルダ作成",
+        "フォルダ作成",
         egui::FontId::proportional(12.0),
         colors::TEXT_PRIMARY,
     );
@@ -292,10 +315,18 @@ fn draw_header(app: &mut KagariApp, ui: &mut egui::Ui, r: egui::Rect, base: f32,
         egui::Color32::from_rgb(255, 103, 24),
         egui::Stroke::NONE,
     );
+    icons::render_svg_at(
+        ui,
+        "asset-import".to_string(),
+        icons::SVG_IMPORT,
+        egui::vec2(18.0, 18.0),
+        egui::Color32::WHITE,
+        egui::pos2(r.right() - 174.0, r.top() + 75.0),
+    );
     p.text(
-        egui::pos2(r.right() - 103.0, r.top() + 84.0),
+        egui::pos2(r.right() - 102.0, r.top() + 84.0),
         egui::Align2::CENTER_CENTER,
-        "⇩  素材をインポート",
+        "素材をインポート",
         egui::FontId::proportional(13.0),
         egui::Color32::WHITE,
     );
@@ -335,10 +366,18 @@ fn draw_header(app: &mut KagariApp, ui: &mut egui::Ui, r: egui::Rect, base: f32,
         egui::Color32::from_rgb(16, 29, 38),
         egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
     );
+    icons::render_svg_at(
+        ui,
+        "asset-search".to_string(),
+        icons::SVG_SEARCH,
+        egui::vec2(16.0, 16.0),
+        colors::TEXT_SECONDARY,
+        egui::pos2(right - 340.0, r.top() + 135.0),
+    );
     p.text(
-        egui::pos2(right - 330.0, r.top() + 143.0),
+        egui::pos2(right - 316.0, r.top() + 143.0),
         egui::Align2::LEFT_CENTER,
-        "⌕  素材を検索...",
+        "素材を検索...",
         egui::FontId::proportional(12.0),
         colors::TEXT_SECONDARY,
     );
@@ -351,10 +390,18 @@ fn draw_header(app: &mut KagariApp, ui: &mut egui::Ui, r: egui::Rect, base: f32,
         egui::Color32::from_rgb(16, 29, 38),
         egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
     );
+    icons::render_svg_at(
+        ui,
+        "asset-filter".to_string(),
+        icons::SVG_FILTER,
+        egui::vec2(16.0, 16.0),
+        colors::TEXT_PRIMARY,
+        egui::pos2(right - 118.0, r.top() + 135.0),
+    );
     p.text(
-        egui::pos2(right - 71.0, r.top() + 143.0),
+        egui::pos2(right - 78.0, r.top() + 143.0),
         egui::Align2::CENTER_CENTER,
-        "▽  フィルター",
+        "フィルター",
         egui::FontId::proportional(12.0),
         colors::TEXT_PRIMARY,
     );
@@ -363,7 +410,11 @@ fn draw_header(app: &mut KagariApp, ui: &mut egui::Ui, r: egui::Rect, base: f32,
         egui::vec2(167.0, 42.0),
     );
     if ui
-        .interact(import_rect, egui::Id::new("asset-library-import"), egui::Sense::click())
+        .interact(
+            import_rect,
+            egui::Id::new("asset-library-import"),
+            egui::Sense::click(),
+        )
         .clicked()
     {
         crate::ui::home_screen::import_footage_dialog(app);
@@ -371,7 +422,9 @@ fn draw_header(app: &mut KagariApp, ui: &mut egui::Ui, r: egui::Rect, base: f32,
 }
 
 fn draw_folders(ui: &mut egui::Ui, rect: egui::Rect) {
-    let p = ui.painter();
+    let p = ui.painter().clone();
+    let compact = rect.width() < 200.0;
+    let row_step = if compact { 25.0 } else { 30.0 };
     p.text(
         egui::pos2(rect.left() + 14.0, rect.top() + 25.0),
         egui::Align2::LEFT_CENTER,
@@ -379,38 +432,53 @@ fn draw_folders(ui: &mut egui::Ui, rect: egui::Rect) {
         egui::FontId::proportional(15.0),
         colors::TEXT_PRIMARY,
     );
-    p.text(
-        egui::pos2(rect.right() - 20.0, rect.top() + 25.0),
-        egui::Align2::CENTER_CENTER,
-        "＋",
-        egui::FontId::proportional(23.0),
+    icons::render_svg_at(
+        ui,
+        "asset-folder-add".to_string(),
+        icons::SVG_PLUS,
+        egui::vec2(18.0, 18.0),
         colors::TEXT_PRIMARY,
+        egui::pos2(rect.right() - 29.0, rect.top() + 16.0),
     );
     let rows = [
-        ("▱  すべての素材", "1,245"),
-        ("★  お気に入り", ""),
-        ("◷  最近追加した項目", ""),
-        ("⌄  ▱  ローカル素材", ""),
-        ("    ▱  Footage", "421"),
-        ("    ▱  Elements", "156"),
-        ("    ▱  Environments", "87"),
-        ("    ▱  Textures", "203"),
-        ("    ▱  3D Models", "64"),
-        ("    ▱  Audio", "98"),
-        ("    ▱  LUTs", "42"),
-        ("›  ▱  クラウド素材", ""),
-        ("⌄  ♧  スマートコレクション", ""),
-        ("    ☆  星付き", "12"),
-        ("    ▱  使用中", "38"),
-        ("    ▱  未使用", "892"),
+        (
+            icons::SVG_FOLDER,
+            "すべての素材",
+            "1,245",
+            0.0_f32,
+            false,
+            false,
+        ),
+        (icons::SVG_STAR, "お気に入り", "", 0.0, false, false),
+        (icons::SVG_CLOCK, "最近追加した項目", "", 0.0, false, false),
+        (icons::SVG_FOLDER, "ローカル素材", "", 0.0, true, true),
+        (icons::SVG_FOLDER, "Footage", "421", 18.0, false, false),
+        (icons::SVG_FOLDER, "Elements", "156", 18.0, false, false),
+        (icons::SVG_FOLDER, "Environments", "87", 18.0, false, false),
+        (icons::SVG_FOLDER, "Textures", "203", 18.0, false, false),
+        (icons::SVG_FOLDER, "3D Models", "64", 18.0, false, false),
+        (icons::SVG_FOLDER, "Audio", "98", 18.0, false, false),
+        (icons::SVG_FOLDER, "LUTs", "42", 18.0, false, false),
+        (icons::SVG_FOLDER, "クラウド素材", "", 0.0, true, false),
+        (
+            icons::SVG_LAYERS,
+            "スマートコレクション",
+            "",
+            0.0,
+            true,
+            true,
+        ),
+        (icons::SVG_STAR, "星付き", "12", 18.0, false, false),
+        (icons::SVG_FOLDER, "使用中", "38", 18.0, false, false),
+        (icons::SVG_FOLDER, "未使用", "892", 18.0, false, false),
     ];
-    for (i, (name, count)) in rows.into_iter().enumerate() {
-        let y = rect.top() + 62.0 + i as f32 * 30.0;
+    for (i, (icon, name, count, indent, disclosure, open)) in rows.into_iter().enumerate() {
+        let y = rect.top() + if compact { 50.0 } else { 62.0 } + i as f32 * row_step;
         if i == 0 {
             p.rect_filled(
                 egui::Rect::from_min_size(
                     egui::pos2(rect.left() + 6.0, y - 15.0),
-                    egui::vec2(rect.width() - 15.0, 31.0),
+                    egui::vec2(rect.width() - 15.0, if compact { 26.0 } else { 31.0 }),
                 ),
                 3.0,
                 egui::Color32::from_rgb(27, 35, 42),
@@ -418,14 +486,40 @@ fn draw_folders(ui: &mut egui::Ui, rect: egui::Rect) {
             p.rect_filled(
                 egui::Rect::from_min_size(
                     egui::pos2(rect.left() + 6.0, y - 15.0),
-                    egui::vec2(3.0, 31.0),
+                    egui::vec2(3.0, if compact { 26.0 } else { 31.0 }),
                 ),
                 0.0,
                 egui::Color32::from_rgb(255, 107, 22),
             );
         }
+        if disclosure {
+            icons::render_svg_at(
+                ui,
+                format!("asset-folder-disclosure-{i}"),
+                if open {
+                    icons::SVG_CHEVRON_DOWN
+                } else {
+                    icons::SVG_CHEVRON_RIGHT
+                },
+                egui::vec2(10.0, 10.0),
+                colors::TEXT_SECONDARY,
+                egui::pos2(rect.left() + 8.0 + indent, y - 5.0),
+            );
+        }
+        icons::render_svg_at(
+            ui,
+            format!("asset-folder-icon-{i}"),
+            icon,
+            egui::vec2(16.0, 16.0),
+            if i == 0 {
+                colors::TEXT_PRIMARY
+            } else {
+                colors::TEXT_SECONDARY
+            },
+            egui::pos2(rect.left() + 19.0 + indent, y - 8.0),
+        );
         p.text(
-            egui::pos2(rect.left() + 17.0, y),
+            egui::pos2(rect.left() + 42.0 + indent, y),
             egui::Align2::LEFT_CENTER,
             name,
             egui::FontId::proportional(12.0),
@@ -456,7 +550,7 @@ fn draw_folders(ui: &mut egui::Ui, rect: egui::Rect) {
     }
 }
 
-fn draw_grid(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect) {
+fn draw_grid(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, narrow: bool) {
     let p = ui.painter();
     let names = [
         (
@@ -487,17 +581,23 @@ fn draw_grid(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect) {
         ("assets_light_leak.webp", "sparks_02.mov", "00:06", "ProRes"),
         ("assets_forest.webp", "forest_trees.mov", "00:18", "ProRes"),
     ];
-    let cols = if rect.width() < 650.0 { 2 } else { 4 };
+    let cols = if rect.width() < 520.0 { 2 } else { 4 };
     let gap = 14.0;
+    let card_h = if narrow { 112.0 } else { 144.0 };
+    let image_h = if narrow { 68.0 } else { 92.0 };
+    let row_step = if narrow { 122.0 } else { 158.0 };
     let selected = ctx.data_mut(|d| {
         d.get_temp::<usize>(egui::Id::new("asset-library-selected"))
             .unwrap_or(0)
     });
-    let cw = (rect.width() - 42.0 - gap * 3.0) / cols as f32;
+    let cw = (rect.width() - 28.0 - gap * (cols - 1) as f32) / cols as f32;
     for (i, (asset, name, time, kind)) in names.into_iter().enumerate() {
+        if narrow && i >= 6 {
+            continue;
+        }
         let x = rect.left() + 14.0 + (i % cols) as f32 * (cw + gap);
-        let y = rect.top() + 148.0 + (i / cols) as f32 * 158.0;
-        let card = egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(cw, 144.0));
+        let y = rect.top() + 34.0 + (i / cols) as f32 * row_step;
+        let card = egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(cw, card_h));
         p.rect(
             card,
             7.0,
@@ -527,80 +627,90 @@ fn draw_grid(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect) {
         if let Some(id) = texture(ctx, path) {
             p.image(
                 id,
-                egui::Rect::from_min_size(egui::pos2(x + 2.0, y + 2.0), egui::vec2(cw - 4.0, 92.0)),
+                egui::Rect::from_min_size(
+                    egui::pos2(x + 2.0, y + 2.0),
+                    egui::vec2(cw - 4.0, image_h),
+                ),
                 egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
                 egui::Color32::WHITE,
             );
         }
+        let display_name = if cw < 160.0 && name.chars().count() > 17 {
+            format!("{}…", name.chars().take(16).collect::<String>())
+        } else {
+            name.to_string()
+        };
         p.text(
-            egui::pos2(x + 8.0, y + 106.0),
+            egui::pos2(x + 8.0, y + if narrow { 82.0 } else { 106.0 }),
             egui::Align2::LEFT_CENTER,
-            name,
-            egui::FontId::proportional(11.0),
+            display_name,
+            egui::FontId::proportional(if cw < 160.0 { 9.0 } else { 11.0 }),
             colors::TEXT_PRIMARY,
         );
         p.text(
-            egui::pos2(x + 8.0, y + 128.0),
+            egui::pos2(x + 8.0, y + if narrow { 100.0 } else { 128.0 }),
             egui::Align2::LEFT_CENTER,
             "3840 × 2160",
             egui::FontId::proportional(10.0),
             colors::TEXT_SECONDARY,
         );
         p.text(
-            egui::pos2(card.right() - 8.0, y + 106.0),
+            egui::pos2(card.right() - 8.0, y + if narrow { 82.0 } else { 106.0 }),
             egui::Align2::RIGHT_CENTER,
             time,
             egui::FontId::proportional(10.0),
             colors::TEXT_PRIMARY,
         );
         p.text(
-            egui::pos2(card.right() - 8.0, y + 128.0),
+            egui::pos2(card.right() - 8.0, y + if narrow { 100.0 } else { 128.0 }),
             egui::Align2::RIGHT_CENTER,
             kind,
             egui::FontId::proportional(10.0),
             colors::TEXT_SECONDARY,
         );
     }
-    p.text(
-        egui::pos2(rect.left() + 16.0, rect.bottom() - 202.0),
-        egui::Align2::LEFT_CENTER,
-        "この素材の使用先 (3)",
-        egui::FontId::proportional(16.0),
-        colors::TEXT_PRIMARY,
-    );
-    p.rect(
-        egui::Rect::from_min_max(
-            egui::pos2(rect.left() + 14.0, rect.bottom() - 184.0),
-            egui::pos2(rect.right() - 14.0, rect.bottom() - 18.0),
-        ),
-        6.0,
-        egui::Color32::from_rgb(15, 26, 33),
-        egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
-    );
-    for (i, n) in ["Sample Project", "City Overview", "EPIC Trailer"]
-        .into_iter()
-        .enumerate()
-    {
-        let y = rect.bottom() - 151.0 + i as f32 * 42.0;
+    if !narrow {
         p.text(
-            egui::pos2(rect.left() + 28.0, y),
+            egui::pos2(rect.left() + 16.0, rect.bottom() - 202.0),
             egui::Align2::LEFT_CENTER,
-            format!("{}   {}", i + 1, n),
-            egui::FontId::proportional(11.0),
+            "この素材の使用先 (3)",
+            egui::FontId::proportional(16.0),
             colors::TEXT_PRIMARY,
         );
-        p.line_segment(
-            [
-                egui::pos2(rect.left() + 20.0, y + 19.0),
-                egui::pos2(rect.right() - 20.0, y + 19.0),
-            ],
+        p.rect(
+            egui::Rect::from_min_max(
+                egui::pos2(rect.left() + 14.0, rect.bottom() - 184.0),
+                egui::pos2(rect.right() - 14.0, rect.bottom() - 18.0),
+            ),
+            6.0,
+            egui::Color32::from_rgb(15, 26, 33),
             egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
         );
+        for (i, n) in ["Sample Project", "City Overview", "EPIC Trailer"]
+            .into_iter()
+            .enumerate()
+        {
+            let y = rect.bottom() - 151.0 + i as f32 * 42.0;
+            p.text(
+                egui::pos2(rect.left() + 28.0, y),
+                egui::Align2::LEFT_CENTER,
+                format!("{}   {}", i + 1, n),
+                egui::FontId::proportional(11.0),
+                colors::TEXT_PRIMARY,
+            );
+            p.line_segment(
+                [
+                    egui::pos2(rect.left() + 20.0, y + 19.0),
+                    egui::pos2(rect.right() - 20.0, y + 19.0),
+                ],
+                egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
+            );
+        }
     }
 }
 
 fn draw_detail(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, narrow: bool) {
-    let p = ui.painter();
+    let p = ui.painter().clone();
     let selected = ctx.data_mut(|d| {
         d.get_temp::<usize>(egui::Id::new("asset-library-selected"))
             .unwrap_or(0)
@@ -617,12 +727,21 @@ fn draw_detail(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, narrow:
         egui::FontId::proportional(15.0),
         colors::TEXT_PRIMARY,
     );
-    p.text(
-        egui::pos2(rect.right() - 65.0, rect.top() + 26.0),
-        egui::Align2::CENTER_CENTER,
-        "★  ···",
-        egui::FontId::proportional(18.0),
+    icons::render_svg_at(
+        ui,
+        "asset-detail-star".to_string(),
+        icons::SVG_STAR,
+        egui::vec2(18.0, 18.0),
         egui::Color32::from_rgb(255, 145, 50),
+        egui::pos2(rect.right() - 98.0, rect.top() + 17.0),
+    );
+    icons::render_svg_at(
+        ui,
+        "asset-detail-more".to_string(),
+        icons::SVG_MORE,
+        egui::vec2(18.0, 18.0),
+        colors::TEXT_SECONDARY,
+        egui::pos2(rect.right() - 39.0, rect.top() + 17.0),
     );
     let preview = egui::Rect::from_min_size(
         egui::pos2(rect.left() + 14.0, rect.top() + 42.0),
@@ -651,7 +770,7 @@ fn draw_detail(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, narrow:
     p.text(
         egui::pos2(rect.left() + 14.0, rect.top() + 227.0),
         egui::Align2::LEFT_CENTER,
-        format!("{}   ✎", selected_name),
+        selected_name,
         egui::FontId::proportional(if narrow { 12.0 } else { 14.0 }),
         colors::TEXT_PRIMARY,
     );
@@ -684,59 +803,69 @@ fn draw_detail(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, narrow:
             colors::TEXT_PRIMARY,
         );
     }
-    p.line_segment(
-        [
-            egui::pos2(rect.left() + 14.0, rect.top() + 462.0),
-            egui::pos2(rect.right() - 14.0, rect.top() + 462.0),
-        ],
-        egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
-    );
-    p.text(
-        egui::pos2(rect.left() + 14.0, rect.top() + 490.0),
-        egui::Align2::LEFT_CENTER,
-        "▾  プロキシ",
-        egui::FontId::proportional(14.0),
-        colors::TEXT_PRIMARY,
-    );
-    p.rect_filled(
-        egui::Rect::from_min_size(
-            egui::pos2(rect.left() + 160.0, rect.top() + 472.0),
-            egui::vec2(rect.width() - 174.0, 30.0),
-        ),
-        5.0,
-        egui::Color32::from_rgb(255, 103, 24),
-    );
-    p.text(
-        egui::pos2(
-            rect.left() + 160.0 + (rect.width() - 174.0) / 2.0,
-            rect.top() + 487.0,
-        ),
-        egui::Align2::CENTER_CENTER,
-        "プロキシを生成",
-        egui::FontId::proportional(12.0),
-        egui::Color32::WHITE,
-    );
-    p.text(
-        egui::pos2(rect.left() + 14.0, rect.top() + 540.0),
-        egui::Align2::LEFT_CENTER,
-        "▾  メディア管理",
-        egui::FontId::proportional(14.0),
-        colors::TEXT_PRIMARY,
-    );
-    p.rect(
-        egui::Rect::from_min_size(
-            egui::pos2(rect.left() + 160.0, rect.top() + 523.0),
-            egui::vec2(rect.width() - 174.0, 30.0),
-        ),
-        5.0,
-        egui::Color32::from_rgb(20, 32, 41),
-        egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
-    );
-    p.text(
-        egui::pos2(rect.left() + 14.0, rect.top() + 612.0),
-        egui::Align2::LEFT_CENTER,
-        "▸  使用状況",
-        egui::FontId::proportional(14.0),
-        colors::TEXT_PRIMARY,
-    );
+    if !narrow {
+        p.line_segment(
+            [
+                egui::pos2(rect.left() + 14.0, rect.top() + 462.0),
+                egui::pos2(rect.right() - 14.0, rect.top() + 462.0),
+            ],
+            egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
+        );
+        icons::render_svg_at(
+            ui,
+            "asset-proxy-disclosure".to_string(),
+            icons::SVG_CHEVRON_DOWN,
+            egui::vec2(12.0, 12.0),
+            colors::TEXT_SECONDARY,
+            egui::pos2(rect.left() + 12.0, rect.top() + 484.0),
+        );
+        p.text(
+            egui::pos2(rect.left() + 32.0, rect.top() + 490.0),
+            egui::Align2::LEFT_CENTER,
+            "プロキシ",
+            egui::FontId::proportional(14.0),
+            colors::TEXT_PRIMARY,
+        );
+        p.rect_filled(
+            egui::Rect::from_min_size(
+                egui::pos2(rect.left() + 160.0, rect.top() + 472.0),
+                egui::vec2(rect.width() - 174.0, 30.0),
+            ),
+            5.0,
+            egui::Color32::from_rgb(255, 103, 24),
+        );
+        p.text(
+            egui::pos2(
+                rect.left() + 160.0 + (rect.width() - 174.0) / 2.0,
+                rect.top() + 487.0,
+            ),
+            egui::Align2::CENTER_CENTER,
+            "プロキシを生成",
+            egui::FontId::proportional(12.0),
+            egui::Color32::WHITE,
+        );
+        p.text(
+            egui::pos2(rect.left() + 14.0, rect.top() + 540.0),
+            egui::Align2::LEFT_CENTER,
+            "▾  メディア管理",
+            egui::FontId::proportional(14.0),
+            colors::TEXT_PRIMARY,
+        );
+        p.rect(
+            egui::Rect::from_min_size(
+                egui::pos2(rect.left() + 160.0, rect.top() + 523.0),
+                egui::vec2(rect.width() - 174.0, 30.0),
+            ),
+            5.0,
+            egui::Color32::from_rgb(20, 32, 41),
+            egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
+        );
+        p.text(
+            egui::pos2(rect.left() + 14.0, rect.top() + 612.0),
+            egui::Align2::LEFT_CENTER,
+            "▸  使用状況",
+            egui::FontId::proportional(14.0),
+            colors::TEXT_PRIMARY,
+        );
+    }
 }

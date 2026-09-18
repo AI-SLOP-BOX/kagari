@@ -49,6 +49,8 @@ pub const SVG_CPU: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 
 pub const SVG_PALETTE: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.7" stroke-linecap="round"><path d="M12 3a9 9 0 0 0 0 18h1.5a2 2 0 0 0 0-4H12a2 2 0 0 1 0-4h2.5A6.5 6.5 0 0 0 12 3Z"/><circle cx="7.5" cy="10" r=".8" fill="white"/><circle cx="10" cy="7" r=".8" fill="white"/><circle cx="14" cy="7" r=".8" fill="white"/></svg>"#;
 pub const SVG_KEYBOARD: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.7" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M5 9h1M9 9h1M13 9h1M17 9h1M5 13h1M9 13h6M17 13h1M6 16h12"/></svg>"#;
 pub const SVG_SEARCH: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg>"#;
+pub const SVG_FILTER: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v5l-4 2v-7L3 5Z"/></svg>"#;
+pub const SVG_PLUS: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>"#;
 
 pub const SVG_EYE_OPEN: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>"#;
 pub const SVG_EYE_CLOSED: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="gray" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>"#;
@@ -279,15 +281,43 @@ mod tests {
         init_image_loaders(&ctx);
         let _ = ctx.run(Default::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
-                render_svg_bytes(ui, "visibility", SVG_EYE_OPEN, egui::vec2(18.0, 18.0), egui::Color32::WHITE);
-                render_svg_bytes(ui, "visibility", SVG_EYE_CLOSED, egui::vec2(18.0, 18.0), egui::Color32::WHITE);
-                render_svg_at(ui, "hand".into(), SVG_TOOL_HAND, egui::vec2(24.0, 24.0), egui::Color32::WHITE, egui::pos2(100.0, 100.0));
+                render_svg_bytes(
+                    ui,
+                    "visibility",
+                    SVG_EYE_OPEN,
+                    egui::vec2(18.0, 18.0),
+                    egui::Color32::WHITE,
+                );
+                render_svg_bytes(
+                    ui,
+                    "visibility",
+                    SVG_EYE_CLOSED,
+                    egui::vec2(18.0, 18.0),
+                    egui::Color32::WHITE,
+                );
+                render_svg_at(
+                    ui,
+                    "hand".into(),
+                    SVG_TOOL_HAND,
+                    egui::vec2(24.0, 24.0),
+                    egui::Color32::WHITE,
+                    egui::pos2(100.0, 100.0),
+                );
             });
         });
-        assert_ne!(svg_uri("visibility", SVG_EYE_OPEN), svg_uri("visibility", SVG_EYE_CLOSED));
-        for (name, svg) in [("visibility", SVG_EYE_OPEN), ("visibility", SVG_EYE_CLOSED), ("hand", SVG_TOOL_HAND)] {
-            assert!(matches!(ctx.try_load_image(&svg_uri(name, svg), egui::load::SizeHint::Size(24, 24)),
-                Ok(egui::load::ImagePoll::Ready { .. })));
+        assert_ne!(
+            svg_uri("visibility", SVG_EYE_OPEN),
+            svg_uri("visibility", SVG_EYE_CLOSED)
+        );
+        for (name, svg) in [
+            ("visibility", SVG_EYE_OPEN),
+            ("visibility", SVG_EYE_CLOSED),
+            ("hand", SVG_TOOL_HAND),
+        ] {
+            assert!(matches!(
+                ctx.try_load_image(&svg_uri(name, svg), egui::load::SizeHint::Size(24, 24)),
+                Ok(egui::load::ImagePoll::Ready { .. })
+            ));
         }
     }
 }
