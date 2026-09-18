@@ -5,7 +5,7 @@ fn main() {
     let args: Vec<_> = std::env::args().collect();
     let path = args
         .get(1)
-        .expect("usage: ui_snapshot output.png [width height] [normal|expanded|graph|expression|effects_panel|viewer_max|home|assets|render|templates|settings]");
+        .expect("usage: ui_snapshot output.png [width height] [normal|expanded|graph|expression|effects_panel|viewer_max|project_drawer|inspector_drawer|home|assets|render|templates|settings]");
     let width: u32 = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(1440);
     let height: u32 = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(900);
     let mode = args.get(4).map(String::as_str).unwrap_or("normal");
@@ -63,6 +63,11 @@ fn main() {
                 ui::menu::draw(&mut app, ctx);
                 ui::viewport::draw(&mut app, ctx, frame);
             } else {
+                if mode == "project_drawer" {
+                    ctx.data_mut(|data| data.insert_temp(egui::Id::new("compact_project_drawer"), true));
+                } else if mode == "inspector_drawer" {
+                    ctx.data_mut(|data| data.insert_temp(egui::Id::new("compact_inspector_drawer"), true));
+                }
                 ui::menu::draw(&mut app, ctx);
                 ui::timeline::draw(&mut app, ctx, &mut frame, duration);
                 ui::inspector::draw(&mut app, ctx, &mut frame);

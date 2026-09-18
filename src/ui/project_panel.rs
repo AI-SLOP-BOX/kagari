@@ -597,6 +597,11 @@ fn draw_asset_row(
     let mut replace_footage_req: Option<(usize, std::path::PathBuf)> = None;
 
     ui.horizontal(|ui| {
+        let row_width = ui.available_width();
+        let compact_row = row_width < 260.0;
+        let tag_width = if compact_row { 72.0 } else { 92.0 };
+        let action_width = if !folders.is_empty() && show_row_actions { 34.0 } else { 0.0 };
+        let name_width = (row_width - 16.0 - 4.0 - tag_width - 4.0 - action_width).max(48.0);
         crate::ui::icons::render_svg_bytes(
             ui,
             &format!("project-asset-icon-{i}"),
@@ -604,7 +609,31 @@ fn draw_asset_row(
             egui::vec2(16.0, 16.0),
             if is_selected { colors::TEXT_PRIMARY } else { colors::TEXT_SECONDARY },
         );
-        let response = ui.selectable_label(is_selected, &item.name);
+        let (name_rect, response) = ui.allocate_exact_size(
+            egui::vec2(name_width, 20.0),
+            egui::Sense::click(),
+        );
+        if is_selected || response.hovered() {
+            ui.painter().rect_filled(
+                name_rect,
+                3.0,
+                if is_selected {
+                    colors::BG_HOVER.linear_multiply(0.72)
+                } else {
+                    colors::BG_HOVER.linear_multiply(0.45)
+                },
+            );
+        }
+        ui.allocate_new_ui(egui::UiBuilder::new().max_rect(name_rect), |name_ui| {
+            name_ui.add(
+                egui::Label::new(
+                    egui::RichText::new(&item.name)
+                        .size(12.0)
+                        .color(if is_selected { colors::TEXT_PRIMARY } else { colors::TEXT_SECONDARY }),
+                )
+                .truncate(),
+            );
+        });
         if response.clicked() {
             *selected_idx_update = Some(Some(i));
         }
@@ -629,10 +658,18 @@ fn draw_asset_row(
                 ui.close_menu();
             }
         });
-        ui.weak(format!("({})", item_tag));
+        ui.add_sized(
+            [tag_width, 20.0],
+            egui::Label::new(
+                egui::RichText::new(format!("({})", item_tag))
+                    .size(11.0)
+                    .color(colors::TEXT_MUTED),
+            )
+            .truncate(),
+        );
         if item.is_media_missing() {
             ui.label(
-                egui::RichText::new("⚠ Missing")
+                egui::RichText::new(if compact_row { "⚠" } else { "⚠ Missing" })
                     .small()
                     .strong()
                     .color(colors::ACCENT_RED),
