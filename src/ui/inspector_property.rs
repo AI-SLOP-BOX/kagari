@@ -444,7 +444,15 @@ pub fn draw_expression_selector(
                     if custom_widgets::ae_icon_button(ui, "✕", "Remove expression").clicked() {
                         remove_requested = true;
                     }
-                    if custom_widgets::ae_icon_button(ui, "▶", "Test expression at current frame").clicked() {
+                    if custom_widgets::ae_svg_icon_button(
+                        ui,
+                        "expression-test",
+                        crate::ui::icons::SVG_PLAY,
+                        "Test expression at current frame",
+                        colors::TEXT_SECONDARY,
+                    )
+                    .clicked()
+                    {
                         if let (Some(cf), Some(fps)) = (current_frame, fps) {
                             let snap = ui.ctx().data(|d| {
                                 d.get_temp::<std::sync::Arc<crate::core::expression_engine::CompSnapshot>>(
@@ -539,7 +547,14 @@ pub fn draw_property_ui<
         }
 
         if has_keyframes
-            && custom_widgets::ae_icon_button(ui, "◀", "Jump to Previous Keyframe (J)").clicked()
+            && custom_widgets::ae_svg_icon_button(
+                ui,
+                "previous-keyframe",
+                crate::ui::icons::SVG_STEP_BACK,
+                "Jump to Previous Keyframe (J)",
+                colors::TEXT_SECONDARY,
+            )
+            .clicked()
         {
             if let Some(kfs) = property.keyframes() {
                 if let Some(target) = kfs.iter().rev().find(|k| k.frame < current_frame) {
@@ -548,14 +563,19 @@ pub fn draw_property_ui<
             }
         }
 
-        let stopwatch_btn = if has_keyframes { "◆" } else { "◇" };
-        if custom_widgets::ae_icon_button(
+        if custom_widgets::ae_svg_icon_button(
             ui,
-            stopwatch_btn,
+            "keyframe-toggle",
+            crate::ui::icons::SVG_KEYFRAME,
             if has_keyframes {
                 "Disable Keyframes"
             } else {
                 "Enable Keyframes / Add Keyframe"
+            },
+            if has_keyframes {
+                colors::ACCENT_BLUE
+            } else {
+                colors::TEXT_SECONDARY
             },
         )
             .clicked()
@@ -574,7 +594,15 @@ pub fn draw_property_ui<
         }
 
         if has_keyframes {
-            if custom_widgets::ae_icon_button(ui, "▶", "Jump to Next Keyframe (K)").clicked() {
+            if custom_widgets::ae_svg_icon_button(
+                ui,
+                "next-keyframe",
+                crate::ui::icons::SVG_STEP_FORWARD,
+                "Jump to Next Keyframe (K)",
+                colors::TEXT_SECONDARY,
+            )
+            .clicked()
+            {
                 if let Some(kfs) = property.keyframes() {
                     if let Some(target) = kfs.iter().find(|k| k.frame > current_frame) {
                         next_frame = Some(target.frame);

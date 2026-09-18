@@ -192,6 +192,29 @@ pub fn ae_icon_button(ui: &mut egui::Ui, icon: &str, tooltip: &str) -> egui::Res
     response
 }
 
+/// Small transparent SVG control used for secondary timeline and Inspector actions.
+pub fn ae_svg_icon_button(
+    ui: &mut egui::Ui,
+    id: impl Into<String>,
+    svg: &'static str,
+    tooltip: &str,
+    tint: egui::Color32,
+) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(20.0, 20.0), egui::Sense::click());
+    if response.hovered() {
+        ui.painter().rect_filled(rect, 2.0, colors::BG_HOVER);
+    }
+    crate::ui::icons::render_svg_at(
+        ui,
+        id.into(),
+        svg,
+        egui::vec2(12.0, 12.0),
+        tint,
+        rect.center() - egui::vec2(6.0, 6.0),
+    );
+    response.on_hover_text(tooltip)
+}
+
 /// Professional SVG vector icon toggle button for timeline switches and toolbars
 pub fn ae_svg_toggle(
     ui: &mut egui::Ui,
