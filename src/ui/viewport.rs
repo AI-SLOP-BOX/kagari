@@ -67,6 +67,40 @@ fn demo_reference_texture(ctx: &egui::Context) -> Option<egui::TextureHandle> {
     Some(texture)
 }
 
+fn draw_view_menu_contents(ui: &mut egui::Ui, app: &mut KagariApp) {
+    ui.checkbox(&mut app.show_handles, "Layer handles");
+    ui.checkbox(&mut app.show_guides, "Safe-area guides");
+    ui.checkbox(&mut app.show_grid, "Grid");
+    ui.checkbox(&mut app.viewport_show_stats, "Preview statistics");
+    if let Some(idx) = app.selection.selected_layer_idx {
+        ui.separator();
+        ui.menu_button("Anchor snapping", |ui| {
+            for (label, x, y) in [
+                ("Top left", 0.0, 0.0),
+                ("Top center", 0.5, 0.0),
+                ("Top right", 1.0, 0.0),
+                ("Center left", 0.0, 0.5),
+                ("Center", 0.5, 0.5),
+                ("Center right", 1.0, 0.5),
+                ("Bottom left", 0.0, 1.0),
+                ("Bottom center", 0.5, 1.0),
+                ("Bottom right", 1.0, 1.0),
+            ] {
+                if ui.button(label).clicked() {
+                    let comp = app.history.current_mut().active_composition_mut();
+                    if let Some(layer) = comp.layers.get_mut(idx) {
+                        let [width, height] = layer.bounding_size();
+                        layer.transform.anchor_point = crate::core::property::Animatable::new_constant([width * x, height * y]);
+                        app.autosave.mark_dirty();
+                        crate::core::frame_cache::bump_version();
+                    }
+                    ui.close_menu();
+                }
+            }
+        });
+    }
+}
+
 pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
     // Only clone the project to the production document when history has actually
     // changed. The generation counter avoids a full deep clone every frame.
@@ -123,6 +157,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
 
         // ── Viewport controls ─────────────────────────────────────────────────────
         ui.horizontal(|ui| {
+            let narrow_toolbar = ctx.screen_rect().width() < 1280.0;
             crate::ui::toolbar::draw_viewer_tool_strip(app, ui);
             ui.separator();
             let zoom_label = match app.ui_tabs.viewport_mag_ratio {
@@ -157,6 +192,9 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             .into_iter()
             .enumerate()
             {
+                if narrow_toolbar && index == 2 {
+                    continue;
+                }
                 let (control_rect, control_response) = ui.allocate_exact_size(
                     egui::vec2(24.0, 24.0),
                     egui::Sense::click(),
@@ -205,56 +243,35 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             ui.separator();
             ui.add_space(4.0);
             ui.menu_button("View", |ui| {
-                ui.checkbox(&mut app.show_handles, "Layer handles");
-                ui.checkbox(&mut app.show_guides, "Safe-area guides");
-                ui.checkbox(&mut app.show_grid, "Grid");
-                ui.checkbox(&mut app.viewport_show_stats, "Preview statistics");
-                if let Some(idx) = app.selection.selected_layer_idx {
+                draw_view_menu_contents(ui, app);
+                if narrow_toolbar {
                     ui.separator();
-                    ui.menu_button("Anchor snapping", |ui| {
-                        for (label, x, y) in [
-                            ("Top left", 0.0, 0.0),
-                            ("Top center", 0.5, 0.0),
-                            ("Top right", 1.0, 0.0),
-                            ("Center left", 0.0, 0.5),
-                            ("Center", 0.5, 0.5),
-                            ("Center right", 1.0, 0.5),
-                            ("Bottom left", 0.0, 1.0),
-                            ("Bottom center", 0.5, 1.0),
-                            ("Bottom right", 1.0, 1.0),
-                        ] {
-                            if ui.button(label).clicked() {
-                                let comp = app.history.current_mut().active_composition_mut();
-                                if let Some(layer) = comp.layers.get_mut(idx) {
-                                    let [width, height] = layer.bounding_size();
-                                    layer.transform.anchor_point = crate::core::property::Animatable::new_constant([width * x, height * y]);
-                                    app.autosave.mark_dirty();
-                                    crate::core::frame_cache::bump_version();
-                                }
-                                ui.close_menu();
-                            }
-                        }
-                    });
+                    if ui.button(if app.viewer_maximized { "Restore panels" } else { "Maximize Viewer" }).clicked() {
+                        app.viewer_maximized = !app.viewer_maximized;
+                        ui.close_menu();
+                    }
                 }
             });
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let (button_rect, button_response) = ui.allocate_exact_size(egui::vec2(24.0, 24.0), egui::Sense::click());
-                if button_response.hovered() {
-                    ui.painter().rect_filled(button_rect, 2.0, colors::BG_HOVER);
-                }
-                crate::ui::icons::render_svg_at(
-                    ui,
-                    "viewport-fullscreen".to_string(),
-                    crate::ui::icons::SVG_WINDOW_MAXIMIZE,
-                    egui::vec2(16.0, 16.0),
-                    colors::TEXT_SECONDARY,
-                    button_rect.center() - egui::vec2(8.0, 8.0),
-                );
-                if button_response.clicked() {
-                    app.viewer_maximized = !app.viewer_maximized;
-                }
-                button_response.on_hover_text(if app.viewer_maximized { "Restore panels" } else { "Maximize Viewer" });
-            });
+            if !narrow_toolbar {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let (button_rect, button_response) = ui.allocate_exact_size(egui::vec2(24.0, 24.0), egui::Sense::click());
+                    if button_response.hovered() {
+                        ui.painter().rect_filled(button_rect, 2.0, colors::BG_HOVER);
+                    }
+                    crate::ui::icons::render_svg_at(
+                        ui,
+                        "viewport-fullscreen".to_string(),
+                        crate::ui::icons::SVG_WINDOW_MAXIMIZE,
+                        egui::vec2(16.0, 16.0),
+                        colors::TEXT_SECONDARY,
+                        button_rect.center() - egui::vec2(8.0, 8.0),
+                    );
+                    if button_response.clicked() {
+                        app.viewer_maximized = !app.viewer_maximized;
+                    }
+                    button_response.on_hover_text(if app.viewer_maximized { "Restore panels" } else { "Maximize Viewer" });
+                });
+            }
         });
         ui.separator();
 
