@@ -648,7 +648,7 @@ pub fn draw_property_ui<
         }
 
         // Secondary property actions stay behind a quiet overflow affordance.
-        ui.menu_button("⋯", |ui| {
+        ui.menu_button("...", |ui| {
             ui.label(egui::RichText::new("Advanced property actions").strong());
             if ui.button("⚡ Easy Ease (F9)").clicked() {
                 property.easy_ease();
