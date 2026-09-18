@@ -20,12 +20,16 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
     // Leave the Viewer the dominant surface on first open. The timeline can
     // still be resized upward, while 900px layouts retain a compact editor
     // strip instead of losing the composition to a giant dock.
-    let timeline_default_height = (screen_height * 0.30).clamp(206.0, 320.0);
+    let timeline_default_height = if narrow_timeline {
+        (screen_height * 0.23).clamp(168.0, 220.0)
+    } else {
+        (screen_height * 0.30).clamp(206.0, 320.0)
+    };
     let timeline_max_height = (screen_height * 0.56).max(260.0);
     egui::TopBottomPanel::bottom("timeline_panel")
         .resizable(true)
         .default_height(timeline_default_height)
-        .min_height(190.0)
+        .min_height(if narrow_timeline { 168.0 } else { 190.0 })
         .max_height(timeline_max_height)
         .show(ctx, |ui| {
             if !narrow_timeline {
@@ -520,9 +524,9 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
             let mut pending_select_label_group: Option<crate::core::timeline::LabelColor> = None;
 
             let layer_scroll_height = if narrow_timeline && ui.ctx().screen_rect().width() < 700.0 {
-                36.0
+                32.0
             } else if narrow_timeline {
-                80.0
+                54.0
             } else if ui.ctx().screen_rect().width() <= 1200.0 {
                 120.0
             } else {
