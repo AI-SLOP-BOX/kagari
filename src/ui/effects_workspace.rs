@@ -112,7 +112,6 @@ fn draw_center(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, compact
     p.text(egui::pos2(search.left() + 42.0, search.center().y), egui::Align2::LEFT_CENTER, "エフェクトを検索...", egui::FontId::proportional(14.0), colors::TEXT_SECONDARY);
     p.rect(egui::Rect::from_min_size(egui::pos2(search.right() + 18.0, search.top()), egui::vec2(125.0, 42.0)), 6.0, egui::Color32::from_rgb(16, 29, 38), egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM));
     p.text(egui::pos2(search.right() + 67.0, search.center().y), egui::Align2::CENTER_CENTER, "人気順", egui::FontId::proportional(13.0), colors::TEXT_PRIMARY);
-    p.text(egui::pos2(rect.right() - pad - 44.0, search.center().y), egui::Align2::CENTER_CENTER, "GRID  LIST", egui::FontId::proportional(10.0), colors::TEXT_PRIMARY);
     let effects = [
         ("Gaussian Blur", "Blur", "assets/studio/assets_smoke.webp"),
         ("Glow", "Light", "assets/studio/assets_light_leak.webp"),
