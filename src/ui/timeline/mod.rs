@@ -1733,7 +1733,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
             crate::ui::timeline::pending_actions::apply_effect_drops(app, pending_effect_drops, &mut project_changed);
 
             // ── AE Timeline Bottom Controls Bar ──
-            if narrow_timeline && ui.ctx().screen_rect().width() < 700.0 {
+            if narrow_timeline {
                 if ui.input(|i| i.key_pressed(egui::Key::F4)) {
                     app.ui_tabs.show_switches_pane = !app.ui_tabs.show_switches_pane;
                 }
