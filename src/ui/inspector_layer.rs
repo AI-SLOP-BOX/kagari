@@ -170,16 +170,6 @@ pub fn draw_layer_transforms(
             if val_before != layer.transform.anchor_point {
                 *project_changed = true;
             }
-            // Anchor point expression (same rich editor as other properties)
-            draw_expression_selector(
-                ui,
-                "anchor",
-                &mut layer.transform.anchor_point_expression,
-                project_changed,
-                Some(current_frame),
-                Some(fps),
-            );
-
             ui.add_space(3.0);
             let pos_before = layer.transform.position.clone();
             if let Some(nf) = draw_property_ui(
@@ -197,14 +187,6 @@ pub fn draw_layer_transforms(
                 *next_frame = Some(nf);
             }
             draw_easy_ease_button(ui, &mut layer.transform.position, project_changed);
-            draw_expression_selector(
-                ui,
-                "position",
-                &mut layer.transform.position_expression,
-                project_changed,
-                Some(current_frame),
-                Some(fps),
-            );
             if pos_before != layer.transform.position {
                 *project_changed = true;
             }
@@ -226,14 +208,6 @@ pub fn draw_layer_transforms(
                 *next_frame = Some(nf);
             }
             draw_easy_ease_button(ui, &mut layer.transform.scale, project_changed);
-            draw_expression_selector(
-                ui,
-                "scale",
-                &mut layer.transform.scale_expression,
-                project_changed,
-                Some(current_frame),
-                Some(fps),
-            );
             if scale_before != layer.transform.scale {
                 *project_changed = true;
             }
@@ -252,14 +226,6 @@ pub fn draw_layer_transforms(
                 *next_frame = Some(nf);
             }
             draw_easy_ease_button(ui, &mut layer.transform.rotation, project_changed);
-            draw_expression_selector(
-                ui,
-                "rotation",
-                &mut layer.transform.rotation_expression,
-                project_changed,
-                Some(current_frame),
-                Some(fps),
-            );
             if rot_before != layer.transform.rotation {
                 *project_changed = true;
             }
@@ -358,14 +324,64 @@ pub fn draw_layer_transforms(
                 *next_frame = Some(nf);
             }
             draw_easy_ease_button(ui, &mut layer.transform.opacity, project_changed);
-            draw_expression_selector(
-                ui,
-                "opacity",
-                &mut layer.transform.opacity_expression,
-                project_changed,
-                Some(current_frame),
-                Some(fps),
-            );
+            let has_transform_expression = layer.transform.anchor_point_expression.is_some()
+                || layer.transform.position_expression.is_some()
+                || layer.transform.scale_expression.is_some()
+                || layer.transform.rotation_expression.is_some()
+                || layer.transform.opacity_expression.is_some();
+            egui::CollapsingHeader::new(
+                egui::RichText::new("Expressions")
+                    .size(12.0)
+                    .color(if has_transform_expression {
+                        colors::TEXT_PRIMARY
+                    } else {
+                        colors::TEXT_SECONDARY
+                    }),
+            )
+            .id_salt("transform_expressions")
+            .default_open(has_transform_expression)
+            .show(ui, |ui| {
+                draw_expression_selector(
+                    ui,
+                    "anchor",
+                    &mut layer.transform.anchor_point_expression,
+                    project_changed,
+                    Some(current_frame),
+                    Some(fps),
+                );
+                draw_expression_selector(
+                    ui,
+                    "position",
+                    &mut layer.transform.position_expression,
+                    project_changed,
+                    Some(current_frame),
+                    Some(fps),
+                );
+                draw_expression_selector(
+                    ui,
+                    "scale",
+                    &mut layer.transform.scale_expression,
+                    project_changed,
+                    Some(current_frame),
+                    Some(fps),
+                );
+                draw_expression_selector(
+                    ui,
+                    "rotation",
+                    &mut layer.transform.rotation_expression,
+                    project_changed,
+                    Some(current_frame),
+                    Some(fps),
+                );
+                draw_expression_selector(
+                    ui,
+                    "opacity",
+                    &mut layer.transform.opacity_expression,
+                    project_changed,
+                    Some(current_frame),
+                    Some(fps),
+                );
+            });
             if layer.is_3d {
                 ui.separator();
                 ui.label(
