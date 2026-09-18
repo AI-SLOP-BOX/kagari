@@ -853,8 +853,35 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
 
                                     });
                                     let is_selected = app.selection.selected_layers.contains(&i) || app.selection.selected_layer_idx == Some(i);
-                                    ui.style_mut().visuals.override_text_color = Some(colors::TEXT_PRIMARY);
-                                    let click_resp = ui.add_sized([110.0, 22.0], egui::SelectableLabel::new(is_selected, &layer.name));
+                                    let (name_rect, click_resp) = ui.allocate_exact_size(
+                                        egui::vec2(110.0, 22.0),
+                                        egui::Sense::click_and_drag(),
+                                    );
+                                    if is_selected || click_resp.hovered() {
+                                        let fill = if is_selected {
+                                            egui::Color32::from_rgba_premultiplied(45, 81, 112, 82)
+                                        } else {
+                                            colors::BG_HOVER.linear_multiply(0.55)
+                                        };
+                                        ui.painter().rect_filled(name_rect, 3.0, fill);
+                                    }
+                                    if is_selected {
+                                        ui.painter().rect_filled(
+                                            egui::Rect::from_min_size(
+                                                name_rect.left_top(),
+                                                egui::vec2(2.0, name_rect.height()),
+                                            ),
+                                            1.0,
+                                            colors::ACCENT_BLUE,
+                                        );
+                                    }
+                                    ui.painter().text(
+                                        egui::pos2(name_rect.left() + 8.0, name_rect.center().y),
+                                        egui::Align2::LEFT_CENTER,
+                                        &layer.name,
+                                        egui::FontId::proportional(12.0),
+                                        if is_selected { colors::TEXT_PRIMARY } else { colors::TEXT_SECONDARY },
+                                    );
 
                                     // ── Pick Whip: clicking a layer in pick mode sets it as parent ──
                                     if click_resp.clicked() && app.pick_whip_mode {
