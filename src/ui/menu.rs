@@ -205,7 +205,13 @@ fn draw_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         "Project"
                     };
                     if ui.small_button(drawer_label).clicked() {
-                        ctx.data_mut(|data| data.insert_temp(drawer_id, !drawer_open));
+                        let next_open = !drawer_open;
+                        ctx.data_mut(|data| {
+                            data.insert_temp(drawer_id, next_open);
+                            if next_open {
+                                data.insert_temp(egui::Id::new("compact_inspector_drawer"), false);
+                            }
+                        });
                     }
                     if ctx.screen_rect().width() < 950.0 {
                         let inspector_id = egui::Id::new("compact_inspector_drawer");
@@ -218,7 +224,13 @@ fn draw_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context) {
                             "Inspector"
                         };
                         if ui.small_button(inspector_label).clicked() {
-                            ctx.data_mut(|data| data.insert_temp(inspector_id, !inspector_open));
+                            let next_open = !inspector_open;
+                            ctx.data_mut(|data| {
+                                data.insert_temp(inspector_id, next_open);
+                                if next_open {
+                                    data.insert_temp(egui::Id::new("compact_project_drawer"), false);
+                                }
+                            });
                         }
                     }
                 }
