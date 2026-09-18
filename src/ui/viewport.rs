@@ -408,6 +408,14 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
         let history_comp = app.history.current().active_composition();
         let comp = binding_snapshot.as_ref().unwrap_or(history_comp);
         let comp_is_empty = comp.layers.is_empty();
+        let missing_media = comp.layers.iter().filter(|layer| layer.is_active(current_frame)).find_map(|layer| {
+            let path = match &layer.layer_type {
+                crate::core::timeline::LayerType::Image { path } => Some(path),
+                crate::core::timeline::LayerType::Video { source, .. } => Some(source),
+                _ => None,
+            }?;
+            if std::path::Path::new(path).is_file() { None } else { Some(layer.name.clone()) }
+        });
         let aspect = comp.width as f32 / comp.height as f32;
 
         // ── One-shot bbox focus request (Shift+Z with selection) ──
@@ -806,6 +814,32 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 egui::Align2::CENTER_CENTER,
                 "Drop media here",
                 egui::FontId::proportional(14.0),
+                colors::TEXT_SECONDARY,
+            );
+        } else if let Some(layer_name) = missing_media {
+            let missing_rect = egui::Rect::from_center_size(rect.center(), egui::vec2(280.0, 72.0));
+            ui.painter().rect_filled(
+                missing_rect,
+                5.0,
+                egui::Color32::from_rgba_premultiplied(31, 24, 22, 224),
+            );
+            ui.painter().rect_stroke(
+                missing_rect,
+                5.0,
+                egui::Stroke::new(1.0_f32, colors::ACCENT_ORANGE),
+            );
+            ui.painter().text(
+                missing_rect.center_top() + egui::vec2(0.0, 21.0),
+                egui::Align2::CENTER_CENTER,
+                "Missing media",
+                egui::FontId::proportional(14.0),
+                colors::TEXT_PRIMARY,
+            );
+            ui.painter().text(
+                missing_rect.center_bottom() - egui::vec2(0.0, 18.0),
+                egui::Align2::CENTER_CENTER,
+                format!("{} · Relink in Project", layer_name),
+                egui::FontId::proportional(11.0),
                 colors::TEXT_SECONDARY,
             );
         }
