@@ -5,7 +5,7 @@ fn main() {
     let args: Vec<_> = std::env::args().collect();
     let path = args
         .get(1)
-        .expect("usage: ui_snapshot output.png [width height] [normal|expanded|graph|expression|effects_panel|viewer_max|project_drawer|inspector_drawer|asset_library|home|assets|render|templates|settings]");
+        .expect("usage: ui_snapshot output.png [width height] [normal|expanded|graph|expression|effects_panel|viewer_max|project_drawer|inspector_drawer|asset_library|tutorial|home|assets|render|templates|settings]");
     let width: u32 = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(1440);
     let height: u32 = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(900);
     let mode = args.get(4).map(String::as_str).unwrap_or("normal");
@@ -85,6 +85,8 @@ fn main() {
                         data.insert_temp(egui::Id::new("studio_active_workspace"), 3_usize);
                     });
                     ui::asset_library::draw(&mut app, ctx);
+                } else if mode == "tutorial" {
+                    ui::tutorial_workspace::draw(&mut app, ctx);
                 } else if mode == "effects_panel" {
                     ui::effects_workspace::draw(&mut app, ctx);
                 } else if mode == "viewer_max" {

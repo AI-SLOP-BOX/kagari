@@ -130,7 +130,7 @@ fn draw_main(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, compact: 
     p.text(egui::pos2(rect.left() + pad, rect.top() + 157.0), egui::Align2::LEFT_CENTER, "Kagari VFX で広がる、映像表現の可能性", egui::FontId::proportional(if mobile { 16.0 } else { 21.0 }), colors::TEXT_SECONDARY);
     if !mobile { p.text(egui::pos2(rect.right() - 30.0, rect.top() + 76.0), egui::Align2::RIGHT_CENTER, "V I S U A L   E F F E C T S\nF O R   A   B R I G H T E R   T O M O R R O W", egui::FontId::proportional(8.0), colors::TEXT_SECONDARY); }
     let hero_top = rect.top() + 190.0;
-    let hero_h = if mobile { 190.0 } else if compact { 220.0 } else { 310.0 };
+    let hero_h = if mobile { 160.0 } else if compact { 170.0 } else { 310.0 };
     let hero = egui::Rect::from_min_max(egui::pos2(rect.left() + pad, hero_top), egui::pos2(rect.right() - pad, hero_top + hero_h));
     if let Some(id) = texture(ctx, "assets/studio/studio_city_reference.webp", "tutorial-hero") { p.image(id, hero, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE); }
     p.rect_stroke(hero, 8.0, egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM));
@@ -140,14 +140,19 @@ fn draw_main(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, compact: 
     let _ = p;
     icons::render_svg_at(ui, "tutorial-hero-play".to_string(), icons::SVG_PLAY, egui::vec2(42.0, 42.0), egui::Color32::WHITE, egui::pos2(hero.center().x - 21.0, hero.center().y - 21.0));
     let timeline_top = hero.bottom() + 18.0;
-    let timeline_h = if mobile { 112.0 } else if compact { 120.0 } else { 190.0 };
+    let timeline_h = if mobile { 96.0 } else if compact { 90.0 } else { 190.0 };
     draw_timeline(ui, egui::Rect::from_min_max(egui::pos2(rect.left() + pad, timeline_top), egui::pos2(rect.right() - pad, timeline_top + timeline_h)), mobile);
     let p = ui.painter();
-    let button = egui::Rect::from_min_size(egui::pos2(rect.center().x - 194.0, timeline_top + timeline_h + 22.0), egui::vec2(388.0, 62.0));
+    let button_w = if mobile { rect.width().min(320.0) } else if compact { 320.0 } else { 388.0 };
+    let button_h = if mobile || compact { 48.0 } else { 62.0 };
+    let button = egui::Rect::from_min_size(
+        egui::pos2(rect.center().x - button_w * 0.5, timeline_top + timeline_h + if compact { 14.0 } else { 22.0 }),
+        egui::vec2(button_w, button_h),
+    );
     let response = ui.interact(button, egui::Id::new("tutorial-play"), egui::Sense::click());
     p.rect_filled(button, 10.0, if response.hovered() { egui::Color32::from_rgb(255, 125, 32) } else { ORANGE });
     p.text(egui::pos2(button.left() + 82.0, button.center().y), egui::Align2::LEFT_CENTER, "チュートリアルを再生", egui::FontId::proportional(if mobile { 18.0 } else { 21.0 }), egui::Color32::WHITE);
-    p.text(egui::pos2(rect.center().x, button.bottom() + 30.0), egui::Align2::CENTER_CENTER, "Kagari VFX の基本とワークフローを動画で学びましょう", egui::FontId::proportional(13.0), colors::TEXT_SECONDARY);
+    p.text(egui::pos2(rect.center().x, button.bottom() + if compact { 20.0 } else { 30.0 }), egui::Align2::CENTER_CENTER, "Kagari VFX の基本とワークフローを動画で学びましょう", egui::FontId::proportional(13.0), colors::TEXT_SECONDARY);
     let _ = p;
     icons::render_svg_at(ui, "tutorial-button-play".to_string(), icons::SVG_PLAY, egui::vec2(22.0, 22.0), egui::Color32::WHITE, egui::pos2(button.left() + 48.0, button.center().y - 11.0));
     if response.clicked() { crate::ui::tutorial::restart(app); }
@@ -161,8 +166,9 @@ fn draw_timeline(ui: &mut egui::Ui, rect: egui::Rect, mobile: bool) {
     for i in 0..6 { p.text(egui::pos2(ruler_x + i as f32 * 65.0, rect.top() + 24.0), egui::Align2::CENTER_CENTER, format!("00:{:02}", i * 2), egui::FontId::proportional(9.0), colors::TEXT_SECONDARY); }
     let labels = ["グロー", "パーティクル", "宇宙_背景", "調整レイヤー", "ベース映像"];
     let lane_colors = [egui::Color32::from_rgb(98, 73, 186), egui::Color32::from_rgb(52, 153, 123), egui::Color32::from_rgb(107, 87, 188), egui::Color32::from_rgb(181, 139, 57), egui::Color32::from_rgb(51, 117, 195)];
+    let lane_step = if mobile || rect.height() < 150.0 { 13.0 } else { rect.height().min(190.0) / 6.0 };
     for (i, label) in labels.into_iter().enumerate() {
-        let y = rect.top() + 47.0 + i as f32 * (rect.height().min(190.0) / 6.0);
+        let y = rect.top() + if mobile || rect.height() < 150.0 { 32.0 } else { 47.0 } + i as f32 * lane_step;
         p.line_segment([egui::pos2(rect.left() + 8.0, y + 15.0), egui::pos2(rect.right() - 8.0, y + 15.0)], egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE));
         p.text(egui::pos2(rect.left() + 22.0, y), egui::Align2::LEFT_CENTER, "◉", egui::FontId::proportional(10.0), colors::TEXT_PRIMARY);
         p.text(egui::pos2(rect.left() + 57.0, y), egui::Align2::LEFT_CENTER, format!("{}   {}", 5 - i, label), egui::FontId::proportional(10.0), colors::TEXT_PRIMARY);
