@@ -133,7 +133,7 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
             }
         }
 
-        ui.menu_button("…", |ui| {
+        ui.menu_button("...", |ui| {
         if ui.button("New folder").clicked() {
             add_folder_requested = true;
         }
@@ -221,12 +221,7 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
                     .filter(|(_i, it)| it.parent_folder.as_deref() == Some(fid.as_str()))
                     .collect();
 
-                egui::CollapsingHeader::new(format!(
-                    "{} {} ({})",
-                    egui_phosphor::regular::FOLDER_NOTCH,
-                    fname,
-                    children.len()
-                ))
+                egui::CollapsingHeader::new(format!("{} ({})", fname, children.len()))
                 .default_open(!query.is_empty())
                 .show(ui, |ui| {
                     if children.is_empty() {
