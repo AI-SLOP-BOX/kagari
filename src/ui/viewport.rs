@@ -2386,7 +2386,108 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
 
         // ── AE Viewport Controls Toolbar (BOTTOM OF CANVAS) ──────────────────────────
         if ctx.screen_rect().width() < 1200.0 {
+        let narrow_canvas_controls = ctx.screen_rect().width() < 950.0;
         ui.separator();
+        if narrow_canvas_controls {
+            ui.horizontal(|ui| {
+                let mag_val = app.ui_tabs.viewport_mag_ratio;
+                egui::ComboBox::from_id_salt("mag_combo_bottom_compact")
+                    .selected_text(if mag_val == 2.0 { "200%" } else if mag_val == 1.0 { "100%" } else if mag_val == 0.5 { "50%" } else if mag_val == 0.25 { "25%" } else { "Fit" })
+                    .width(62.0)
+                    .show_ui(ui, |ui| {
+                        for (label, value) in [("Fit", 0.0), ("25%", 0.25), ("50%", 0.5), ("100%", 1.0), ("200%", 2.0), ("400%", 4.0)] {
+                            if ui.selectable_label(app.ui_tabs.viewport_mag_ratio == value, label).clicked() {
+                                app.ui_tabs.viewport_mag_ratio = value;
+                            }
+                        }
+                    });
+                ui.menu_button("View", |ui| {
+                    ui.checkbox(&mut app.show_grid, "Grid");
+                    ui.checkbox(&mut app.show_guides, "Safe-area guides");
+                    ui.checkbox(&mut app.show_handles, "Layer handles");
+                    ui.separator();
+                    egui::ComboBox::from_id_salt("cam_view_combo_compact")
+                        .selected_text(match app.viewport_cam_view {
+                            0 => "Active Camera",
+                            1 => "Front",
+                            2 => "Left",
+                            3 => "Top",
+                            _ => "Custom View",
+                        })
+                        .show_ui(ui, |ui| {
+                            if ui.selectable_value(&mut app.viewport_cam_view, 0, "Active Camera").clicked() {
+                                app.viewport_mode = ViewportMode::Comp2D;
+                            }
+                            if ui.selectable_value(&mut app.viewport_cam_view, 1, "Front").clicked() {
+                                app.viewport_mode = ViewportMode::Camera3D;
+                                app.camera_orbit = (0.0, 0.0, 1000.0);
+                            }
+                            if ui.selectable_value(&mut app.viewport_cam_view, 2, "Left").clicked() {
+                                app.viewport_mode = ViewportMode::Camera3D;
+                                app.camera_orbit = (-90.0, 0.0, 1000.0);
+                            }
+                            if ui.selectable_value(&mut app.viewport_cam_view, 3, "Top").clicked() {
+                                app.viewport_mode = ViewportMode::Camera3D;
+                                app.camera_orbit = (0.0, -89.0, 1000.0);
+                            }
+                        });
+                    egui::ComboBox::from_id_salt("res_combo_compact")
+                        .selected_text(match app.viewport_render_resolution {
+                            0 => "Full",
+                            1 => "Half",
+                            2 => "Third",
+                            _ => "Quarter",
+                        })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut app.viewport_render_resolution, 0, "Full");
+                            ui.selectable_value(&mut app.viewport_render_resolution, 1, "Half");
+                            ui.selectable_value(&mut app.viewport_render_resolution, 2, "Third");
+                            ui.selectable_value(&mut app.viewport_render_resolution, 3, "Quarter");
+                        });
+                    egui::ComboBox::from_id_salt("chan_combo_compact")
+                        .selected_text(match app.viewport_color_channel {
+                            0 => "RGB Color",
+                            1 => "Red",
+                            2 => "Green",
+                            3 => "Blue",
+                            _ => "Alpha",
+                        })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut app.viewport_color_channel, 0, "RGB Color");
+                            ui.selectable_value(&mut app.viewport_color_channel, 1, "Red");
+                            ui.selectable_value(&mut app.viewport_color_channel, 2, "Green");
+                            ui.selectable_value(&mut app.viewport_color_channel, 3, "Blue");
+                            ui.selectable_value(&mut app.viewport_color_channel, 4, "Alpha");
+                        });
+                    egui::ComboBox::from_id_salt("fast_preview_combo_compact")
+                        .selected_text(match app.viewport_fast_preview {
+                            0 => "Final Quality",
+                            1 => "Adaptive",
+                            2 => "Fast Draft",
+                            _ => "Wireframe",
+                        })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut app.viewport_fast_preview, 0, "Final Quality");
+                            ui.selectable_value(&mut app.viewport_fast_preview, 1, "Adaptive Resolution");
+                            ui.selectable_value(&mut app.viewport_fast_preview, 2, "Fast Draft");
+                            ui.selectable_value(&mut app.viewport_fast_preview, 3, "Wireframe");
+                        });
+                    if ui.button("Take Snapshot").clicked() {
+                        crate::ui::viewport_state::set_snap_frame(ctx, current_frame);
+                        app.toasts.info(format!("Snapshot saved at frame {}", current_frame));
+                        ui.close_menu();
+                    }
+                    let comparing = crate::ui::viewport_state::is_comparing(ctx);
+                    if ui.selectable_label(comparing, "Compare Snapshot").clicked() {
+                        if crate::ui::viewport_state::snap_frame(ctx).is_some() {
+                            crate::ui::viewport_state::toggle_comparing(ctx);
+                        } else {
+                            app.toasts.warning("Take a snapshot first");
+                        }
+                    }
+                });
+            });
+        } else {
         ui.horizontal(|ui| {
             ui.style_mut().spacing.item_spacing.x = 4.0;
             // AE Magnification Ratio Dropdown
@@ -2499,6 +2600,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                     ui.selectable_value(&mut app.viewport_fast_preview, 3, "Wireframe");
                 });
         });
+        }
         }
 
         // ── Pen tool commit: turn collected points into a mask on the selected layer ──
