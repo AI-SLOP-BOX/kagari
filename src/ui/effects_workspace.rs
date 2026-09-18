@@ -158,8 +158,21 @@ fn draw_detail(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, compact
     let p = ui.painter();
     p.rect(card, 8.0, PANEL, egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE));
     p.text(egui::pos2(card.left() + 20.0, card.top() + 35.0), egui::Align2::LEFT_CENTER, "Glow", egui::FontId::proportional(if compact { 24.0 } else { 30.0 }), colors::TEXT_PRIMARY);
-    p.text(egui::pos2(card.left() + 20.0, card.top() + 70.0), egui::Align2::LEFT_CENTER, "明るい部分にじむような発光を適用します。", egui::FontId::proportional(13.0), colors::TEXT_PRIMARY);
-    for (i, tag) in ["光・発光", "スタイライズ", "よく使う"].into_iter().enumerate() { let x = card.left() + 20.0 + i as f32 * 97.0; p.rect(egui::Rect::from_min_size(egui::pos2(x, card.top() + 96.0), egui::vec2(86.0, 31.0)), 15.0, egui::Color32::from_rgb(28, 43, 55), egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE)); p.text(egui::pos2(x + 43.0, card.top() + 111.0), egui::Align2::CENTER_CENTER, tag, egui::FontId::proportional(10.0), colors::TEXT_PRIMARY); }
+    if compact {
+        p.text(egui::pos2(card.left() + 20.0, card.top() + 65.0), egui::Align2::LEFT_CENTER, "明るい部分に", egui::FontId::proportional(11.0), colors::TEXT_PRIMARY);
+        p.text(egui::pos2(card.left() + 20.0, card.top() + 81.0), egui::Align2::LEFT_CENTER, "にじむような発光を適用。", egui::FontId::proportional(11.0), colors::TEXT_PRIMARY);
+    } else {
+        p.text(egui::pos2(card.left() + 20.0, card.top() + 70.0), egui::Align2::LEFT_CENTER, "明るい部分にじむような発光を適用します。", egui::FontId::proportional(13.0), colors::TEXT_PRIMARY);
+    }
+    let tags_top = card.top() + if compact { 104.0 } else { 96.0 };
+    let tag_gap = 6.0;
+    let tag_width = ((card.width() - 40.0 - tag_gap * 2.0) / 3.0).max(52.0);
+    for (i, tag) in ["光・発光", "スタイライズ", "よく使う"].into_iter().enumerate() {
+        let x = card.left() + 20.0 + i as f32 * (tag_width + tag_gap);
+        let tag_rect = egui::Rect::from_min_size(egui::pos2(x, tags_top), egui::vec2(tag_width, 31.0));
+        p.rect(tag_rect, 15.0, egui::Color32::from_rgb(28, 43, 55), egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE));
+        p.text(tag_rect.center(), egui::Align2::CENTER_CENTER, tag, egui::FontId::proportional(if compact { 9.0 } else { 10.0 }), colors::TEXT_PRIMARY);
+    }
     let rows = [("しきい値", "0.60"), ("強さ", "5.00"), ("拡散", "1.00")];
     let slider_left = card.left() + if compact { 116.0 } else { 160.0 };
     let slider_right = card.right() - if compact { 96.0 } else { 160.0 };
