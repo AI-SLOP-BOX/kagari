@@ -523,6 +523,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
             let mut pending_effect_drops: Vec<(usize, String, usize)> = Vec::new();
             let mut pending_select_label_group: Option<crate::core::timeline::LabelColor> = None;
 
+            let expanded_timeline = !app.selection.expanded_layers.is_empty() || app.show_graph_editor;
             let layer_scroll_height = if narrow_timeline && ui.ctx().screen_rect().width() < 700.0 {
                 32.0
             } else if narrow_timeline {
@@ -530,7 +531,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
             } else if ui.ctx().screen_rect().width() <= 1200.0 {
                 120.0
             } else {
-                200.0
+                if expanded_timeline { 200.0 } else { 140.0 }
             };
             let _scroll_resp = egui::ScrollArea::vertical().max_height(layer_scroll_height).show(ui, |ui| {
                 let layers_len = comp.layers.len();
