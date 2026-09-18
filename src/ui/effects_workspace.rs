@@ -103,15 +103,16 @@ fn draw_sidebar(ui: &mut egui::Ui, rect: egui::Rect, width: f32, compact: bool, 
 fn draw_center(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, compact: bool, mobile: bool, app: &mut KagariApp) {
     let pad = if mobile { 16.0 } else if compact { 18.0 } else { 30.0 };
     let search = egui::Rect::from_min_size(egui::pos2(rect.left() + pad, rect.top() + 105.0), egui::vec2((rect.width() - pad * 2.0 - 176.0).max(130.0), 42.0));
-    icons::render_svg_at(ui, "effects-search".to_string(), icons::SVG_SEARCH, egui::vec2(20.0, 20.0), colors::TEXT_SECONDARY, egui::pos2(search.left() + 12.0, search.top() + 11.0));
-    icons::render_svg_at(ui, "effects-sort-chevron".to_string(), icons::SVG_CHEVRON_DOWN, egui::vec2(16.0, 16.0), colors::TEXT_PRIMARY, egui::pos2(search.right() + 117.0, search.top() + 13.0));
-    let p = ui.painter();
+    let p = ui.painter().clone();
     p.text(egui::pos2(rect.left() + pad, rect.top() + 43.0), egui::Align2::LEFT_CENTER, "エフェクト", egui::FontId::proportional(if mobile { 28.0 } else { 36.0 }), colors::TEXT_PRIMARY);
     p.text(egui::pos2(rect.left() + pad, rect.top() + 76.0), egui::Align2::LEFT_CENTER, "映像表現を広げる、豊富なエフェクトライブラリ", egui::FontId::proportional(15.0), colors::TEXT_SECONDARY);
     p.rect(search, 6.0, egui::Color32::from_rgb(16, 29, 38), egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM));
     p.text(egui::pos2(search.left() + 42.0, search.center().y), egui::Align2::LEFT_CENTER, "エフェクトを検索...", egui::FontId::proportional(14.0), colors::TEXT_SECONDARY);
-    p.rect(egui::Rect::from_min_size(egui::pos2(search.right() + 18.0, search.top()), egui::vec2(125.0, 42.0)), 6.0, egui::Color32::from_rgb(16, 29, 38), egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM));
+    let sort_rect = egui::Rect::from_min_size(egui::pos2(search.right() + 18.0, search.top()), egui::vec2(125.0, 42.0));
+    p.rect(sort_rect, 6.0, egui::Color32::from_rgb(16, 29, 38), egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM));
     p.text(egui::pos2(search.right() + 67.0, search.center().y), egui::Align2::CENTER_CENTER, "人気順", egui::FontId::proportional(13.0), colors::TEXT_PRIMARY);
+    icons::render_svg_at(ui, "effects-search".to_string(), icons::SVG_SEARCH, egui::vec2(20.0, 20.0), colors::TEXT_SECONDARY, egui::pos2(search.left() + 12.0, search.top() + 11.0));
+    icons::render_svg_at(ui, "effects-sort-chevron".to_string(), icons::SVG_CHEVRON_DOWN, egui::vec2(16.0, 16.0), colors::TEXT_PRIMARY, egui::pos2(sort_rect.right() - 24.0, sort_rect.top() + 13.0));
     let effects = [
         ("Gaussian Blur", "Blur", "assets/studio/assets_smoke.webp"),
         ("Glow", "Light", "assets/studio/assets_light_leak.webp"),
@@ -153,9 +154,9 @@ fn draw_center(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, compact
 fn draw_detail(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, compact: bool, _app: &mut KagariApp) {
     let pad = if compact { 16.0 } else { 22.0 };
     let card = egui::Rect::from_min_max(egui::pos2(rect.left() + pad, rect.top() + 18.0), egui::pos2(rect.right() - pad, rect.bottom() * 0.53));
-    icons::render_svg_at(ui, "effect-detail-star".to_string(), icons::SVG_STAR, egui::vec2(25.0, 25.0), ORANGE, egui::pos2(card.right() - 37.0, card.top() + 23.0));
-    let p = ui.painter();
+    let p = ui.painter().clone();
     p.rect(card, 8.0, PANEL, egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE));
+    icons::render_svg_at(ui, "effect-detail-star".to_string(), icons::SVG_STAR, egui::vec2(25.0, 25.0), ORANGE, egui::pos2(card.right() - 37.0, card.top() + 23.0));
     p.text(egui::pos2(card.left() + 20.0, card.top() + 35.0), egui::Align2::LEFT_CENTER, "Glow", egui::FontId::proportional(if compact { 24.0 } else { 30.0 }), colors::TEXT_PRIMARY);
     if compact {
         p.text(egui::pos2(card.left() + 20.0, card.top() + 65.0), egui::Align2::LEFT_CENTER, "明るい部分に", egui::FontId::proportional(11.0), colors::TEXT_PRIMARY);
