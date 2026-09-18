@@ -3,7 +3,7 @@
 use crate::core::keyframe::{InterpolationType, Keyframe};
 use crate::core::particle_system::ParticleEmitter;
 use crate::core::property::Animatable;
-use crate::core::timeline::{Composition, Effect, EffectType, Expression, Layer, LayerType, ShapeType};
+use crate::core::timeline::{Composition, Effect, EffectType, Expression, LabelColor, Layer, LayerType, ShapeType};
 
 fn kf(frame: u32, v: f32) -> Keyframe<f32> {
     Keyframe::new(frame, v, InterpolationType::Linear)
@@ -182,12 +182,18 @@ pub fn build(app: &mut crate::KagariApp) {
     sub.transform.opacity.easy_ease();
     sub.transform.position = Animatable::new_constant([640.0, 430.0]);
 
-    let city = Layer::new(
+    let mut city = Layer::new(
         "demo_city".into(),
         "Footage".into(),
         LayerType::Solid { color: [0.0, 0.0, 0.0, 0.0] },
         comp.duration_frames,
     );
+    sub.label = LabelColor::Lavender;
+    title.label = LabelColor::Purple;
+    ring.label = LabelColor::Peach;
+    circle.label = LabelColor::Aqua;
+    city.label = LabelColor::Blue;
+    embers.label = LabelColor::Sea;
     comp.layers = vec![sub, title, ring, circle, city, embers, bg];
 
     let proj = app.history.current_mut();
