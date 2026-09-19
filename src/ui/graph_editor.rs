@@ -2,6 +2,76 @@ use crate::core::timeline::Layer;
 use crate::ui::theme::colors;
 use eframe::egui;
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct GraphKeyframeDrag {
+    anchor_id: usize,
+    original_frame: u32,
+    current_frame: u32,
+    original_value: f32,
+    current_value: f32,
+}
+
+trait GraphChannelValue {
+    fn component(&self, axis: usize) -> f32;
+    fn set_component(&mut self, axis: usize, value: f32);
+}
+
+impl GraphChannelValue for f32 {
+    fn component(&self, _axis: usize) -> f32 {
+        *self
+    }
+
+    fn set_component(&mut self, _axis: usize, value: f32) {
+        *self = value;
+    }
+}
+
+impl GraphChannelValue for [f32; 2] {
+    fn component(&self, axis: usize) -> f32 {
+        self[axis.min(1)]
+    }
+
+    fn set_component(&mut self, axis: usize, value: f32) {
+        self[axis.min(1)] = value;
+    }
+}
+
+impl GraphChannelValue for [f32; 3] {
+    fn component(&self, axis: usize) -> f32 {
+        self[axis.min(2)]
+    }
+
+    fn set_component(&mut self, axis: usize, value: f32) {
+        self[axis.min(2)] = value;
+    }
+}
+
+/// Move the keyed item by its frame identity, then re-find it after sorting.
+/// The old graph editor mutated an index after sorting, which could edit the
+/// neighbour that took that index. Keeping the lookup frame-based also makes
+/// this helper safe for all vector/scalar transform tracks.
+fn move_and_set_channel<T: GraphChannelValue + Clone>(
+    track: &mut crate::core::property::Animatable<T>,
+    from_frame: u32,
+    to_frame: u32,
+    axis: usize,
+    value: f32,
+) -> bool {
+    let mut changed = false;
+    if from_frame != to_frame {
+        changed |= track.move_keyframe(from_frame, to_frame);
+    }
+    if let Some(keyframes) = track.keyframes_mut() {
+        if let Some(keyframe) = keyframes.iter_mut().find(|key| key.frame == to_frame) {
+            if (keyframe.value.component(axis) - value).abs() > f32::EPSILON {
+                keyframe.value.set_component(axis, value);
+                changed = true;
+            }
+        }
+    }
+    changed
+}
+
 fn axis_3d(prop: &str) -> usize {
     if prop.ends_with('Z') {
         2
@@ -9,6 +79,80 @@ fn axis_3d(prop: &str) -> usize {
         1
     } else {
         0
+    }
+}
+
+/// Graph properties for effects use the effect instance id, not its display
+/// name. Two instances may have the same name, and names can also be
+/// localized or edited without changing which parameter is selected.
+fn parse_effect_property(property: &str) -> Option<(&str, &str, Option<usize>)> {
+    let rest = property.strip_prefix("fxid:")?;
+    let (base, component) = rest
+        .rsplit_once('|')
+        .map(|(base, channel)| (base, channel.parse::<usize>().ok()))
+        .unwrap_or((rest, None));
+    let (effect_id, parameter) = base.split_once("::")?;
+    Some((effect_id, parameter, component))
+}
+
+fn is_effect_property(property: &str) -> bool {
+    property.starts_with("fxid:")
+}
+
+fn keyframe_frame<T>(
+    keys: Option<&[crate::core::keyframe::Keyframe<T>]>,
+    index: usize,
+) -> Option<u32> {
+    keys.and_then(|keys| keys.get(index)).map(|key| key.frame)
+}
+
+fn graph_keyframe_frame(layer: &Layer, property: &str, index: usize) -> Option<u32> {
+    match property {
+        "Position X" | "Position Y" => keyframe_frame(layer.transform.position.keyframes(), index),
+        "Scale X" | "Scale Y" => keyframe_frame(layer.transform.scale.keyframes(), index),
+        "Rotation" => keyframe_frame(layer.transform.rotation.keyframes(), index),
+        "Opacity" => keyframe_frame(layer.transform.opacity.keyframes(), index),
+        p if p.starts_with("3D Position") => {
+            keyframe_frame(layer.transform_3d.position.keyframes(), index)
+        }
+        p if p.starts_with("3D Rotation") => {
+            keyframe_frame(layer.transform_3d.rotation.keyframes(), index)
+        }
+        p if p.starts_with("3D Scale") => {
+            keyframe_frame(layer.transform_3d.scale.keyframes(), index)
+        }
+        p if p.starts_with("PinX:") || p.starts_with("PinY:") => {
+            let id = p.split(':').nth(1)?;
+            layer
+                .puppet_pins
+                .iter()
+                .find(|pin| pin.id == id)
+                .and_then(|pin| keyframe_frame(pin.position.keyframes(), index))
+        }
+        p if is_effect_property(p) => {
+            let (effect_id, parameter, _) = parse_effect_property(p)?;
+            let effect = layer.effects.iter().find(|effect| effect.id == effect_id)?;
+            effect
+                .effect_type
+                .animatable_params_ref()
+                .into_iter()
+                .find(|(name, _)| *name == parameter)
+                .and_then(|(_, parameter)| match parameter {
+                    crate::core::effect_params::ParamRefRef::Scalar(track) => {
+                        keyframe_frame(track.keyframes(), index)
+                    }
+                    crate::core::effect_params::ParamRefRef::Vec2(track) => {
+                        keyframe_frame(track.keyframes(), index)
+                    }
+                    crate::core::effect_params::ParamRefRef::Vec3(track) => {
+                        keyframe_frame(track.keyframes(), index)
+                    }
+                    crate::core::effect_params::ParamRefRef::Vec4Color(track) => {
+                        keyframe_frame(track.keyframes(), index)
+                    }
+                })
+        }
+        _ => None,
     }
 }
 
@@ -65,20 +209,18 @@ fn set_layer_interpolation(
         p if p.starts_with("Pin") => pin_anim_mut(layer, p)
             .map(|track| apply(track, interpolation))
             .unwrap_or(false),
-        p if p.starts_with("fx_") => {
-            let rest = p.strip_prefix("fx_").unwrap_or_default();
+        p if is_effect_property(p) => {
+            let Some((effect_id, parameter_name, _)) = parse_effect_property(p) else {
+                return false;
+            };
             layer
                 .effects
                 .iter_mut()
-                .find_map(|effect| {
-                    rest.strip_prefix(&format!("{}_", effect.name))
-                        .map(|label| {
-                            let parameter_name = label.split('|').next().unwrap_or(label);
-                            effect.effect_type.set_parameter_keyframe_interpolation(
-                                Some(parameter_name),
-                                interpolation,
-                            )
-                        })
+                .find(|effect| effect.id == effect_id)
+                .map(|effect| {
+                    effect
+                        .effect_type
+                        .set_parameter_keyframe_interpolation(Some(parameter_name), interpolation)
                 })
                 .unwrap_or(false)
         }
@@ -87,15 +229,14 @@ fn set_layer_interpolation(
 }
 
 fn remove_effect_channel_at_frame(layer: &mut Layer, property: &str, frame: u32) -> bool {
-    let rest = property.strip_prefix("fx_").unwrap_or_default();
-    let (base, component) = rest
-        .rsplit_once('|')
-        .map(|(base, channel)| (base, channel.parse::<usize>().ok()))
-        .unwrap_or((rest, None));
-    for effect in &mut layer.effects {
-        let Some(parameter_name) = base.strip_prefix(&format!("{}_", effect.name)) else {
-            continue;
-        };
+    let Some((effect_id, parameter_name, component)) = parse_effect_property(property) else {
+        return false;
+    };
+    if let Some(effect) = layer
+        .effects
+        .iter_mut()
+        .find(|effect| effect.id == effect_id)
+    {
         return match component {
             Some(_) => effect
                 .effect_type
@@ -114,39 +255,34 @@ fn effect_parameter_channel_interpolation(
     property: &str,
     frame: u32,
 ) -> Option<crate::core::keyframe::InterpolationType> {
-    let rest = property.strip_prefix("fx_")?;
-    let base = rest.rsplit_once('|').map(|(base, _)| base).unwrap_or(rest);
-    for effect in &layer.effects {
-        let Some(label) = base.strip_prefix(&format!("{}_", effect.name)) else {
+    let (effect_id, label, _) = parse_effect_property(property)?;
+    let effect = layer.effects.iter().find(|effect| effect.id == effect_id)?;
+    for (name, parameter) in effect.effect_type.animatable_params_ref() {
+        if name != label {
             continue;
-        };
-        for (name, parameter) in effect.effect_type.animatable_params_ref() {
-            if name != label {
-                continue;
-            }
-            return match parameter {
-                crate::core::effect_params::ParamRefRef::Scalar(track) => track
-                    .keyframes()?
-                    .iter()
-                    .find(|key| key.frame == frame)
-                    .map(|key| key.interpolation),
-                crate::core::effect_params::ParamRefRef::Vec2(track) => track
-                    .keyframes()?
-                    .iter()
-                    .find(|key| key.frame == frame)
-                    .map(|key| key.interpolation),
-                crate::core::effect_params::ParamRefRef::Vec3(track) => track
-                    .keyframes()?
-                    .iter()
-                    .find(|key| key.frame == frame)
-                    .map(|key| key.interpolation),
-                crate::core::effect_params::ParamRefRef::Vec4Color(track) => track
-                    .keyframes()?
-                    .iter()
-                    .find(|key| key.frame == frame)
-                    .map(|key| key.interpolation),
-            };
         }
+        return match parameter {
+            crate::core::effect_params::ParamRefRef::Scalar(track) => track
+                .keyframes()?
+                .iter()
+                .find(|key| key.frame == frame)
+                .map(|key| key.interpolation),
+            crate::core::effect_params::ParamRefRef::Vec2(track) => track
+                .keyframes()?
+                .iter()
+                .find(|key| key.frame == frame)
+                .map(|key| key.interpolation),
+            crate::core::effect_params::ParamRefRef::Vec3(track) => track
+                .keyframes()?
+                .iter()
+                .find(|key| key.frame == frame)
+                .map(|key| key.interpolation),
+            crate::core::effect_params::ParamRefRef::Vec4Color(track) => track
+                .keyframes()?
+                .iter()
+                .find(|key| key.frame == frame)
+                .map(|key| key.interpolation),
+        };
     }
     None
 }
@@ -158,12 +294,14 @@ fn set_effect_channel_interpolation_at_frame(
     frame: u32,
     interpolation: crate::core::keyframe::InterpolationType,
 ) -> bool {
-    let rest = property.strip_prefix("fx_").unwrap_or_default();
-    let base = rest.rsplit_once('|').map(|(base, _)| base).unwrap_or(rest);
-    for effect in &mut layer.effects {
-        let Some(label) = base.strip_prefix(&format!("{}_", effect.name)) else {
-            continue;
-        };
+    let Some((effect_id, label, _)) = parse_effect_property(property) else {
+        return false;
+    };
+    if let Some(effect) = layer
+        .effects
+        .iter_mut()
+        .find(|effect| effect.id == effect_id)
+    {
         return effect
             .effect_type
             .set_parameter_keyframe_interpolation_at_frame(label, frame, interpolation);
@@ -172,15 +310,10 @@ fn set_effect_channel_interpolation_at_frame(
 }
 
 fn effect_parameter_channel_value(layer: &Layer, property: &str, frame: u32) -> f32 {
-    let (base, channel) = property
-        .strip_prefix("fx_")
-        .and_then(|value| value.rsplit_once('|'))
-        .map(|(value, index)| (value, index.parse::<usize>().ok()))
-        .unwrap_or((property.strip_prefix("fx_").unwrap_or_default(), None));
-    for effect in &layer.effects {
-        let Some(label) = base.strip_prefix(&format!("{}_", effect.name)) else {
-            continue;
-        };
+    let Some((effect_id, label, channel)) = parse_effect_property(property) else {
+        return 0.0;
+    };
+    if let Some(effect) = layer.effects.iter().find(|effect| effect.id == effect_id) {
         for (name, parameter) in effect.effect_type.animatable_params_ref() {
             if name != label {
                 continue;
@@ -203,15 +336,11 @@ fn effect_parameter_channel_value(layer: &Layer, property: &str, frame: u32) -> 
 }
 
 fn effect_parameter_channel_keyframes(layer: &Layer, property: &str) -> Vec<(u32, f32)> {
-    let (base, channel) = property
-        .strip_prefix("fx_")
-        .and_then(|value| value.rsplit_once('|'))
-        .map(|(value, index)| (value, index.parse::<usize>().unwrap_or(0)))
-        .unwrap_or((property.strip_prefix("fx_").unwrap_or_default(), 0));
-    for effect in &layer.effects {
-        let Some(label) = base.strip_prefix(&format!("{}_", effect.name)) else {
-            continue;
-        };
+    let Some((effect_id, label, channel)) = parse_effect_property(property) else {
+        return vec![];
+    };
+    let channel = channel.unwrap_or(0);
+    if let Some(effect) = layer.effects.iter().find(|effect| effect.id == effect_id) {
         for (name, parameter) in effect.effect_type.animatable_params_ref() {
             if name != label {
                 continue;
@@ -249,48 +378,43 @@ fn effect_parameter_channel_keyframes(layer: &Layer, property: &str) -> Vec<(u32
 }
 
 fn effect_channel_bezier_points(layer: &Layer, property: &str, frame: u32) -> Option<[f32; 4]> {
-    let rest = property.strip_prefix("fx_")?;
-    let base = rest.rsplit_once('|').map(|(base, _)| base).unwrap_or(rest);
-    for effect in &layer.effects {
-        let Some(label) = base.strip_prefix(&format!("{}_", effect.name)) else {
+    let (effect_id, label, _) = parse_effect_property(property)?;
+    let effect = layer.effects.iter().find(|effect| effect.id == effect_id)?;
+    for (name, parameter) in effect.effect_type.animatable_params_ref() {
+        if name != label {
             continue;
-        };
-        for (name, parameter) in effect.effect_type.animatable_params_ref() {
-            if name != label {
-                continue;
-            }
-            let interpolation = match parameter {
-                crate::core::effect_params::ParamRefRef::Vec2(track) => {
-                    track
-                        .keyframes()?
-                        .iter()
-                        .find(|key| key.frame == frame)?
-                        .interpolation
-                }
-                crate::core::effect_params::ParamRefRef::Vec3(track) => {
-                    track
-                        .keyframes()?
-                        .iter()
-                        .find(|key| key.frame == frame)?
-                        .interpolation
-                }
-                crate::core::effect_params::ParamRefRef::Vec4Color(track) => {
-                    track
-                        .keyframes()?
-                        .iter()
-                        .find(|key| key.frame == frame)?
-                        .interpolation
-                }
-                _ => return None,
-            };
-            return match interpolation {
-                crate::core::keyframe::InterpolationType::Bezier {
-                    custom_bezier: Some(points),
-                    ..
-                } => Some(points),
-                _ => Some([0.33, 0.0, 0.67, 1.0]),
-            };
         }
+        let interpolation = match parameter {
+            crate::core::effect_params::ParamRefRef::Vec2(track) => {
+                track
+                    .keyframes()?
+                    .iter()
+                    .find(|key| key.frame == frame)?
+                    .interpolation
+            }
+            crate::core::effect_params::ParamRefRef::Vec3(track) => {
+                track
+                    .keyframes()?
+                    .iter()
+                    .find(|key| key.frame == frame)?
+                    .interpolation
+            }
+            crate::core::effect_params::ParamRefRef::Vec4Color(track) => {
+                track
+                    .keyframes()?
+                    .iter()
+                    .find(|key| key.frame == frame)?
+                    .interpolation
+            }
+            _ => return None,
+        };
+        return match interpolation {
+            crate::core::keyframe::InterpolationType::Bezier {
+                custom_bezier: Some(points),
+                ..
+            } => Some(points),
+            _ => Some([0.33, 0.0, 0.67, 1.0]),
+        };
     }
     None
 }
@@ -301,12 +425,14 @@ fn set_effect_channel_bezier(
     frame: u32,
     points: [f32; 4],
 ) -> bool {
-    let rest = property.strip_prefix("fx_").unwrap_or_default();
-    let base = rest.rsplit_once('|').map(|(base, _)| base).unwrap_or(rest);
-    for effect in &mut layer.effects {
-        let Some(label) = base.strip_prefix(&format!("{}_", effect.name)) else {
-            continue;
-        };
+    let Some((effect_id, label, _)) = parse_effect_property(property) else {
+        return false;
+    };
+    if let Some(effect) = layer
+        .effects
+        .iter_mut()
+        .find(|effect| effect.id == effect_id)
+    {
         return effect
             .effect_type
             .set_parameter_keyframe_bezier_at_frame(label, frame, points);
@@ -315,15 +441,14 @@ fn set_effect_channel_bezier(
 }
 
 fn set_effect_channel_at_frame(layer: &mut Layer, property: &str, frame: u32, value: f32) -> bool {
-    let rest = property.strip_prefix("fx_").unwrap_or_default();
-    let (base, component) = rest
-        .rsplit_once('|')
-        .map(|(base, channel)| (base, channel.parse::<usize>().ok()))
-        .unwrap_or((rest, None));
-    for effect in &mut layer.effects {
-        let Some(parameter_name) = base.strip_prefix(&format!("{}_", effect.name)) else {
-            continue;
-        };
+    let Some((effect_id, parameter_name, component)) = parse_effect_property(property) else {
+        return false;
+    };
+    if let Some(effect) = layer
+        .effects
+        .iter_mut()
+        .find(|effect| effect.id == effect_id)
+    {
         return match component {
             Some(component) => effect.effect_type.set_parameter_component_keyframe(
                 parameter_name,
@@ -345,18 +470,17 @@ fn move_effect_channel_keyframe(
     from_frame: u32,
     to_frame: u32,
 ) -> bool {
-    let rest = property.strip_prefix("fx_").unwrap_or_default();
-    let (base, component) = rest
-        .rsplit_once('|')
-        .map(|(base, channel)| (base, channel.parse::<usize>().ok()))
-        .unwrap_or((rest, None));
+    let Some((effect_id, parameter_name, component)) = parse_effect_property(property) else {
+        return false;
+    };
     let Some(component) = component else {
         return false;
     };
-    for effect in &mut layer.effects {
-        let Some(parameter_name) = base.strip_prefix(&format!("{}_", effect.name)) else {
-            continue;
-        };
+    if let Some(effect) = layer
+        .effects
+        .iter_mut()
+        .find(|effect| effect.id == effect_id)
+    {
         return effect.effect_type.move_parameter_component_keyframe(
             parameter_name,
             component,
@@ -373,14 +497,17 @@ fn move_effect_scalar_keyframe(
     from_frame: u32,
     to_frame: u32,
 ) -> bool {
-    let rest = property.strip_prefix("fx_").unwrap_or_default();
-    if rest.contains('|') {
+    let Some((effect_id, parameter_name, component)) = parse_effect_property(property) else {
+        return false;
+    };
+    if component.is_some() {
         return false;
     }
-    for effect in &mut layer.effects {
-        let Some(parameter_name) = rest.strip_prefix(&format!("{}_", effect.name)) else {
-            continue;
-        };
+    if let Some(effect) = layer
+        .effects
+        .iter_mut()
+        .find(|effect| effect.id == effect_id)
+    {
         return effect.effect_type.move_scalar_parameter_keyframe(
             parameter_name,
             from_frame,
@@ -397,46 +524,102 @@ fn track_velocity<T: Clone>(
     component: impl Fn(&T) -> f32,
     replacement: Option<[f32; 4]>,
 ) -> Option<[f32; 4]> {
-    use crate::core::keyframe::{BezierControlPoint, InterpolationType, compute_ae_bezier_control_points};
+    use crate::core::keyframe::{
+        compute_ae_bezier_control_points, BezierControlPoint, InterpolationType,
+    };
     let keys = track.keyframes_mut()?;
     let key = keys.get(index)?;
     let next = keys.get(index + 1)?;
     let span = next.frame.checked_sub(key.frame)? as f32;
     let delta = component(&next.value) - component(&key.value);
     let values = replacement.unwrap_or(match key.interpolation {
-        InterpolationType::Bezier { incoming, outgoing, .. } =>
-            [incoming.influence * 100.0, outgoing.influence * 100.0, incoming.speed, outgoing.speed],
+        InterpolationType::Bezier {
+            incoming, outgoing, ..
+        } => [
+            incoming.influence * 100.0,
+            outgoing.influence * 100.0,
+            incoming.speed,
+            outgoing.speed,
+        ],
         _ => [33.3, 33.3, 0.0, 0.0],
     });
     if replacement.is_some() {
-        let incoming = BezierControlPoint { influence: values[0] / 100.0, speed: values[2] };
-        let outgoing = BezierControlPoint { influence: values[1] / 100.0, speed: values[3] };
+        let incoming = BezierControlPoint {
+            influence: values[0] / 100.0,
+            speed: values[2],
+        };
+        let outgoing = BezierControlPoint {
+            influence: values[1] / 100.0,
+            speed: values[3],
+        };
         let control = compute_ae_bezier_control_points(&outgoing, &incoming, span, delta, fps);
         keys[index].interpolation = InterpolationType::Bezier {
-            incoming, outgoing, custom_bezier: Some(control),
+            incoming,
+            outgoing,
+            custom_bezier: Some(control),
         };
     }
     Some(values)
 }
 
 fn layer_velocity(
-    layer: &mut Layer, property: &str, index: usize, fps: f32,
+    layer: &mut Layer,
+    property: &str,
+    index: usize,
+    fps: f32,
     replacement: Option<[f32; 4]>,
 ) -> Option<[f32; 4]> {
     let axis = axis_3d(property);
     match property {
-        "Position X" | "Position Y" =>
-            track_velocity(&mut layer.transform.position, index, fps, |v| v[axis], replacement),
-        "Scale X" | "Scale Y" =>
-            track_velocity(&mut layer.transform.scale, index, fps, |v| v[axis], replacement),
-        "Rotation" => track_velocity(&mut layer.transform.rotation, index, fps, |v| *v, replacement),
-        "Opacity" => track_velocity(&mut layer.transform.opacity, index, fps, |v| *v, replacement),
-        p if p.starts_with("3D Position") =>
-            track_velocity(&mut layer.transform_3d.position, index, fps, |v| v[axis], replacement),
-        p if p.starts_with("3D Rotation") =>
-            track_velocity(&mut layer.transform_3d.rotation, index, fps, |v| v[axis], replacement),
-        p if p.starts_with("3D Scale") =>
-            track_velocity(&mut layer.transform_3d.scale, index, fps, |v| v[axis], replacement),
+        "Position X" | "Position Y" => track_velocity(
+            &mut layer.transform.position,
+            index,
+            fps,
+            |v| v[axis],
+            replacement,
+        ),
+        "Scale X" | "Scale Y" => track_velocity(
+            &mut layer.transform.scale,
+            index,
+            fps,
+            |v| v[axis],
+            replacement,
+        ),
+        "Rotation" => track_velocity(
+            &mut layer.transform.rotation,
+            index,
+            fps,
+            |v| *v,
+            replacement,
+        ),
+        "Opacity" => track_velocity(
+            &mut layer.transform.opacity,
+            index,
+            fps,
+            |v| *v,
+            replacement,
+        ),
+        p if p.starts_with("3D Position") => track_velocity(
+            &mut layer.transform_3d.position,
+            index,
+            fps,
+            |v| v[axis],
+            replacement,
+        ),
+        p if p.starts_with("3D Rotation") => track_velocity(
+            &mut layer.transform_3d.rotation,
+            index,
+            fps,
+            |v| v[axis],
+            replacement,
+        ),
+        p if p.starts_with("3D Scale") => track_velocity(
+            &mut layer.transform_3d.scale,
+            index,
+            fps,
+            |v| v[axis],
+            replacement,
+        ),
         _ => None,
     }
 }
@@ -457,11 +640,8 @@ fn draw_ease_thumbnail(
         colors::BG_SURFACE
     };
     ui.painter().rect_filled(rect, 3.0, bg);
-    ui.painter().rect_stroke(
-        rect,
-        3.0,
-        egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM),
-    );
+    ui.painter()
+        .rect_stroke(rect, 3.0, egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM));
     let pad = 4.0;
     let inner = egui::Rect::from_min_max(
         rect.min + egui::vec2(pad, pad),
@@ -517,57 +697,331 @@ pub fn draw_animation_graph_editor(
     layer: &Layer,
     current_frame: &mut u32,
 ) {
-    struct Track { key: String, label: &'static str, color: egui::Color32, values: Vec<(u32, f32)>, animated: bool }
+    struct Track {
+        key: String,
+        label: &'static str,
+        color: egui::Color32,
+        values: Vec<(u32, f32)>,
+        animated: bool,
+    }
     let total = duration_frames.max(1);
     let mut tracks = Vec::with_capacity(5);
-    let mut add = |key: &str, label: &'static str, color: egui::Color32, mut values: Vec<(u32, f32)>, animated: bool| {
-        if values.is_empty() { values.push((0, 0.0)); values.push((total, 0.0)); }
-        tracks.push(Track { key: key.into(), label, color, values, animated });
+    let mut add = |key: &str,
+                   label: &'static str,
+                   color: egui::Color32,
+                   mut values: Vec<(u32, f32)>,
+                   animated: bool| {
+        if values.is_empty() {
+            values.push((0, 0.0));
+            values.push((total, 0.0));
+        }
+        tracks.push(Track {
+            key: key.into(),
+            label,
+            color,
+            values,
+            animated,
+        });
     };
-    let v2 = |a: &crate::core::property::Animatable<[f32; 2]>, axis: usize| -> Vec<(u32, f32)> { a.keyframes().map(|k| k.iter().map(|x| (x.frame.min(total), x.value[axis])).collect()).unwrap_or_default() };
-    let s = |a: &crate::core::property::Animatable<f32>| -> Vec<(u32, f32)> { a.keyframes().map(|k| k.iter().map(|x| (x.frame.min(total), x.value)).collect()).unwrap_or_default() };
-    let px = v2(&layer.transform.position, 0); let py = v2(&layer.transform.position, 1);
-    let sx = v2(&layer.transform.scale, 0); let rot = s(&layer.transform.rotation); let op = s(&layer.transform.opacity);
-    add("Position X", "Position X", colors::ACCENT_BLUE, if px.is_empty() { vec![(0, layer.transform.position.evaluate(0)[0]), (total, layer.transform.position.evaluate(total)[0])] } else { px }, !v2(&layer.transform.position, 0).is_empty());
-    add("Position Y", "Position Y", egui::Color32::from_rgb(92, 200, 180), if py.is_empty() { vec![(0, layer.transform.position.evaluate(0)[1]), (total, layer.transform.position.evaluate(total)[1])] } else { py }, !v2(&layer.transform.position, 1).is_empty());
-    add("Scale X", "Scale", egui::Color32::from_rgb(172, 132, 255), if sx.is_empty() { vec![(0, layer.transform.scale.evaluate(0)[0]), (total, layer.transform.scale.evaluate(total)[0])] } else { sx }, !v2(&layer.transform.scale, 0).is_empty());
-    add("Rotation", "Rotation", egui::Color32::from_rgb(255, 173, 92), if rot.is_empty() { vec![(0, layer.transform.rotation.evaluate(0)), (total, layer.transform.rotation.evaluate(total))] } else { rot }, !s(&layer.transform.rotation).is_empty());
-    add("Opacity", "Opacity", egui::Color32::from_rgb(242, 112, 148), if op.is_empty() { vec![(0, layer.transform.opacity.evaluate(0)), (total, layer.transform.opacity.evaluate(total))] } else { op }, !s(&layer.transform.opacity).is_empty());
+    let v2 = |a: &crate::core::property::Animatable<[f32; 2]>, axis: usize| -> Vec<(u32, f32)> {
+        a.keyframes()
+            .map(|k| {
+                k.iter()
+                    .map(|x| (x.frame.min(total), x.value[axis]))
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    let s = |a: &crate::core::property::Animatable<f32>| -> Vec<(u32, f32)> {
+        a.keyframes()
+            .map(|k| k.iter().map(|x| (x.frame.min(total), x.value)).collect())
+            .unwrap_or_default()
+    };
+    let px = v2(&layer.transform.position, 0);
+    let py = v2(&layer.transform.position, 1);
+    let sx = v2(&layer.transform.scale, 0);
+    let rot = s(&layer.transform.rotation);
+    let op = s(&layer.transform.opacity);
+    add(
+        "Position X",
+        "Position X",
+        colors::ACCENT_BLUE,
+        if px.is_empty() {
+            vec![
+                (0, layer.transform.position.evaluate(0)[0]),
+                (total, layer.transform.position.evaluate(total)[0]),
+            ]
+        } else {
+            px
+        },
+        !v2(&layer.transform.position, 0).is_empty(),
+    );
+    add(
+        "Position Y",
+        "Position Y",
+        egui::Color32::from_rgb(92, 200, 180),
+        if py.is_empty() {
+            vec![
+                (0, layer.transform.position.evaluate(0)[1]),
+                (total, layer.transform.position.evaluate(total)[1]),
+            ]
+        } else {
+            py
+        },
+        !v2(&layer.transform.position, 1).is_empty(),
+    );
+    add(
+        "Scale X",
+        "Scale",
+        egui::Color32::from_rgb(172, 132, 255),
+        if sx.is_empty() {
+            vec![
+                (0, layer.transform.scale.evaluate(0)[0]),
+                (total, layer.transform.scale.evaluate(total)[0]),
+            ]
+        } else {
+            sx
+        },
+        !v2(&layer.transform.scale, 0).is_empty(),
+    );
+    add(
+        "Rotation",
+        "Rotation",
+        egui::Color32::from_rgb(255, 173, 92),
+        if rot.is_empty() {
+            vec![
+                (0, layer.transform.rotation.evaluate(0)),
+                (total, layer.transform.rotation.evaluate(total)),
+            ]
+        } else {
+            rot
+        },
+        !s(&layer.transform.rotation).is_empty(),
+    );
+    add(
+        "Opacity",
+        "Opacity",
+        egui::Color32::from_rgb(242, 112, 148),
+        if op.is_empty() {
+            vec![
+                (0, layer.transform.opacity.evaluate(0)),
+                (total, layer.transform.opacity.evaluate(total)),
+            ]
+        } else {
+            op
+        },
+        !s(&layer.transform.opacity).is_empty(),
+    );
 
     ui.group(|ui| {
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("Graph Editor").size(13.0).strong());
-            ui.label(egui::RichText::new("Animation Curves").small().color(colors::TEXT_MUTED));
+            ui.label(
+                egui::RichText::new("Animation Curves")
+                    .small()
+                    .color(colors::TEXT_MUTED),
+            );
             ui.separator();
-            ui.label(egui::RichText::new("X: time   Y: value").small().color(colors::TEXT_MUTED));
+            ui.label(
+                egui::RichText::new("X: time   Y: value")
+                    .small()
+                    .color(colors::TEXT_MUTED),
+            );
         });
         ui.add_space(3.0);
-        let (toolbar, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 25.0), egui::Sense::hover());
-        ui.painter().line_segment([toolbar.left_bottom(), toolbar.right_bottom()], egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE));
-        ui.painter().text(toolbar.left_center() + egui::vec2(8.0, 0.0), egui::Align2::LEFT_CENTER, "Value Graph   ·   Bezier", egui::FontId::proportional(11.0), colors::TEXT_SECONDARY);
-        ui.painter().text(toolbar.right_center() - egui::vec2(8.0, 0.0), egui::Align2::RIGHT_CENTER, format!("{} animated tracks", tracks.iter().filter(|x| x.animated).count()), egui::FontId::proportional(10.0), colors::TEXT_MUTED);
+        let (toolbar, _) =
+            ui.allocate_exact_size(egui::vec2(ui.available_width(), 25.0), egui::Sense::hover());
+        ui.painter().line_segment(
+            [toolbar.left_bottom(), toolbar.right_bottom()],
+            egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
+        );
+        ui.painter().text(
+            toolbar.left_center() + egui::vec2(8.0, 0.0),
+            egui::Align2::LEFT_CENTER,
+            "Value Graph   ·   Bezier",
+            egui::FontId::proportional(11.0),
+            colors::TEXT_SECONDARY,
+        );
+        ui.painter().text(
+            toolbar.right_center() - egui::vec2(8.0, 0.0),
+            egui::Align2::RIGHT_CENTER,
+            format!(
+                "{} animated tracks",
+                tracks.iter().filter(|x| x.animated).count()
+            ),
+            egui::FontId::proportional(10.0),
+            colors::TEXT_MUTED,
+        );
 
         let row_h = ((ui.available_height() - 8.0) / tracks.len().max(1) as f32).clamp(48.0, 76.0);
-        let graph = egui::Rect::from_min_size(ui.cursor().min, egui::vec2(ui.available_width(), row_h * tracks.len() as f32));
+        let graph = egui::Rect::from_min_size(
+            ui.cursor().min,
+            egui::vec2(ui.available_width(), row_h * tracks.len() as f32),
+        );
         ui.allocate_rect(graph, egui::Sense::hover());
-        let left = graph.left() + 116.0; let width = (graph.width() - 124.0).max(40.0);
+        let left = graph.left() + 116.0;
+        let width = (graph.width() - 124.0).max(40.0);
         let x_of = |frame: u32| left + frame.min(total) as f32 / total as f32 * width;
         let playhead = x_of(*current_frame);
-        ui.painter().line_segment([egui::pos2(playhead, graph.top()), egui::pos2(playhead, graph.bottom())], egui::Stroke::new(1.0_f32, colors::ACCENT_ORANGE));
+        ui.painter().line_segment(
+            [
+                egui::pos2(playhead, graph.top()),
+                egui::pos2(playhead, graph.bottom()),
+            ],
+            egui::Stroke::new(1.0_f32, colors::ACCENT_ORANGE),
+        );
         for (index, track) in tracks.iter().enumerate() {
-            let row = egui::Rect::from_min_size(egui::pos2(graph.left(), graph.top() + index as f32 * row_h), egui::vec2(graph.width(), row_h));
-            let min = track.values.iter().map(|(_, v)| *v).fold(f32::INFINITY, f32::min);
-            let max = track.values.iter().map(|(_, v)| *v).fold(f32::NEG_INFINITY, f32::max);
-            let pad = (max - min).abs().max(1.0) * 0.12; let lo = min - pad; let hi = max + pad;
-            let y_of = |v: f32| row.bottom() - 10.0 - ((v - lo) / (hi - lo).max(0.01)).clamp(0.0, 1.0) * (row.height() - 20.0);
-            if index > 0 { ui.painter().line_segment([row.left_top(), row.right_top()], egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE)); }
-            ui.painter().text(egui::pos2(row.left() + 8.0, row.center().y - 5.0), egui::Align2::LEFT_CENTER, track.label, egui::FontId::proportional(11.0), if selected_property.as_deref() == Some(track.key.as_str()) { colors::TEXT_PRIMARY } else { colors::TEXT_SECONDARY });
-            ui.painter().text(egui::pos2(row.left() + 8.0, row.center().y + 11.0), egui::Align2::LEFT_CENTER, if track.animated { "animated" } else { "constant" }, egui::FontId::proportional(9.0), if track.animated { track.color } else { colors::TEXT_MUTED });
-            for division in 0..=4 { let x = left + division as f32 / 4.0 * width; ui.painter().line_segment([egui::pos2(x, row.top()), egui::pos2(x, row.bottom())], egui::Stroke::new(0.5_f32, colors::GRID_LINE)); if index == tracks.len() - 1 { ui.painter().text(egui::pos2(x + 2.0, row.bottom() - 2.0), egui::Align2::LEFT_BOTTOM, format!("{}f", total * division / 4), egui::FontId::proportional(9.0), colors::TEXT_MUTED); } }
-            for division in 0..=2 { let y = row.bottom() - 10.0 - division as f32 / 2.0 * (row.height() - 20.0); ui.painter().line_segment([egui::pos2(left, y), egui::pos2(graph.right(), y)], egui::Stroke::new(0.5_f32, colors::GRID_LINE)); }
-            let points: Vec<_> = track.values.iter().map(|(f, v)| egui::pos2(x_of(*f), y_of(*v))).collect();
-            for pair in points.windows(2) { let p0 = pair[0]; let p3 = pair[1]; let span = (p3.x - p0.x).max(8.0); let p1 = egui::pos2(p0.x + span * 0.36, p0.y); let p2 = egui::pos2(p3.x - span * 0.36, p3.y); let mut previous = p0; for step in 1..=18 { let t = step as f32 / 18.0; let q = 1.0 - t; let next = egui::pos2(q.powi(3)*p0.x + 3.0*q.powi(2)*t*p1.x + 3.0*q*t.powi(2)*p2.x + t.powi(3)*p3.x, q.powi(3)*p0.y + 3.0*q.powi(2)*t*p1.y + 3.0*q*t.powi(2)*p2.y + t.powi(3)*p3.y); ui.painter().line_segment([previous, next], egui::Stroke::new(if track.animated { 1.8_f32 } else { 1.0_f32 }, track.color)); previous = next; } }
-            for (i, point) in points.iter().enumerate() { if track.animated { let value = track.values[i].1; let prev = track.values.get(i.saturating_sub(1)).map(|x| x.1).unwrap_or(value); let next = track.values.get((i + 1).min(track.values.len()-1)).map(|x| x.1).unwrap_or(value); let span = 14.0_f32.min(width * 0.08); let hout = egui::pos2(point.x + span, y_of((value + next) * 0.5)); let hin = egui::pos2(point.x - span, y_of((value + prev) * 0.5)); ui.painter().line_segment([*point, hout], egui::Stroke::new(0.8_f32, track.color.linear_multiply(0.65))); ui.painter().line_segment([*point, hin], egui::Stroke::new(0.8_f32, track.color.linear_multiply(0.65))); ui.painter().circle_filled(hout, 2.5, track.color.linear_multiply(0.75)); ui.painter().circle_filled(hin, 2.5, track.color.linear_multiply(0.75)); ui.painter().circle_filled(*point, 4.0, if selected_property.as_deref() == Some(track.key.as_str()) { colors::ACCENT_ORANGE } else { track.color }); } }
+            let row = egui::Rect::from_min_size(
+                egui::pos2(graph.left(), graph.top() + index as f32 * row_h),
+                egui::vec2(graph.width(), row_h),
+            );
+            let min = track
+                .values
+                .iter()
+                .map(|(_, v)| *v)
+                .fold(f32::INFINITY, f32::min);
+            let max = track
+                .values
+                .iter()
+                .map(|(_, v)| *v)
+                .fold(f32::NEG_INFINITY, f32::max);
+            let pad = (max - min).abs().max(1.0) * 0.12;
+            let lo = min - pad;
+            let hi = max + pad;
+            let y_of = |v: f32| {
+                row.bottom()
+                    - 10.0
+                    - ((v - lo) / (hi - lo).max(0.01)).clamp(0.0, 1.0) * (row.height() - 20.0)
+            };
+            if index > 0 {
+                ui.painter().line_segment(
+                    [row.left_top(), row.right_top()],
+                    egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
+                );
+            }
+            ui.painter().text(
+                egui::pos2(row.left() + 8.0, row.center().y - 5.0),
+                egui::Align2::LEFT_CENTER,
+                track.label,
+                egui::FontId::proportional(11.0),
+                if selected_property.as_deref() == Some(track.key.as_str()) {
+                    colors::TEXT_PRIMARY
+                } else {
+                    colors::TEXT_SECONDARY
+                },
+            );
+            ui.painter().text(
+                egui::pos2(row.left() + 8.0, row.center().y + 11.0),
+                egui::Align2::LEFT_CENTER,
+                if track.animated {
+                    "animated"
+                } else {
+                    "constant"
+                },
+                egui::FontId::proportional(9.0),
+                if track.animated {
+                    track.color
+                } else {
+                    colors::TEXT_MUTED
+                },
+            );
+            for division in 0..=4 {
+                let x = left + division as f32 / 4.0 * width;
+                ui.painter().line_segment(
+                    [egui::pos2(x, row.top()), egui::pos2(x, row.bottom())],
+                    egui::Stroke::new(0.5_f32, colors::GRID_LINE),
+                );
+                if index == tracks.len() - 1 {
+                    ui.painter().text(
+                        egui::pos2(x + 2.0, row.bottom() - 2.0),
+                        egui::Align2::LEFT_BOTTOM,
+                        format!("{}f", total * division / 4),
+                        egui::FontId::proportional(9.0),
+                        colors::TEXT_MUTED,
+                    );
+                }
+            }
+            for division in 0..=2 {
+                let y = row.bottom() - 10.0 - division as f32 / 2.0 * (row.height() - 20.0);
+                ui.painter().line_segment(
+                    [egui::pos2(left, y), egui::pos2(graph.right(), y)],
+                    egui::Stroke::new(0.5_f32, colors::GRID_LINE),
+                );
+            }
+            let points: Vec<_> = track
+                .values
+                .iter()
+                .map(|(f, v)| egui::pos2(x_of(*f), y_of(*v)))
+                .collect();
+            for pair in points.windows(2) {
+                let p0 = pair[0];
+                let p3 = pair[1];
+                let span = (p3.x - p0.x).max(8.0);
+                let p1 = egui::pos2(p0.x + span * 0.36, p0.y);
+                let p2 = egui::pos2(p3.x - span * 0.36, p3.y);
+                let mut previous = p0;
+                for step in 1..=18 {
+                    let t = step as f32 / 18.0;
+                    let q = 1.0 - t;
+                    let next = egui::pos2(
+                        q.powi(3) * p0.x
+                            + 3.0 * q.powi(2) * t * p1.x
+                            + 3.0 * q * t.powi(2) * p2.x
+                            + t.powi(3) * p3.x,
+                        q.powi(3) * p0.y
+                            + 3.0 * q.powi(2) * t * p1.y
+                            + 3.0 * q * t.powi(2) * p2.y
+                            + t.powi(3) * p3.y,
+                    );
+                    ui.painter().line_segment(
+                        [previous, next],
+                        egui::Stroke::new(
+                            if track.animated { 1.8_f32 } else { 1.0_f32 },
+                            track.color,
+                        ),
+                    );
+                    previous = next;
+                }
+            }
+            for (i, point) in points.iter().enumerate() {
+                if track.animated {
+                    let value = track.values[i].1;
+                    let prev = track
+                        .values
+                        .get(i.saturating_sub(1))
+                        .map(|x| x.1)
+                        .unwrap_or(value);
+                    let next = track
+                        .values
+                        .get((i + 1).min(track.values.len() - 1))
+                        .map(|x| x.1)
+                        .unwrap_or(value);
+                    let span = 14.0_f32.min(width * 0.08);
+                    let hout = egui::pos2(point.x + span, y_of((value + next) * 0.5));
+                    let hin = egui::pos2(point.x - span, y_of((value + prev) * 0.5));
+                    ui.painter().line_segment(
+                        [*point, hout],
+                        egui::Stroke::new(0.8_f32, track.color.linear_multiply(0.65)),
+                    );
+                    ui.painter().line_segment(
+                        [*point, hin],
+                        egui::Stroke::new(0.8_f32, track.color.linear_multiply(0.65)),
+                    );
+                    ui.painter()
+                        .circle_filled(hout, 2.5, track.color.linear_multiply(0.75));
+                    ui.painter()
+                        .circle_filled(hin, 2.5, track.color.linear_multiply(0.75));
+                    ui.painter().circle_filled(
+                        *point,
+                        4.0,
+                        if selected_property.as_deref() == Some(track.key.as_str()) {
+                            colors::ACCENT_ORANGE
+                        } else {
+                            track.color
+                        },
+                    );
+                }
+            }
         }
     });
 }
@@ -613,9 +1067,9 @@ pub fn draw_graph_editor(
                             };
                             for (suffix, channel) in channels {
                                 let key = if suffix.is_empty() {
-                                    format!("fx_{}_{}", effect.name, label)
+                                    format!("fxid:{}::{}", effect.id, label)
                                 } else {
-                                    format!("fx_{}_{}|{}", effect.name, label, channel)
+                                    format!("fxid:{}::{}|{}", effect.id, label, channel)
                                 };
                                 props.push((key, format!("⚙ {} / {}{}", effect.name, label, suffix)));
                             }
@@ -637,12 +1091,20 @@ pub fn draw_graph_editor(
             ui.checkbox(linked_tangent, "🔗 Link");
 
             // ── Visual Ease Presets Palette ──
-            fn apply_preset_to_layer(layer: &mut Layer, prop: &str, preset: crate::core::keyframe::EasePreset) {
+            fn apply_preset_to_layer(
+                layer: &mut Layer,
+                prop: &str,
+                preset: crate::core::keyframe::EasePreset,
+                selected_frame: Option<u32>,
+            ) {
                 use crate::core::property::Animatable;
                 use crate::core::keyframe::{BezierControlPoint, InterpolationType};
                 let pts = preset.control_points();
-                fn apply<T>(kfs: &mut [crate::core::keyframe::Keyframe<T>], pts: [f32; 4]) {
+                fn apply<T>(kfs: &mut [crate::core::keyframe::Keyframe<T>], pts: [f32; 4], selected_frame: Option<u32>) {
                     for kf in kfs.iter_mut() {
+                        if selected_frame.is_some_and(|frame| frame != kf.frame) {
+                            continue;
+                        }
                         kf.interpolation = InterpolationType::Bezier {
                             outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
                             incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
@@ -653,41 +1115,39 @@ pub fn draw_graph_editor(
 
                 match prop {
                     "Position X" | "Position Y" => {
-                        if let Animatable::Animated(ref mut kfs) = layer.transform.position { apply(kfs, pts); }
+                        if let Animatable::Animated(ref mut kfs) = layer.transform.position { apply(kfs, pts, selected_frame); }
                     }
                     "Scale X" | "Scale Y" => {
-                        if let Animatable::Animated(ref mut kfs) = layer.transform.scale { apply(kfs, pts); }
+                        if let Animatable::Animated(ref mut kfs) = layer.transform.scale { apply(kfs, pts, selected_frame); }
                     }
                     "Rotation" => {
-                        if let Animatable::Animated(ref mut kfs) = layer.transform.rotation { apply(kfs, pts); }
+                        if let Animatable::Animated(ref mut kfs) = layer.transform.rotation { apply(kfs, pts, selected_frame); }
                     }
                     "Opacity" => {
-                        if let Animatable::Animated(ref mut kfs) = layer.transform.opacity { apply(kfs, pts); }
+                        if let Animatable::Animated(ref mut kfs) = layer.transform.opacity { apply(kfs, pts, selected_frame); }
                     }
-                    p if p.starts_with("3D Position") => { if let Animatable::Animated(ref mut kfs) = layer.transform_3d.position { apply(kfs, pts); } }
-                    p if p.starts_with("3D Rotation") => { if let Animatable::Animated(ref mut kfs) = layer.transform_3d.rotation { apply(kfs, pts); } }
-                    p if p.starts_with("3D Scale") => { if let Animatable::Animated(ref mut kfs) = layer.transform_3d.scale { apply(kfs, pts); } }
+                    p if p.starts_with("3D Position") => { if let Animatable::Animated(ref mut kfs) = layer.transform_3d.position { apply(kfs, pts, selected_frame); } }
+                    p if p.starts_with("3D Rotation") => { if let Animatable::Animated(ref mut kfs) = layer.transform_3d.rotation { apply(kfs, pts, selected_frame); } }
+                    p if p.starts_with("3D Scale") => { if let Animatable::Animated(ref mut kfs) = layer.transform_3d.scale { apply(kfs, pts, selected_frame); } }
                     p if p.starts_with("Pin") => {
                         if let Some(Animatable::Animated(ref mut kfs)) = pin_anim_mut(layer, p) {
-                            apply(kfs, pts);
+                            apply(kfs, pts, selected_frame);
                         }
                     }
-                    p if p.starts_with("fx_") => {
-                        let rest = p.strip_prefix("fx_").unwrap_or_default();
-                        for effect in &mut layer.effects {
-                            let Some(label) = rest.strip_prefix(&format!("{}_", effect.name)) else {
-                                continue;
-                            };
-                            let parameter_name = label.split('|').next().unwrap_or(label);
-                            effect.effect_type.set_parameter_keyframe_interpolation(
-                                Some(parameter_name),
-                                InterpolationType::Bezier {
+                    p if is_effect_property(p) => {
+                        if let Some((effect_id, parameter_name, _)) = parse_effect_property(p) {
+                            if let Some(effect) = layer.effects.iter_mut().find(|effect| effect.id == effect_id) {
+                                let interpolation = InterpolationType::Bezier {
                                     outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
                                     incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
                                     custom_bezier: Some(pts),
-                                },
-                            );
-                            break;
+                                };
+                                if let Some(frame) = selected_frame {
+                                    effect.effect_type.set_parameter_keyframe_interpolation_at_frame(parameter_name, frame, interpolation);
+                                } else {
+                                    effect.effect_type.set_parameter_keyframe_interpolation(Some(parameter_name), interpolation);
+                                }
+                            }
                         }
                     }
                     _ => {}
@@ -695,6 +1155,19 @@ pub fn draw_graph_editor(
             }
 
             let active_prop = selected_property.clone().unwrap_or_else(|| "Position X".to_string());
+            let ease_scope_id = egui::Id::new(("graph_ease_scope", &layer.id, &active_prop));
+            let mut apply_all_keys = ui.ctx().data(|d| d.get_temp(ease_scope_id).unwrap_or(true));
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut apply_all_keys, "All keys");
+                ui.label(egui::RichText::new("off = hovered key only").small().weak());
+            });
+            ui.ctx().data_mut(|d| d.insert_temp(ease_scope_id, apply_all_keys));
+            let hovered_index: Option<usize> = ui.ctx().data(|d| d.get_temp(egui::Id::new(("ae_graph_hovered_kf", &layer.id, &active_prop))));
+            let ease_target_frame = if apply_all_keys {
+                None
+            } else {
+                hovered_index.and_then(|index| graph_keyframe_frame(layer, &active_prop, index))
+            };
 
             ui.horizontal_wrapped(|ui| {
                 for (lbl, short, preset, tip) in [
@@ -712,7 +1185,7 @@ pub fn draw_graph_editor(
                         let thumb = draw_ease_thumbnail(ui, preset).on_hover_text(format!("{lbl}\n{tip}"));
                         let label = ui.small_button(short).on_hover_text(format!("{lbl}\n{tip}"));
                         if thumb.clicked() || label.clicked() {
-                            apply_preset_to_layer(layer, &active_prop, preset);
+                            apply_preset_to_layer(layer, &active_prop, preset, ease_target_frame);
                             *project_changed = true;
                         }
                     });
@@ -722,7 +1195,7 @@ pub fn draw_graph_editor(
             ui.add_space(4.0);
             if ui.button("〰 Rove Across Time").on_hover_text("Evenly distribute keyframes in time based on spatial path distance").clicked() {
                 // Apply auto-bezier spatial timing
-                apply_preset_to_layer(layer, &active_prop, crate::core::keyframe::EasePreset::Sine);
+                apply_preset_to_layer(layer, &active_prop, crate::core::keyframe::EasePreset::Sine, ease_target_frame);
                 *project_changed = true;
             }
 
@@ -989,7 +1462,7 @@ pub fn draw_graph_editor(
                         .map(|pp| pp.position.evaluate(f)[ci])
                         .unwrap_or(0.0)
                 }
-                p if p.starts_with("fx_") => effect_parameter_channel_value(layer, p, f),
+                p if is_effect_property(p) => effect_parameter_channel_value(layer, p, f),
                 _ => layer.transform.position.evaluate(f)[0],
             };
             let val = if raw_val.is_nan() { 0.0 } else { raw_val };
@@ -1152,15 +1625,20 @@ pub fn draw_graph_editor(
                                     .map(|pp| chan_kfs(&pp.position, ci))
                                     .unwrap_or_default()
                             }
-                            p if p.starts_with("fx_") => layer.effects.iter().find_map(|effect| {
-                                let label = p.strip_prefix("fx_")?.strip_prefix(&format!("{}_", effect.name))?;
-                                effect.effect_type.animatable_params_ref().into_iter().find_map(|(name, parameter)| {
-                                    (name == label).then_some(match parameter {
-                                        crate::core::effect_params::ParamRefRef::Scalar(track) => track.keyframes().map(|k| k.iter().map(|kf| (kf.frame, kf.value)).collect()).unwrap_or_default(),
-                                        _ => vec![],
+                            p if is_effect_property(p) => {
+                                parse_effect_property(p)
+                                    .and_then(|(effect_id, label, _)| {
+                                        layer.effects.iter().find(|effect| effect.id == effect_id).and_then(|effect| {
+                                            effect.effect_type.animatable_params_ref().into_iter().find_map(|(name, parameter)| {
+                                                (name == label).then_some(match parameter {
+                                                    crate::core::effect_params::ParamRefRef::Scalar(track) => track.keyframes().map(|k| k.iter().map(|kf| (kf.frame, kf.value)).collect()).unwrap_or_default(),
+                                                    _ => vec![],
+                                                })
+                                            })
+                                        })
                                     })
-                                })
-                            }).unwrap_or_default(),
+                                    .unwrap_or_default()
+                            },
                             _ => vec![],
                         };
                         let near_anchor = anchor_pts.iter().any(|&(f, v)| {
@@ -1219,16 +1697,11 @@ pub fn draw_graph_editor(
                                         pin.add_keyframe(GKeyframe::new(new_frame, v, GInterp::Linear));
                                     }
                                 }
-                                p if p.starts_with("fx_") => {
-                                    let rest = p.strip_prefix("fx_").unwrap_or_default();
-                                    let (rest, component) = rest
-                                        .rsplit_once('|')
-                                        .map(|(value, channel)| (value, channel.parse::<usize>().ok()))
-                                        .unwrap_or((rest, None));
-                                    for effect in &mut layer.effects {
-                                        let Some(parameter_name) = rest.strip_prefix(&format!("{}_", effect.name)) else {
-                                            continue;
-                                        };
+                                p if is_effect_property(p) => {
+                                    let Some((effect_id, parameter_name, component)) = parse_effect_property(p) else {
+                                        return;
+                                    };
+                                    if let Some(effect) = layer.effects.iter_mut().find(|effect| effect.id == effect_id) {
                                         if let Some(component) = component {
                                             effect.effect_type.set_parameter_component_keyframe(
                                                 parameter_name, component, new_frame, new_val,
@@ -1238,7 +1711,6 @@ pub fn draw_graph_editor(
                                                 parameter_name, new_frame, new_val,
                                             );
                                         }
-                                        break;
                                     }
                                 }
                                 _ => {}
@@ -1326,16 +1798,15 @@ pub fn draw_graph_editor(
                 layer: &'a mut Layer,
                 prop: &str,
             ) -> Option<&'a mut Vec<crate::core::keyframe::Keyframe<f32>>> {
-                let rest = prop.strip_prefix("fx_")?;
-                for effect in &mut layer.effects {
-                    let Some(label) = rest.strip_prefix(&format!("{}_", effect.name)) else {
-                        continue;
-                    };
-                    for (name, parameter) in effect.effect_type.animatable_params() {
-                        if name == label {
-                            if let crate::core::effect_params::ParamRef::Scalar(track) = parameter {
-                                return track.keyframes_mut();
-                            }
+                let (effect_id, label, component) = parse_effect_property(prop)?;
+                if component.is_some() {
+                    return None;
+                }
+                let effect = layer.effects.iter_mut().find(|effect| effect.id == effect_id)?;
+                for (name, parameter) in effect.effect_type.animatable_params() {
+                    if name == label {
+                        if let crate::core::effect_params::ParamRef::Scalar(track) = parameter {
+                            return track.keyframes_mut();
                         }
                     }
                 }
@@ -1360,7 +1831,7 @@ pub fn draw_graph_editor(
                         if let Some($kfs) = keyframes_of_vec3($layer, &prop) { Some({ $body }) } else { None }
                     } else if matches!(prop.as_str(), "Position X" | "Position Y" | "Scale X" | "Scale Y") {
                         if let Some($kfs) = keyframes_of_vec2($layer, &prop) { Some({ $body }) } else { None }
-                    } else if prop.starts_with("fx_") {
+                    } else if is_effect_property(&prop) {
                         if let Some($kfs) = effect_keyframes_of_f32($layer, &prop) { Some({ $body }) } else { None }
                     } else {
                         if let Some($kfs) = keyframes_of_f32($layer, &prop) { Some({ $body }) } else { None }
@@ -1371,15 +1842,6 @@ pub fn draw_graph_editor(
             let frame_to_x = |f: u32| rect.left() + (f as f32 / total_f as f32) * rect.width();
             let val_to_y = |v: f32| rect.bottom() - 4.0 - ((v - min_val) / val_range) * (rect.height() - 8.0);
 
-            // Adds a value delta to a keyframe of either supported value type
-            trait AddVal { fn add_val(&mut self, delta: f32, is_y: bool); }
-            impl AddVal for f32 { fn add_val(&mut self, d: f32, _y: bool) { *self += d; } }
-            impl AddVal for [f32; 2] { fn add_val(&mut self, d: f32, y: bool) { let i = if y { 1 } else { 0 }; self[i] += d; } }
-            impl AddVal for [f32; 3] { fn add_val(&mut self, d: f32, y: bool) { self[if y { 1 } else { 0 }] += d; } }
-            fn set_keyframe_value<T: AddVal>(kf: &mut crate::core::keyframe::Keyframe<T>, delta: f32, is_y: bool) {
-                kf.value.add_val(delta, is_y);
-            }
-
             // Snapshot keyframe positions first (immutable), then edit mutably on drag
             let kf_positions: Vec<(usize, u32, f32)> = if graph_prop.starts_with("3D ") {
                 let ci = axis_3d(&graph_prop);
@@ -1389,7 +1851,7 @@ pub fn draw_graph_editor(
                 keyframes_of_vec2(layer, &graph_prop).map(|kfs| {
                     kfs.iter().enumerate().map(|(i, kf)| (i, kf.frame, kf.value[comp_idx])).collect::<Vec<_>>()
                 }).unwrap_or_default()
-            } else if graph_prop.starts_with("fx_") {
+            } else if is_effect_property(&graph_prop) {
                 effect_keyframes_of_f32(layer, &graph_prop)
                     .map(|kfs| kfs.iter().enumerate().map(|(i, kf)| (i, kf.frame, kf.value)).collect::<Vec<_>>())
                     .unwrap_or_default()
@@ -1399,22 +1861,28 @@ pub fn draw_graph_editor(
                 }).unwrap_or_default()
             };
 
-            if graph_prop.starts_with("fx_") && graph_prop.contains('|') {
+            if is_effect_property(&graph_prop) && graph_prop.contains('|') {
                 let channel_keys = effect_parameter_channel_keyframes(layer, &graph_prop);
+                let channel_drag_id = egui::Id::new(("effect_channel_drag", &layer.id, &graph_prop));
+                let active_channel_drag: Option<GraphKeyframeDrag> = ui.ctx().data(|d| d.get_temp(channel_drag_id));
                 for (index, (frame, value)) in channel_keys.iter().enumerate() {
-                    let key_pos = egui::pos2(frame_to_x(*frame), val_to_y(*value));
+                    let drag_display = active_channel_drag.filter(|drag| drag.current_frame == *frame);
+                    let display_frame = drag_display.map(|drag| drag.current_frame).unwrap_or(*frame);
+                    let display_value = drag_display.map(|drag| drag.current_value).unwrap_or(*value);
+                    let key_token = drag_display.map(|drag| drag.anchor_id).unwrap_or(index);
+                    let key_pos = egui::pos2(frame_to_x(display_frame), val_to_y(display_value));
                     let key_rect = egui::Rect::from_center_size(key_pos, egui::vec2(14.0, 14.0));
                     let key_response = ui.interact(
                         key_rect,
-                        egui::Id::new(("effect_channel_key", &graph_prop, index)),
-                        egui::Sense::drag(),
+                        egui::Id::new(("effect_channel_key", &layer.id, &graph_prop, key_token)),
+                        egui::Sense::click_and_drag(),
                     );
                     ui.painter().circle_filled(key_pos, 4.0, colors::TIMELINE_KEYFRAME);
-                    if let Some(points) = effect_channel_bezier_points(layer, &graph_prop, *frame) {
+                    if let Some(points) = effect_channel_bezier_points(layer, &graph_prop, display_frame) {
                         let out = egui::pos2(key_pos.x + points[2] * 44.0, key_pos.y - points[3] * 24.0);
                         let incoming = egui::pos2(key_pos.x - points[0] * 44.0, key_pos.y + points[1] * 24.0);
-                        let out_resp = ui.interact(egui::Rect::from_center_size(out, egui::vec2(14.0, 14.0)), egui::Id::new(("effect_bezier_out", &graph_prop, index)), egui::Sense::drag());
-                        let in_resp = ui.interact(egui::Rect::from_center_size(incoming, egui::vec2(14.0, 14.0)), egui::Id::new(("effect_bezier_in", &graph_prop, index)), egui::Sense::drag());
+                        let out_resp = ui.interact(egui::Rect::from_center_size(out, egui::vec2(14.0, 14.0)), egui::Id::new(("effect_bezier_out", &layer.id, &graph_prop, key_token)), egui::Sense::drag());
+                        let in_resp = ui.interact(egui::Rect::from_center_size(incoming, egui::vec2(14.0, 14.0)), egui::Id::new(("effect_bezier_in", &layer.id, &graph_prop, key_token)), egui::Sense::drag());
                         ui.painter().line_segment([key_pos, out], egui::Stroke::new(1.0_f32, colors::MOTION_PATH));
                         ui.painter().line_segment([key_pos, incoming], egui::Stroke::new(1.0_f32, colors::MOTION_PATH));
                         ui.painter().circle_filled(out, 3.0, colors::HANDLE_NORMAL);
@@ -1428,141 +1896,148 @@ pub fn draw_graph_editor(
                             next[0] = (points[0] - in_resp.drag_delta().x / 44.0).clamp(0.0, points[2] - 0.01);
                             next[1] = (points[1] + in_resp.drag_delta().y / 24.0).clamp(-1.5, 2.5);
                         }
-                        if (out_resp.dragged() || in_resp.dragged()) && set_effect_channel_bezier(layer, &graph_prop, *frame, next) {
+                        if (out_resp.dragged() || in_resp.dragged()) && set_effect_channel_bezier(layer, &graph_prop, display_frame, next) {
                             *project_changed = true;
                         }
                     }
+                    if key_response.drag_started() {
+                        ui.ctx().data_mut(|d| d.insert_temp(channel_drag_id, GraphKeyframeDrag {
+                            anchor_id: index,
+                            original_frame: *frame,
+                            current_frame: *frame,
+                            original_value: *value,
+                            current_value: *value,
+                        }));
+                    }
                     if key_response.secondary_clicked() {
-                        if remove_effect_channel_at_frame(layer, &graph_prop, *frame) {
+                        if remove_effect_channel_at_frame(layer, &graph_prop, display_frame) {
                             *project_changed = true;
                         }
                         continue;
                     }
                     if key_response.dragged() {
-                        let next_frame = (*frame as i32
+                        let state = ui.ctx().data(|d| d.get_temp::<GraphKeyframeDrag>(channel_drag_id)).unwrap_or(GraphKeyframeDrag {
+                            anchor_id: index,
+                            original_frame: *frame,
+                            current_frame: *frame,
+                            original_value: *value,
+                            current_value: *value,
+                        });
+                        let next_frame = (state.original_frame as i32
                             + (key_response.drag_delta().x / rect.width() * total_f as f32).round() as i32)
                             .clamp(0, total_f as i32) as u32;
-                        let next_value = *value
+                        let next_value = state.original_value
                             - key_response.drag_delta().y / (rect.height() - 8.0) * val_range;
-                        let moved = next_frame != *frame;
-                        let moved_key = moved && move_effect_channel_keyframe(layer, &graph_prop, *frame, next_frame);
-                        let value_changed = if moved {
-                            moved_key
-                        } else {
-                            set_effect_channel_at_frame(layer, &graph_prop, next_frame, next_value)
-                        };
-                        if moved_key {
-                            let _ = set_effect_channel_at_frame(layer, &graph_prop, next_frame, next_value);
-                        }
-                        *project_changed |= value_changed;
+                        let moved = next_frame != state.current_frame
+                            && move_effect_channel_keyframe(layer, &graph_prop, state.current_frame, next_frame);
+                        let value_changed = set_effect_channel_at_frame(layer, &graph_prop, next_frame, next_value);
+                        *project_changed |= moved || value_changed;
+                        ui.ctx().data_mut(|d| d.insert_temp(channel_drag_id, GraphKeyframeDrag {
+                            current_frame: next_frame,
+                            current_value: next_value,
+                            ..state
+                        }));
+                    }
+                    if key_response.drag_stopped() {
+                        ui.ctx().data_mut(|d| d.remove::<GraphKeyframeDrag>(channel_drag_id));
                     }
                 }
             }
 
+            let drag_state_id = egui::Id::new(("graph_keyframe_drag", &layer.id, &graph_prop));
+            let active_drag: Option<GraphKeyframeDrag> = ui.ctx().data(|d| d.get_temp(drag_state_id));
+
             for (kf_idx, kf_frame, kf_val) in &kf_positions {
-                let pt = egui::pos2(frame_to_x(*kf_frame), val_to_y(*kf_val));
+                let drag_display = active_drag
+                    .filter(|drag| drag.current_frame == *kf_frame);
+                let display_frame = drag_display.map(|drag| drag.current_frame).unwrap_or(*kf_frame);
+                let display_value = drag_display.map(|drag| drag.current_value).unwrap_or(*kf_val);
+                let pt = egui::pos2(frame_to_x(display_frame), val_to_y(display_value));
 
                 // --- Anchor point: drag horizontally to retime, vertically to change value ---
                 let anchor_rect = egui::Rect::from_center_size(pt, egui::vec2(14.0, 14.0));
-                let anchor_resp = ui.interact(anchor_rect, egui::Id::new(("graph_anchor", kf_idx)), egui::Sense::click_and_drag());
+                let anchor_token = active_drag
+                    .filter(|drag| drag.current_frame == *kf_frame)
+                    .map(|drag| drag.original_frame as usize)
+                    .unwrap_or(*kf_idx);
+                let anchor_resp = ui.interact(
+                    anchor_rect,
+                    egui::Id::new(("graph_anchor", &layer.id, &graph_prop, anchor_token)),
+                    egui::Sense::click_and_drag(),
+                );
                 if anchor_resp.hovered() {
                     ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(("ae_graph_hovered_kf", &layer.id, &graph_prop)), *kf_idx));
                 }
                 if anchor_resp.secondary_clicked() {
                     with_keyframes!(layer, graph_prop, kfs => {
-                        if *kf_idx < kfs.len() {
-                            kfs.remove(*kf_idx);
+                        if let Some(index) = kfs.iter().position(|key| key.frame == *kf_frame) {
+                            kfs.remove(index);
                             *project_changed = true;
                         }
                     });
                     continue;
                 }
+                if anchor_resp.drag_started() {
+                    let state = GraphKeyframeDrag {
+                        anchor_id: *kf_idx,
+                        original_frame: *kf_frame,
+                        current_frame: *kf_frame,
+                        original_value: *kf_val,
+                        current_value: *kf_val,
+                    };
+                    ui.ctx().data_mut(|d| d.insert_temp(drag_state_id, state));
+                }
                 if anchor_resp.dragged() {
-                    let delta_frames = (anchor_resp.drag_delta().x / rect.width() * total_f as f32).round() as i32;
-                    let new_frame = (*kf_frame as i32 + delta_frames).clamp(0, total_f as i32) as u32;
-                    // Vertical drag → value change (screen up = value up)
-                    let delta_val = -anchor_resp.drag_delta().y / (rect.height() - 8.0) * val_range;
-                    if graph_prop.starts_with("fx_") && !graph_prop.contains('|') && new_frame != *kf_frame {
-                        if move_effect_scalar_keyframe(layer, &graph_prop, *kf_frame, new_frame) {
-                            let value = effect_parameter_channel_value(layer, &graph_prop, new_frame);
-                            let _ = set_effect_channel_at_frame(layer, &graph_prop, new_frame, value + delta_val);
-                            *project_changed = true;
-                        }
-                        continue;
-                    }
-                    if new_frame != *kf_frame && (graph_prop == "Rotation" || graph_prop == "Opacity") {
-                        let moved = if graph_prop == "Rotation" {
-                            layer.transform.rotation.move_keyframe(*kf_frame, new_frame)
-                        } else {
-                            layer.transform.opacity.move_keyframe(*kf_frame, new_frame)
-                        };
-                        if moved {
-                            let value_delta = delta_val;
-                            if graph_prop == "Rotation" {
-                                if let Some(key) = layer.transform.rotation.keyframes_mut().and_then(|keys| keys.iter_mut().find(|key| key.frame == new_frame)) {
-                                    key.value += value_delta;
-                                }
-                            } else if let Some(key) = layer.transform.opacity.keyframes_mut().and_then(|keys| keys.iter_mut().find(|key| key.frame == new_frame)) {
-                                key.value = (key.value + value_delta).clamp(0.0, 100.0);
-                            }
-                            *project_changed = true;
-                            continue;
-                        }
-                    }
-                    if new_frame != *kf_frame
-                        && (graph_prop.starts_with("Position") || graph_prop.starts_with("Scale")
-                            || graph_prop.starts_with("3D Position") || graph_prop.starts_with("3D Rotation")
-                            || graph_prop.starts_with("3D Scale"))
-                    {
-                        let moved = if graph_prop.starts_with("3D Position") {
-                            layer.transform_3d.position.move_keyframe(*kf_frame, new_frame)
-                        } else if graph_prop.starts_with("3D Rotation") {
-                            layer.transform_3d.rotation.move_keyframe(*kf_frame, new_frame)
-                        } else if graph_prop.starts_with("3D Scale") {
-                            layer.transform_3d.scale.move_keyframe(*kf_frame, new_frame)
-                        } else if graph_prop.starts_with("Position") {
-                            layer.transform.position.move_keyframe(*kf_frame, new_frame)
-                        } else {
-                            layer.transform.scale.move_keyframe(*kf_frame, new_frame)
-                        };
-                        if moved {
-                            let is_3d = graph_prop.starts_with("3D ");
-                            let axis = if is_3d { axis_3d(&graph_prop) } else { usize::from(graph_prop.ends_with('Y')) };
-                            if graph_prop.starts_with("3D Position") {
-                                if let Some(key) = layer.transform_3d.position.keyframes_mut().and_then(|keys| keys.iter_mut().find(|key| key.frame == new_frame)) { key.value[axis] += delta_val; }
-                            } else if graph_prop.starts_with("3D Rotation") {
-                                if let Some(key) = layer.transform_3d.rotation.keyframes_mut().and_then(|keys| keys.iter_mut().find(|key| key.frame == new_frame)) { key.value[axis] += delta_val; }
-                            } else if graph_prop.starts_with("3D Scale") {
-                                if let Some(key) = layer.transform_3d.scale.keyframes_mut().and_then(|keys| keys.iter_mut().find(|key| key.frame == new_frame)) { key.value[axis] += delta_val; }
-                            } else if graph_prop.starts_with("Position") {
-                                if let Some(key) = layer.transform.position.keyframes_mut().and_then(|keys| keys.iter_mut().find(|key| key.frame == new_frame)) { key.value[axis] += delta_val; }
-                            } else if let Some(key) = layer.transform.scale.keyframes_mut().and_then(|keys| keys.iter_mut().find(|key| key.frame == new_frame)) { key.value[axis] += delta_val; }
-                            *project_changed = true;
-                            continue;
-                        }
-                    }
-                    if new_frame != *kf_frame && (graph_prop.starts_with("PinX:") || graph_prop.starts_with("PinY:")) {
-                        if let Some(pin) = pin_anim_mut(layer, &graph_prop) {
-                            if pin.move_keyframe(*kf_frame, new_frame) {
-                                let axis = usize::from(graph_prop.starts_with("PinY:"));
-                                if let Some(key) = pin.keyframes_mut().and_then(|keys| keys.iter_mut().find(|key| key.frame == new_frame)) {
-                                    key.value[axis] += delta_val;
-                                }
-                                *project_changed = true;
-                                continue;
-                            }
-                        }
-                    }
-                    with_keyframes!(layer, graph_prop, kfs => {
-                        if kfs[*kf_idx].frame != new_frame {
-                            kfs[*kf_idx].frame = new_frame;
-                            kfs.sort_by_key(|k| k.frame);
-                        }
-                        if let Some(kf) = kfs.get_mut(*kf_idx) {
-                            set_keyframe_value(kf, delta_val, graph_prop.ends_with('Y'));
-                        }
-                        *project_changed = true;
+                    let state = ui.ctx().data(|d| d.get_temp::<GraphKeyframeDrag>(drag_state_id)).unwrap_or(GraphKeyframeDrag {
+                        anchor_id: *kf_idx,
+                        original_frame: *kf_frame,
+                        current_frame: *kf_frame,
+                        original_value: *kf_val,
+                        current_value: *kf_val,
                     });
+                    let delta_frames = (anchor_resp.drag_delta().x / rect.width() * total_f as f32).round() as i32;
+                    let new_frame = (state.original_frame as i32 + delta_frames).clamp(0, total_f as i32) as u32;
+                    let delta_val = -anchor_resp.drag_delta().y / (rect.height() - 8.0) * val_range;
+                    let new_value = state.original_value + delta_val;
+                    let axis = if graph_prop.starts_with("3D ") { axis_3d(&graph_prop) } else { usize::from(graph_prop.ends_with('Y')) };
+
+                    let changed = if is_effect_property(&graph_prop) && !graph_prop.contains('|') {
+                        let moved = state.current_frame != new_frame
+                            && move_effect_scalar_keyframe(layer, &graph_prop, state.current_frame, new_frame);
+                        let updated = set_effect_channel_at_frame(layer, &graph_prop, new_frame, new_value);
+                        moved || updated
+                    } else if graph_prop == "Rotation" {
+                        move_and_set_channel(&mut layer.transform.rotation, state.current_frame, new_frame, 0, new_value)
+                    } else if graph_prop == "Opacity" {
+                        move_and_set_channel(&mut layer.transform.opacity, state.current_frame, new_frame, 0, new_value.clamp(0.0, 100.0))
+                    } else if graph_prop.starts_with("3D Position") {
+                        move_and_set_channel(&mut layer.transform_3d.position, state.current_frame, new_frame, axis, new_value)
+                    } else if graph_prop.starts_with("3D Rotation") {
+                        move_and_set_channel(&mut layer.transform_3d.rotation, state.current_frame, new_frame, axis, new_value)
+                    } else if graph_prop.starts_with("3D Scale") {
+                        move_and_set_channel(&mut layer.transform_3d.scale, state.current_frame, new_frame, axis, new_value)
+                    } else if graph_prop.starts_with("Position") {
+                        move_and_set_channel(&mut layer.transform.position, state.current_frame, new_frame, axis, new_value)
+                    } else if graph_prop.starts_with("Scale") {
+                        move_and_set_channel(&mut layer.transform.scale, state.current_frame, new_frame, axis, new_value)
+                    } else if graph_prop.starts_with("PinX:") || graph_prop.starts_with("PinY:") {
+                        pin_anim_mut(layer, &graph_prop)
+                            .map(|pin| move_and_set_channel(pin, state.current_frame, new_frame, axis, new_value))
+                            .unwrap_or(false)
+                    } else {
+                        false
+                    };
+                    if changed {
+                        *project_changed = true;
+                    }
+                    ui.ctx().data_mut(|d| d.insert_temp(drag_state_id, GraphKeyframeDrag {
+                        current_frame: new_frame,
+                        current_value: new_value,
+                        ..state
+                    }));
+                }
+                if anchor_resp.drag_stopped() {
+                    ui.ctx().data_mut(|d| d.remove::<GraphKeyframeDrag>(drag_state_id));
                 }
                 let anchor_color = if anchor_resp.dragged() {
                     colors::HANDLE_NORMAL
@@ -1574,13 +2049,13 @@ pub fn draw_graph_editor(
                 ui.painter().circle_filled(pt, 4.0, anchor_color);
 
                 // ── Double-click anchor → numeric value popup ──
-                let dbl_id = ui.make_persistent_id(("graph_kf_popup", kf_idx));
+                let dbl_id = ui.make_persistent_id(("graph_kf_popup", &layer.id, &graph_prop, anchor_token));
                 let mut show_popup: bool = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(dbl_id, || false));
                 if anchor_resp.double_clicked() {
                     show_popup = true;
                 }
                 if show_popup {
-                    let popup_id = egui::Id::new(("graph_kf_val_popup", kf_idx));
+                    let popup_id = egui::Id::new(("graph_kf_val_popup", &layer.id, &graph_prop, anchor_token));
                     let resp = egui::Area::new(popup_id)
                         .fixed_pos(pt + egui::vec2(12.0, -20.0))
                         .order(egui::Order::Foreground)
@@ -1593,8 +2068,12 @@ pub fn draw_graph_editor(
                                     if ui.add(egui::TextEdit::singleline(&mut frame_str).desired_width(50.0)).changed() {
                                         if let Ok(f) = frame_str.parse::<u32>() {
                                             let new_f = f.min(total_f);
-                                            let handled_effect_move = if graph_prop.starts_with("fx_") && !graph_prop.contains('|') && new_f != *kf_frame {
-                                                move_effect_scalar_keyframe(layer, &graph_prop, *kf_frame, new_f)
+                                            let handled_effect_move = if is_effect_property(&graph_prop) && new_f != *kf_frame {
+                                                if graph_prop.contains('|') {
+                                                    move_effect_channel_keyframe(layer, &graph_prop, *kf_frame, new_f)
+                                                } else {
+                                                    move_effect_scalar_keyframe(layer, &graph_prop, *kf_frame, new_f)
+                                                }
                                             } else if graph_prop == "Rotation" && new_f != *kf_frame {
                                                 layer.transform.rotation.move_keyframe(*kf_frame, new_f)
                                             } else if graph_prop == "Opacity" && new_f != *kf_frame {
@@ -1617,13 +2096,7 @@ pub fn draw_graph_editor(
                                             };
                                             if handled_effect_move {
                                                 *project_changed = true;
-                                            } else { with_keyframes!(layer, graph_prop, kfs => {
-                                                if kfs.get(*kf_idx).map(|k| k.frame != new_f).unwrap_or(false) {
-                                                    kfs[*kf_idx].frame = new_f;
-                                                    kfs.sort_by_key(|k| k.frame);
-                                                    *project_changed = true;
-                                                }
-                                            }); }
+                                            }
                                         }
                                     }
                                 });
@@ -1635,28 +2108,28 @@ pub fn draw_graph_editor(
                                             if graph_prop.starts_with("Position") {
                                                 let ci = if graph_prop.ends_with('Y') { 1 } else { 0 };
                                                 if let Some(kfs) = layer.transform.position.keyframes_mut() {
-                                                    if let Some(kf) = kfs.get_mut(*kf_idx) { kf.value[ci] = v; *project_changed = true; }
+                                                    if let Some(kf) = kfs.iter_mut().find(|kf| kf.frame == *kf_frame) { kf.value[ci] = v; *project_changed = true; }
                                                 }
                                             } else if graph_prop.starts_with("Scale") {
                                                 let ci = if graph_prop.ends_with('Y') { 1 } else { 0 };
                                                 if let Some(kfs) = layer.transform.scale.keyframes_mut() {
-                                                    if let Some(kf) = kfs.get_mut(*kf_idx) { kf.value[ci] = v; *project_changed = true; }
+                                                    if let Some(kf) = kfs.iter_mut().find(|kf| kf.frame == *kf_frame) { kf.value[ci] = v; *project_changed = true; }
                                                 }
                                             } else if graph_prop == "Rotation" {
                                                 if let Some(kfs) = layer.transform.rotation.keyframes_mut() {
-                                                    if let Some(kf) = kfs.get_mut(*kf_idx) { kf.value = v; *project_changed = true; }
+                                                    if let Some(kf) = kfs.iter_mut().find(|kf| kf.frame == *kf_frame) { kf.value = v; *project_changed = true; }
                                                 }
                                             } else if graph_prop == "Opacity" {
                                                 if let Some(kfs) = layer.transform.opacity.keyframes_mut() {
-                                                    if let Some(kf) = kfs.get_mut(*kf_idx) { kf.value = v.clamp(0.0, 100.0); *project_changed = true; }
+                                                    if let Some(kf) = kfs.iter_mut().find(|kf| kf.frame == *kf_frame) { kf.value = v.clamp(0.0, 100.0); *project_changed = true; }
                                                 }
                                             } else if graph_prop.starts_with("3D Position") {
-                                                if let Some(kfs) = layer.transform_3d.position.keyframes_mut() { if let Some(kf) = kfs.get_mut(*kf_idx) { kf.value[axis_3d(&graph_prop)] = v; *project_changed = true; } }
+                                                if let Some(kfs) = layer.transform_3d.position.keyframes_mut() { if let Some(kf) = kfs.iter_mut().find(|kf| kf.frame == *kf_frame) { kf.value[axis_3d(&graph_prop)] = v; *project_changed = true; } }
                                             } else if graph_prop.starts_with("3D Rotation") {
-                                                if let Some(kfs) = layer.transform_3d.rotation.keyframes_mut() { if let Some(kf) = kfs.get_mut(*kf_idx) { kf.value[axis_3d(&graph_prop)] = v; *project_changed = true; } }
+                                                if let Some(kfs) = layer.transform_3d.rotation.keyframes_mut() { if let Some(kf) = kfs.iter_mut().find(|kf| kf.frame == *kf_frame) { kf.value[axis_3d(&graph_prop)] = v; *project_changed = true; } }
                                             } else if graph_prop.starts_with("3D Scale") {
-                                                if let Some(kfs) = layer.transform_3d.scale.keyframes_mut() { if let Some(kf) = kfs.get_mut(*kf_idx) { kf.value[axis_3d(&graph_prop)] = v; *project_changed = true; } }
-                                            } else if graph_prop.starts_with("fx_") {
+                                                if let Some(kfs) = layer.transform_3d.scale.keyframes_mut() { if let Some(kf) = kfs.iter_mut().find(|kf| kf.frame == *kf_frame) { kf.value[axis_3d(&graph_prop)] = v; *project_changed = true; } }
+                                            } else if is_effect_property(&graph_prop) {
                                                 if set_effect_channel_at_frame(layer, &graph_prop, *kf_frame, v) {
                                                     *project_changed = true;
                                                 }
@@ -1688,7 +2161,10 @@ pub fn draw_graph_editor(
                     }
                 }
                 let (bx1, by1, bx2, by2): (f32, f32, f32, f32) = with_keyframes!(layer, graph_prop, kfs => {
-                    kfs.get(*kf_idx).map(bezier_pts).unwrap_or((0.33, 0.0, 0.67, 1.0))
+                    kfs.iter()
+                        .find(|key| key.frame == display_frame)
+                        .map(bezier_pts)
+                        .unwrap_or((0.33, 0.0, 0.67, 1.0))
                 }).unwrap_or((0.33, 0.0, 0.67, 1.0));
 
                 let h_out = egui::pos2(pt.x + bx2 * 44.0, pt.y - by2 * 24.0);
@@ -1696,8 +2172,8 @@ pub fn draw_graph_editor(
 
                 let h_out_rect = egui::Rect::from_center_size(h_out, egui::vec2(14.0, 14.0));
                 let h_in_rect = egui::Rect::from_center_size(h_in, egui::vec2(14.0, 14.0));
-                let h_out_resp = ui.interact(h_out_rect, egui::Id::new(("graph_h_out", kf_idx)), egui::Sense::drag());
-                let h_in_resp = ui.interact(h_in_rect, egui::Id::new(("graph_h_in", kf_idx)), egui::Sense::drag());
+                let h_out_resp = ui.interact(h_out_rect, egui::Id::new(("graph_h_out", &layer.id, &graph_prop, anchor_token)), egui::Sense::drag());
+                let h_in_resp = ui.interact(h_in_rect, egui::Id::new(("graph_h_in", &layer.id, &graph_prop, anchor_token)), egui::Sense::drag());
 
                 let mut new_pts: Option<[f32; 4]> = None;
                 if h_out_resp.dragged() {
@@ -1724,7 +2200,7 @@ pub fn draw_graph_editor(
                 }
                 if let Some(pts) = new_pts {
                     with_keyframes!(layer, graph_prop, kfs => {
-                        if let Some(kf) = kfs.get_mut(*kf_idx) {
+                        if let Some(kf) = kfs.iter_mut().find(|key| key.frame == display_frame) {
                             kf.interpolation = InterpolationType::Bezier {
                                 outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
                                 incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
@@ -2224,9 +2700,49 @@ fn compute_velocity_curve(keyframes: &[(u32, f32)], fps: u32) -> Vec<(f32, f32)>
 
 #[cfg(test)]
 mod tests {
-    use super::{axis_3d, remove_camera_key, set_camera_key_ease, set_camera_key_interpolation};
+    use super::{
+        axis_3d, move_and_set_channel, parse_effect_property, remove_camera_key, set_camera_key_ease,
+        set_camera_key_interpolation,
+    };
     use crate::core::keyframe::{InterpolationType, Keyframe};
     use crate::core::property::Animatable;
+
+    #[test]
+    fn move_and_set_channel_reacquires_keyframe_after_sorting() {
+        let mut track = Animatable::new_animated(vec![
+            Keyframe::new(10, [1.0, 2.0], InterpolationType::Linear),
+            Keyframe::new(20, [3.0, 4.0], InterpolationType::Linear),
+            Keyframe::new(30, [5.0, 6.0], InterpolationType::Linear),
+        ]);
+
+        assert!(move_and_set_channel(&mut track, 20, 40, 0, 9.0));
+        let keyframes = track.keyframes().unwrap();
+        assert_eq!(
+            keyframes.iter().map(|key| key.frame).collect::<Vec<_>>(),
+            vec![10, 30, 40]
+        );
+        assert_eq!(
+            keyframes.iter().find(|key| key.frame == 30).unwrap().value,
+            [5.0, 6.0]
+        );
+        assert_eq!(
+            keyframes.iter().find(|key| key.frame == 40).unwrap().value,
+            [9.0, 4.0]
+        );
+    }
+
+    #[test]
+    fn effect_property_uses_instance_id_and_component() {
+        assert_eq!(
+            parse_effect_property("fxid:effect-2::Glow Radius|1"),
+            Some(("effect-2", "Glow Radius", Some(1)))
+        );
+        assert_eq!(
+            parse_effect_property("fxid:effect-2::Opacity"),
+            Some(("effect-2", "Opacity", None))
+        );
+        assert!(parse_effect_property("fx_Glow_Opacity").is_none());
+    }
 
     #[test]
     fn velocity_preserves_fields_and_uses_segment_units() {
@@ -2237,14 +2753,27 @@ mod tests {
         ]);
         let values = [25.0, 40.0, 50.0, 100.0];
         track_velocity(&mut track, 0, 60.0, |v| *v, Some(values)).unwrap();
-        assert_eq!(track_velocity(&mut track, 0, 60.0, |v| *v, None), Some(values));
+        assert_eq!(
+            track_velocity(&mut track, 0, 60.0, |v| *v, None),
+            Some(values)
+        );
         let mut edited = values;
         edited[0] = 30.0;
         track_velocity(&mut track, 0, 60.0, |v| *v, Some(edited)).unwrap();
-        for (actual, expected) in track_velocity(&mut track, 0, 60.0, |v| *v, None).unwrap().into_iter().zip(edited) {
+        for (actual, expected) in track_velocity(&mut track, 0, 60.0, |v| *v, None)
+            .unwrap()
+            .into_iter()
+            .zip(edited)
+        {
             assert!((actual - expected).abs() < 1e-4);
         }
-        let InterpolationType::Bezier { custom_bezier: Some(cp), .. } = track.keyframes().unwrap()[0].interpolation else { panic!("Expected Bezier"); };
+        let InterpolationType::Bezier {
+            custom_bezier: Some(cp),
+            ..
+        } = track.keyframes().unwrap()[0].interpolation
+        else {
+            panic!("Expected Bezier");
+        };
         for (actual, expected) in cp.into_iter().zip([0.4, 0.2, 0.7, 0.925]) {
             assert!((actual - expected).abs() < 1e-6);
         }
@@ -2256,7 +2785,12 @@ mod tests {
         use super::layer_velocity;
         use crate::core::timeline::{Layer, LayerType};
         for property in ["3D Position Z", "3D Rotation Y", "3D Scale X"] {
-            let mut layer = Layer::new("layer".into(), "Layer".into(), LayerType::Solid { color: [1.0; 4] }, 120);
+            let mut layer = Layer::new(
+                "layer".into(),
+                "Layer".into(),
+                LayerType::Solid { color: [1.0; 4] },
+                120,
+            );
             let track = Animatable::new_animated(vec![
                 Keyframe::new(0, [0.0; 3], InterpolationType::Linear),
                 Keyframe::new(60, [100.0, 200.0, 400.0], InterpolationType::Linear),
@@ -2265,15 +2799,38 @@ mod tests {
             layer.transform_3d.rotation = track.clone();
             layer.transform_3d.scale = track;
             let values = [30.0, 40.0, 50.0, 100.0];
-            assert_eq!(layer_velocity(&mut layer, property, 0, 60.0, Some(values)), Some(values));
-            for (actual, expected) in layer_velocity(&mut layer, property, 0, 60.0, None).unwrap().into_iter().zip(values) {
+            assert_eq!(
+                layer_velocity(&mut layer, property, 0, 60.0, Some(values)),
+                Some(values)
+            );
+            for (actual, expected) in layer_velocity(&mut layer, property, 0, 60.0, None)
+                .unwrap()
+                .into_iter()
+                .zip(values)
+            {
                 assert!((actual - expected).abs() < 1e-4);
             }
-            let changed = if property.starts_with("3D Position") { &layer.transform_3d.position }
-                else if property.starts_with("3D Rotation") { &layer.transform_3d.rotation }
-                else { &layer.transform_3d.scale };
-            let InterpolationType::Bezier { custom_bezier: Some(cp), .. } = changed.keyframes().unwrap()[0].interpolation else { panic!("Expected Bezier"); };
-            let expected = if property.ends_with('Z') { 0.1 } else if property.ends_with('Y') { 0.2 } else { 0.4 };
+            let changed = if property.starts_with("3D Position") {
+                &layer.transform_3d.position
+            } else if property.starts_with("3D Rotation") {
+                &layer.transform_3d.rotation
+            } else {
+                &layer.transform_3d.scale
+            };
+            let InterpolationType::Bezier {
+                custom_bezier: Some(cp),
+                ..
+            } = changed.keyframes().unwrap()[0].interpolation
+            else {
+                panic!("Expected Bezier");
+            };
+            let expected = if property.ends_with('Z') {
+                0.1
+            } else if property.ends_with('Y') {
+                0.2
+            } else {
+                0.4
+            };
             assert!((cp[1] - expected).abs() < 1e-6);
         }
     }
