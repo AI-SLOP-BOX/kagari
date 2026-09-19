@@ -47,15 +47,36 @@ pub fn start_comp_export(app: &mut crate::KagariApp, ctx: &egui::Context, comp_n
         crate::app_state::QueueItemStatus::Rendering,
     );
 
-    // Mux the first video layer's extracted WAV when present AND enabled
+    // Render the same non-destructive audio correction used by preview before
+    // muxing. This avoids exporting the untouched source while the preview
+    // sounds corrected.
     let include_audio = ctx.data_mut(|d| {
         *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_include_audio"), || true)
     });
     let audio_wav = if include_audio {
-        comp.layers.iter().find_map(|l| match &l.layer_type {
-            crate::core::timeline::LayerType::Video { audio_wav, .. } => audio_wav.clone(),
-            _ => None,
-        })
+        let has_audio = comp.layers.iter().any(|l| {
+            matches!(
+                &l.layer_type,
+                crate::core::timeline::LayerType::Audio { .. }
+                    | crate::core::timeline::LayerType::Video {
+                        audio_wav: Some(_),
+                        ..
+                    }
+            )
+        });
+        if has_audio {
+            crate::core::audio_engine::mix_composition_to_wav(
+                &comp,
+                frame_offset,
+                frame_offset.saturating_add(total_frames),
+                48_000,
+                Some(&app.audio_mixer_channels),
+                &app.master_dsp_params(),
+            )
+            .map(|path| path.to_string_lossy().into_owned())
+        } else {
+            None
+        }
     } else {
         None
     };

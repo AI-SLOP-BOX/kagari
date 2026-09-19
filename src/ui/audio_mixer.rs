@@ -406,7 +406,7 @@ pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
             ui.add(
                 egui::Slider::new(&mut app.master_target_level_db, -30.0..=-6.0)
                     .text("Target dB")
-                    .clamp_to_range(true),
+                    .clamping(egui::SliderClamping::Always),
             );
             ui.add(
                 egui::Slider::new(&mut app.master_wet_dry, 0.0..=1.0)

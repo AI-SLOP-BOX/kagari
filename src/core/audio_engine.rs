@@ -965,12 +965,12 @@ pub fn mix_composition_to_wav(
 ) -> Option<std::path::PathBuf> {
     use std::io::Write;
 
-    let _fps = comp.fps.max(1);
+    let fps = comp.fps.max(1);
     let total_frames = end_frame.saturating_sub(start_frame);
     if total_frames == 0 {
         return None;
     }
-    let buffer_size = 2048;
+    let buffer_size = ((sample_rate as f64 / fps as f64).round() as usize).max(1);
     let mut all_samples: Vec<f32> = Vec::new();
 
     for frame in start_frame..end_frame {
@@ -1110,6 +1110,24 @@ mod multitrack_tests {
         let _ = Keyframe::new(0, 0.0f32, crate::core::keyframe::InterpolationType::Linear);
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn mixed_wav_uses_composition_fps_for_audio_duration() {
+        let comp = Composition::new("c".into(), "Duration".into(), 64, 64, 30, 30);
+        let path = mix_composition_to_wav(
+            &comp,
+            0,
+            30,
+            48_000,
+            None,
+            &MasterDspParams::bypass(),
+        )
+        .expect("empty composition still produces a silent audio track");
+        let audio = AudioBuffer::load_wav(&path).expect("mixed WAV must be readable");
+        assert_eq!(audio.sample_rate, 48_000);
+        assert_eq!(audio.samples.len(), 30 * 1_600 * 2);
+        let _ = std::fs::remove_file(path);
     }
 }
 
