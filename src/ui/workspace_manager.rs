@@ -68,6 +68,7 @@ pub fn draw_workspace_manager(app: &mut KagariApp, ui: &mut egui::Ui) {
             let ws = SavedWorkspace::capture(
                 format!("Custom {}", app.custom_workspaces.len() + 1),
                 app,
+                ui.ctx(),
             );
             app.custom_workspaces.push(ws);
             crate::ui::preferences_dialog::save_workspaces(&app.custom_workspaces);
@@ -132,6 +133,12 @@ pub struct SavedWorkspace {
     pub viewer_maximized: bool,
     pub show_graph_editor: bool,
     pub timeline_zoom: f32,
+    #[serde(default)]
+    pub left_panel_width: f32,
+    #[serde(default)]
+    pub right_panel_width: f32,
+    #[serde(default)]
+    pub timeline_height: f32,
 }
 
 impl Default for SavedWorkspace {
@@ -149,12 +156,15 @@ impl Default for SavedWorkspace {
             viewer_maximized: false,
             show_graph_editor: false,
             timeline_zoom: 1.0,
+            left_panel_width: 0.0,
+            right_panel_width: 0.0,
+            timeline_height: 0.0,
         }
     }
 }
 
 impl SavedWorkspace {
-    pub fn capture(name: String, app: &KagariApp) -> Self {
+    pub fn capture(name: String, app: &KagariApp, ctx: &egui::Context) -> Self {
         Self {
             name,
             left_tab: app.ui_tabs.left_tab_idx,
@@ -168,6 +178,9 @@ impl SavedWorkspace {
             viewer_maximized: app.viewer_maximized,
             show_graph_editor: app.show_graph_editor,
             timeline_zoom: app.timeline_zoom,
+            left_panel_width: panel_width(ctx, "left_panel", true),
+            right_panel_width: panel_width(ctx, "right_panel", true),
+            timeline_height: panel_width(ctx, "timeline_panel", false),
         }
     }
 
@@ -183,5 +196,47 @@ impl SavedWorkspace {
         app.viewer_maximized = self.viewer_maximized;
         app.show_graph_editor = self.show_graph_editor;
         app.timeline_zoom = self.timeline_zoom;
+        restore_panel_size(app.ui_ctx.as_ref(), "left_panel", self.left_panel_width, true);
+        restore_panel_size(app.ui_ctx.as_ref(), "right_panel", self.right_panel_width, true);
+        restore_panel_size(app.ui_ctx.as_ref(), "timeline_panel", self.timeline_height, false);
     }
+}
+
+fn panel_width(ctx: &egui::Context, id: &str, horizontal: bool) -> f32 {
+    egui::containers::panel::PanelState::load(ctx, egui::Id::new(id))
+        .map(|state| {
+            if horizontal {
+                state.size().x
+            } else {
+                state.size().y
+            }
+        })
+        .unwrap_or(0.0)
+}
+
+fn restore_panel_size(
+    ctx: Option<&egui::Context>,
+    id: &str,
+    size: f32,
+    horizontal: bool,
+) {
+    let Some(ctx) = ctx else {
+        return;
+    };
+    if !size.is_finite() || size <= 0.0 {
+        return;
+    }
+    let dimensions = if horizontal {
+        egui::vec2(size, 1.0)
+    } else {
+        egui::vec2(1.0, size)
+    };
+    ctx.data_mut(|data| {
+        data.insert_persisted(
+            egui::Id::new(id),
+            egui::containers::panel::PanelState {
+                rect: egui::Rect::from_min_size(egui::Pos2::ZERO, dimensions),
+            },
+        );
+    });
 }
