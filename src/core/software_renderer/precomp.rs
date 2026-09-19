@@ -7,26 +7,6 @@ use super::{render_frame_to_pixels, rgba_buffer_size};
 use crate::core::sdf::rasterize_shape_sdf;
 use crate::core::timeline::{Composition, LayerType};
 
-/// Render a sub-composition into a pixel buffer (for PreComp nesting).
-pub fn render_sub_comp(
-    _comp: &Composition,
-    sub_comp_id: &str,
-    _frame: u32,
-    _width: u32,
-    _height: u32,
-    time_remapped_frame: u32,
-) -> Option<Vec<u8>> {
-    // Find the sub-comp by id in the project (we need to search all compositions)
-    // Since Composition doesn't store a reference to other comps, we use a flat lookup approach:
-    // The sub-comp is expected to be passed via the project's compositions list.
-    // For now, we render a copy of the current comp with only the sub-comp's layers.
-    let _ = (sub_comp_id, time_remapped_frame);
-    // In a full implementation, this would find the sub-comp and render it recursively.
-    // For now, return None to signal that pre-comp nesting is not yet fully wired.
-    // The composition system needs a project-level composition registry.
-    None
-}
-
 /// Maximum pre-comp nesting depth before we bail out (cycle / pathological nesting guard).
 pub const MAX_PRECOMP_DEPTH: u32 = 16;
 
@@ -227,9 +207,7 @@ fn render_precomp_layers_inner(
             LayerType::Solid { .. } | LayerType::PreComp { .. } => {
                 (precomp_comp.width as f32, precomp_comp.height as f32)
             }
-            LayerType::Text { .. } => {
-                (precomp_comp.width as f32, precomp_comp.height as f32)
-            }
+            LayerType::Text { .. } => (precomp_comp.width as f32, precomp_comp.height as f32),
             LayerType::Shape { .. } => {
                 // Shape units are uniform (composition-width referenced) so
                 // circles stay circular on non-square compositions.

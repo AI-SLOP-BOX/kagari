@@ -1,7 +1,5 @@
 # Kagari VFX
 
-うんち!!
-
 Open-source CLI-first VFX & compositing engine.
 Built in Rust with GPU acceleration, headless rendering, and automation-friendly tooling for AI agents.
 
@@ -12,23 +10,27 @@ Kagari is designed to handle the VFX work that code-first video tools eventually
 ## Quick start
 
 ```bash
-git clone https://github.com/AI-SLOP-BOX/kagarivfx.git
-cd kagarivfx
+git clone https://github.com/AI-SLOP-BOX/kagari.git
+cd kagari
 cargo run --release --features gui --bin kagari-studio
 ```
 
 ## CLI
 
 ```bash
-kagari render project.kagari --comp main --frame 120 --output frame.exr
-kagari effect add --layer 1 --effect gaussian-blur --radius 20
-kagari keyframe set --layer 1 --property opacity --frame 0 --value 0
+kagari render --project project.json --comp main --from 120 --to 120 \
+  --format png --output ./output
+kagari frame --project project.json --frame 120 --output frame.png
+kagari effects
+kagari lottie --project project.json --output lottie_export.json
 ```
 
 ## What it is
 
 Kagari VFX is a node-based compositor and motion graphics engine written in Rust.
-It exports MP4, ProRes, GIF, Lottie, and MLT XML, and can also run entirely headless for scripting or AI-agent automation.
+The CLI can render PNG sequences, MP4, and GIF output, export Lottie JSON,
+and run headlessly for scripting or automation. ProRes and MLT are available
+through the library export modules; they are not separate CLI subcommands yet.
 
 ## Stack
 

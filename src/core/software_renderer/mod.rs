@@ -23,7 +23,7 @@ pub use shadow::{build_shadow_map, light_attenuation, spot_cone_factor};
 use composite::{CompositeCtx, composite_layer_buffer};
 use matte::render_matte_buffer;
 
-pub use precomp::{render_precomp_layers, render_sub_comp, MAX_PRECOMP_DEPTH};
+pub use precomp::{render_precomp_layers, MAX_PRECOMP_DEPTH};
 pub(crate) use precomp::render_single_layer_pixels;
 
 
