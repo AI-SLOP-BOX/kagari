@@ -339,8 +339,8 @@ pub struct KagariApp {
     /// Spatial drag of a position keyframe dot on the motion path:
     /// (layer_idx, keyframe_frame, start_value, start_pointer)
     pub viewport_pos_kf_drag_state: Option<(usize, u32, [f32; 2], eframe::egui::Pos2)>,
-    /// (layer_idx, kf_frame, handle_type: 0=out/1=in, start_bezier_pt, start_pointer)
-    pub viewport_tangent_drag_state: Option<(usize, u32, u8, [f32; 2], eframe::egui::Pos2)>,
+    /// (layer_idx, kf_frame, handle_type: 0=out/1=in, start_bezier_points, start_pointer)
+    pub viewport_tangent_drag_state: Option<(usize, u32, u8, [f32; 4], eframe::egui::Pos2)>,
     pub viewport_linked_tangent: bool,
     /// Pick whip mode: when true, clicking a layer sets it as parent
     pub pick_whip_mode: bool,

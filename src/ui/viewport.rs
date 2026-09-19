@@ -1696,7 +1696,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                     };
 
                 // 1a-tangent. Bezier tangent handle hit detection
-                let tangent_hit: Option<(usize, u32, u8, [f32; 2])> = if app.active_tool == crate::ui::toolbar::ActiveTool::Selection {
+                let tangent_hit: Option<(usize, u32, u8, [f32; 4])> = if app.active_tool == crate::ui::toolbar::ActiveTool::Selection {
                     if let Some(sel) = app.selection.selected_layer_idx {
                         if sel < comp_state.layers.len() {
                             let l = &comp_state.layers[sel];
@@ -1717,14 +1717,14 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                                         let out_screen = to_scr(out_pos);
                                         let d_out = ((pointer_pos.x - out_screen.x).powi(2) + (pointer_pos.y - out_screen.y).powi(2)).sqrt();
                                         if d_out <= 8.0 {
-                                            found = Some((sel, a.frame, 0u8, out_pos));
+                                            found = Some((sel, a.frame, 0u8, c));
                                             break 'outer;
                                         }
                                         let in_pos = [b.value[0] - (1.0 - c[2]) * val_delta[0], b.value[1] - (1.0 - c[3]) * val_delta[1]];
                                         let in_screen = to_scr(in_pos);
                                         let d_in = ((pointer_pos.x - in_screen.x).powi(2) + (pointer_pos.y - in_screen.y).powi(2)).sqrt();
                                         if d_in <= 8.0 {
-                                            found = Some((sel, b.frame, 1u8, in_pos));
+                                            found = Some((sel, b.frame, 1u8, c));
                                             break 'outer;
                                         }
                                     }
@@ -1738,7 +1738,6 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 if let Some((l_idx, kf_frame, handle_type, start_bez)) = tangent_hit {
                     app.viewport_tangent_drag_state = Some((l_idx, kf_frame, handle_type, start_bez, pointer_pos));
                     app.viewport_pos_kf_drag_state = None;
-                    app.viewport_tangent_drag_state = None;
                     app.viewport_drag_state = None;
                     app.viewport_mask_drag_state = None;
                 } else if let Some((l_idx, kf_frame, kf_start)) = kf_hit {
@@ -1898,7 +1897,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                             }
                         }
                     }
-                } else if let Some((l_idx, kf_frame, handle_type, _start_bez, start_ptr)) = app.viewport_tangent_drag_state {
+                } else if let Some((l_idx, kf_frame, handle_type, start_bez, start_ptr)) = app.viewport_tangent_drag_state {
                     let delta_x = (pointer_pos.x - start_ptr.x) / draw_w * comp_w;
                     let delta_y = (pointer_pos.y - start_ptr.y) / draw_h * comp_h;
 
@@ -1914,8 +1913,11 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                                         if handle_type == 0 && i + 1 < kfs.len() {
                                             // Dragging outgoing handle of keyframe i
                                             let val_delta = [kfs[i+1].value[0] - kfs[i].value[0], kfs[i+1].value[1] - kfs[i].value[1]];
-                                            let new_out_x = ((pts[0] * val_delta[0] + delta_x) / val_delta[0]).clamp(0.01, 0.99);
-                                            let new_out_y = ((pts[1] * val_delta[1] + delta_y) / val_delta[1]).clamp(-1.5, 2.5);
+                                            let normalized = |base: f32, delta: f32, span: f32| {
+                                                if span.abs() > f32::EPSILON { (base * span + delta) / span } else { base }
+                                            };
+                                            let new_out_x = normalized(start_bez[0], delta_x, val_delta[0]).clamp(0.01, 0.99);
+                                            let new_out_y = normalized(start_bez[1], delta_y, val_delta[1]).clamp(-1.5, 2.5);
                                             if app.viewport_linked_tangent {
                                                 new_pts[2] = 1.0 - new_out_x;
                                                 new_pts[3] = -new_out_y;
@@ -1926,8 +1928,11 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                                         } else if handle_type == 1 && i > 0 {
                                             // Dragging incoming handle of keyframe i (which is the outgoing of i-1... actually incoming of this kf)
                                             let val_delta = [kfs[i].value[0] - kfs[i-1].value[0], kfs[i].value[1] - kfs[i-1].value[1]];
-                                            let new_in_x = ((pts[2] * val_delta[0] - delta_x) / val_delta[0]).clamp(0.01, 0.99);
-                                            let new_in_y = ((pts[3] * val_delta[1] - delta_y) / val_delta[1]).clamp(-1.5, 2.5);
+                                            let normalized = |base: f32, delta: f32, span: f32| {
+                                                if span.abs() > f32::EPSILON { (base * span + delta) / span } else { base }
+                                            };
+                                            let new_in_x = normalized(start_bez[2], -delta_x, val_delta[0]).clamp(0.01, 0.99);
+                                            let new_in_y = normalized(start_bez[3], -delta_y, val_delta[1]).clamp(-1.5, 2.5);
                                             if app.viewport_linked_tangent {
                                                 new_pts[0] = 1.0 - new_in_x;
                                                 new_pts[1] = -new_in_y;
@@ -2219,6 +2224,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                     || app.viewport_mask_drag_state.is_some()
                     || app.mask_tangent_drag_state.is_some()
                     || app.viewport_pos_kf_drag_state.is_some()
+                    || app.viewport_tangent_drag_state.is_some()
                     || app.viewport_scale_drag.is_some()
                     || app.viewport_multi_drag.is_some();
                 if was_dragging {
@@ -2261,6 +2267,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 app.viewport_mask_drag_vertices.clear();
                 app.mask_tangent_drag_state = None;
                 app.viewport_pos_kf_drag_state = None;
+                app.viewport_tangent_drag_state = None;
                 app.viewport_scale_drag = None;
                 app.viewport_multi_drag = None;
             }
