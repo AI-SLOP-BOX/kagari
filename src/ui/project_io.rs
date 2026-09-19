@@ -134,7 +134,14 @@ pub fn save_project_to_path(app: &mut KagariApp, path: &std::path::Path) -> Resu
             .save_atomic(path)
             .map_err(|e| format!("Failed to save production document: {}", e))?;
     } else {
-        crate::core::project_migration::save_project_atomic(&project_snapshot, path)?;
+        let mut document = crate::core::production_document::ProductionDocument::new(project_snapshot.clone());
+        document.audio.correction = audio_correction;
+        document.audio.channels = audio_channels;
+        document.audio.master_gain = master_gain;
+        document
+            .save_atomic(path)
+            .map_err(|e| format!("Failed to upgrade and save production document: {}", e))?;
+        app.production_document = Some(document);
     }
     app.project_path = path.to_string_lossy().to_string();
     let _ = app.autosave.save_now(&project_snapshot);
