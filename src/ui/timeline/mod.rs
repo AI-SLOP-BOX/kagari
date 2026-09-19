@@ -1760,7 +1760,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                     track!("opacity", layer.transform.opacity);
                     for eff in &layer.effects {
                         for (lbl, pref) in eff.effect_type.animatable_params_ref() {
-                            let key = format!("fx_{}_{}", eff.name, lbl);
+                            let key = format!("fxid:{}::{}", eff.id, lbl);
                             match pref {
                                 crate::core::effect_params::ParamRefRef::Scalar(a) => track!(key.as_str(), a),
                                 crate::core::effect_params::ParamRefRef::Vec2(a) => track!(key.as_str(), a),

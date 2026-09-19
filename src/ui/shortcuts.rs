@@ -532,13 +532,10 @@ pub fn handle_global_shortcuts(
                             } else { None }
                         } else { None }
                     }
-                    _ if pk.starts_with("fx_") => {
+                    _ if crate::ui::graph_editor::is_effect_property(&pk) => {
                         // Effect keyframe: find the effect + param and serialize
-                        let parts: Vec<&str> = pk.strip_prefix("fx_").unwrap_or("").splitn(2, '_').collect();
-                        if parts.len() == 2 {
-                            let fx_name = parts[0];
-                            let param_label = parts[1];
-                            if let Some(effect) = comp.effects.iter().find(|e| e.name == fx_name) {
+                        if let Some((effect_id, param_label, _)) = crate::ui::graph_editor::parse_effect_property(&pk) {
+                            if let Some(effect) = comp.effects.iter().find(|e| e.id == effect_id) {
                                 use crate::core::effect_params::ParamRefRef;
                                 let mut found_json = None;
                                 for (label, param) in effect.effect_type.animatable_params_ref() {
@@ -601,11 +598,7 @@ pub fn handle_global_shortcuts(
                         kf.frame = ((kf.frame as i64 + paste_origin as i64
                             - app.kf_clipboard_anchor as i64)
                             .max(0)) as u32;
-                        if let Some(kfs) = $anim.keyframes_mut() {
-                            kfs.retain(|k| k.frame != kf.frame);
-                            kfs.push(kf);
-                            kfs.sort_by_key(|k| k.frame);
-                        }
+                        $anim.add_keyframe(kf);
                     }
                 }};
             }
@@ -622,14 +615,10 @@ pub fn handle_global_shortcuts(
                             paste_into!(pin.position, [f32; 2], value_json);
                         }
                     }
-                    _ if pk.starts_with("fx_") => {
+                    _ if crate::ui::graph_editor::is_effect_property(pk) => {
                         // Paste into effect param
-                        let stripped = pk.strip_prefix("fx_").unwrap_or("");
-                        let parts: Vec<&str> = stripped.splitn(2, '_').collect();
-                        if parts.len() == 2 {
-                            let fx_name = parts[0];
-                            let param_label = parts[1];
-                            if let Some(effect) = layer.effects.iter_mut().find(|e| e.name == fx_name) {
+                        if let Some((effect_id, param_label, _)) = crate::ui::graph_editor::parse_effect_property(pk) {
+                            if let Some(effect) = layer.effects.iter_mut().find(|e| e.id == effect_id) {
                                 use crate::core::effect_params::ParamRef;
                                 for (label, param) in effect.effect_type.animatable_params() {
                                     if label == param_label {

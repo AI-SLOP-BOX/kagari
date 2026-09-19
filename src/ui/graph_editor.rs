@@ -85,7 +85,7 @@ fn axis_3d(prop: &str) -> usize {
 /// Graph properties for effects use the effect instance id, not its display
 /// name. Two instances may have the same name, and names can also be
 /// localized or edited without changing which parameter is selected.
-fn parse_effect_property(property: &str) -> Option<(&str, &str, Option<usize>)> {
+pub(crate) fn parse_effect_property(property: &str) -> Option<(&str, &str, Option<usize>)> {
     let rest = property.strip_prefix("fxid:")?;
     let (base, component) = rest
         .rsplit_once('|')
@@ -95,7 +95,7 @@ fn parse_effect_property(property: &str) -> Option<(&str, &str, Option<usize>)> 
     Some((effect_id, parameter, component))
 }
 
-fn is_effect_property(property: &str) -> bool {
+pub(crate) fn is_effect_property(property: &str) -> bool {
     property.starts_with("fxid:")
 }
 
@@ -154,6 +154,98 @@ fn graph_keyframe_frame(layer: &Layer, property: &str, index: usize) -> Option<u
         }
         _ => None,
     }
+}
+
+fn rove_keyframes<T: Clone>(
+    keys: &mut [crate::core::keyframe::Keyframe<T>],
+    distance: impl Fn(&T, &T) -> f32,
+) -> bool {
+    if keys.len() < 3 {
+        return false;
+    }
+    let first_frame = keys[0].frame;
+    let last_frame = keys[keys.len() - 1].frame;
+    let span = last_frame.saturating_sub(first_frame);
+    if span < (keys.len() - 1) as u32 {
+        return false;
+    }
+    let mut cumulative = vec![0.0_f32; keys.len()];
+    for index in 1..keys.len() {
+        cumulative[index] = cumulative[index - 1]
+            + distance(&keys[index - 1].value, &keys[index].value).max(0.0);
+    }
+    let total_distance = *cumulative.last().unwrap_or(&0.0);
+    if total_distance <= f32::EPSILON {
+        return false;
+    }
+
+    let mut changed = false;
+    let mut previous_frame = first_frame;
+    let last_index = keys.len() - 1;
+    for (index, key) in keys.iter_mut().enumerate().skip(1).take(last_index - 1) {
+        let minimum = previous_frame.saturating_add(1);
+        let remaining = (last_index - index) as u32;
+        let maximum = last_frame.saturating_sub(remaining);
+        let proposed = first_frame as f32
+            + span as f32 * cumulative[index] / total_distance;
+        let next_frame = (proposed.round() as u32).clamp(minimum, maximum);
+        changed |= key.frame != next_frame;
+        key.frame = next_frame;
+        previous_frame = next_frame;
+    }
+    changed
+}
+
+fn rove_across_time(layer: &mut Layer, property: &str) -> bool {
+    match property {
+        "Position X" | "Position Y" => layer
+            .transform
+            .position
+            .keyframes_mut()
+            .is_some_and(|keys| rove_keyframes(keys, |a, b| (b[0] - a[0]).hypot(b[1] - a[1]))),
+        p if p.starts_with("3D Position") => layer
+            .transform_3d
+            .position
+            .keyframes_mut()
+            .is_some_and(|keys| {
+                rove_keyframes(keys, |a, b| {
+                    ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2) + (b[2] - a[2]).powi(2)).sqrt()
+                })
+            }),
+        p if p.starts_with("PinX:") || p.starts_with("PinY:") => pin_anim_mut(layer, p)
+            .and_then(|track| track.keyframes_mut())
+            .is_some_and(|keys| rove_keyframes(keys, |a, b| (b[0] - a[0]).hypot(b[1] - a[1]))),
+        _ => false,
+    }
+}
+
+fn reverse_keyframes<T: Clone>(track: &mut crate::core::property::Animatable<T>) -> bool {
+    track.reverse_keyframes()
+}
+
+fn reverse_effect_property(layer: &mut Layer, property: &str) -> bool {
+    let Some((effect_id, parameter, _)) = parse_effect_property(property) else {
+        return false;
+    };
+    let Some(effect) = layer.effects.iter_mut().find(|effect| effect.id == effect_id) else {
+        return false;
+    };
+    effect
+        .effect_type
+        .animatable_params()
+        .into_iter()
+        .find_map(|(name, parameter_ref)| {
+            if name != parameter {
+                return None;
+            }
+            Some(match parameter_ref {
+                crate::core::effect_params::ParamRef::Scalar(track) => reverse_keyframes(track),
+                crate::core::effect_params::ParamRef::Vec2(track) => reverse_keyframes(track),
+                crate::core::effect_params::ParamRef::Vec3(track) => reverse_keyframes(track),
+                crate::core::effect_params::ParamRef::Vec4Color(track) => reverse_keyframes(track),
+            })
+        })
+        .unwrap_or(false)
 }
 
 /// A reusable module for rendering the keyframe Graph Editor.
@@ -1193,63 +1285,38 @@ pub fn draw_graph_editor(
             });
 
             ui.add_space(4.0);
-            if ui.button("〰 Rove Across Time").on_hover_text("Evenly distribute keyframes in time based on spatial path distance").clicked() {
-                // Apply auto-bezier spatial timing
-                apply_preset_to_layer(layer, &active_prop, crate::core::keyframe::EasePreset::Sine, ease_target_frame);
-                *project_changed = true;
+            let rove_supported = matches!(
+                active_prop.as_str(),
+                "Position X" | "Position Y"
+            ) || active_prop.starts_with("3D Position")
+                || active_prop.starts_with("PinX:")
+                || active_prop.starts_with("PinY:");
+            if ui
+                .add_enabled(rove_supported, egui::Button::new("〰 Rove Across Time"))
+                .on_hover_text(if rove_supported {
+                    "Redistribute position keyframes by cumulative spatial distance"
+                } else {
+                    "Rove is available for position and puppet-pin tracks"
+                })
+                .clicked()
+            {
+                *project_changed |= rove_across_time(layer, &active_prop);
             }
 
             if ui.button("⇄ Reverse Keys").on_hover_text("Reverse keyframe order in time (values stay, timing flips)").clicked() {
-                use crate::core::property::Animatable;
-                let reverse_v2 = |anim: &mut Animatable<[f32; 2]>| {
-                    if let Some(kfs) = anim.keyframes_mut() {
-                        if kfs.len() >= 2 {
-                            // len >= 2 guarantees both ends exist; index access keeps this panic-free.
-                            let first = kfs[0].frame;
-                            let last = kfs[kfs.len() - 1].frame;
-                            for kf in kfs.iter_mut() {
-                                kf.frame = last - (kf.frame - first);
-                            }
-                            kfs.sort_by_key(|k| k.frame);
-                        }
-                    }
+                let changed = match selected_property.clone().unwrap_or_else(|| "Position X".to_string()).as_str() {
+                    "Position X" | "Position Y" => reverse_keyframes(&mut layer.transform.position),
+                    "Scale X" | "Scale Y" => reverse_keyframes(&mut layer.transform.scale),
+                    "Rotation" => reverse_keyframes(&mut layer.transform.rotation),
+                    "Opacity" => reverse_keyframes(&mut layer.transform.opacity),
+                    p if p.starts_with("3D Position") => reverse_keyframes(&mut layer.transform_3d.position),
+                    p if p.starts_with("3D Rotation") => reverse_keyframes(&mut layer.transform_3d.rotation),
+                    p if p.starts_with("3D Scale") => reverse_keyframes(&mut layer.transform_3d.scale),
+                    p if p.starts_with("Pin") => pin_anim_mut(layer, p).is_some_and(reverse_keyframes),
+                    p if is_effect_property(p) => reverse_effect_property(layer, p),
+                    _ => false,
                 };
-                let reverse_f32 = |anim: &mut Animatable<f32>| {
-                    if let Some(kfs) = anim.keyframes_mut() {
-                        if kfs.len() >= 2 {
-                            let first = kfs[0].frame;
-                            let last = kfs[kfs.len() - 1].frame;
-                            for kf in kfs.iter_mut() {
-                                kf.frame = last - (kf.frame - first);
-                            }
-                            kfs.sort_by_key(|k| k.frame);
-                        }
-                    }
-                };
-                let reverse_v3 = |anim: &mut Animatable<[f32; 3]>| {
-                    if let Some(kfs) = anim.keyframes_mut() {
-                        if kfs.len() >= 2 {
-                            let first = kfs[0].frame;
-                            let last = kfs[kfs.len() - 1].frame;
-                            for kf in kfs.iter_mut() { kf.frame = last - (kf.frame - first); }
-                            kfs.sort_by_key(|k| k.frame);
-                        }
-                    }
-                };
-                match selected_property.clone().unwrap_or_else(|| "Position X".to_string()).as_str() {
-                    "Position X" | "Position Y" => reverse_v2(&mut layer.transform.position),
-                    "Scale X" | "Scale Y" => reverse_v2(&mut layer.transform.scale),
-                    "Rotation" => reverse_f32(&mut layer.transform.rotation),
-                    "Opacity" => reverse_f32(&mut layer.transform.opacity),
-                    p if p.starts_with("3D Position") => reverse_v3(&mut layer.transform_3d.position),
-                    p if p.starts_with("3D Rotation") => reverse_v3(&mut layer.transform_3d.rotation),
-                    p if p.starts_with("3D Scale") => reverse_v3(&mut layer.transform_3d.scale),
-                                        p if p.starts_with("Pin") => {
-                                            if let Some(a) = pin_anim_mut(layer, p) { reverse_v2(a); }
-                                        }
-                    _ => {}
-                }
-                *project_changed = true;
+                *project_changed |= changed;
             }
 
             ui.add_space(4.0);
@@ -1543,9 +1610,10 @@ pub fn draw_graph_editor(
         }
 
         // Convert keyframe time/value to screen space coordinates inside the allocated rect
+        let display_fps = fps.max(1);
         let points: Vec<egui::Pos2> = if speed_graph_mode {
             // Speed Graph: compute velocity curve and map to screen
-            let vel_curve = compute_velocity_curve(&keyframes_ref, 30);
+            let vel_curve = compute_velocity_curve(&keyframes_ref, display_fps);
             let vel_min = vel_curve.iter().map(|(_, v)| *v).fold(f32::INFINITY, f32::min);
             let vel_max = vel_curve.iter().map(|(_, v)| *v).fold(f32::NEG_INFINITY, f32::max);
             let vel_range = (vel_max - vel_min).abs().max(0.001);
@@ -1753,7 +1821,7 @@ pub fn draw_graph_editor(
             ui.painter().text(
                 speed_badge_pos,
                 egui::Align2::LEFT_TOP,
-                format!("⚡ Peak: {:.0} px/s", max_speed * 30.0),
+                format!("⚡ Peak: {:.0} px/s", max_speed * display_fps as f32),
                 egui::FontId::monospace(10.0),
                 colors::MOTION_PATH,
             );
@@ -2053,6 +2121,12 @@ pub fn draw_graph_editor(
                 let mut show_popup: bool = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(dbl_id, || false));
                 if anchor_resp.double_clicked() {
                     show_popup = true;
+                    let frame_edit_id = egui::Id::new(("graph_kf_frame_text", &layer.id, &graph_prop, anchor_token));
+                    let value_edit_id = egui::Id::new(("graph_kf_value_text", &layer.id, &graph_prop, anchor_token));
+                    ui.ctx().data_mut(|data| {
+                        data.insert_temp(frame_edit_id, kf_frame.to_string());
+                        data.insert_temp(value_edit_id, format!("{:.2}", kf_val));
+                    });
                 }
                 if show_popup {
                     let popup_id = egui::Id::new(("graph_kf_val_popup", &layer.id, &graph_prop, anchor_token));
@@ -2064,8 +2138,15 @@ pub fn draw_graph_editor(
                                 ui.set_min_width(140.0);
                                 ui.horizontal(|ui| {
                                     ui.label(egui::RichText::new("Frame:").small());
-                                    let mut frame_str = kf_frame.to_string();
-                                    if ui.add(egui::TextEdit::singleline(&mut frame_str).desired_width(50.0)).changed() {
+                                    let frame_edit_id = egui::Id::new(("graph_kf_frame_text", &layer.id, &graph_prop, anchor_token));
+                                    let mut frame_str = ui.ctx().data(|data| {
+                                        data.get_temp::<String>(frame_edit_id).unwrap_or_else(|| kf_frame.to_string())
+                                    });
+                                    let frame_response = ui.add(egui::TextEdit::singleline(&mut frame_str).desired_width(50.0));
+                                    if frame_response.changed() {
+                                        ui.ctx().data_mut(|data| data.insert_temp(frame_edit_id, frame_str.clone()));
+                                    }
+                                    if frame_response.lost_focus() || ui.input(|input| input.key_pressed(egui::Key::Enter)) {
                                         if let Ok(f) = frame_str.parse::<u32>() {
                                             let new_f = f.min(total_f);
                                             let handled_effect_move = if is_effect_property(&graph_prop) && new_f != *kf_frame {
@@ -2097,13 +2178,21 @@ pub fn draw_graph_editor(
                                             if handled_effect_move {
                                                 *project_changed = true;
                                             }
+                                            ui.ctx().data_mut(|data| data.insert_temp(frame_edit_id, new_f.to_string()));
                                         }
                                     }
                                 });
                                 ui.horizontal(|ui| {
                                     ui.label(egui::RichText::new("Value:").small());
-                                    let mut val_str = format!("{:.2}", kf_val);
-                                    if ui.add(egui::TextEdit::singleline(&mut val_str).desired_width(70.0)).changed() {
+                                    let value_edit_id = egui::Id::new(("graph_kf_value_text", &layer.id, &graph_prop, anchor_token));
+                                    let mut val_str = ui.ctx().data(|data| {
+                                        data.get_temp::<String>(value_edit_id).unwrap_or_else(|| format!("{:.2}", kf_val))
+                                    });
+                                    let value_response = ui.add(egui::TextEdit::singleline(&mut val_str).desired_width(70.0));
+                                    if value_response.changed() {
+                                        ui.ctx().data_mut(|data| data.insert_temp(value_edit_id, val_str.clone()));
+                                    }
+                                    if value_response.lost_focus() || ui.input(|input| input.key_pressed(egui::Key::Enter)) {
                                         if let Ok(v) = val_str.parse::<f32>() {
                                             if graph_prop.starts_with("Position") {
                                                 let ci = if graph_prop.ends_with('Y') { 1 } else { 0 };
@@ -2137,6 +2226,9 @@ pub fn draw_graph_editor(
                                         }
                                     }
                                 });
+                                if ui.input(|input| input.key_pressed(egui::Key::Escape)) {
+                                    show_popup = false;
+                                }
                                 if ui.button("Done").clicked() {
                                     show_popup = false;
                                 }
@@ -2326,6 +2418,19 @@ pub fn draw_automation_curve(
     }
 }
 
+fn camera_animation_mut<'a>(
+    camera: &'a mut crate::core::timeline::Camera3D,
+    property: &str,
+) -> &'a mut Option<crate::core::property::Animatable<f32>> {
+    match property {
+        "FOV" => &mut camera.fov_animation,
+        "Focus Distance" => &mut camera.focus_distance_animation,
+        "Aperture" => &mut camera.aperture_animation,
+        "DOF Enabled" => &mut camera.dof_enabled_animation,
+        _ => &mut camera.dof_max_blur_animation,
+    }
+}
+
 pub fn draw_camera_lens_graph(
     ui: &mut egui::Ui,
     camera: &mut crate::core::timeline::Camera3D,
@@ -2455,7 +2560,7 @@ pub fn draw_camera_lens_graph(
         ui.label("No keyframes yet — use ◆ in Camera Settings.");
         return;
     };
-    let Some(keys) = track.keyframes() else {
+    let Some(keys) = track.keyframes().map(|keys| keys.to_vec()) else {
         return;
     };
     let (rect, response) = ui.allocate_exact_size(
@@ -2518,7 +2623,7 @@ pub fn draw_camera_lens_graph(
             previous = next;
         }
     }
-    for key in keys {
+    for key in &keys {
         ui.painter()
             .circle_filled(point(key.frame, key.value), 4.0, colors::TIMELINE_KEYFRAME);
     }
@@ -2541,43 +2646,49 @@ pub fn draw_camera_lens_graph(
                 })
                 .filter(|(_, key)| point(key.frame, key.value).distance(pointer) <= 12.0)
                 .map(|(index, _)| index);
-            ui.ctx().data_mut(|data| data.insert_temp(drag_id, nearest));
+            let drag = nearest.and_then(|index| {
+                keys.get(index).map(|key| GraphKeyframeDrag {
+                    anchor_id: index,
+                    original_frame: key.frame,
+                    current_frame: key.frame,
+                    original_value: key.value,
+                    current_value: key.value,
+                })
+            });
+            ui.ctx().data_mut(|data| data.insert_temp(drag_id, drag));
         }
     }
     if response.dragged() {
         if let Some(pointer) = response.interact_pointer_pos() {
-            let nearest = ui
-                .ctx()
-                .data(|data| data.get_temp::<Option<usize>>(drag_id))
-                .flatten();
-            if let Some(index) = nearest {
+            let drag = ui.ctx().data(|data| data.get_temp::<GraphKeyframeDrag>(drag_id));
+            if let Some(state) = drag {
                 let frame = ((pointer.x - rect.left()) / rect.width() * end as f32)
                     .round()
                     .clamp(0.0, end as f32) as u32;
                 let value = clamp_value(
                     min + ((rect.bottom() - 6.0 - pointer.y) / (rect.height() - 12.0) * range),
                 );
-                let track = match property.as_str() {
-                    "FOV" => &mut camera.fov_animation,
-                    "Focus Distance" => &mut camera.focus_distance_animation,
-                    "Aperture" => &mut camera.aperture_animation,
-                    "DOF Enabled" => &mut camera.dof_enabled_animation,
-                    _ => &mut camera.dof_max_blur_animation,
-                };
-                if let Some(crate::core::property::Animatable::Animated(keys)) = track {
-                    if let Some(key) = keys.get_mut(index) {
-                        key.frame = frame;
-                        key.value = value;
-                    }
-                    keys.sort_by_key(|key| key.frame);
-                    *project_changed = true;
-                }
+                let track = camera_animation_mut(camera, &property);
+                let moved = track
+                    .as_mut()
+                    .is_some_and(|track| track.move_keyframe(state.current_frame, frame));
+                let updated = track.as_mut().is_some_and(|track| {
+                    let before = track.evaluate(frame);
+                    track.set_value_at_frame(frame, value);
+                    before != value
+                });
+                *project_changed |= moved || updated;
+                ui.ctx().data_mut(|data| data.insert_temp(drag_id, GraphKeyframeDrag {
+                    current_frame: frame,
+                    current_value: value,
+                    ..state
+                }));
             }
         }
     }
     if response.drag_stopped() {
         ui.ctx()
-            .data_mut(|data| data.remove_temp::<Option<usize>>(drag_id));
+            .data_mut(|data| data.remove::<GraphKeyframeDrag>(drag_id));
     }
     if response.clicked() {
         if let Some(pos) = response.interact_pointer_pos() {
@@ -2701,7 +2812,7 @@ fn compute_velocity_curve(keyframes: &[(u32, f32)], fps: u32) -> Vec<(f32, f32)>
 #[cfg(test)]
 mod tests {
     use super::{
-        axis_3d, move_and_set_channel, parse_effect_property, remove_camera_key, set_camera_key_ease,
+        axis_3d, move_and_set_channel, parse_effect_property, remove_camera_key, rove_keyframes, set_camera_key_ease,
         set_camera_key_interpolation,
     };
     use crate::core::keyframe::{InterpolationType, Keyframe};
@@ -2742,6 +2853,17 @@ mod tests {
             Some(("effect-2", "Opacity", None))
         );
         assert!(parse_effect_property("fx_Glow_Opacity").is_none());
+    }
+
+    #[test]
+    fn rove_keyframes_uses_cumulative_spatial_distance() {
+        let mut keys = vec![
+            Keyframe::new(0, [0.0_f32, 0.0], InterpolationType::Linear),
+            Keyframe::new(10, [100.0_f32, 0.0], InterpolationType::Linear),
+            Keyframe::new(20, [900.0_f32, 0.0], InterpolationType::Linear),
+        ];
+        assert!(rove_keyframes(&mut keys, |a, b| (b[0] - a[0]).abs()));
+        assert_eq!(keys.iter().map(|key| key.frame).collect::<Vec<_>>(), vec![0, 2, 20]);
     }
 
     #[test]

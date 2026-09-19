@@ -24,22 +24,12 @@ pub fn draw_expanded_rows(
     project_changed: &mut bool,
 ) {
     // Keyframe drag-to-move: mutator maps a prop label to its Animatable
-    fn move_kf<T: Clone + crate::core::property::Interpolate>(
+    fn move_kf<T: Clone>(
         anim: &mut crate::core::property::Animatable<T>,
         old_f: u32,
         new_f: u32,
     ) {
-        if old_f == new_f {
-            return;
-        }
-        if let Some(kfs) = anim.keyframes_mut() {
-            // If another keyframe already occupies new_f, remove it first to avoid duplicates
-            kfs.retain(|k| k.frame != new_f || k.frame == old_f);
-            if let Some(kf) = kfs.iter_mut().find(|k| k.frame == old_f) {
-                kf.frame = new_f;
-                kfs.sort_by_key(|k| k.frame);
-            }
-        }
+        let _ = anim.move_keyframe(old_f, new_f);
     }
     let pos_kfs = get_kfs(&layer.transform.position);
     let scale_kfs = get_kfs(&layer.transform.scale);
@@ -315,7 +305,7 @@ pub fn draw_expanded_rows(
         .default_open(false);
         hdr.show(ui, |ui| {
             for (label, param) in effect.effect_type.animatable_params() {
-                let prop_key_str = format!("fx_{}_{}", fx_name, label);
+                let prop_key_str = format!("fxid:{}::{}", effect.id, label);
                 let prop_key: &'static str = Box::leak(prop_key_str.into_boxed_str());
                 let row_label = format!("  [{}] {}", fx_name, label);
                 match param {
@@ -578,17 +568,7 @@ pub fn draw_expanded_rows(
         }
     }
     fn reverse_track<T: Clone>(anim: &mut crate::core::property::Animatable<T>) {
-        if let Some(kfs) = anim.keyframes_mut() {
-            if kfs.len() < 2 {
-                return;
-            }
-            let first = kfs.first().map(|k| k.frame).unwrap_or(0);
-            let last = kfs.last().map(|k| k.frame).unwrap_or(0);
-            for kf in kfs.iter_mut() {
-                kf.frame = first + last - kf.frame;
-            }
-            kfs.sort_by_key(|k| k.frame);
-        }
+        let _ = anim.reverse_keyframes();
     }
     fn delete_track_kf<T: Clone>(anim: &mut crate::core::property::Animatable<T>, frame: u32) {
         if let Some(kfs) = anim.keyframes_mut() {
@@ -885,14 +865,15 @@ pub fn draw_expanded_rows(
                     out.extend(keyframes.iter().map(|keyframe| keyframe.frame));
                 }
             }
-            _ if pk.starts_with("fx_") => {
+            _ if crate::ui::graph_editor::is_effect_property(pk) => {
                 use crate::core::effect_params::ParamRefRef;
-                let rest = pk.strip_prefix("fx_").unwrap_or("");
+                let Some((effect_id, label, _)) = crate::ui::graph_editor::parse_effect_property(pk) else {
+                    return out;
+                };
                 for eff in &layer.effects {
-                    if !rest.starts_with(&eff.name) {
+                    if eff.id != effect_id {
                         continue;
                     }
-                    let label = rest[eff.name.len()..].trim_start_matches('_');
                     for (plabel, pref) in eff.effect_type.animatable_params_ref() {
                         if plabel != label {
                             continue;
@@ -1049,13 +1030,7 @@ pub fn draw_expanded_rows(
             zoom_span,
             left_pane_w,
             Some(&mut |o, n| {
-                // Vec<[f32;2]> lacks Interpolate — retime inline
-                if let Some(kfs) = mask.path.vertices.keyframes_mut() {
-                    if let Some(kf) = kfs.iter_mut().find(|k| k.frame == o) {
-                        kf.frame = n;
-                        kfs.sort_by_key(|k| k.frame);
-                    }
-                }
+                move_kf(&mut mask.path.vertices, o, n);
                 *moved_m = true;
             }),
         );

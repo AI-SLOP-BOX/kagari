@@ -183,6 +183,41 @@ impl<T: Clone> Animatable<T> {
         true
     }
 
+    /// Reverse the timing and interpolation direction of an animated track.
+    /// Bezier handles belong to a time-directed segment, so reversing only the
+    /// frame numbers would leave the curve easing in the wrong direction.
+    pub fn reverse_keyframes(&mut self) -> bool {
+        let Some(keyframes) = self.keyframes_mut() else {
+            return false;
+        };
+        if keyframes.len() < 2 {
+            return false;
+        }
+        let first = keyframes[0].frame;
+        let last = keyframes[keyframes.len() - 1].frame;
+        for keyframe in keyframes.iter_mut() {
+            keyframe.frame = last.saturating_sub(keyframe.frame.saturating_sub(first));
+            if let InterpolationType::Bezier {
+                outgoing,
+                incoming,
+                custom_bezier,
+            } = &mut keyframe.interpolation
+            {
+                std::mem::swap(outgoing, incoming);
+                if let Some(points) = custom_bezier {
+                    *points = [
+                        1.0 - points[2],
+                        1.0 - points[3],
+                        1.0 - points[0],
+                        1.0 - points[1],
+                    ];
+                }
+            }
+        }
+        keyframes.sort_by_key(|keyframe| keyframe.frame);
+        true
+    }
+
     fn sort_keyframes(&mut self) {
         if let Animatable::Animated(keyframes) = self {
             keyframes.sort_by_key(|kf| kf.frame);
@@ -330,6 +365,40 @@ mod tests {
         assert_eq!(anim.evaluate(15), 10.0);
         let mut constant = Animatable::new_constant(3.0f32);
         assert!(!constant.move_keyframe(0, 4));
+    }
+
+    #[test]
+    fn reverse_keyframes_reverses_bezier_direction() {
+        let mut anim = Animatable::new_animated(vec![
+            Keyframe::new(
+                0,
+                0.0,
+                InterpolationType::Bezier {
+                    outgoing: BezierControlPoint { influence: 0.2, speed: 1.0 },
+                    incoming: BezierControlPoint { influence: 0.8, speed: 2.0 },
+                    custom_bezier: Some([0.1, 0.2, 0.7, 0.9]),
+                },
+            ),
+            Keyframe::new(10, 100.0, InterpolationType::Linear),
+        ]);
+
+        assert!(anim.reverse_keyframes());
+        let keys = anim.keyframes().unwrap();
+        assert_eq!(keys.iter().map(|key| key.frame).collect::<Vec<_>>(), vec![0, 10]);
+        assert_eq!(keys[1].value, 0.0);
+        let InterpolationType::Bezier {
+            outgoing,
+            incoming,
+            custom_bezier: Some(points),
+        } = keys[1].interpolation
+        else {
+            panic!("expected reversed bezier");
+        };
+        assert_eq!(outgoing.influence, 0.8);
+        assert_eq!(incoming.influence, 0.2);
+        for (actual, expected) in points.into_iter().zip([0.3, 0.1, 0.9, 0.8]) {
+            assert!((actual - expected).abs() < 1e-5);
+        }
     }
 
     #[test]
