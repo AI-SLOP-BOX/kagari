@@ -884,6 +884,10 @@ impl KagariApp {
         // user simply closed the app normally with autosave files still present.
         if !self.recovery_checked {
             self.recovery_checked = true;
+            // Load user preferences before the first autosave tick so cache,
+            // history, audio preview, and saved workspaces are live from the
+            // first frame. This must not share a second one-shot guard below.
+            crate::ui::preferences_dialog::apply_loaded(self);
             let dirty_exit_marker = std::env::temp_dir().join("kagari_dirty_exit");
             let had_crash = dirty_exit_marker.exists();
             // Write the marker for THIS session
@@ -1136,10 +1140,6 @@ impl KagariApp {
         }
 
         self.ui_ctx = Some(ctx.clone());
-        if !self.recovery_checked {
-            self.recovery_checked = true;
-            crate::ui::preferences_dialog::apply_loaded(self);
-        }
         crate::ui::shortcuts::handle_global_shortcuts(self, ctx, &mut current_frame, total_frames);
         if self.show_home {
             crate::ui::home_screen::draw(self, ctx);
