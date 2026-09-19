@@ -64,28 +64,45 @@ pub fn save_project_atomic<P: AsRef<std::path::Path>>(
     proj: &Project,
     path: P,
 ) -> Result<(), String> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static SAVE_COUNTER: AtomicU64 = AtomicU64::new(0);
+
     let json_str = save_project_versioned(proj)?;
     let target_path = path.as_ref();
-    let tmp_path = target_path.with_extension("json.tmp");
+    let temp_suffix = format!(
+        "json.tmp.{}.{}",
+        std::process::id(),
+        SAVE_COUNTER.fetch_add(1, Ordering::Relaxed)
+    );
+    let tmp_path = target_path.with_extension(temp_suffix);
     let bak_path = target_path.with_extension("json.bak");
 
     // Preserve the previous generation before overwriting
     if target_path.exists() {
-        let _ = std::fs::copy(target_path, &bak_path);
+        std::fs::copy(target_path, &bak_path)
+            .map_err(|e| format!("Failed to create project backup: {}", e))?;
     }
 
-    let mut tmp_file = std::fs::File::create(&tmp_path)
-        .map_err(|e| format!("Failed to create temporary project file: {}", e))?;
-    tmp_file
-        .write_all(json_str.as_bytes())
-        .map_err(|e| format!("Failed to write temporary project file: {}", e))?;
-    tmp_file
-        .sync_all()
-        .map_err(|e| format!("Failed to sync temporary project file: {}", e))?;
-    drop(tmp_file);
+    let write_result = (|| {
+        let mut tmp_file = std::fs::File::create(&tmp_path)
+            .map_err(|e| format!("Failed to create temporary project file: {}", e))?;
+        tmp_file
+            .write_all(json_str.as_bytes())
+            .map_err(|e| format!("Failed to write temporary project file: {}", e))?;
+        tmp_file
+            .sync_all()
+            .map_err(|e| format!("Failed to sync temporary project file: {}", e))?;
+        drop(tmp_file);
 
-    std::fs::rename(&tmp_path, target_path)
-        .map_err(|e| format!("Failed to atomically replace project file: {}", e))?;
+        std::fs::rename(&tmp_path, target_path)
+            .map_err(|e| format!("Failed to atomically replace project file: {}", e))
+    })();
+
+    if write_result.is_err() {
+        let _ = std::fs::remove_file(&tmp_path);
+    }
+    write_result?;
 
     if let Some(parent) = target_path.parent() {
         if let Ok(dir) = std::fs::File::open(parent) {

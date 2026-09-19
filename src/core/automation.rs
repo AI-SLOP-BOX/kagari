@@ -115,6 +115,10 @@ fn bounded_u32(value: i64, minimum: u32) -> u32 {
 fn build_engine(log_sink: Arc<Mutex<Vec<String>>>) -> rhai::Engine {
     let mut engine = rhai::Engine::new();
     engine.set_max_operations(2_000_000);
+    engine
+        .set_max_string_size(1024 * 1024)
+        .set_max_array_size(16 * 1024)
+        .set_max_map_size(16 * 1024);
 
     engine.on_print({
         let sink = Arc::clone(&log_sink);
