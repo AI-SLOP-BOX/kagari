@@ -192,6 +192,41 @@ pub fn ae_icon_button(ui: &mut egui::Ui, icon: &str, tooltip: &str) -> egui::Res
     response
 }
 
+/// Compact text switch for dense production panels. It stays quiet until
+/// hovered, while the active state remains legible without a button box.
+pub fn ae_text_toggle(
+    ui: &mut egui::Ui,
+    active: bool,
+    label: &str,
+    tooltip: &str,
+) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(27.0, 20.0), egui::Sense::click());
+    if response.hovered() {
+        ui.painter().rect_filled(rect, 3.0, colors::BG_HOVER);
+    }
+    let color = if active {
+        colors::TEXT_PRIMARY
+    } else if response.hovered() {
+        colors::TEXT_SECONDARY
+    } else {
+        colors::TEXT_MUTED
+    };
+    ui.painter().text(
+        rect.center(),
+        egui::Align2::CENTER_CENTER,
+        label,
+        egui::FontId::proportional(11.0),
+        color,
+    );
+    if active {
+        ui.painter().line_segment(
+            [egui::pos2(rect.left() + 5.0, rect.bottom() - 2.0), egui::pos2(rect.right() - 5.0, rect.bottom() - 2.0)],
+            egui::Stroke::new(1.0_f32, colors::ACCENT_ORANGE),
+        );
+    }
+    response.on_hover_text(tooltip)
+}
+
 /// Small transparent SVG control used for secondary timeline and Inspector actions.
 pub fn ae_svg_icon_button(
     ui: &mut egui::Ui,

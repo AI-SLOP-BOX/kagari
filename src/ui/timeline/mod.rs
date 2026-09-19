@@ -633,19 +633,33 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                     ui.horizontal(|ui| {
                                     // Layer Stacking Order Reorder Buttons
                                     if i > 0
-                                        && ui.small_button("^").on_hover_text("Move Layer Up in Render Stack").clicked() {
-                                            swap_request = Some((i, i - 1));
-                                        }
+                                        && crate::ui::custom_widgets::ae_icon_button(ui, "↑", "Move Layer Up in Render Stack").clicked() {
+                                        swap_request = Some((i, i - 1));
+                                    }
                                     if i + 1 < layers_len
-                                        && ui.small_button("v").on_hover_text("Move Layer Down in Render Stack").clicked() {
-                                            swap_request = Some((i, i + 1));
-                                        }
+                                        && crate::ui::custom_widgets::ae_icon_button(ui, "↓", "Move Layer Down in Render Stack").clicked() {
+                                        swap_request = Some((i, i + 1));
+                                    }
 
                                     });
                                     });
                                     let is_expanded = app.selection.expanded_layers.contains(&i);
-                                    let arrow = if is_expanded { "v" } else { ">" };
-                                    if ui.selectable_label(is_expanded, arrow).clicked() {
+                                    let arrow = if is_expanded { "⌄" } else { "›" };
+                                    let (arrow_rect, arrow_response) = ui.allocate_exact_size(
+                                        egui::vec2(20.0, 22.0),
+                                        egui::Sense::click(),
+                                    );
+                                    if arrow_response.hovered() {
+                                        ui.painter().rect_filled(arrow_rect, 3.0, colors::BG_HOVER);
+                                    }
+                                    ui.painter().text(
+                                        arrow_rect.center(),
+                                        egui::Align2::CENTER_CENTER,
+                                        arrow,
+                                        egui::FontId::proportional(15.0),
+                                        if is_expanded { colors::TEXT_PRIMARY } else { colors::TEXT_MUTED },
+                                    );
+                                    if arrow_response.clicked() {
                                         if is_expanded {
                                             app.selection.expanded_layers.remove(&i);
                                         } else {
@@ -653,6 +667,14 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         }
                                     }
 
+                                    ui.scope(|ui| {
+                                    let widgets = &mut ui.style_mut().visuals.widgets;
+                                    widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
+                                    widgets.inactive.bg_stroke = egui::Stroke::NONE;
+                                    widgets.inactive.weak_bg_fill = egui::Color32::TRANSPARENT;
+                                    widgets.hovered.bg_fill = colors::BG_HOVER;
+                                    widgets.hovered.bg_stroke = egui::Stroke::NONE;
+                                    widgets.hovered.weak_bg_fill = colors::BG_HOVER;
                                     ui.menu_button(egui::RichText::new("S").small(), |ui| {
                                     // ── AE Layer Color Label Square Picker ──
                                     let label_rgb = layer.label.to_rgb();
@@ -720,7 +742,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                     }
 
                                     let fx_on = layer.effects_enabled;
-                                    if ui.selectable_label(fx_on, "fx").on_hover_text("Toggle All Layer Effects On/Off").clicked() {
+                                    if crate::ui::custom_widgets::ae_text_toggle(ui, fx_on, "fx", "Toggle All Layer Effects On/Off").clicked() {
                                         layer.effects_enabled = !fx_on;
                                         project_changed = true;
                                     }
@@ -829,29 +851,30 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
 
 
                                     let mb = layer.motion_blur;
-                                    if ui.selectable_label(mb, "M").on_hover_text("Motion Blur Switch").clicked() {
+                                    if crate::ui::custom_widgets::ae_text_toggle(ui, mb, "M", "Motion Blur Switch").clicked() {
                                         layer.motion_blur = !mb;
                                         project_changed = true;
                                     }
 
                                     let is_3d = layer.is_3d;
-                                    if ui.selectable_label(is_3d, "3D").on_hover_text("3D Layer Switch").clicked() {
+                                    if crate::ui::custom_widgets::ae_text_toggle(ui, is_3d, "3D", "3D Layer Switch").clicked() {
                                         layer.is_3d = !is_3d;
                                         project_changed = true;
                                     }
 
                                     let is_shy = layer.is_shy;
-                                    if ui.selectable_label(is_shy, "Shy").on_hover_text("Shy Layer Switch").clicked() {
+                                    if crate::ui::custom_widgets::ae_text_toggle(ui, is_shy, "Shy", "Shy Layer Switch").clicked() {
                                         layer.is_shy = !is_shy;
                                         project_changed = true;
                                     }
 
                                     let is_guide = layer.is_guide_layer;
-                                    if ui.selectable_label(is_guide, "📐").on_hover_text("Guide Layer Switch: Excludes layer from final render export").clicked() {
+                                    if crate::ui::custom_widgets::ae_text_toggle(ui, is_guide, "⌁", "Guide Layer Switch: Excludes layer from final render export").clicked() {
                                         layer.is_guide_layer = !is_guide;
                                         project_changed = true;
                                     }
 
+                                    });
                                     });
                                     let is_selected = app.selection.selected_layers.contains(&i) || app.selection.selected_layer_idx == Some(i);
                                     let (name_rect, click_resp) = ui.allocate_exact_size(
@@ -1178,6 +1201,14 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                     });
                                     ui.style_mut().visuals.override_text_color = None;
 
+                                    ui.scope(|ui| {
+                                    let widgets = &mut ui.style_mut().visuals.widgets;
+                                    widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
+                                    widgets.inactive.bg_stroke = egui::Stroke::NONE;
+                                    widgets.inactive.weak_bg_fill = egui::Color32::TRANSPARENT;
+                                    widgets.hovered.bg_fill = colors::BG_HOVER;
+                                    widgets.hovered.bg_stroke = egui::Stroke::NONE;
+                                    widgets.hovered.weak_bg_fill = colors::BG_HOVER;
                                     ui.menu_button(egui::RichText::new("M").small(), |ui| {
                                     // ── Blend Mode Dropdown ──
                                     let bm_text = format!("{:?}", layer.blend_mode);
@@ -1270,6 +1301,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                                 }
                                             }
                                         });
+                                    });
                                     });
                                 });
                             });
