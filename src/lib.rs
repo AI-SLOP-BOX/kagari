@@ -8,7 +8,6 @@
 #![allow(clippy::type_complexity)]
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::needless_range_loop)]
-#![allow(clippy::unused_io_amount)]
 #![allow(clippy::manual_let_else)]
 #![allow(clippy::single_match)]
 #![allow(clippy::chunks_exact_to_as_chunks)]
