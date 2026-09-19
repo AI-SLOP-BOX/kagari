@@ -187,6 +187,13 @@ impl MasterDspParams {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct MasterDspState {
+    pub auto_gain: crate::core::audio_dsp::AutoGainState,
+    pub compressor: crate::core::audio_dsp::CompressorState,
+    pub limiter: crate::core::audio_dsp::CompressorState,
+}
+
 pub fn mix_audio_for_frame(
     comp: &Composition,
     frame: u32,
@@ -654,6 +661,19 @@ pub fn mix_audio_sources_for_frame(
     mixer: Option<&[crate::core::audio_types::MixerChannel]>,
     dsp: &MasterDspParams,
 ) -> (Vec<f32>, AudioFrameMeter) {
+    let mut state = MasterDspState::default();
+    mix_audio_sources_for_frame_with_state(comp, frame, sample_rate, buffer_size, mixer, dsp, &mut state)
+}
+
+pub fn mix_audio_sources_for_frame_with_state(
+    comp: &Composition,
+    frame: u32,
+    sample_rate: u32,
+    buffer_size: usize,
+    mixer: Option<&[crate::core::audio_types::MixerChannel]>,
+    dsp: &MasterDspParams,
+    dsp_state: &mut MasterDspState,
+) -> (Vec<f32>, AudioFrameMeter) {
     use std::collections::HashMap;
     use std::sync::Mutex;
 
@@ -705,7 +725,7 @@ pub fn mix_audio_sources_for_frame(
         }
         // Resolve the WAV path + gain for this layer
         let (wav_path, gain_db) = match &layer.layer_type {
-            LayerType::Audio { volume, .. } => (None, volume.evaluate(frame)),
+            LayerType::Audio { path, volume } => (Some(path.clone()), volume.evaluate(frame)),
             LayerType::Video {
                 audio_wav: Some(w), ..
             } => (Some(w.clone()), 0.0f32),
@@ -806,7 +826,12 @@ pub fn mix_audio_sources_for_frame(
         };
         let dry_output = (wet_dry < 1.0).then(|| stereo_output.clone());
         if dsp.auto_gain_enabled {
-            audio_dsp::apply_auto_gain(&mut stereo_output, dsp.auto_gain_target_db);
+            audio_dsp::apply_auto_gain_with_state(
+                &mut stereo_output,
+                dsp.auto_gain_target_db,
+                sample_rate,
+                &mut dsp_state.auto_gain,
+            );
         }
         let master_eq = vec![
             audio_dsp::EqBand {
@@ -838,11 +863,10 @@ pub fn mix_audio_sources_for_frame(
             knee_db: 6.0,
             makeup_gain_db: dsp.comp_makeup,
         };
-        let mut comp_state = audio_dsp::CompressorState::default();
         audio_dsp::apply_compressor(
             &mut stereo_output,
             &comp_params,
-            &mut comp_state,
+            &mut dsp_state.compressor,
             sample_rate,
         );
 
@@ -853,12 +877,11 @@ pub fn mix_audio_sources_for_frame(
         }
 
         if dsp.limiter_enabled {
-            let mut limiter_state = audio_dsp::CompressorState::default();
             audio_dsp::apply_limiter(
                 &mut stereo_output,
                 dsp.limiter_ceiling_db,
                 50.0,
-                &mut limiter_state,
+                &mut dsp_state.limiter,
                 sample_rate,
             );
         } else {
@@ -972,10 +995,18 @@ pub fn mix_composition_to_wav(
     }
     let buffer_size = ((sample_rate as f64 / fps as f64).round() as usize).max(1);
     let mut all_samples: Vec<f32> = Vec::new();
+    let mut dsp_state = MasterDspState::default();
 
     for frame in start_frame..end_frame {
-        let (stereo_buf, _) =
-            mix_audio_sources_for_frame(comp, frame, sample_rate, buffer_size, mixer, dsp);
+        let (stereo_buf, _) = mix_audio_sources_for_frame_with_state(
+            comp,
+            frame,
+            sample_rate,
+            buffer_size,
+            mixer,
+            dsp,
+            &mut dsp_state,
+        );
         all_samples.extend_from_slice(&stereo_buf);
     }
 
@@ -1128,6 +1159,39 @@ mod multitrack_tests {
         assert_eq!(audio.sample_rate, 48_000);
         assert_eq!(audio.samples.len(), 30 * 1_600 * 2);
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn standalone_audio_layer_is_included_in_mix() {
+        let dir = std::env::temp_dir().join(format!("kagari_audio_layer_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let wav = dir.join("voice.wav");
+        write_wav(&wav, &vec![0.4; 48_000], 48_000);
+
+        let mut comp = Composition::new("c".into(), "Audio layer".into(), 64, 64, 30, 30);
+        let mut layer = Layer::new(
+            "voice".into(),
+            "Voice".into(),
+            LayerType::Audio {
+                path: wav.to_string_lossy().into_owned(),
+                volume: Animatable::new_constant(0.0),
+            },
+            30,
+        );
+        layer.in_frame = 0;
+        layer.out_frame = 30;
+        comp.layers.push(layer);
+
+        let (mix, _) = mix_audio_sources_for_frame(
+            &comp,
+            0,
+            48_000,
+            1_600,
+            None,
+            &MasterDspParams::bypass(),
+        );
+        assert!((mix[0] - 0.4).abs() < 0.01, "mix[0] = {}", mix[0]);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 

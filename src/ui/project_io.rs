@@ -95,7 +95,12 @@ pub fn open_project_from_path(app: &mut KagariApp, path: &std::path::Path) -> Re
     app.history = crate::core::history::ProjectHistory::new(project);
     app.production_document = production_document;
     if let Some(document) = app.production_document.as_ref() {
-        app.apply_audio_correction_settings(document.audio.correction);
+        let correction = document.audio.correction;
+        let channels = document.audio.channels.clone();
+        let master_gain = document.audio.master_gain;
+        app.apply_audio_correction_settings(correction);
+        app.audio_mixer_channels = channels;
+        app.playback.master_volume = master_gain.clamp(0.0, 1.0);
     }
     app.doc_sync_generation = 0;
     app.clear_automation_history();
@@ -118,9 +123,13 @@ pub fn open_project_from_path(app: &mut KagariApp, path: &std::path::Path) -> Re
 pub fn save_project_to_path(app: &mut KagariApp, path: &std::path::Path) -> Result<(), String> {
     let project_snapshot = app.history.current().clone();
     let audio_correction = app.audio_correction_settings();
+    let audio_channels = app.audio_mixer_channels.clone();
+    let master_gain = app.playback.master_volume;
     if let Some(existing) = app.production_document.as_mut() {
         *existing.project_mut() = project_snapshot.clone();
         existing.audio.correction = audio_correction;
+        existing.audio.channels = audio_channels;
+        existing.audio.master_gain = master_gain;
         existing
             .save_atomic(path)
             .map_err(|e| format!("Failed to save production document: {}", e))?;

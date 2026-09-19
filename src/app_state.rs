@@ -911,6 +911,8 @@ impl KagariApp {
         let correction = self.audio_correction_settings();
         let autosave_path = if let Some(document) = self.production_document.as_mut() {
             document.audio.correction = correction;
+            document.audio.channels = self.audio_mixer_channels.clone();
+            document.audio.master_gain = self.playback.master_volume;
             self.autosave
                 .tick_production(self.history.current(), document)
         } else {

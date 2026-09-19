@@ -226,11 +226,30 @@ pub fn apply_eq(buf: &mut [f32], bands: &[EqBand], sample_rate: u32) {
     }
 }
 
-/// Apply a conservative block loudness correction. This is intentionally
-/// bounded so a quiet passage does not pull its noise floor up without limit.
-/// Composition playback and export both use the same function, keeping the
-/// audible result consistent across preview and final output.
-pub fn apply_auto_gain(buf: &mut [f32], target_db: f32) {
+#[derive(Debug, Clone)]
+pub struct AutoGainState {
+    pub gain_db: f32,
+    initialized: bool,
+}
+
+impl Default for AutoGainState {
+    fn default() -> Self {
+        Self {
+            gain_db: 0.0,
+            initialized: false,
+        }
+    }
+}
+
+/// Apply a conservative, smoothed block loudness correction. This is bounded
+/// so a quiet passage does not pull its noise floor up without limit, and the
+/// state prevents audible gain pumping at frame boundaries.
+pub fn apply_auto_gain_with_state(
+    buf: &mut [f32],
+    target_db: f32,
+    sample_rate: u32,
+    state: &mut AutoGainState,
+) {
     if buf.is_empty() {
         return;
     }
@@ -255,11 +274,39 @@ pub fn apply_auto_gain(buf: &mut [f32], target_db: f32) {
     } else {
         -18.0
     };
-    let gain_db = (target_db as f64 - current_db).clamp(-12.0, 18.0);
-    let gain = 10.0f64.powf(gain_db / 20.0);
+    let desired_gain_db = (target_db as f64 - current_db).clamp(-12.0, 18.0) as f32;
+    if !state.gain_db.is_finite() {
+        state.gain_db = 0.0;
+        state.initialized = false;
+    }
+    if !state.initialized {
+        state.gain_db = desired_gain_db;
+        state.initialized = true;
+    } else {
+        let duration_sec = if sample_rate == 0 {
+            0.0
+        } else {
+            (buf.len() / 2) as f32 / sample_rate as f32
+        };
+        let time_constant = if desired_gain_db < state.gain_db {
+            0.08
+        } else {
+            0.4
+        };
+        let alpha = 1.0 - (-duration_sec / time_constant).exp();
+        state.gain_db += (desired_gain_db - state.gain_db) * alpha;
+    }
+    let gain = 10.0f64.powf(f64::from(state.gain_db) / 20.0);
     for sample in buf.iter_mut() {
         *sample = finite_audio_sample(f64::from(*sample) * gain);
     }
+}
+
+/// Stateless convenience wrapper used by isolated DSP tests and one-shot
+/// callers. Composition playback/export should use the stateful variant.
+pub fn apply_auto_gain(buf: &mut [f32], target_db: f32) {
+    let mut state = AutoGainState::default();
+    apply_auto_gain_with_state(buf, target_db, 48_000, &mut state);
 }
 
 /// Compressor state (keeps running envelope for smooth gain reduction).

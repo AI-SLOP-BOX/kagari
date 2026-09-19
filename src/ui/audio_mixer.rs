@@ -13,6 +13,8 @@ pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
         app.audio_mixer_channels
             .resize(layer_count, Default::default());
     }
+    let channels_before = app.audio_mixer_channels.clone();
+    let master_volume_before = app.playback.master_volume;
 
     let comp_name = app.history.current().active_composition().name.clone();
     ui.label(
@@ -483,7 +485,10 @@ pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
         }
     });
 
-    if correction_before != app.audio_correction_settings() {
+    if correction_before != app.audio_correction_settings()
+        || channels_before != app.audio_mixer_channels
+        || (master_volume_before - app.playback.master_volume).abs() > f32::EPSILON
+    {
         app.autosave.mark_dirty();
         app.playback.cached_audio_key = 0;
     }
