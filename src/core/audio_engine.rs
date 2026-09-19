@@ -70,29 +70,37 @@ impl AudioBuffer {
     pub fn resample(&self, target_sample_rate: u32) -> Self {
         if self.sample_rate == target_sample_rate
             || self.sample_rate == 0
+            || target_sample_rate == 0
             || self.samples.is_empty()
         {
             return self.clone();
         }
 
         let ratio = self.sample_rate as f64 / target_sample_rate as f64;
-        let num_frames = (self.samples.len() / 2) as f64;
+        let channels = self.channels.max(1) as usize;
+        let num_frames = (self.samples.len() / channels) as f64;
         let new_frames = (num_frames / ratio) as usize;
-        let mut out = Vec::with_capacity(new_frames * 2);
+        let mut out = Vec::with_capacity(new_frames * channels);
 
         for i in 0..new_frames {
             let src_f = i as f64 * ratio;
             let idx0 = src_f.floor() as usize;
-            let idx1 = (idx0 + 1).min((self.samples.len() / 2).saturating_sub(1));
+            let idx1 = (idx0 + 1).min((self.samples.len() / channels).saturating_sub(1));
             let frac = (src_f - idx0 as f64) as f32;
-
-            let l0 = self.samples.get(idx0 * 2).copied().unwrap_or(0.0);
-            let r0 = self.samples.get(idx0 * 2 + 1).copied().unwrap_or(l0);
-            let l1 = self.samples.get(idx1 * 2).copied().unwrap_or(l0);
-            let r1 = self.samples.get(idx1 * 2 + 1).copied().unwrap_or(r0);
-
-            out.push(l0 + (l1 - l0) * frac);
-            out.push(r0 + (r1 - r0) * frac);
+            for channel in 0..channels {
+                let fallback = self
+                    .samples
+                    .get(idx0 * channels + channel)
+                    .copied()
+                    .unwrap_or(0.0);
+                let s0 = fallback;
+                let s1 = self
+                    .samples
+                    .get(idx1 * channels + channel)
+                    .copied()
+                    .unwrap_or(s0);
+                out.push(s0 + (s1 - s0) * frac);
+            }
         }
         Self {
             samples: out,
@@ -440,6 +448,20 @@ mod wav_tests {
         assert!(peaks.iter().all(|p| (0.0..=1.0).contains(p)));
 
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn resample_preserves_mono_channel_layout() {
+        let input = AudioBuffer {
+            samples: vec![0.0, 0.5, 1.0, 0.5],
+            sample_rate: 4,
+            channels: 1,
+        };
+        let output = input.resample(8);
+        assert_eq!(output.channels, 1);
+        assert_eq!(output.samples.len(), 8);
+        assert!((output.samples[2] - 0.5).abs() < 0.001);
+        assert!((output.samples[4] - 1.0).abs() < 0.001);
     }
 
     #[test]
