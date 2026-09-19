@@ -14,6 +14,13 @@ use eframe::egui;
 use header::draw_timeline_header;
 use utils::maybe_snap_frame;
 
+#[derive(Clone, Copy, Default)]
+struct LayerBodyDragState {
+    frame_offset: i32,
+    previous_y: f32,
+    y_remainder: f32,
+}
+
 pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, total_frames: u32) {
     let screen_height = ctx.screen_rect().height();
     let narrow_timeline = ctx.screen_rect().width() < 950.0;
@@ -1435,24 +1442,38 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                     egui::Id::new(("layer_slide", i, layer.id.as_str())),
                                     egui::Sense::drag(),
                                 );
+                                let body_drag_id = egui::Id::new(("layer_slide_state", layer.id.as_str()));
+                                if body_resp.drag_started() {
+                                    ui.ctx().data_mut(|data| {
+                                        data.insert_temp(body_drag_id, LayerBodyDragState::default());
+                                    });
+                                }
                                 if body_resp.dragged() {
-                                    let delta_frames =
+                                    let total_frame_offset =
                                         (body_resp.drag_delta().x / bar_rect.width() * zoom_span as f32).round() as i32;
+                                    let mut drag_state = ui.ctx().data(|data| {
+                                        data.get_temp::<LayerBodyDragState>(body_drag_id)
+                                            .unwrap_or_default()
+                                    });
+                                    let delta_frames = total_frame_offset - drag_state.frame_offset;
+                                    drag_state.frame_offset = total_frame_offset;
                                     // ── Vertical drag → reorder layers in stack ──
                                     let row_h = 26.0f32;
-                                    let y_delta_key = egui::Id::new(("body_y_accum", i, layer.id.as_str()));
-                                    let y_accum: f32 = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(y_delta_key, || 0.0f32));
-                                    let new_accum = y_accum + body_resp.drag_delta().y;
+                                    let total_y = body_resp.drag_delta().y;
+                                    let incremental_y = total_y - drag_state.previous_y;
+                                    drag_state.previous_y = total_y;
+                                    let new_accum = drag_state.y_remainder + incremental_y;
                                     let row_offset = (new_accum / row_h).trunc() as i32;
                                     if row_offset != 0 {
                                         let target = (i as i32 - row_offset).clamp(0, layers_len as i32 - 1) as usize;
                                         if target != i {
                                             swap_request = Some((i, target));
                                         }
-                                        ui.ctx().data_mut(|d| d.insert_temp(y_delta_key, new_accum - row_offset as f32 * row_h));
+                                        drag_state.y_remainder = new_accum - row_offset as f32 * row_h;
                                     } else {
-                                        ui.ctx().data_mut(|d| d.insert_temp(y_delta_key, new_accum));
+                                        drag_state.y_remainder = new_accum;
                                     }
+                                    ui.ctx().data_mut(|data| data.insert_temp(body_drag_id, drag_state));
                                     if delta_frames != 0 {
                                         let alt_held = ui.input(|inp| inp.modifiers.alt);
                                         if alt_held {
@@ -1548,6 +1569,9 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         }
                                         project_changed = true;
                                     }
+                                }
+                                if body_resp.drag_stopped() {
+                                    ui.ctx().data_mut(|data| data.remove::<LayerBodyDragState>(body_drag_id));
                                 }
                                 if body_resp.hovered() && !in_resp.hovered() && !out_resp.hovered() {
                                     let alt_held = ui.input(|inp| inp.modifiers.alt);
