@@ -274,7 +274,7 @@ fn set_layer_interpolation(
 ) -> bool {
     use crate::core::property::Animatable;
 
-    fn apply<T>(
+    fn apply<T: Clone>(
         track: &mut Animatable<T>,
         interpolation: crate::core::keyframe::InterpolationType,
     ) -> bool {
@@ -313,6 +313,91 @@ fn set_layer_interpolation(
                     effect
                         .effect_type
                         .set_parameter_keyframe_interpolation(Some(parameter_name), interpolation)
+                })
+                .unwrap_or(false)
+        }
+        _ => false,
+    }
+}
+
+/// Mutate interpolation handles on the active graph property without losing
+/// the user's selection scope. `None` means all keys; `Some(frame)` means the
+/// one key under the graph cursor. The legacy ease buttons used to always
+/// mutate the whole track, which made a single-key edit surprisingly global.
+fn map_layer_interpolation(
+    layer: &mut Layer,
+    property: &str,
+    selected_frame: Option<u32>,
+    mut map: impl FnMut(&mut crate::core::keyframe::InterpolationType),
+) -> bool {
+    use crate::core::property::Animatable;
+
+    fn apply<T: Clone>(
+        track: &mut Animatable<T>,
+        selected_frame: Option<u32>,
+        map: &mut impl FnMut(&mut crate::core::keyframe::InterpolationType),
+    ) -> bool {
+        let Some(keyframes) = track.keyframes_mut() else {
+            return false;
+        };
+        let mut changed = false;
+        for keyframe in keyframes {
+            if selected_frame.is_some_and(|frame| frame != keyframe.frame) {
+                continue;
+            }
+            let before = keyframe.interpolation;
+            map(&mut keyframe.interpolation);
+            changed |= before != keyframe.interpolation;
+        }
+        changed
+    }
+
+    match property {
+        "Position X" | "Position Y" => apply(&mut layer.transform.position, selected_frame, &mut map),
+        "Scale X" | "Scale Y" => apply(&mut layer.transform.scale, selected_frame, &mut map),
+        "Rotation" => apply(&mut layer.transform.rotation, selected_frame, &mut map),
+        "Opacity" => apply(&mut layer.transform.opacity, selected_frame, &mut map),
+        p if p.starts_with("3D Position") => {
+            apply(&mut layer.transform_3d.position, selected_frame, &mut map)
+        }
+        p if p.starts_with("3D Rotation") => {
+            apply(&mut layer.transform_3d.rotation, selected_frame, &mut map)
+        }
+        p if p.starts_with("3D Scale") => {
+            apply(&mut layer.transform_3d.scale, selected_frame, &mut map)
+        }
+        p if p.starts_with("Pin") => pin_anim_mut(layer, p)
+            .map(|track| apply(track, selected_frame, &mut map))
+            .unwrap_or(false),
+        p if is_effect_property(p) => {
+            let Some((effect_id, parameter_name, _)) = parse_effect_property(p) else {
+                return false;
+            };
+            let Some(effect) = layer.effects.iter_mut().find(|effect| effect.id == effect_id) else {
+                return false;
+            };
+            effect
+                .effect_type
+                .animatable_params()
+                .into_iter()
+                .find_map(|(name, parameter)| {
+                    if name != parameter_name {
+                        return None;
+                    }
+                    Some(match parameter {
+                        crate::core::effect_params::ParamRef::Scalar(track) => {
+                            apply(track, selected_frame, &mut map)
+                        }
+                        crate::core::effect_params::ParamRef::Vec2(track) => {
+                            apply(track, selected_frame, &mut map)
+                        }
+                        crate::core::effect_params::ParamRef::Vec3(track) => {
+                            apply(track, selected_frame, &mut map)
+                        }
+                        crate::core::effect_params::ParamRef::Vec4Color(track) => {
+                            apply(track, selected_frame, &mut map)
+                        }
+                    })
                 })
                 .unwrap_or(false)
         }
@@ -1321,56 +1406,26 @@ pub fn draw_graph_editor(
 
             ui.add_space(4.0);
             if ui.button("⚡ Mirror Ease").on_hover_text("Symmetrically mirror Ease In / Ease Out handles").clicked() {
-                use crate::core::property::Animatable;
                 use crate::core::keyframe::InterpolationType;
 
-                let mirror_custom_bezier = |interpolation: &mut InterpolationType| {
+                let mut mirror_custom_bezier = |interpolation: &mut InterpolationType| {
                     if let InterpolationType::Bezier { custom_bezier: Some(ref mut pts), .. } = interpolation {
                         let mirrored = [1.0 - pts[2], 1.0 - pts[3], 1.0 - pts[0], 1.0 - pts[1]];
                         *pts = mirrored;
                     }
                 };
-
-                let active_prop = selected_property.clone().unwrap_or_else(|| "Position X".to_string());
-                match active_prop.as_str() {
-                    "Position X" | "Position Y" => {
-                        if let Animatable::Animated(ref mut kfs) = layer.transform.position {
-                            for kf in kfs.iter_mut() { mirror_custom_bezier(&mut kf.interpolation); }
-                        }
-                    }
-                    "Scale X" | "Scale Y" => {
-                        if let Animatable::Animated(ref mut kfs) = layer.transform.scale {
-                            for kf in kfs.iter_mut() { mirror_custom_bezier(&mut kf.interpolation); }
-                        }
-                    }
-                    "Rotation" => {
-                        if let Animatable::Animated(ref mut kfs) = layer.transform.rotation {
-                            for kf in kfs.iter_mut() { mirror_custom_bezier(&mut kf.interpolation); }
-                        }
-                    }
-                    "Opacity" => {
-                        if let Animatable::Animated(ref mut kfs) = layer.transform.opacity {
-                            for kf in kfs.iter_mut() { mirror_custom_bezier(&mut kf.interpolation); }
-                        }
-                    }
-                    p if p.starts_with("3D Position") => { if let Animatable::Animated(ref mut kfs) = layer.transform_3d.position { for kf in kfs.iter_mut() { mirror_custom_bezier(&mut kf.interpolation); } } }
-                    p if p.starts_with("3D Rotation") => { if let Animatable::Animated(ref mut kfs) = layer.transform_3d.rotation { for kf in kfs.iter_mut() { mirror_custom_bezier(&mut kf.interpolation); } } }
-                    p if p.starts_with("3D Scale") => { if let Animatable::Animated(ref mut kfs) = layer.transform_3d.scale { for kf in kfs.iter_mut() { mirror_custom_bezier(&mut kf.interpolation); } } }
-                    p if p.starts_with("Pin") => {
-                        if let Some(Animatable::Animated(ref mut kfs)) = pin_anim_mut(layer, p) {
-                                                            for kf in kfs.iter_mut() { mirror_custom_bezier(&mut kf.interpolation); }
-                        }
-                    }
-                    _ => {}
-                }
-                *project_changed = true;
+                *project_changed |= map_layer_interpolation(
+                    layer,
+                    &active_prop,
+                    ease_target_frame,
+                    &mut mirror_custom_bezier,
+                );
             }
 
             ui.add_space(4.0);
             if ui.button("↘ Ease In").on_hover_text("Flatten incoming tangent — keyframe eases into its value").clicked() {
-                use crate::core::property::Animatable;
                 use crate::core::keyframe::InterpolationType;
-                let ease_in = |interpolation: &mut InterpolationType| {
+                let mut ease_in = |interpolation: &mut InterpolationType| {
                     if let InterpolationType::Bezier { ref mut outgoing, ref mut incoming, ref mut custom_bezier, .. } = *interpolation {
                         outgoing.influence = 0.0;
                         outgoing.speed = 0.0;
@@ -1379,28 +1434,11 @@ pub fn draw_graph_editor(
                         *custom_bezier = Some([0.0, 0.0, 0.33, 1.0]);
                     }
                 };
-                let active_prop = selected_property.clone().unwrap_or_else(|| "Position X".to_string());
-                match active_prop.as_str() {
-                    "Position X" | "Position Y" => { if let Animatable::Animated(ref mut kfs) = layer.transform.position { for kf in kfs.iter_mut() { ease_in(&mut kf.interpolation); } } }
-                    "Scale X" | "Scale Y" => { if let Animatable::Animated(ref mut kfs) = layer.transform.scale { for kf in kfs.iter_mut() { ease_in(&mut kf.interpolation); } } }
-                    "Rotation" => { if let Animatable::Animated(ref mut kfs) = layer.transform.rotation { for kf in kfs.iter_mut() { ease_in(&mut kf.interpolation); } } }
-                    "Opacity" => { if let Animatable::Animated(ref mut kfs) = layer.transform.opacity { for kf in kfs.iter_mut() { ease_in(&mut kf.interpolation); } } }
-                    p if p.starts_with("3D Position") => { if let Animatable::Animated(ref mut kfs) = layer.transform_3d.position { for kf in kfs.iter_mut() { ease_in(&mut kf.interpolation); } } }
-                    p if p.starts_with("3D Rotation") => { if let Animatable::Animated(ref mut kfs) = layer.transform_3d.rotation { for kf in kfs.iter_mut() { ease_in(&mut kf.interpolation); } } }
-                    p if p.starts_with("3D Scale") => { if let Animatable::Animated(ref mut kfs) = layer.transform_3d.scale { for kf in kfs.iter_mut() { ease_in(&mut kf.interpolation); } } }
-                                        p if p.starts_with("Pin") => {
-                                            if let Some(Animatable::Animated(ref mut kfs)) = pin_anim_mut(layer, p) {
-                                                                                                    for kf in kfs.iter_mut() { ease_in(&mut kf.interpolation); }
-                                            }
-                                        }
-                    _ => {}
-                }
-                *project_changed = true;
+                *project_changed |= map_layer_interpolation(layer, &active_prop, ease_target_frame, &mut ease_in);
             }
             if ui.button("↗ Ease Out").on_hover_text("Flatten outgoing tangent — keyframe eases out of its value").clicked() {
-                use crate::core::property::Animatable;
                 use crate::core::keyframe::InterpolationType;
-                let ease_out = |interpolation: &mut InterpolationType| {
+                let mut ease_out = |interpolation: &mut InterpolationType| {
                     if let InterpolationType::Bezier { ref mut outgoing, ref mut incoming, ref mut custom_bezier, .. } = *interpolation {
                         outgoing.influence = 0.333;
                         outgoing.speed = 0.0;
@@ -1409,23 +1447,7 @@ pub fn draw_graph_editor(
                         *custom_bezier = Some([0.67, 0.0, 1.0, 1.0]);
                     }
                 };
-                let active_prop = selected_property.clone().unwrap_or_else(|| "Position X".to_string());
-                match active_prop.as_str() {
-                    "Position X" | "Position Y" => { if let Animatable::Animated(ref mut kfs) = layer.transform.position { for kf in kfs.iter_mut() { ease_out(&mut kf.interpolation); } } }
-                    "Scale X" | "Scale Y" => { if let Animatable::Animated(ref mut kfs) = layer.transform.scale { for kf in kfs.iter_mut() { ease_out(&mut kf.interpolation); } } }
-                    "Rotation" => { if let Animatable::Animated(ref mut kfs) = layer.transform.rotation { for kf in kfs.iter_mut() { ease_out(&mut kf.interpolation); } } }
-                    "Opacity" => { if let Animatable::Animated(ref mut kfs) = layer.transform.opacity { for kf in kfs.iter_mut() { ease_out(&mut kf.interpolation); } } }
-                    p if p.starts_with("3D Position") => { if let Animatable::Animated(ref mut kfs) = layer.transform_3d.position { for kf in kfs.iter_mut() { ease_out(&mut kf.interpolation); } } }
-                    p if p.starts_with("3D Rotation") => { if let Animatable::Animated(ref mut kfs) = layer.transform_3d.rotation { for kf in kfs.iter_mut() { ease_out(&mut kf.interpolation); } } }
-                    p if p.starts_with("3D Scale") => { if let Animatable::Animated(ref mut kfs) = layer.transform_3d.scale { for kf in kfs.iter_mut() { ease_out(&mut kf.interpolation); } } }
-                                        p if p.starts_with("Pin") => {
-                                            if let Some(Animatable::Animated(ref mut kfs)) = pin_anim_mut(layer, p) {
-                                                                                                    for kf in kfs.iter_mut() { ease_out(&mut kf.interpolation); }
-                                            }
-                                        }
-                    _ => {}
-                }
-                *project_changed = true;
+                *project_changed |= map_layer_interpolation(layer, &active_prop, ease_target_frame, &mut ease_out);
             }
 
             ui.add_space(8.0);
@@ -2812,11 +2834,58 @@ fn compute_velocity_curve(keyframes: &[(u32, f32)], fps: u32) -> Vec<(f32, f32)>
 #[cfg(test)]
 mod tests {
     use super::{
-        axis_3d, move_and_set_channel, parse_effect_property, remove_camera_key, rove_keyframes, set_camera_key_ease,
-        set_camera_key_interpolation,
+        axis_3d, map_layer_interpolation, move_and_set_channel, parse_effect_property,
+        remove_camera_key, rove_keyframes, set_camera_key_ease, set_camera_key_interpolation,
     };
     use crate::core::keyframe::{InterpolationType, Keyframe};
     use crate::core::property::Animatable;
+    use crate::core::timeline::{Layer, LayerType};
+
+    #[test]
+    fn interpolation_commands_respect_selected_key_scope() {
+        let mut layer = Layer::new(
+            "layer".into(),
+            "Layer".into(),
+            LayerType::Solid {
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
+            60,
+        );
+        layer.transform.position = Animatable::new_animated(vec![
+            Keyframe::new(0, [0.0, 0.0], InterpolationType::Linear),
+            Keyframe::new(20, [20.0, 0.0], InterpolationType::Linear),
+        ]);
+
+        let mut make_hold = |interpolation: &mut InterpolationType| {
+            *interpolation = InterpolationType::Hold;
+        };
+        assert!(map_layer_interpolation(
+            &mut layer,
+            "Position X",
+            Some(20),
+            &mut make_hold,
+        ));
+        let keys = layer.transform.position.keyframes().unwrap();
+        assert_eq!(keys[0].interpolation, InterpolationType::Linear);
+        assert_eq!(keys[1].interpolation, InterpolationType::Hold);
+
+        let mut make_linear = |interpolation: &mut InterpolationType| {
+            *interpolation = InterpolationType::Linear;
+        };
+        assert!(map_layer_interpolation(
+            &mut layer,
+            "Position X",
+            None,
+            &mut make_linear,
+        ));
+        assert!(layer
+            .transform
+            .position
+            .keyframes()
+            .unwrap()
+            .iter()
+            .all(|key| key.interpolation == InterpolationType::Linear));
+    }
 
     #[test]
     fn move_and_set_channel_reacquires_keyframe_after_sorting() {

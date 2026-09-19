@@ -70,6 +70,7 @@ pub fn draw_workspace_manager(app: &mut KagariApp, ui: &mut egui::Ui) {
                 app,
             );
             app.custom_workspaces.push(ws);
+            crate::ui::preferences_dialog::save_workspaces(&app.custom_workspaces);
             app.toasts.info("Workspace saved".to_string());
         }
         if crate::ui::custom_widgets::ae_button(ui, "🔄 Reset").clicked() {
@@ -108,6 +109,7 @@ pub fn draw_workspace_manager(app: &mut KagariApp, ui: &mut egui::Ui) {
         }
         if let Some(idx) = delete_idx {
             app.custom_workspaces.remove(idx);
+            crate::ui::preferences_dialog::save_workspaces(&app.custom_workspaces);
         }
         if let Some(ws) = apply_request {
             ws.apply(app);
@@ -115,7 +117,7 @@ pub fn draw_workspace_manager(app: &mut KagariApp, ui: &mut egui::Ui) {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SavedWorkspace {
     pub name: String,

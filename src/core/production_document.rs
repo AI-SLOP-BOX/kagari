@@ -1652,7 +1652,7 @@ mod tests {
         let mut document = ProductionDocument::new(Project::default());
         document.audio.channels.push(MixerChannel {
             gain_db: 0.0,
-            pan: 1.1,
+            pan: 100.1,
             mute: false,
             solo: false,
         });

@@ -153,7 +153,7 @@ mod tests {
             .validate()
             .is_err());
         }
-        for pan in [f32::NAN, f32::NEG_INFINITY, -100.1, 100.1] {
+        for pan in [f32::NAN, f32::NEG_INFINITY, f32::INFINITY, -100.1, 100.1] {
             assert!(MixerChannel {
                 pan,
                 ..Default::default()

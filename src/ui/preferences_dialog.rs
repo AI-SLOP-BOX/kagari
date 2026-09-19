@@ -13,6 +13,8 @@ pub struct Prefs {
     pub adaptive_preview: bool,
     #[serde(default = "default_disk_cache_gb")]
     pub disk_cache_gb: usize,
+    #[serde(default)]
+    pub custom_workspaces: Vec<crate::ui::workspace_manager::SavedWorkspace>,
 }
 
 fn default_disk_cache_gb() -> usize {
@@ -28,6 +30,7 @@ impl Default for Prefs {
             audio_preview: true,
             adaptive_preview: true,
             disk_cache_gb: 50,
+            custom_workspaces: Vec::new(),
         }
     }
 }
@@ -52,6 +55,14 @@ pub(crate) fn save(p: &Prefs) {
     }
 }
 
+pub(crate) fn save_workspaces(
+    workspaces: &[crate::ui::workspace_manager::SavedWorkspace],
+) {
+    let mut prefs = load();
+    prefs.custom_workspaces = workspaces.to_vec();
+    save(&prefs);
+}
+
 /// Apply stored prefs to live app state. Called once at startup.
 pub fn apply_loaded(app: &mut KagariApp) {
     let p = load();
@@ -66,6 +77,7 @@ pub(crate) fn apply(app: &mut KagariApp, p: &Prefs) {
     app.history.set_max_history_entries(p.undo_steps);
     app.autosave.set_interval_secs(p.autosave_secs);
     app.audio_preview_enabled = p.audio_preview;
+    app.custom_workspaces = p.custom_workspaces.clone();
     if !p.adaptive_preview {
         app.playback.adaptive_preview_factor = 1.0;
     }
