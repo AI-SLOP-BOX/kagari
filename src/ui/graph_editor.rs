@@ -1971,23 +1971,39 @@ pub fn draw_graph_editor(
                     if let Some(points) = effect_channel_bezier_points(layer, &graph_prop, display_frame) {
                         let out = egui::pos2(key_pos.x + points[2] * 44.0, key_pos.y - points[3] * 24.0);
                         let incoming = egui::pos2(key_pos.x - points[0] * 44.0, key_pos.y + points[1] * 24.0);
+                        let out_drag_id = egui::Id::new(("effect_bezier_drag_out", &layer.id, &graph_prop, key_token));
+                        let in_drag_id = egui::Id::new(("effect_bezier_drag_in", &layer.id, &graph_prop, key_token));
                         let out_resp = ui.interact(egui::Rect::from_center_size(out, egui::vec2(14.0, 14.0)), egui::Id::new(("effect_bezier_out", &layer.id, &graph_prop, key_token)), egui::Sense::drag());
                         let in_resp = ui.interact(egui::Rect::from_center_size(incoming, egui::vec2(14.0, 14.0)), egui::Id::new(("effect_bezier_in", &layer.id, &graph_prop, key_token)), egui::Sense::drag());
                         ui.painter().line_segment([key_pos, out], egui::Stroke::new(1.0_f32, colors::MOTION_PATH));
                         ui.painter().line_segment([key_pos, incoming], egui::Stroke::new(1.0_f32, colors::MOTION_PATH));
                         ui.painter().circle_filled(out, 3.0, colors::HANDLE_NORMAL);
                         ui.painter().circle_filled(incoming, 3.0, colors::HANDLE_NORMAL);
+                        if out_resp.drag_started() {
+                            ui.ctx().data_mut(|data| data.insert_temp(out_drag_id, points));
+                        }
+                        if in_resp.drag_started() {
+                            ui.ctx().data_mut(|data| data.insert_temp(in_drag_id, points));
+                        }
+                        let out_base = ui.ctx().data(|data| data.get_temp::<[f32; 4]>(out_drag_id)).unwrap_or(points);
+                        let in_base = ui.ctx().data(|data| data.get_temp::<[f32; 4]>(in_drag_id)).unwrap_or(points);
                         let mut next = points;
                         if out_resp.dragged() {
-                            next[2] = (points[2] + out_resp.drag_delta().x / 44.0).clamp(points[0] + 0.01, 1.0);
-                            next[3] = (points[3] - out_resp.drag_delta().y / 24.0).clamp(-1.5, 2.5);
+                            next[2] = (out_base[2] + out_resp.drag_delta().x / 44.0).clamp(out_base[0] + 0.01, 1.0);
+                            next[3] = (out_base[3] - out_resp.drag_delta().y / 24.0).clamp(-1.5, 2.5);
                         }
                         if in_resp.dragged() {
-                            next[0] = (points[0] - in_resp.drag_delta().x / 44.0).clamp(0.0, points[2] - 0.01);
-                            next[1] = (points[1] + in_resp.drag_delta().y / 24.0).clamp(-1.5, 2.5);
+                            next[0] = (in_base[0] - in_resp.drag_delta().x / 44.0).clamp(0.0, in_base[2] - 0.01);
+                            next[1] = (in_base[1] + in_resp.drag_delta().y / 24.0).clamp(-1.5, 2.5);
                         }
                         if (out_resp.dragged() || in_resp.dragged()) && set_effect_channel_bezier(layer, &graph_prop, display_frame, next) {
                             *project_changed = true;
+                        }
+                        if out_resp.drag_stopped() {
+                            ui.ctx().data_mut(|data| data.remove::<[f32; 4]>(out_drag_id));
+                        }
+                        if in_resp.drag_stopped() {
+                            ui.ctx().data_mut(|data| data.remove::<[f32; 4]>(in_drag_id));
                         }
                     }
                     if key_response.drag_started() {
@@ -2286,30 +2302,42 @@ pub fn draw_graph_editor(
 
                 let h_out_rect = egui::Rect::from_center_size(h_out, egui::vec2(14.0, 14.0));
                 let h_in_rect = egui::Rect::from_center_size(h_in, egui::vec2(14.0, 14.0));
-                let h_out_resp = ui.interact(h_out_rect, egui::Id::new(("graph_h_out", &layer.id, &graph_prop, anchor_token)), egui::Sense::drag());
-                let h_in_resp = ui.interact(h_in_rect, egui::Id::new(("graph_h_in", &layer.id, &graph_prop, anchor_token)), egui::Sense::drag());
+                let h_out_id = egui::Id::new(("graph_h_out", &layer.id, &graph_prop, anchor_token));
+                let h_in_id = egui::Id::new(("graph_h_in", &layer.id, &graph_prop, anchor_token));
+                let h_out_drag_id = egui::Id::new(("graph_bezier_drag_out", &layer.id, &graph_prop, anchor_token));
+                let h_in_drag_id = egui::Id::new(("graph_bezier_drag_in", &layer.id, &graph_prop, anchor_token));
+                let h_out_resp = ui.interact(h_out_rect, h_out_id, egui::Sense::drag());
+                let h_in_resp = ui.interact(h_in_rect, h_in_id, egui::Sense::drag());
 
                 let mut new_pts: Option<[f32; 4]> = None;
+                if h_out_resp.drag_started() {
+                    ui.ctx().data_mut(|data| data.insert_temp(h_out_drag_id, [bx1, by1, bx2, by2]));
+                }
+                if h_in_resp.drag_started() {
+                    ui.ctx().data_mut(|data| data.insert_temp(h_in_drag_id, [bx1, by1, bx2, by2]));
+                }
+                let out_base = ui.ctx().data(|data| data.get_temp::<[f32; 4]>(h_out_drag_id)).unwrap_or([bx1, by1, bx2, by2]);
+                let in_base = ui.ctx().data(|data| data.get_temp::<[f32; 4]>(h_in_drag_id)).unwrap_or([bx1, by1, bx2, by2]);
                 if h_out_resp.dragged() {
                     let d = h_out_resp.drag_delta();
-                    let nx2 = (bx2 + d.x / 44.0).clamp(bx1 + 0.01, 1.0);
-                    let ny2 = (by2 - d.y / 24.0).clamp(-1.5, 2.5);
+                    let nx2 = (out_base[2] + d.x / 44.0).clamp(out_base[0] + 0.01, 1.0);
+                    let ny2 = (out_base[3] - d.y / 24.0).clamp(-1.5, 2.5);
                     if *linked_tangent {
                         let mir_x = (1.0 - nx2).clamp(0.0, nx2 - 0.01);
                         new_pts = Some([mir_x, -ny2, nx2, ny2]);
                     } else {
-                        new_pts = Some([bx1, by1, nx2, ny2]);
+                        new_pts = Some([out_base[0], out_base[1], nx2, ny2]);
                     }
                 }
                 if h_in_resp.dragged() {
                     let d = h_in_resp.drag_delta();
-                    let nx1 = (bx1 - d.x / 44.0).clamp(0.0, bx2 - 0.01);
-                    let ny1 = (by1 + d.y / 24.0).clamp(-1.5, 2.5);
+                    let nx1 = (in_base[0] - d.x / 44.0).clamp(0.0, in_base[2] - 0.01);
+                    let ny1 = (in_base[1] + d.y / 24.0).clamp(-1.5, 2.5);
                     if *linked_tangent {
                         let mir_x = (1.0 - nx1).clamp(nx1 + 0.01, 1.0);
                         new_pts = Some([nx1, ny1, mir_x, -ny1]);
                     } else {
-                        new_pts = Some([nx1, ny1, bx2, by2]);
+                        new_pts = Some([nx1, ny1, in_base[2], in_base[3]]);
                     }
                 }
                 if let Some(pts) = new_pts {
@@ -2323,6 +2351,12 @@ pub fn draw_graph_editor(
                             *project_changed = true;
                         }
                     });
+                }
+                if h_out_resp.drag_stopped() {
+                    ui.ctx().data_mut(|data| data.remove::<[f32; 4]>(h_out_drag_id));
+                }
+                if h_in_resp.drag_stopped() {
+                    ui.ctx().data_mut(|data| data.remove::<[f32; 4]>(h_in_drag_id));
                 }
 
                 let any_hover = h_out_resp.hovered() || h_in_resp.dragged() || h_in_resp.hovered() || h_out_resp.dragged();
