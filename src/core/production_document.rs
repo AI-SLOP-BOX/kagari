@@ -48,6 +48,7 @@ impl ProductionDocument {
     pub const CURRENT_SCHEMA_VERSION: u32 = 1;
     pub const MAX_AUDIO_CHANNELS: usize = 4096;
     pub const MAX_BINDINGS: usize = 8192;
+    pub const MAX_COMPOSITION_DIMENSION: u32 = 16_384;
     pub const MAX_ASSETS: usize = 100_000;
     pub const MAX_COMPOSITIONS: usize = 10_000;
     pub const MAX_LAYERS_PER_COMPOSITION: usize = 100_000;
@@ -856,7 +857,9 @@ fn validate_composition(
     if !composition_ids.insert(composition.id.clone()) {
         return Err(format!("duplicate composition id: {}", composition.id));
     }
-    if !(1..=65_535).contains(&composition.width) || !(1..=65_535).contains(&composition.height) {
+    if !(1..=ProductionDocument::MAX_COMPOSITION_DIMENSION).contains(&composition.width)
+        || !(1..=ProductionDocument::MAX_COMPOSITION_DIMENSION).contains(&composition.height)
+    {
         return Err("composition dimensions are outside the supported range".into());
     }
     if !(1..=240).contains(&composition.fps)

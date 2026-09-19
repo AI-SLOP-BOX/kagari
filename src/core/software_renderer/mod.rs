@@ -281,7 +281,8 @@ pub fn rgba_buffer_size(width: u32, height: u32) -> Option<usize> {
     }
     let w = width as usize;
     let h = height as usize;
-    w.checked_mul(h)?.checked_mul(4)
+    let size = w.checked_mul(h)?.checked_mul(4)?;
+    (size <= MAX_RENDER_BYTES).then_some(size)
 }
 
 // ─── Shape SDF Rasterization (delegated to sdf.rs) ──────────────────────
@@ -299,10 +300,16 @@ pub fn rgba_buffer_size(width: u32, height: u32) -> Option<usize> {
 /// allocations from corrupted project files or hostile CLI arguments — a
 /// 100000x100000 request would otherwise attempt a ~40 GB allocation and abort.
 pub const MAX_RENDER_DIMENSION: u32 = 16384;
+/// Maximum size of one RGBA8 render buffer (512 MiB).
+pub const MAX_RENDER_BYTES: usize = 512 * 1024 * 1024;
 
 #[inline]
 fn is_sane_render_size(width: u32, height: u32) -> bool {
-    width > 0 && height > 0 && width <= MAX_RENDER_DIMENSION && height <= MAX_RENDER_DIMENSION
+    width > 0
+        && height > 0
+        && width <= MAX_RENDER_DIMENSION
+        && height <= MAX_RENDER_DIMENSION
+        && rgba_buffer_size(width, height).is_some()
 }
 
 /// Memoized particle simulation: (version, layer id, frame, emitter fingerprint, state).
@@ -2154,6 +2161,8 @@ mod render_size_guard_tests {
         assert!(rgba_buffer_size(u32::MAX, u32::MAX).is_none());
         assert!(rgba_buffer_size(0, 0).is_none());
         assert_eq!(rgba_buffer_size(2, 2), Some(16));
+        assert!(rgba_buffer_size(16384, 16384).is_none());
+        assert_eq!(rgba_buffer_size(8192, 8192), Some(8192 * 8192 * 4));
     }
 }
 

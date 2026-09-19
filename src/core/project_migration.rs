@@ -40,6 +40,10 @@ pub fn load_project_migrated(json_str: &str) -> Result<Project, String> {
         comp.sanitize_parent_cycles();
     }
 
+    crate::core::production_document::ProductionDocument::new(proj.clone())
+        .validate()
+        .map_err(|e| format!("Project validation failed after migration: {e}"))?;
+
     Ok(proj)
 }
 
@@ -65,8 +69,17 @@ pub fn save_project_atomic<P: AsRef<std::path::Path>>(
     path: P,
 ) -> Result<(), String> {
     use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::{Mutex, OnceLock};
 
     static SAVE_COUNTER: AtomicU64 = AtomicU64::new(0);
+    static SAVE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+    // Keep the backup and atomic replacement as one operation within this
+    // process. Cross-process writers still need an OS-level lock at the caller.
+    let _save_guard = SAVE_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
 
     let json_str = save_project_versioned(proj)?;
     let target_path = path.as_ref();
@@ -213,6 +226,16 @@ mod tests {
 
         let error = load_project_migrated(&json).unwrap_err();
         assert!(error.contains("newer than supported"));
+    }
+
+    #[test]
+    fn test_rejects_unrenderable_legacy_composition() {
+        let mut project = Project::default();
+        project.compositions[0].width = 20_000;
+        let json = serde_json::to_string(&project).unwrap();
+
+        let error = load_project_migrated(&json).unwrap_err();
+        assert!(error.contains("validation"));
     }
 }
 
