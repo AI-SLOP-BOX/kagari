@@ -353,7 +353,7 @@ fn draw_effect_controls(
     });
     ui.add_space(4.0);
     egui::CollapsingHeader::new("Color")
-        .default_open(true)
+        .default_open(false)
         .show(ui, |ui| {
         for (label, initial, range) in [
             ("Exposure", 0.0_f32, -2.0..=2.0),
