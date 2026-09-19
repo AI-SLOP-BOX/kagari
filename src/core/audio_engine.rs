@@ -137,6 +137,11 @@ pub struct MasterDspParams {
     pub comp_attack: f32,
     pub comp_release: f32,
     pub comp_makeup: f32,
+    pub auto_gain_enabled: bool,
+    pub auto_gain_target_db: f32,
+    pub limiter_enabled: bool,
+    pub limiter_ceiling_db: f32,
+    pub wet_dry: f32,
 }
 
 impl Default for MasterDspParams {
@@ -151,6 +156,33 @@ impl Default for MasterDspParams {
             comp_attack: 10.0,
             comp_release: 100.0,
             comp_makeup: 0.0,
+            auto_gain_enabled: false,
+            auto_gain_target_db: -18.0,
+            limiter_enabled: true,
+            limiter_ceiling_db: -1.0,
+            wet_dry: 1.0,
+        }
+    }
+
+}
+
+impl MasterDspParams {
+    pub fn bypass() -> Self {
+        Self {
+            eq_highpass: 0.0,
+            eq_lowpass: 24_000.0,
+            eq_mid_gain: 0.0,
+            eq_mid_freq: 1_000.0,
+            comp_threshold: 0.0,
+            comp_ratio: 1.0,
+            comp_attack: 1.0,
+            comp_release: 10.0,
+            comp_makeup: 0.0,
+            auto_gain_enabled: false,
+            auto_gain_target_db: -18.0,
+            limiter_enabled: false,
+            limiter_ceiling_db: 0.0,
+            wet_dry: 1.0,
         }
     }
 }
@@ -764,9 +796,13 @@ pub fn mix_audio_sources_for_frame(
         }
     }
 
-    // ── Master DSP processing (EQ → Compressor → Limiter) ──
+    // ── Master DSP processing (auto gain → EQ → compressor → limiter) ──
     {
         use crate::core::audio_dsp;
+        let dry_output = stereo_output.clone();
+        if dsp.auto_gain_enabled {
+            audio_dsp::apply_auto_gain(&mut stereo_output, dsp.auto_gain_target_db);
+        }
         let master_eq = vec![
             audio_dsp::EqBand {
                 freq: dsp.eq_highpass,
@@ -804,6 +840,34 @@ pub fn mix_audio_sources_for_frame(
             &mut comp_state,
             sample_rate,
         );
+
+        let wet_dry = if dsp.wet_dry.is_finite() {
+            dsp.wet_dry.clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
+        if wet_dry < 1.0 {
+            for (processed, dry) in stereo_output.iter_mut().zip(dry_output) {
+                *processed = *processed * wet_dry + dry * (1.0 - wet_dry);
+            }
+        }
+
+        if dsp.limiter_enabled {
+            let mut limiter_state = audio_dsp::CompressorState::default();
+            audio_dsp::apply_limiter(
+                &mut stereo_output,
+                dsp.limiter_ceiling_db,
+                50.0,
+                &mut limiter_state,
+                sample_rate,
+            );
+        } else {
+            for sample in &mut stereo_output {
+                if !sample.is_finite() {
+                    *sample = 0.0;
+                }
+            }
+        }
     }
 
     // Meter the MIXED output, not per-layer contributions — otherwise the peak
@@ -1035,6 +1099,7 @@ mod multitrack_tests {
             comp_attack: 0.1,
             comp_release: 10.0,
             comp_makeup: 0.0,
+            ..MasterDspParams::bypass()
         };
         let (mix, meter) = mix_audio_sources_for_frame(&comp, 0, rate, 480, None, &bypass_dsp);
         // Sum of 0.5 + 0.25 at sample 0 ≈ 0.75

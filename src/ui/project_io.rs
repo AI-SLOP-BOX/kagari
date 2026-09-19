@@ -94,6 +94,9 @@ pub fn open_project_from_path(app: &mut KagariApp, path: &std::path::Path) -> Re
 
     app.history = crate::core::history::ProjectHistory::new(project);
     app.production_document = production_document;
+    if let Some(document) = app.production_document.as_ref() {
+        app.apply_audio_correction_settings(document.audio.correction);
+    }
     app.doc_sync_generation = 0;
     app.clear_automation_history();
     // Restore the persisted GPU-compute preference (respects adapter availability)
@@ -114,8 +117,10 @@ pub fn open_project_from_path(app: &mut KagariApp, path: &std::path::Path) -> Re
 /// Atomically save the current project. Returns Ok(()) or an error message.
 pub fn save_project_to_path(app: &mut KagariApp, path: &std::path::Path) -> Result<(), String> {
     let project_snapshot = app.history.current().clone();
+    let audio_correction = app.audio_correction_settings();
     if let Some(existing) = app.production_document.as_mut() {
         *existing.project_mut() = project_snapshot.clone();
+        existing.audio.correction = audio_correction;
         existing
             .save_atomic(path)
             .map_err(|e| format!("Failed to save production document: {}", e))?;

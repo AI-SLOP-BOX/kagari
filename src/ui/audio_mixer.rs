@@ -364,59 +364,119 @@ pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
             });
         });
 
-    // ── Master DSP: EQ + Compressor ──
+    // ── Voice correction: the same non-destructive chain is used by preview
+    // and export. Advanced controls stay collapsed for first-time users.
     ui.add_space(8.0);
     ui.separator();
     ui.horizontal(|ui| {
-        ui.strong("Master DSP");
+        ui.strong("Voice Correction");
+        ui.label(
+            egui::RichText::new("Natural speech enhancement")
+                .small()
+                .color(colors::TEXT_MUTED),
+        );
+        let compare_label = if app.master_dsp_enabled {
+            "Compare Original"
+        } else {
+            "Use Correction"
+        };
+        if ui
+            .button(compare_label)
+            .on_hover_text("A/B compare the unprocessed mix with the current correction")
+            .clicked()
+        {
+            app.master_dsp_enabled = !app.master_dsp_enabled;
+            app.playback.cached_audio_key = 0;
+        }
+        if ui
+            .small_button("Reset")
+            .on_hover_text("Restore the conservative voice-correction defaults")
+            .clicked()
+        {
+            app.apply_audio_correction_settings(
+                crate::core::audio_types::AudioCorrectionSettings::default(),
+            );
+            app.playback.cached_audio_key = 0;
+        }
     });
     ui.horizontal(|ui| {
-        // EQ controls
         ui.vertical(|ui| {
-            ui.label(egui::RichText::new("EQ").small().strong().color(colors::ACCENT_BLUE));
-            ui.add(egui::Slider::new(&mut app.master_eq_highpass, 20.0..=500.0)
-                .text("HPF Hz")
-                .logarithmic(true));
-            ui.add(egui::Slider::new(&mut app.master_eq_lowpass, 2000.0..=20000.0)
-                .text("LPF Hz")
-                .logarithmic(true));
-            ui.add(egui::Slider::new(&mut app.master_eq_mid_gain, -12.0..=12.0)
-                .text("Mid dB"));
-            ui.add(egui::Slider::new(&mut app.master_eq_mid_freq, 200.0..=8000.0)
-                .text("Mid Hz")
-                .logarithmic(true));
+            ui.label(egui::RichText::new("Basic").small().strong().color(colors::ACCENT_BLUE));
+            ui.checkbox(&mut app.master_auto_gain, "Auto level");
+            ui.add(
+                egui::Slider::new(&mut app.master_target_level_db, -30.0..=-6.0)
+                    .text("Target dB")
+                    .clamp_to_range(true),
+            );
+            ui.add(
+                egui::Slider::new(&mut app.master_wet_dry, 0.0..=1.0)
+                    .text("Correction mix")
+                    .show_value(false),
+            );
         });
         ui.separator();
-        // Compressor controls
         ui.vertical(|ui| {
-            ui.label(egui::RichText::new("Compressor").small().strong().color(colors::ACCENT_BLUE));
-            ui.add(egui::Slider::new(&mut app.master_comp_threshold, -40.0..=0.0)
-                .text("Thresh dB"));
-            ui.add(egui::Slider::new(&mut app.master_comp_ratio, 1.0..=20.0)
-                .text("Ratio"));
-            ui.add(egui::Slider::new(&mut app.master_comp_attack, 0.1..=50.0)
-                .text("Attack ms"));
-            ui.add(egui::Slider::new(&mut app.master_comp_release, 10.0..=500.0)
-                .text("Release ms"));
-            ui.add(egui::Slider::new(&mut app.master_comp_makeup, 0.0..=24.0)
-                .text("Makeup dB"));
+            ui.label(egui::RichText::new("Safety").small().strong().color(colors::ACCENT_BLUE));
+            ui.checkbox(&mut app.master_limiter_enabled, "Limiter");
+            ui.add(
+                egui::Slider::new(&mut app.master_limiter_ceiling_db, -6.0..=-0.1)
+                    .text("Ceiling dB"),
+            );
         });
-        ui.separator();
-        // Frequency Crossover Reactivity
-        ui.vertical(|ui| {
-            ui.label(egui::RichText::new("🎵 Audio to Keyframes").small().strong().color(colors::ACCENT_CYAN));
-            ui.label(egui::RichText::new("Extract motion reactivity by frequency band.").small().color(colors::TEXT_MUTED));
-            let mut band_sel = ui.ctx().data(|d| d.get_temp::<i32>(egui::Id::new("audio_crossover_band")).unwrap_or(0));
-            ui.horizontal(|ui| {
-                ui.selectable_value(&mut band_sel, 0, "All (Master)");
-                ui.selectable_value(&mut band_sel, 1, "Bass (20-250Hz)");
-                ui.selectable_value(&mut band_sel, 2, "Mid (250-4kHz)");
-                ui.selectable_value(&mut band_sel, 3, "High (4k-20kHz)");
+    });
+
+    ui.collapsing("Detailed voice shaping", |ui| {
+        ui.horizontal(|ui| {
+            ui.vertical(|ui| {
+                ui.label(egui::RichText::new("Clarity EQ").small().strong().color(colors::ACCENT_BLUE));
+                ui.add(
+                    egui::Slider::new(&mut app.master_eq_highpass, 20.0..=500.0)
+                        .text("Low cut Hz")
+                        .logarithmic(true),
+                );
+                ui.add(
+                    egui::Slider::new(&mut app.master_eq_lowpass, 2_000.0..=20_000.0)
+                        .text("High cut Hz")
+                        .logarithmic(true),
+                );
+                ui.add(egui::Slider::new(&mut app.master_eq_mid_gain, -12.0..=12.0).text("Presence dB"));
+                ui.add(
+                    egui::Slider::new(&mut app.master_eq_mid_freq, 200.0..=8_000.0)
+                        .text("Presence Hz")
+                        .logarithmic(true),
+                );
             });
-            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("audio_crossover_band"), band_sel));
-            if ui.button("⚡ Bake Audio to Null Controller").on_hover_text("Bakes amplitude slider tracks for selected frequency band into a new controller layer").clicked() {
-                app.toasts.info("Created 'Audio Amplitude' controller with Bass/Mid/High slider channels");
-            }
+            ui.separator();
+            ui.vertical(|ui| {
+                ui.label(egui::RichText::new("Dynamics").small().strong().color(colors::ACCENT_BLUE));
+                ui.add(egui::Slider::new(&mut app.master_comp_threshold, -40.0..=0.0).text("Threshold dB"));
+                ui.add(egui::Slider::new(&mut app.master_comp_ratio, 1.0..=20.0).text("Ratio"));
+                ui.add(egui::Slider::new(&mut app.master_comp_attack, 0.1..=50.0).text("Attack ms"));
+                ui.add(egui::Slider::new(&mut app.master_comp_release, 10.0..=500.0).text("Release ms"));
+                ui.add(egui::Slider::new(&mut app.master_comp_makeup, 0.0..=24.0).text("Makeup dB"));
+            });
         });
+    });
+
+    ui.add_space(4.0);
+    ui.collapsing("Audio to Keyframes", |ui| {
+        ui.label(
+            egui::RichText::new("Extract motion reactivity by frequency band.")
+                .small()
+                .color(colors::TEXT_MUTED),
+        );
+        let mut band_sel = ui
+            .ctx()
+            .data(|d| d.get_temp::<i32>(egui::Id::new("audio_crossover_band")).unwrap_or(0));
+        ui.horizontal(|ui| {
+            ui.selectable_value(&mut band_sel, 0, "All");
+            ui.selectable_value(&mut band_sel, 1, "Bass");
+            ui.selectable_value(&mut band_sel, 2, "Mid");
+            ui.selectable_value(&mut band_sel, 3, "High");
+        });
+        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("audio_crossover_band"), band_sel));
+        if ui.button("Bake Audio to Null Controller").clicked() {
+            app.toasts.info("Created 'Audio Amplitude' controller with Bass/Mid/High slider channels");
+        }
     });
 }

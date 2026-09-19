@@ -226,6 +226,42 @@ pub fn apply_eq(buf: &mut [f32], bands: &[EqBand], sample_rate: u32) {
     }
 }
 
+/// Apply a conservative block loudness correction. This is intentionally
+/// bounded so a quiet passage does not pull its noise floor up without limit.
+/// Composition playback and export both use the same function, keeping the
+/// audible result consistent across preview and final output.
+pub fn apply_auto_gain(buf: &mut [f32], target_db: f32) {
+    if buf.is_empty() {
+        return;
+    }
+    let mut sum_sq = 0.0f64;
+    let mut count = 0usize;
+    for sample in buf.iter().copied() {
+        if sample.is_finite() {
+            sum_sq += f64::from(sample) * f64::from(sample);
+            count += 1;
+        }
+    }
+    if count == 0 {
+        return;
+    }
+    let rms = (sum_sq / count as f64).sqrt();
+    if rms <= 1.0e-8 {
+        return;
+    }
+    let current_db = 20.0 * rms.log10();
+    let target_db = if target_db.is_finite() {
+        target_db.clamp(-60.0, 0.0)
+    } else {
+        -18.0
+    };
+    let gain_db = (target_db as f64 - current_db).clamp(-12.0, 18.0);
+    let gain = 10.0f64.powf(gain_db / 20.0);
+    for sample in buf.iter_mut() {
+        *sample = finite_audio_sample(f64::from(*sample) * gain);
+    }
+}
+
 /// Compressor state (keeps running envelope for smooth gain reduction).
 #[derive(Debug, Clone)]
 pub struct CompressorState {
@@ -720,6 +756,20 @@ mod tests {
             48_000,
         );
         assert_eq!(buf, original);
+    }
+
+    #[test]
+    fn test_auto_gain_moves_rms_toward_target_without_unbounded_boost() {
+        let mut buf = vec![0.1f32; 4096];
+        apply_auto_gain(&mut buf, -18.0);
+        let rms = (buf.iter().map(|s| f64::from(*s).powi(2)).sum::<f64>()
+            / buf.len() as f64)
+            .sqrt();
+        assert!((20.0 * rms.log10() + 18.0).abs() < 0.1);
+
+        let mut silence = vec![0.0f32; 64];
+        apply_auto_gain(&mut silence, -18.0);
+        assert!(silence.iter().all(|sample| *sample == 0.0));
     }
 
     #[test]

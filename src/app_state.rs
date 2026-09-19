@@ -383,6 +383,12 @@ pub struct KagariApp {
     pub master_comp_attack: f32,
     pub master_comp_release: f32,
     pub master_comp_makeup: f32,
+    pub master_auto_gain: bool,
+    pub master_target_level_db: f32,
+    pub master_limiter_enabled: bool,
+    pub master_limiter_ceiling_db: f32,
+    pub master_wet_dry: f32,
+    pub master_dsp_enabled: bool,
     pub viewport_cam_view: usize,
     pub viewport_render_resolution: usize,
     pub viewport_color_channel: usize,
@@ -582,6 +588,12 @@ impl Default for KagariApp {
             master_comp_attack: 10.0,
             master_comp_release: 100.0,
             master_comp_makeup: 0.0,
+            master_auto_gain: false,
+            master_target_level_db: -18.0,
+            master_limiter_enabled: true,
+            master_limiter_ceiling_db: -1.0,
+            master_wet_dry: 1.0,
+            master_dsp_enabled: true,
             viewport_cam_view: 0,
             viewport_render_resolution: 0,
             viewport_color_channel: 0,
@@ -650,6 +662,71 @@ impl Default for KagariApp {
 
 #[cfg(feature = "gui")]
 impl KagariApp {
+    pub fn master_dsp_params(&self) -> crate::core::audio_engine::MasterDspParams {
+        if !self.master_dsp_enabled {
+            return crate::core::audio_engine::MasterDspParams::bypass();
+        }
+        crate::core::audio_engine::MasterDspParams {
+            eq_highpass: self.master_eq_highpass,
+            eq_lowpass: self.master_eq_lowpass,
+            eq_mid_gain: self.master_eq_mid_gain,
+            eq_mid_freq: self.master_eq_mid_freq,
+            comp_threshold: self.master_comp_threshold,
+            comp_ratio: self.master_comp_ratio,
+            comp_attack: self.master_comp_attack,
+            comp_release: self.master_comp_release,
+            comp_makeup: self.master_comp_makeup,
+            auto_gain_enabled: self.master_auto_gain,
+            auto_gain_target_db: self.master_target_level_db,
+            limiter_enabled: self.master_limiter_enabled,
+            limiter_ceiling_db: self.master_limiter_ceiling_db,
+            wet_dry: self.master_wet_dry,
+        }
+    }
+
+    pub fn audio_correction_settings(
+        &self,
+    ) -> crate::core::audio_types::AudioCorrectionSettings {
+        crate::core::audio_types::AudioCorrectionSettings {
+            enabled: self.master_dsp_enabled,
+            auto_gain: self.master_auto_gain,
+            target_level_db: self.master_target_level_db,
+            highpass_hz: self.master_eq_highpass,
+            lowpass_hz: self.master_eq_lowpass,
+            presence_gain_db: self.master_eq_mid_gain,
+            presence_freq_hz: self.master_eq_mid_freq,
+            compressor_threshold_db: self.master_comp_threshold,
+            compressor_ratio: self.master_comp_ratio,
+            compressor_attack_ms: self.master_comp_attack,
+            compressor_release_ms: self.master_comp_release,
+            compressor_makeup_db: self.master_comp_makeup,
+            limiter_enabled: self.master_limiter_enabled,
+            limiter_ceiling_db: self.master_limiter_ceiling_db,
+            wet_dry: self.master_wet_dry,
+        }
+    }
+
+    pub fn apply_audio_correction_settings(
+        &mut self,
+        settings: crate::core::audio_types::AudioCorrectionSettings,
+    ) {
+        self.master_dsp_enabled = settings.enabled;
+        self.master_auto_gain = settings.auto_gain;
+        self.master_target_level_db = settings.target_level_db;
+        self.master_eq_highpass = settings.highpass_hz;
+        self.master_eq_lowpass = settings.lowpass_hz;
+        self.master_eq_mid_gain = settings.presence_gain_db;
+        self.master_eq_mid_freq = settings.presence_freq_hz;
+        self.master_comp_threshold = settings.compressor_threshold_db;
+        self.master_comp_ratio = settings.compressor_ratio;
+        self.master_comp_attack = settings.compressor_attack_ms;
+        self.master_comp_release = settings.compressor_release_ms;
+        self.master_comp_makeup = settings.compressor_makeup_db;
+        self.master_limiter_enabled = settings.limiter_enabled;
+        self.master_limiter_ceiling_db = settings.limiter_ceiling_db;
+        self.master_wet_dry = settings.wet_dry;
+    }
+
     pub fn modify_project(&mut self, f: impl FnOnce(&mut Project)) {
         let mut next_project = self.history.current().clone();
         f(&mut next_project);
@@ -850,17 +927,7 @@ impl KagariApp {
             {
                 let project = self.history.current();
                 let comp = project.active_composition();
-                let dsp = crate::core::audio_engine::MasterDspParams {
-                    eq_highpass: self.master_eq_highpass,
-                    eq_lowpass: self.master_eq_lowpass,
-                    eq_mid_gain: self.master_eq_mid_gain,
-                    eq_mid_freq: self.master_eq_mid_freq,
-                    comp_threshold: self.master_comp_threshold,
-                    comp_ratio: self.master_comp_ratio,
-                    comp_attack: self.master_comp_attack,
-                    comp_release: self.master_comp_release,
-                    comp_makeup: self.master_comp_makeup,
-                };
+                let dsp = self.master_dsp_params();
                 let (_mix, meter) = crate::core::audio_engine::mix_audio_sources_for_frame(
                     comp,
                     self.playback.current_frame,
@@ -896,6 +963,12 @@ impl KagariApp {
                 (self.master_comp_attack.to_bits()).hash(&mut hasher);
                 (self.master_comp_release.to_bits()).hash(&mut hasher);
                 (self.master_comp_makeup.to_bits()).hash(&mut hasher);
+                self.master_auto_gain.hash(&mut hasher);
+                (self.master_target_level_db.to_bits()).hash(&mut hasher);
+                self.master_limiter_enabled.hash(&mut hasher);
+                (self.master_limiter_ceiling_db.to_bits()).hash(&mut hasher);
+                (self.master_wet_dry.to_bits()).hash(&mut hasher);
+                self.master_dsp_enabled.hash(&mut hasher);
                 for ch in &self.audio_mixer_channels {
                     (ch.gain_db.to_bits()).hash(&mut hasher);
                     (ch.pan.to_bits()).hash(&mut hasher);
@@ -908,17 +981,7 @@ impl KagariApp {
                     || self.playback.cached_audio_path.is_none();
 
                 if needs_mix {
-                    let dsp = crate::core::audio_engine::MasterDspParams {
-                        eq_highpass: self.master_eq_highpass,
-                        eq_lowpass: self.master_eq_lowpass,
-                        eq_mid_gain: self.master_eq_mid_gain,
-                        eq_mid_freq: self.master_eq_mid_freq,
-                        comp_threshold: self.master_comp_threshold,
-                        comp_ratio: self.master_comp_ratio,
-                        comp_attack: self.master_comp_attack,
-                        comp_release: self.master_comp_release,
-                        comp_makeup: self.master_comp_makeup,
-                    };
+                    let dsp = self.master_dsp_params();
                     if let Some(wav) = crate::core::audio_engine::mix_composition_to_wav(
                         comp,
                         wa_start,

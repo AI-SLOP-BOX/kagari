@@ -1,6 +1,6 @@
 //! Versionable cross-domain document joining the VFX project and audio clock.
 
-use crate::core::audio_types::MixerChannel;
+use crate::core::audio_types::{AudioCorrectionSettings, MixerChannel};
 use crate::core::automation_binding::{AutomationBinding, AutomationCurve, ProductionClock};
 use crate::core::keyframe::{InterpolationType, Keyframe};
 use crate::core::property::Animatable;
@@ -17,6 +17,8 @@ pub struct AudioDocumentSettings {
     pub sample_rate: u32,
     pub master_gain: f32,
     pub channels: Vec<MixerChannel>,
+    #[serde(default)]
+    pub correction: AudioCorrectionSettings,
 }
 
 impl Default for AudioDocumentSettings {
@@ -25,6 +27,7 @@ impl Default for AudioDocumentSettings {
             sample_rate: 48_000,
             master_gain: 1.0,
             channels: Vec::new(),
+            correction: AudioCorrectionSettings::default(),
         }
     }
 }
@@ -743,6 +746,10 @@ impl ProductionDocument {
         for channel in &self.audio.channels {
             channel.validate().map_err(str::to_owned)?;
         }
+        self.audio
+            .correction
+            .validate()
+            .map_err(str::to_owned)?;
         self.tempo.validate().map_err(str::to_owned)?;
         self.validate_bindings()?;
         Ok(())
