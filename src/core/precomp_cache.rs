@@ -13,15 +13,25 @@ struct CacheEntry {
 pub struct PrecompCache {
     entries: HashMap<CacheKey, CacheEntry>,
     order: Vec<CacheKey>,
-    capacity: usize,
+    max_entries: usize,
+    max_bytes: usize,
+    used_bytes: usize,
 }
 
 impl PrecompCache {
-    pub fn new(capacity: usize) -> Self {
+    const DEFAULT_MAX_BYTES: usize = 512 * 1024 * 1024;
+
+    pub fn new(max_entries: usize) -> Self {
+        Self::with_limits(max_entries, Self::DEFAULT_MAX_BYTES)
+    }
+
+    pub fn with_limits(max_entries: usize, max_bytes: usize) -> Self {
         Self {
-            entries: HashMap::with_capacity(capacity),
-            order: Vec::with_capacity(capacity),
-            capacity,
+            entries: HashMap::with_capacity(max_entries),
+            order: Vec::with_capacity(max_entries),
+            max_entries,
+            max_bytes,
+            used_bytes: 0,
         }
     }
 
@@ -51,13 +61,35 @@ impl PrecompCache {
         h: u32,
         pixels: Vec<u8>,
     ) {
+        if self.max_entries == 0 || self.max_bytes == 0 {
+            return;
+        }
+
         let key = (comp_id.to_string(), content_revision, frame, w, h);
-        if self.entries.len() >= self.capacity {
+
+        if let Some(previous) = self.entries.remove(&key) {
+            self.used_bytes = self.used_bytes.saturating_sub(previous.pixels.len());
+            self.order.retain(|existing| existing != &key);
+        }
+
+        if pixels.len() > self.max_bytes {
+            return;
+        }
+
+        while self.entries.len() >= self.max_entries
+            || self.used_bytes.saturating_add(pixels.len()) > self.max_bytes
+        {
             if let Some(oldest) = self.order.first().cloned() {
-                self.entries.remove(&oldest);
+                if let Some(entry) = self.entries.remove(&oldest) {
+                    self.used_bytes = self.used_bytes.saturating_sub(entry.pixels.len());
+                }
                 self.order.retain(|k| *k != oldest);
+            } else {
+                break;
             }
         }
+
+        self.used_bytes = self.used_bytes.saturating_add(pixels.len());
         self.entries.insert(key.clone(), CacheEntry { pixels });
         self.order.push(key);
     }
@@ -65,6 +97,7 @@ impl PrecompCache {
     pub fn clear(&mut self) {
         self.entries.clear();
         self.order.clear();
+        self.used_bytes = 0;
     }
 
     pub fn len(&self) -> usize {
@@ -73,6 +106,10 @@ impl PrecompCache {
 
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
+    }
+
+    pub fn used_bytes(&self) -> usize {
+        self.used_bytes
     }
 }
 
@@ -123,5 +160,25 @@ mod tests {
 
         assert!(cache.get("comp1", 11, 0, 100, 100).is_none());
         assert_eq!(cache.get("comp1", 10, 0, 100, 100).unwrap()[0], 1);
+    }
+
+    #[test]
+    fn test_byte_budget_evicts_oldest_entries() {
+        let mut cache = PrecompCache::with_limits(10, 8);
+        cache.insert("a", 1, 0, 1, 1, vec![1; 6]);
+        cache.insert("b", 1, 0, 1, 1, vec![2; 6]);
+
+        assert!(cache.get("a", 1, 0, 1, 1).is_none());
+        assert_eq!(cache.get("b", 1, 0, 1, 1).unwrap(), vec![2; 6]);
+        assert_eq!(cache.used_bytes(), 6);
+    }
+
+    #[test]
+    fn test_oversized_entry_is_not_cached() {
+        let mut cache = PrecompCache::with_limits(4, 4);
+        cache.insert("large", 1, 0, 1, 1, vec![0; 5]);
+
+        assert!(cache.is_empty());
+        assert_eq!(cache.used_bytes(), 0);
     }
 }

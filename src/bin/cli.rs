@@ -951,8 +951,9 @@ fn render_to_mp4(
     let comp_clone = comp.clone();
     let production_clone = production.cloned();
     let binding_values = spec.bindings.clone();
+    let (done_tx, done_rx) = std::sync::mpsc::channel();
     let start_export = move || {
-        let _ = start_export_cancelable(config, tx, cancel_clone, move |frame_idx| {
+        let result = start_export_cancelable(config, tx, cancel_clone, move |frame_idx| {
             let actual_frame = from + frame_idx;
             let frame_comp = production_clone.as_ref().and_then(|document| {
                 document.composition_for_frame_with_sources(
@@ -970,9 +971,11 @@ fn render_to_mp4(
                 lut,
             )
         });
+        let _ = done_tx.send(result);
     };
 
-    std::thread::spawn(start_export);
+    let worker = std::thread::spawn(start_export);
+    let mut event_error = None;
 
     while let Ok(event) = rx.recv() {
         match event {
@@ -985,12 +988,23 @@ fn render_to_mp4(
             }
             kagari_vfx::ExportEvent::Error(msg) => {
                 eprintln!("\n  Error: {}", msg);
-                return Err(msg.into());
+                event_error = Some(msg);
             }
         }
     }
 
-    Ok(())
+    let worker_result = done_rx.recv();
+    let worker_join = worker.join();
+    if worker_join.is_err() {
+        return Err("FFmpeg export worker panicked".into());
+    }
+    let worker_result = worker_result
+        .map_err(|_| "FFmpeg export worker terminated without a result".to_string())?;
+
+    if let Some(error) = event_error {
+        return Err(error.into());
+    }
+    worker_result.map_err(|error| error.into())
 }
 
 fn render_to_gif(
@@ -1028,8 +1042,9 @@ fn render_to_gif(
     let comp_clone = comp.clone();
     let production_clone = production.cloned();
     let binding_values = spec.bindings.clone();
+    let (done_tx, done_rx) = std::sync::mpsc::channel();
     let start_export = move || {
-        let _ = start_gif_export(config, tx, cancel_clone, move |frame_idx| {
+        let result = start_gif_export(config, tx, cancel_clone, move |frame_idx| {
             let actual_frame = from + frame_idx;
             let frame_comp = production_clone.as_ref().and_then(|document| {
                 document.composition_for_frame_with_sources(
@@ -1047,9 +1062,11 @@ fn render_to_gif(
                 lut,
             )
         });
+        let _ = done_tx.send(result);
     };
 
-    std::thread::spawn(start_export);
+    let worker = std::thread::spawn(start_export);
+    let mut event_error = None;
 
     while let Ok(event) = rx.recv() {
         match event {
@@ -1062,12 +1079,23 @@ fn render_to_gif(
             }
             kagari_vfx::ExportEvent::Error(msg) => {
                 eprintln!("\n  Error: {}", msg);
-                return Err(msg.into());
+                event_error = Some(msg);
             }
         }
     }
 
-    Ok(())
+    let worker_result = done_rx.recv();
+    let worker_join = worker.join();
+    if worker_join.is_err() {
+        return Err("GIF export worker panicked".into());
+    }
+    let worker_result =
+        worker_result.map_err(|_| "GIF export worker terminated without a result".to_string())?;
+
+    if let Some(error) = event_error {
+        return Err(error.into());
+    }
+    worker_result.map_err(|error| error.into())
 }
 
 fn cmd_effects(json_output: bool) {

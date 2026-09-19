@@ -6,7 +6,8 @@
 //!
 //! Implementation note: Rhai evaluation is strictly single-threaded within
 //! `run_script`, so a thread-local project pointer + log sink is the simplest
-//! sound way to expose mutation without cloning the whole project per call.
+//! sound way to expose mutation. Scripts run against a working copy and are
+//! committed only after the whole evaluation succeeds.
 
 use crate::core::keyframe::{InterpolationType, Keyframe};
 use crate::core::property::Animatable;
@@ -60,10 +61,14 @@ pub fn run_script(project: &mut Project, source: &str) -> Result<Vec<String>, St
     let log_sink: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
     let engine = build_engine(Arc::clone(&log_sink));
 
-    let _scope = ProjectScope::enter(project)?;
-    engine
-        .run(source)
-        .map_err(|e| format!("script error: {e}"))?;
+    let mut working_copy = project.clone();
+    let scope = ProjectScope::enter(&mut working_copy)?;
+    let result = engine.run(source);
+    drop(scope);
+
+    result.map_err(|e| format!("script error: {e}"))?;
+
+    *project = working_copy;
 
     let logs = log_sink.lock().map(|g| g.clone()).unwrap_or_default();
     Ok(logs)
@@ -385,6 +390,27 @@ mod tests {
         assert!(err.contains("script error"));
         // Pointer cleared: further calls safe
         assert!(with_project(|_| 1).is_none());
+    }
+
+    #[test]
+    fn test_script_failure_rolls_back_all_mutations() {
+        let mut project = Project::default();
+        let original = project.clone();
+        let err = run_script(
+            &mut project,
+            r#"
+                new_comp("partial", 1920, 1080, 30, 60);
+                add_text("T", "must not commit", 48);
+                missing_function();
+            "#,
+        )
+        .unwrap_err();
+
+        assert!(err.contains("script error"));
+        assert_eq!(
+            serde_json::to_value(&project).unwrap(),
+            serde_json::to_value(&original).unwrap()
+        );
     }
 
     #[test]
