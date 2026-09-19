@@ -15,6 +15,34 @@ use crate::core::timeline::{Composition, Layer, LayerType, Project};
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 
+const MAX_LOG_LINES: usize = 8_192;
+const MAX_LOG_BYTES: usize = 1024 * 1024;
+
+#[derive(Default)]
+struct LogSink {
+    lines: Vec<String>,
+    bytes: usize,
+    truncated: bool,
+}
+
+fn append_log(sink: &Arc<Mutex<LogSink>>, message: &str) {
+    let Ok(mut sink) = sink.lock() else {
+        return;
+    };
+    if sink.truncated {
+        return;
+    }
+    if sink.lines.len() >= MAX_LOG_LINES
+        || sink.bytes.saturating_add(message.len()) > MAX_LOG_BYTES
+    {
+        sink.lines.push("[automation log truncated]".to_string());
+        sink.truncated = true;
+        return;
+    }
+    sink.bytes = sink.bytes.saturating_add(message.len());
+    sink.lines.push(message.to_string());
+}
+
 thread_local! {
     /// Project currently being scripted (valid only inside run_script).
     static CURRENT_PROJECT: RefCell<*mut Project> = const { RefCell::new(std::ptr::null_mut()) };
@@ -58,7 +86,7 @@ fn with_project<R>(f: impl FnOnce(&mut Project) -> R) -> Option<R> {
 /// Execute an automation script against the project.
 /// Returns captured `log()` lines on success.
 pub fn run_script(project: &mut Project, source: &str) -> Result<Vec<String>, String> {
-    let log_sink: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+    let log_sink = Arc::new(Mutex::new(LogSink::default()));
     let engine = build_engine(Arc::clone(&log_sink));
 
     let mut working_copy = project.clone();
@@ -70,7 +98,10 @@ pub fn run_script(project: &mut Project, source: &str) -> Result<Vec<String>, St
 
     *project = working_copy;
 
-    let logs = log_sink.lock().map(|g| g.clone()).unwrap_or_default();
+    let logs = log_sink
+        .lock()
+        .map(|sink| sink.lines.clone())
+        .unwrap_or_default();
     Ok(logs)
 }
 
@@ -112,7 +143,7 @@ fn bounded_u32(value: i64, minimum: u32) -> u32 {
     value.clamp(i64::from(minimum), i64::from(u32::MAX)) as u32
 }
 
-fn build_engine(log_sink: Arc<Mutex<Vec<String>>>) -> rhai::Engine {
+fn build_engine(log_sink: Arc<Mutex<LogSink>>) -> rhai::Engine {
     let mut engine = rhai::Engine::new();
     engine.set_max_operations(2_000_000);
     engine
@@ -123,17 +154,13 @@ fn build_engine(log_sink: Arc<Mutex<Vec<String>>>) -> rhai::Engine {
     engine.on_print({
         let sink = Arc::clone(&log_sink);
         move |msg: &str| {
-            if let Ok(mut g) = sink.lock() {
-                g.push(msg.to_string());
-            }
+            append_log(&sink, msg);
         }
     });
 
     // ── Composition management ──
     engine.register_fn("log", move |msg: &str| {
-        if let Ok(mut g) = log_sink.lock() {
-            g.push(msg.to_string());
-        }
+        append_log(&log_sink, msg);
     });
     engine.register_fn(
         "new_comp",

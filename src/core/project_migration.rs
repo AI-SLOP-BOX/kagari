@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::io::Write;
 
 pub const CURRENT_SCHEMA_VERSION: u32 = 1;
+pub const MAX_PROJECT_JSON_BYTES: usize = 100 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VersionedProjectFile {
@@ -17,6 +18,13 @@ pub struct VersionedProjectFile {
 /// Load a project JSON string safely, executing schema migrations if needed.
 #[allow(dead_code)]
 pub fn load_project_migrated(json_str: &str) -> Result<Project, String> {
+    if json_str.len() > MAX_PROJECT_JSON_BYTES {
+        return Err(format!(
+            "Project JSON exceeds the {} MiB limit",
+            MAX_PROJECT_JSON_BYTES / (1024 * 1024)
+        ));
+    }
+
     let mut proj: Project = if let Ok(proj) = serde_json::from_str::<Project>(json_str) {
         proj
     } else if let Ok(wrapper) = serde_json::from_str::<VersionedProjectFile>(json_str) {
@@ -134,13 +142,13 @@ pub fn load_project_with_backup<P: AsRef<std::path::Path>>(
     let target = path.as_ref();
     let bak = target.with_extension("json.bak");
 
-    if let Ok(json) = std::fs::read_to_string(target) {
+    if let Ok(json) = read_bounded_project_file(target) {
         match load_project_migrated(&json) {
             Ok(p) => return Ok((p, false)),
             Err(e) => log::warn!("[Project] Primary file corrupt ({}); trying backup", e),
         }
     }
-    if let Ok(json) = std::fs::read_to_string(&bak) {
+    if let Ok(json) = read_bounded_project_file(&bak) {
         match load_project_migrated(&json) {
             Ok(p) => return Ok((p, true)),
             Err(e) => log::warn!("[Project] Backup also corrupt: {}", e),
@@ -151,6 +159,17 @@ pub fn load_project_with_backup<P: AsRef<std::path::Path>>(
         target.display(),
         bak.display()
     ))
+}
+
+fn read_bounded_project_file(path: &std::path::Path) -> Result<String, String> {
+    let metadata = std::fs::metadata(path).map_err(|e| e.to_string())?;
+    if metadata.len() > MAX_PROJECT_JSON_BYTES as u64 {
+        return Err(format!(
+            "Project file exceeds the {} MiB limit",
+            MAX_PROJECT_JSON_BYTES / (1024 * 1024)
+        ));
+    }
+    std::fs::read_to_string(path).map_err(|e| e.to_string())
 }
 
 /// Migrate JSON schema from `from_version` to `CURRENT_SCHEMA_VERSION`.

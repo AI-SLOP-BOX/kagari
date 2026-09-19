@@ -762,6 +762,12 @@ impl ProductionDocument {
     }
 
     pub fn from_json(json: &str) -> Result<Self, String> {
+        if json.len() > crate::core::project_migration::MAX_PROJECT_JSON_BYTES {
+            return Err(format!(
+                "Production document exceeds the {} MiB limit",
+                crate::core::project_migration::MAX_PROJECT_JSON_BYTES / (1024 * 1024)
+            ));
+        }
         let document: Self = serde_json::from_str(json).map_err(|error| error.to_string())?;
         document.validate()?;
         Ok(document)
@@ -796,6 +802,14 @@ impl ProductionDocument {
     }
 
     pub fn load(path: impl AsRef<std::path::Path>) -> Result<Self, String> {
+        let metadata = std::fs::metadata(path.as_ref())
+            .map_err(|error| format!("failed to stat production document: {error}"))?;
+        if metadata.len() > crate::core::project_migration::MAX_PROJECT_JSON_BYTES as u64 {
+            return Err(format!(
+                "Production document exceeds the {} MiB limit",
+                crate::core::project_migration::MAX_PROJECT_JSON_BYTES / (1024 * 1024)
+            ));
+        }
         let json = std::fs::read_to_string(path.as_ref())
             .map_err(|error| format!("failed to read production document: {error}"))?;
         Self::from_json(&json)

@@ -13,10 +13,50 @@
 /// 4. Progress events are sent back to the UI via the mpsc sender.
 /// 5. The UI polls the receiver each frame (non-blocking `try_recv`).
 use std::io::Write;
+use std::path::PathBuf;
 
 type RenderFrameFn = Arc<dyn Fn(&str, u32) -> Vec<u8> + Send + Sync>;
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::Sender;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+
+static TEMP_OUTPUT_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+fn temporary_output_path(output_path: &str) -> String {
+    format!(
+        "{}.kagari-tmp-{}-{}",
+        output_path,
+        std::process::id(),
+        TEMP_OUTPUT_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+    )
+}
+
+struct TemporaryOutputGuard {
+    path: PathBuf,
+    keep: bool,
+}
+
+impl TemporaryOutputGuard {
+    fn new(path: impl Into<PathBuf>) -> Self {
+        Self {
+            path: path.into(),
+            keep: false,
+        }
+    }
+
+    fn persist(&mut self) {
+        self.keep = true;
+    }
+}
+
+impl Drop for TemporaryOutputGuard {
+    fn drop(&mut self) {
+        if !self.keep {
+            let _ = std::fs::remove_file(&self.path);
+        }
+    }
+}
 
 /// RAII guard that ensures a child process is killed and waited on drop.
 /// Prevents zombie processes on all exit paths (error, cancel, early return).
@@ -116,8 +156,7 @@ pub fn is_ffmpeg_available() -> bool {
 /// The function is called on the background thread, so the closure must be `Send + 'static`.
 ///
 /// Returns `Err(String)` immediately if FFmpeg is not found.
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 /// Start an asynchronous FFmpeg export job with an optional cancellation flag.
 /// Invokes a render closure with the cooperative cancel flag installed on the
@@ -174,6 +213,8 @@ where
         .name("ffmpeg_export".to_string())
         .spawn(move || {
             let config = config_clone;
+            let temporary_output = temporary_output_path(&config.output_path);
+            let mut output_guard = TemporaryOutputGuard::new(&temporary_output);
 
             // Build FFmpeg command:
             // Read raw RGBA frames from stdin, encode to H.264 yuv420p MP4.
@@ -260,7 +301,7 @@ where
             cmd.arg("-movflags")
                 .arg("+faststart")
                 .arg("--")
-                .arg(&config.output_path);
+                .arg(&temporary_output);
 
             let ffmpeg_result = cmd
                 .stdin(Stdio::piped())
@@ -379,6 +420,14 @@ where
             let stderr_output = stderr_handle.join().unwrap_or_default();
             match child.wait() {
                 Ok(status) if status.success() => {
+                    if let Err(error) = std::fs::rename(&temporary_output, &config.output_path) {
+                        let _ = tx.send(ExportEvent::Error(format!(
+                            "Failed to finalize export output: {}",
+                            error
+                        )));
+                        return;
+                    }
+                    output_guard.persist();
                     let _ = tx.send(ExportEvent::Finished(format!(
                         "Export complete → {}",
                         config.output_path
@@ -436,7 +485,9 @@ where
         .name("ffmpeg_gif_export".to_string())
         .spawn(move || {
             let config = config_clone;
-            let palette_path = format!("{}.palette.png", config.output_path);
+            let temporary_output = temporary_output_path(&config.output_path);
+            let mut output_guard = TemporaryOutputGuard::new(&temporary_output);
+            let palette_path = format!("{}.palette.png", temporary_output);
 
             let Some(frame_bytes) =
                 crate::core::software_renderer::rgba_buffer_size(config.width, config.height)
@@ -597,7 +648,7 @@ where
                     "paletteuse=dither=sierra2_4a",
                     "-loop",
                     "0",
-                    &config.output_path,
+                    &temporary_output,
                 ])
                 .stdin(Stdio::piped())
                 .stdout(Stdio::null())
@@ -670,6 +721,15 @@ where
             let stderr_output = gif_stderr_handle.join().unwrap_or_default();
             match gif_child.wait() {
                 Ok(status) if status.success() => {
+                    if let Err(error) = std::fs::rename(&temporary_output, &config.output_path) {
+                        let _ = tx.send(ExportEvent::Error(format!(
+                            "Failed to finalize GIF output: {}",
+                            error
+                        )));
+                        let _ = std::fs::remove_file(&palette_path);
+                        return;
+                    }
+                    output_guard.persist();
                     let _ = std::fs::remove_file(&palette_path);
                     let _ = tx.send(ExportEvent::Finished(format!(
                         "GIF export complete → {}",

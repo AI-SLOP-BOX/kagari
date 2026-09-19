@@ -281,6 +281,11 @@ impl AudioBuffer {
     /// Parses a RIFF/WAVE file (PCM 8/16/24-bit, mono or stereo).
     /// Returns an error with a human-readable reason for unsupported formats.
     pub fn load_wav(path: &std::path::Path) -> Result<Self, String> {
+        const MAX_WAV_BYTES: u64 = 512 * 1024 * 1024;
+        let metadata = std::fs::metadata(path).map_err(|e| format!("cannot stat WAV: {}", e))?;
+        if metadata.len() > MAX_WAV_BYTES {
+            return Err("WAV file exceeds the 512 MiB limit".into());
+        }
         let data = std::fs::read(path).map_err(|e| format!("cannot read WAV: {}", e))?;
         if data.len() < 44 || &data[0..4] != b"RIFF" || &data[8..12] != b"WAVE" {
             return Err("not a RIFF/WAVE file".into());
@@ -321,7 +326,7 @@ impl AudioBuffer {
         if audio_data.is_none() {
             return Err("WAV has no data chunk".into());
         }
-        if channels == 0 || sample_rate == 0 || bits == 0 {
+        if channels == 0 || channels > 32 || sample_rate == 0 || sample_rate > 384_000 || bits == 0 {
             return Err("WAV has invalid fmt chunk".into());
         }
         if format_tag != 1 {
