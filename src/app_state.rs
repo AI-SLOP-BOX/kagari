@@ -389,6 +389,8 @@ pub struct KagariApp {
     pub master_limiter_ceiling_db: f32,
     pub master_wet_dry: f32,
     pub master_dsp_enabled: bool,
+    /// Temporary A/B bypass state; this is not part of saved correction settings.
+    pub master_dsp_bypass: bool,
     pub viewport_cam_view: usize,
     pub viewport_render_resolution: usize,
     pub viewport_color_channel: usize,
@@ -594,6 +596,7 @@ impl Default for KagariApp {
             master_limiter_ceiling_db: -1.0,
             master_wet_dry: 1.0,
             master_dsp_enabled: true,
+            master_dsp_bypass: false,
             viewport_cam_view: 0,
             viewport_render_resolution: 0,
             viewport_color_channel: 0,
@@ -663,7 +666,7 @@ impl Default for KagariApp {
 #[cfg(feature = "gui")]
 impl KagariApp {
     pub fn master_dsp_params(&self) -> crate::core::audio_engine::MasterDspParams {
-        if !self.master_dsp_enabled {
+        if !self.master_dsp_enabled || self.master_dsp_bypass {
             return crate::core::audio_engine::MasterDspParams::bypass();
         }
         crate::core::audio_engine::MasterDspParams {
@@ -711,6 +714,7 @@ impl KagariApp {
         settings: crate::core::audio_types::AudioCorrectionSettings,
     ) {
         self.master_dsp_enabled = settings.enabled;
+        self.master_dsp_bypass = false;
         self.master_auto_gain = settings.auto_gain;
         self.master_target_level_db = settings.target_level_db;
         self.master_eq_highpass = settings.highpass_hz;
@@ -904,7 +908,9 @@ impl KagariApp {
         }
 
         // Crash-recovery autosave: write a rotating snapshot when dirty and due
-        let autosave_path = if let Some(document) = self.production_document.as_ref() {
+        let correction = self.audio_correction_settings();
+        let autosave_path = if let Some(document) = self.production_document.as_mut() {
+            document.audio.correction = correction;
             self.autosave
                 .tick_production(self.history.current(), document)
         } else {
@@ -969,6 +975,7 @@ impl KagariApp {
                 (self.master_limiter_ceiling_db.to_bits()).hash(&mut hasher);
                 (self.master_wet_dry.to_bits()).hash(&mut hasher);
                 self.master_dsp_enabled.hash(&mut hasher);
+                self.master_dsp_bypass.hash(&mut hasher);
                 for ch in &self.audio_mixer_channels {
                     (ch.gain_db.to_bits()).hash(&mut hasher);
                     (ch.pan.to_bits()).hash(&mut hasher);

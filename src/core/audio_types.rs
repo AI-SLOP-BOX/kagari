@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 /// Non-destructive, CPU-only voice enhancement settings stored with a
 /// production document. The defaults are intentionally conservative so old
 /// projects keep their existing sound when opened.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AudioCorrectionSettings {
     pub enabled: bool,
     pub auto_gain: bool,
@@ -56,6 +57,9 @@ impl AudioCorrectionSettings {
         }
         if !self.lowpass_hz.is_finite() || !(20.0..=24_000.0).contains(&self.lowpass_hz) {
             return Err("audio correction low-pass frequency is invalid");
+        }
+        if self.lowpass_hz <= self.highpass_hz {
+            return Err("audio correction low-pass must be above high-pass");
         }
         if !self.presence_gain_db.is_finite() || !(-24.0..=24.0).contains(&self.presence_gain_db) {
             return Err("audio correction presence gain is invalid");
@@ -168,5 +172,10 @@ mod tests {
         }
         .validate()
         .is_err());
+
+        let partial: AudioCorrectionSettings = serde_json::from_str(r#"{"auto_gain":true}"#)
+            .expect("partial correction settings should use defaults");
+        assert!(partial.auto_gain);
+        assert_eq!(partial.target_level_db, -18.0);
     }
 }

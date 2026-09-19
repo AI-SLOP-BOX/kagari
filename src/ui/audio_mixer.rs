@@ -3,6 +3,7 @@ use crate::KagariApp;
 use eframe::egui;
 
 pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
+    let correction_before = app.audio_correction_settings();
     ui.heading("Multi-Track Audio Mixer");
     ui.separator();
 
@@ -375,17 +376,18 @@ pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
                 .small()
                 .color(colors::TEXT_MUTED),
         );
-        let compare_label = if app.master_dsp_enabled {
-            "Compare Original"
-        } else {
+        ui.checkbox(&mut app.master_dsp_enabled, "Enabled");
+        let compare_label = if app.master_dsp_bypass {
             "Use Correction"
+        } else {
+            "Compare Original"
         };
         if ui
             .button(compare_label)
             .on_hover_text("A/B compare the unprocessed mix with the current correction")
             .clicked()
         {
-            app.master_dsp_enabled = !app.master_dsp_enabled;
+            app.master_dsp_bypass = !app.master_dsp_bypass;
             app.playback.cached_audio_key = 0;
         }
         if ui
@@ -396,6 +398,7 @@ pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
             app.apply_audio_correction_settings(
                 crate::core::audio_types::AudioCorrectionSettings::default(),
             );
+            app.master_dsp_bypass = false;
             app.playback.cached_audio_key = 0;
         }
     });
@@ -479,4 +482,9 @@ pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
             app.toasts.info("Created 'Audio Amplitude' controller with Bass/Mid/High slider channels");
         }
     });
+
+    if correction_before != app.audio_correction_settings() {
+        app.autosave.mark_dirty();
+        app.playback.cached_audio_key = 0;
+    }
 }

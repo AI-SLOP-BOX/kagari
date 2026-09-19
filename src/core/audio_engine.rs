@@ -799,7 +799,12 @@ pub fn mix_audio_sources_for_frame(
     // ── Master DSP processing (auto gain → EQ → compressor → limiter) ──
     {
         use crate::core::audio_dsp;
-        let dry_output = stereo_output.clone();
+        let wet_dry = if dsp.wet_dry.is_finite() {
+            dsp.wet_dry.clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
+        let dry_output = (wet_dry < 1.0).then(|| stereo_output.clone());
         if dsp.auto_gain_enabled {
             audio_dsp::apply_auto_gain(&mut stereo_output, dsp.auto_gain_target_db);
         }
@@ -841,12 +846,7 @@ pub fn mix_audio_sources_for_frame(
             sample_rate,
         );
 
-        let wet_dry = if dsp.wet_dry.is_finite() {
-            dsp.wet_dry.clamp(0.0, 1.0)
-        } else {
-            1.0
-        };
-        if wet_dry < 1.0 {
+        if let Some(dry_output) = dry_output {
             for (processed, dry) in stereo_output.iter_mut().zip(dry_output) {
                 *processed = *processed * wet_dry + dry * (1.0 - wet_dry);
             }
