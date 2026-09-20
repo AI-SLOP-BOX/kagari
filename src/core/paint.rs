@@ -256,6 +256,136 @@ pub fn draw_stroke_with_brush(
     }
 }
 
+/// Draw a clone-stamp stroke by sampling `source` at the corresponding
+/// offset position for every brush stamp.
+pub fn draw_clone_stroke_with_brush(
+    buf: &mut [u8],
+    source: &[u8],
+    w: u32,
+    h: u32,
+    target_points: &[[f32; 2]],
+    source_points: &[[f32; 2]],
+    size: f32,
+    hardness: f32,
+    opacity: f32,
+    flow: f32,
+) {
+    let Some(expected_len) = (w as usize)
+        .checked_mul(h as usize)
+        .and_then(|count| count.checked_mul(4))
+    else {
+        return;
+    };
+    if target_points.is_empty()
+        || target_points.len() != source_points.len()
+        || !size.is_finite()
+        || size <= 0.0
+        || w == 0
+        || h == 0
+        || buf.len() < expected_len
+        || source.len() < expected_len
+    {
+        return;
+    }
+    let radius = (size.clamp(0.0, 8192.0) * 0.5).max(0.5);
+    let hardness = if hardness.is_finite() {
+        hardness.clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
+    let opacity = if opacity.is_finite() {
+        opacity.clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
+    let flow = if flow.is_finite() {
+        flow.clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
+
+    let mut stamp = |target: [f32; 2], sample: [f32; 2]| {
+        let (cx, cy) = (target[0], target[1]);
+        if !cx.is_finite() || !cy.is_finite() {
+            return;
+        }
+        let lo_x = ((cx - radius).floor().max(0.0)) as u32;
+        let hi_x = ((cx + radius).ceil().min(w as f32 - 1.0)) as u32;
+        let lo_y = ((cy - radius).floor().max(0.0)) as u32;
+        let hi_y = ((cy + radius).ceil().min(h as f32 - 1.0)) as u32;
+        for py in lo_y..=hi_y {
+            for px in lo_x..=hi_x {
+                let dx = px as f32 + 0.5 - cx;
+                let dy = py as f32 + 0.5 - cy;
+                let dist = (dx * dx + dy * dy).sqrt();
+                if dist > radius {
+                    continue;
+                }
+                let cov = if hardness >= 1.0 {
+                    (radius - dist).clamp(0.0, 1.0)
+                } else if dist <= radius * hardness {
+                    1.0
+                } else {
+                    let inner_radius = radius * hardness;
+                    ((radius - dist) / (radius - inner_radius).max(1.0)).clamp(0.0, 1.0)
+                };
+                let sx = (sample[0] + dx).round().clamp(0.0, w as f32 - 1.0) as u32;
+                let sy = (sample[1] + dy).round().clamp(0.0, h as f32 - 1.0) as u32;
+                let src_idx = ((sy * w + sx) * 4) as usize;
+                let dst_idx = ((py * w + px) * 4) as usize;
+                let sa = source[src_idx + 3] as f32 / 255.0 * opacity * flow * cov;
+                if sa <= 0.0001 {
+                    continue;
+                }
+                let dst = [
+                    buf[dst_idx] as f32 / 255.0,
+                    buf[dst_idx + 1] as f32 / 255.0,
+                    buf[dst_idx + 2] as f32 / 255.0,
+                    buf[dst_idx + 3] as f32 / 255.0,
+                ];
+                let out_a = sa + dst[3] * (1.0 - sa);
+                for ch in 0..3 {
+                    let sc = source[src_idx + ch] as f32 / 255.0;
+                    let value = (sc * sa + dst[ch] * dst[3] * (1.0 - sa)) / out_a;
+                    buf[dst_idx + ch] = (value.clamp(0.0, 1.0) * 255.0).round() as u8;
+                }
+                buf[dst_idx + 3] = (out_a.clamp(0.0, 1.0) * 255.0).round() as u8;
+            }
+        }
+    };
+
+    if target_points.len() == 1 {
+        stamp(target_points[0], source_points[0]);
+        return;
+    }
+    for (target_seg, source_seg) in target_points
+        .windows(2)
+        .zip(source_points.windows(2))
+    {
+        let target_a = target_seg[0];
+        let target_b = target_seg[1];
+        let source_a = source_seg[0];
+        let source_b = source_seg[1];
+        let dx = target_b[0] - target_a[0];
+        let dy = target_b[1] - target_a[1];
+        let len = (dx * dx + dy * dy).sqrt();
+        let steps = ((len / (radius * 0.5)).ceil() as usize).clamp(1, 4096);
+        for s in 0..=steps {
+            let t = s as f32 / steps as f32;
+            stamp(
+                [
+                    target_a[0] + (target_b[0] - target_a[0]) * t,
+                    target_a[1] + (target_b[1] - target_a[1]) * t,
+                ],
+                [
+                    source_a[0] + (source_b[0] - source_a[0]) * t,
+                    source_a[1] + (source_b[1] - source_a[1]) * t,
+                ],
+            );
+        }
+    }
+}
+
 /// Configuration for the clone stamp tool.
 #[derive(Debug, Clone)]
 pub struct CloneStampConfig {
@@ -451,6 +581,30 @@ mod tests {
         let edge_alpha = buf[((1 * 9 + 4) * 4) + 3];
         assert!((center_alpha as i32 - 128).abs() <= 1);
         assert!(edge_alpha < center_alpha);
+    }
+
+    #[test]
+    fn clone_brush_samples_from_source_points() {
+        let mut source = blank(9, 9);
+        let source_idx = ((4 * 9 + 2) * 4) as usize;
+        source[source_idx + 1] = 255;
+        source[source_idx + 3] = 255;
+        let mut target = blank(9, 9);
+        draw_clone_stroke_with_brush(
+            &mut target,
+            &source,
+            9,
+            9,
+            &[[6.5, 4.5]],
+            &[[1.5, 3.5]],
+            2.0,
+            1.0,
+            1.0,
+            1.0,
+        );
+        let target_idx = ((4 * 9 + 6) * 4) as usize;
+        assert_eq!(target[target_idx + 1], 255);
+        assert_eq!(target[target_idx + 3], 255);
     }
 
     fn blank(w: u32, h: u32) -> Vec<u8> {

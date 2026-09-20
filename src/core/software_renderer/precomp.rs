@@ -489,17 +489,38 @@ fn render_precomp_layers_inner(
                 let buf_pts: Vec<[f32; 2]> =
                     stroke.points.iter().map(|&p| to_buf_local(p)).collect();
                 let col = stroke.color;
-                crate::core::paint::draw_stroke_with_brush(
-                    &mut layer_buf,
-                    bw,
-                    bh,
-                    &buf_pts,
-                    col,
-                    stroke.size.max(1.0),
-                    stroke.hardness,
-                    stroke.opacity,
-                    stroke.flow,
-                );
+                if stroke.mode == crate::core::timeline::PaintStrokeMode::CloneStamp {
+                    let source_buf = layer_buf.clone();
+                    let source_pts: Vec<[f32; 2]> = stroke
+                        .points
+                        .iter()
+                        .map(|&p| to_buf_local([p[0] + stroke.clone_offset[0], p[1] + stroke.clone_offset[1]]))
+                        .collect();
+                    crate::core::paint::draw_clone_stroke_with_brush(
+                        &mut layer_buf,
+                        &source_buf,
+                        bw,
+                        bh,
+                        &buf_pts,
+                        &source_pts,
+                        stroke.size.max(1.0),
+                        stroke.hardness,
+                        stroke.opacity,
+                        stroke.flow,
+                    );
+                } else {
+                    crate::core::paint::draw_stroke_with_brush(
+                        &mut layer_buf,
+                        bw,
+                        bh,
+                        &buf_pts,
+                        col,
+                        stroke.size.max(1.0),
+                        stroke.hardness,
+                        stroke.opacity,
+                        stroke.flow,
+                    );
+                }
             }
         }
 

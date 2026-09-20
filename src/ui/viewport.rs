@@ -1132,6 +1132,8 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                                      layer.paint_strokes.push(crate::core::timeline::PaintStroke {
                                         color,
                                         size: bsize,
+                                        mode: crate::core::timeline::PaintStrokeMode::Brush,
+                                        clone_offset: [0.0, 0.0],
                                         hardness,
                                         opacity,
                                         flow,
@@ -1293,12 +1295,37 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                             let flow = ctx.data_mut(|d| {
                                 d.get_temp::<f32>(egui::Id::new("paint_flow")).unwrap_or(100.0)
                             }) / 100.0;
-                            let _src_off = src_opt.unwrap_or([0.0, 0.0]);
+                            let clone_offset = if let Some(source_comp) = src_opt {
+                                let source_local = {
+                                    let comp_ro = app.history.current().active_composition();
+                                    match comp_ro.layers.get(sel_li) {
+                                        Some(l) => {
+                                            let (pos, scl, rot, _) =
+                                                comp_ro.resolve_world_transform(l, current_frame);
+                                            let rad = rot.to_radians();
+                                            let (cr, sr) = rad.sin_cos();
+                                            let dx = (source_comp[0] - pos[0]) * 100.0;
+                                            let dy = (source_comp[1] - pos[1]) * 100.0;
+                                            [
+                                                (dx * cr + dy * sr) / scl[0].abs().max(0.001),
+                                                (-dx * sr + dy * cr) / scl[1].abs().max(0.001),
+                                            ]
+                                        }
+                                        None => source_comp,
+                                    }
+                                };
+                                let target = pts.first().copied().unwrap_or(source_local);
+                                [source_local[0] - target[0], source_local[1] - target[1]]
+                            } else {
+                                [0.0, 0.0]
+                            };
                             let proj = app.history.current_mut().active_composition_mut();
                             if let Some(layer) = proj.layers.get_mut(sel_li) {
                                 layer.paint_strokes.push(crate::core::timeline::PaintStroke {
                                     color: [1.0, 1.0, 1.0, 1.0],
                                     size: bsize,
+                                    mode: crate::core::timeline::PaintStrokeMode::CloneStamp,
+                                    clone_offset,
                                     hardness,
                                     opacity,
                                     flow,

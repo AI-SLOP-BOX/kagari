@@ -1972,12 +1972,23 @@ pub struct Layer {
     pub proxy: crate::core::proxy::LayerProxy,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum PaintStrokeMode {
+    #[default]
+    Brush,
+    CloneStamp,
+}
+
 /// A brush stroke painted onto a layer. Points live in layer-local space
 /// (origin = the layer's rest center), so strokes follow transforms.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PaintStroke {
     pub color: [f32; 4],
     pub size: f32,
+    #[serde(default)]
+    pub mode: PaintStrokeMode,
+    #[serde(default)]
+    pub clone_offset: [f32; 2],
     #[serde(default = "default_paint_hardness")]
     pub hardness: f32,
     #[serde(default = "default_paint_opacity")]
