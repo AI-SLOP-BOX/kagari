@@ -17,11 +17,12 @@ use std::path::PathBuf;
 
 type RenderFrameFn = Arc<dyn Fn(&str, u32) -> Vec<u8> + Send + Sync>;
 use std::process::{Child, Command, Stdio};
-use std::sync::mpsc::Sender;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc::Sender;
 use std::sync::Arc;
 
 static TEMP_OUTPUT_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+const MAX_FFMPEG_STDERR_BYTES: usize = 1024 * 1024;
 
 fn temporary_output_path(output_path: &str) -> String {
     format!(
@@ -90,11 +91,16 @@ impl Drop for ChildGuard {
 fn drain_stderr(mut child: Child) -> (Child, std::thread::JoinHandle<String>) {
     let stderr = child.stderr.take();
     let handle = std::thread::spawn(move || {
-        let mut output = String::new();
+        let mut output = Vec::new();
         if let Some(mut s) = stderr {
-            let _ = std::io::Read::read_to_string(&mut s, &mut output);
+            let mut limited = std::io::Read::take(&mut s, (MAX_FFMPEG_STDERR_BYTES + 1) as u64);
+            let _ = std::io::Read::read_to_end(&mut limited, &mut output);
         }
-        output
+        if output.len() > MAX_FFMPEG_STDERR_BYTES {
+            output.truncate(MAX_FFMPEG_STDERR_BYTES);
+            output.extend_from_slice(b"\n[FFmpeg stderr truncated]");
+        }
+        String::from_utf8_lossy(&output).into_owned()
     });
     (child, handle)
 }
