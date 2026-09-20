@@ -212,10 +212,7 @@ struct ProjectSummary {
 }
 
 fn read_project_json(path: &std::path::Path) -> Option<serde_json::Value> {
-    let text = std::fs::read_to_string(path).ok()?;
-    if text.len() > 8_000_000 {
-        return None;
-    }
+    let text = crate::core::project_migration::read_bounded_text_file(path, 8_000_000).ok()?;
     serde_json::from_str(&text).ok()
 }
 

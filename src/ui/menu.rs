@@ -356,8 +356,10 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         .add_filter("Subtitles", &["srt", "vtt"])
                         .pick_file()
                     {
-                        match std::fs::read_to_string(&path)
-                            .map_err(|e| e.to_string())
+                        match crate::core::project_migration::read_bounded_text_file(
+                            &path,
+                            8 * 1024 * 1024,
+                        )
                             .map(|s| crate::core::subtitles::parse_srt(&s, app.history.current().active_composition().fps))
                         {
                             Ok(cues) => {
@@ -388,8 +390,10 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         .add_filter("Camera Track JSON", &["json"])
                         .pick_file()
                     {
-                        match std::fs::read_to_string(&path)
-                            .map_err(|e| e.to_string())
+                        match crate::core::project_migration::read_bounded_text_file(
+                            &path,
+                            32 * 1024 * 1024,
+                        )
                             .and_then(|s| crate::core::camera_track::BlenderCamTrack::parse(&s))
                         {
                             Ok(track) => {
@@ -535,7 +539,10 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     ui.close_menu();
                 }
                 if ui.button("Import OpenTimelineIO (.otio.json)").clicked() {
-                    match std::fs::read_to_string(&app.otio_path) {
+                    match crate::core::project_migration::read_bounded_text_file(
+                        std::path::Path::new(&app.otio_path),
+                        crate::core::project_migration::MAX_PROJECT_JSON_BYTES,
+                    ) {
                         Ok(json) => match serde_json::from_str::<crate::core::integration::OtioTimeline>(&json) {
                             Ok(otio) => {
                                 let comp = otio.to_composition();

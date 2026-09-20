@@ -165,11 +165,20 @@ pub fn load_project_with_backup<P: AsRef<std::path::Path>>(
 /// the in-memory parser. CLI and GUI entry points should use this helper so a
 /// large file cannot bypass the parser's limit during the initial read.
 pub fn read_project_json_file(path: &std::path::Path) -> Result<String, String> {
+    read_bounded_text_file(path, MAX_PROJECT_JSON_BYTES)
+}
+
+/// Read a user-selected text file without allocating beyond the caller's
+/// declared limit.
+pub fn read_bounded_text_file(
+    path: &std::path::Path,
+    max_bytes: usize,
+) -> Result<String, String> {
     let metadata = std::fs::metadata(path).map_err(|e| e.to_string())?;
-    if metadata.len() > MAX_PROJECT_JSON_BYTES as u64 {
+    if metadata.len() > max_bytes as u64 {
         return Err(format!(
-            "Project file exceeds the {} MiB limit",
-            MAX_PROJECT_JSON_BYTES / (1024 * 1024)
+            "File exceeds the {} byte limit",
+            max_bytes
         ));
     }
     std::fs::read_to_string(path).map_err(|e| e.to_string())
