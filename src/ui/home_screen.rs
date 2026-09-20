@@ -505,7 +505,8 @@ pub(crate) fn import_footage_dialog(app: &mut KagariApp) {
         .add_filter(
             "Footage",
             &[
-                "png", "jpg", "jpeg", "webp", "bmp", "exr", "mov", "mp4", "wav", "mp3",
+                "png", "jpg", "jpeg", "webp", "bmp", "exr", "mov", "mp4", "avi", "mkv",
+                "webm", "av1", "wav", "mp3",
             ],
         )
         .pick_file()
@@ -560,9 +561,62 @@ fn open_selected_in_studio(app: &mut KagariApp, path: &std::path::Path) {
             });
             app.toasts.info(format!("Imported audio: {}", name));
         }
-        _ => {
-            app.toasts.info("Entered studio — use File > Import for video");
+        "mov" | "mp4" | "avi" | "mkv" | "webm" | "av1" => {
+            import_video_into_active_comp(app, path);
         }
+        _ => {
+            app.toasts.info("Entered studio — use File > Import for unsupported media");
+        }
+    }
+}
+
+fn import_video_into_active_comp(app: &mut KagariApp, path: &std::path::Path) {
+    let comp = app.history.current().active_composition();
+    let fps = comp.fps as f32;
+    let (comp_w, comp_h, comp_duration) =
+        (comp.width as f32, comp.height as f32, comp.duration_frames);
+    let name = path
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "video".to_string());
+    let dest = std::env::temp_dir().join("kagari_media").join(&name);
+    let src = path.to_string_lossy().to_string();
+    app.toasts
+        .info(format!("Extracting video frames for '{}' via FFmpeg...", name));
+
+    match crate::core::video_import::import_video(&src, &dest, fps) {
+        Ok(asset) => {
+            let fit = ((comp_w / asset.width.max(1) as f32)
+                .min(comp_h / asset.height.max(1) as f32))
+                .min(1.0)
+                * 100.0;
+            app.modify_project(|project| {
+                let comp = project.active_composition_mut();
+                let layer_id = comp.next_layer_id("video");
+                let mut layer = crate::core::timeline::Layer::new(
+                    layer_id,
+                    name.clone(),
+                    crate::core::timeline::LayerType::Video {
+                        source: src.clone(),
+                        frames_dir: asset.frames_dir.clone(),
+                        frame_count: asset.frame_count,
+                        audio_wav: asset.audio_wav.clone(),
+                        speed: 1.0,
+                    },
+                    comp_duration,
+                );
+                layer.transform.position =
+                    crate::core::property::Animatable::new_constant([comp_w * 0.5, comp_h * 0.5]);
+                layer.transform.scale =
+                    crate::core::property::Animatable::new_constant([fit, fit]);
+                comp.layers.push(layer);
+            });
+            app.toasts.info(format!(
+                "Imported video: {} ({} frames)",
+                name, asset.frame_count
+            ));
+        }
+        Err(error) => app.toasts.error(format!("Video import failed: {error}")),
     }
 }
 
