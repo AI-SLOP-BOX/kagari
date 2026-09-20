@@ -12,6 +12,7 @@ pub(crate) struct RasterCtx<'a> {
     pub layer: &'a Layer,
     pub frame: u32,
     pub effective_frame: u32,
+    pub source_frame: f32,
     pub masks: &'a [CpuMaskEntry],
     pub min_x: u32,
     pub min_y: u32,
@@ -55,7 +56,8 @@ pub(crate) fn rasterize_layer_content(ctx: RasterCtx<'_>) {
 fn rasterize_image_layer(ctx: RasterCtx<'_>) {
         let RasterCtx {
         layer,
-        effective_frame,
+        effective_frame: _,
+        source_frame,
         masks,
         min_x,
         min_y,
@@ -75,24 +77,44 @@ fn rasterize_image_layer(ctx: RasterCtx<'_>) {
         // Image layers load directly; Video layers resolve their frame PNG first.
         use crate::core::image_cache::with_image_cache;
 
-        let img_path = match &layer.layer_type {
+        let (img_path, next_img_path, blend_t) = match &layer.layer_type {
             LayerType::Video {
                 frames_dir,
                 frame_count,
                 speed,
                 ..
             } => {
-                let seq_frame = ((effective_frame as f32 * speed.max(0.0)) as u32)
-                    .min(frame_count.saturating_sub(1));
-                crate::core::video_import::frame_path_in_dir(frames_dir, seq_frame)
-                    .to_string_lossy()
-                    .to_string()
+                let source_position = (source_frame * speed.max(0.0)).max(0.0);
+                let first = (source_position.floor() as u32).min(frame_count.saturating_sub(1));
+                let second = (first + 1).min(frame_count.saturating_sub(1));
+                let t = if layer.frame_blending {
+                    (source_position - first as f32).clamp(0.0, 1.0)
+                } else {
+                    0.0
+                };
+                (
+                    crate::core::video_import::frame_path_in_dir(frames_dir, first)
+                        .to_string_lossy()
+                        .to_string(),
+                    crate::core::video_import::frame_path_in_dir(frames_dir, second)
+                        .to_string_lossy()
+                        .to_string(),
+                    t,
+                )
             }
-            LayerType::Image { path } => path.clone(),
+            LayerType::Image { path } => (path.clone(), path.clone(), 0.0),
             _ => unreachable!(),
         };
         with_image_cache(|cache| {
-            if let Some(img) = cache.load_image(&img_path) {
+            let Some(img) = cache.load_image(&img_path).cloned() else {
+                return;
+            };
+            let next_img = if blend_t > 0.0 && next_img_path != img_path {
+                cache.load_image(&next_img_path).cloned()
+            } else {
+                None
+            };
+            {
                 let img_w = img.width as f32;
                 let img_h = img.height as f32;
 
@@ -125,10 +147,23 @@ fn rasterize_image_layer(ctx: RasterCtx<'_>) {
                             if tidx + 3 < img.pixels.len() {
                                 let lidx = (((py - min_y) * bw + (px - min_x)) * 4) as usize;
                                 if lidx + 3 < layer_buf.len() {
-                                    let src_a = (img.pixels[tidx + 3] as f32 / 255.0) * mask_alpha;
-                                    layer_buf[lidx] = img.pixels[tidx];
-                                    layer_buf[lidx + 1] = img.pixels[tidx + 1];
-                                    layer_buf[lidx + 2] = img.pixels[tidx + 2];
+                                    let sample = |channel: usize| -> u8 {
+                                        let a = img.pixels[tidx + channel] as f32;
+                                        let b = next_img
+                                            .as_ref()
+                                            .filter(|next| next.width == img.width && next.height == img.height)
+                                            .and_then(|next| {
+                                                let next_idx = ((tex_y * next.width + tex_x) * 4) as usize;
+                                                next.pixels.get(next_idx + channel).copied()
+                                            })
+                                            .map(f32::from)
+                                            .unwrap_or(a);
+                                        (a + (b - a) * blend_t).round().clamp(0.0, 255.0) as u8
+                                    };
+                                    let src_a = (f32::from(sample(3)) / 255.0) * mask_alpha;
+                                    layer_buf[lidx] = sample(0);
+                                    layer_buf[lidx + 1] = sample(1);
+                                    layer_buf[lidx + 2] = sample(2);
                                     layer_buf[lidx + 3] = (src_a * 255.0) as u8;
                                 }
                             }

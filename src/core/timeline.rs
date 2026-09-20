@@ -1925,6 +1925,11 @@ pub struct Layer {
     #[serde(default)]
     pub paint_strokes: Vec<PaintStroke>,
 
+    /// Blend adjacent source frames when video speed or time-remap lands
+    /// between frames. Disabled by default for legacy project parity.
+    #[serde(default)]
+    pub frame_blending: bool,
+
     // ── AE Layer Markers (per-layer comment flags) ──
     #[serde(default)]
     pub markers: Vec<TimelineMarker>,
@@ -2071,6 +2076,7 @@ impl Layer {
             masks: Vec::new(),
             puppet_pins: Vec::new(),
             paint_strokes: Vec::new(),
+            frame_blending: false,
             markers: Vec::new(),
             auto_orient: crate::core::auto_orient::AutoOrientMode::Off,
             posterize_time: None,
@@ -2128,9 +2134,15 @@ impl Layer {
     }
 
     pub fn remap_frame(&self, frame: u32) -> u32 {
+        self.remap_frame_f32(frame).round().max(0.0) as u32
+    }
+
+    /// Evaluate time remapping without losing the fractional source frame.
+    /// Video rasterization uses this for optional frame blending.
+    pub fn remap_frame_f32(&self, frame: u32) -> f32 {
         match &self.time_remap {
-            Some(anim) => anim.evaluate(frame) as u32,
-            None => frame,
+            Some(anim) => anim.evaluate(frame).max(0.0),
+            None => frame as f32,
         }
     }
 

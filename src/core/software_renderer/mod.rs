@@ -1038,6 +1038,7 @@ pub fn render_frame_to_pixels(
             layer,
             frame,
             effective_frame,
+            source_frame: layer.remap_frame_f32(frame),
             masks,
             min_x,
             min_y,
@@ -1337,6 +1338,13 @@ mod tests {
             .expect("save png");
     }
 
+    fn write_gray_webp(path: &std::path::Path, gray: u8) {
+        let img = image::GrayImage::from_pixel(4, 4, image::Luma([gray]));
+        image::DynamicImage::ImageLuma8(img)
+            .save_with_format(path, image::ImageFormat::WebP)
+            .expect("save webp");
+    }
+
     #[test]
     fn test_video_layer_speed_scales_sequence_index() {
         let dir = std::env::temp_dir().join(format!("kagari_speed_test_{}", std::process::id()));
@@ -1386,6 +1394,39 @@ mod tests {
             200,
             "index must clamp to last frame"
         );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_video_frame_blending_interpolates_webp_frames() {
+        let dir = std::env::temp_dir().join(format!("kagari_blend_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        write_gray_webp(&dir.join("frame_00000.webp"), 0);
+        write_gray_webp(&dir.join("frame_00001.webp"), 100);
+
+        let mut comp = Composition::new("c1".into(), "Comp".into(), 16, 16, 30, 30);
+        let mut layer = Layer::new(
+            "v".into(),
+            "V".into(),
+            LayerType::Video {
+                source: "test".into(),
+                frames_dir: dir.to_string_lossy().into_owned(),
+                frame_count: 2,
+                audio_wav: None,
+                speed: 0.5,
+            },
+            30,
+        );
+        layer.frame_blending = true;
+        layer.transform.position = Animatable::new_constant([8.0, 8.0]);
+        comp.layers.push(layer);
+
+        // Timeline frame 1 maps to source position 0.5, so the midpoint is
+        // rendered instead of truncating to either source frame.
+        let pixels = render_frame_to_pixels(&comp, 1, 16, 16, 0.0, 0);
+        assert_eq!(pixels[8 * 16 * 4 + 8 * 4], 50);
 
         let _ = std::fs::remove_dir_all(&dir);
     }

@@ -879,6 +879,7 @@ pub fn draw_layer_type_specs(
                 let before_frames = frames_dir.clone();
                 let before_speed = *speed;
                 let before_count = *frame_count;
+                let before_frame_blending = layer.frame_blending;
                 ui.label(egui::RichText::new("Video Layer").strong());
                 ui.horizontal(|ui| {
                     ui.label("Source:");
@@ -911,6 +912,8 @@ pub fn draw_layer_type_specs(
                         *speed = 1.0;
                     }
                 });
+                ui.checkbox(&mut layer.frame_blending, "Frame Blending")
+                    .on_hover_text("Blend adjacent source frames for fractional speed and time-remap playback");
                 ui.horizontal(|ui| {
                     ui.label("Frame count:");
                     ui.add(egui::DragValue::new(frame_count).range(1..=100_000));
@@ -955,6 +958,7 @@ pub fn draw_layer_type_specs(
                     || before_frames != *frames_dir
                     || before_speed != *speed
                     || before_count != *frame_count
+                    || before_frame_blending != layer.frame_blending
                 {
                     *project_changed = true;
                 }

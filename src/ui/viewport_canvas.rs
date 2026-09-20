@@ -43,7 +43,15 @@ pub fn draw_software_canvas(
             )
         })
     });
-    if custom_lut_active || paint_preview_required || source_map_effect_preview_required {
+    let frame_blending_required = comp
+        .layers
+        .iter()
+        .any(|layer| layer.frame_blending && matches!(layer.layer_type, LayerType::Video { .. }));
+    if custom_lut_active
+        || paint_preview_required
+        || source_map_effect_preview_required
+        || frame_blending_required
+    {
         let max_preview_dim = 2048u32;
         let scale = (max_preview_dim as f32 / comp.width.max(comp.height) as f32).min(1.0);
         let render_width = ((comp.width as f32 * scale).round() as u32).max(1);
