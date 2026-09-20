@@ -589,7 +589,12 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
         #[allow(unused_mut)]
         let mut rendered_gpu = false;
         #[cfg(feature = "wgpu")]
-        if let Some(renderer) = &mut app.renderer {
+        if ctx
+            .data(|d| d.get_temp::<usize>(egui::Id::new("ae_colorspace_lut")))
+            .unwrap_or(0)
+            != 3
+        {
+            if let Some(renderer) = &mut app.renderer {
             if let Some(wgpu_state) = &app.wgpu_state {
                 let exp_id = egui::Id::new("ae_exposure_ev");
                 let exposure_ev = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(exp_id, || 0.0f32));
@@ -787,6 +792,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                     ui.put(draw_rect, egui::Image::new(egui::load::SizedTexture::new(texture_id, draw_rect.size())));
                     rendered_gpu = true;
                 }
+            }
             }
         }
 

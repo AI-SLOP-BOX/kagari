@@ -24,6 +24,42 @@ pub fn draw_software_canvas(
         ui.set_clip_rect(prev_clip.intersect(clip));
     }
 
+    let custom_lut_active = ui
+        .ctx()
+        .data(|d| d.get_temp::<usize>(egui::Id::new("ae_colorspace_lut")))
+        .unwrap_or(0)
+        == 3;
+    if custom_lut_active {
+        let comp = app.history.current().active_composition();
+        let max_preview_dim = 2048u32;
+        let scale = (max_preview_dim as f32 / comp.width.max(comp.height) as f32).min(1.0);
+        let render_width = ((comp.width as f32 * scale).round() as u32).max(1);
+        let render_height = ((comp.height as f32 * scale).round() as u32).max(1);
+        let pixels = crate::core::software_renderer::render_frame_to_pixels(
+            comp,
+            current_frame,
+            render_width,
+            render_height,
+            0.0,
+            3,
+        );
+        let image = egui::ColorImage::from_rgba_unmultiplied(
+            [render_width as usize, render_height as usize],
+            &pixels,
+        );
+        let texture = ui.ctx().load_texture(
+            "custom-lut-software-preview",
+            image,
+            egui::TextureOptions::LINEAR,
+        );
+        ui.put(
+            draw_rect,
+            egui::Image::new(egui::load::SizedTexture::new(texture.id(), draw_rect.size())),
+        );
+        ui.set_clip_rect(prev_clip);
+        return;
+    }
+
     ui.painter()
         .rect_filled(draw_rect, 0.0, egui::Color32::BLACK);
     let comp = app.history.current().active_composition();
