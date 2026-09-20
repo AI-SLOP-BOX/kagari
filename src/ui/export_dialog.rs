@@ -243,8 +243,17 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
     // ── Non-blocking Channel Event Receiver ──
     let mut finished_export = false;
     let mut next_batch_comp: Option<String> = None;
+    let mut export_channel_disconnected = false;
     if let Some(ref rx) = app.export.export_rx {
-        while let Ok(event) = rx.try_recv() {
+        loop {
+            let event = match rx.try_recv() {
+                Ok(event) => event,
+                Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    export_channel_disconnected = true;
+                    break;
+                }
+            };
             match event {
                 ExportEvent::Progress(prog, msg) => {
                     app.export.export_progress = prog;
@@ -288,6 +297,24 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     }
                 }
             }
+        }
+    }
+
+    if export_channel_disconnected && app.export.is_exporting {
+        let message =
+            "Export worker stopped unexpectedly before reporting a result".to_string();
+        app.export.export_status = Some(format!("Error: {}", message));
+        app.export.is_exporting = false;
+        finished_export = true;
+        if let Some(name) = app.export.export_comp_name.clone() {
+            app.render_item_status
+                .insert(name, crate::app_state::QueueItemStatus::Failed);
+        }
+        app.toasts.error(message);
+        if !app.batch_queue.is_empty() {
+            app.toasts.error("Batch render aborted");
+            app.batch_queue.clear();
+            app.batch_idx = 0;
         }
     }
 
