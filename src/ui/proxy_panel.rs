@@ -33,32 +33,28 @@ pub fn draw_proxy_controls(app: &mut KagariApp, ui: &mut egui::Ui) {
         };
 
         if btn(ui, "Full", ProxyResolution::Full).clicked() {
-            app.history
-                .current_mut()
-                .active_composition_mut()
-                .comp_proxy
-                .global_resolution = ProxyResolution::Full;
+            app.modify_project(|project| {
+                project.active_composition_mut().comp_proxy.global_resolution =
+                    ProxyResolution::Full;
+            });
         }
         if btn(ui, "Half", ProxyResolution::Half).clicked() {
-            app.history
-                .current_mut()
-                .active_composition_mut()
-                .comp_proxy
-                .global_resolution = ProxyResolution::Half;
+            app.modify_project(|project| {
+                project.active_composition_mut().comp_proxy.global_resolution =
+                    ProxyResolution::Half;
+            });
         }
         if btn(ui, "¼", ProxyResolution::Quarter).clicked() {
-            app.history
-                .current_mut()
-                .active_composition_mut()
-                .comp_proxy
-                .global_resolution = ProxyResolution::Quarter;
+            app.modify_project(|project| {
+                project.active_composition_mut().comp_proxy.global_resolution =
+                    ProxyResolution::Quarter;
+            });
         }
         if btn(ui, "⅛", ProxyResolution::Eighth).clicked() {
-            app.history
-                .current_mut()
-                .active_composition_mut()
-                .comp_proxy
-                .global_resolution = ProxyResolution::Eighth;
+            app.modify_project(|project| {
+                project.active_composition_mut().comp_proxy.global_resolution =
+                    ProxyResolution::Eighth;
+            });
         }
 
         ui.separator();
@@ -80,11 +76,10 @@ pub fn draw_proxy_controls(app: &mut KagariApp, ui: &mut egui::Ui) {
             )
             .clicked()
         {
-            app.history
-                .current_mut()
-                .active_composition_mut()
-                .comp_proxy
-                .active_in_preview = !active_in_preview;
+            app.modify_project(|project| {
+                project.active_composition_mut().comp_proxy.active_in_preview =
+                    !active_in_preview;
+            });
         }
 
         ui.separator();
@@ -131,10 +126,17 @@ pub fn draw_layer_proxy(app: &mut KagariApp, ui: &mut egui::Ui, layer_idx: usize
                 .color(colors::TEXT_MUTED),
         );
 
-        if ui.checkbox(&mut enabled.clone(), "").changed() {
-            app.history.current_mut().active_composition_mut().layers[layer_idx]
-                .proxy
-                .enabled = !enabled;
+        let mut next_enabled = enabled;
+        if ui.checkbox(&mut next_enabled, "").changed() {
+            app.modify_project(|project| {
+                if let Some(layer) = project
+                    .active_composition_mut()
+                    .layers
+                    .get_mut(layer_idx)
+                {
+                    layer.proxy.enabled = next_enabled;
+                }
+            });
         }
 
         if enabled {
@@ -142,19 +144,37 @@ pub fn draw_layer_proxy(app: &mut KagariApp, ui: &mut egui::Ui, layer_idx: usize
                 ui.selectable_label(res == r, egui::RichText::new(label).small())
             };
             if btn(ui, "½", ProxyResolution::Half).clicked() {
-                app.history.current_mut().active_composition_mut().layers[layer_idx]
-                    .proxy
-                    .resolution = ProxyResolution::Half;
+                app.modify_project(|project| {
+                    if let Some(layer) = project
+                        .active_composition_mut()
+                        .layers
+                        .get_mut(layer_idx)
+                    {
+                        layer.proxy.resolution = ProxyResolution::Half;
+                    }
+                });
             }
             if btn(ui, "¼", ProxyResolution::Quarter).clicked() {
-                app.history.current_mut().active_composition_mut().layers[layer_idx]
-                    .proxy
-                    .resolution = ProxyResolution::Quarter;
+                app.modify_project(|project| {
+                    if let Some(layer) = project
+                        .active_composition_mut()
+                        .layers
+                        .get_mut(layer_idx)
+                    {
+                        layer.proxy.resolution = ProxyResolution::Quarter;
+                    }
+                });
             }
             if btn(ui, "⅛", ProxyResolution::Eighth).clicked() {
-                app.history.current_mut().active_composition_mut().layers[layer_idx]
-                    .proxy
-                    .resolution = ProxyResolution::Eighth;
+                app.modify_project(|project| {
+                    if let Some(layer) = project
+                        .active_composition_mut()
+                        .layers
+                        .get_mut(layer_idx)
+                    {
+                        layer.proxy.resolution = ProxyResolution::Eighth;
+                    }
+                });
             }
         }
     });
