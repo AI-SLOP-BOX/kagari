@@ -1122,16 +1122,20 @@ fn draw_character_tab(app: &mut KagariApp, ui: &mut egui::Ui, current_frame: u32
     );
     if changed {
         let is_pointer_down = ui.input(|i| i.pointer.any_down());
+        *app.history.current_mut() = temp_proj;
         if is_pointer_down {
             if !app.drag_active() {
                 if let Some(snapshot) = pre_snapshot {
                     app.begin_drag_with_snapshot(snapshot, "Character Edit");
                 }
             }
+            crate::core::frame_cache::bump_version();
         } else if app.drag_active() {
             app.commit_drag();
+        } else if let Some(snapshot) = pre_snapshot {
+            app.begin_drag_with_snapshot(snapshot, "Character Edit");
+            app.commit_drag();
         }
-        crate::core::frame_cache::bump_version();
     }
 }
 
