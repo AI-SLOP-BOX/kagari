@@ -1225,8 +1225,11 @@ pub fn handle_global_shortcuts(
                 if i.key_pressed(key) {
                     let comp_count = app.history.current().compositions.len();
                     if idx < comp_count {
-                        app.history.current_mut().active_composition_idx = idx;
-                        crate::core::frame_cache::bump_version();
+                        let mut project = app.history.current().clone();
+                        project.active_composition_idx = idx;
+                        app.commit_project(project);
+                        app.selection.selected_layer_idx = None;
+                        app.selection.selected_layers.clear();
                         let name = app.history.current().compositions[idx].name.clone();
                         app.toasts
                             .info(format!("Switched to Composition: {}", name));
@@ -1296,8 +1299,11 @@ pub fn handle_global_shortcuts(
         if cmd && i.modifiers.alt && i.key_pressed(Key::ArrowLeft) && !app.comp_nav_stack.is_empty()
         {
             if let Some(prev) = app.comp_nav_stack.pop() {
-                app.history.current_mut().active_composition_idx = prev;
-                crate::core::frame_cache::bump_version();
+                let mut project = app.history.current().clone();
+                project.active_composition_idx = prev;
+                app.commit_project(project);
+                app.selection.selected_layer_idx = None;
+                app.selection.selected_layers.clear();
             }
         }
 

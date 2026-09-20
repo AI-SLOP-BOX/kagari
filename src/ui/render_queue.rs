@@ -236,9 +236,12 @@ pub fn draw_render_queue_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
             }
         }
         if let Some(name) = switch_comp {
-            let p = app.history.current_mut();
-            if let Some(pos) = p.compositions.iter().position(|c| c.name == name) {
-                p.active_composition_idx = pos;
+            let mut project = app.history.current().clone();
+            if let Some(pos) = project.compositions.iter().position(|c| c.name == name) {
+                project.active_composition_idx = pos;
+                app.commit_project(project);
+                app.selection.selected_layer_idx = None;
+                app.selection.selected_layers.clear();
             }
         }
 

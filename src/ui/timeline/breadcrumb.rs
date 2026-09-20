@@ -62,12 +62,18 @@ pub fn draw_comp_breadcrumb(app: &mut KagariApp, ui: &mut egui::Ui) {
     if let Some((pos, comp_idx)) = jump_to {
         // Truncate stack so clicked crumb becomes current, then navigate.
         app.comp_nav_stack.truncate(pos);
-        app.history.current_mut().active_composition_idx = comp_idx;
-        crate::core::frame_cache::bump_version();
+        let mut project = app.history.current().clone();
+        project.active_composition_idx = comp_idx;
+        app.commit_project(project);
+        app.selection.selected_layer_idx = None;
+        app.selection.selected_layers.clear();
     } else if back_requested {
         if let Some(prev) = app.comp_nav_stack.pop() {
-            app.history.current_mut().active_composition_idx = prev;
-            crate::core::frame_cache::bump_version();
+            let mut project = app.history.current().clone();
+            project.active_composition_idx = prev;
+            app.commit_project(project);
+            app.selection.selected_layer_idx = None;
+            app.selection.selected_layers.clear();
         }
     }
 }
