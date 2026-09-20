@@ -2091,7 +2091,11 @@ impl WgpuRenderer {
                     ..
                 } = &layer.layer_type
                 {
-                    let seq_frame = ((effective_frame as f32) * speed.max(0.0))
+                    let source_frame = match &layer.posterize_time {
+                        Some(pt) if pt.enabled => effective_frame as f32,
+                        _ => layer.remap_frame_f32(frame),
+                    };
+                    let seq_frame = (source_frame * speed.max(0.0))
                         .floor()
                         .max(0.0) as u32;
                     let seq_frame = seq_frame.min(frame_count.saturating_sub(1));
