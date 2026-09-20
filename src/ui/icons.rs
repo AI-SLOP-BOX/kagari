@@ -198,36 +198,37 @@ pub const SVG_BRAIN_AI: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBo
 pub const SVG_EXPORT: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15.5v4a1.75 1.75 0 0 0 1.75 1.75h12.5A1.75 1.75 0 0 0 20 19.5v-4"/><path d="M12 16V3M7.5 7.5 12 3l4.5 4.5"/></svg>"#;
 pub const SVG_EFFECTS: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.7" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/><circle cx="8" cy="6" r="2" fill="#0d161d"/><circle cx="16" cy="12" r="2" fill="#0d161d"/><circle cx="10" cy="18" r="2" fill="#0d161d"/></svg>"##;
 
-/// The application logo mark: a stylized composition frame with a playhead.
-/// Drawn procedurally so it stays crisp at any size and adapts to the theme.
+/// The application logo mark used by legacy callers.
+///
+/// Keep this on the same source asset as the native window icon and the
+/// workspace sidebars. The old procedural blue/purple mark was a different
+/// identity and made the app look like it had multiple logos.
 pub fn draw_logo(ui: &mut egui::Ui, size: f32) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
-    let p = ui.painter();
-    let accent = egui::Color32::from_rgb(0, 160, 240);
-    let purple = egui::Color32::from_rgb(150, 80, 220);
-
-    // Rounded frame
-    p.rect_stroke(rect.shrink(1.0), 3.0, egui::Stroke::new(1.6_f32, accent));
-    // Diagonal split suggesting motion
-    let tl = rect.left_top();
-    let br = rect.right_bottom();
-    let mid = egui::pos2(rect.center().x, rect.center().y);
-    p.line_segment([tl, mid], egui::Stroke::new(1.2_f32, purple));
-    p.line_segment([mid, br], egui::Stroke::new(1.2_f32, purple));
-    // Playhead diamond at center
-    let c = rect.center();
-    let s = size * 0.14;
-    let pts = [
-        egui::pos2(c.x, c.y - s),
-        egui::pos2(c.x + s, c.y),
-        egui::pos2(c.x, c.y + s),
-        egui::pos2(c.x - s, c.y),
-    ];
-    p.add(egui::Shape::convex_polygon(
-        pts.to_vec(),
-        accent,
-        egui::Stroke::NONE,
-    ));
+    let texture_id = egui::Id::new("kagari-logo-mark");
+    let texture = ui.ctx().data_mut(|data| data.get_temp::<egui::TextureHandle>(texture_id));
+    let texture = texture.unwrap_or_else(|| {
+        let image = image::load_from_memory(include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/assets/kagari_logo.webp"
+        )))
+        .expect("embedded Kagari logo must decode")
+        .to_rgba8();
+        let size = [image.width() as usize, image.height() as usize];
+        let handle = ui.ctx().load_texture(
+            "kagari-logo-mark",
+            egui::ColorImage::from_rgba_unmultiplied(size, image.as_raw()),
+            egui::TextureOptions::LINEAR,
+        );
+        ui.ctx().data_mut(|data| data.insert_temp(texture_id, handle.clone()));
+        handle
+    });
+    ui.painter().image(
+        texture.id(),
+        rect,
+        egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+        egui::Color32::WHITE,
+    );
     resp
 }
 
