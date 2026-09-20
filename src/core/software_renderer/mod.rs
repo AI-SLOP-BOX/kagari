@@ -768,74 +768,69 @@ pub fn render_frame_to_pixels(
                     let hi_x = (pc_cx + pc_bx + 2.0).ceil().min(width as f32 - 1.0) as u32;
                     let lo_y = (pc_cy - pc_by - 2.0).floor().max(0.0) as u32;
                     let hi_y = (pc_cy + pc_by + 2.0).ceil().min(height as f32 - 1.0) as u32;
+                    if pc_bx > 0.0 && pc_by > 0.0 && lo_x <= hi_x && lo_y <= hi_y {
+                        let precomp_width = hi_x - lo_x + 1;
+                        let precomp_height = hi_y - lo_y + 1;
+                        let mut precomp_buf = vec![0u8; (precomp_width * precomp_height * 4) as usize];
 
-                    for py in lo_y..=hi_y {
-                        for px in lo_x..=hi_x {
-                            // Vector mask check
-                            let mut mask_alpha = 1.0;
-                            if !masks.is_empty() {
-                                mask_alpha =
-                                    compute_combined_mask_coverage(px as f32, py as f32, masks);
-                            }
-                            if mask_alpha <= 0.001 {
-                                continue;
-                            }
+                        for py in lo_y..=hi_y {
+                            for px in lo_x..=hi_x {
+                                let mut mask_alpha = 1.0;
+                                if !masks.is_empty() {
+                                    mask_alpha =
+                                        compute_combined_mask_coverage(px as f32, py as f32, masks);
+                                }
+                                if mask_alpha <= 0.001 {
+                                    continue;
+                                }
 
-                            // Inverse rotation into local space, then UV over sub-comp frame
-                            let dx = px as f32 - pc_cx;
-                            let dy = py as f32 - pc_cy;
-                            let lx = dx * pc_cos + dy * pc_sin;
-                            let ly = -dx * pc_sin + dy * pc_cos;
-                            let u = (lx / pc_bx + 1.0) * 0.5;
-                            let v = (ly / pc_by + 1.0) * 0.5;
-                            if !(0.0..=1.0).contains(&u) || !(0.0..=1.0).contains(&v) {
-                                continue;
-                            }
+                                // Inverse rotation into local space, then UV over sub-comp frame.
+                                let dx = px as f32 - pc_cx;
+                                let dy = py as f32 - pc_cy;
+                                let lx = dx * pc_cos + dy * pc_sin;
+                                let ly = -dx * pc_sin + dy * pc_cos;
+                                let u = (lx / pc_bx + 1.0) * 0.5;
+                                let v = (ly / pc_by + 1.0) * 0.5;
+                                if !(0.0..=1.0).contains(&u) || !(0.0..=1.0).contains(&v) {
+                                    continue;
+                                }
 
-                            let sw = width.max(1);
-                            let sh = height.max(1);
-                            let sx = ((u * (sw - 1) as f32).round() as u32).min(sw - 1);
-                            let sy = ((v * (sh - 1) as f32).round() as u32).min(sh - 1);
-                            let src_idx = ((sy * sw + sx) * 4) as usize;
-                            if src_idx + 3 >= sub_pixels.len() {
-                                continue;
+                                let sw = width.max(1);
+                                let sh = height.max(1);
+                                let sx = ((u * (sw - 1) as f32).round() as u32).min(sw - 1);
+                                let sy = ((v * (sh - 1) as f32).round() as u32).min(sh - 1);
+                                let src_idx = ((sy * sw + sx) * 4) as usize;
+                                if src_idx + 3 >= sub_pixels.len() {
+                                    continue;
+                                }
+                                let dst_idx = (((py - lo_y) * precomp_width + (px - lo_x)) * 4) as usize;
+                                precomp_buf[dst_idx] = sub_pixels[src_idx];
+                                precomp_buf[dst_idx + 1] = sub_pixels[src_idx + 1];
+                                precomp_buf[dst_idx + 2] = sub_pixels[src_idx + 2];
+                                precomp_buf[dst_idx + 3] = (sub_pixels[src_idx + 3] as f32
+                                    * mask_alpha)
+                                    .round()
+                                    .clamp(0.0, 255.0) as u8;
                             }
-
-                            let src_a_raw =
-                                sub_pixels[src_idx + 3] as f32 / 255.0 * l_opacity * mask_alpha;
-                            if src_a_raw <= 0.001 {
-                                continue;
-                            }
-                            let dst_idx = ((py * width + px) * 4) as usize;
-                            if dst_idx + 3 >= buffer.len() {
-                                continue;
-                            }
-                            // Linear-space compositing (16bpc quality)
-                            let src_linear = crate::core::color::Rgbaf::from_rgba8(
-                                sub_pixels[src_idx],
-                                sub_pixels[src_idx + 1],
-                                sub_pixels[src_idx + 2],
-                                255,
-                            );
-                            let src_lin = crate::core::color::Rgbaf::new(
-                                src_linear.r,
-                                src_linear.g,
-                                src_linear.b,
-                                src_a_raw,
-                            );
-                            let dst_linear = crate::core::color::Rgbaf::from_rgba8(
-                                buffer[dst_idx],
-                                buffer[dst_idx + 1],
-                                buffer[dst_idx + 2],
-                                buffer[dst_idx + 3],
-                            );
-                            let out = src_lin.over(dst_linear);
-                            let out_rgba = out.to_rgba8();
-                            buffer[dst_idx] = out_rgba[0];
-                            buffer[dst_idx + 1] = out_rgba[1];
-                            buffer[dst_idx + 2] = out_rgba[2];
-                            buffer[dst_idx + 3] = out_rgba[3];
                         }
+
+                        let matte_pixels = render_matte_buffer(comp, layer, frame, width, height);
+                        composite_layer_buffer(
+                            &mut buffer[..],
+                            &precomp_buf,
+                            &CompositeCtx {
+                                layer,
+                                matte: matte_pixels.as_deref(),
+                                min_x: lo_x,
+                                min_y: lo_y,
+                                bw: precomp_width,
+                                bh: precomp_height,
+                                width,
+                                height,
+                                blend_linear,
+                                l_opacity,
+                            },
+                        );
                     }
                 }
             }
