@@ -1978,6 +1978,12 @@ pub struct Layer {
 pub struct PaintStroke {
     pub color: [f32; 4],
     pub size: f32,
+    #[serde(default = "default_paint_hardness")]
+    pub hardness: f32,
+    #[serde(default = "default_paint_opacity")]
+    pub opacity: f32,
+    #[serde(default = "default_paint_flow")]
+    pub flow: f32,
     pub points: Vec<[f32; 2]>,
     /// First frame the stroke is visible.
     #[serde(default)]
@@ -1985,6 +1991,18 @@ pub struct PaintStroke {
     /// Last frame it is visible; 0 = until the layer's out-point.
     #[serde(default)]
     pub end_frame: u32,
+}
+
+fn default_paint_hardness() -> f32 {
+    0.8
+}
+
+fn default_paint_opacity() -> f32 {
+    1.0
+}
+
+fn default_paint_flow() -> f32 {
+    1.0
 }
 
 /// A puppet-tool deformation pin. `comp_source` is the rest position in

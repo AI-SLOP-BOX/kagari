@@ -1111,12 +1111,24 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                                 let bsize = ctx.data_mut(|d| {
                                     d.get_temp::<f32>(egui::Id::new("paint_size")).unwrap_or(12.0)
                                 });
+                                let hardness = ctx.data_mut(|d| {
+                                    d.get_temp::<f32>(egui::Id::new("paint_hardness")).unwrap_or(80.0)
+                                }) / 100.0;
+                                let opacity = ctx.data_mut(|d| {
+                                    d.get_temp::<f32>(egui::Id::new("paint_opacity")).unwrap_or(100.0)
+                                }) / 100.0;
+                                let flow = ctx.data_mut(|d| {
+                                    d.get_temp::<f32>(egui::Id::new("paint_flow")).unwrap_or(100.0)
+                                }) / 100.0;
                                 let start_f = current_frame;
                                 let proj = app.history.current_mut().active_composition_mut();
                                 if let Some(layer) = proj.layers.get_mut(sel_li) {
                                      layer.paint_strokes.push(crate::core::timeline::PaintStroke {
                                         color,
                                         size: bsize,
+                                        hardness,
+                                        opacity,
+                                        flow,
                                         points: pts,
                                         start_frame: start_f,
                                         end_frame: 0,
@@ -1178,10 +1190,10 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                             ui.set_min_width(150.0);
                             ui.label(egui::RichText::new("📋 Clone Stamp").strong().small());
                             let mut size = ctx.data_mut(|d| {
-                                d.get_temp::<f32>(egui::Id::new("clone_stamp_size")).unwrap_or(15.0)
+                                d.get_temp::<f32>(egui::Id::new("paint_size")).unwrap_or(12.0)
                             });
                             if ui.add(egui::Slider::new(&mut size, 1.0..=100.0).suffix(" px")).changed() {
-                                ctx.data_mut(|d| d.insert_temp(egui::Id::new("clone_stamp_size"), size));
+                                ctx.data_mut(|d| d.insert_temp(egui::Id::new("paint_size"), size));
                             }
                             ui.label(egui::RichText::new("Alt+Click to set source").small().color(colors::TEXT_SECONDARY));
                         });
@@ -1264,14 +1276,26 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                     if let Some(pts) = pts_opt {
                         if !pts.is_empty() {
                             let bsize = ctx.data_mut(|d| {
-                                d.get_temp::<f32>(egui::Id::new("clone_stamp_size")).unwrap_or(15.0)
+                                d.get_temp::<f32>(egui::Id::new("paint_size")).unwrap_or(12.0)
                             });
+                            let hardness = ctx.data_mut(|d| {
+                                d.get_temp::<f32>(egui::Id::new("paint_hardness")).unwrap_or(80.0)
+                            }) / 100.0;
+                            let opacity = ctx.data_mut(|d| {
+                                d.get_temp::<f32>(egui::Id::new("paint_opacity")).unwrap_or(100.0)
+                            }) / 100.0;
+                            let flow = ctx.data_mut(|d| {
+                                d.get_temp::<f32>(egui::Id::new("paint_flow")).unwrap_or(100.0)
+                            }) / 100.0;
                             let _src_off = src_opt.unwrap_or([0.0, 0.0]);
                             let proj = app.history.current_mut().active_composition_mut();
                             if let Some(layer) = proj.layers.get_mut(sel_li) {
                                 layer.paint_strokes.push(crate::core::timeline::PaintStroke {
                                     color: [1.0, 1.0, 1.0, 1.0],
                                     size: bsize,
+                                    hardness,
+                                    opacity,
+                                    flow,
                                     points: pts,
                                     start_frame: current_frame,
                                     end_frame: 0,

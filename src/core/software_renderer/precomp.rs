@@ -489,13 +489,16 @@ fn render_precomp_layers_inner(
                 let buf_pts: Vec<[f32; 2]> =
                     stroke.points.iter().map(|&p| to_buf_local(p)).collect();
                 let col = stroke.color;
-                crate::core::paint::draw_stroke(
+                crate::core::paint::draw_stroke_with_brush(
                     &mut layer_buf,
                     bw,
                     bh,
                     &buf_pts,
                     col,
                     stroke.size.max(1.0),
+                    stroke.hardness,
+                    stroke.opacity,
+                    stroke.flow,
                 );
             }
         }

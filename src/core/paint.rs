@@ -136,6 +136,21 @@ pub fn draw_stroke(
     color: [f32; 4],
     size: f32,
 ) {
+    draw_stroke_with_brush(buf, w, h, points, color, size, 1.0, 1.0, 1.0);
+}
+
+/// Draw a stroke with the brush controls exposed by the paint UI.
+pub fn draw_stroke_with_brush(
+    buf: &mut [u8],
+    w: u32,
+    h: u32,
+    points: &[[f32; 2]],
+    color: [f32; 4],
+    size: f32,
+    hardness: f32,
+    opacity: f32,
+    flow: f32,
+) {
     let Some(expected_len) = (w as usize)
         .checked_mul(h as usize)
         .and_then(|count| count.checked_mul(4))
@@ -154,7 +169,22 @@ pub fn draw_stroke(
     }
     let radius = (size.clamp(0.0, 8192.0) * 0.5).max(0.5);
     let r2 = radius * radius;
-    let src_a = color[3].clamp(0.0, 1.0);
+    let hardness = if hardness.is_finite() {
+        hardness.clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
+    let opacity = if opacity.is_finite() {
+        opacity.clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
+    let flow = if flow.is_finite() {
+        flow.clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
+    let src_a = color[3].clamp(0.0, 1.0) * opacity * flow;
 
     let mut stamp = |cx: f32, cy: f32| {
         if !cx.is_finite() || !cy.is_finite() {
@@ -172,12 +202,18 @@ pub fn draw_stroke(
                 if d2 > r2 {
                     continue;
                 }
-                // Hard core with a 1px anti-aliased rim.
                 let dist = d2.sqrt();
                 if dist > radius {
                     continue;
                 }
-                let cov = (radius - dist).clamp(0.0, 1.0);
+                let cov = if hardness >= 1.0 {
+                    (radius - dist).clamp(0.0, 1.0)
+                } else if dist <= radius * hardness {
+                    1.0
+                } else {
+                    let inner_radius = radius * hardness;
+                    ((radius - dist) / (radius - inner_radius).max(1.0)).clamp(0.0, 1.0)
+                };
                 let idx = ((py * w + px) * 4) as usize;
                 if idx + 3 >= buf.len() {
                     continue;
@@ -395,6 +431,26 @@ mod tests {
         assert_eq!(buf, original);
         draw_stroke(&mut buf, 2, 2, &[[1.0, 1.0]], [1.0; 4], 2.0);
         assert_ne!(buf, original);
+    }
+
+    #[test]
+    fn brush_controls_affect_alpha_and_edge_falloff() {
+        let mut buf = blank(9, 9);
+        draw_stroke_with_brush(
+            &mut buf,
+            9,
+            9,
+            &[[4.5, 4.5]],
+            [1.0, 0.0, 0.0, 1.0],
+            6.0,
+            0.0,
+            0.5,
+            1.0,
+        );
+        let center_alpha = buf[((4 * 9 + 4) * 4) + 3];
+        let edge_alpha = buf[((1 * 9 + 4) * 4) + 3];
+        assert!((center_alpha as i32 - 128).abs() <= 1);
+        assert!(edge_alpha < center_alpha);
     }
 
     fn blank(w: u32, h: u32) -> Vec<u8> {
