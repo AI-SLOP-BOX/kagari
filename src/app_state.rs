@@ -203,6 +203,12 @@ pub struct KagariApp {
     pub history: crate::core::history::ProjectHistory,
     /// Crash-recovery autosave manager
     pub autosave: crate::core::autosave::AutosaveManager,
+    /// History generation already observed by the autosave bridge.
+    ///
+    /// Some editing surfaces commit through `EditorSession` or directly through
+    /// `ProjectHistory`, so the app-level bridge keeps autosave coverage
+    /// independent of the individual panel implementation.
+    pub autosave_history_generation: u64,
     /// Show the crash-recovery restore prompt at startup
     pub show_recovery_dialog: bool,
     /// Ensures the startup recovery check runs only once
@@ -464,6 +470,7 @@ impl Default for KagariApp {
             autosave: crate::core::autosave::AutosaveManager::new(
                 std::env::temp_dir().join("kagari_recovery"),
             ),
+            autosave_history_generation: 0,
             show_recovery_dialog: false,
             recovery_checked: false,
             recovery_snapshot_time: None,
@@ -912,6 +919,15 @@ impl KagariApp {
                 });
                 self.show_recovery_dialog = true;
             }
+        }
+
+        // History-backed edits can come from panels that use EditorSession or
+        // ProjectHistory directly. Observe the generation centrally so every
+        // committed edit participates in crash recovery.
+        let history_generation = self.history.generation();
+        if history_generation != self.autosave_history_generation {
+            self.autosave.mark_dirty();
+            self.autosave_history_generation = history_generation;
         }
 
         // Crash-recovery autosave: write a rotating snapshot when dirty and due
