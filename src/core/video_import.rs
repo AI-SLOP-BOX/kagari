@@ -110,6 +110,35 @@ fn probe_has_audio(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
+fn create_unique_import_dir(dest_dir: &Path) -> Result<PathBuf, String> {
+    let parent = dest_dir
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    std::fs::create_dir_all(parent)
+        .map_err(|e| format!("failed to create media parent dir: {}", e))?;
+
+    let stem = dest_dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or("import");
+    let mut candidate = dest_dir.to_path_buf();
+    let mut suffix = 1u32;
+    loop {
+        match std::fs::create_dir(&candidate) {
+            Ok(()) => return Ok(candidate),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                candidate = parent.join(format!("{stem}_{suffix}"));
+                suffix = suffix.saturating_add(1);
+            }
+            Err(error) => {
+                return Err(format!("failed to create media dir: {}", error));
+            }
+        }
+    }
+}
+
 /// Decodes `src_path` into `dest_dir` as a WebP frame sequence (+ WAV audio).
 /// PNG is used as a compatibility fallback when the installed FFmpeg lacks
 /// the WebP encoder.
@@ -157,7 +186,8 @@ pub fn import_video(src_path: &str, dest_dir: &Path, fps: f32) -> Result<VideoAs
             MAX_IMPORT_FRAMES
         ));
     }
-    let frames_dir = dest_dir.join("frames");
+    let import_dir = create_unique_import_dir(dest_dir)?;
+    let frames_dir = import_dir.join("frames");
     std::fs::create_dir_all(&frames_dir)
         .map_err(|e| format!("failed to create media dir: {}", e))?;
 
@@ -231,7 +261,7 @@ pub fn import_video(src_path: &str, dest_dir: &Path, fps: f32) -> Result<VideoAs
     // 2. Audio extraction (best effort — absence is not fatal)
     let mut audio_wav = None;
     if probe_has_audio(src) {
-        let wav = dest_dir.join("audio.wav");
+        let wav = import_dir.join("audio.wav");
         let audio = Command::new("ffmpeg")
             .arg("-y")
             .arg("-i")
@@ -324,5 +354,25 @@ mod tests {
             "unexpected import failure mode: {}",
             err
         );
+    }
+
+    #[test]
+    fn import_directory_is_unique_without_overwriting_existing_media() {
+        let root = std::env::temp_dir().join(format!(
+            "kagari_video_import_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock should be after unix epoch")
+                .as_nanos()
+        ));
+        let requested = root.join("clip");
+        let first = create_unique_import_dir(&requested).expect("first directory should be made");
+        let second = create_unique_import_dir(&requested).expect("second directory should be made");
+        assert_eq!(first, requested);
+        assert_eq!(second, root.join("clip_1"));
+        assert!(first.is_dir());
+        assert!(second.is_dir());
+        std::fs::remove_dir_all(root).expect("test directories should be removable");
     }
 }
