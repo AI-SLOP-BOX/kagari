@@ -32,7 +32,15 @@ pub fn handle_dropped_files(app: &mut KagariApp, ctx: &egui::Context) {
             match res {
                 ImportResult::Video(asset, name) => {
                     let dur = asset.frame_count.max(1);
-                    let layer = crate::core::timeline::Layer::new(
+                    let (comp_w, comp_h) = {
+                        let comp = app.history.current().active_composition();
+                        (comp.width as f32, comp.height as f32)
+                    };
+                    let fit = ((comp_w / asset.width.max(1) as f32)
+                        .min(comp_h / asset.height.max(1) as f32))
+                        .min(1.0)
+                        * 100.0;
+                    let mut layer = crate::core::timeline::Layer::new(
                         format!("vid_{}", asset.frames_dir.replace('/', "_")),
                         name.clone(),
                         crate::core::timeline::LayerType::Video {
@@ -44,6 +52,13 @@ pub fn handle_dropped_files(app: &mut KagariApp, ctx: &egui::Context) {
                         },
                         dur,
                     );
+                    layer.transform.position =
+                        crate::core::property::Animatable::new_constant([
+                            comp_w * 0.5,
+                            comp_h * 0.5,
+                        ]);
+                    layer.transform.scale =
+                        crate::core::property::Animatable::new_constant([fit, fit]);
                     insert_layer(app, layer, &format!("video '{}'", name));
                 }
                 ImportResult::Err(e) => {

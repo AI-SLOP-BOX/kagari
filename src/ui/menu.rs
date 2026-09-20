@@ -463,10 +463,18 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                             &src, &dest, fps,
                         ) {
                             Ok(asset) => {
+                                let (comp_w, comp_h, comp_duration) = {
+                                    let comp = app.history.current().active_composition();
+                                    (comp.width as f32, comp.height as f32, comp.duration_frames)
+                                };
+                                let fit = ((comp_w / asset.width.max(1) as f32)
+                                    .min(comp_h / asset.height.max(1) as f32))
+                                    .min(1.0)
+                                    * 100.0;
                                 app.modify_project(|p| {
                                     let layer_count = p.compositions.len();
                                     let comp = p.active_composition_mut();
-                                    let layer = crate::core::timeline::Layer::new(
+                                    let mut layer = crate::core::timeline::Layer::new(
                                         format!("video_{}", layer_count),
                                         name.clone(),
                                         crate::core::timeline::LayerType::Video {
@@ -476,8 +484,15 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                             audio_wav: asset.audio_wav.clone(),
                                             speed: 1.0,
                                         },
-                                        comp.fps,
+                                        comp_duration,
                                     );
+                                    layer.transform.position =
+                                        crate::core::property::Animatable::new_constant([
+                                            comp_w * 0.5,
+                                            comp_h * 0.5,
+                                        ]);
+                                    layer.transform.scale =
+                                        crate::core::property::Animatable::new_constant([fit, fit]);
                                     comp.layers.push(layer);
                                 });
                                 app.toasts.info(format!(
@@ -500,15 +515,35 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         let src = path.to_string_lossy().to_string();
                         let name = path.file_stem().map(|s| s.to_string_lossy().to_string())
                             .unwrap_or_else(|| "image".to_string());
+                        let dimensions = image::image_dimensions(&path).ok();
+                        let (comp_w, comp_h, comp_duration) = {
+                            let comp = app.history.current().active_composition();
+                            (comp.width as f32, comp.height as f32, comp.duration_frames)
+                        };
+                        let fit = dimensions
+                            .map(|(width, height)| {
+                                ((comp_w / width.max(1) as f32)
+                                    .min(comp_h / height.max(1) as f32))
+                                    .min(1.0)
+                                    * 100.0
+                            })
+                            .unwrap_or(100.0);
                         app.modify_project(|p| {
                             let layer_count = p.compositions.len();
                             let comp = p.active_composition_mut();
-                            let layer = crate::core::timeline::Layer::new(
+                            let mut layer = crate::core::timeline::Layer::new(
                                 format!("img_{}", layer_count),
                                 name.clone(),
                                 crate::core::timeline::LayerType::Image { path: src.clone() },
-                                comp.duration_frames,
+                                comp_duration,
                             );
+                            layer.transform.position =
+                                crate::core::property::Animatable::new_constant([
+                                    comp_w * 0.5,
+                                    comp_h * 0.5,
+                                ]);
+                            layer.transform.scale =
+                                crate::core::property::Animatable::new_constant([fit, fit]);
                             comp.layers.push(layer);
                         });
                         app.toasts.info(format!("Imported image: {}", name));
