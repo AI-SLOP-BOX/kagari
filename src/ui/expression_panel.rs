@@ -1,6 +1,7 @@
 use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
+use crate::core::editor::EditorSession;
 
 pub fn draw_expression_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     let layer_idx = match app.selection.selected_layer_idx {
@@ -176,10 +177,11 @@ pub fn draw_expression_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
 
     // Apply expression
     if let Some(expr) = apply_expr {
-        let comp = app.history.current_mut().active_composition_mut();
+        let mut session = EditorSession::new(&mut app.history, "Apply Expression");
+        let comp = session.current_mut().active_composition_mut();
         if layer_idx < comp.layers.len() {
             set_expression(&mut comp.layers[layer_idx].transform, selected_prop, &expr);
-            crate::core::frame_cache::bump_version();
+            session.commit();
             app.toasts.info(format!(
                 "Applied expression to {}.{}",
                 layer_name, prop_name
@@ -189,10 +191,11 @@ pub fn draw_expression_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
 
     // Remove expression
     if remove_expr {
-        let comp = app.history.current_mut().active_composition_mut();
+        let mut session = EditorSession::new(&mut app.history, "Remove Expression");
+        let comp = session.current_mut().active_composition_mut();
         if layer_idx < comp.layers.len() {
             set_expression(&mut comp.layers[layer_idx].transform, selected_prop, "");
-            crate::core::frame_cache::bump_version();
+            session.commit();
             app.toasts.info(format!(
                 "Removed expression from {}.{}",
                 layer_name, prop_name
@@ -243,10 +246,11 @@ pub fn draw_expression_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
         });
 
     if let Some(expr) = preset_expr {
-        let comp = app.history.current_mut().active_composition_mut();
+        let mut session = EditorSession::new(&mut app.history, "Apply Expression Preset");
+        let comp = session.current_mut().active_composition_mut();
         if layer_idx < comp.layers.len() {
             set_expression(&mut comp.layers[layer_idx].transform, selected_prop, &expr);
-            crate::core::frame_cache::bump_version();
+            session.commit();
             app.toasts.info(format!("Applied preset to {}", prop_name));
         }
     }
