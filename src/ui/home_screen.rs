@@ -468,6 +468,7 @@ fn recent_asset_entries(ctx: &egui::Context) -> Vec<AssetEntry> {
 fn enter_studio_new_project(app: &mut KagariApp) {
     app.history =
         crate::core::history::ProjectHistory::new(crate::core::timeline::Project::default());
+    app.mogrt_properties.clear();
     app.selection.selected_layer_idx = None;
     app.selection.selected_layers.clear();
     crate::core::frame_cache::bump_version();

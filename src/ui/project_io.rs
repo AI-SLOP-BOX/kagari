@@ -243,6 +243,7 @@ pub fn open_project_from_path(app: &mut KagariApp, path: &std::path::Path) -> Re
     }
 
     app.history = crate::core::history::ProjectHistory::new(project);
+    app.mogrt_properties.clear();
     app.production_document = production_document;
     if let Some(document) = app.production_document.as_ref() {
         let correction = document.audio.correction;
