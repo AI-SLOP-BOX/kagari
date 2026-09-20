@@ -140,13 +140,17 @@ fn draw_view_menu_contents(ui: &mut egui::Ui, app: &mut KagariApp) {
                 ("Bottom right", 1.0, 1.0),
             ] {
                 if ui.button(label).clicked() {
-                    let comp = app.history.current_mut().active_composition_mut();
-                    if let Some(layer) = comp.layers.get_mut(idx) {
-                        let [width, height] = layer.bounding_size();
-                        layer.transform.anchor_point = crate::core::property::Animatable::new_constant([width * x, height * y]);
-                        app.autosave.mark_dirty();
-                        crate::core::frame_cache::bump_version();
-                    }
+                    app.modify_project(|project| {
+                        let comp = project.active_composition_mut();
+                        if let Some(layer) = comp.layers.get_mut(idx) {
+                            let [width, height] = layer.bounding_size();
+                            layer.transform.anchor_point =
+                                crate::core::property::Animatable::new_constant([
+                                    width * x,
+                                    height * y,
+                                ]);
+                        }
+                    });
                     ui.close_menu();
                 }
             }

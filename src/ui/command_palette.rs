@@ -1099,9 +1099,29 @@ pub fn draw_command_palette(app: &mut KagariApp, ctx: &egui::Context) {
 
             if let Some(exec_idx) = executed_command_idx {
                 if exec_idx < filtered.len() {
+                    let command_name = filtered[exec_idx].name;
+                    let generation_before = app.history.generation();
+                    let snapshot = app.history.current().clone();
                     (filtered[exec_idx].action)(app);
-                    let current = app.history.current().clone();
-                    app.history.commit_action(current, filtered[exec_idx].name);
+
+                    // Some commands use `modify_project`, while older commands
+                    // mutate the live history entry for speed. Normalize both
+                    // paths into one undoable edit without adding a duplicate
+                    // entry for commands that already committed.
+                    if app.history.generation() == generation_before {
+                        let current = app.history.current().clone();
+                        let changed = match (
+                            serde_json::to_vec(&snapshot),
+                            serde_json::to_vec(&current),
+                        ) {
+                            (Ok(before), Ok(after)) => before != after,
+                            _ => false,
+                        };
+                        if changed {
+                            app.begin_drag_with_snapshot(snapshot, command_name);
+                            app.commit_drag();
+                        }
+                    }
                     app.show_command_palette = false;
                     app.command_palette_search.clear();
                     app.command_palette_selected_idx = 0;

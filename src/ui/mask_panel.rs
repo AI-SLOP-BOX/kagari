@@ -8,7 +8,13 @@ pub fn draw_mask_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
 
     let selected_layer_idx = app.selection.selected_layer_idx;
     let project_changed_flag = &mut false;
+    let pre_snapshot = if !app.drag_active() {
+        Some(app.history.current().clone())
+    } else {
+        None
+    };
 
+    {
     let temp_proj = app.history.current_mut();
     let comp = temp_proj.active_composition_mut();
 
@@ -344,8 +350,21 @@ pub fn draw_mask_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     } else {
         ui.weak("No layer selected.");
     }
+    }
 
     if *project_changed_flag {
-        crate::core::frame_cache::bump_version();
+        let pointer_down = ui.input(|input| input.pointer.any_down());
+        if pointer_down {
+            if !app.drag_active() {
+                if let Some(snapshot) = pre_snapshot {
+                    app.begin_drag_with_snapshot(snapshot, "Mask Edit");
+                }
+            }
+        } else if app.drag_active() {
+            app.commit_drag();
+        } else if let Some(snapshot) = pre_snapshot {
+            app.begin_drag_with_snapshot(snapshot, "Mask Edit");
+            app.commit_drag();
+        }
     }
 }

@@ -4,7 +4,13 @@ use eframe::egui;
 pub fn draw_camera_dof_hud(app: &mut KagariApp, ui: &mut egui::Ui) {
     let mut project_changed = false;
     let current_f = app.playback.current_frame;
+    let pre_snapshot = if !app.drag_active() {
+        Some(app.history.current().clone())
+    } else {
+        None
+    };
 
+    {
     ui.horizontal(|ui| {
         ui.style_mut().spacing.item_spacing.x = 4.0;
         ui.small("📷 3D DoF:");
@@ -118,8 +124,21 @@ pub fn draw_camera_dof_hud(app: &mut KagariApp, ui: &mut egui::Ui) {
             ui.weak("(No Active 3D Camera)");
         }
     });
+    }
 
     if project_changed {
-        crate::core::frame_cache::bump_version();
+        let pointer_down = ui.input(|input| input.pointer.any_down());
+        if pointer_down {
+            if !app.drag_active() {
+                if let Some(snapshot) = pre_snapshot {
+                    app.begin_drag_with_snapshot(snapshot, "Camera Depth of Field Edit");
+                }
+            }
+        } else if app.drag_active() {
+            app.commit_drag();
+        } else if let Some(snapshot) = pre_snapshot {
+            app.begin_drag_with_snapshot(snapshot, "Camera Depth of Field Edit");
+            app.commit_drag();
+        }
     }
 }

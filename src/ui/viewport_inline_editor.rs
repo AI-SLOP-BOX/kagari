@@ -25,7 +25,14 @@ pub fn draw_inline_numeric_editor(
 
     let mut project_changed = false;
     let mut should_close = false;
+    let pre_snapshot = if !app.drag_active() {
+        Some(app.history.current().clone())
+    } else {
+        None
+    };
+    let mut is_open = true;
 
+    {
     let temp_proj = app.history.current_mut();
     let comp = temp_proj.active_composition_mut();
 
@@ -44,8 +51,6 @@ pub fn draw_inline_numeric_editor(
         (screen_x - 110.0).max(origin_x + 10.0),
         (screen_y - 120.0).max(origin_y + 10.0),
     );
-
-    let mut is_open = true;
 
     egui::Window::new(format!("✏ Quick Edit: {}", layer.name))
         .fixed_pos(window_pos)
@@ -151,11 +156,28 @@ pub fn draw_inline_numeric_editor(
                 }
             });
         });
+    }
 
     if project_changed {
-        crate::core::frame_cache::bump_version();
+        let pointer_down = ui_pointer_down(ctx);
+        if pointer_down {
+            if !app.drag_active() {
+                if let Some(snapshot) = pre_snapshot {
+                    app.begin_drag_with_snapshot(snapshot, "Inline Transform Edit");
+                }
+            }
+        } else if app.drag_active() {
+            app.commit_drag();
+        } else if let Some(snapshot) = pre_snapshot {
+            app.begin_drag_with_snapshot(snapshot, "Inline Transform Edit");
+            app.commit_drag();
+        }
     }
     if should_close || !is_open {
         app.show_inline_numeric_editor = false;
     }
+}
+
+fn ui_pointer_down(ctx: &egui::Context) -> bool {
+    ctx.input(|input| input.pointer.any_down())
 }

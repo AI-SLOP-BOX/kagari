@@ -177,7 +177,6 @@ pub fn draw_new_comp_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                         proj.compositions.push(comp);
                         proj.active_composition_idx = proj.compositions.len() - 1;
                     });
-                    crate::core::frame_cache::bump_version();
                     app.toasts.info(format!(
                         "Created '{}' — {}×{} @{}fps ({})",
                         name,
