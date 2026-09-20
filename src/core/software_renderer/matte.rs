@@ -162,28 +162,54 @@ pub(crate) fn render_matte_buffer(
                         }
                         LayerType::Image { .. } | LayerType::Video { .. } => {
                             use crate::core::image_cache::with_image_cache;
-                            let image_path = match &matte_layer.layer_type {
-                                LayerType::Image { path } => path.clone(),
-                                LayerType::Video {
-                                    frames_dir,
-                                    frame_count,
-                                    speed,
-                                    ..
-                                } => {
-                                    let sequence_frame = ((m_frame as f32 * speed.max(0.0))
-                                        as u32)
-                                        .min(frame_count.saturating_sub(1));
-                                    crate::core::video_import::frame_path_in_dir(
+                            let (image_path, next_image_path, blend_t) =
+                                match &matte_layer.layer_type {
+                                    LayerType::Image { path } => (path.clone(), None, 0.0),
+                                    LayerType::Video {
                                         frames_dir,
-                                        sequence_frame,
-                                    )
-                                        .to_string_lossy()
-                                        .into_owned()
-                                }
-                                _ => unreachable!(),
-                            };
+                                        frame_count,
+                                        speed,
+                                        ..
+                                    } => {
+                                        let source_position =
+                                            (matte_layer.remap_frame_f32(frame)
+                                                * speed.max(0.0))
+                                                .max(0.0);
+                                        let first = (source_position.floor() as u32)
+                                            .min(frame_count.saturating_sub(1));
+                                        let second = (first + 1).min(frame_count.saturating_sub(1));
+                                        let blend_t = if matte_layer.frame_blending {
+                                            (source_position - first as f32).clamp(0.0, 1.0)
+                                        } else {
+                                            0.0
+                                        };
+                                        (
+                                            crate::core::video_import::frame_path_in_dir(
+                                                frames_dir, first,
+                                            )
+                                            .to_string_lossy()
+                                            .into_owned(),
+                                            Some(
+                                                crate::core::video_import::frame_path_in_dir(
+                                                    frames_dir, second,
+                                                )
+                                                .to_string_lossy()
+                                                .into_owned(),
+                                            ),
+                                            blend_t,
+                                        )
+                                    }
+                                    _ => unreachable!(),
+                                };
                             with_image_cache(|cache| {
-                                if let Some(image) = cache.load_image(&image_path) {
+                                if let Some(image) = cache.load_image(&image_path).cloned() {
+                                    let next_image = next_image_path
+                                        .as_deref()
+                                        .filter(|path| *path != image_path && blend_t > 0.0)
+                                        .and_then(|path| cache.load_image(path).cloned())
+                                        .filter(|next| {
+                                            next.width == image.width && next.height == image.height
+                                        });
                                     let iw = image.width as f32;
                                     let ih = image.height as f32;
                                     let cos_r = m_rot.to_radians().cos();
@@ -214,11 +240,27 @@ pub(crate) fn render_matte_buffer(
                                             if sidx + 3 < image.pixels.len()
                                                 && didx + 3 < m_buf.len()
                                             {
-                                                m_buf[didx..didx + 4].copy_from_slice(
-                                                    &image.pixels[sidx..sidx + 4],
-                                                );
-                                                m_buf[didx + 3] = (m_buf[didx + 3] as f32
-                                                    * m_opacity)
+                                                let sample = |channel: usize| -> u8 {
+                                                    let a = image.pixels[sidx + channel] as f32;
+                                                    let b = next_image
+                                                        .as_ref()
+                                                        .and_then(|next| {
+                                                            let next_idx =
+                                                                ((sy * next.width + sx) * 4)
+                                                                    as usize;
+                                                            next.pixels.get(next_idx + channel).copied()
+                                                        })
+                                                        .map(f32::from)
+                                                        .unwrap_or(a);
+                                                    (a + (b - a) * blend_t)
+                                                        .round()
+                                                        .clamp(0.0, 255.0)
+                                                        as u8
+                                                };
+                                                m_buf[didx] = sample(0);
+                                                m_buf[didx + 1] = sample(1);
+                                                m_buf[didx + 2] = sample(2);
+                                                m_buf[didx + 3] = (sample(3) as f32 * m_opacity)
                                                     .round()
                                                     .clamp(0.0, 255.0)
                                                     as u8;

@@ -1328,7 +1328,7 @@ mod tests {
     use super::*;
     use crate::core::property::Animatable;
     use crate::core::timeline::{
-        BlendMode, Composition, Effect, EffectType, Layer, LayerType, ShapeType,
+        BlendMode, Composition, Effect, EffectType, Layer, LayerType, ShapeType, TrackMatteMode,
     };
 
     fn write_gray_png(path: &std::path::Path, gray: u8) {
@@ -1780,6 +1780,62 @@ mod tests {
 
         let pixels = render_frame_to_pixels(&comp, 1, 16, 16, 0.0, 0);
         assert_eq!(pixels[8 * 16 * 4 + 8 * 4], 50);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_video_frame_blending_works_for_luma_matte() {
+        let dir = std::env::temp_dir().join(format!(
+            "kagari_video_matte_test_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        write_gray_webp(&dir.join("frame_00000.webp"), 0);
+        write_gray_webp(&dir.join("frame_00001.webp"), 255);
+
+        let mut comp = Composition::new("video_matte".into(), "Video Matte".into(), 16, 16, 30, 30);
+        comp.background_color = [0.0, 0.0, 0.0, 0.0];
+        let mut matte = Layer::new(
+            "matte".into(),
+            "Matte".into(),
+            LayerType::Video {
+                source: "test".into(),
+                frames_dir: dir.to_string_lossy().into_owned(),
+                frame_count: 2,
+                audio_wav: None,
+                speed: 0.5,
+            },
+            30,
+        );
+        matte.frame_blending = true;
+        matte.transform.position = Animatable::new_constant([8.0, 8.0]);
+        comp.layers.push(matte);
+
+        let mut content = Layer::new(
+            "content".into(),
+            "Content".into(),
+            LayerType::Solid {
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
+            30,
+        );
+        content.transform.position = Animatable::new_constant([8.0, 8.0]);
+        content.track_matte = TrackMatteMode::LumaMatte;
+        comp.layers.push(content);
+
+        let matte = render_matte_buffer(&comp, &comp.layers[1], 1, 16, 16).unwrap();
+        let matte_center = (8 * 16 * 4 + 8 * 4) as usize;
+        assert!((120..=136).contains(&matte[matte_center]));
+
+        let pixels = render_frame_to_pixels(&comp, 1, 16, 16, 0.0, 0);
+        let center = (8 * 16 * 4 + 8 * 4) as usize;
+        assert!(
+            (120..=136).contains(&pixels[center + 3]),
+            "expected half matte alpha, got {}",
+            pixels[center + 3]
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }
