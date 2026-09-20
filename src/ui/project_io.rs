@@ -74,6 +74,14 @@ pub fn push_recent(path: &std::path::Path) {
 
 /// Load a project file into app state. Returns Ok(()) or an error message.
 pub fn open_project_from_path(app: &mut KagariApp, path: &std::path::Path) -> Result<(), String> {
+    let metadata = std::fs::metadata(path)
+        .map_err(|e| format!("Could not stat project file: {}", e))?;
+    if metadata.len() > crate::core::project_migration::MAX_PROJECT_JSON_BYTES as u64 {
+        return Err(format!(
+            "Project file exceeds the {} MiB limit",
+            crate::core::project_migration::MAX_PROJECT_JSON_BYTES / (1024 * 1024)
+        ));
+    }
     let json = std::fs::read_to_string(path).map_err(|e| format!("Could not read file: {}", e))?;
     let production_document =
         crate::core::production_document::ProductionDocument::from_json(&json).ok();
