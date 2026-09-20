@@ -12,8 +12,20 @@ static PREFS_WRITE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 static PREFS_WRITE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 pub(crate) fn prefs_path() -> std::path::PathBuf {
-    std::env::var("HOME")
-        .map(std::path::PathBuf::from)
+    if let Ok(home) = std::env::var("HOME") {
+        return std::path::PathBuf::from(home).join(".kagari_prefs.json");
+    }
+    if let Ok(config_home) = std::env::var("XDG_CONFIG_HOME") {
+        return std::path::PathBuf::from(config_home)
+            .join("kagari")
+            .join("prefs.json");
+    }
+    if let Ok(app_data) = std::env::var("APPDATA") {
+        return std::path::PathBuf::from(app_data)
+            .join("Kagari")
+            .join("prefs.json");
+    }
+    std::env::current_dir()
         .unwrap_or_else(|_| std::env::temp_dir())
         .join(".kagari_prefs.json")
 }
@@ -90,6 +102,9 @@ where
         return;
     };
     let sequence = PREFS_WRITE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
     let temporary = path.with_file_name(format!(
         ".kagari_prefs.json.tmp.{}.{}",
         std::process::id(),

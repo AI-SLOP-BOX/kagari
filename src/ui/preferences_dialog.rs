@@ -35,13 +35,6 @@ impl Default for Prefs {
     }
 }
 
-fn prefs_path() -> std::path::PathBuf {
-    std::env::var("HOME")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|_| std::env::temp_dir())
-        .join(".kagari_prefs.json")
-}
-
 pub(crate) fn load() -> Prefs {
     crate::ui::project_io::load_prefs_value()
         .and_then(|value| serde_json::from_value(value).ok())
@@ -274,7 +267,7 @@ pub fn draw_preferences_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.label(
-                        egui::RichText::new(prefs_path().display().to_string())
+                        egui::RichText::new(crate::ui::project_io::prefs_path().display().to_string())
                             .small()
                             .color(colors::TEXT_MUTED),
                     );
