@@ -96,15 +96,55 @@ pub fn draw_render_queue_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
             }
         }
 
-        if custom_widgets::ae_button(ui, "📡 Submit to Deadline Farm")
-            .on_hover_text(
-                "Dispatch distributed rendering job to AWS Thinkbox Deadline / OpenCue cluster",
-            )
+        if custom_widgets::ae_button(ui, "📡 Export Farm Job Manifest")
+            .on_hover_text("Write the current render queue as a Deadline/OpenCue-compatible JSON job")
             .clicked()
         {
-            app.toasts.info(
-                "Submitted job to Deadline Render Farm (Chunk Size: 25 frames, Priority: 50)",
-            );
+            let default_name = format!("{}_farm_job.json", comp_name.replace(['/', '\\'], "_"));
+            let path = rfd::FileDialog::new()
+                .add_filter("Render job manifest", &["json"])
+                .set_file_name(default_name)
+                .save_file();
+            if let Some(path) = path {
+                let items: Vec<serde_json::Value> = app
+                    .render_queue_items
+                    .iter()
+                    .map(|name| {
+                        serde_json::json!({
+                            "composition": name,
+                            "status": "queued",
+                            "output": app.export.export_output_path,
+                            "format": preset_name(app.export_format_preset),
+                            "start_frame": app.playback.work_area_in.unwrap_or(0),
+                            "end_frame": app.playback.work_area_out,
+                            "chunk_size": 25,
+                            "priority": 50,
+                        })
+                    })
+                    .collect();
+                let manifest = serde_json::json!({
+                    "schema": "kagari.render-job/v1",
+                    "application": "kagari-vfx",
+                    "adapter": "deadline-or-opencue",
+                    "job_name": comp_name,
+                    "items": items,
+                });
+                match serde_json::to_string_pretty(&manifest)
+                    .map_err(|error| error.to_string())
+                    .and_then(|json| std::fs::write(&path, json).map_err(|error| error.to_string()))
+                {
+                    Ok(()) => {
+                        crate::ui::project_io::reveal_in_file_manager(&path);
+                        app.toasts.info(format!(
+                            "Farm job manifest exported: {}",
+                            path.display()
+                        ));
+                    }
+                    Err(error) => app
+                        .toasts
+                        .error(format!("Could not write farm job manifest: {error}")),
+                }
+            }
         }
     });
 
