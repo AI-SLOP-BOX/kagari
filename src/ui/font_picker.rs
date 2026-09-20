@@ -48,16 +48,16 @@ pub fn draw_font_picker(app: &mut KagariApp, ui: &mut egui::Ui) {
         {
             if let Some(idx) = app.selection.selected_layer_idx {
                 let fam = families[selected].clone();
-                {
-                    let comp = app.history.current_mut().active_composition_mut();
+                let fam_for_project = fam.clone();
+                app.modify_project(|project| {
+                    let comp = project.active_composition_mut();
                     if let Some(layer) = comp.layers.get_mut(idx) {
                         layer
                             .text_formatting
                             .get_or_insert_with(crate::core::timeline::TextFormatting::default)
-                            .font_family = fam.clone();
+                            .font_family = fam_for_project;
                     }
-                }
-                crate::core::frame_cache::bump_version();
+                });
                 app.toasts.info(format!("Font set to {}", fam));
             } else {
                 app.toasts.error("Select a text layer first");

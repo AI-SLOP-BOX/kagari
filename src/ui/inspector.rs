@@ -19,27 +19,33 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                 keyframes,
             } = event
             {
-                let comp_mut = app.history.current_mut().active_composition_mut();
-                let layer_opt = comp_mut.layers.iter().position(|l| l.id == *layer_id).or(
-                    if layer_idx < comp_mut.layers.len() {
-                        Some(layer_idx)
-                    } else {
-                        None
-                    },
-                );
+                let keyframes = keyframes.clone();
+                let mut completed_layer_name = None;
+                app.modify_project(|project| {
+                    let comp = project.active_composition_mut();
+                    let layer_opt = comp.layers.iter().position(|l| l.id == *layer_id).or(
+                        if layer_idx < comp.layers.len() {
+                            Some(layer_idx)
+                        } else {
+                            None
+                        },
+                    );
 
-                if let Some(idx) = layer_opt {
-                    let layer = &mut comp_mut.layers[idx];
-                    if tracker_idx < layer.trackers.len() {
-                        layer.trackers[tracker_idx].position = Animatable::Animated(keyframes);
-                        crate::core::frame_cache::bump_version();
-                        log::info!(
-                            "Async Motion Tracker analysis completed for layer {} ({}), tracker {}",
-                            layer.name,
-                            layer_id,
-                            tracker_idx
-                        );
+                    if let Some(idx) = layer_opt {
+                        let layer = &mut comp.layers[idx];
+                        if tracker_idx < layer.trackers.len() {
+                            layer.trackers[tracker_idx].position = Animatable::Animated(keyframes);
+                            completed_layer_name = Some(layer.name.clone());
+                        }
                     }
+                });
+                if let Some(layer_name) = completed_layer_name {
+                    log::info!(
+                        "Async Motion Tracker analysis completed for layer {} ({}), tracker {}",
+                        layer_name,
+                        layer_id,
+                        tracker_idx
+                    );
                 }
                 tracker_completed = true;
                 break;

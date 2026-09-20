@@ -34,19 +34,21 @@ pub fn draw_essential_properties(app: &mut KagariApp, ui: &mut egui::Ui) {
                 let c = app.history.current().active_composition();
                 c.layers[sel_idx].essential_properties.len()
             };
-            let comp = app.history.current_mut().active_composition_mut();
-            comp.layers[sel_idx].essential_properties.push(
-                crate::core::essential_properties::EssentialProperty {
-                    name: format!("Property {}", count + 1),
-                    prop_type: crate::core::essential_properties::EssentialPropertyType::Slider,
-                    value: crate::core::essential_properties::EssentialValue::Float(50.0),
-                    overridden: false,
-                    min_value: 0.0,
-                    max_value: 100.0,
-                    options: vec![],
-                },
-            );
-            crate::core::frame_cache::bump_version();
+            app.modify_project(|project| {
+                let comp = project.active_composition_mut();
+                comp.layers[sel_idx].essential_properties.push(
+                    crate::core::essential_properties::EssentialProperty {
+                        name: format!("Property {}", count + 1),
+                        prop_type:
+                            crate::core::essential_properties::EssentialPropertyType::Slider,
+                        value: crate::core::essential_properties::EssentialValue::Float(50.0),
+                        overridden: false,
+                        min_value: 0.0,
+                        max_value: 100.0,
+                        options: vec![],
+                    },
+                );
+            });
         }
         return;
     }
@@ -90,22 +92,31 @@ pub fn draw_essential_properties(app: &mut KagariApp, ui: &mut egui::Ui) {
     }
 
     if let Some(idx) = remove_idx {
-        app.history.current_mut().active_composition_mut().layers[sel_idx]
-            .essential_properties
-            .remove(idx);
-        crate::core::frame_cache::bump_version();
+        app.modify_project(|project| {
+            project
+                .active_composition_mut()
+                .layers[sel_idx]
+                .essential_properties
+                .remove(idx);
+        });
     }
     if let Some(idx) = move_up {
-        app.history.current_mut().active_composition_mut().layers[sel_idx]
-            .essential_properties
-            .swap(idx, idx - 1);
-        crate::core::frame_cache::bump_version();
+        app.modify_project(|project| {
+            project
+                .active_composition_mut()
+                .layers[sel_idx]
+                .essential_properties
+                .swap(idx, idx - 1);
+        });
     }
     if let Some(idx) = move_down {
-        app.history.current_mut().active_composition_mut().layers[sel_idx]
-            .essential_properties
-            .swap(idx, idx + 1);
-        crate::core::frame_cache::bump_version();
+        app.modify_project(|project| {
+            project
+                .active_composition_mut()
+                .layers[sel_idx]
+                .essential_properties
+                .swap(idx, idx + 1);
+        });
     }
 
     ui.add_space(4.0);
@@ -114,18 +125,19 @@ pub fn draw_essential_properties(app: &mut KagariApp, ui: &mut egui::Ui) {
             let c = app.history.current().active_composition();
             c.layers[sel_idx].essential_properties.len()
         };
-        let comp = app.history.current_mut().active_composition_mut();
-        comp.layers[sel_idx].essential_properties.push(
-            crate::core::essential_properties::EssentialProperty {
-                name: format!("Property {}", count + 1),
-                prop_type: crate::core::essential_properties::EssentialPropertyType::Slider,
-                value: crate::core::essential_properties::EssentialValue::Float(50.0),
-                overridden: false,
-                min_value: 0.0,
-                max_value: 100.0,
-                options: vec![],
-            },
-        );
-        crate::core::frame_cache::bump_version();
+        app.modify_project(|project| {
+            let comp = project.active_composition_mut();
+            comp.layers[sel_idx].essential_properties.push(
+                crate::core::essential_properties::EssentialProperty {
+                    name: format!("Property {}", count + 1),
+                    prop_type: crate::core::essential_properties::EssentialPropertyType::Slider,
+                    value: crate::core::essential_properties::EssentialValue::Float(50.0),
+                    overridden: false,
+                    min_value: 0.0,
+                    max_value: 100.0,
+                    options: vec![],
+                },
+            );
+        });
     }
 }
