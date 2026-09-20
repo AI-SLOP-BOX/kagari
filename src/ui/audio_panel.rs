@@ -165,17 +165,34 @@ pub fn draw_audio_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
         );
         ui.horizontal(|ui| {
             if custom_widgets::ae_button_accent(ui, "⚡ Convert Audio to Keyframes").on_hover_text("Bake audio amplitude waveform into Slider Control keyframes (Both / Left / Right Channels)").clicked() {
+                let source = app
+                    .history
+                    .current()
+                    .active_composition()
+                    .layers
+                    .get(idx)
+                    .and_then(|layer| match &layer.layer_type {
+                        crate::core::timeline::LayerType::Audio { path, .. } => Some(path.clone()),
+                        crate::core::timeline::LayerType::Video {
+                            audio_wav: Some(path), ..
+                        } => Some(path.clone()),
+                        _ => None,
+                    });
+                let Some(source) = source else {
+                    app.toasts.error("Selected layer has no readable audio source");
+                    return;
+                };
                 let mut temp_proj = app.history.current().clone();
-                let comp_mut = temp_proj.active_composition_mut();
-                let dur = comp_mut.duration_frames;
-                let null_layer = crate::core::timeline::Layer::new_null(
-                    format!("audio_amp_{}", comp_mut.layers.len()),
-                    "Audio Amplitude".to_string(),
-                    dur,
-                );
-                comp_mut.add_layer(null_layer);
-                app.commit_project(temp_proj);
-                app.toasts.info("Created 'Audio Amplitude' layer with baked Slider Control keyframes!");
+                match crate::core::audio_to_keyframes::convert_audio_to_keyframes(
+                    temp_proj.active_composition_mut(),
+                    &source,
+                ) {
+                    Ok(name) => {
+                        app.commit_project(temp_proj);
+                        app.toasts.info(format!("Created '{name}' with baked Slider Control keyframes"));
+                    }
+                    Err(error) => app.toasts.error(error),
+                }
             }
         });
     } else {

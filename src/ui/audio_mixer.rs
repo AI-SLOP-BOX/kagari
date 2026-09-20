@@ -481,7 +481,41 @@ pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
         });
         ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("audio_crossover_band"), band_sel));
         if ui.button("Bake Audio to Null Controller").clicked() {
-            app.toasts.info("Created 'Audio Amplitude' controller with Bass/Mid/High slider channels");
+            let source = app
+                .history
+                .current()
+                .active_composition()
+                .layers
+                .iter()
+                .find_map(|layer| match &layer.layer_type {
+                    crate::core::timeline::LayerType::Audio { path, .. } => Some(path.clone()),
+                    crate::core::timeline::LayerType::Video {
+                        audio_wav: Some(path), ..
+                    } => Some(path.clone()),
+                    _ => None,
+                });
+            let Some(source) = source else {
+                app.toasts.error("Add an Audio or Video-with-Audio layer first");
+                return;
+            };
+            let band = match band_sel {
+                1 => crate::core::audio_dsp::AudioExtractBand::Bass,
+                2 => crate::core::audio_dsp::AudioExtractBand::Mid,
+                3 => crate::core::audio_dsp::AudioExtractBand::Treble,
+                _ => crate::core::audio_dsp::AudioExtractBand::Master,
+            };
+            let mut project = app.history.current().clone();
+            match crate::core::audio_to_keyframes::convert_selected_band_to_keyframes(
+                project.active_composition_mut(),
+                &source,
+                band,
+            ) {
+                Ok(name) => {
+                    app.commit_project(project);
+                    app.toasts.info(format!("Created '{name}' with animated Slider Control keyframes"));
+                }
+                Err(error) => app.toasts.error(error),
+            }
         }
     });
 

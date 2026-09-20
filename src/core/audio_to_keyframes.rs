@@ -163,6 +163,55 @@ pub fn convert_multiband_audio_to_keyframes(
     Ok("Audio Multi-Band Amplitude".to_string())
 }
 
+/// Convert one selected frequency band into a single animatable Slider Control.
+/// This is used by the mixer when the user wants a focused reactive channel
+/// instead of the four-channel assistant layer.
+pub fn convert_selected_band_to_keyframes(
+    comp: &mut Composition,
+    audio_path: &str,
+    band: crate::core::audio_dsp::AudioExtractBand,
+) -> Result<String, String> {
+    let buf = AudioBuffer::load_wav(Path::new(audio_path))
+        .map_err(|e| format!("Failed to decode audio: {}", e))?;
+    let fps = comp.fps.max(1);
+    let multiband = crate::core::audio_dsp::extract_multiband_audio_keyframes(
+        &buf.samples,
+        buf.sample_rate.max(1),
+        fps,
+        comp.duration_frames,
+        &crate::core::audio_dsp::AudioKeyframeOptions {
+            band,
+            ..Default::default()
+        },
+    );
+    let (label, keyframes) = match band {
+        crate::core::audio_dsp::AudioExtractBand::Master => ("Master", multiband.master),
+        crate::core::audio_dsp::AudioExtractBand::Bass => ("Bass", multiband.bass),
+        crate::core::audio_dsp::AudioExtractBand::Mid => ("Mid", multiband.mid),
+        crate::core::audio_dsp::AudioExtractBand::Treble => ("High", multiband.treble),
+    };
+    if keyframes.is_empty() {
+        return Err("Audio analysis produced no frames".to_string());
+    }
+
+    let layer_name = format!("Audio {label} Amplitude");
+    let mut amp_layer = Layer::new_null(
+        format!("audio_{}_{}", label.to_ascii_lowercase(), comp.layers.len() + 1),
+        layer_name.clone(),
+        comp.duration_frames,
+    );
+    amp_layer.effects.push(Effect {
+        id: format!("slider_{}", label.to_ascii_lowercase()),
+        name: format!("{label} Amplitude"),
+        effect_type: EffectType::SliderControl {
+            value: Animatable::Animated(keyframes),
+        },
+        enabled: true,
+    });
+    comp.add_layer(amp_layer);
+    Ok(layer_name)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AudioTargetProperty {
     Scale,
@@ -326,6 +375,34 @@ mod tests {
             }
         }
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_selected_band_conversion_generates_animated_slider() {
+        let path = std::env::temp_dir().join(format!(
+            "kagari_selected_band_test_{}.wav",
+            std::process::id()
+        ));
+        write_tone_wav(&path);
+        let mut comp = Composition::new("test".into(), "Test".into(), 1920, 1080, 30, 24);
+        let name = convert_selected_band_to_keyframes(
+            &mut comp,
+            &path.to_string_lossy(),
+            crate::core::audio_dsp::AudioExtractBand::Bass,
+        )
+        .expect("selected band must convert");
+        assert_eq!(name, "Audio Bass Amplitude");
+        let layer = comp.layers.last().expect("controller layer must exist");
+        assert_eq!(layer.effects.len(), 1);
+        match &layer.effects[0].effect_type {
+            EffectType::SliderControl { value } => {
+                let keyframes = value.keyframes().expect("slider must be animated");
+                assert_eq!(keyframes.len(), 24);
+                assert!(keyframes.iter().all(|kf| kf.value.is_finite()));
+            }
+            other => panic!("expected SliderControl, got {:?}", other),
+        }
+        let _ = std::fs::remove_file(path);
     }
 
     /// Minimal 16-bit PCM mono WAV writer (1s 440Hz tone) for tests.
