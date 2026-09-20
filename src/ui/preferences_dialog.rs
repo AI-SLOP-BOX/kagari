@@ -43,15 +43,20 @@ fn prefs_path() -> std::path::PathBuf {
 }
 
 pub(crate) fn load() -> Prefs {
-    std::fs::read_to_string(prefs_path())
+    crate::core::project_migration::read_bounded_text_file(
+        &prefs_path(),
+        1024 * 1024,
+    )
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_default()
 }
 
 pub(crate) fn save(p: &Prefs) {
-    if let Ok(json) = serde_json::to_string_pretty(p) {
-        let _ = std::fs::write(prefs_path(), json);
+    if let Ok(serde_json::Value::Object(fields)) = serde_json::to_value(p) {
+        crate::ui::project_io::update_prefs(|root| {
+            root.extend(fields);
+        });
     }
 }
 

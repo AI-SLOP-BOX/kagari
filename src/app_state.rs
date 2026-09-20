@@ -414,6 +414,8 @@ pub struct KagariApp {
     pub home_dir: std::path::PathBuf,
     pub home_selected: Option<std::path::PathBuf>,
     pub home_search: String,
+    /// Cached starred project keys; refreshed only at startup and after a toggle.
+    pub home_starred_projects: Vec<String>,
     /// Cached home-screen textures: banner art, file thumbnails, preview.
     pub home_banner: Option<eframe::egui::TextureHandle>,
     pub home_thumbs: std::collections::HashMap<std::path::PathBuf, eframe::egui::TextureHandle>,
@@ -614,6 +616,7 @@ impl Default for KagariApp {
                 .unwrap_or_else(|_| std::env::temp_dir()),
             home_selected: None,
             home_search: String::new(),
+            home_starred_projects: crate::ui::project_io::starred_projects(),
             home_banner: None,
             home_thumbs: std::collections::HashMap::new(),
             home_preview: None,

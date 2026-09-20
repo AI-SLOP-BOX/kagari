@@ -3906,9 +3906,9 @@ fn draw_project_rows(
     limit: usize,
     starred_only: bool,
 ) {
-    let starred = crate::ui::project_io::starred_projects();
+    let starred = app.home_starred_projects.clone();
     let is_starred = |p: &std::path::Path| {
-        let s = p.to_string_lossy().to_string();
+        let s = crate::ui::project_io::path_key(p);
         starred.iter().any(|q| q == &s)
     };
     let mut shown = 0;
@@ -3939,7 +3939,13 @@ fn draw_project_rows(
                 .on_hover_text("Toggle starred")
                 .clicked()
             {
-                crate::ui::project_io::toggle_starred(&entry.path);
+                let now_starred = crate::ui::project_io::toggle_starred(&entry.path);
+                app.home_starred_projects = crate::ui::project_io::starred_projects();
+                app.toasts.info(if now_starred {
+                    "Project starred"
+                } else {
+                    "Project unstarred"
+                });
             }
             let name = if exists {
                 entry.name.clone()

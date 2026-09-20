@@ -2,8 +2,16 @@
 //! the prefs file. Used by the File menu, the welcome screen, and the
 //! command palette.
 use crate::KagariApp;
+use std::collections::HashSet;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, OnceLock};
 
-fn prefs_path() -> std::path::PathBuf {
+const MAX_PREFS_BYTES: usize = 1024 * 1024;
+const MAX_STARRED_PROJECTS: usize = 100;
+static PREFS_WRITE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+static PREFS_WRITE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+pub(crate) fn prefs_path() -> std::path::PathBuf {
     std::env::var("HOME")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|_| std::env::temp_dir())
@@ -14,6 +22,9 @@ fn prefs_path() -> std::path::PathBuf {
 struct RecentsFile {
     #[serde(default)]
     recent_projects: Vec<String>,
+    /// Starred project paths. Added later; defaults to empty for old files.
+    #[serde(default)]
+    starred_projects: Vec<String>,
     /// Whether the welcome screen shows on startup. Defaults to true for
     /// prefs files written before this flag existed.
     #[serde(default = "default_welcome_on_startup")]
@@ -24,6 +35,7 @@ impl Default for RecentsFile {
     fn default() -> Self {
         Self {
             recent_projects: Vec::new(),
+            starred_projects: Vec::new(),
             show_welcome_on_startup: true,
         }
     }
@@ -34,16 +46,96 @@ fn default_welcome_on_startup() -> bool {
 }
 
 fn read_prefs() -> RecentsFile {
-    std::fs::read_to_string(prefs_path())
+    let mut prefs = crate::core::project_migration::read_bounded_text_file(
+        &prefs_path(),
+        MAX_PREFS_BYTES,
+    )
         .ok()
         .and_then(|s| serde_json::from_str::<RecentsFile>(&s).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    prefs.recent_projects = normalize_path_keys(prefs.recent_projects, 8);
+    prefs.starred_projects = normalize_path_keys(prefs.starred_projects, MAX_STARRED_PROJECTS);
+    prefs
 }
 
 fn write_prefs(prefs: &RecentsFile) {
-    if let Ok(json) = serde_json::to_string_pretty(prefs) {
-        let _ = std::fs::write(prefs_path(), json);
+    update_prefs(|root| {
+        root.insert(
+            "recent_projects".into(),
+            serde_json::to_value(&prefs.recent_projects).unwrap_or_default(),
+        );
+        root.insert(
+            "starred_projects".into(),
+            serde_json::to_value(&prefs.starred_projects).unwrap_or_default(),
+        );
+        root.insert(
+            "show_welcome_on_startup".into(),
+            serde_json::Value::Bool(prefs.show_welcome_on_startup),
+        );
+    });
+}
+
+/// Update only the requested preference fields while preserving fields owned
+/// by the preferences dialog or newer app versions.
+pub(crate) fn update_prefs<F>(update: F)
+where
+    F: FnOnce(&mut serde_json::Map<String, serde_json::Value>),
+{
+    let _write_guard = PREFS_WRITE_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let path = prefs_path();
+    let mut root = crate::core::project_migration::read_bounded_text_file(&path, MAX_PREFS_BYTES)
+        .ok()
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+        .and_then(|value| value.as_object().cloned())
+        .unwrap_or_default();
+    update(&mut root);
+    let Ok(json) = serde_json::to_vec_pretty(&serde_json::Value::Object(root)) else {
+        return;
+    };
+    let sequence = PREFS_WRITE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let temporary = path.with_file_name(format!(
+        ".kagari_prefs.json.tmp.{}.{}",
+        std::process::id(),
+        sequence
+    ));
+    let result = (|| {
+        let mut file = std::fs::File::create(&temporary).ok()?;
+        use std::io::Write;
+        file.write_all(&json).ok()?;
+        file.sync_all().ok()?;
+        drop(file);
+        std::fs::rename(&temporary, &path).ok()
+    })();
+    if result.is_none() {
+        let _ = std::fs::remove_file(temporary);
     }
+}
+
+pub(crate) fn path_key(path: &std::path::Path) -> String {
+    if path.as_os_str().is_empty() {
+        return String::new();
+    }
+    let normalized = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    normalized.to_string_lossy().into_owned()
+}
+
+fn normalize_path_keys(paths: Vec<String>, limit: usize) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut normalized = Vec::with_capacity(paths.len().min(limit));
+    for path in paths {
+        let key = path_key(std::path::Path::new(&path));
+        if !key.is_empty() && seen.insert(key.clone()) {
+            normalized.push(key);
+        }
+    }
+    if normalized.len() > limit {
+        let excess = normalized.len() - limit;
+        normalized.drain(..excess);
+    }
+    normalized
 }
 
 pub fn recent_projects() -> Vec<String> {
@@ -64,7 +156,7 @@ pub fn set_welcome_on_startup(show: bool) {
 
 /// Insert path at front of recents (deduped, capped at 8) and persist.
 pub fn push_recent(path: &std::path::Path) {
-    let s = path.to_string_lossy().to_string();
+    let s = path_key(path);
     let mut r = read_prefs();
     r.recent_projects.retain(|p| p != &s);
     r.recent_projects.insert(0, s);
@@ -72,10 +164,39 @@ pub fn push_recent(path: &std::path::Path) {
     write_prefs(&r);
 }
 
+/// Starred project paths shown in Home > Starred.
+pub fn starred_projects() -> Vec<String> {
+    read_prefs().starred_projects
+}
+
+/// Toggle the starred flag for a project path. Returns true if now starred.
+#[must_use]
+pub fn toggle_starred(path: &std::path::Path) -> bool {
+    let s = path_key(path);
+    let mut r = read_prefs();
+    let now_starred = toggle_starred_key(&mut r, s);
+    write_prefs(&r);
+    now_starred
+}
+
+fn toggle_starred_key(prefs: &mut RecentsFile, key: String) -> bool {
+    if prefs.starred_projects.iter().any(|path| path == &key) {
+        prefs.starred_projects.retain(|path| path != &key);
+        false
+    } else {
+        prefs.starred_projects.push(key);
+        if prefs.starred_projects.len() > MAX_STARRED_PROJECTS {
+            let excess = prefs.starred_projects.len() - MAX_STARRED_PROJECTS;
+            prefs.starred_projects.drain(..excess);
+        }
+        true
+    }
+}
+
 /// Load a project file into app state. Returns Ok(()) or an error message.
 pub fn open_project_from_path(app: &mut KagariApp, path: &std::path::Path) -> Result<(), String> {
-    let metadata = std::fs::metadata(path)
-        .map_err(|e| format!("Could not stat project file: {}", e))?;
+    let metadata =
+        std::fs::metadata(path).map_err(|e| format!("Could not stat project file: {}", e))?;
     if metadata.len() > crate::core::project_migration::MAX_PROJECT_JSON_BYTES as u64 {
         return Err(format!(
             "Project file exceeds the {} MiB limit",
@@ -206,5 +327,29 @@ mod tests {
             serde_json::from_str(r#"{"recent_projects":[],"show_welcome_on_startup":false}"#)
                 .unwrap();
         assert!(!parsed.show_welcome_on_startup);
+    }
+
+    #[test]
+    fn starred_projects_toggle_is_bounded_and_roundtrips() {
+        let parsed: RecentsFile = serde_json::from_str(r#"{"recent_projects":[]}"#).unwrap();
+        assert!(parsed.starred_projects.is_empty());
+
+        let mut prefs = RecentsFile::default();
+        assert!(toggle_starred_key(&mut prefs, "first.json".into()));
+        assert!(!toggle_starred_key(&mut prefs, "first.json".into()));
+        assert!(prefs.starred_projects.is_empty());
+
+        for index in 0..=MAX_STARRED_PROJECTS {
+            assert!(toggle_starred_key(
+                &mut prefs,
+                format!("project-{index}.json")
+            ));
+        }
+        assert_eq!(prefs.starred_projects.len(), MAX_STARRED_PROJECTS);
+        assert!(!prefs.starred_projects.iter().any(|p| p == "project-0.json"));
+        assert!(prefs
+            .starred_projects
+            .iter()
+            .any(|p| p == "project-100.json"));
     }
 }
