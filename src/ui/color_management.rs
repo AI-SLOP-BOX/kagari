@@ -321,7 +321,67 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
                 .on_hover_text("Load 3D LUT for film stock emulation")
                 .clicked()
             {
-                app.toasts.info("3D LUT loader ready — pick .cube file");
+                let Some(path) = rfd::FileDialog::new()
+                    .add_filter("3D LUT", &["cube"])
+                    .pick_file()
+                else {
+                    return;
+                };
+
+                const MAX_LUT_BYTES: u64 = 64 * 1024 * 1024;
+                let size_ok = std::fs::metadata(&path)
+                    .map(|metadata| metadata.len() <= MAX_LUT_BYTES)
+                    .unwrap_or(false);
+                if !size_ok {
+                    app.toasts.error("The .cube LUT is missing or larger than 64 MiB");
+                } else {
+                    match std::fs::read_to_string(&path) {
+                        Ok(contents) => {
+                            match crate::core::ocio_color::Lut3D::parse_cube(&contents) {
+                                Ok(lut) => {
+                                    let lut_size = lut.size;
+                                    crate::core::ocio_color::set_active_lut(Some(
+                                        std::sync::Arc::new(lut),
+                                    ));
+                                    ui.ctx().data_mut(|d| {
+                                        d.insert_temp(
+                                            egui::Id::new("ae_colorspace_lut"),
+                                            3usize,
+                                        );
+                                        d.insert_temp(
+                                            egui::Id::new("active_cube_lut_path"),
+                                            path.display().to_string(),
+                                        );
+                                    });
+                                    crate::core::frame_cache::bump_version();
+                                    app.toasts.info(format!(
+                                        "Loaded {}x{}x{} 3D LUT: {}",
+                                        lut_size,
+                                        lut_size,
+                                        lut_size,
+                                        path.display()
+                                    ));
+                                }
+                                Err(error) => {
+                                    app.toasts.error(format!("Could not parse .cube LUT: {error}"));
+                                }
+                            }
+                        }
+                        Err(error) => {
+                            app.toasts.error(format!("Could not read .cube LUT: {error}"));
+                        }
+                    }
+                }
+            }
+            if let Some(path) = ui
+                .ctx()
+                .data(|d| d.get_temp::<String>(egui::Id::new("active_cube_lut_path")))
+            {
+                ui.label(
+                    egui::RichText::new(format!("Active: {}", path))
+                        .small()
+                        .color(colors::TEXT_MUTED),
+                );
             }
             if crate::ui::custom_widgets::ae_button(ui, "💾 Export Grade as .cube")
                 .on_hover_text("Export active color grade as 33x33x33 3D LUT (.cube)")
