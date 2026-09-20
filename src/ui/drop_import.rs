@@ -21,7 +21,6 @@ fn insert_layer(app: &mut KagariApp, layer: crate::core::timeline::Layer, label:
         let at = insert_at.min(comp.layers.len());
         comp.layers.insert(at, l);
     });
-    crate::core::frame_cache::bump_version();
     app.toasts.info(format!("Imported {}", label));
 }
 

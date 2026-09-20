@@ -149,7 +149,6 @@ pub fn draw_particle_emitter_controls(app: &mut KagariApp, ui: &mut egui::Ui) {
                 }
             }
         });
-        crate::core::frame_cache::bump_version();
     }
 }
 

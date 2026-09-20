@@ -375,7 +375,6 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                             comp.add_layer(l);
                                         }
                                     });
-                                    crate::core::frame_cache::bump_version();
                                     app.toasts.info(format!("{} caption layers created", n));
                                 }
                             }
@@ -642,7 +641,6 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                             }
                         });
                         if duplicated {
-                            crate::core::frame_cache::bump_version();
                             app.toasts.info("Layer duplicated");
                         }
                     }
@@ -833,7 +831,6 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         app.modify_project(|project| {
                             project.active_composition_mut().lights.push(light);
                         });
-                        crate::core::frame_cache::bump_version();
                         app.toasts.info(format!("Added {}", name));
                         ui.close_menu();
                     }
@@ -1133,7 +1130,6 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                             }
                         });
                         app.selection.selected_layer_idx = if i < len { Some(len - 1) } else { app.selection.selected_layer_idx };
-                        crate::core::frame_cache::bump_version();
                         ui.close_menu();
                     }
                     if ui.add(egui::Button::new("Bring Forward").shortcut_text("Cmd+]")).clicked() {
@@ -1145,7 +1141,6 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                 }
                             });
                             app.selection.selected_layer_idx = Some(i + 1);
-                            crate::core::frame_cache::bump_version();
                         }
                         ui.close_menu();
                     }
@@ -1158,7 +1153,6 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                 }
                             });
                             app.selection.selected_layer_idx = Some(i - 1);
-                            crate::core::frame_cache::bump_version();
                         }
                         ui.close_menu();
                     }
@@ -1171,7 +1165,6 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                             }
                         });
                         app.selection.selected_layer_idx = if i < len { Some(0) } else { app.selection.selected_layer_idx };
-                        crate::core::frame_cache::bump_version();
                         ui.close_menu();
                     }
                 });
