@@ -242,4 +242,47 @@ mod tests {
         });
         assert_eq!(counter.load(Ordering::Relaxed), 4);
     }
+
+    #[test]
+    fn invalid_frame_range_does_not_inflate_total_or_render() {
+        let mut queue = ParallelRenderQueue::new();
+        queue.add_item(RenderQueueItem {
+            comp_name: "Invalid".into(),
+            start_frame: 20,
+            end_frame: 10,
+            output_path: "/tmp/invalid".into(),
+            status: RenderStatus::Pending,
+        });
+        assert_eq!(queue.total_frames, 0);
+
+        let counter = AtomicUsize::new(0);
+        queue.render_all(|_, _| {
+            counter.fetch_add(1, Ordering::SeqCst);
+            Vec::new()
+        });
+        assert_eq!(counter.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn external_cancel_stops_parallel_render_before_next_frame() {
+        let mut queue = ParallelRenderQueue::new();
+        queue.add_item(RenderQueueItem {
+            comp_name: "Cancelable".into(),
+            start_frame: 0,
+            end_frame: 100,
+            output_path: "/tmp/cancelable".into(),
+            status: RenderStatus::Pending,
+        });
+        let external_cancel = AtomicBool::new(false);
+        let counter = AtomicUsize::new(0);
+        queue.render_all_with_external_cancel(&external_cancel, |_, _| {
+            let rendered = counter.fetch_add(1, Ordering::SeqCst) + 1;
+            if rendered == 1 {
+                external_cancel.store(true, Ordering::SeqCst);
+            }
+            Vec::new()
+        });
+        assert_eq!(counter.load(Ordering::SeqCst), 1);
+        assert!(queue.is_cancelled());
+    }
 }
