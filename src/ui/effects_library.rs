@@ -71,6 +71,12 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
             egui::ScrollArea::vertical().id_salt("panel_content").show(ui, |ui| {
             let mut next_frame = None;
             let mut current_frame_reset = None;
+            let pre_edit_snapshot = if !app.drag_active() {
+                Some(app.history.current().clone())
+            } else {
+                None
+            };
+            let history_generation_before = app.history.generation();
 
             // Track whether a continuous interaction (slider drag) occurred.
             // Discrete actions are committed immediately via EditorSession.
@@ -254,12 +260,13 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
             // edits go through the drag transaction API (begin on drag start,
             // commit on drag end). This produces exactly one undo entry per drag
             // regardless of how many intermediate value updates occur.
-            if slider_changed {
+            if slider_changed && app.history.generation() == history_generation_before {
                 let is_pointer_down = ui.input(|i| i.pointer.any_down());
                 if is_pointer_down {
                     if !app.drag_active() {
-                        let snapshot = app.history.current().clone();
-                        app.begin_drag_with_snapshot(snapshot, "Effect Parameter Edit");
+                        if let Some(snapshot) = pre_edit_snapshot {
+                            app.begin_drag_with_snapshot(snapshot, "Effect Parameter Edit");
+                        }
                     }
                 } else if app.drag_active() {
                     app.commit_drag();
@@ -453,9 +460,11 @@ fn draw_effect_controls(
                     ui.collapsing(format!("fx {} - {}", e_idx + 1, fx.name), |ui| {
                         ui.horizontal(|ui| {
                             let was_enabled = fx.enabled;
-                            ui.checkbox(&mut fx.enabled, "Enabled (fx)");
-                            if was_enabled != fx.enabled {
-                                fx_toggle = Some((e_idx, fx.enabled));
+                            let mut next_enabled = was_enabled;
+                            if ui.checkbox(&mut next_enabled, "Enabled (fx)").changed()
+                                && next_enabled != was_enabled
+                            {
+                                fx_toggle = Some((e_idx, next_enabled));
                             }
                             if e_idx > 0
                                 && ui
