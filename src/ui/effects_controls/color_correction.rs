@@ -173,6 +173,55 @@ pub fn draw(
                 if path_before != *lut_path {
                     *project_changed = true;
                 }
+                if ui
+                    .small_button("Browse…")
+                    .on_hover_text("Choose and validate a .cube 3D LUT")
+                    .clicked()
+                {
+                    if let Some(path) = rfd::FileDialog::new()
+                        .add_filter("3D LUT", &["cube"])
+                        .pick_file()
+                    {
+                        const MAX_LUT_BYTES: u64 = 64 * 1024 * 1024;
+                        let size_ok = std::fs::metadata(&path)
+                            .map(|metadata| metadata.len() <= MAX_LUT_BYTES)
+                            .unwrap_or(false);
+                        if !size_ok {
+                            ui.label(
+                                egui::RichText::new("LUT file is missing or larger than 64 MiB")
+                                    .small()
+                                    .color(crate::ui::theme::colors::ACCENT_RED),
+                            );
+                        } else {
+                            match std::fs::read_to_string(&path) {
+                                Ok(contents) => {
+                                    match crate::core::ocio_color::Lut3D::parse_cube(&contents) {
+                                        Ok(_) => {
+                                            *lut_path = path.to_string_lossy().into_owned();
+                                            *project_changed = true;
+                                        }
+                                        Err(error) => {
+                                            ui.label(
+                                                egui::RichText::new(format!(
+                                                    "Invalid LUT: {error}"
+                                                ))
+                                                .small()
+                                                .color(crate::ui::theme::colors::ACCENT_RED),
+                                            );
+                                        }
+                                    }
+                                }
+                                Err(error) => {
+                                    ui.label(
+                                        egui::RichText::new(format!("Cannot read LUT: {error}"))
+                                            .small()
+                                            .color(crate::ui::theme::colors::ACCENT_RED),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
             });
 
             let i_before = intensity.clone();
