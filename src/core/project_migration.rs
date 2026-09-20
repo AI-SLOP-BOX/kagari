@@ -142,13 +142,13 @@ pub fn load_project_with_backup<P: AsRef<std::path::Path>>(
     let target = path.as_ref();
     let bak = target.with_extension("json.bak");
 
-    if let Ok(json) = read_bounded_project_file(target) {
+    if let Ok(json) = read_project_json_file(target) {
         match load_project_migrated(&json) {
             Ok(p) => return Ok((p, false)),
             Err(e) => log::warn!("[Project] Primary file corrupt ({}); trying backup", e),
         }
     }
-    if let Ok(json) = read_bounded_project_file(&bak) {
+    if let Ok(json) = read_project_json_file(&bak) {
         match load_project_migrated(&json) {
             Ok(p) => return Ok((p, true)),
             Err(e) => log::warn!("[Project] Backup also corrupt: {}", e),
@@ -161,7 +161,10 @@ pub fn load_project_with_backup<P: AsRef<std::path::Path>>(
     ))
 }
 
-fn read_bounded_project_file(path: &std::path::Path) -> Result<String, String> {
+/// Read a project JSON file only after enforcing the same size limit used by
+/// the in-memory parser. CLI and GUI entry points should use this helper so a
+/// large file cannot bypass the parser's limit during the initial read.
+pub fn read_project_json_file(path: &std::path::Path) -> Result<String, String> {
     let metadata = std::fs::metadata(path).map_err(|e| e.to_string())?;
     if metadata.len() > MAX_PROJECT_JSON_BYTES as u64 {
         return Err(format!(

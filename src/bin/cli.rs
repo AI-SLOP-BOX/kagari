@@ -363,7 +363,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .into());
             }
-            let json = std::fs::read_to_string(&project)?;
+            let json = kagari_vfx::core::project_migration::read_project_json_file(
+                std::path::Path::new(&project),
+            )
+            .map_err(std::io::Error::other)?;
             let mut production =
                 kagari_vfx::core::production_document::ProductionDocument::from_json(&json).ok();
             let mut proj = if let Some(document) = production.as_mut() {
@@ -505,7 +508,10 @@ fn cmd_add_sample_binding(
     input_range: (f64, f64),
     output_range: (f64, f64),
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let json = std::fs::read_to_string(project_path)?;
+    let json = kagari_vfx::core::project_migration::read_project_json_file(std::path::Path::new(
+        project_path,
+    ))
+    .map_err(std::io::Error::other)?;
     let mut document = kagari_vfx::core::production_document::ProductionDocument::from_json(&json)
         .map_err(|error| format!("Not a valid production document: {error}"))?;
     document
@@ -526,7 +532,10 @@ fn cmd_bindings(
     frame: Option<u32>,
     comp_ref: Option<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let json = std::fs::read_to_string(project_path)?;
+    let json = kagari_vfx::core::project_migration::read_project_json_file(std::path::Path::new(
+        project_path,
+    ))
+    .map_err(std::io::Error::other)?;
     let mut document = kagari_vfx::core::production_document::ProductionDocument::from_json(&json)
         .map_err(|error| format!("Not a valid production document: {error}"))?;
     let sources = values
@@ -723,8 +732,9 @@ fn load_project(path: &str) -> Result<Project, Box<dyn std::error::Error>> {
         )
         .into());
     }
-    let json = std::fs::read_to_string(path)
-        .map_err(|e| format!("Failed to read project file '{}': {}", path, e))?;
+    let json =
+        kagari_vfx::core::project_migration::read_project_json_file(std::path::Path::new(path))
+            .map_err(|e| format!("Failed to read project file '{}': {}", path, e))?;
     let project = kagari_vfx::core::production_document::ProductionDocument::from_json(&json)
         .map(|document| document.project().clone())
         .or_else(|_| kagari_vfx::core::project_migration::load_project_migrated(&json))
@@ -791,11 +801,13 @@ struct RenderArgs {
 }
 
 fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Error>> {
-    let production = std::fs::read_to_string(&args.project_path)
-        .ok()
-        .and_then(|json| {
-            kagari_vfx::core::production_document::ProductionDocument::from_json(&json).ok()
-        });
+    let production = kagari_vfx::core::project_migration::read_project_json_file(
+        std::path::Path::new(&args.project_path),
+    )
+    .ok()
+    .and_then(|json| {
+        kagari_vfx::core::production_document::ProductionDocument::from_json(&json).ok()
+    });
     let project = if let Some(document) = production.as_ref() {
         document.project.clone()
     } else {
@@ -1223,7 +1235,10 @@ fn cmd_production_info(
     project_path: &str,
     json_output: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let json = std::fs::read_to_string(project_path)?;
+    let json = kagari_vfx::core::project_migration::read_project_json_file(std::path::Path::new(
+        project_path,
+    ))
+    .map_err(std::io::Error::other)?;
     let document = kagari_vfx::core::production_document::ProductionDocument::from_json(&json)
         .map_err(|error| format!("Not a valid production document: {error}"))?;
     let clock = document.clock();

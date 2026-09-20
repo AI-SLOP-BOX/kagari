@@ -11,6 +11,11 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+const MAX_IMPORT_FPS: f32 = 240.0;
+const MAX_IMPORT_DURATION_SECONDS: f64 = 24.0 * 60.0 * 60.0;
+const MAX_IMPORT_FRAMES: u64 = 2_000_000;
+const MAX_IMPORT_DIMENSION: u32 = 16_384;
+
 /// A decoded video asset on disk.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct VideoAsset {
@@ -117,7 +122,39 @@ pub fn import_video(src_path: &str, dest_dir: &Path, fps: f32) -> Result<VideoAs
     if !src.is_file() {
         return Err(format!("source file not found: {}", src_path));
     }
-    let fps = fps.max(1.0);
+    if !fps.is_finite() || fps < 1.0 || fps > MAX_IMPORT_FPS {
+        return Err(format!(
+            "fps must be finite and between 1 and {}",
+            MAX_IMPORT_FPS
+        ));
+    }
+    let duration = probe_duration_seconds(src)
+        .ok_or_else(|| "could not determine video duration".to_string())?;
+    if !duration.is_finite() || duration <= 0.0 || duration > MAX_IMPORT_DURATION_SECONDS {
+        return Err(format!(
+            "video duration must be between 0 and {} hours",
+            MAX_IMPORT_DURATION_SECONDS / 3600.0
+        ));
+    }
+    let (source_width, source_height) =
+        probe_dimensions(src).ok_or_else(|| "could not determine video dimensions".to_string())?;
+    if source_width == 0
+        || source_height == 0
+        || source_width > MAX_IMPORT_DIMENSION
+        || source_height > MAX_IMPORT_DIMENSION
+    {
+        return Err(format!(
+            "video dimensions must be within {}x{}",
+            MAX_IMPORT_DIMENSION, MAX_IMPORT_DIMENSION
+        ));
+    }
+    let estimated_frames = (duration * f64::from(fps)).ceil() as u64;
+    if estimated_frames > MAX_IMPORT_FRAMES {
+        return Err(format!(
+            "video would produce too many frames (limit {})",
+            MAX_IMPORT_FRAMES
+        ));
+    }
     let frames_dir = dest_dir.join("frames");
     std::fs::create_dir_all(&frames_dir)
         .map_err(|e| format!("failed to create media dir: {}", e))?;
@@ -177,17 +214,13 @@ pub fn import_video(src_path: &str, dest_dir: &Path, fps: f32) -> Result<VideoAs
         }
     }
 
-    let (width, height) = probe_dimensions(src).unwrap_or((1920, 1080));
-    // Prefer actual frame count over probed duration for sequence length
-    let _duration = probe_duration_seconds(src);
-
     Ok(VideoAsset {
         source_path: src_path.to_string(),
         frames_dir: frames_dir.to_string_lossy().to_string(),
         frame_count,
         fps,
-        width,
-        height,
+        width: source_width,
+        height: source_height,
         audio_wav,
     })
 }
@@ -239,7 +272,9 @@ mod tests {
         let result = import_video("/dev/null", Path::new("/tmp/kagari_vid_test2"), 30.0);
         let err = result.expect_err("/dev/null is never a valid video source");
         assert!(
-            err.contains("ffmpeg not found") || err.contains("source file not found"),
+            err.contains("ffmpeg not found")
+                || err.contains("source file not found")
+                || err.contains("could not determine video"),
             "unexpected import failure mode: {}",
             err
         );
