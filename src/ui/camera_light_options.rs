@@ -5,6 +5,11 @@ use eframe::egui;
 
 pub fn draw_camera_light_options(app: &mut KagariApp, ui: &mut egui::Ui) {
     let current_frame = app.playback.current_frame;
+    let pre_snapshot = if !app.drag_active() {
+        Some(app.history.current().clone())
+    } else {
+        None
+    };
     let comp = app.history.current_mut().active_composition_mut();
     let mut changed = false;
 
@@ -393,6 +398,18 @@ pub fn draw_camera_light_options(app: &mut KagariApp, ui: &mut egui::Ui) {
     });
 
     if changed {
-        crate::core::frame_cache::bump_version();
+        let pointer_down = ui.input(|input| input.pointer.any_down());
+        if pointer_down {
+            if !app.drag_active() {
+                if let Some(snapshot) = pre_snapshot {
+                    app.begin_drag_with_snapshot(snapshot, "Camera and Light Edit");
+                }
+            }
+        } else if app.drag_active() {
+            app.commit_drag();
+        } else if let Some(snapshot) = pre_snapshot {
+            app.begin_drag_with_snapshot(snapshot, "Camera and Light Edit");
+            app.commit_drag();
+        }
     }
 }

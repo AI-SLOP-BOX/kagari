@@ -4,6 +4,11 @@ use crate::KagariApp;
 use eframe::egui;
 
 pub fn draw_paragraph_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
+    let pre_snapshot = if !app.drag_active() {
+        Some(app.history.current().clone())
+    } else {
+        None
+    };
     let comp = app.history.current_mut().active_composition_mut();
 
     let layer_idx = match app.selection.selected_layer_idx {
@@ -270,6 +275,18 @@ pub fn draw_paragraph_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     }
 
     if changed {
-        crate::core::frame_cache::bump_version();
+        let pointer_down = ui.input(|input| input.pointer.any_down());
+        if pointer_down {
+            if !app.drag_active() {
+                if let Some(snapshot) = pre_snapshot {
+                    app.begin_drag_with_snapshot(snapshot, "Paragraph Edit");
+                }
+            }
+        } else if app.drag_active() {
+            app.commit_drag();
+        } else if let Some(snapshot) = pre_snapshot {
+            app.begin_drag_with_snapshot(snapshot, "Paragraph Edit");
+            app.commit_drag();
+        }
     }
 }
