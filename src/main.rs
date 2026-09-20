@@ -1,13 +1,35 @@
 use eframe::egui;
 
+fn kagari_app_icon() -> Option<egui::IconData> {
+    let image = image::load_from_memory(include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/assets/kagari_logo.webp"
+    )))
+    .ok()?;
+    let rgba = image.to_rgba8();
+
+    Some(egui::IconData {
+        rgba: rgba.into_raw(),
+        width: image.width(),
+        height: image.height(),
+    })
+}
+
 fn main() -> eframe::Result<()> {
     env_logger::init();
 
+    let mut viewport = egui::ViewportBuilder::default()
+        .with_inner_size([1536.0, 1024.0])
+        .with_min_inner_size([300.0, 220.0])
+        .with_title("Kagari VFX");
+    if let Some(icon) = kagari_app_icon() {
+        viewport = viewport.with_icon(icon);
+    } else {
+        log::warn!("Unable to decode the embedded Kagari application icon");
+    }
+
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1536.0, 1024.0])
-            .with_min_inner_size([300.0, 220.0])
-            .with_title("Kagari VFX"),
+        viewport,
         ..Default::default()
     };
 
