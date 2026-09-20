@@ -396,7 +396,8 @@ pub(crate) fn render_frame_to_pixels_filtered(
     // Collapse Transformations: expand collapsed precomps into parent space
     // so their 3D children join the parent camera / z-sort / shadow passes.
     let owned;
-    let comp = if comp
+    let comp = if only_layer_idx.is_none()
+        && comp
         .layers
         .iter()
         .any(|l| l.is_collapsed && matches!(l.layer_type, LayerType::PreComp { .. }))
