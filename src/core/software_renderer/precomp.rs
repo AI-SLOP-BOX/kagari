@@ -3,7 +3,7 @@
 //! Covers sub-comp entry points, nesting guards/caches, and the
 //! recursive inner renderer (with its own opacity/matte handling).
 
-use super::{render_frame_to_pixels, rgba_buffer_size};
+use super::{render_frame_to_pixels_filtered, rgba_buffer_size};
 use crate::core::sdf::rasterize_shape_sdf;
 use crate::core::timeline::{Composition, LayerType};
 
@@ -17,7 +17,12 @@ thread_local! {
     /// Precomp render cache: avoids re-rendering the same sub-comp at the
     /// same frame when it's referenced by multiple layers.
     static PRECOMP_RENDER_CACHE: std::cell::RefCell<crate::core::precomp_cache::PrecompCache> = std::cell::RefCell::new(crate::core::precomp_cache::PrecompCache::new(64));
+    /// Source-layer effects can reference another layer which references a
+    /// third one, but a cycle must not recurse forever.
+    static SOURCE_LAYER_RENDER_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
 }
+
+const MAX_SOURCE_LAYER_RENDER_DEPTH: u32 = 16;
 
 /// Render a pre-comp by recursively rendering its layers into a pixel buffer.
 /// This is the core of pre-comp nesting support. Uses a thread-local cache
@@ -255,12 +260,30 @@ pub(crate) fn render_single_layer_pixels(
     if size == 0 || layer_idx >= comp.layers.len() {
         return vec![0u8; size as usize];
     }
-    // Create a minimal composition with only the target layer
-    let mut single = comp.clone();
-    let target = single.layers.remove(layer_idx);
-    single.layers.clear();
-    single.layers.push(target);
-    render_frame_to_pixels(&single, frame, width, height, 0.0, 0)
+
+    SOURCE_LAYER_RENDER_DEPTH.with(|depth| {
+        let current = depth.get();
+        if current >= MAX_SOURCE_LAYER_RENDER_DEPTH {
+            log::warn!(
+                "[Renderer] source-layer effect recursion exceeded {} levels",
+                MAX_SOURCE_LAYER_RENDER_DEPTH
+            );
+            return vec![0u8; size as usize];
+        }
+
+        depth.set(current + 1);
+        let pixels = render_frame_to_pixels_filtered(
+            comp,
+            frame,
+            width,
+            height,
+            0.0,
+            0,
+            Some(layer_idx),
+        );
+        depth.set(current);
+        pixels
+    })
 }
 
 fn render_precomp_layers_inner(

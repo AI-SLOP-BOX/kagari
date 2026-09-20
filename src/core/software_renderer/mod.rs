@@ -374,6 +374,25 @@ pub fn render_frame_to_pixels(
     exposure_ev: f32,
     lut_mode: u32,
 ) -> Vec<u8> {
+    render_frame_to_pixels_filtered(comp, frame, width, height, exposure_ev, lut_mode, None)
+}
+
+/// Render a frame while optionally limiting the top-level pass to one layer.
+///
+/// Source-layer effects need a layer's pixels without losing the original
+/// composition, because the selected layer's effect parameters still refer to
+/// the original layer indices. Keeping the full composition here preserves
+/// those references while the filter prevents unrelated layers from being
+/// composited into the source buffer.
+pub(crate) fn render_frame_to_pixels_filtered(
+    comp: &Composition,
+    frame: u32,
+    width: u32,
+    height: u32,
+    exposure_ev: f32,
+    lut_mode: u32,
+    only_layer_idx: Option<usize>,
+) -> Vec<u8> {
     // Collapse Transformations: expand collapsed precomps into parent space
     // so their 3D children join the parent camera / z-sort / shadow passes.
     let owned;
@@ -458,7 +477,8 @@ pub fn render_frame_to_pixels(
         );
     }
 
-    let has_solo = comp.layers.iter().any(|l| l.is_active(frame) && l.solo);
+    let has_solo = only_layer_idx.is_none()
+        && comp.layers.iter().any(|l| l.is_active(frame) && l.solo);
 
     // ── Phase 1: Parallel layer data preparation ──
     // Multi-frame rendering support: parallel render queue initialized for MFR pipeline.
@@ -597,6 +617,9 @@ pub fn render_frame_to_pixels(
 
     for &sorted_idx in &sorted_layer_indices {
         let layer = &comp.layers[sorted_idx];
+        if only_layer_idx.is_some_and(|target_idx| target_idx != sorted_idx) {
+            continue;
+        }
         // Cooperative cancellation: checked once per layer
         if render_cancelled() {
             break;
@@ -1476,6 +1499,56 @@ mod tests {
 
         let pixels = render_frame_to_pixels(&comp, 0, 100, 100, 0.0, 0);
         assert_eq!(pixels.len(), 100 * 100 * 4);
+    }
+
+    #[test]
+    fn source_layer_effects_keep_original_layer_indices() {
+        let mut comp = Composition::new("source_map".into(), "Source Map".into(), 16, 16, 30, 30);
+        comp.background_color = [0.0, 0.0, 0.0, 0.0];
+
+        let mut source = Layer::new(
+            "source".into(),
+            "Source".into(),
+            LayerType::Solid {
+                color: [1.0, 1.0, 1.0, 0.25],
+            },
+            30,
+        );
+        source.transform.position = Animatable::new_constant([8.0, 8.0]);
+        comp.layers.push(source);
+
+        let mut target = Layer::new(
+            "target".into(),
+            "Target".into(),
+            LayerType::Solid {
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
+            30,
+        );
+        target.transform.position = Animatable::new_constant([8.0, 8.0]);
+        target.effects.push(Effect {
+            id: "matte".into(),
+            enabled: true,
+            name: "Set Matte".into(),
+            effect_type: EffectType::SetMatte {
+                source_layer_idx: 0,
+                source_channel: crate::core::set_matte::MatteSourceChannel::Alpha,
+                invert_matte: false,
+                composite_mode: crate::core::set_matte::MatteCompositeMode::Replace,
+            },
+        });
+        comp.layers.push(target);
+
+        // Render only the target as a source-layer consumer. The source must
+        // still resolve against index 0 in the original composition.
+        let pixels = render_frame_to_pixels_filtered(&comp, 0, 16, 16, 0.0, 0, Some(1));
+        let center = ((8 * 16 + 8) * 4) as usize;
+        assert!(pixels[center] > 200, "target color should survive the matte");
+        assert!(
+            (60..=68).contains(&pixels[center + 3]),
+            "source alpha should drive target alpha, got {}",
+            pixels[center + 3]
+        );
     }
 
     #[test]
