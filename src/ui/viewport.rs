@@ -84,6 +84,9 @@ fn software_preview_required(comp: &crate::core::timeline::Composition, frame: u
                     | crate::core::timeline::LayerType::Particle { .. }
             ) || (matches!(layer.layer_type, crate::core::timeline::LayerType::Text { .. })
                 && (layer
+                    .text_formatting
+                    .is_some()
+                    || layer
                     .text_animator
                     .as_ref()
                     .is_some_and(|animator| animator.enabled)
