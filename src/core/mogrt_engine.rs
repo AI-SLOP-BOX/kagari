@@ -7,6 +7,41 @@
 
 use crate::core::timeline::Composition;
 
+fn blend_mode_from_label(label: &str) -> Option<crate::core::timeline::BlendMode> {
+    match label.to_ascii_lowercase().replace([' ', '_', '-'], "").as_str() {
+        "normal" => Some(crate::core::timeline::BlendMode::Normal),
+        "multiply" => Some(crate::core::timeline::BlendMode::Multiply),
+        "screen" => Some(crate::core::timeline::BlendMode::Screen),
+        "overlay" => Some(crate::core::timeline::BlendMode::Overlay),
+        "add" => Some(crate::core::timeline::BlendMode::Add),
+        "darken" => Some(crate::core::timeline::BlendMode::Darken),
+        "lighten" => Some(crate::core::timeline::BlendMode::Lighten),
+        "softlight" => Some(crate::core::timeline::BlendMode::SoftLight),
+        "hardlight" => Some(crate::core::timeline::BlendMode::HardLight),
+        "difference" => Some(crate::core::timeline::BlendMode::Difference),
+        "exclusion" => Some(crate::core::timeline::BlendMode::Exclusion),
+        "divide" => Some(crate::core::timeline::BlendMode::Divide),
+        "subtract" => Some(crate::core::timeline::BlendMode::Subtract),
+        "colorburn" => Some(crate::core::timeline::BlendMode::ColorBurn),
+        "linearburn" => Some(crate::core::timeline::BlendMode::LinearBurn),
+        "vividlight" => Some(crate::core::timeline::BlendMode::VividLight),
+        "colordodge" => Some(crate::core::timeline::BlendMode::ColorDodge),
+        "lineardodge" => Some(crate::core::timeline::BlendMode::LinearDodge),
+        "color" => Some(crate::core::timeline::BlendMode::Color),
+        "hue" => Some(crate::core::timeline::BlendMode::Hue),
+        "saturation" => Some(crate::core::timeline::BlendMode::Saturation),
+        "luminosity" => Some(crate::core::timeline::BlendMode::Luminosity),
+        "stencilalpha" => Some(crate::core::timeline::BlendMode::StencilAlpha),
+        "stencilluma" => Some(crate::core::timeline::BlendMode::StencilLuma),
+        "silhouettealpha" => Some(crate::core::timeline::BlendMode::SilhouetteAlpha),
+        "silhouetteluma" => Some(crate::core::timeline::BlendMode::SilhouetteLuma),
+        "behind" => Some(crate::core::timeline::BlendMode::Behind),
+        "alphaadd" => Some(crate::core::timeline::BlendMode::AlphaAdd),
+        "linearlight" => Some(crate::core::timeline::BlendMode::LinearLight),
+        _ => None,
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum EssentialPropertyType {
     Number {
@@ -105,7 +140,25 @@ pub fn apply_essential_property_overrides(
                         *color = *value;
                     }
                 }
-                _ => {}
+                EssentialPropertyType::Checkbox { value } => {
+                    match prop.target_property_path.as_str() {
+                        "effects_enabled" => layer.effects_enabled = *value,
+                        "visible" => layer.visible = *value,
+                        _ => {}
+                    }
+                }
+                EssentialPropertyType::Dropdown {
+                    options,
+                    selected_index,
+                } => {
+                    if prop.target_property_path == "blend_mode" {
+                        if let Some(label) = options.get(*selected_index) {
+                            if let Some(mode) = blend_mode_from_label(label) {
+                                layer.blend_mode = mode;
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -198,6 +251,25 @@ mod tests {
                     value: [500.0, 200.0],
                 },
             },
+            EssentialProperty {
+                id: "p3".into(),
+                name: "Visible".into(),
+                comment: None,
+                target_layer_id: "l_title".into(),
+                target_property_path: "visible".into(),
+                property_type: EssentialPropertyType::Checkbox { value: false },
+            },
+            EssentialProperty {
+                id: "p4".into(),
+                name: "Blend".into(),
+                comment: None,
+                target_layer_id: "l_title".into(),
+                target_property_path: "blend_mode".into(),
+                    property_type: EssentialPropertyType::Dropdown {
+                        options: vec!["Normal".into(), "Screen".into()],
+                    selected_index: 1,
+                    },
+            },
         ];
 
         apply_essential_property_overrides(&mut comp, &overrides);
@@ -209,6 +281,8 @@ mod tests {
             panic!("Expected Text layer");
         }
         assert_eq!(layer.transform.position.evaluate(0), [500.0, 200.0]);
+        assert!(!layer.visible);
+        assert_eq!(layer.blend_mode, crate::core::timeline::BlendMode::Screen);
     }
 
     #[test]
