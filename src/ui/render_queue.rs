@@ -67,6 +67,35 @@ pub fn draw_render_queue_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
             app.render_item_status.clear();
         }
 
+        let failed_items: Vec<String> = app
+            .render_queue_items
+            .iter()
+            .filter(|name| {
+                matches!(
+                    app.render_item_status.get(*name),
+                    Some(crate::app_state::QueueItemStatus::Failed)
+                )
+            })
+            .cloned()
+            .collect();
+        if custom_widgets::ae_button(ui, "↻ Retry Failed")
+            .on_hover_text("Requeue failed items and render them sequentially")
+            .clicked()
+            && !failed_items.is_empty()
+            && !app.export.is_exporting
+        {
+            for name in &failed_items {
+                app.render_item_status
+                    .insert(name.clone(), crate::app_state::QueueItemStatus::Queued);
+            }
+            app.batch_queue = failed_items;
+            app.batch_idx = 0;
+            app.export.show_export_dialog = true;
+            if let Some(first) = app.batch_queue.first().cloned() {
+                crate::ui::export_dialog::start_comp_export(app, ui.ctx(), &first);
+            }
+        }
+
         if custom_widgets::ae_button(ui, "📡 Submit to Deadline Farm")
             .on_hover_text(
                 "Dispatch distributed rendering job to AWS Thinkbox Deadline / OpenCue cluster",
