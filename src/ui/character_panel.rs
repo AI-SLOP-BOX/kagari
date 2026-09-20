@@ -13,6 +13,7 @@ pub fn draw_character_panel(
     _current_frame: u32,
 ) -> bool {
     let mut project_changed = false;
+    let sel_idx = app.selection.selected_layer_idx;
 
     ui.vertical(|ui| {
         ui.horizontal(|ui| {
@@ -25,7 +26,6 @@ pub fn draw_character_panel(
         });
         ui.separator();
 
-        let sel_idx = app.selection.selected_layer_idx;
         if let Some(idx) = sel_idx {
             if idx < comp.layers.len() {
                 let layer = &mut comp.layers[idx];
@@ -435,6 +435,48 @@ pub fn draw_character_panel(
             ui.weak("Select a Text Layer to edit character formatting.");
         }
     });
+
+    // Character and Paragraph panels edit the same rendered text. Keep the
+    // legacy LayerType fields in sync so switching panels cannot make one
+    // panel's changes disappear behind TextFormatting overrides.
+    if project_changed {
+        if let Some(idx) = sel_idx {
+            if let Some(layer) = comp.layers.get_mut(idx) {
+                let text_values = match &layer.layer_type {
+                    LayerType::Text {
+                        font_family,
+                        tracking,
+                        leading,
+                        align,
+                        stroke_color,
+                        stroke_width,
+                        ..
+                    } => Some((
+                        font_family.clone(),
+                        tracking,
+                        leading,
+                        align,
+                        stroke_color,
+                        stroke_width,
+                    )),
+                    _ => None,
+                };
+                if let Some((font_family, tracking, leading, align, stroke_color, stroke_width)) =
+                    text_values
+                {
+                    let formatting = layer
+                        .text_formatting
+                        .get_or_insert_with(crate::core::timeline::TextFormatting::default);
+                    formatting.font_family = font_family;
+                    formatting.tracking = *tracking;
+                    formatting.leading = *leading;
+                    formatting.alignment = *align as u32;
+                    formatting.stroke_color = (*stroke_width > 0.0).then_some(*stroke_color);
+                    formatting.stroke_width = *stroke_width;
+                }
+            }
+        }
+    }
 
     project_changed
 }

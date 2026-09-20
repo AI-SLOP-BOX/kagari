@@ -42,23 +42,47 @@ pub(crate) fn rasterize_text_layer(ctx: RasterCtx<'_>) {
     else {
         return;
     };
+    let formatting = layer.text_formatting.as_ref();
+    let effective_family = formatting
+        .map(|tf| tf.font_family.clone())
+        .unwrap_or_else(|| font_family.clone());
+    let effective_tracking = formatting.map(|tf| tf.tracking).unwrap_or(*tracking);
+    let effective_leading = formatting.map(|tf| tf.leading).unwrap_or(*leading);
+    let effective_align = formatting
+        .map(|tf| tf.alignment as usize)
+        .unwrap_or(*align);
+    let effective_box_width = formatting.map(|tf| tf.box_width).unwrap_or(0.0);
+    let effective_stroke_color = formatting
+        .map(|tf| tf.stroke_color.unwrap_or([0.0, 0.0, 0.0, 0.0]))
+        .unwrap_or(*stroke_color);
+    let effective_stroke_width = formatting
+        .map(|tf| if tf.stroke_color.is_some() { tf.stroke_width } else { 0.0 })
+        .unwrap_or(*stroke_width);
+    let faux_style = formatting
+        .map(|tf| crate::core::font_rasterizer::FauxTextStyle {
+            bold: tf.faux_bold,
+            italic: tf.faux_italic,
+            all_caps: tf.all_caps,
+            small_caps: tf.small_caps,
+        })
+        .unwrap_or_default();
         // Text layers: rasterize glyphs via ab_glyph and composite
         use crate::core::font_rasterizer::with_font_rasterizer;
         use crate::core::text_layout::TextAlign;
 
         let text_color = *color;
-        let stroke_c = *stroke_color;
-        let stroke_w = *stroke_width;
+        let stroke_c = effective_stroke_color;
+        let stroke_w = effective_stroke_width;
         let text_str = text.clone();
         let fs = *font_size as f32;
-        let tk = *tracking;
-        let ld = *leading;
-        let alignment = match align {
+        let tk = effective_tracking;
+        let ld = effective_leading;
+        let alignment = match effective_align {
             1 => TextAlign::Center,
             2 => TextAlign::Right,
             _ => TextAlign::Left,
         };
-        let family = font_family.clone();
+        let family = effective_family.clone();
 
         with_font_rasterizer(|rasterizer| {
             let family_name = rasterizer.resolve_family(&family);
@@ -179,17 +203,18 @@ pub(crate) fn rasterize_text_layer(ctx: RasterCtx<'_>) {
                     .as_ref()
                     .map(|tf| tf.leading)
                     .unwrap_or(1.2);
-                rasterizer.rasterize_text_animated_stack(
+                rasterizer.rasterize_text_animated_stack_styled(
                     &family_name,
                     &text_str,
                     fs,
                     text_color,
                     tk,
                     lead,
-                    0.0,
+                    effective_box_width,
                     alignment,
                     stack,
                     frame as f32 / comp.fps.max(1) as f32,
+                    faux_style,
                 )
             } else if let Some(anim) = layer.text_animator.as_ref().filter(|a| a.enabled) {
                 let lead = layer
@@ -204,28 +229,30 @@ pub(crate) fn rasterize_text_layer(ctx: RasterCtx<'_>) {
                 } else {
                     anim.clone()
                 };
-                rasterizer.rasterize_text_animated(
+                rasterizer.rasterize_text_animated_styled(
                     &family_name,
                     &text_str,
                     fs,
                     text_color,
                     tk,
                     lead,
-                    0.0,
+                    effective_box_width,
                     alignment,
                     &anim_owned,
                     frame as f32 / comp.fps.max(1) as f32,
+                    faux_style,
                 )
             } else {
-                rasterizer.rasterize_text_formatted(
+                rasterizer.rasterize_text_formatted_styled(
                     &family_name,
                     &text_str,
                     fs,
                     text_color,
                     tk,
                     ld,
-                    0.0,
+                    effective_box_width,
                     alignment,
+                    faux_style,
                 )
             };
             if let Some((tw, th, text_pixels)) = maybe_text {

@@ -1046,8 +1046,10 @@ struct TextRasterParams {
     tracking: f32,
     leading: f32,
     align: usize,
+    box_width: f32,
     stroke_color: [f32; 4],
     stroke_width: f32,
+    faux_style: crate::core::font_rasterizer::FauxTextStyle,
 }
 
 fn composition_cache_key(comp: &Composition) -> u64 {
@@ -1060,7 +1062,24 @@ fn composition_cache_key(comp: &Composition) -> u64 {
 }
 
 type RenderKey = (u64, u64, u32, u32, u32, (u32, u32));
-type TextTextureKey = (String, String, u32, [u32; 4], u32);
+#[derive(Clone, PartialEq, Eq, Hash)]
+struct TextTextureKey {
+    layer_id: String,
+    text: String,
+    font_size: u32,
+    color: [u32; 4],
+    font_family: String,
+    tracking: u32,
+    leading: u32,
+    box_width: u32,
+    align: usize,
+    stroke_color: [u32; 4],
+    stroke_width: u32,
+    faux_bold: bool,
+    faux_italic: bool,
+    all_caps: bool,
+    small_caps: bool,
+}
 type TextTextureCache = std::collections::HashMap<
     TextTextureKey,
     (wgpu::Texture, std::sync::Arc<wgpu::BindGroup>, u32, u32),
@@ -1722,19 +1741,35 @@ impl WgpuRenderer {
             params.align,
         );
         let (stroke_color, stroke_width) = (params.stroke_color, params.stroke_width);
-        // Floats hashed via bit patterns (f32 is not Hash)
-        let key = (
-            layer_id.to_string(),
-            text.to_string(),
+        // Floats hashed via bit patterns (f32 is not Hash). Include every
+        // visual input so changing a text property cannot reuse stale pixels.
+        let key = TextTextureKey {
+            layer_id: layer_id.to_string(),
+            text: text.to_string(),
             font_size,
-            [
+            color: [
+                color[0].to_bits(),
+                color[1].to_bits(),
+                color[2].to_bits(),
+                color[3].to_bits(),
+            ],
+            font_family: font_family.to_string(),
+            tracking: tracking.to_bits(),
+            leading: leading.to_bits(),
+            box_width: params.box_width.to_bits(),
+            align,
+            stroke_color: [
                 stroke_color[0].to_bits(),
                 stroke_color[1].to_bits(),
                 stroke_color[2].to_bits(),
                 stroke_color[3].to_bits(),
             ],
-            stroke_width.to_bits(),
-        );
+            stroke_width: stroke_width.to_bits(),
+            faux_bold: params.faux_style.bold,
+            faux_italic: params.faux_style.italic,
+            all_caps: params.faux_style.all_caps,
+            small_caps: params.faux_style.small_caps,
+        };
         // Cached: return stored dimensions — no CPU rasterization on hits
         if let Some(bind_group) = self
             .text_texture_cache
@@ -1753,15 +1788,16 @@ impl WgpuRenderer {
         };
         let rasterized = crate::core::font_rasterizer::with_font_rasterizer(|r| {
             let family = r.resolve_family(font_family);
-            r.rasterize_text_formatted(
+            r.rasterize_text_formatted_styled(
                 &family,
                 text,
                 font_size as f32,
                 color,
                 tracking,
                 leading,
-                0.0,
+                params.box_width,
                 alignment,
+                params.faux_style,
             )
         })?;
         if rasterized.0 == 0 || rasterized.1 == 0 || rasterized.2.is_empty() {
@@ -2137,16 +2173,42 @@ impl WgpuRenderer {
                     ..
                 } = &layer.layer_type
                 {
+                    let formatting = layer.text_formatting.as_ref();
+                    let effective_family = formatting
+                        .map(|tf| tf.font_family.clone())
+                        .unwrap_or_else(|| font_family.clone());
+                    let effective_tracking = formatting.map(|tf| tf.tracking).unwrap_or(*tracking);
+                    let effective_leading = formatting.map(|tf| tf.leading).unwrap_or(*leading);
+                    let effective_align = formatting
+                        .map(|tf| tf.alignment as usize)
+                        .unwrap_or(*align);
+                    let effective_box_width = formatting.map(|tf| tf.box_width).unwrap_or(0.0);
+                    let effective_stroke_color = formatting
+                        .map(|tf| tf.stroke_color.unwrap_or([0.0, 0.0, 0.0, 0.0]))
+                        .unwrap_or(*stroke_color);
+                    let effective_stroke_width = formatting
+                        .map(|tf| if tf.stroke_color.is_some() { tf.stroke_width } else { 0.0 })
+                        .unwrap_or(*stroke_width);
+                    let faux_style = formatting
+                        .map(|tf| crate::core::font_rasterizer::FauxTextStyle {
+                            bold: tf.faux_bold,
+                            italic: tf.faux_italic,
+                            all_caps: tf.all_caps,
+                            small_caps: tf.small_caps,
+                        })
+                        .unwrap_or_default();
                     let params = TextRasterParams {
                         text: text.clone(),
                         font_size: *font_size,
                         color: *color,
-                        font_family: font_family.clone(),
-                        tracking: *tracking,
-                        leading: *leading,
-                        align: *align,
-                        stroke_color: *stroke_color,
-                        stroke_width: *stroke_width,
+                        font_family: effective_family,
+                        tracking: effective_tracking,
+                        leading: effective_leading,
+                        align: effective_align,
+                        box_width: effective_box_width,
+                        stroke_color: effective_stroke_color,
+                        stroke_width: effective_stroke_width,
+                        faux_style,
                     };
                     if let Some((tw, th, bg)) = self.get_or_create_text_texture(&layer.id, &params)
                     {

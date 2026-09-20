@@ -33,6 +33,106 @@ pub struct RasterizedGlyph {
     pub pixels: Vec<u8>,
 }
 
+/// Synthetic text styles used when a font family does not expose a matching
+/// face.  These are deliberately kept in the rasterizer so CPU and GPU text
+/// paths can share exactly the same fallback behavior.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct FauxTextStyle {
+    pub bold: bool,
+    pub italic: bool,
+    pub all_caps: bool,
+    pub small_caps: bool,
+}
+
+fn styled_text_input(text: &str, style: FauxTextStyle) -> String {
+    if !style.all_caps && !style.small_caps {
+        return text.to_string();
+    }
+    text.chars()
+        .map(|ch| {
+            if ch.is_alphabetic() {
+                ch.to_uppercase().next().unwrap_or(ch)
+            } else {
+                ch
+            }
+        })
+        .collect()
+}
+
+fn apply_faux_bitmap_style(
+    (mut width, mut height, mut pixels): (u32, u32, Vec<u8>),
+    style: FauxTextStyle,
+) -> (u32, u32, Vec<u8>) {
+    if style.small_caps && width > 0 && height > 0 {
+        let new_width = ((width as f32) * 0.84).round().max(1.0) as u32;
+        let new_height = ((height as f32) * 0.84).round().max(1.0) as u32;
+        let mut scaled = vec![0u8; (new_width * new_height * 4) as usize];
+        for y in 0..new_height {
+            for x in 0..new_width {
+                let sx = ((x as f32 / new_width as f32) * width as f32)
+                    .floor()
+                    .min(width.saturating_sub(1) as f32) as u32;
+                let sy = ((y as f32 / new_height as f32) * height as f32)
+                    .floor()
+                    .min(height.saturating_sub(1) as f32) as u32;
+                let src = ((sy * width + sx) * 4) as usize;
+                let dst = ((y * new_width + x) * 4) as usize;
+                scaled[dst..dst + 4].copy_from_slice(&pixels[src..src + 4]);
+            }
+        }
+        width = new_width;
+        height = new_height;
+        pixels = scaled;
+    }
+
+    if style.bold {
+        let source = pixels.clone();
+        for y in 0..height {
+            for x in 0..width {
+                let mut best = 0u8;
+                let mut best_src = 0usize;
+                for oy in -1i32..=1 {
+                    for ox in -1i32..=1 {
+                        let sx = x as i32 + ox;
+                        let sy = y as i32 + oy;
+                        if sx >= 0 && sy >= 0 && sx < width as i32 && sy < height as i32 {
+                            let idx = ((sy as u32 * width + sx as u32) * 4) as usize;
+                            if source[idx + 3] > best {
+                                best = source[idx + 3];
+                                best_src = idx;
+                            }
+                        }
+                    }
+                }
+                let dst = ((y * width + x) * 4) as usize;
+                if best > 0 {
+                    pixels[dst..dst + 3].copy_from_slice(&source[best_src..best_src + 3]);
+                    pixels[dst + 3] = best;
+                }
+            }
+        }
+    }
+
+    if style.italic && width > 0 && height > 0 {
+        let shear = (height as f32 * 0.22).ceil() as u32;
+        let new_width = width.saturating_add(shear).max(1);
+        let mut slanted = vec![0u8; (new_width * height * 4) as usize];
+        for y in 0..height {
+            let shift = ((height - 1 - y) as f32 * 0.22).round() as u32;
+            for x in 0..width {
+                let dst_x = x.saturating_add(shift);
+                let src = ((y * width + x) * 4) as usize;
+                let dst = ((y * new_width + dst_x) * 4) as usize;
+                slanted[dst..dst + 4].copy_from_slice(&pixels[src..src + 4]);
+            }
+        }
+        width = new_width;
+        pixels = slanted;
+    }
+
+    (width, height, pixels)
+}
+
 /// Font rasterizer that caches loaded fonts and rasterized glyphs.
 pub struct FontRasterizer {
     /// Loaded fonts keyed by family name
@@ -412,6 +512,36 @@ impl FontRasterizer {
         )
     }
 
+    /// Rasterize text and apply synthetic styles after glyph layout.  Keeping
+    /// this wrapper separate preserves the legacy API used by importers and
+    /// tests while allowing editor text formatting to be rendered faithfully.
+    #[allow(clippy::too_many_arguments)]
+    pub fn rasterize_text_formatted_styled(
+        &self,
+        family_name: &str,
+        text: &str,
+        font_size: f32,
+        color: [f32; 4],
+        tracking: f32,
+        leading: f32,
+        box_width: f32,
+        alignment: crate::core::text_layout::TextAlign,
+        style: FauxTextStyle,
+    ) -> Option<(u32, u32, Vec<u8>)> {
+        let styled_text = styled_text_input(text, style);
+        let rasterized = self.rasterize_text_formatted(
+            family_name,
+            &styled_text,
+            font_size,
+            color,
+            tracking,
+            leading,
+            box_width,
+            alignment,
+        )?;
+        Some(apply_faux_bitmap_style(rasterized, style))
+    }
+
     /// Rasterize text with full paragraph formatting (leading, box_width, alignment).
     #[allow(clippy::too_many_arguments)]
     pub fn rasterize_text_formatted(
@@ -735,6 +865,37 @@ impl FontRasterizer {
     }
 
     #[allow(clippy::too_many_arguments)]
+    pub fn rasterize_text_animated_styled(
+        &self,
+        family_name: &str,
+        text: &str,
+        font_size: f32,
+        color: [f32; 4],
+        tracking: f32,
+        leading: f32,
+        box_width: f32,
+        alignment: crate::core::text_layout::TextAlign,
+        animator: &crate::core::text_animator::TextAnimatorSettings,
+        time: f32,
+        style: FauxTextStyle,
+    ) -> Option<(u32, u32, Vec<u8>)> {
+        let styled_text = styled_text_input(text, style);
+        let rasterized = self.rasterize_text_animated(
+            family_name,
+            &styled_text,
+            font_size,
+            color,
+            tracking,
+            leading,
+            box_width,
+            alignment,
+            animator,
+            time,
+        )?;
+        Some(apply_faux_bitmap_style(rasterized, style))
+    }
+
+    #[allow(clippy::too_many_arguments)]
     /// Rasterize text with AnimatorStack: multiple animators composed additively/multiplicatively.
     pub fn rasterize_text_animated_stack(
         &self,
@@ -916,6 +1077,37 @@ impl FontRasterizer {
         Some((buf_w, buf_h, pixels))
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub fn rasterize_text_animated_stack_styled(
+        &self,
+        family_name: &str,
+        text: &str,
+        font_size: f32,
+        color: [f32; 4],
+        tracking: f32,
+        leading: f32,
+        box_width: f32,
+        alignment: crate::core::text_layout::TextAlign,
+        stack: &crate::core::text_animator_advanced::AnimatorStack,
+        time: f32,
+        style: FauxTextStyle,
+    ) -> Option<(u32, u32, Vec<u8>)> {
+        let styled_text = styled_text_input(text, style);
+        let rasterized = self.rasterize_text_animated_stack(
+            family_name,
+            &styled_text,
+            font_size,
+            color,
+            tracking,
+            leading,
+            box_width,
+            alignment,
+            stack,
+            time,
+        )?;
+        Some(apply_faux_bitmap_style(rasterized, style))
+    }
+
     /// System font directory paths per platform.
     fn system_font_paths(family_name: &str) -> Vec<std::path::PathBuf> {
         let lower = family_name.to_lowercase().replace(' ', "");
@@ -1062,5 +1254,44 @@ mod tests {
     fn test_load_nonexistent_font() {
         let mut r = FontRasterizer::new();
         assert!(!r.load_system_font("NonExistentFont12345"));
+    }
+
+    #[test]
+    fn faux_text_style_transforms_content_without_losing_layout_markers() {
+        let styled = styled_text_input(
+            "Kagari vfx 42\nα",
+            FauxTextStyle {
+                all_caps: true,
+                ..Default::default()
+            },
+        );
+        assert_eq!(styled, "KAGARI VFX 42\nΑ");
+    }
+
+    #[test]
+    fn faux_bitmap_style_changes_only_requested_dimensions_and_alpha() {
+        let pixels = vec![
+            255, 255, 255, 0, 255, 255, 255, 0, // transparent row
+            255, 255, 255, 255, 255, 255, 255, 0,
+        ];
+        let (width, height, bold) = apply_faux_bitmap_style(
+            (2, 2, pixels.clone()),
+            FauxTextStyle {
+                bold: true,
+                ..Default::default()
+            },
+        );
+        assert_eq!((width, height), (2, 2));
+        assert!(bold.chunks_exact(4).any(|pixel| pixel[3] == 255));
+
+        let (italic_width, italic_height, _) = apply_faux_bitmap_style(
+            (2, 2, pixels),
+            FauxTextStyle {
+                italic: true,
+                ..Default::default()
+            },
+        );
+        assert!(italic_width > 2);
+        assert_eq!(italic_height, 2);
     }
 }

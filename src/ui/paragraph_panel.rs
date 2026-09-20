@@ -37,13 +37,34 @@ pub fn draw_paragraph_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
         return;
     }
 
-    // Ensure text_formatting exists, then borrow it for the panel.
+    // Ensure text_formatting exists, preserving the legacy LayerType values
+    // when opening an older text layer for the first time.
+    if layer.text_formatting.is_none() {
+        let initial = match &layer.layer_type {
+            crate::core::timeline::LayerType::Text {
+                font_family,
+                tracking,
+                leading,
+                align,
+                stroke_color,
+                stroke_width,
+                ..
+            } => crate::core::timeline::TextFormatting {
+                font_family: font_family.clone(),
+                tracking: *tracking,
+                leading: *leading,
+                stroke_color: (*stroke_width > 0.0).then_some(*stroke_color),
+                stroke_width: *stroke_width,
+                alignment: *align as u32,
+                ..Default::default()
+            },
+            _ => crate::core::timeline::TextFormatting::default(),
+        };
+        layer.text_formatting = Some(initial);
+    }
     let Some(fmt) = (match layer.text_formatting {
         Some(_) => layer.text_formatting.as_mut(),
-        None => {
-            layer.text_formatting = Some(crate::core::timeline::TextFormatting::default());
-            layer.text_formatting.as_mut()
-        }
+        None => None,
     }) else {
         return;
     };
@@ -274,7 +295,29 @@ pub fn draw_paragraph_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
         });
     }
 
+    let rendered_formatting = fmt.clone();
     if changed {
+        if let crate::core::timeline::LayerType::Text {
+            font_family,
+            tracking,
+            leading,
+            align,
+            stroke_color,
+            stroke_width,
+            ..
+        } = &mut layer.layer_type
+        {
+            *font_family = rendered_formatting.font_family.clone();
+            *tracking = rendered_formatting.tracking;
+            *leading = rendered_formatting.leading;
+            *align = rendered_formatting.alignment as usize;
+            if let Some(color) = rendered_formatting.stroke_color {
+                *stroke_color = color;
+                *stroke_width = rendered_formatting.stroke_width;
+            } else {
+                *stroke_width = 0.0;
+            }
+        }
         let pointer_down = ui.input(|input| input.pointer.any_down());
         if pointer_down {
             if !app.drag_active() {

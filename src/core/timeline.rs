@@ -1863,6 +1863,18 @@ pub struct TextFormatting {
     /// Text box height for vertical overflow (0 = no limit)
     #[serde(default)]
     pub box_height: f32,
+    /// Synthetic weight used when the selected family has no bold face.
+    #[serde(default)]
+    pub faux_bold: bool,
+    /// Synthetic slant used when the selected family has no italic face.
+    #[serde(default)]
+    pub faux_italic: bool,
+    /// Render alphabetic characters as uppercase without changing the source text.
+    #[serde(default)]
+    pub all_caps: bool,
+    /// Render alphabetic characters as compact uppercase glyphs.
+    #[serde(default)]
+    pub small_caps: bool,
 }
 
 impl Default for TextFormatting {
@@ -1876,6 +1888,10 @@ impl Default for TextFormatting {
             alignment: 0,
             box_width: 0.0,
             box_height: 0.0,
+            faux_bold: false,
+            faux_italic: false,
+            all_caps: false,
+            small_caps: false,
         }
     }
 }
