@@ -1214,7 +1214,7 @@ fn draw_reference_new_project_narrow(app: &mut KagariApp, ui: &mut egui::Ui, ctx
         ui.painter().text(egui::pos2(left.left() + 8.0, left.top() + 158.0 + index as f32 * 11.0), egui::Align2::LEFT_CENTER, text, egui::FontId::proportional(7.0), colors::TEXT_PRIMARY);
     }
     ui.painter().text(egui::pos2(right.left() + 9.0, right.top() + 13.0), egui::Align2::LEFT_CENTER, "Create a New Project", egui::FontId::proportional(9.0), colors::TEXT_PRIMARY);
-    let fields = [("Project Name", "Untitled Project"), ("Location", "/Users/redacted-user/Projects"), ("Frame Rate", "24 fps"), ("Resolution", "3440 × 2160 (4K UHD)"), ("Color Space", "Rec.709")];
+    let fields = [("Project Name", "Untitled Project"), ("Location", "~/Projects"), ("Frame Rate", "24 fps"), ("Resolution", "3440 × 2160 (4K UHD)"), ("Color Space", "Rec.709")];
     for (index, (label, value)) in fields.into_iter().enumerate() {
         let y = right.top() + 27.0 + index as f32 * 27.0;
         ui.painter().text(egui::pos2(right.left() + 9.0, y + 4.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(6.0), colors::TEXT_SECONDARY);
@@ -1335,7 +1335,7 @@ fn draw_reference_new_project_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: 
                 let name_id = egui::Id::new("reference_new_project_name");
                 let location_id = egui::Id::new("reference_new_project_location");
                 let mut name = ctx.data_mut(|d| d.get_temp::<String>(name_id)).unwrap_or_else(|| "Untitled Project".to_string());
-                let mut location = ctx.data_mut(|d| d.get_temp::<String>(location_id)).unwrap_or_else(|| "/Users/redacted-user/Projects".to_string());
+                let mut location = ctx.data_mut(|d| d.get_temp::<String>(location_id)).unwrap_or_else(|| "~/Projects".to_string());
                 ui.add_space(if narrow { 4.0 } else { 8.0 });
                 ui.label(egui::RichText::new("Project Name").size(if narrow { 8.0 } else { 11.0 }).color(colors::TEXT_SECONDARY));
                 ui.add(egui::TextEdit::singleline(&mut name).desired_width(ui.available_width()));
