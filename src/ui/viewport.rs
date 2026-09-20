@@ -1497,6 +1497,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
         // ── Roto Brush Tool (Interactive Green/Red Strokes -> Auto-Mask) ──
         if app.active_tool == crate::ui::toolbar::ActiveTool::RotoBrush {
             let mut clear_roto = false;
+            let mut propagate_roto = false;
             // Radius HUD
             {
                 let hud_id = egui::Id::new("roto_brush_hud");
@@ -1559,6 +1560,9 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                             if ui.button("Clear strokes and matte").clicked() {
                                 clear_roto = true;
                             }
+                            if ui.button("Propagate with layer tracker").clicked() {
+                                propagate_roto = true;
+                            }
                         });
                     });
             }
@@ -1576,6 +1580,36 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                     }
                     app.history.commit(cleared);
                     app.toasts.info("Roto Brush matte cleared");
+                }
+                if propagate_roto {
+                    let mut propagated = app.history.current().clone();
+                    let result = propagated
+                        .active_composition_mut()
+                        .layers
+                        .get_mut(sel_li)
+                        .and_then(|layer| {
+                            let tracker = layer.trackers.first()?.clone();
+                            let mask = layer
+                                .masks
+                                .iter_mut()
+                                .find(|mask| mask.name == "Roto Brush Matte")?;
+                            let baked = crate::core::roto_assist::bake_tracked_mask(
+                                mask,
+                                &tracker,
+                                layer.in_frame,
+                                layer.out_frame.max(layer.in_frame + 1),
+                            )
+                            .ok()?;
+                            mask.path.vertices = baked;
+                            Some(())
+                        });
+                    if result.is_some() {
+                        app.history.commit(propagated);
+                        crate::core::frame_cache::bump_version();
+                        app.toasts.info("Roto Brush matte propagated across the layer");
+                    } else {
+                        app.toasts.info("Add a tracker to this layer before propagation");
+                    }
                 }
                 let stroke_id = egui::Id::new(("roto_live_stroke", sel_li));
                 let alt_held = ctx.input(|i| i.modifiers.alt);
