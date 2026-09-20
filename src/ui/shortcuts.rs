@@ -140,13 +140,19 @@ pub fn handle_global_shortcuts(
     if allow_single_key
         && app.active_tool == crate::ui::toolbar::ActiveTool::Selection
         && ctx.input(|i| i.key_pressed(Key::Delete) || i.key_pressed(Key::Backspace))
-        && app.mask_selected_vertices.as_ref().is_some_and(|(_, _, vertices)| !vertices.is_empty())
+        && app
+            .mask_selected_vertices
+            .as_ref()
+            .is_some_and(|(_, _, vertices)| !vertices.is_empty())
     {
         if let Some((layer_idx, mask_idx, vertices)) = app.mask_selected_vertices.take() {
             if app.selection.selected_layer_idx == Some(layer_idx) {
                 app.commit_drag();
                 app.modify_project(|project| {
-                    if let Some(mask) = project.active_composition_mut().layers.get_mut(layer_idx)
+                    if let Some(mask) = project
+                        .active_composition_mut()
+                        .layers
+                        .get_mut(layer_idx)
                         .filter(|layer| !layer.locked)
                         .and_then(|layer| layer.masks.get_mut(mask_idx))
                     {
@@ -184,14 +190,30 @@ pub fn handle_global_shortcuts(
         // ── Tool Switching Shortcuts (AE standard) ──
         // Only when no modifier keys are pressed and text is not focused
         if allow_single_key && !cmd && !shift && !i.modifiers.alt {
-            if i.key_pressed(Key::V) { app.active_tool = crate::ui::toolbar::ActiveTool::Selection; }
-            if i.key_pressed(Key::H) { app.active_tool = crate::ui::toolbar::ActiveTool::Hand; }
-            if i.key_pressed(Key::Z) { app.active_tool = crate::ui::toolbar::ActiveTool::Zoom; }
-            if i.key_pressed(Key::W) { app.active_tool = crate::ui::toolbar::ActiveTool::Rotation; }
-            if i.key_pressed(Key::Y) { app.active_tool = crate::ui::toolbar::ActiveTool::AnchorPoint; }
-            if i.key_pressed(Key::Q) { app.active_tool = crate::ui::toolbar::ActiveTool::Rectangle; }
-            if i.key_pressed(Key::G) { app.active_tool = crate::ui::toolbar::ActiveTool::Pen; }
-            if i.key_pressed(Key::C) { app.active_tool = crate::ui::toolbar::ActiveTool::Camera3D; }
+            if i.key_pressed(Key::V) {
+                app.active_tool = crate::ui::toolbar::ActiveTool::Selection;
+            }
+            if i.key_pressed(Key::H) {
+                app.active_tool = crate::ui::toolbar::ActiveTool::Hand;
+            }
+            if i.key_pressed(Key::Z) {
+                app.active_tool = crate::ui::toolbar::ActiveTool::Zoom;
+            }
+            if i.key_pressed(Key::W) {
+                app.active_tool = crate::ui::toolbar::ActiveTool::Rotation;
+            }
+            if i.key_pressed(Key::Y) {
+                app.active_tool = crate::ui::toolbar::ActiveTool::AnchorPoint;
+            }
+            if i.key_pressed(Key::Q) {
+                app.active_tool = crate::ui::toolbar::ActiveTool::Rectangle;
+            }
+            if i.key_pressed(Key::G) {
+                app.active_tool = crate::ui::toolbar::ActiveTool::Pen;
+            }
+            if i.key_pressed(Key::C) {
+                app.active_tool = crate::ui::toolbar::ActiveTool::Camera3D;
+            }
         }
         if allow_single_key && cmd && !shift && !i.modifiers.alt && i.key_pressed(Key::P) {
             app.active_tool = crate::ui::toolbar::ActiveTool::PuppetPin;
@@ -217,7 +239,9 @@ pub fn handle_global_shortcuts(
         // Shift+Z → Viewport zoom to fit / to selected layers' bbox (AE parity)
         if shift && !cmd && i.key_pressed(Key::Z) {
             let mut bbox_request: Option<([f32; 2], [f32; 2])> = None;
-            if !app.selection.selected_layers.is_empty() || app.selection.selected_layer_idx.is_some() {
+            if !app.selection.selected_layers.is_empty()
+                || app.selection.selected_layer_idx.is_some()
+            {
                 let comp = app.history.current().active_composition();
                 let cf = *current_frame;
                 let idxs: Vec<usize> = if app.selection.selected_layers.is_empty() {
@@ -230,14 +254,18 @@ pub fn handle_global_shortcuts(
                 let mut min = [f32::MAX; 2];
                 let mut max = [f32::MIN; 2];
                 for &li in &idxs {
-                    let Some(l) = comp.layers.get(li) else { continue };
+                    let Some(l) = comp.layers.get(li) else {
+                        continue;
+                    };
                     let (pos, _, _, _) = comp.resolve_world_transform(l, cf);
                     let bs = l.bounding_size();
                     let sc = l.transform.scale.evaluate(cf);
                     let hx = bs[0] * sc[0].abs() * 0.005;
                     let hy = bs[1] * sc[1].abs() * 0.005;
-                    min[0] = min[0].min(pos[0] - hx); min[1] = min[1].min(pos[1] - hy);
-                    max[0] = max[0].max(pos[0] + hx); max[1] = max[1].max(pos[1] + hy);
+                    min[0] = min[0].min(pos[0] - hx);
+                    min[1] = min[1].min(pos[1] - hy);
+                    max[0] = max[0].max(pos[0] + hx);
+                    max[1] = max[1].max(pos[1] + hy);
                 }
                 if max[0] > min[0] && max[1] > min[1] {
                     bbox_request = Some((min, max));
@@ -294,42 +322,84 @@ pub fn handle_global_shortcuts(
                     app.playback.start_playing();
                     app.playback_speed = 1;
                 }
-                app.toasts.info(format!("▶ Forward {}x", app.playback_speed));
+                app.toasts
+                    .info(format!("▶ Forward {}x", app.playback_speed));
             }
             if i.key_pressed(Key::F9) {
                 if let Some(idx) = app.selection.selected_layer_idx {
-                    let mut temp_proj = app.history.current().clone();
-                    let comp = temp_proj.active_composition_mut();
-                    if idx < comp.layers.len() {
-                        let layer = &mut comp.layers[idx];
-                        let ez = if shift {
-                            // Easy Ease In (Shift+F9)
-                            crate::core::keyframe::InterpolationType::Bezier {
-                                outgoing: crate::core::keyframe::BezierControlPoint { influence: 0.0, speed: 0.0 },
-                                incoming: crate::core::keyframe::BezierControlPoint { influence: 0.85, speed: 0.0 },
-                                custom_bezier: Some([0.85, 0.0, 1.0, 1.0]),
+                    let ease = if shift {
+                        // Easy Ease In (Shift+F9)
+                        crate::core::keyframe::InterpolationType::Bezier {
+                            outgoing: crate::core::keyframe::BezierControlPoint {
+                                influence: 0.0,
+                                speed: 0.0,
+                            },
+                            incoming: crate::core::keyframe::BezierControlPoint {
+                                influence: 0.85,
+                                speed: 0.0,
+                            },
+                            custom_bezier: Some([0.85, 0.0, 1.0, 1.0]),
+                        }
+                    } else if cmd {
+                        // Easy Ease Out (Cmd+Shift+F9 / Cmd+F9)
+                        crate::core::keyframe::InterpolationType::Bezier {
+                            outgoing: crate::core::keyframe::BezierControlPoint {
+                                influence: 0.85,
+                                speed: 0.0,
+                            },
+                            incoming: crate::core::keyframe::BezierControlPoint {
+                                influence: 0.0,
+                                speed: 0.0,
+                            },
+                            custom_bezier: Some([0.0, 0.0, 0.15, 1.0]),
+                        }
+                    } else {
+                        // Easy Ease (F9)
+                        crate::core::keyframe::InterpolationType::Bezier {
+                            outgoing: crate::core::keyframe::BezierControlPoint {
+                                influence: 0.333,
+                                speed: 0.0,
+                            },
+                            incoming: crate::core::keyframe::BezierControlPoint {
+                                influence: 0.333,
+                                speed: 0.0,
+                            },
+                            custom_bezier: Some([0.333, 0.0, 0.333, 1.0]),
+                        }
+                    };
+                    app.modify_project(|project| {
+                        let comp = project.active_composition_mut();
+                        if let Some(layer) = comp.layers.get_mut(idx) {
+                            if let crate::core::property::Animatable::Animated(kfs) =
+                                &mut layer.transform.position
+                            {
+                                for kf in kfs {
+                                    kf.interpolation = ease;
+                                }
                             }
-                        } else if cmd {
-                            // Easy Ease Out (Cmd+Shift+F9 / Cmd+F9)
-                            crate::core::keyframe::InterpolationType::Bezier {
-                                outgoing: crate::core::keyframe::BezierControlPoint { influence: 0.85, speed: 0.0 },
-                                incoming: crate::core::keyframe::BezierControlPoint { influence: 0.0, speed: 0.0 },
-                                custom_bezier: Some([0.0, 0.0, 0.15, 1.0]),
+                            if let crate::core::property::Animatable::Animated(kfs) =
+                                &mut layer.transform.scale
+                            {
+                                for kf in kfs {
+                                    kf.interpolation = ease;
+                                }
                             }
-                        } else {
-                            // Easy Ease (F9)
-                            crate::core::keyframe::InterpolationType::Bezier {
-                                outgoing: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
-                                incoming: crate::core::keyframe::BezierControlPoint { influence: 0.333, speed: 0.0 },
-                                custom_bezier: Some([0.333, 0.0, 0.333, 1.0]),
+                            if let crate::core::property::Animatable::Animated(kfs) =
+                                &mut layer.transform.rotation
+                            {
+                                for kf in kfs {
+                                    kf.interpolation = ease;
+                                }
                             }
-                        };
-                        if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.position { for kf in kfs { kf.interpolation = ez; } }
-                        if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.scale { for kf in kfs { kf.interpolation = ez; } }
-                        if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.rotation { for kf in kfs { kf.interpolation = ez; } }
-                        if let crate::core::property::Animatable::Animated(ref mut kfs) = layer.transform.opacity { for kf in kfs { kf.interpolation = ez; } }
-                        app.history.commit(temp_proj);
-                    }
+                            if let crate::core::property::Animatable::Animated(kfs) =
+                                &mut layer.transform.opacity
+                            {
+                                for kf in kfs {
+                                    kf.interpolation = ease;
+                                }
+                            }
+                        }
+                    });
                 }
             }
         }
@@ -370,8 +440,12 @@ pub fn handle_global_shortcuts(
         }
 
         // Home → first frame, End → last frame (single-key)
-        if allow_single_key && i.key_pressed(Key::Home) { *current_frame = 0; }
-        if allow_single_key && i.key_pressed(Key::End)  { *current_frame = total_frames.saturating_sub(1); }
+        if allow_single_key && i.key_pressed(Key::Home) {
+            *current_frame = 0;
+        }
+        if allow_single_key && i.key_pressed(Key::End) {
+            *current_frame = total_frames.saturating_sub(1);
+        }
 
         // Page Up / Down → frame step backward/forward (always available)
         if allow_single_key && i.key_pressed(Key::PageUp) {
@@ -386,75 +460,75 @@ pub fn handle_global_shortcuts(
         let step = if i.modifiers.shift { 10.0 } else { 1.0 };
         let cur_frame = *current_frame;
         let mut arrow_nudge = |dx: f32, dy: f32| -> bool {
-            let Some(idx) = app.selection.selected_layer_idx else { return false };
-            let project = app.history.current_mut();
-            let Some(comp) = project.active_composition_mut().layers.get_mut(idx) else {
+            let Some(idx) = app.selection.selected_layer_idx else {
                 return false;
             };
-            let cur = comp.transform.position.evaluate(cur_frame);
-            comp.transform.position = crate::core::property::Animatable::new_constant([
-                cur[0] + dx,
-                cur[1] + dy,
-            ]);
-            true
+            let mut nudged = false;
+            app.modify_project(|project| {
+                if let Some(layer) = project.active_composition_mut().layers.get_mut(idx) {
+                    let cur = layer.transform.position.evaluate(cur_frame);
+                    layer.transform.position =
+                        crate::core::property::Animatable::new_constant([cur[0] + dx, cur[1] + dy]);
+                    nudged = true;
+                }
+            });
+            nudged
         };
-        let mut nudged = false;
         if allow_single_key && i.key_pressed(Key::ArrowLeft) {
-            nudged = arrow_nudge(-step, 0.0);
-            if !nudged {
+            let moved = arrow_nudge(-step, 0.0);
+            if !moved {
                 *current_frame = cur_frame.saturating_sub(1);
             }
         }
         if allow_single_key && i.key_pressed(Key::ArrowRight) {
-            nudged = arrow_nudge(step, 0.0);
-            if !nudged {
+            let moved = arrow_nudge(step, 0.0);
+            if !moved {
                 *current_frame = (cur_frame + 1).min(total_frames.saturating_sub(1));
             }
         }
         if allow_single_key && i.key_pressed(Key::ArrowUp) {
-            nudged = arrow_nudge(0.0, -step);
+            arrow_nudge(0.0, -step);
         }
         if allow_single_key && i.key_pressed(Key::ArrowDown) {
-            nudged = arrow_nudge(0.0, step);
+            arrow_nudge(0.0, step);
         }
-        if nudged {
-            crate::core::frame_cache::bump_version();
-        }
-
         // ── Batch-move selected keyframes with , / . (comma/period) ──
         // Comma shifts all selected keyframes 1 frame left, period right (Shift = 10).
         if allow_single_key && (i.key_pressed(Key::Comma) || i.key_pressed(Key::Period)) {
             let delta: i32 = if i.key_pressed(Key::Comma) { -1 } else { 1 };
             let delta = if i.modifiers.shift { delta * 10 } else { delta };
             if !app.selected_keyframes.is_empty() {
+                let selected_keyframes = app.selected_keyframes.clone();
                 // Group by layer so we can borrow layers one at a time
                 use std::collections::HashMap;
                 let mut by_layer: HashMap<usize, Vec<(String, u32)>> = HashMap::new();
-                for (li, pk, f) in app.selected_keyframes.iter() {
+                for (li, pk, f) in &selected_keyframes {
                     by_layer.entry(*li).or_default().push((pk.clone(), *f));
                 }
-                let project = app.history.current_mut();
-                for (li, kfs) in by_layer {
-                    let Some(comp) = project.active_composition_mut().layers.get_mut(li) else { continue };
-                    let t = &mut comp.transform;
-                    for (pk, old_f) in kfs {
-                        let new_f = ((old_f as i32) + delta).max(0) as u32;
-                        match pk.as_str() {
-                            "position" => move_kf_in(&mut t.position, old_f, new_f),
-                            "scale" => move_kf_in(&mut t.scale, old_f, new_f),
-                            "rotation" => move_kf_in(&mut t.rotation, old_f, new_f),
-                            "opacity" => move_kf_in(&mut t.opacity, old_f, new_f),
-                            _ => {}
+                app.modify_project(|project| {
+                    for (li, kfs) in by_layer {
+                        let Some(comp) = project.active_composition_mut().layers.get_mut(li) else {
+                            continue;
+                        };
+                        let t = &mut comp.transform;
+                        for (pk, old_f) in kfs {
+                            let new_f = ((old_f as i32) + delta).max(0) as u32;
+                            match pk.as_str() {
+                                "position" => move_kf_in(&mut t.position, old_f, new_f),
+                                "scale" => move_kf_in(&mut t.scale, old_f, new_f),
+                                "rotation" => move_kf_in(&mut t.rotation, old_f, new_f),
+                                "opacity" => move_kf_in(&mut t.opacity, old_f, new_f),
+                                _ => {}
+                            }
                         }
                     }
-                }
+                });
                 // Remap selection to the moved frames
                 app.selected_keyframes = app
                     .selected_keyframes
                     .iter()
                     .map(|(li, pk, f)| (*li, pk.clone(), ((*f as i32) + delta).max(0) as u32))
                     .collect();
-                crate::core::frame_cache::bump_version();
             }
         }
 
@@ -463,14 +537,17 @@ pub fn handle_global_shortcuts(
             && (i.key_pressed(Key::Delete) || i.key_pressed(Key::Backspace))
             && !app.selected_keyframes.is_empty()
         {
-                use std::collections::HashMap;
-                let mut by_layer: HashMap<usize, Vec<(String, u32)>> = HashMap::new();
-                for (li, pk, f) in app.selected_keyframes.iter() {
-                    by_layer.entry(*li).or_default().push((pk.clone(), *f));
-                }
-                let project = app.history.current_mut();
+            use std::collections::HashMap;
+            let mut by_layer: HashMap<usize, Vec<(String, u32)>> = HashMap::new();
+            let selected_keyframes = app.selected_keyframes.clone();
+            for (li, pk, f) in &selected_keyframes {
+                by_layer.entry(*li).or_default().push((pk.clone(), *f));
+            }
+            app.modify_project(|project| {
                 for (li, kfs) in by_layer {
-                    let Some(comp) = project.active_composition_mut().layers.get_mut(li) else { continue };
+                    let Some(comp) = project.active_composition_mut().layers.get_mut(li) else {
+                        continue;
+                    };
                     let t = &mut comp.transform;
                     for (pk, frame) in kfs {
                         match pk.as_str() {
@@ -482,8 +559,8 @@ pub fn handle_global_shortcuts(
                         }
                     }
                 }
-                app.selected_keyframes.clear();
-                crate::core::frame_cache::bump_version();
+            });
+            app.selected_keyframes.clear();
         }
 
         // ── Cmd+A: select all layers (AE parity) ──
@@ -507,34 +584,51 @@ pub fn handle_global_shortcuts(
 
             let project = app.history.current();
             for (li, pk, frame) in selection {
-                let Some(comp) = project.active_composition().layers.get(li) else { continue };
+                let Some(comp) = project.active_composition().layers.get(li) else {
+                    continue;
+                };
                 let t = &comp.transform;
                 // Serialize per-arm: value types differ across properties
                 let kf_json = match pk.as_str() {
-                    "position" => t.position.keyframes()
+                    "position" => t
+                        .position
+                        .keyframes()
                         .and_then(|k| k.iter().find(|k| k.frame == frame))
                         .and_then(|k| serde_json::to_value(k).ok()),
-                    "scale" => t.scale.keyframes()
+                    "scale" => t
+                        .scale
+                        .keyframes()
                         .and_then(|k| k.iter().find(|k| k.frame == frame))
                         .and_then(|k| serde_json::to_value(k).ok()),
-                    "rotation" => t.rotation.keyframes()
+                    "rotation" => t
+                        .rotation
+                        .keyframes()
                         .and_then(|k| k.iter().find(|k| k.frame == frame))
                         .and_then(|k| serde_json::to_value(k).ok()),
-                    "opacity" => t.opacity.keyframes()
+                    "opacity" => t
+                        .opacity
+                        .keyframes()
                         .and_then(|k| k.iter().find(|k| k.frame == frame))
                         .and_then(|k| serde_json::to_value(k).ok()),
                     _ if pk.starts_with("pin_") => {
                         let pin_id = pk.strip_prefix("pin_").unwrap_or("");
                         if let Some(pin) = comp.puppet_pins.iter().find(|p| p.id == pin_id) {
                             if let Some(kfs) = pin.position.keyframes() {
-                                kfs.iter().find(|k| k.frame == frame)
+                                kfs.iter()
+                                    .find(|k| k.frame == frame)
                                     .and_then(|k| serde_json::to_value(k).ok())
-                            } else { None }
-                        } else { None }
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
                     }
                     _ if crate::ui::graph_editor::is_effect_property(&pk) => {
                         // Effect keyframe: find the effect + param and serialize
-                        if let Some((effect_id, param_label, _)) = crate::ui::graph_editor::parse_effect_property(&pk) {
+                        if let Some((effect_id, param_label, _)) =
+                            crate::ui::graph_editor::parse_effect_property(&pk)
+                        {
                             if let Some(effect) = comp.effects.iter().find(|e| e.id == effect_id) {
                                 use crate::core::effect_params::ParamRefRef;
                                 let mut found_json = None;
@@ -543,25 +637,33 @@ pub fn handle_global_shortcuts(
                                         match param {
                                             ParamRefRef::Scalar(anim) => {
                                                 if let Some(kfs) = anim.keyframes() {
-                                                    found_json = kfs.iter().find(|k| k.frame == frame)
+                                                    found_json = kfs
+                                                        .iter()
+                                                        .find(|k| k.frame == frame)
                                                         .and_then(|k| serde_json::to_value(k).ok());
                                                 }
                                             }
                                             ParamRefRef::Vec2(anim) => {
                                                 if let Some(kfs) = anim.keyframes() {
-                                                    found_json = kfs.iter().find(|k| k.frame == frame)
+                                                    found_json = kfs
+                                                        .iter()
+                                                        .find(|k| k.frame == frame)
                                                         .and_then(|k| serde_json::to_value(k).ok());
                                                 }
                                             }
                                             ParamRefRef::Vec3(anim) => {
                                                 if let Some(kfs) = anim.keyframes() {
-                                                    found_json = kfs.iter().find(|k| k.frame == frame)
+                                                    found_json = kfs
+                                                        .iter()
+                                                        .find(|k| k.frame == frame)
                                                         .and_then(|k| serde_json::to_value(k).ok());
                                                 }
                                             }
                                             ParamRefRef::Vec4Color(anim) => {
                                                 if let Some(kfs) = anim.keyframes() {
-                                                    found_json = kfs.iter().find(|k| k.frame == frame)
+                                                    found_json = kfs
+                                                        .iter()
+                                                        .find(|k| k.frame == frame)
                                                         .and_then(|k| serde_json::to_value(k).ok());
                                                 }
                                             }
@@ -570,8 +672,12 @@ pub fn handle_global_shortcuts(
                                     }
                                 }
                                 found_json
-                            } else { None }
-                        } else { None }
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
                     }
                     _ => None,
                 };
@@ -588,64 +694,79 @@ pub fn handle_global_shortcuts(
         if cmd && !shift && i.key_pressed(Key::V) && !app.kf_clipboard.is_empty() {
             let paste_origin = *current_frame;
             let target_layer_idx = app.selection.selected_layer_idx.unwrap_or(0);
-            let project = app.history.current_mut();
-            let Some(layer) = project.active_composition_mut().layers.get_mut(target_layer_idx) else { return };
-            let t = &mut layer.transform;
+            let clipboard = app.kf_clipboard.clone();
+            let clipboard_anchor = app.kf_clipboard_anchor;
 
-            macro_rules! paste_into {
-                ($anim:expr, $ty:ty, $value_json:expr) => {{
-                    if let Ok(mut kf) = serde_json::from_value::<crate::core::keyframe::Keyframe<$ty>>($value_json.clone()) {
-                        kf.frame = ((kf.frame as i64 + paste_origin as i64
-                            - app.kf_clipboard_anchor as i64)
-                            .max(0)) as u32;
-                        $anim.add_keyframe(kf);
-                    }
-                }};
-            }
+            app.modify_project(|project| {
+                let Some(layer) = project
+                    .active_composition_mut()
+                    .layers
+                    .get_mut(target_layer_idx)
+                else {
+                    return;
+                };
+                let t = &mut layer.transform;
 
-            for (pk, _offset, value_json) in &app.kf_clipboard {
-                match pk.as_str() {
-                    "position" => paste_into!(t.position, [f32; 2], value_json),
-                    "scale" => paste_into!(t.scale, [f32; 2], value_json),
-                    "rotation" => paste_into!(t.rotation, f32, value_json),
-                    "opacity" => paste_into!(t.opacity, f32, value_json),
-                    _ if pk.starts_with("pin_") => {
-                        let pid = pk.strip_prefix("pin_").unwrap_or("");
-                        if let Some(pin) = layer.puppet_pins.iter_mut().find(|p| p.id == pid) {
-                            paste_into!(pin.position, [f32; 2], value_json);
+                macro_rules! paste_into {
+                    ($anim:expr, $ty:ty, $value_json:expr) => {{
+                        if let Ok(mut kf) = serde_json::from_value::<
+                            crate::core::keyframe::Keyframe<$ty>,
+                        >($value_json.clone())
+                        {
+                            kf.frame = ((kf.frame as i64 + paste_origin as i64
+                                - clipboard_anchor as i64)
+                                .max(0)) as u32;
+                            $anim.add_keyframe(kf);
                         }
-                    }
-                    _ if crate::ui::graph_editor::is_effect_property(pk) => {
-                        // Paste into effect param
-                        if let Some((effect_id, param_label, _)) = crate::ui::graph_editor::parse_effect_property(pk) {
-                            if let Some(effect) = layer.effects.iter_mut().find(|e| e.id == effect_id) {
-                                use crate::core::effect_params::ParamRef;
-                                for (label, param) in effect.effect_type.animatable_params() {
-                                    if label == param_label {
-                                        match param {
-                                            ParamRef::Scalar(anim) => {
-                                                paste_into!(anim, f32, value_json);
+                    }};
+                }
+
+                for (pk, _offset, value_json) in &clipboard {
+                    match pk.as_str() {
+                        "position" => paste_into!(t.position, [f32; 2], value_json),
+                        "scale" => paste_into!(t.scale, [f32; 2], value_json),
+                        "rotation" => paste_into!(t.rotation, f32, value_json),
+                        "opacity" => paste_into!(t.opacity, f32, value_json),
+                        _ if pk.starts_with("pin_") => {
+                            let pid = pk.strip_prefix("pin_").unwrap_or("");
+                            if let Some(pin) = layer.puppet_pins.iter_mut().find(|p| p.id == pid) {
+                                paste_into!(pin.position, [f32; 2], value_json);
+                            }
+                        }
+                        _ if crate::ui::graph_editor::is_effect_property(pk) => {
+                            if let Some((effect_id, param_label, _)) =
+                                crate::ui::graph_editor::parse_effect_property(pk)
+                            {
+                                if let Some(effect) =
+                                    layer.effects.iter_mut().find(|e| e.id == effect_id)
+                                {
+                                    use crate::core::effect_params::ParamRef;
+                                    for (label, param) in effect.effect_type.animatable_params() {
+                                        if label == param_label {
+                                            match param {
+                                                ParamRef::Scalar(anim) => {
+                                                    paste_into!(anim, f32, value_json);
+                                                }
+                                                ParamRef::Vec2(anim) => {
+                                                    paste_into!(anim, [f32; 2], value_json);
+                                                }
+                                                ParamRef::Vec3(anim) => {
+                                                    paste_into!(anim, [f32; 3], value_json);
+                                                }
+                                                ParamRef::Vec4Color(anim) => {
+                                                    paste_into!(anim, [f32; 4], value_json);
+                                                }
                                             }
-                                            ParamRef::Vec2(anim) => {
-                                                paste_into!(anim, [f32; 2], value_json);
-                                            }
-                                            ParamRef::Vec3(anim) => {
-                                                paste_into!(anim, [f32; 3], value_json);
-                                            }
-                                            ParamRef::Vec4Color(anim) => {
-                                                paste_into!(anim, [f32; 4], value_json);
-                                            }
+                                            break;
                                         }
-                                        break;
                                     }
                                 }
                             }
                         }
+                        _ => {}
                     }
-                    _ => {}
                 }
-            }
-            crate::core::frame_cache::bump_version();
+            });
         }
 
         // ── Escape: clear keyframe selection, then layer selection ──
@@ -666,12 +787,20 @@ pub fn handle_global_shortcuts(
         }
 
         if cmd && !shift && i.key_pressed(Key::Z) && app.history.can_undo() {
-            app.history.undo();
-            app.toasts.info("Undo");
+            if app.history.undo().is_some() {
+                crate::core::frame_cache::bump_version();
+                app.autosave.mark_dirty();
+                app.autosave_history_generation = app.history.generation();
+                app.toasts.info("Undo");
+            }
         }
         if cmd && shift && i.key_pressed(Key::Z) && app.history.can_redo() {
-            app.history.redo();
-            app.toasts.info("Redo");
+            if app.history.redo().is_some() {
+                crate::core::frame_cache::bump_version();
+                app.autosave.mark_dirty();
+                app.autosave_history_generation = app.history.generation();
+                app.toasts.info("Redo");
+            }
         }
 
         // Cmd+N → New Composition
@@ -726,7 +855,9 @@ pub fn handle_global_shortcuts(
         if i.key_pressed(Key::Semicolon) && shift && !cmd {
             let comp = app.history.current().active_composition();
             let cur = *current_frame;
-            let next = comp.markers.iter()
+            let next = comp
+                .markers
+                .iter()
                 .map(|m| m.frame)
                 .filter(|&f| f > cur)
                 .min();
@@ -739,7 +870,9 @@ pub fn handle_global_shortcuts(
         if i.key_pressed(Key::Semicolon) && cmd {
             let comp = app.history.current().active_composition();
             let cur = *current_frame;
-            let prev = comp.markers.iter()
+            let prev = comp
+                .markers
+                .iter()
                 .map(|m| m.frame)
                 .filter(|&f| f < cur)
                 .max();
@@ -751,7 +884,8 @@ pub fn handle_global_shortcuts(
         }
 
         // ── Jump between markers: Shift+M cycles forward, Alt+M backward? Use [ ] keys ──
-        if allow_single_key && (i.key_pressed(Key::OpenBracket) || i.key_pressed(Key::CloseBracket)) {
+        if allow_single_key && (i.key_pressed(Key::OpenBracket) || i.key_pressed(Key::CloseBracket))
+        {
             let forward = i.key_pressed(Key::CloseBracket);
             let project = app.history.current();
             let mut frames: Vec<u32> = project
@@ -772,7 +906,11 @@ pub fn handle_global_shortcuts(
                     *current_frame = f;
                 } else {
                     // wrap around
-                    *current_frame = if forward { frames[0] } else { frames[frames.len() - 1] };
+                    *current_frame = if forward {
+                        frames[0]
+                    } else {
+                        frames[frames.len() - 1]
+                    };
                 }
             }
         }
@@ -802,7 +940,8 @@ pub fn handle_global_shortcuts(
                 if split_done {
                     app.toasts.info(format!("Split layer at frame {}", cur));
                 } else {
-                    app.toasts.error("Split point must be inside the layer's duration");
+                    app.toasts
+                        .error("Split point must be inside the layer's duration");
                 }
             } else {
                 app.toasts.info("Select a layer first");
@@ -878,10 +1017,16 @@ pub fn handle_global_shortcuts(
                 let precomp_layer = crate::core::timeline::Layer::new(
                     format!("layer_{}", precomp_id),
                     precomp_name,
-                    crate::core::timeline::LayerType::PreComp { comp_id: precomp_id },
+                    crate::core::timeline::LayerType::PreComp {
+                        comp_id: precomp_id,
+                    },
                     duration_frames,
                 );
-                let insert_pos = selected_indices.first().copied().unwrap_or(0).min(comp_mut.layers.len());
+                let insert_pos = selected_indices
+                    .first()
+                    .copied()
+                    .unwrap_or(0)
+                    .min(comp_mut.layers.len());
                 comp_mut.layers.insert(insert_pos, precomp_layer);
                 temp_project.compositions.push(new_comp);
 
@@ -958,7 +1103,10 @@ pub fn handle_global_shortcuts(
         }
 
         // Delete / Backspace → Delete all selected layers (single-key)
-        if allow_single_key && (i.key_pressed(Key::Delete) || i.key_pressed(Key::Backspace)) && !shift {
+        if allow_single_key
+            && (i.key_pressed(Key::Delete) || i.key_pressed(Key::Backspace))
+            && !shift
+        {
             let mut indices: Vec<usize> = app.selection.selected_layers.iter().copied().collect();
             if indices.is_empty() {
                 if let Some(s) = app.selection.selected_layer_idx {
@@ -981,10 +1129,18 @@ pub fn handle_global_shortcuts(
         }
 
         // Property Selection Shortcuts (P, S, T, R) — single-key, suppressed while typing
-        if allow_single_key && i.key_pressed(Key::P) && !cmd { app.selection.selected_property = Some("Position X".to_string()); }
-        if allow_single_key && i.key_pressed(Key::S) && !cmd { app.selection.selected_property = Some("Scale X".to_string()); }
-        if allow_single_key && i.key_pressed(Key::T) && !cmd { app.selection.selected_property = Some("Opacity".to_string()); }
-        if allow_single_key && i.key_pressed(Key::R) && !cmd { app.selection.selected_property = Some("Rotation".to_string()); }
+        if allow_single_key && i.key_pressed(Key::P) && !cmd {
+            app.selection.selected_property = Some("Position X".to_string());
+        }
+        if allow_single_key && i.key_pressed(Key::S) && !cmd {
+            app.selection.selected_property = Some("Scale X".to_string());
+        }
+        if allow_single_key && i.key_pressed(Key::T) && !cmd {
+            app.selection.selected_property = Some("Opacity".to_string());
+        }
+        if allow_single_key && i.key_pressed(Key::R) && !cmd {
+            app.selection.selected_property = Some("Rotation".to_string());
+        }
 
         // ── I / O: Jump to Layer In / Out Point ─────────────────────────────
         // I = jump CTI to selected layer's in_frame
@@ -994,7 +1150,8 @@ pub fn handle_global_shortcuts(
                 let comp = app.history.current().active_composition();
                 if idx < comp.layers.len() {
                     *current_frame = comp.layers[idx].in_frame;
-                    app.toasts.info(format!("Jumped to Layer In Point: frame {}", current_frame));
+                    app.toasts
+                        .info(format!("Jumped to Layer In Point: frame {}", current_frame));
                 }
             }
         }
@@ -1003,7 +1160,10 @@ pub fn handle_global_shortcuts(
                 let comp = app.history.current().active_composition();
                 if idx < comp.layers.len() {
                     *current_frame = comp.layers[idx].out_frame.saturating_sub(1);
-                    app.toasts.info(format!("Jumped to Layer Out Point: frame {}", current_frame));
+                    app.toasts.info(format!(
+                        "Jumped to Layer Out Point: frame {}",
+                        current_frame
+                    ));
                 }
             }
         }
@@ -1013,7 +1173,8 @@ pub fn handle_global_shortcuts(
         // UU (x2)  = Reveal ALL modified (non-default) properties
         if allow_single_key && !cmd && i.key_pressed(Key::U) {
             let now = i.time;
-            let is_double = app.u_key_last_press
+            let is_double = app
+                .u_key_last_press
                 .map(|last| (now - last) < 0.4)
                 .unwrap_or(false);
             if is_double {
@@ -1056,7 +1217,10 @@ pub fn handle_global_shortcuts(
         // ── Cmd+1~4: Composition Tab Switcher ───────────────────────────────
         if cmd {
             for (key, idx) in [
-                (Key::Num1, 0usize), (Key::Num2, 1), (Key::Num3, 2), (Key::Num4, 3),
+                (Key::Num1, 0usize),
+                (Key::Num2, 1),
+                (Key::Num3, 2),
+                (Key::Num4, 3),
             ] {
                 if i.key_pressed(key) {
                     let comp_count = app.history.current().compositions.len();
@@ -1064,7 +1228,8 @@ pub fn handle_global_shortcuts(
                         app.history.current_mut().active_composition_idx = idx;
                         crate::core::frame_cache::bump_version();
                         let name = app.history.current().compositions[idx].name.clone();
-                        app.toasts.info(format!("Switched to Composition: {}", name));
+                        app.toasts
+                            .info(format!("Switched to Composition: {}", name));
                     }
                 }
             }
@@ -1075,9 +1240,13 @@ pub fn handle_global_shortcuts(
             let count = app.history.current().active_composition().layers.len();
             if count > 0 {
                 let next = if shift {
-                    app.selection.selected_layer_idx.map_or(count - 1, |i| i.saturating_sub(1))
+                    app.selection
+                        .selected_layer_idx
+                        .map_or(count - 1, |i| i.saturating_sub(1))
                 } else {
-                    app.selection.selected_layer_idx.map_or(0, |i| (i + 1).min(count - 1))
+                    app.selection
+                        .selected_layer_idx
+                        .map_or(0, |i| (i + 1).min(count - 1))
                 };
                 app.selection.selected_layer_idx = Some(next);
                 app.selection.selected_layers.clear();
@@ -1093,14 +1262,22 @@ pub fn handle_global_shortcuts(
         // ── Cmd+Alt+F → Fit to Comp (uniform scale + center, AE Layer menu parity) ──
         if cmd && i.modifiers.alt && i.key_pressed(Key::F) {
             if let Some(idx) = app.selection.selected_layer_idx {
-                let dims = { let cc = app.history.current().active_composition(); (cc.width as f32, cc.height as f32) };
+                let dims = {
+                    let cc = app.history.current().active_composition();
+                    (cc.width as f32, cc.height as f32)
+                };
                 app.modify_project(move |p| {
                     if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
                         let bs = l.bounding_size();
                         if bs[0] > 1.0 && bs[1] > 1.0 {
                             let s = ((dims.0 / bs[0]).max(dims.1 / bs[1])) * 100.0;
-                            l.transform.scale = crate::core::property::Animatable::new_constant([s, s]);
-                            l.transform.position = crate::core::property::Animatable::new_constant([dims.0 / 2.0, dims.1 / 2.0]);
+                            l.transform.scale =
+                                crate::core::property::Animatable::new_constant([s, s]);
+                            l.transform.position =
+                                crate::core::property::Animatable::new_constant([
+                                    dims.0 / 2.0,
+                                    dims.1 / 2.0,
+                                ]);
                         }
                     }
                 });
@@ -1116,7 +1293,8 @@ pub fn handle_global_shortcuts(
         }
 
         // ── Cmd+Alt+← → Breadcrumb Back (previous composition) ──
-        if cmd && i.modifiers.alt && i.key_pressed(Key::ArrowLeft) && !app.comp_nav_stack.is_empty() {
+        if cmd && i.modifiers.alt && i.key_pressed(Key::ArrowLeft) && !app.comp_nav_stack.is_empty()
+        {
             if let Some(prev) = app.comp_nav_stack.pop() {
                 app.history.current_mut().active_composition_idx = prev;
                 crate::core::frame_cache::bump_version();
@@ -1128,7 +1306,8 @@ pub fn handle_global_shortcuts(
             app.motion_sketch_active = !app.motion_sketch_active;
             if app.motion_sketch_active {
                 app.playback.start_playing();
-                app.toasts.info("Motion Sketch ON — drag layer to record position");
+                app.toasts
+                    .info("Motion Sketch ON — drag layer to record position");
             } else {
                 app.toasts.info("Motion Sketch OFF");
             }
@@ -1184,9 +1363,20 @@ mod tests {
             let mut project = app.history.current().clone();
             let comp = project.active_composition_mut();
             comp.layers.clear();
-            let mut layer = crate::core::timeline::Layer::new("layer".into(), "Layer".into(),
-                crate::core::timeline::LayerType::Solid { color: [1.0; 4] }, 60);
-            layer.masks.push(crate::core::mask::Mask::new_rect("mask".into(), "Mask".into(), 0.0, 0.0, 100.0, 100.0));
+            let mut layer = crate::core::timeline::Layer::new(
+                "layer".into(),
+                "Layer".into(),
+                crate::core::timeline::LayerType::Solid { color: [1.0; 4] },
+                60,
+            );
+            layer.masks.push(crate::core::mask::Mask::new_rect(
+                "mask".into(),
+                "Mask".into(),
+                0.0,
+                0.0,
+                100.0,
+                100.0,
+            ));
             comp.layers.push(layer.clone());
             layer.id = "other".into();
             comp.layers.push(layer);
@@ -1196,18 +1386,39 @@ mod tests {
             app.selection.selected_layers.insert(0);
             app.mask_selected_vertices = Some((0, 0, [1].into_iter().collect()));
             let ctx = egui::Context::default();
-            let input = egui::RawInput { events: vec![egui::Event::Key {
-                key, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE,
-            }], ..Default::default() };
-            let _ = ctx.run(input, |ctx| handle_global_shortcuts(&mut app, ctx, &mut 0, 60));
+            let input = egui::RawInput {
+                events: vec![egui::Event::Key {
+                    key,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                }],
+                ..Default::default()
+            };
+            let _ = ctx.run(input, |ctx| {
+                handle_global_shortcuts(&mut app, ctx, &mut 0, 60)
+            });
             let comp = app.history.current().active_composition();
             assert_eq!(comp.layers.len(), 2);
             assert_eq!(comp.layers[0].masks[0].path.vertices_at_frame(0).len(), 3);
             assert_eq!(comp.layers[1].masks[0].path.vertices_at_frame(0).len(), 4);
             assert!(app.history.undo().is_some());
-            assert_eq!(app.history.current().active_composition().layers[0].masks[0].path.vertices_at_frame(0).len(), 4);
+            assert_eq!(
+                app.history.current().active_composition().layers[0].masks[0]
+                    .path
+                    .vertices_at_frame(0)
+                    .len(),
+                4
+            );
             assert!(app.history.redo().is_some());
-            assert_eq!(app.history.current().active_composition().layers[0].masks[0].path.vertices_at_frame(0).len(), 3);
+            assert_eq!(
+                app.history.current().active_composition().layers[0].masks[0]
+                    .path
+                    .vertices_at_frame(0)
+                    .len(),
+                3
+            );
         }
     }
 
