@@ -118,17 +118,40 @@ impl ParallelRenderQueue {
     where
         F: Fn(&str, u32) -> Vec<u8> + Sync,
     {
+        let external_cancel = AtomicBool::new(false);
+        self.render_all_mfr_with_external_cancel(&external_cancel, render_frame);
+    }
+
+    /// MFR variant with a cancellation source owned by the caller.
+    ///
+    /// The callback may be running on several rayon workers at once, so the
+    /// flag is checked both before entering an item and immediately before
+    /// each frame. It is cooperative: a callback already in progress is
+    /// allowed to return, but no new frame is started after cancellation is
+    /// observed.
+    pub fn render_all_mfr_with_external_cancel<F>(
+        &self,
+        external_cancel: &AtomicBool,
+        render_frame: F,
+    ) where
+        F: Fn(&str, u32) -> Vec<u8> + Sync,
+    {
         self.items
             .par_iter()
             .enumerate()
             .for_each(|(item_idx, item)| {
-                if self.is_cancelled() {
+                if self.is_cancelled() || external_cancel.load(Ordering::Relaxed) {
+                    self.cancel();
                     return;
                 }
 
+                if item.start_frame > item.end_frame {
+                    return;
+                }
                 let frames: Vec<u32> = (item.start_frame..=item.end_frame).collect();
                 frames.par_iter().for_each(|&frame| {
-                    if self.is_cancelled() {
+                    if self.is_cancelled() || external_cancel.load(Ordering::Relaxed) {
+                        self.cancel();
                         return;
                     }
 
@@ -284,5 +307,52 @@ mod tests {
         });
         assert_eq!(counter.load(Ordering::SeqCst), 1);
         assert!(queue.is_cancelled());
+    }
+
+    #[test]
+    fn external_cancel_stops_mfr_render_before_next_frame() {
+        let mut queue = ParallelRenderQueue::new();
+        queue.add_item(RenderQueueItem {
+            comp_name: "MFR cancel".into(),
+            start_frame: 0,
+            end_frame: 100,
+            output_path: "/tmp/mfr-cancel".into(),
+            status: RenderStatus::Pending,
+        });
+        let external_cancel = AtomicBool::new(false);
+        let counter = AtomicUsize::new(0);
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(1)
+            .build()
+            .unwrap();
+        pool.install(|| {
+            queue.render_all_mfr_with_external_cancel(&external_cancel, |_, _| {
+                let rendered = counter.fetch_add(1, Ordering::SeqCst) + 1;
+                if rendered == 1 {
+                    external_cancel.store(true, Ordering::SeqCst);
+                }
+                Vec::new()
+            });
+        });
+        assert_eq!(counter.load(Ordering::SeqCst), 1);
+        assert!(queue.is_cancelled());
+    }
+
+    #[test]
+    fn invalid_frame_range_does_not_render_in_mfr_mode() {
+        let mut queue = ParallelRenderQueue::new();
+        queue.add_item(RenderQueueItem {
+            comp_name: "Invalid MFR".into(),
+            start_frame: 9,
+            end_frame: 3,
+            output_path: "/tmp/invalid-mfr".into(),
+            status: RenderStatus::Pending,
+        });
+        let counter = AtomicUsize::new(0);
+        queue.render_all_mfr(|_, _| {
+            counter.fetch_add(1, Ordering::SeqCst);
+            Vec::new()
+        });
+        assert_eq!(counter.load(Ordering::SeqCst), 0);
     }
 }
