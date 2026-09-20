@@ -259,6 +259,18 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
             .data_mut(|d| d.insert_temp(egui::Id::new("selected_project_asset"), update));
     }
 
+    // Replace requests are posted by the asset row menu during the render pass
+    // and consumed by the project mutation block below on the same frame.
+    let replace_info: Option<(usize, String, String)> = ui.ctx().data_mut(|d| {
+        let idx = d.remove_temp::<usize>(egui::Id::new("ae_replace_footage_asset_idx"));
+        let path = d.remove_temp::<String>(egui::Id::new("ae_replace_footage_path"));
+        let name = d.remove_temp::<String>(egui::Id::new("ae_replace_footage_name"));
+        match (idx, path, name) {
+            (Some(i), Some(p), Some(n)) => Some((i, p, n)),
+            _ => None,
+        }
+    });
+
     ui.add_space(8.0);
     ui.separator();
 
@@ -319,6 +331,9 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
         || import_file_requested.is_some()
         || add_folder_requested
         || add_to_timeline_item.is_some()
+        || remove_unused_requested
+        || reduce_project_requested
+        || replace_info.is_some()
     {
         let mut temp_project = app.history.current().clone();
         let mut changed = false;
@@ -341,6 +356,7 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
                     comp_idx: temp_project.compositions.len() - 1,
                 },
             ));
+            changed = true;
         }
 
         if let Some(path) = import_file_requested {
@@ -370,13 +386,13 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
                 file_name,
                 item_type,
             ));
+            changed = true;
         }
 
         if let Some((idx, target)) = move_to_folder {
             if let Some(it) = temp_project.assets.get_mut(idx) {
                 it.parent_folder = target;
                 changed = true;
-                crate::core::frame_cache::bump_version();
             }
         }
 
@@ -389,6 +405,7 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
                     name: format!("Folder {}", folder_count),
                 },
             ));
+            changed = true;
         }
 
         if let Some(item) = add_to_timeline_item {
@@ -508,17 +525,6 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
             }
         }
 
-        // Process Replace Footage request
-        let replace_info: Option<(usize, String, String)> = ui.ctx().data_mut(|d| {
-            let idx = d.remove_temp::<usize>(egui::Id::new("ae_replace_footage_asset_idx"));
-            let path = d.remove_temp::<String>(egui::Id::new("ae_replace_footage_path"));
-            let name = d.remove_temp::<String>(egui::Id::new("ae_replace_footage_name"));
-            match (idx, path, name) {
-                (Some(i), Some(p), Some(n)) => Some((i, p, n)),
-                _ => None,
-            }
-        });
-
         if let Some((asset_idx, new_path, new_name)) = replace_info {
             if let Some(asset) = temp_project.assets.get_mut(asset_idx) {
                 let old_name = asset.name.clone();
@@ -553,8 +559,14 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
         }
 
         if changed {
+            let generation_before = app.history.generation();
             app.history.commit(temp_project);
-            crate::core::frame_cache::bump_version();
+            if app.history.generation() != generation_before {
+                crate::core::frame_cache::bump_version();
+                app.autosave.mark_dirty();
+                app.autosave_history_generation = app.history.generation();
+                app.frame_cache.collect_garbage();
+            }
         }
     }
 }
