@@ -1,4 +1,7 @@
 #![allow(dead_code)]
+use std::path::{Path, PathBuf};
+
+const MAX_OCIO_CONFIG_BYTES: u64 = 64 * 1024 * 1024;
 /// Supported Color Spaces matching OpenColorIO (OCIO) / ACES standard.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OcioColorSpace {
@@ -89,6 +92,77 @@ impl OcioColorEngine {
             pixels[idx + 1] = g.clamp(0.0, 1.0);
             pixels[idx + 2] = b.clamp(0.0, 1.0);
         }
+    }
+}
+
+/// The subset of an OCIO v1/v2 config that Kagari can execute without a
+/// native OCIO dependency: a FileTransform that points at a 3D .cube LUT.
+#[derive(Debug, Clone)]
+pub struct LoadedOcioConfig {
+    pub path: PathBuf,
+    pub lut_path: PathBuf,
+    pub lut: Lut3D,
+}
+
+impl LoadedOcioConfig {
+    pub fn load(path: &Path) -> Result<Self, String> {
+        let metadata = std::fs::metadata(path)
+            .map_err(|error| format!("could not access config.ocio: {error}"))?;
+        if metadata.len() > MAX_OCIO_CONFIG_BYTES {
+            return Err("config.ocio is larger than 64 MiB".into());
+        }
+        let config = std::fs::read_to_string(path)
+            .map_err(|error| format!("could not read config.ocio: {error}"))?;
+        if !config.contains("ocio_profile_version")
+            && !config.contains("colorspaces:")
+            && !config.contains("ColorSpace")
+        {
+            return Err("file does not look like an OCIO config".into());
+        }
+
+        let mut candidates = Vec::new();
+        for line in config.lines() {
+            let Some(src) = line.split_once("src:").map(|(_, value)| value) else {
+                continue;
+            };
+            let value = src
+                .trim()
+                .trim_matches(|ch: char| matches!(ch, '"' | '\'' | ',' | '}' | ']'))
+                .split_whitespace()
+                .next()
+                .unwrap_or_default();
+            if value.is_empty() || !value.to_ascii_lowercase().ends_with(".cube") {
+                continue;
+            }
+            let lut_path = Path::new(value);
+            candidates.push(if lut_path.is_absolute() {
+                lut_path.to_path_buf()
+            } else {
+                path.parent().unwrap_or_else(|| Path::new(".")).join(lut_path)
+            });
+        }
+
+        for lut_path in candidates {
+            let Ok(lut_metadata) = std::fs::metadata(&lut_path) else {
+                continue;
+            };
+            if lut_metadata.len() > MAX_OCIO_CONFIG_BYTES {
+                continue;
+            }
+            let contents = match std::fs::read_to_string(&lut_path) {
+                Ok(contents) => contents,
+                Err(_) => continue,
+            };
+            if let Ok(lut) = Lut3D::parse_cube(&contents) {
+                return Ok(Self {
+                    path: path.to_path_buf(),
+                    lut_path,
+                    lut,
+                });
+            }
+        }
+
+        Err("config.ocio has no readable FileTransform .cube LUT".into())
     }
 }
 
@@ -218,6 +292,9 @@ impl Lut3D {
                     .trim()
                     .parse::<usize>()
                     .map_err(|_| "bad LUT_3D_SIZE")?;
+                if !(2..=256).contains(&size) {
+                    return Err("LUT_3D_SIZE must be between 2 and 256".into());
+                }
                 continue;
             }
             let mut it = line.split_whitespace();
@@ -225,14 +302,27 @@ impl Lut3D {
             else {
                 continue; // skip malformed lines rather than failing whole file
             };
-            values.push(r.parse::<f32>().map_err(|_| "bad float in .cube")?);
-            values.push(g.parse::<f32>().map_err(|_| "bad float in .cube")?);
-            values.push(b.parse::<f32>().map_err(|_| "bad float in .cube")?);
+            let parsed = [
+                r.parse::<f32>().map_err(|_| "bad float in .cube")?,
+                g.parse::<f32>().map_err(|_| "bad float in .cube")?,
+                b.parse::<f32>().map_err(|_| "bad float in .cube")?,
+            ];
+            if !parsed.iter().all(|value| value.is_finite()) {
+                return Err("non-finite value in .cube".into());
+            }
+            values.extend(parsed);
         }
-        if size == 0 {
+        if size < 2 {
             return Err("missing LUT_3D_SIZE".into());
         }
-        let expected = size * size * size * 3;
+        let expected = size
+            .checked_mul(size)
+            .and_then(|value| value.checked_mul(size))
+            .and_then(|value| value.checked_mul(3))
+            .ok_or("LUT size overflow")?;
+        if expected > (MAX_OCIO_CONFIG_BYTES / 4) as usize {
+            return Err(".cube LUT data exceeds 64 MiB".into());
+        }
         if values.len() != expected {
             return Err(format!(
                 "expected {} values for size {}, got {}",
@@ -385,5 +475,22 @@ DOMAIN_MAX 1 1 1
         let mut px = vec![10u8, 20, 30, 255];
         assert!(!apply_active_lut(&mut px));
         assert_eq!(px, vec![10, 20, 30, 255]);
+    }
+
+    #[test]
+    fn test_load_ocio_config_with_relative_cube_file_transform() {
+        let root = std::env::temp_dir().join(format!("kagari-ocio-test-{}", std::process::id()));
+        std::fs::create_dir_all(&root).expect("create test directory");
+        let cube_path = root.join("look.cube");
+        let config_path = root.join("config.ocio");
+        let cube = "LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n";
+        let config = "ocio_profile_version: 2\ncolorspaces:\n  - !<ColorSpace>\n    name: Display\n    from_reference: !<FileTransform> {src: look.cube}\n";
+        std::fs::write(&cube_path, cube).expect("write test LUT");
+        std::fs::write(&config_path, config).expect("write test config");
+
+        let loaded = LoadedOcioConfig::load(&config_path).expect("load config");
+        assert_eq!(loaded.lut.size, 2);
+        assert_eq!(loaded.lut_path, cube_path);
+        let _ = std::fs::remove_dir_all(root);
     }
 }

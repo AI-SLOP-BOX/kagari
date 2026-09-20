@@ -307,8 +307,47 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
                 .on_hover_text("Load OpenColorIO custom config")
                 .clicked()
             {
-                app.toasts
-                    .info("OCIO 2.2 engine ready — select custom config.ocio");
+                let Some(path) = rfd::FileDialog::new()
+                    .add_filter("OpenColorIO config", &["ocio"])
+                    .pick_file()
+                else {
+                    return;
+                };
+                match crate::core::ocio_color::LoadedOcioConfig::load(&path) {
+                    Ok(config) => {
+                        let lut_size = config.lut.size;
+                        crate::core::ocio_color::set_active_lut(Some(
+                            std::sync::Arc::new(config.lut),
+                        ));
+                        ui.ctx().data_mut(|d| {
+                            d.insert_temp(egui::Id::new("ae_colorspace_lut"), 3usize);
+                            d.insert_temp(
+                                egui::Id::new("active_ocio_config_path"),
+                                config.path.display().to_string(),
+                            );
+                            d.insert_temp(
+                                egui::Id::new("active_cube_lut_path"),
+                                config.lut_path.display().to_string(),
+                            );
+                        });
+                        crate::core::frame_cache::bump_version();
+                        app.toasts.info(format!(
+                            "Loaded OCIO config with {}x{}x{} FileTransform LUT",
+                            lut_size, lut_size, lut_size
+                        ));
+                    }
+                    Err(error) => app.toasts.error(format!("Could not load OCIO config: {error}")),
+                }
+            }
+            if let Some(path) = ui
+                .ctx()
+                .data(|d| d.get_temp::<String>(egui::Id::new("active_ocio_config_path")))
+            {
+                ui.label(
+                    egui::RichText::new(format!("Active: {}", path))
+                        .small()
+                        .color(colors::TEXT_MUTED),
+                );
             }
         });
     });
