@@ -734,9 +734,21 @@ pub fn render_frame_to_pixels(
         // through the layer's transform (position / scale / rotation / opacity).
         if let LayerType::PreComp { comp_id } = &layer.layer_type {
             if let Some(sub_comp) = comp.find_sub_comp(comp_id) {
-                let sub_pixels =
+                let mut sub_pixels =
                     render_precomp_layers(comp, sub_comp, effective_frame, width, height);
                 if !sub_pixels.is_empty() {
+                    if !layer.effects.is_empty() && layer.effects_enabled {
+                        crate::core::cpu_effects::apply_layer_effects(
+                            Some(comp),
+                            Some(sorted_idx),
+                            &mut sub_pixels,
+                            width,
+                            height,
+                            &layer.effects,
+                            effective_frame,
+                            comp.fps,
+                        );
+                    }
                     // Treat the rendered sub-comp as a full-frame texture and
                     // sample it through the inverse layer transform.
                     let pc_rad = rotation.to_radians();
@@ -1805,6 +1817,51 @@ mod tests {
         assert!(
             pixels[center] > 180 && pixels[center + 3] > 180,
             "two-level PreComp should preserve nested pixels: {:?}",
+            &pixels[center..center + 4]
+        );
+    }
+
+    #[test]
+    fn test_precomp_applies_parent_effects_before_compositing() {
+        let mut sub = Composition::new("pre_fx_sub".into(), "Pre FX Sub".into(), 16, 16, 30, 30);
+        sub.background_color = [0.0, 0.0, 0.0, 0.0];
+        let mut red = Layer::new(
+            "red".into(),
+            "Red".into(),
+            LayerType::Solid {
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
+            30,
+        );
+        red.transform.position = Animatable::new_constant([8.0, 8.0]);
+        sub.layers.push(red);
+
+        let mut comp = Composition::new("pre_fx_main".into(), "Pre FX Main".into(), 16, 16, 30, 30);
+        comp.sub_compositions.push(sub);
+        let mut precomp = Layer::new(
+            "pre_fx".into(),
+            "Pre FX".into(),
+            LayerType::PreComp {
+                comp_id: "pre_fx_sub".into(),
+            },
+            30,
+        );
+        precomp.transform.position = Animatable::new_constant([8.0, 8.0]);
+        precomp.effects.push(crate::core::timeline::Effect {
+            id: "invert_parent".into(),
+            enabled: true,
+            name: "Invert".into(),
+            effect_type: crate::core::timeline::EffectType::Invert {
+                invert_alpha: false,
+            },
+        });
+        comp.layers.push(precomp);
+
+        let pixels = render_frame_to_pixels(&comp, 0, 16, 16, 0.0, 0);
+        let center = ((8 * 16 + 8) * 4) as usize;
+        assert!(
+            pixels[center] < 40 && pixels[center + 1] > 200 && pixels[center + 2] > 200,
+            "parent PreComp effect should invert nested pixels: {:?}",
             &pixels[center..center + 4]
         );
     }
