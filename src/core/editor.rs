@@ -133,9 +133,13 @@ impl<'a> EditorSession<'a> {
         }
         self.state = SessionState::Committed;
         if let Some(snapshot) = self.snapshot.take() {
+            let generation_before = self.history.generation();
             let current = self.history.current().clone();
             self.history
                 .commit_drag_action(snapshot, current, self.label);
+            if self.history.generation() != generation_before {
+                crate::core::frame_cache::bump_version();
+            }
         }
     }
 
@@ -156,6 +160,7 @@ impl<'a> EditorSession<'a> {
         self.state = SessionState::RolledBack;
         if let Some(snapshot) = self.snapshot.take() {
             self.history.restore_current_without_history(snapshot);
+            crate::core::frame_cache::bump_version();
         }
     }
 

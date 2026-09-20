@@ -744,9 +744,14 @@ impl KagariApp {
     pub fn modify_project(&mut self, f: impl FnOnce(&mut Project)) {
         let mut next_project = self.history.current().clone();
         f(&mut next_project);
+        let generation_before = self.history.generation();
         self.history.commit(next_project);
-        self.autosave.mark_dirty();
-        self.frame_cache.collect_garbage();
+        if self.history.generation() != generation_before {
+            crate::core::frame_cache::bump_version();
+            self.autosave.mark_dirty();
+            self.autosave_history_generation = self.history.generation();
+            self.frame_cache.collect_garbage();
+        }
     }
 
     pub fn begin_drag(&mut self, label: &'static str) {
@@ -790,6 +795,9 @@ impl KagariApp {
             // in place, so commit_action's comparison would always see equality.
             self.history
                 .commit_drag_action(tx.snapshot, current, tx.label);
+            crate::core::frame_cache::bump_version();
+            self.autosave.mark_dirty();
+            self.autosave_history_generation = self.history.generation();
             self.frame_cache.collect_garbage();
         }
     }
@@ -845,7 +853,7 @@ impl KagariApp {
 
     pub fn cancel_drag(&mut self) {
         if let Some(tx) = self.drag_tx.take() {
-            self.history.commit(tx.snapshot);
+            self.history.restore_current_without_history(tx.snapshot);
             crate::core::frame_cache::bump_version();
         }
     }

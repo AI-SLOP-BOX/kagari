@@ -39,7 +39,7 @@ pub fn apply(
         open_nested_comp(app, &comp_id);
     }
     if let Some((idx, old_out, shift)) = pending_ripple {
-        ripple_edit(app, idx, old_out, shift);
+        ripple_edit(app, idx, old_out, shift, project_changed);
     }
     if let Some(idx) = pending_layer_marker {
         add_layer_marker(app, idx, current_frame, project_changed);
@@ -140,8 +140,15 @@ fn open_nested_comp(app: &mut KagariApp, comp_id: &str) {
     }
 }
 
-fn ripple_edit(app: &mut KagariApp, idx: usize, old_out: u32, shift: i64) {
+fn ripple_edit(
+    app: &mut KagariApp,
+    idx: usize,
+    old_out: u32,
+    shift: i64,
+    project_changed: &mut bool,
+) {
     let temp_project = app.history.current_mut();
+    let mut changed = false;
     for l2 in temp_project
         .active_composition_mut()
         .layers
@@ -151,9 +158,13 @@ fn ripple_edit(app: &mut KagariApp, idx: usize, old_out: u32, shift: i64) {
         if l2.in_frame >= old_out {
             l2.in_frame = (l2.in_frame as i64 + shift).max(0) as u32;
             l2.out_frame = (l2.out_frame as i64 + shift).max(l2.in_frame as i64 + 1) as u32;
+            changed = true;
         }
     }
-    app.toasts.info("Ripple edit applied");
+    if changed {
+        *project_changed = true;
+        app.toasts.info("Ripple edit applied");
+    }
 }
 
 fn add_layer_marker(
