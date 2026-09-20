@@ -623,15 +623,6 @@ fn apply_one_ctx(
                     &options,
                 );
                 pixels.copy_from_slice(&displaced);
-            } else {
-                crate::core::cpu_effects_new::apply_displacement_map(
-                    pixels,
-                    width,
-                    height,
-                    source_layer.evaluate(frame),
-                    max_horizontal.evaluate(frame),
-                    max_vertical.evaluate(frame),
-                );
             }
         }
         EffectType::CompoundBlur {
@@ -650,13 +641,15 @@ fn apply_one_ctx(
                     )
                 })
             });
-            crate::core::cpu_effects_new::apply_compound_blur_with_map(
-                pixels,
-                width,
-                height,
-                source.as_deref(),
-                max_blur.evaluate(frame),
-            );
+            if let Some(source_pixels) = source {
+                crate::core::cpu_effects_new::apply_compound_blur_with_map(
+                    pixels,
+                    width,
+                    height,
+                    Some(&source_pixels),
+                    max_blur.evaluate(frame),
+                );
+            }
         }
         EffectType::Minimax { operation, radius } => {
             let op = operation.evaluate(frame);
@@ -2022,6 +2015,50 @@ mod tests {
             effect_type: et,
             enabled: true,
         }
+    }
+
+    #[test]
+    fn source_layer_effects_are_noops_without_a_resolved_source() {
+        let original = solid_layer(8, 8, 96, 128, 160);
+
+        let mut displacement = original.clone();
+        apply_layer_effects(
+            None,
+            None,
+            &mut displacement,
+            8,
+            8,
+            &[effect(
+                "displacement",
+                EffectType::DisplacementMap {
+                    source_layer: Animatable::new_constant(0.0),
+                    max_horizontal: Animatable::new_constant(24.0),
+                    max_vertical: Animatable::new_constant(18.0),
+                },
+            )],
+            0,
+            30,
+        );
+        assert_eq!(displacement, original);
+
+        let mut compound_blur = original.clone();
+        apply_layer_effects(
+            None,
+            None,
+            &mut compound_blur,
+            8,
+            8,
+            &[effect(
+                "compound-blur",
+                EffectType::CompoundBlur {
+                    source_layer: Animatable::new_constant(0.0),
+                    max_blur: Animatable::new_constant(8.0),
+                },
+            )],
+            0,
+            30,
+        );
+        assert_eq!(compound_blur, original);
     }
 
     #[test]
