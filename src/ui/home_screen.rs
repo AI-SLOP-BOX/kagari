@@ -1472,7 +1472,7 @@ fn draw_reference_assets_narrow(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
         ("recent_project_atlas.webp", "stroke_01.mov"),
         ("recent_project_eclipse.webp", "light_leak.mov"),
         ("recent_project_rift.webp", "glass_texture.png"),
-        ("logo.png", "logo.png"),
+        ("logo.png", "kagari_logo.webp"),
         ("recent_project_atlas.webp", "particles.mov"),
         ("recent_project_rift.webp", "four_red.jpeg"),
     ];
@@ -1484,7 +1484,7 @@ fn draw_reference_assets_narrow(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
             egui::vec2(44.0, 58.0),
         );
         ui.painter().rect(card, 4.0, egui::Color32::from_rgb(22, 32, 42), egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(43, 60, 76)));
-        if name == "logo.png" {
+        if name == "kagari_logo.webp" {
             ui.put(card.shrink2(egui::vec2(2.0, 2.0)), egui::Image::new(egui::load::SizedTexture::new(reference_texture(app, ctx, asset).unwrap_or_default(), egui::vec2(40.0, 34.0))));
         } else if let Some(id) = reference_texture(app, ctx, asset) {
             ui.put(egui::Rect::from_min_size(card.min + egui::vec2(2.0, 2.0), egui::vec2(40.0, 34.0)), egui::Image::new(egui::load::SizedTexture::new(id, egui::vec2(40.0, 34.0))).fit_to_exact_size(egui::vec2(40.0, 34.0)));
@@ -1749,7 +1749,7 @@ fn draw_reference_projects_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
                         ("recent_project_atlas.webp", "stroke_01.mov", "00:04"),
                         ("recent_project_eclipse.webp", "light_leak.mov", "00:06"),
                         ("recent_project_rift.webp", "glass_texture.png", "4096 × 4096"),
-                        ("logo.png", "logo.png", "1024 × 1024"),
+                        ("logo.png", "kagari_logo.webp", "1254 × 1254"),
                         ("recent_project_atlas.webp", "particles.mov", "00:05"),
                         ("recent_project_rift.webp", "four_red.jpeg", "00:04"),
                     ];
@@ -1767,8 +1767,10 @@ fn draw_reference_projects_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
                             rendered_assets += 1;
                             let response = fixed_card_with_inset(ui, egui::vec2(card_width, if narrow { 60.0 } else if compact { 124.0 } else { 152.0 }), egui::Color32::from_rgb(22, 32, 42), egui::Color32::from_rgb(43, 60, 76), 6.0, if narrow { 0.0 } else { 14.0 }, |ui| {
                                 let image_size = egui::vec2(if narrow { card_width } else { (card_width - 28.0).max(12.0) }, if narrow { 34.0 } else if compact { 74.0 } else { 96.0 });
-                                if name == "logo.png" {
-                                    crate::ui::icons::render_svg_bytes(ui, "asset-logo-preview", crate::ui::icons::SVG_ASSET_LOGO, image_size, egui::Color32::WHITE);
+                                if name == "kagari_logo.webp" {
+                                    if let Some(id) = reference_texture(app, ctx, asset) {
+                                        reference_cover_image(ui, id, image_size, 1.0);
+                                    }
                                 } else if let Some(id) = reference_texture(app, ctx, asset) {
                                     reference_cover_image(ui, id, image_size, 2.64);
                                 }
@@ -1821,8 +1823,10 @@ fn draw_reference_projects_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
                         ui.add_space(if narrow { 4.0 } else { 8.0 });
                         let preview_width = if narrow { ui.available_width().max(1.0) } else if medium { 130.0 } else { 164.0 };
                         let preview_size = egui::vec2(preview_width, if narrow { 70.0 } else if medium { 80.0 } else { 94.0 });
-                        if selected_name == "logo.png" {
-                            crate::ui::icons::render_svg_bytes(ui, "asset-logo-detail-preview", crate::ui::icons::SVG_ASSET_LOGO, preview_size, egui::Color32::WHITE);
+                        if selected_name == "kagari_logo.webp" {
+                            if let Some(id) = reference_texture(app, ctx, "kagari_logo.webp") {
+                                reference_cover_image(ui, id, preview_size, 1.0);
+                            }
                         } else if let Some(id) = reference_texture(app, ctx, asset_thumbnail_for_name(&selected_name)) {
                             reference_cover_image(ui, id, preview_size, 319.0 / 121.0);
                         }
@@ -2866,7 +2870,7 @@ fn home_asset_path(name: &str) -> std::path::PathBuf {
 }
 
 fn reference_texture(app: &mut KagariApp, ctx: &egui::Context, name: &str) -> Option<egui::TextureId> {
-    if name == "logo.png" {
+    if name == "kagari_logo.webp" || name == "logo.png" {
         if app.home_banner.is_none() {
             if let Ok(img) = image::open(std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/kagari_logo.webp")) {
                 app.home_banner = load_logo_texture(ctx, img);
@@ -2895,7 +2899,7 @@ fn asset_thumbnail_for_name(name: &str) -> &'static str {
         "mountain_bg.jpg" | "glass_texture.png" | "four_red.jpeg" => "recent_project_rift.webp",
         "clouds.mov" => "continue_working_preview.webp",
         "stroke_01.mov" | "particles.mov" => "recent_project_atlas.webp",
-        "logo.png" => "logo.png",
+        "logo.png" | "kagari_logo.webp" => "kagari_logo.webp",
         "light_leak.mov" => "recent_project_eclipse.webp",
         _ => "recent_project_citadel.webp",
     }
@@ -2906,7 +2910,7 @@ fn asset_metadata_for_name(name: &str) -> &'static [(&'static str, &'static str)
         "mountain_bg.jpg" => &[("Frame Size", "3840 × 2160"), ("Format", "JPEG"), ("Color", "Rec.709"), ("File Size", "18 MB")],
         "clouds.mov" => &[("Frame Rate", "24 fps"), ("Frame Size", "3840 × 2160"), ("Duration", "00:09"), ("Codec", "ProRes 422"), ("Audio", "48 kHz")],
         "glass_texture.png" => &[("Frame Size", "4096 × 4096"), ("Format", "PNG"), ("Color", "RGBA"), ("File Size", "12 MB")],
-        "logo.png" => &[("Frame Size", "1024 × 1024"), ("Format", "PNG"), ("Color", "RGBA"), ("File Size", "2 MB")],
+        "logo.png" | "kagari_logo.webp" => &[("Frame Size", "1254 × 1254"), ("Format", "WebP"), ("Color", "RGBA"), ("File Size", "264 KB")],
         "four_red.jpeg" => &[("Frame Size", "3840 × 2160"), ("Format", "JPEG"), ("Color", "Rec.709"), ("File Size", "24 MB")],
         "stroke_01.mov" | "light_leak.mov" | "particles.mov" => &[("Frame Rate", "24 fps"), ("Frame Size", "1920 × 1080"), ("Duration", "00:05"), ("Codec", "H.264"), ("File Size", "86 MB")],
         _ => &[("Frame Rate", "24 fps"), ("Frame Size", "3840 × 2160"), ("Duration", "00:12"), ("Codec", "H.264"), ("File Size", "428 MB"), ("Audio", "48 kHz")],

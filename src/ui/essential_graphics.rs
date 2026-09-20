@@ -218,13 +218,20 @@ fn import_mogrt(app: &mut KagariApp, path: &std::path::Path) {
     let mut merged = app.history.current().clone();
     let first_imported_comp = merged.compositions.len();
     let imported_comp_id = package.manifest.comp_id.clone();
-    merged.compositions.extend(imported.compositions);
-    merged.assets.extend(imported.assets);
-    let imported_index = merged
+    let Some(imported_comp_offset) = imported
         .compositions
         .iter()
         .position(|comp| comp.id == imported_comp_id)
-        .unwrap_or(first_imported_comp);
+    else {
+        app.toasts.error(format!(
+            "Invalid MOGRT package: composition '{}' is missing",
+            imported_comp_id
+        ));
+        return;
+    };
+    merged.compositions.extend(imported.compositions);
+    merged.assets.extend(imported.assets);
+    let imported_index = first_imported_comp.saturating_add(imported_comp_offset);
     if let Some(comp) = merged.compositions.get_mut(imported_index) {
         apply_essential_property_overrides(comp, &package.manifest.essential_properties);
     }
