@@ -792,9 +792,27 @@ pub fn apply_compound_blur(
     _source_layer: f32,
     max_blur: f32,
 ) {
+    apply_compound_blur_with_map(pixels, width, height, None, max_blur);
+}
+
+/// Apply compound blur using an optional external layer as the blur map.
+/// Bright pixels in `blur_map` receive a larger blur radius. When no map is
+/// supplied, the target image remains the map for backwards compatibility.
+pub fn apply_compound_blur_with_map(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    blur_map: Option<&[u8]>,
+    max_blur: f32,
+) {
     if max_blur < 0.5 {
         return;
     }
+    let expected = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|n| n.checked_mul(4))
+        .unwrap_or(0);
+    let map = blur_map.filter(|candidate| candidate.len() == expected);
     let radius = max_blur.round() as u32;
     let orig = pixels.to_vec();
 
@@ -810,10 +828,14 @@ pub fn apply_compound_blur(
                     continue;
                 }
 
-                // Use pixel brightness as blur intensity
-                let lum = (orig[((py * width + px) * 4) as usize] as f32
-                    + orig[((py * width + px) * 4 + 1) as usize] as f32
-                    + orig[((py * width + px) * 4 + 2) as usize] as f32)
+                // AE's Compound Blur uses the selected layer as an intensity
+                // map. If no source layer is available, use the target as a
+                // deterministic fallback.
+                let map_px = map.unwrap_or(&orig);
+                let map_idx = ((py * width + px) * 4) as usize;
+                let lum = (map_px[map_idx] as f32
+                    + map_px[map_idx + 1] as f32
+                    + map_px[map_idx + 2] as f32)
                     / 765.0;
                 let r = (lum * radius as f32).round() as u32;
                 if r < 1 {

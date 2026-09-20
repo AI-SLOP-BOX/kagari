@@ -595,24 +595,66 @@ fn apply_one_ctx(
             max_horizontal,
             max_vertical,
         } => {
-            crate::core::cpu_effects_new::apply_displacement_map(
-                pixels,
-                width,
-                height,
-                source_layer.evaluate(frame),
-                max_horizontal.evaluate(frame),
-                max_vertical.evaluate(frame),
-            );
+            let source_idx = source_layer.evaluate(frame).round();
+            let source = comp.and_then(|composition| {
+                if !source_idx.is_finite() || source_idx < 0.0 {
+                    return None;
+                }
+                let index = source_idx as usize;
+                (index < composition.layers.len() && Some(index) != layer_idx).then(|| {
+                    crate::core::software_renderer::render_single_layer_pixels(
+                        composition, index, frame, width, height,
+                    )
+                })
+            });
+            if let Some(source_pixels) = source {
+                let options = crate::core::displacement_map::DisplacementMapOptions {
+                    max_horizontal_displacement: max_horizontal.evaluate(frame),
+                    max_vertical_displacement: max_vertical.evaluate(frame),
+                    horizontal_channel: crate::core::displacement_map::DisplacementChannel::Luminance,
+                    vertical_channel: crate::core::displacement_map::DisplacementChannel::Luminance,
+                    wrap_pixels: false,
+                };
+                let displaced = crate::core::displacement_map::apply_displacement_map(
+                    pixels,
+                    &source_pixels,
+                    width,
+                    height,
+                    &options,
+                );
+                pixels.copy_from_slice(&displaced);
+            } else {
+                crate::core::cpu_effects_new::apply_displacement_map(
+                    pixels,
+                    width,
+                    height,
+                    source_layer.evaluate(frame),
+                    max_horizontal.evaluate(frame),
+                    max_vertical.evaluate(frame),
+                );
+            }
         }
         EffectType::CompoundBlur {
             source_layer,
             max_blur,
         } => {
-            crate::core::cpu_effects_new::apply_compound_blur(
+            let source_idx = source_layer.evaluate(frame).round();
+            let source = comp.and_then(|composition| {
+                if !source_idx.is_finite() || source_idx < 0.0 {
+                    return None;
+                }
+                let index = source_idx as usize;
+                (index < composition.layers.len() && Some(index) != layer_idx).then(|| {
+                    crate::core::software_renderer::render_single_layer_pixels(
+                        composition, index, frame, width, height,
+                    )
+                })
+            });
+            crate::core::cpu_effects_new::apply_compound_blur_with_map(
                 pixels,
                 width,
                 height,
-                source_layer.evaluate(frame),
+                source.as_deref(),
                 max_blur.evaluate(frame),
             );
         }

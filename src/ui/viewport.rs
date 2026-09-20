@@ -1,5 +1,9 @@
 use crate::core::property::Animatable;
-use crate::core::roto_assist::{segment_roto_brush, trace_contour_to_polygon, RotoStroke};
+use crate::core::roto_assist::trace_contour_to_polygon;
+use crate::core::roto_brush_engine::{
+    generate_rotobrush_matte, RotoBrushSettings, RotoStroke as EngineRotoStroke,
+    RotoStrokeType,
+};
 use crate::core::timeline::Layer;
 use crate::ui::theme::colors;
 use crate::KagariApp;
@@ -1492,6 +1496,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
 
         // ── Roto Brush Tool (Interactive Green/Red Strokes -> Auto-Mask) ──
         if app.active_tool == crate::ui::toolbar::ActiveTool::RotoBrush {
+            let mut clear_roto = false;
             // Radius HUD
             {
                 let hud_id = egui::Id::new("roto_brush_hud");
@@ -1538,10 +1543,40 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                             if ui.checkbox(&mut matte_preview, "Matte Preview").on_hover_text("Show high-contrast black/white silhouette matte").changed() {
                                 ctx.data_mut(|d| d.insert_temp(egui::Id::new("roto_matte_preview"), matte_preview));
                             }
+                            ui.separator();
+                            let mut feather = ctx.data_mut(|d| {
+                                d.get_temp::<f32>(egui::Id::new("roto_feather_radius")).unwrap_or(3.0)
+                            });
+                            if ui.add(egui::Slider::new(&mut feather, 0.0..=32.0).text("Feather")).changed() {
+                                ctx.data_mut(|d| d.insert_temp(egui::Id::new("roto_feather_radius"), feather));
+                            }
+                            let mut contrast = ctx.data_mut(|d| {
+                                d.get_temp::<f32>(egui::Id::new("roto_contrast")).unwrap_or(1.0)
+                            });
+                            if ui.add(egui::Slider::new(&mut contrast, 0.1..=3.0).text("Contrast")).changed() {
+                                ctx.data_mut(|d| d.insert_temp(egui::Id::new("roto_contrast"), contrast));
+                            }
+                            if ui.button("Clear strokes and matte").clicked() {
+                                clear_roto = true;
+                            }
                         });
                     });
             }
             if let Some(sel_li) = app.selection.selected_layer_idx {
+                let stroke_list_id = egui::Id::new(("roto_strokes", sel_li));
+                if clear_roto {
+                    ctx.data_mut(|d| d.remove::<Vec<EngineRotoStroke>>(stroke_list_id));
+                    let mut cleared = app.history.current().clone();
+                    if let Some(layer) = cleared
+                        .active_composition_mut()
+                        .layers
+                        .get_mut(sel_li)
+                    {
+                        layer.masks.retain(|mask| mask.name != "Roto Brush Matte");
+                    }
+                    app.history.commit(cleared);
+                    app.toasts.info("Roto Brush matte cleared");
+                }
                 let stroke_id = egui::Id::new(("roto_live_stroke", sel_li));
                 let alt_held = ctx.input(|i| i.modifiers.alt);
                 let fg_pref = ctx.data_mut(|d| d.get_temp::<bool>(egui::Id::new("roto_fg_mode")).unwrap_or(true));
@@ -1576,25 +1611,67 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                                 let radius = ctx.data_mut(|d| {
                                     d.get_temp::<f32>(egui::Id::new("roto_brush_radius")).unwrap_or(8.0)
                                 });
-                                let strokes = vec![RotoStroke {
-                                    is_foreground: is_fg,
+                                let mut all_strokes = ctx.data_mut(|d| {
+                                    d.get_temp::<Vec<EngineRotoStroke>>(stroke_list_id)
+                                        .unwrap_or_default()
+                                });
+                                all_strokes.push(EngineRotoStroke {
+                                    stroke_type: if is_fg {
+                                        RotoStrokeType::Foreground
+                                    } else {
+                                        RotoStrokeType::Background
+                                    },
                                     points: pts.clone(),
                                     radius,
-                                }];
-                                let mask_buf = segment_roto_brush(&pixels, cw, ch, &strokes);
+                                });
+                                ctx.data_mut(|d| d.insert_temp(stroke_list_id, all_strokes.clone()));
+                                let feather = ctx.data_mut(|d| {
+                                    d.get_temp::<f32>(egui::Id::new("roto_feather_radius"))
+                                        .unwrap_or(3.0)
+                                });
+                                let contrast = ctx.data_mut(|d| {
+                                    d.get_temp::<f32>(egui::Id::new("roto_contrast"))
+                                        .unwrap_or(1.0)
+                                });
+                                let settings = RotoBrushSettings {
+                                    feather_radius: feather,
+                                    contrast,
+                                    ..Default::default()
+                                };
+                                let mask_buf = generate_rotobrush_matte(
+                                    &pixels,
+                                    cw,
+                                    ch,
+                                    &all_strokes,
+                                    &settings,
+                                );
                                 let polygon = trace_contour_to_polygon(&mask_buf, cw, ch, 2.0);
                                 if polygon.len() >= 3 {
                                     let mut temp_proj = app.history.current().clone();
                                     let comp = temp_proj.active_composition_mut();
                                     if let Some(layer) = comp.layers.get_mut(sel_li) {
-                                        let mask_name = format!("Roto Mask {}", layer.masks.len() + 1);
-                                        layer.masks.push(crate::core::mask::Mask::new_closed(
-                                            format!("roto_mask_{}", layer.masks.len() + 1),
-                                            mask_name,
-                                            polygon,
-                                        ));
+                                        if let Some(mask) = layer
+                                            .masks
+                                            .iter_mut()
+                                            .find(|mask| mask.name == "Roto Brush Matte")
+                                        {
+                                            mask.path = crate::core::mask::MaskPath::new_closed(polygon);
+                                            mask.feather = crate::core::property::Animatable::new_constant(feather);
+                                        } else {
+                                            let mut mask = crate::core::mask::Mask::new_closed(
+                                                "roto_brush_matte".to_owned(),
+                                                "Roto Brush Matte".to_owned(),
+                                                polygon,
+                                            );
+                                            mask.feather = crate::core::property::Animatable::new_constant(feather);
+                                            layer.masks.push(mask);
+                                        }
                                         app.history.commit(temp_proj);
-                                        app.toasts.info(if is_fg { "Roto Brush: Segmented Foreground Matte" } else { "Roto Brush: Segmented Background Matte" });
+                                        app.toasts.info(if all_strokes.len() == 1 {
+                                            if is_fg { "Roto Brush: Foreground matte created" } else { "Roto Brush: Background refinement added" }
+                                        } else {
+                                            "Roto Brush: Matte refined from all strokes"
+                                        });
                                     }
                                 } else {
                                     app.toasts.info("Roto Brush: No distinct region found — try broader strokes");
@@ -1614,6 +1691,40 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                         }).collect();
                         for w in screen_pts.windows(2) {
                             ui.painter().line_segment([w[0], w[1]], egui::Stroke::new(6.0_f32, stroke_col));
+                        }
+                    }
+                }
+
+                // Matte Preview is intentionally drawn from the committed
+                // mask, so it stays in sync with the same mask the renderer
+                // uses instead of becoming a second, visual-only result.
+                let matte_preview = ctx.data(|d| {
+                    d.get_temp::<bool>(egui::Id::new("roto_matte_preview"))
+                        .unwrap_or(false)
+                });
+                if matte_preview {
+                    let comp_state = app.history.current().active_composition();
+                    if let Some(mask) = comp_state
+                        .layers
+                        .get(sel_li)
+                        .and_then(|layer| layer.masks.iter().find(|mask| mask.name == "Roto Brush Matte"))
+                    {
+                        let verts = mask.path.vertices_at_frame(current_frame);
+                        if verts.len() >= 3 {
+                            let screen_verts: Vec<egui::Pos2> = verts
+                                .iter()
+                                .map(|p| {
+                                    egui::pos2(
+                                        origin_x + p[0] / comp_w * draw_w,
+                                        origin_y + p[1] / comp_h * draw_h,
+                                    )
+                                })
+                                .collect();
+                            ui.painter().add(egui::Shape::convex_polygon(
+                                screen_verts,
+                                egui::Color32::from_rgba_unmultiplied(80, 220, 120, 52),
+                                egui::Stroke::new(1.0_f32, colors::ACCENT_GREEN.linear_multiply(0.8)),
+                            ));
                         }
                     }
                 }
