@@ -35,6 +35,12 @@ impl OtioTimeline {
             items: Vec::new(),
         };
 
+        let mut audio_track = OtioTrack {
+            name: "Audio Track 1".to_string(),
+            kind: "audio".to_string(),
+            items: Vec::new(),
+        };
+
         for layer in &comp.layers {
             let media_ref = match &layer.layer_type {
                 LayerType::Image { path } => Some(path.clone()),
@@ -61,7 +67,7 @@ impl OtioTimeline {
                 LayerType::Particle { .. } => Some("particle_emitter".to_string()),
             };
 
-            video_track.items.push(OtioItem {
+            let item = OtioItem {
                 name: layer.name.clone(),
                 // Use saturating_sub to guard against u32 underflow when out_frame < in_frame
                 source_range: [
@@ -69,14 +75,25 @@ impl OtioTimeline {
                     layer.out_frame.saturating_sub(layer.in_frame),
                 ],
                 media_reference: media_ref,
-            });
+            };
+
+            if matches!(&layer.layer_type, LayerType::Audio { .. }) {
+                audio_track.items.push(item);
+            } else {
+                video_track.items.push(item);
+            }
+        }
+
+        let mut tracks = vec![video_track];
+        if !audio_track.items.is_empty() {
+            tracks.push(audio_track);
         }
 
         Self {
             name: comp.name.clone(),
             global_start_time: 0,
             fps: comp.fps as f64,
-            tracks: vec![video_track],
+            tracks,
         }
     }
 
@@ -93,47 +110,68 @@ impl OtioTimeline {
 
         let mut layer_idx = 0;
         for track in &self.tracks {
-            if track.kind == "video" {
-                for item in &track.items {
-                    let layer_type = match &item.media_reference {
-                        Some(ref_str) if ref_str.starts_with("text:") => {
-                            LayerType::new_text(&ref_str["text:".len()..], 48, [1.0, 1.0, 1.0, 1.0])
+            for item in &track.items {
+                let layer_type = match (&track.kind[..], &item.media_reference) {
+                    ("audio", Some(ref_str)) if ref_str.starts_with("audio:") => {
+                        LayerType::Audio {
+                            path: ref_str["audio:".len()..].to_string(),
+                            volume: crate::core::property::Animatable::new_constant(1.0),
                         }
-                        Some(ref_str) if ref_str == "color_solid" => LayerType::Solid {
-                            color: [0.2, 0.5, 0.8, 1.0],
-                        },
-                        Some(ref_str) if ref_str == "vector_shape" => LayerType::Shape {
-                            shape_type: crate::core::timeline::ShapeType::Rectangle {
-                                width: crate::core::property::Animatable::new_constant(100.0),
-                                height: crate::core::property::Animatable::new_constant(100.0),
-                                corner_radius: crate::core::property::Animatable::new_constant(0.0),
-                            },
-                            color: [0.3, 0.6, 1.0, 1.0],
-                            stroke_color: [0.0, 0.0, 0.0, 1.0],
-                            stroke_width: 0.0,
-                            fill_type: Default::default(),
-                            extrusion_depth: 0.0,
-                            bevel_depth: 0.0,
-                        },
-                        Some(path) => LayerType::Image { path: path.clone() },
-                        None => {
-                            LayerType::Solid {
-                                color: [1.0, 0.0, 1.0, 1.0],
-                            } // Placeholder Pink Solid
+                    }
+                    (_, Some(ref_str)) if ref_str.starts_with("video:") => {
+                        let mut parts = ref_str.splitn(5, ':');
+                        let _ = parts.next();
+                        let source = parts.next().unwrap_or_default().to_string();
+                        let frames_dir = parts.next().unwrap_or_default().to_string();
+                        let frame_count = parts
+                            .next()
+                            .and_then(|value| value.parse::<u32>().ok())
+                            .unwrap_or_default();
+                        let audio_wav = parts
+                            .next()
+                            .filter(|value| !value.is_empty())
+                            .map(str::to_string);
+                        LayerType::Video {
+                            source,
+                            frames_dir,
+                            frame_count,
+                            audio_wav,
+                            speed: 1.0,
                         }
-                    };
+                    }
+                    (_, Some(ref_str)) if ref_str.starts_with("text:") => {
+                        LayerType::new_text(&ref_str["text:".len()..], 48, [1.0, 1.0, 1.0, 1.0])
+                    }
+                    (_, Some(ref_str)) if ref_str == "color_solid" => LayerType::Solid {
+                        color: [0.2, 0.5, 0.8, 1.0],
+                    },
+                    (_, Some(ref_str)) if ref_str == "vector_shape" => LayerType::Shape {
+                        shape_type: crate::core::timeline::ShapeType::Rectangle {
+                            width: crate::core::property::Animatable::new_constant(100.0),
+                            height: crate::core::property::Animatable::new_constant(100.0),
+                            corner_radius: crate::core::property::Animatable::new_constant(0.0),
+                        },
+                        color: [0.3, 0.6, 1.0, 1.0],
+                        stroke_color: [0.0, 0.0, 0.0, 1.0],
+                        stroke_width: 0.0,
+                        fill_type: Default::default(),
+                        extrusion_depth: 0.0,
+                        bevel_depth: 0.0,
+                    },
+                    (_, Some(path)) => LayerType::Image { path: path.clone() },
+                    (_, None) => LayerType::Null,
+                };
 
-                    let mut layer = Layer::new(
-                        format!("otio_layer_{}", layer_idx),
-                        item.name.clone(),
-                        layer_type,
-                        item.source_range[1],
-                    );
-                    layer.in_frame = item.source_range[0];
-                    layer.out_frame = item.source_range[0] + item.source_range[1];
-                    comp.add_layer(layer);
-                    layer_idx += 1;
-                }
+                let mut layer = Layer::new(
+                    format!("otio_layer_{}", layer_idx),
+                    item.name.clone(),
+                    layer_type,
+                    item.source_range[1],
+                );
+                layer.in_frame = item.source_range[0];
+                layer.out_frame = item.source_range[0] + item.source_range[1];
+                comp.add_layer(layer);
+                layer_idx += 1;
             }
         }
 
@@ -373,6 +411,74 @@ mod tests {
             assert_eq!(client_name, "AfterEffects-OSS-Alternative");
         } else {
             panic!("Expected handshake response");
+        }
+    }
+
+    #[test]
+    fn otio_roundtrip_preserves_audio_and_video_layers() {
+        let mut comp = Composition::new(
+            "media_comp".to_string(),
+            "Media Comp".to_string(),
+            1280,
+            720,
+            24,
+            240,
+        );
+        comp.add_layer(Layer::new(
+            "video_1".to_string(),
+            "Footage".to_string(),
+            LayerType::Video {
+                source: "/media/scene.mov".to_string(),
+                frames_dir: "/cache/scene".to_string(),
+                frame_count: 240,
+                audio_wav: Some("/cache/scene.wav".to_string()),
+                speed: 1.0,
+            },
+            240,
+        ));
+        comp.add_layer(Layer::new(
+            "audio_1".to_string(),
+            "Music".to_string(),
+            LayerType::Audio {
+                path: "/audio/music.wav".to_string(),
+                volume: crate::core::property::Animatable::new_constant(1.0),
+            },
+            240,
+        ));
+
+        let otio = OtioTimeline::from_composition(&comp);
+        assert_eq!(otio.tracks.len(), 2);
+        assert_eq!(otio.tracks[0].kind, "video");
+        assert_eq!(otio.tracks[1].kind, "audio");
+
+        let round_tripped = otio.to_composition();
+        assert!(matches!(
+            round_tripped.layers[0].layer_type,
+            LayerType::Video { .. }
+        ));
+        assert!(matches!(
+            round_tripped.layers[1].layer_type,
+            LayerType::Audio { .. }
+        ));
+        if let LayerType::Video {
+            source,
+            frames_dir,
+            frame_count,
+            audio_wav,
+            ..
+        } = &round_tripped.layers[0].layer_type
+        {
+            assert_eq!(source, "/media/scene.mov");
+            assert_eq!(frames_dir, "/cache/scene");
+            assert_eq!(*frame_count, 240);
+            assert_eq!(audio_wav.as_deref(), Some("/cache/scene.wav"));
+        } else {
+            panic!("video layer did not survive OTIO roundtrip");
+        }
+        if let LayerType::Audio { path, .. } = &round_tripped.layers[1].layer_type {
+            assert_eq!(path, "/audio/music.wav");
+        } else {
+            panic!("audio layer did not survive OTIO roundtrip");
         }
     }
 
