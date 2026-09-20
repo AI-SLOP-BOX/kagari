@@ -1738,6 +1738,58 @@ mod tests {
     }
 
     #[test]
+    fn test_precomp_recurses_through_two_nested_compositions() {
+        let mut inner = Composition::new("inner".into(), "Inner".into(), 32, 32, 30, 30);
+        inner.background_color = [0.0, 0.0, 0.0, 0.0];
+        let mut solid = Layer::new(
+            "solid".into(),
+            "Red".into(),
+            LayerType::Solid {
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
+            30,
+        );
+        solid.transform.position = Animatable::new_constant([16.0, 16.0]);
+        inner.layers.push(solid);
+
+        let mut middle = Composition::new("middle".into(), "Middle".into(), 32, 32, 30, 30);
+        middle.background_color = [0.0, 0.0, 0.0, 0.0];
+        middle.sub_compositions.push(inner);
+        let mut inner_layer = Layer::new(
+            "inner-ref".into(),
+            "Inner PreComp".into(),
+            LayerType::PreComp {
+                comp_id: "inner".into(),
+            },
+            30,
+        );
+        inner_layer.transform.position = Animatable::new_constant([16.0, 16.0]);
+        middle.layers.push(inner_layer);
+
+        let mut outer = Composition::new("outer".into(), "Outer".into(), 32, 32, 30, 30);
+        outer.background_color = [0.0, 0.0, 0.0, 0.0];
+        outer.sub_compositions.push(middle);
+        let mut middle_layer = Layer::new(
+            "middle-ref".into(),
+            "Middle PreComp".into(),
+            LayerType::PreComp {
+                comp_id: "middle".into(),
+            },
+            30,
+        );
+        middle_layer.transform.position = Animatable::new_constant([16.0, 16.0]);
+        outer.layers.push(middle_layer);
+
+        let pixels = render_frame_to_pixels(&outer, 0, 32, 32, 0.0, 0);
+        let center = ((16 * 32 + 16) * 4) as usize;
+        assert!(
+            pixels[center] > 180 && pixels[center + 3] > 180,
+            "two-level PreComp should preserve nested pixels: {:?}",
+            &pixels[center..center + 4]
+        );
+    }
+
+    #[test]
     fn test_precomp_video_uses_sequence_and_frame_blending() {
         let dir = std::env::temp_dir().join(format!(
             "kagari_precomp_video_test_{}",

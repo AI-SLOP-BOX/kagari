@@ -185,6 +185,62 @@ fn rasterize_texture_layer(
     });
 }
 
+/// Rasterize an already-rendered nested composition into a transformed layer
+/// buffer. Keeping this sampling path separate from filesystem-backed footage
+/// lets nested PreComps recurse without manufacturing temporary image files.
+fn rasterize_pixel_layer(
+    layer_buf: &mut [u8],
+    pixels: &[u8],
+    source_width: u32,
+    source_height: u32,
+    min_x: u32,
+    min_y: u32,
+    max_x: u32,
+    max_y: u32,
+    bw: u32,
+    cx: f32,
+    cy: f32,
+    cos_r: f32,
+    sin_r: f32,
+    bounds_x: f32,
+    bounds_y: f32,
+) {
+    if source_width == 0 || source_height == 0 {
+        return;
+    }
+    let source_size = (source_width as usize)
+        .checked_mul(source_height as usize)
+        .and_then(|size| size.checked_mul(4));
+    if source_size != Some(pixels.len()) {
+        return;
+    }
+
+    let source_w = source_width as f32;
+    let source_h = source_height as f32;
+    for py in min_y..max_y {
+        for px in min_x..max_x {
+            let dx = px as f32 - cx;
+            let dy = py as f32 - cy;
+            let lx = dx * cos_r + dy * sin_r;
+            let ly = -dx * sin_r + dy * cos_r;
+            let u = (lx / bounds_x + 1.0) * 0.5;
+            let v = (ly / bounds_y + 1.0) * 0.5;
+            if !(0.0..=1.0).contains(&u) || !(0.0..=1.0).contains(&v) {
+                continue;
+            }
+
+            let sx = ((u * (source_w - 1.0)).round() as u32).min(source_width - 1);
+            let sy = ((v * (source_h - 1.0)).round() as u32).min(source_height - 1);
+            let source_idx = ((sy * source_width + sx) * 4) as usize;
+            let layer_idx = (((py - min_y) * bw + (px - min_x)) * 4) as usize;
+            if source_idx + 3 < pixels.len() && layer_idx + 3 < layer_buf.len() {
+                layer_buf[layer_idx..layer_idx + 4]
+                    .copy_from_slice(&pixels[source_idx..source_idx + 4]);
+            }
+        }
+    }
+}
+
 /// Render a single layer from `comp` at the given frame, returning an RGBA8 buffer
 /// of size `width * height * 4`. Used by effects like SetMatte that need another
 /// layer's pixel data.
@@ -420,6 +476,34 @@ fn render_precomp_layers_inner(
                     bounds_x,
                     bounds_y,
                 );
+            }
+            LayerType::PreComp { comp_id } => {
+                if let Some(nested_comp) = precomp_comp.find_sub_comp(comp_id) {
+                    let nested_pixels = render_precomp_layers(
+                        precomp_comp,
+                        nested_comp,
+                        effective_frame,
+                        width,
+                        height,
+                    );
+                    rasterize_pixel_layer(
+                        &mut layer_buf,
+                        &nested_pixels,
+                        width,
+                        height,
+                        min_x,
+                        min_y,
+                        max_x,
+                        max_y,
+                        bw,
+                        cx,
+                        cy,
+                        cos_r,
+                        sin_r,
+                        bounds_x,
+                        bounds_y,
+                    );
+                }
             }
             LayerType::Text {
                 text,

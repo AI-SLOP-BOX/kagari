@@ -2013,6 +2013,19 @@ impl WgpuRenderer {
                     continue;
                 }
                 comp_indices.push(comp_idx);
+                let effective_frame = {
+                    let remapped = layer.remap_frame(frame);
+                    match &layer.posterize_time {
+                        Some(pt) if pt.enabled => {
+                            crate::core::posterize_time::quantize_frame_posterize(
+                                remapped,
+                                comp.fps,
+                                pt,
+                            )
+                        }
+                        _ => remapped,
+                    }
+                };
 
                 // Retrieve transform values at the current frame.
                 // Parented layers and expression-driven layers resolve through the full
@@ -2055,6 +2068,7 @@ impl WgpuRenderer {
                 // Video layers sample their frame sequence via the image path too,
                 // but keep composition-sized geometry (unlike text, which fits the bitmap).
                 let mut is_video_frame = false;
+                let mut is_precomp_frame = false;
                 if let LayerType::Video {
                     frames_dir,
                     frame_count,
@@ -2070,6 +2084,19 @@ impl WgpuRenderer {
                     ) {
                         text_bind_group = Some(bg);
                         is_video_frame = true;
+                    }
+                }
+                if let LayerType::PreComp { comp_id } = &layer.layer_type {
+                    if let Some((_, _, bg)) = self.get_or_create_precomp_frame_texture(
+                        comp,
+                        comp_id,
+                        effective_frame,
+                        width,
+                        height,
+                        crate::core::frame_cache::current_version(),
+                    ) {
+                        text_bind_group = Some(bg);
+                        is_precomp_frame = true;
                     }
                 }
                 if let LayerType::Text {
@@ -2304,7 +2331,7 @@ impl WgpuRenderer {
                 };
 
                 // Textured text uses the image sampling path with unmodified texture colors
-                if is_textured_text || is_video_frame {
+                if is_textured_text || is_video_frame || is_precomp_frame {
                     layer_type = 1u32;
                     color = [1.0, 1.0, 1.0, 1.0];
                 }
@@ -3280,6 +3307,110 @@ impl WgpuRenderer {
             }
         }
         Some((tw, th, bind_group))
+    }
+
+    /// Render a nested composition through the same software reference path
+    /// used by export, then cache its pixels as a GPU texture for the parent
+    /// layer. The GPU shader can then apply the parent PreComp transform,
+    /// effects, masks, mattes, and blend mode without treating the layer as a
+    /// flat placeholder.
+    fn get_or_create_precomp_frame_texture(
+        &self,
+        comp: &Composition,
+        comp_id: &str,
+        frame_idx: u32,
+        width: u32,
+        height: u32,
+        version: u64,
+    ) -> Option<(u32, u32, std::sync::Arc<wgpu::BindGroup>)> {
+        let sub_comp = comp.find_sub_comp(comp_id)?;
+        let revision = composition_cache_key(sub_comp);
+        let key: VideoFrameKey = (
+            format!("precomp:{comp_id}"),
+            format!("{revision}:{width}x{height}"),
+            frame_idx,
+        );
+
+        if self.video_cache_version.get() != version {
+            self.video_frame_cache.borrow_mut().clear();
+            self.video_cache_version.set(version);
+        }
+        if let Some(bg) = self
+            .video_frame_cache
+            .borrow()
+            .get(&key)
+            .map(|(_, bg)| bg.clone())
+        {
+            return Some((width, height, bg));
+        }
+
+        let pixels = crate::core::software_renderer::render_precomp_layers(
+            comp, sub_comp, frame_idx, width, height,
+        );
+        if pixels.len()
+            != crate::core::software_renderer::rgba_buffer_size(width, height)? as usize
+        {
+            return None;
+        }
+
+        let size = wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        };
+        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("PreComp Frame Texture"),
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba16Float,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        self.queue.write_texture(
+            wgpu::ImageCopyTexture {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &rgba8_to_rgba16f_bytes(&pixels),
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(width * 8),
+                rows_per_image: Some(height),
+            },
+            size,
+        );
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &self.texture_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
+            ],
+            label: Some("precomp_frame_bind_group"),
+        });
+        let bind_group = std::sync::Arc::new(bind_group);
+        {
+            let mut cache = self.video_frame_cache.borrow_mut();
+            cache.insert(key, (std::sync::Arc::new(texture), bind_group.clone()));
+            while cache.len() > MAX_VIDEO_FRAME_TEXTURES {
+                if let Some(oldest) = cache.keys().next().cloned() {
+                    cache.remove(&oldest);
+                } else {
+                    break;
+                }
+            }
+        }
+        Some((width, height, bind_group))
     }
 
     /// Caps preview render width (px). `None` renders at composition resolution.
