@@ -341,16 +341,22 @@ impl TrackerEngine {
                 let seq_a = frame.min(frame_count.saturating_sub(1));
                 let seq_b = (frame + 1).min(frame_count.saturating_sub(1));
                 (
-                    Some(format!(
-                        "{}/frame_{:05}.png",
-                        frames_dir.trim_end_matches('/'),
-                        seq_a
-                    )),
-                    Some(format!(
-                        "{}/frame_{:05}.png",
-                        frames_dir.trim_end_matches('/'),
-                        seq_b
-                    )),
+                    Some(
+                        crate::core::video_import::frame_path_in_dir(
+                            frames_dir,
+                            seq_a,
+                        )
+                        .to_string_lossy()
+                        .into_owned(),
+                    ),
+                    Some(
+                        crate::core::video_import::frame_path_in_dir(
+                            frames_dir,
+                            seq_b,
+                        )
+                        .to_string_lossy()
+                        .into_owned(),
+                    ),
                 )
             }
             crate::core::timeline::LayerType::Image { path } => {

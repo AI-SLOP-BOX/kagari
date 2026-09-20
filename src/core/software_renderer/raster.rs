@@ -84,8 +84,7 @@ fn rasterize_image_layer(ctx: RasterCtx<'_>) {
             } => {
                 let seq_frame = ((effective_frame as f32 * speed.max(0.0)) as u32)
                     .min(frame_count.saturating_sub(1));
-                std::path::Path::new(frames_dir)
-                    .join(format!("frame_{:05}.png", seq_frame))
+                crate::core::video_import::frame_path_in_dir(frames_dir, seq_frame)
                     .to_string_lossy()
                     .to_string()
             }

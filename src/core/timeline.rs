@@ -62,8 +62,9 @@ pub enum LayerType {
         path: String,
     },
     /// Video layer: plays a pre-extracted frame sequence (see video_import).
-    /// `frames_dir` holds frame_%05d.png files decoded at import time; rendering
-    /// samples the sequence by the layer's effective frame.
+    /// `frames_dir` holds frame_%05d.webp files decoded at import time (older
+    /// projects may still contain PNG frames); rendering samples the sequence
+    /// by the layer's effective frame.
     Video {
         source: String,
         frames_dir: String,

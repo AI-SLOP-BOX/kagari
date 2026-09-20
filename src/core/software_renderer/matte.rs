@@ -173,8 +173,10 @@ pub(crate) fn render_matte_buffer(
                                     let sequence_frame = ((m_frame as f32 * speed.max(0.0))
                                         as u32)
                                         .min(frame_count.saturating_sub(1));
-                                    std::path::Path::new(frames_dir)
-                                        .join(format!("frame_{:05}.png", sequence_frame))
+                                    crate::core::video_import::frame_path_in_dir(
+                                        frames_dir,
+                                        sequence_frame,
+                                    )
                                         .to_string_lossy()
                                         .into_owned()
                                 }

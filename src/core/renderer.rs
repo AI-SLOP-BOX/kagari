@@ -3208,15 +3208,14 @@ impl WgpuRenderer {
         {
             return Some((1, 1, bg));
         }
-        let png_path = std::path::Path::new(frames_dir)
-            .join(format!("frame_{:05}.png", frame_idx))
+        let frame_path = crate::core::video_import::frame_path_in_dir(frames_dir, frame_idx)
             .to_string_lossy()
             .to_string();
         let (tw, th, pixels) = {
             use crate::core::image_cache::with_image_cache;
             with_image_cache(|cache| {
                 cache
-                    .load_image(&png_path)
+                    .load_image(&frame_path)
                     .map(|img| (img.width, img.height, img.pixels.clone()))
             })?
         };

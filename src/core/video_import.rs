@@ -110,7 +110,9 @@ fn probe_has_audio(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-/// Decodes `src_path` into `dest_dir` as a PNG frame sequence (+ WAV audio).
+/// Decodes `src_path` into `dest_dir` as a WebP frame sequence (+ WAV audio).
+/// PNG is used as a compatibility fallback when the installed FFmpeg lacks
+/// the WebP encoder.
 ///
 /// `fps` controls extraction rate (use the composition's fps so 1 sequence
 /// frame == 1 composition frame).
@@ -159,9 +161,11 @@ pub fn import_video(src_path: &str, dest_dir: &Path, fps: f32) -> Result<VideoAs
     std::fs::create_dir_all(&frames_dir)
         .map_err(|e| format!("failed to create media dir: {}", e))?;
 
-    // 1. Decode frames: scale to even dimensions (encoder-safe), numbered from 0
-    let pattern = frames_dir.join("frame_%05d.png");
-    let decode = Command::new("ffmpeg")
+    // 1. Decode frames: scale to even dimensions (encoder-safe), numbered from 0.
+    // Lossless WebP keeps imported footage substantially smaller than a PNG
+    // sequence while remaining directly decodable by image_cache.
+    let webp_pattern = frames_dir.join("frame_%05d.webp");
+    let decode_webp = Command::new("ffmpeg")
         .arg("-y")
         .arg("-i")
         .arg(src)
@@ -169,16 +173,36 @@ pub fn import_video(src_path: &str, dest_dir: &Path, fps: f32) -> Result<VideoAs
             "-vf",
             &format!("fps={},scale=trunc(iw/2)*2:trunc(ih/2)*2", fps),
         ])
+        .args(["-c:v", "libwebp", "-lossless", "1", "-compression_level", "4"])
         .args(["-start_number", "0"])
         .arg("--")
-        .arg(&pattern)
+        .arg(&webp_pattern)
         .output()
         .map_err(|e| format!("failed to run ffmpeg: {}", e))?;
-    if !decode.status.success() {
-        return Err(format!(
-            "ffmpeg frame extraction failed: {}",
-            String::from_utf8_lossy(&decode.stderr)
-        ));
+    if !decode_webp.status.success() {
+        // Some minimal FFmpeg builds omit libwebp. Keep those installations
+        // usable by falling back to the legacy PNG sequence.
+        let png_pattern = frames_dir.join("frame_%05d.png");
+        let decode_png = Command::new("ffmpeg")
+            .arg("-y")
+            .arg("-i")
+            .arg(src)
+            .args([
+                "-vf",
+                &format!("fps={},scale=trunc(iw/2)*2:trunc(ih/2)*2", fps),
+            ])
+            .args(["-start_number", "0"])
+            .arg("--")
+            .arg(&png_pattern)
+            .output()
+            .map_err(|e| format!("failed to run ffmpeg PNG fallback: {}", e))?;
+        if !decode_png.status.success() {
+            return Err(format!(
+                "ffmpeg frame extraction failed (WebP: {}; PNG: {})",
+                String::from_utf8_lossy(&decode_webp.stderr),
+                String::from_utf8_lossy(&decode_png.stderr)
+            ));
+        }
     }
 
     // Count produced frames
@@ -187,8 +211,17 @@ pub fn import_video(src_path: &str, dest_dir: &Path, fps: f32) -> Result<VideoAs
         std::fs::read_dir(&frames_dir).map_err(|e| format!("failed to read frames dir: {}", e))?;
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().to_string();
-        if name.starts_with("frame_") && name.ends_with(".png") {
-            frame_count += 1;
+        if name.starts_with("frame_") {
+            let is_frame = name.ends_with(".webp") || name.ends_with(".png");
+            if is_frame {
+                if let Some(number) = name
+                    .strip_prefix("frame_")
+                    .and_then(|suffix| suffix.split('.').next())
+                    .and_then(|digits| digits.parse::<u32>().ok())
+                {
+                    frame_count = frame_count.max(number.saturating_add(1));
+                }
+            }
         }
     }
     if frame_count == 0 {
@@ -225,10 +258,23 @@ pub fn import_video(src_path: &str, dest_dir: &Path, fps: f32) -> Result<VideoAs
     })
 }
 
-/// Returns the PNG path for a given sequence frame index (clamped to range).
+/// Returns the extracted frame path (WebP preferred, PNG fallback), clamped to
+/// the imported sequence range.
 pub fn frame_path(asset: &VideoAsset, frame: u32) -> PathBuf {
     let clamped = frame.min(asset.frame_count.saturating_sub(1));
-    Path::new(&asset.frames_dir).join(format!("frame_{:05}.png", clamped))
+    frame_path_in_dir(&asset.frames_dir, clamped)
+}
+
+/// Resolve an extracted video frame while supporting both the current WebP
+/// sequence and older projects that still contain PNG frames.
+pub fn frame_path_in_dir(frames_dir: &str, frame: u32) -> PathBuf {
+    let dir = Path::new(frames_dir);
+    let webp = dir.join(format!("frame_{:05}.webp", frame));
+    if webp.is_file() {
+        webp
+    } else {
+        dir.join(format!("frame_{:05}.png", frame))
+    }
 }
 
 #[cfg(test)]
