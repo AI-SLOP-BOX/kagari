@@ -23,7 +23,27 @@ pub struct OtioTimeline {
     pub name: String,
     pub global_start_time: u32,
     pub fps: f64,
+    /// Kagari's native dimensions. External OTIO files may omit these fields;
+    /// the import path then falls back to a standard HD composition.
+    #[serde(default = "default_otio_width")]
+    pub width: u32,
+    #[serde(default = "default_otio_height")]
+    pub height: u32,
+    #[serde(default = "default_otio_duration")]
+    pub duration_frames: u32,
     pub tracks: Vec<OtioTrack>,
+}
+
+fn default_otio_width() -> u32 {
+    1920
+}
+
+fn default_otio_height() -> u32 {
+    1080
+}
+
+fn default_otio_duration() -> u32 {
+    300
 }
 
 impl OtioTimeline {
@@ -93,6 +113,9 @@ impl OtioTimeline {
             name: comp.name.clone(),
             global_start_time: 0,
             fps: comp.fps as f64,
+            width: comp.width,
+            height: comp.height,
+            duration_frames: comp.duration_frames,
             tracks,
         }
     }
@@ -102,10 +125,10 @@ impl OtioTimeline {
         let mut comp = Composition::new(
             self.name.clone(),
             self.name.clone(),
-            1920, // default width
-            1080, // default height
-            self.fps as u32,
-            300, // default duration
+            self.width.max(1),
+            self.height.max(1),
+            self.fps.round().max(1.0) as u32,
+            self.duration_frames.max(1),
         );
 
         let mut layer_idx = 0;
@@ -142,6 +165,11 @@ impl OtioTimeline {
                     (_, Some(ref_str)) if ref_str.starts_with("text:") => {
                         LayerType::new_text(&ref_str["text:".len()..], 48, [1.0, 1.0, 1.0, 1.0])
                     }
+                    (_, Some(ref_str)) if ref_str.starts_with("precomp:") => {
+                        LayerType::PreComp {
+                            comp_id: ref_str["precomp:".len()..].to_string(),
+                        }
+                    }
                     (_, Some(ref_str)) if ref_str == "color_solid" => LayerType::Solid {
                         color: [0.2, 0.5, 0.8, 1.0],
                     },
@@ -158,6 +186,14 @@ impl OtioTimeline {
                         extrusion_depth: 0.0,
                         bevel_depth: 0.0,
                     },
+                    (_, Some(ref_str)) if ref_str == "adjustment_layer" => {
+                        LayerType::AdjustmentLayer
+                    }
+                    (_, Some(ref_str)) if ref_str == "particle_emitter" => {
+                        LayerType::Particle {
+                            emitter: crate::core::particle_system::ParticleEmitter::default(),
+                        }
+                    }
                     (_, Some(path)) => LayerType::Image { path: path.clone() },
                     (_, None) => LayerType::Null,
                 };
@@ -452,6 +488,9 @@ mod tests {
         assert_eq!(otio.tracks[1].kind, "audio");
 
         let round_tripped = otio.to_composition();
+        assert_eq!(round_tripped.width, 1280);
+        assert_eq!(round_tripped.height, 720);
+        assert_eq!(round_tripped.duration_frames, 240);
         assert!(matches!(
             round_tripped.layers[0].layer_type,
             LayerType::Video { .. }
