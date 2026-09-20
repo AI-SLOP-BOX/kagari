@@ -782,7 +782,7 @@ fn draw_detail(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, narrow:
         ("再生時間", "00:28"),
         ("ファイルサイズ", "412 MB"),
         ("追加日", "2025/08/28 14:32"),
-        ("保存先", "/Users/username/Library/Kagari VFX/..."),
+        ("保存先", "~/Library/Kagari VFX/..."),
     ]
     .into_iter()
     .enumerate()

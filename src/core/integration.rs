@@ -307,9 +307,10 @@ pub fn start_sync_server(
     frame_tx: std::sync::mpsc::Sender<u32>,
     connection_tx: std::sync::mpsc::Sender<Option<String>>,
 ) -> Result<u16, std::io::Error> {
-    use std::io::{BufRead, BufReader, Write};
+    use std::io::{BufRead, BufReader, Read, Write};
     use std::net::TcpListener;
     use std::thread;
+    const MAX_MESSAGE_BYTES: usize = 65_536;
 
     let listener = TcpListener::bind(format!("127.0.0.1:{}", port))?;
     let bound_port = listener.local_addr()?.port();
@@ -330,20 +331,30 @@ pub fn start_sync_server(
             let mut reader = BufReader::new(stream_clone);
             let mut writer = stream;
 
-            let mut line = String::new();
+            let mut line = Vec::with_capacity(MAX_MESSAGE_BYTES.min(4096));
             loop {
                 line.clear();
-                match reader.read_line(&mut line) {
+                let read_result = reader
+                    .by_ref()
+                    .take((MAX_MESSAGE_BYTES + 1) as u64)
+                    .read_until(b'\n', &mut line);
+                match read_result {
                     Ok(0) => {
                         // EOF - Connection closed
                         break;
                     }
                     Ok(_) => {
-                        if line.len() > 65_536 {
+                        if line.len() > MAX_MESSAGE_BYTES {
                             log::warn!("TCP line limit exceeded ({} bytes). Closing connection to prevent memory exhaustion.", line.len());
                             break;
                         }
-                        let trimmed = line.trim();
+                        let trimmed = match std::str::from_utf8(&line) {
+                            Ok(value) => value.trim(),
+                            Err(_) => {
+                                log::warn!("Dynamic Link message was not valid UTF-8");
+                                continue;
+                            }
+                        };
                         if trimmed.is_empty() {
                             continue;
                         }
