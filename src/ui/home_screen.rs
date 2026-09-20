@@ -259,7 +259,20 @@ struct RecentProject {
 
 /// Cached per (path, mtime) so the JSON parse does not repeat every frame.
 fn recent_project_entries(ctx: &egui::Context) -> Vec<RecentProject> {
-    let recents = crate::ui::project_io::recent_projects();
+    project_entries_for_paths(ctx, &crate::ui::project_io::recent_projects(), true)
+}
+
+/// Starred projects are an independent collection: they remain visible after
+/// falling out of the eight-item recent-project list.
+fn starred_project_entries(ctx: &egui::Context, starred: &[String]) -> Vec<RecentProject> {
+    project_entries_for_paths(ctx, starred, false)
+}
+
+fn project_entries_for_paths(
+    ctx: &egui::Context,
+    paths: &[String],
+    sort_by_modified: bool,
+) -> Vec<RecentProject> {
     let cache_id = egui::Id::new("home_proj_cache");
     type ProjCache = std::collections::HashMap<
         std::path::PathBuf,
@@ -268,7 +281,7 @@ fn recent_project_entries(ctx: &egui::Context) -> Vec<RecentProject> {
     let mut cache: ProjCache =
         ctx.data_mut(|d| d.get_temp_mut_or_default::<ProjCache>(cache_id).clone());
     let mut out = Vec::new();
-    for path_str in recents.iter().take(8) {
+    for path_str in paths {
         let path = std::path::PathBuf::from(path_str);
         let name = path
             .file_stem()
@@ -294,13 +307,15 @@ fn recent_project_entries(ctx: &egui::Context) -> Vec<RecentProject> {
             summary,
         });
     }
-    // Existing files first (newest first), missing files trail.
-    out.sort_by(|a, b| match (&a.modified, &b.modified) {
-        (Some(x), Some(y)) => y.cmp(x),
-        (Some(_), None) => std::cmp::Ordering::Less,
-        (None, Some(_)) => std::cmp::Ordering::Greater,
-        (None, None) => std::cmp::Ordering::Equal,
-    });
+    if sort_by_modified {
+        // Existing files first (newest first), missing files trail.
+        out.sort_by(|a, b| match (&a.modified, &b.modified) {
+            (Some(x), Some(y)) => y.cmp(x),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => std::cmp::Ordering::Equal,
+        });
+    }
     ctx.data_mut(|d| d.insert_temp(cache_id, cache));
     out
 }
@@ -3893,7 +3908,11 @@ fn draw_projects_view(
             } else {
                 crate::ui::theme::draw_section_header(ui, "Projects", "");
             }
-            let entries = recent_project_entries(ctx);
+            let entries = if starred_only == Some(true) {
+                starred_project_entries(ctx, &app.home_starred_projects)
+            } else {
+                recent_project_entries(ctx)
+            };
             draw_project_rows(app, ui, ctx, entries, usize::MAX, starred_only == Some(true));
         });
 }

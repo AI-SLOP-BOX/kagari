@@ -43,12 +43,8 @@ fn prefs_path() -> std::path::PathBuf {
 }
 
 pub(crate) fn load() -> Prefs {
-    crate::core::project_migration::read_bounded_text_file(
-        &prefs_path(),
-        1024 * 1024,
-    )
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
+    crate::ui::project_io::load_prefs_value()
+        .and_then(|value| serde_json::from_value(value).ok())
         .unwrap_or_default()
 }
 

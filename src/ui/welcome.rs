@@ -152,6 +152,42 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
             ui.separator();
             ui.add_space(8.0);
 
+            let starred = app.home_starred_projects.clone();
+            if !starred.is_empty() {
+                ui.heading(
+                    egui::RichText::new("Starred Projects")
+                        .size(13.0)
+                        .strong()
+                        .color(colors::TEXT_PRIMARY),
+                );
+                ui.add_space(8.0);
+                egui::ScrollArea::vertical()
+                    .max_height(120.0)
+                    .show(ui, |ui| {
+                        for path_str in &starred {
+                            let path = std::path::PathBuf::from(path_str);
+                            let display = path
+                                .file_name()
+                                .map(|s| s.to_string_lossy().to_string())
+                                .unwrap_or_else(|| path_str.clone());
+                            ui.horizontal(|ui| {
+                                ui.add_space(8.0);
+                                let resp = ui
+                                    .selectable_label(false, format!("★ {}", display))
+                                    .on_hover_text(path_str.clone());
+                                if resp.clicked() {
+                                    recent_to_open = Some(path.clone());
+                                }
+                                if resp.hovered() {
+                                    ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                                }
+                            });
+                            ui.add_space(2.0);
+                        }
+                    });
+                ui.add_space(16.0);
+            }
+
             let recent = crate::ui::project_io::recent_projects();
             if !recent.is_empty() {
                 ui.heading(
