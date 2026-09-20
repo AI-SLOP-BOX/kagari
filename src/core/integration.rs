@@ -251,7 +251,7 @@ impl DynamicLinkServer {
                 self.is_connected = true;
                 self.connected_app = Some(client_name.clone());
                 Some(DynamicLinkMessage::Handshake {
-                    client_name: "AfterEffects-OSS-Alternative".to_string(),
+                    client_name: "Kagari VFX".to_string(),
                     protocol_version: "1.0.0".to_string(),
                 })
             }
@@ -319,7 +319,7 @@ pub fn start_sync_server(
                                     connection_tx.send(Some(client_name.clone())).ok();
 
                                     let resp = DynamicLinkMessage::Handshake {
-                                        client_name: "AfterEffects-OSS-Alternative".to_string(),
+                                        client_name: "Kagari VFX".to_string(),
                                         protocol_version: "1.0.0".to_string(),
                                     };
                                     if let Ok(resp_json) = serde_json::to_string(&resp) {
@@ -408,7 +408,7 @@ mod tests {
         assert_eq!(server.connected_app.unwrap(), "Kdenlive");
 
         if let Some(DynamicLinkMessage::Handshake { client_name, .. }) = resp {
-            assert_eq!(client_name, "AfterEffects-OSS-Alternative");
+            assert_eq!(client_name, "Kagari VFX");
         } else {
             panic!("Expected handshake response");
         }
@@ -516,7 +516,7 @@ mod tests {
         // Read Handshake Response
         let mut line = String::new();
         reader.read_line(&mut line).unwrap();
-        assert!(line.contains("AfterEffects-OSS-Alternative"));
+        assert!(line.contains("Kagari VFX"));
 
         // Verify connection state channel
         let conn_state = conn_rx.recv().unwrap();
