@@ -24,13 +24,17 @@ pub fn draw_software_canvas(
         ui.set_clip_rect(prev_clip.intersect(clip));
     }
 
+    let comp = app.history.current().active_composition();
     let custom_lut_active = ui
         .ctx()
         .data(|d| d.get_temp::<usize>(egui::Id::new("ae_colorspace_lut")))
         .unwrap_or(0)
         == 3;
-    if custom_lut_active {
-        let comp = app.history.current().active_composition();
+    let paint_preview_required = comp
+        .layers
+        .iter()
+        .any(|layer| !layer.paint_strokes.is_empty());
+    if custom_lut_active || paint_preview_required {
         let max_preview_dim = 2048u32;
         let scale = (max_preview_dim as f32 / comp.width.max(comp.height) as f32).min(1.0);
         let render_width = ((comp.width as f32 * scale).round() as u32).max(1);
@@ -41,7 +45,7 @@ pub fn draw_software_canvas(
             render_width,
             render_height,
             0.0,
-            3,
+            if custom_lut_active { 3 } else { 0 },
         );
         let image = egui::ColorImage::from_rgba_unmultiplied(
             [render_width as usize, render_height as usize],
@@ -62,7 +66,6 @@ pub fn draw_software_canvas(
 
     ui.painter()
         .rect_filled(draw_rect, 0.0, egui::Color32::BLACK);
-    let comp = app.history.current().active_composition();
 
     let has_solo = comp
         .layers

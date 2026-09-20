@@ -210,6 +210,13 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
         } else {
             active_comp_name.clone()
         };
+        let paint_preview_required = app
+            .history
+            .current()
+            .active_composition()
+            .layers
+            .iter()
+            .any(|layer| !layer.paint_strokes.is_empty());
         ui.horizontal(|ui| {
             let tab_frame = egui::Frame::none()
                 .fill(egui::Color32::TRANSPARENT)
@@ -593,6 +600,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             .data(|d| d.get_temp::<usize>(egui::Id::new("ae_colorspace_lut")))
             .unwrap_or(0)
             != 3
+            && !paint_preview_required
         {
             if let Some(renderer) = &mut app.renderer {
             if let Some(wgpu_state) = &app.wgpu_state {
