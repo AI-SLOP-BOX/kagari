@@ -99,12 +99,24 @@ fn software_preview_required(comp: &crate::core::timeline::Composition, frame: u
                 || layer.style.outer_glow.enabled
                 || layer.style.inner_glow.enabled
                 || layer.style.satin.enabled
-                || (layer.effects_enabled && layer.effects.iter().any(|effect| {
-                    effect.enabled
-                        && !crate::core::effect_plugin::gpu_preview_effect_supported(
-                            &effect.effect_type,
-                        )
-                }))
+                || (layer.effects_enabled && {
+                    let mut enabled_effects = 0usize;
+                    let mut has_unsupported_effect = false;
+                    for effect in &layer.effects {
+                        if effect.enabled {
+                            enabled_effects += 1;
+                            has_unsupported_effect |=
+                                !crate::core::effect_plugin::gpu_preview_effect_supported(
+                                    &effect.effect_type,
+                                );
+                        }
+                    }
+                    // EffectParams is a single-pass representation. It cannot
+                    // preserve repeated effects or the user-authored order, so
+                    // use the software path instead of silently collapsing the
+                    // stack in the realtime preview.
+                    enabled_effects > 1 || has_unsupported_effect
+                })
         })
 }
 
@@ -3343,5 +3355,45 @@ mod review_regression_tests {
         assert!(app.pen_bezier_drag.is_none());
         let path = pen_path(app.pen_points, app.pen_tangents);
         assert_eq!(path.tangents.unwrap()[0], ([-60.0, -40.0], [60.0, 40.0]));
+    }
+
+    #[test]
+    fn multiple_gpu_effects_use_software_preview_to_preserve_stack_order() {
+        let mut comp = crate::core::timeline::Composition::new(
+            "comp".to_string(),
+            "Comp".to_string(),
+            320,
+            180,
+            30,
+            30,
+        );
+        let mut layer = crate::core::timeline::Layer::new(
+            "layer".to_string(),
+            "Layer".to_string(),
+            crate::core::timeline::LayerType::Solid {
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
+            30,
+        );
+        layer.effects.push(crate::core::timeline::Effect {
+            id: "invert".to_string(),
+            name: "Invert".to_string(),
+            effect_type: crate::core::timeline::EffectType::Invert {
+                invert_alpha: false,
+            },
+            enabled: true,
+        });
+        comp.layers.push(layer);
+        assert!(!software_preview_required(&comp, 0));
+
+        comp.layers[0].effects.push(crate::core::timeline::Effect {
+            id: "posterize".to_string(),
+            name: "Posterize".to_string(),
+            effect_type: crate::core::timeline::EffectType::Posterize {
+                levels: crate::core::property::Animatable::new_constant(8.0),
+            },
+            enabled: true,
+        });
+        assert!(software_preview_required(&comp, 0));
     }
 }
