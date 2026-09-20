@@ -2,6 +2,27 @@ use crate::ui::theme::colors;
 use crate::ExportEvent;
 use eframe::egui;
 
+/// Resolve the export range used by both the UI preview and every encoder.
+/// Work Area In/Out are inclusive in the timeline, while encoder APIs take a
+/// start plus a frame count (and audio uses an exclusive end frame).
+fn export_frame_range(
+    comp_total: u32,
+    range_mode: u8,
+    work_area_in: Option<u32>,
+    work_area_out: Option<u32>,
+) -> (u32, u32) {
+    if comp_total == 0 {
+        return (0, 0);
+    }
+    if range_mode == 1 && (work_area_in.is_some() || work_area_out.is_some()) {
+        let last = comp_total.saturating_sub(1);
+        let start = work_area_in.unwrap_or(0).min(last);
+        let end = work_area_out.unwrap_or(last).min(last).max(start);
+        return (start, end.saturating_sub(start).saturating_add(1));
+    }
+    (0, comp_total)
+}
+
 /// Spawn the async FFmpeg (or fallback) render worker for one composition.
 /// Shared by the export dialog button and the Render Queue batch runner.
 pub fn start_comp_export(app: &mut crate::KagariApp, ctx: &egui::Context, comp_name: &str) {
@@ -25,18 +46,12 @@ pub fn start_comp_export(app: &mut crate::KagariApp, ctx: &egui::Context, comp_n
     // Range mode: 0 = Entire Comp, 1 = Work Area (falls back to Entire when unset)
     let range_mode =
         ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_range"), || 0u8));
-    let (frame_offset, total_frames) = if range_mode == 1
-        && (app.playback.work_area_in.is_some() || app.playback.work_area_out.is_some())
-    {
-        let s = app.playback.work_area_in.unwrap_or(0);
-        let e = app
-            .playback
-            .work_area_out
-            .unwrap_or(comp_total.saturating_sub(1));
-        (s, e.saturating_sub(s).max(1))
-    } else {
-        (0u32, comp_total)
-    };
+    let (frame_offset, total_frames) = export_frame_range(
+        comp_total,
+        range_mode,
+        app.playback.work_area_in,
+        app.playback.work_area_out,
+    );
 
     app.export.is_exporting = true;
     app.export.export_progress = 0.0;
@@ -343,15 +358,12 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
             let comp_total = comp.duration_frames;
             // Display range length when Work Area mode is active.
             let range_mode = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_range"), || 0u8));
-            let shown_total = if range_mode == 1
-                && (app.playback.work_area_in.is_some() || app.playback.work_area_out.is_some())
-            {
-                let s = app.playback.work_area_in.unwrap_or(0);
-                let e = app.playback.work_area_out.unwrap_or(comp_total.saturating_sub(1));
-                e.saturating_sub(s).max(1)
-            } else {
-                comp_total
-            };
+            let (_, shown_total) = export_frame_range(
+                comp_total,
+                range_mode,
+                app.playback.work_area_in,
+                app.playback.work_area_out,
+            );
 
             ui.label(format!("Composition: {} x {}", comp.width, comp.height));
             ui.label(format!("Total Duration: {} frames", shown_total));
@@ -674,6 +686,20 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
 mod tests {
     use super::*;
     use crate::app_state::QueueItemStatus;
+
+    #[test]
+    fn work_area_export_range_includes_both_endpoints() {
+        assert_eq!(export_frame_range(100, 1, Some(10), Some(20)), (10, 11));
+        assert_eq!(export_frame_range(100, 1, Some(10), None), (10, 90));
+        assert_eq!(export_frame_range(100, 1, None, Some(20)), (0, 21));
+    }
+
+    #[test]
+    fn export_range_clamps_invalid_work_area_without_underflow() {
+        assert_eq!(export_frame_range(10, 1, Some(50), Some(80)), (9, 1));
+        assert_eq!(export_frame_range(10, 1, Some(8), Some(3)), (8, 1));
+        assert_eq!(export_frame_range(0, 1, Some(0), Some(0)), (0, 0));
+    }
 
     fn drive_events(app: &mut crate::KagariApp) {
         let ctx = egui::Context::default();
