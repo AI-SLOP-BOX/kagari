@@ -379,7 +379,10 @@ pub fn draw_viewport_overlays(
             .iter()
             .filter(|l| l.is_active(current_frame))
             .filter(|l| {
-                l.style.drop_shadow.enabled || l.style.outer_glow.enabled || l.style.stroke.enabled
+                l.style.drop_shadow.enabled
+                    || l.style.outer_glow.enabled
+                    || l.style.inner_glow.enabled
+                    || l.style.satin.enabled
             })
             .count();
         if styled > 0 {

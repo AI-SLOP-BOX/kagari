@@ -92,6 +92,10 @@ fn software_preview_required(comp: &crate::core::timeline::Composition, frame: u
                         .as_ref()
                         .is_some_and(|stack| !stack.animators.is_empty())))
                 || (dof_enabled && layer.is_3d)
+                || layer.style.drop_shadow.enabled
+                || layer.style.outer_glow.enabled
+                || layer.style.inner_glow.enabled
+                || layer.style.satin.enabled
                 || (layer.effects_enabled && layer.effects.iter().any(|effect| {
                     effect.enabled
                         && !crate::core::effect_plugin::gpu_preview_effect_supported(
