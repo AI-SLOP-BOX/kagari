@@ -52,7 +52,10 @@ impl ParallelRenderQueue {
     }
 
     pub fn add_item(&mut self, item: RenderQueueItem) {
-        self.total_frames += item.end_frame.saturating_sub(item.start_frame) + 1;
+        if item.start_frame <= item.end_frame {
+            let frames = item.end_frame - item.start_frame + 1;
+            self.total_frames = self.total_frames.saturating_add(frames);
+        }
         self.items.push(item);
     }
 
@@ -70,18 +73,30 @@ impl ParallelRenderQueue {
     where
         F: Fn(&str, u32) -> Vec<u8> + Sync,
     {
-        let items_done = AtomicU32::new(0);
+        let external_cancel = AtomicBool::new(false);
+        self.render_all_with_external_cancel(&external_cancel, render_frame);
+    }
+
+    pub fn render_all_with_external_cancel<F>(&self, external_cancel: &AtomicBool, render_frame: F)
+    where
+        F: Fn(&str, u32) -> Vec<u8> + Sync,
+    {
 
         self.items
             .par_iter()
             .enumerate()
             .for_each(|(item_idx, item)| {
-                if self.is_cancelled() {
+                if self.is_cancelled() || external_cancel.load(Ordering::Relaxed) {
+                    self.cancel();
                     return;
                 }
 
+                if item.start_frame > item.end_frame {
+                    return;
+                }
                 for frame in item.start_frame..=item.end_frame {
-                    if self.is_cancelled() {
+                    if self.is_cancelled() || external_cancel.load(Ordering::Relaxed) {
+                        self.cancel();
                         return;
                     }
 
@@ -93,7 +108,6 @@ impl ParallelRenderQueue {
                         cb(item_idx, done, self.total_frames);
                     }
                 }
-                items_done.fetch_add(1, Ordering::Relaxed);
             });
     }
 

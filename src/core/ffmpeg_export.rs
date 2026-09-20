@@ -798,8 +798,9 @@ pub fn start_parallel_export(
 
     let total: u32 = items
         .iter()
-        .map(|i| i.end_frame.saturating_sub(i.start_frame) + 1)
-        .sum();
+        .filter(|i| i.start_frame <= i.end_frame)
+        .map(|i| i.end_frame - i.start_frame + 1)
+        .fold(0u32, u32::saturating_add);
     if total == 0 {
         let _ = tx.send(ExportEvent::Error("Total frames is zero".to_string()));
         return Err("Zero frames".to_string());
@@ -812,10 +813,6 @@ pub fn start_parallel_export(
             for item in items {
                 queue.add_item(item);
             }
-            queue
-                .cancelled
-                .store(cancel_flag.load(Ordering::SeqCst), Ordering::Relaxed);
-
             let tx_clone = tx.clone();
             let total_frames = total;
             queue.set_progress_callback(move |_item_idx, done, _total| {
@@ -826,13 +823,19 @@ pub fn start_parallel_export(
                 ));
             });
 
-            queue.render_all(|comp_name, frame| render_frame_fn(comp_name, frame));
+            queue.render_all_with_external_cancel(&cancel_flag, |comp_name, frame| {
+                render_frame_fn(comp_name, frame)
+            });
 
-            let _ = tx.send(ExportEvent::Finished(format!(
-                "Parallel export complete: {} items, {} frames",
-                queue.items.len(),
-                total_frames
-            )));
+            if cancel_flag.load(Ordering::SeqCst) || queue.is_cancelled() {
+                let _ = tx.send(ExportEvent::Error("Parallel export canceled".to_string()));
+            } else {
+                let _ = tx.send(ExportEvent::Finished(format!(
+                    "Parallel render complete: {} items, {} frames",
+                    queue.items.len(),
+                    total_frames
+                )));
+            }
         })
         .map_err(|e| format!("Failed to spawn parallel export thread: {}", e))?;
 
