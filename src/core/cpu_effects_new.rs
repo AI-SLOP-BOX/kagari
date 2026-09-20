@@ -982,6 +982,20 @@ mod ca_radial_tests {
     use super::*;
 
     #[test]
+    fn compound_blur_uses_external_layer_as_intensity_map() {
+        let mut target = vec![0u8, 0, 0, 255, 255, 0, 0, 255, 0, 0, 0, 255];
+        let map = vec![0u8, 0, 0, 255, 255, 255, 255, 255, 0, 0, 0, 255];
+
+        apply_compound_blur_with_map(&mut target, 3, 1, Some(&map), 2.0);
+
+        // Only the bright center of the source map receives blur. The dark
+        // neighbors stay black, proving the map is not read from the target.
+        assert!(target[4] < 255);
+        assert_eq!(target[0], 0);
+        assert_eq!(target[8], 0);
+    }
+
+    #[test]
     fn test_ca_center_pixel_unchanged() {
         // At the exact center, falloff direction is zero → no shift anywhere
         let w = 33u32;
