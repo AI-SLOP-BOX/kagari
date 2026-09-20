@@ -348,6 +348,24 @@ fn render_cancelled() -> bool {
     })
 }
 
+fn source_media_dimensions(layer: &Layer) -> Option<(f32, f32)> {
+    let path = match &layer.layer_type {
+        LayerType::Image { path } => path.clone(),
+        LayerType::Video { frames_dir, .. } => {
+            crate::core::video_import::frame_path_in_dir(frames_dir, 0)
+                .to_string_lossy()
+                .to_string()
+        }
+        _ => return None,
+    };
+
+    crate::core::image_cache::with_image_cache(|cache| {
+        cache
+            .load_image(&path)
+            .map(|image| (image.width as f32, image.height as f32))
+    })
+}
+
 pub fn render_frame_to_pixels(
     comp: &Composition,
     frame: u32,
@@ -936,9 +954,8 @@ pub fn render_frame_to_pixels(
                 // circles stay circular on non-square compositions.
                 (comp.width as f32, comp.width as f32)
             }
-            LayerType::Image { .. } | LayerType::Video { .. } => {
-                (comp.width as f32, comp.height as f32)
-            }
+            LayerType::Image { .. } | LayerType::Video { .. } => source_media_dimensions(layer)
+                .unwrap_or((comp.width as f32, comp.height as f32)),
             _ => continue, // Null or audio layers don't output visual pixels
         };
 
