@@ -93,8 +93,7 @@ pub fn draw_audio_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                             frequency: 4.0,
                             amplitude: 15.0,
                         });
-                    app.history.commit(temp_proj);
-                    crate::core::frame_cache::bump_version();
+                    app.commit_project(temp_proj);
                     app.toasts
                         .info(format!("Bound Audio Bass to {} Scale", layer_name));
                 }
@@ -122,8 +121,7 @@ pub fn draw_audio_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                             },
                             enabled: true,
                         });
-                    app.history.commit(temp_proj);
-                    crate::core::frame_cache::bump_version();
+                    app.commit_project(temp_proj);
                     app.toasts
                         .info(format!("Bound Audio to {} Glow Pulse", layer_name));
                 }
@@ -151,8 +149,7 @@ pub fn draw_audio_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                             },
                             enabled: true,
                         });
-                    app.history.commit(temp_proj);
-                    crate::core::frame_cache::bump_version();
+                    app.commit_project(temp_proj);
                     app.toasts
                         .info(format!("Added Audio Spectrum generator to {}", layer_name));
                 }
@@ -177,8 +174,7 @@ pub fn draw_audio_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                     dur,
                 );
                 comp_mut.add_layer(null_layer);
-                app.history.commit(temp_proj);
-                crate::core::frame_cache::bump_version();
+                app.commit_project(temp_proj);
                 app.toasts.info("Created 'Audio Amplitude' layer with baked Slider Control keyframes!");
             }
         });

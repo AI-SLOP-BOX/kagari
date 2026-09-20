@@ -559,14 +559,7 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
         }
 
         if changed {
-            let generation_before = app.history.generation();
-            app.history.commit(temp_project);
-            if app.history.generation() != generation_before {
-                crate::core::frame_cache::bump_version();
-                app.autosave.mark_dirty();
-                app.autosave_history_generation = app.history.generation();
-                app.frame_cache.collect_garbage();
-            }
+            app.commit_project(temp_project);
         }
     }
 }

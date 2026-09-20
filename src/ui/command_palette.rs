@@ -901,7 +901,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                         None,
                     ) {
                         Ok(name) => {
-                            app.history.commit(temp_proj);
+                            app.commit_project(temp_proj);
                             app.toasts
                                 .info(format!("Created '{}' with Master/Bass/Mid/Treble", name));
                         }

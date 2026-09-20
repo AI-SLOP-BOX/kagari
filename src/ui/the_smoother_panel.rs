@@ -104,7 +104,7 @@ pub fn draw_the_smoother_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
         }
 
         if reduced_count > 0 {
-            app.history.commit(temp_proj);
+            app.commit_project(temp_proj);
             app.toasts.info(format!(
                 "The Smoother: Removed {} redundant keyframes",
                 reduced_count

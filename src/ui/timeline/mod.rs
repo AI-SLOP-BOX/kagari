@@ -57,7 +57,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
                             if index != app.history.current().active_composition_idx {
                                 let mut project = app.history.current().clone();
                                 project.active_composition_idx = index;
-                                app.history.commit(project);
+                                app.commit_project(project);
                             }
                         }
                     }

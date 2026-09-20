@@ -52,7 +52,7 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                     Keyframe::new(in_frame, 0.0, InterpolationType::Linear),
                     Keyframe::new(out_frame, dur as f32, InterpolationType::Linear),
                 ]));
-                app.history.commit(temp_proj);
+                app.commit_project(temp_proj);
                 app.toasts
                     .info(format!("Enabled Time Remapping on {}", layer_name));
             }
@@ -69,7 +69,7 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                 if idx < comp_mut.layers.len() {
                     let cur_f = app.playback.current_frame.saturating_sub(in_frame) as f32;
                     comp_mut.layers[idx].time_remap = Some(Animatable::new_constant(cur_f));
-                    app.history.commit(temp_proj);
+                    app.commit_project(temp_proj);
                     app.toasts.info(format!(
                         "Froze {} at frame {}",
                         layer_name, app.playback.current_frame
@@ -89,7 +89,7 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                         Keyframe::new(in_frame, dur as f32, InterpolationType::Linear),
                         Keyframe::new(out_frame, 0.0, InterpolationType::Linear),
                     ]));
-                    app.history.commit(temp_proj);
+                    app.commit_project(temp_proj);
                     app.toasts
                         .info(format!("Reversed playback on {}", layer_name));
                 }
@@ -162,7 +162,7 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                             t += src_dur * if mode == 0 { 1.0 } else { 2.0 };
                         }
                         comp_mut.layers[idx].time_remap = Some(Animatable::Animated(kfs));
-                        app.history.commit(temp_proj);
+                        app.commit_project(temp_proj);
                         app.toasts.info(format!(
                             "Baked {} loop onto {}",
                             if mode == 0 { "cycle" } else { "pingpong" },
@@ -212,7 +212,7 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                     if let Some(remap) = layer.time_remap.as_mut() {
                         rescale_track(remap, in_f, factor);
                     }
-                    app.history.commit(temp_proj);
+                    app.commit_project(temp_proj);
                     app.toasts.info(format!(
                         "Stretched {} to {:.0}% ({} → {} frames)",
                         layer_name, stretch_factor, span, new_span

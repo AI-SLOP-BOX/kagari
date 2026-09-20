@@ -335,7 +335,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                             || used_names.contains(&a.name)
                     });
                     let rem = before.saturating_sub(temp_proj.assets.len());
-                    app.history.commit(temp_proj);
+                    app.commit_project(temp_proj);
                     app.toasts.info(format!("Removed {} unused footage items", rem));
                     ui.close_menu();
                 }
@@ -346,7 +346,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         let keep = temp_proj.compositions[act].clone();
                         temp_proj.compositions = vec![keep];
                         temp_proj.active_composition_idx = 0;
-                        app.history.commit(temp_proj);
+                        app.commit_project(temp_proj);
                         app.toasts.info("Project reduced to active composition");
                     }
                     ui.close_menu();
@@ -1206,7 +1206,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                     );
                                     shape_layer.transform = layer.transform.clone();
                                     comp.layers.insert(idx + 1, shape_layer);
-                                    app.history.commit(temp_proj);
+                                    app.commit_project(temp_proj);
                                     app.toasts.info("Converted Text to Vector Shape Layer");
                                 } else {
                                     app.toasts.error("Selected layer is not a Text layer");
@@ -1230,7 +1230,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                         pos[0] - w * 0.5, pos[1] - h * 0.5, w, h,
                                     );
                                     layer.masks.push(mask);
-                                    app.history.commit(temp_proj);
+                                    app.commit_project(temp_proj);
                                     app.toasts.info("Converted Text into Vector Mask");
                                 } else {
                                     app.toasts.error("Selected layer is not a Text layer");
@@ -1493,7 +1493,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                             let mut temp_proj = app.history.current().clone();
                             match crate::core::audio_to_keyframes::convert_audio_to_keyframes(temp_proj.active_composition_mut(), &src) {
                                 Ok(name) => {
-                                    app.history.commit(temp_proj);
+                                    app.commit_project(temp_proj);
                                     app.toasts.info(format!("Created '{}' with Left/Right/Both channels", name));
                                 }
                                 Err(e) => app.toasts.error(e),
@@ -1519,7 +1519,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                             let mut temp_proj = app.history.current().clone();
                             match crate::core::audio_to_keyframes::convert_multiband_audio_to_keyframes(temp_proj.active_composition_mut(), &src, None) {
                                 Ok(name) => {
-                                    app.history.commit(temp_proj);
+                                    app.commit_project(temp_proj);
                                     app.toasts.info(format!("Created '{}' with Master/Bass/Mid/Treble", name));
                                 }
                                 Err(e) => app.toasts.error(e),
@@ -1552,7 +1552,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                             exp_kfs.push(crate::core::keyframe::Keyframe::new(f, [log_val, log_val], crate::core::keyframe::InterpolationType::Linear));
                                         }
                                         *kfs = exp_kfs;
-                                        app.history.commit(temp_proj);
+                                        app.commit_project(temp_proj);
                                         app.toasts.info("Converted scale to Exponential Zoom curve");
                                     }
                                 }
@@ -1577,7 +1577,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                 let (inf, outf) = (layer.in_frame, layer.out_frame);
                                 rev_vec2(&mut layer.transform.position, inf, outf);
                                 rev_vec2(&mut layer.transform.scale, inf, outf);
-                                app.history.commit(temp_proj);
+                                app.commit_project(temp_proj);
                                 app.toasts.info("Keyframes time-reversed");
                             }
                         }

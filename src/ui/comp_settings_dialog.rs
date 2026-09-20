@@ -253,8 +253,7 @@ pub fn draw_comp_settings_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                     }
                 }
 
-                app.history.commit(temp_proj.clone());
-                crate::core::frame_cache::bump_version();
+                app.commit_project(temp_proj.clone());
                 committed = true;
             }
 

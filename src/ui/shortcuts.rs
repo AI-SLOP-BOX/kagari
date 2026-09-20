@@ -1033,7 +1033,7 @@ pub fn handle_global_shortcuts(
                 app.selection.selected_layers.clear();
                 app.selection.selected_layers.insert(insert_pos);
                 app.selection.selected_layer_idx = Some(insert_pos);
-                app.history.commit(temp_project);
+                app.commit_project(temp_project);
             }
         }
 
@@ -1059,7 +1059,7 @@ pub fn handle_global_shortcuts(
                         comp.layers.insert(idx + 1, split_b);
                         app.selection.selected_layer_idx = Some(idx + 1);
                     }
-                    app.history.commit(proj);
+                    app.commit_project(proj);
                 }
             }
         }
@@ -1078,7 +1078,7 @@ pub fn handle_global_shortcuts(
                     let mut proj = app.history.current().clone();
                     proj.active_composition_mut().layers.swap(idx, new_idx);
                     app.selection.selected_layer_idx = Some(new_idx);
-                    app.history.commit(proj);
+                    app.commit_project(proj);
                 }
             }
         }
@@ -1097,7 +1097,7 @@ pub fn handle_global_shortcuts(
                     let mut proj = app.history.current().clone();
                     proj.active_composition_mut().layers.swap(idx, new_idx);
                     app.selection.selected_layer_idx = Some(new_idx);
-                    app.history.commit(proj);
+                    app.commit_project(proj);
                 }
             }
         }

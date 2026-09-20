@@ -89,7 +89,7 @@ pub fn draw_precompose_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                             if open_new_tab {
                                 temp_proj.active_composition_idx = temp_proj.compositions.len() - 1;
                             }
-                            app.history.commit(temp_proj);
+                            app.commit_project(temp_proj);
                             app.toasts
                                 .info(format!("Pre-composed into '{}'", app.precompose_name));
                         }

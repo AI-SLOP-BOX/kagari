@@ -10,8 +10,6 @@ pub fn draw_alignment_hud(app: &mut KagariApp, ui: &mut egui::Ui) {
         let comp_w = comp.width as f32;
         let comp_h = comp.height as f32;
 
-        let mut project_changed = false;
-
         ui.small("Align: ");
 
         // 1. Align Left
@@ -26,8 +24,7 @@ pub fn draw_alignment_hud(app: &mut KagariApp, ui: &mut egui::Ui) {
                         .evaluate(app.playback.current_frame);
                     comp_mut.layers[idx].transform.position =
                         Animatable::new_constant([0.0, pos[1]]);
-                    project_changed = true;
-                    app.history.commit(temp_proj);
+                    app.commit_project(temp_proj);
                 }
             }
         }
@@ -48,8 +45,7 @@ pub fn draw_alignment_hud(app: &mut KagariApp, ui: &mut egui::Ui) {
                         .evaluate(app.playback.current_frame);
                     comp_mut.layers[idx].transform.position =
                         Animatable::new_constant([comp_w * 0.5, pos[1]]);
-                    project_changed = true;
-                    app.history.commit(temp_proj);
+                    app.commit_project(temp_proj);
                 }
             }
         }
@@ -66,8 +62,7 @@ pub fn draw_alignment_hud(app: &mut KagariApp, ui: &mut egui::Ui) {
                         .evaluate(app.playback.current_frame);
                     comp_mut.layers[idx].transform.position =
                         Animatable::new_constant([comp_w, pos[1]]);
-                    project_changed = true;
-                    app.history.commit(temp_proj);
+                    app.commit_project(temp_proj);
                 }
             }
         }
@@ -86,8 +81,7 @@ pub fn draw_alignment_hud(app: &mut KagariApp, ui: &mut egui::Ui) {
                         .evaluate(app.playback.current_frame);
                     comp_mut.layers[idx].transform.position =
                         Animatable::new_constant([pos[0], 0.0]);
-                    project_changed = true;
-                    app.history.commit(temp_proj);
+                    app.commit_project(temp_proj);
                 }
             }
         }
@@ -108,8 +102,7 @@ pub fn draw_alignment_hud(app: &mut KagariApp, ui: &mut egui::Ui) {
                         .evaluate(app.playback.current_frame);
                     comp_mut.layers[idx].transform.position =
                         Animatable::new_constant([pos[0], comp_h * 0.5]);
-                    project_changed = true;
-                    app.history.commit(temp_proj);
+                    app.commit_project(temp_proj);
                 }
             }
         }
@@ -126,8 +119,7 @@ pub fn draw_alignment_hud(app: &mut KagariApp, ui: &mut egui::Ui) {
                         .evaluate(app.playback.current_frame);
                     comp_mut.layers[idx].transform.position =
                         Animatable::new_constant([pos[0], comp_h]);
-                    project_changed = true;
-                    app.history.commit(temp_proj);
+                    app.commit_project(temp_proj);
                 }
             }
         }
@@ -154,8 +146,7 @@ pub fn draw_alignment_hud(app: &mut KagariApp, ui: &mut egui::Ui) {
                     layer.transform.position =
                         Animatable::new_constant([step * (i as f32 + 1.0), pos[1]]);
                 }
-                project_changed = true;
-                app.history.commit(temp_proj);
+                app.commit_project(temp_proj);
             }
         }
 
@@ -178,13 +169,9 @@ pub fn draw_alignment_hud(app: &mut KagariApp, ui: &mut egui::Ui) {
                     layer.transform.position =
                         Animatable::new_constant([pos[0], step * (i as f32 + 1.0)]);
                 }
-                project_changed = true;
-                app.history.commit(temp_proj);
+                app.commit_project(temp_proj);
             }
         }
 
-        if project_changed {
-            crate::core::frame_cache::bump_version();
-        }
     });
 }

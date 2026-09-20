@@ -194,8 +194,7 @@ pub fn draw_physics_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                 }
             }
 
-            app.history.commit(temp_proj);
-            crate::core::frame_cache::bump_version();
+            app.commit_project(temp_proj);
             app.toasts.info("Physics simulation baked to keyframes!");
         }
     }
@@ -227,8 +226,7 @@ pub fn draw_physics_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
             }
         }
 
-        app.history.commit(temp_proj);
-        crate::core::frame_cache::bump_version();
+        app.commit_project(temp_proj);
         app.toasts.info("Baked inertial bounce keyframes to Scale!");
     }
 }

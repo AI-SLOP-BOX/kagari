@@ -741,17 +741,25 @@ impl KagariApp {
         self.master_wet_dry = settings.wet_dry;
     }
 
-    pub fn modify_project(&mut self, f: impl FnOnce(&mut Project)) {
-        let mut next_project = self.history.current().clone();
-        f(&mut next_project);
+    /// Commit a project snapshot and keep history, render caches, and crash
+    /// recovery in sync. Returns whether the snapshot changed the project.
+    pub fn commit_project(&mut self, project: Project) -> bool {
         let generation_before = self.history.generation();
-        self.history.commit(next_project);
-        if self.history.generation() != generation_before {
+        self.history.commit(project);
+        let changed = self.history.generation() != generation_before;
+        if changed {
             crate::core::frame_cache::bump_version();
             self.autosave.mark_dirty();
             self.autosave_history_generation = self.history.generation();
             self.frame_cache.collect_garbage();
         }
+        changed
+    }
+
+    pub fn modify_project(&mut self, f: impl FnOnce(&mut Project)) {
+        let mut next_project = self.history.current().clone();
+        f(&mut next_project);
+        self.commit_project(next_project);
     }
 
     pub fn begin_drag(&mut self, label: &'static str) {

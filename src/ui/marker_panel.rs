@@ -22,7 +22,7 @@ pub fn draw_marker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame: 
                     label: format!("Cue {}", m_count),
                     color: [0.0, 0.8, 1.0],
                 });
-            app.history.commit(temp_proj);
+            app.commit_project(temp_proj);
             app.toasts
                 .info(format!("Added marker at frame {}", current_frame));
         }
@@ -84,7 +84,7 @@ pub fn draw_marker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame: 
                     let comp_mut = temp_proj.active_composition_mut();
                     if del_idx < comp_mut.markers.len() {
                         comp_mut.markers.remove(del_idx);
-                        app.history.commit(temp_proj);
+                        app.commit_project(temp_proj);
                     }
                 }
             }

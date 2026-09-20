@@ -461,7 +461,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                     if crate::ui::theme::draw_custom_tab(ui, is_active, &tab_text).clicked() {
                         let mut p = app.history.current().clone();
                         p.active_composition_idx = idx;
-                        app.history.commit(p);
+                        app.commit_project(p);
                     }
                 }
             });
@@ -1656,7 +1656,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                     {
                         layer.masks.retain(|mask| mask.name != "Roto Brush Matte");
                     }
-                    app.history.commit(cleared);
+                    app.commit_project(cleared);
                     app.toasts.info("Roto Brush matte cleared");
                 }
                 if propagate_roto {
@@ -1682,8 +1682,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                             Some(())
                         });
                     if result.is_some() {
-                        app.history.commit(propagated);
-                        crate::core::frame_cache::bump_version();
+                        app.commit_project(propagated);
                         app.toasts.info("Roto Brush matte propagated across the layer");
                     } else {
                         app.toasts.info("Add a tracker to this layer before propagation");
@@ -1778,7 +1777,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                                             mask.feather = crate::core::property::Animatable::new_constant(feather);
                                             layer.masks.push(mask);
                                         }
-                                        app.history.commit(temp_proj);
+                                        app.commit_project(temp_proj);
                                         app.toasts.info(if all_strokes.len() == 1 {
                                             if is_fg { "Roto Brush: Foreground matte created" } else { "Roto Brush: Background refinement added" }
                                         } else {
@@ -2711,8 +2710,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                                             if mi < layer.masks.len() {
                                                 let mask = &mut layer.masks[mi];
                                                 if let Some(new_idx) = mask.path.insert_vertex_at_frame(current_frame, best_seg, best_t) {
-                                                    app.history.commit(next_project);
-                                                    app.autosave.mark_dirty();
+                                                    app.commit_project(next_project);
                                                     app.mask_selected_vertices = Some((sel_li, mi, vec![new_idx].into_iter().collect()));
                                                     app.toasts.info(format!("Inserted vertex at index {}", new_idx));
                                                 }
@@ -3222,7 +3220,7 @@ fn draw_inline_text_editor(
                 *t = buf.clone();
             }
         }
-        app.history.commit(temp_proj);
+        app.commit_project(temp_proj);
         app.toasts.info("Source text updated");
     }
 

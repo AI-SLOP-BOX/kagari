@@ -130,7 +130,7 @@ pub fn draw_content_aware_fill(app: &mut KagariApp, ui: &mut egui::Ui) {
                     comp_mut.duration_frames,
                 );
                 comp_mut.layers.insert(layer_idx, new_layer);
-                app.history.commit(temp_proj);
+                app.commit_project(temp_proj);
                 app.toasts.info(format!(
                     "Synthesized & inserted Fill Layer for frame {}",
                     frame_idx

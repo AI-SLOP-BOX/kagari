@@ -301,7 +301,7 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                         );
                         cam_layer.is_3d = true;
                         comp_mut.add_layer(cam_layer);
-                        app.history.commit(temp_proj);
+                        app.commit_project(temp_proj);
                         app.toasts.info("3D Camera solved! Created '3D Tracked Camera 1' (Average Error: 0.42 px)");
                     }
                 });
@@ -850,7 +850,7 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                         };
 
                         comp_mut.layers[idx].masks.push(mask);
-                        app.history.commit(temp_proj);
+                        app.commit_project(temp_proj);
                         app.toasts
                             .info(format!("Auto-generated Bezier Mask on {}", layer_name));
                     }

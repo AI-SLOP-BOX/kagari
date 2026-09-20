@@ -182,6 +182,6 @@ pub fn draw_align_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     }
 
     if project_changed {
-        app.history.commit(temp_proj);
+        app.commit_project(temp_proj);
     }
 }
