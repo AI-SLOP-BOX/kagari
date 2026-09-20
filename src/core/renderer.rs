@@ -1071,6 +1071,8 @@ type VideoFrameCache = std::collections::HashMap<
     (
         std::sync::Arc<wgpu::Texture>,
         std::sync::Arc<wgpu::BindGroup>,
+        u32,
+        u32,
     ),
 >;
 
@@ -2069,6 +2071,19 @@ impl WgpuRenderer {
                 // but keep composition-sized geometry (unlike text, which fits the bitmap).
                 let mut is_video_frame = false;
                 let mut is_precomp_frame = false;
+                let mut is_image_frame = false;
+                if let LayerType::Image { path } = &layer.layer_type {
+                    if let Some((tw, th, bg)) = self.get_or_create_image_texture(
+                        &layer.id,
+                        path,
+                        crate::core::frame_cache::current_version(),
+                    ) {
+                        layer_w = tw as f32;
+                        layer_h = th as f32;
+                        text_bind_group = Some(bg);
+                        is_image_frame = true;
+                    }
+                }
                 if let LayerType::Video {
                     frames_dir,
                     frame_count,
@@ -2076,12 +2091,14 @@ impl WgpuRenderer {
                 } = &layer.layer_type
                 {
                     let seq_frame = frame.min(frame_count.saturating_sub(1));
-                    if let Some((_, _, bg)) = self.get_or_create_video_frame_texture(
+                    if let Some((tw, th, bg)) = self.get_or_create_video_frame_texture(
                         &layer.id,
                         frames_dir,
                         seq_frame,
                         crate::core::frame_cache::current_version(),
                     ) {
+                        layer_w = tw as f32;
+                        layer_h = th as f32;
                         text_bind_group = Some(bg);
                         is_video_frame = true;
                     }
@@ -2331,7 +2348,7 @@ impl WgpuRenderer {
                 };
 
                 // Textured text uses the image sampling path with unmodified texture colors
-                if is_textured_text || is_video_frame || is_precomp_frame {
+                if is_textured_text || is_video_frame || is_precomp_frame || is_image_frame {
                     layer_type = 1u32;
                     color = [1.0, 1.0, 1.0, 1.0];
                 }
@@ -3231,9 +3248,11 @@ impl WgpuRenderer {
             .video_frame_cache
             .borrow()
             .get(&key)
-            .map(|(_, bg)| bg.clone())
+            .map(|(_, bg, _, _)| bg.clone())
         {
-            return Some((1, 1, bg));
+            let cache = self.video_frame_cache.borrow();
+            let (_, _, tw, th) = cache.get(&key)?;
+            return Some((*tw, *th, bg));
         }
         let frame_path = crate::core::video_import::frame_path_in_dir(frames_dir, frame_idx)
             .to_string_lossy()
@@ -3295,7 +3314,10 @@ impl WgpuRenderer {
         let bind_group = std::sync::Arc::new(bind_group);
         {
             let mut cache = self.video_frame_cache.borrow_mut();
-            cache.insert(key, (std::sync::Arc::new(texture), bind_group.clone()));
+            cache.insert(
+                key,
+                (std::sync::Arc::new(texture), bind_group.clone(), tw, th),
+            );
             // Simple FIFO eviction: HashMap order is arbitrary but bounded memory
             // matters more than exact LRU here (frames re-upload cheaply).
             while cache.len() > MAX_VIDEO_FRAME_TEXTURES {
@@ -3304,6 +3326,93 @@ impl WgpuRenderer {
                 } else {
                     break;
                 }
+            }
+        }
+        Some((tw, th, bind_group))
+    }
+
+    /// Upload a still image through the same shared decode cache as video
+    /// frames. The returned dimensions keep the GPU quad in sync with the
+    /// source pixel aspect instead of rendering a 1×1 placeholder.
+    fn get_or_create_image_texture(
+        &self,
+        layer_id: &str,
+        path: &str,
+        version: u64,
+    ) -> Option<(u32, u32, std::sync::Arc<wgpu::BindGroup>)> {
+        let key: VideoFrameKey = (format!("image:{layer_id}"), path.to_string(), 0);
+        if self.video_cache_version.get() != version {
+            self.video_frame_cache.borrow_mut().clear();
+            self.video_cache_version.set(version);
+        }
+        if let Some((_, bg, tw, th)) = self.video_frame_cache.borrow().get(&key) {
+            return Some((*tw, *th, bg.clone()));
+        }
+
+        let (tw, th, pixels) = {
+            use crate::core::image_cache::with_image_cache;
+            with_image_cache(|cache| {
+                cache
+                    .load_image(path)
+                    .map(|img| (img.width, img.height, img.pixels.clone()))
+            })?
+        };
+        let size = wgpu::Extent3d {
+            width: tw,
+            height: th,
+            depth_or_array_layers: 1,
+        };
+        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Image Layer Texture"),
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba16Float,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        self.queue.write_texture(
+            wgpu::ImageCopyTexture {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &rgba8_to_rgba16f_bytes(&pixels),
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(tw * 8),
+                rows_per_image: Some(th),
+            },
+            size,
+        );
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &self.texture_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
+            ],
+            label: Some("image_layer_bind_group"),
+        });
+        let bind_group = std::sync::Arc::new(bind_group);
+        let mut cache = self.video_frame_cache.borrow_mut();
+        cache.insert(
+            key,
+            (std::sync::Arc::new(texture), bind_group.clone(), tw, th),
+        );
+        while cache.len() > MAX_VIDEO_FRAME_TEXTURES {
+            if let Some(oldest) = cache.keys().next().cloned() {
+                cache.remove(&oldest);
+            } else {
+                break;
             }
         }
         Some((tw, th, bind_group))
@@ -3339,7 +3448,7 @@ impl WgpuRenderer {
             .video_frame_cache
             .borrow()
             .get(&key)
-            .map(|(_, bg)| bg.clone())
+            .map(|(_, bg, _, _)| bg.clone())
         {
             return Some((width, height, bg));
         }
@@ -3401,7 +3510,10 @@ impl WgpuRenderer {
         let bind_group = std::sync::Arc::new(bind_group);
         {
             let mut cache = self.video_frame_cache.borrow_mut();
-            cache.insert(key, (std::sync::Arc::new(texture), bind_group.clone()));
+            cache.insert(
+                key,
+                (std::sync::Arc::new(texture), bind_group.clone(), width, height),
+            );
             while cache.len() > MAX_VIDEO_FRAME_TEXTURES {
                 if let Some(oldest) = cache.keys().next().cloned() {
                     cache.remove(&oldest);
