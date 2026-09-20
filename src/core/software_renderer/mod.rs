@@ -1738,6 +1738,53 @@ mod tests {
     }
 
     #[test]
+    fn test_precomp_video_uses_sequence_and_frame_blending() {
+        let dir = std::env::temp_dir().join(format!(
+            "kagari_precomp_video_test_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        write_gray_webp(&dir.join("frame_00000.webp"), 0);
+        write_gray_webp(&dir.join("frame_00001.webp"), 100);
+
+        let mut sub = Composition::new("sub_video".into(), "Sub Video".into(), 16, 16, 30, 30);
+        let mut video = Layer::new(
+            "video".into(),
+            "Video".into(),
+            LayerType::Video {
+                source: "test".into(),
+                frames_dir: dir.to_string_lossy().into_owned(),
+                frame_count: 2,
+                audio_wav: None,
+                speed: 0.5,
+            },
+            30,
+        );
+        video.frame_blending = true;
+        video.transform.position = Animatable::new_constant([8.0, 8.0]);
+        sub.layers.push(video);
+
+        let mut comp = Composition::new("main_video".into(), "Main".into(), 16, 16, 30, 30);
+        comp.sub_compositions.push(sub);
+        let mut precomp = Layer::new(
+            "pc".into(),
+            "Nested Video".into(),
+            LayerType::PreComp {
+                comp_id: "sub_video".into(),
+            },
+            30,
+        );
+        precomp.transform.position = Animatable::new_constant([8.0, 8.0]);
+        comp.layers.push(precomp);
+
+        let pixels = render_frame_to_pixels(&comp, 1, 16, 16, 0.0, 0);
+        assert_eq!(pixels[8 * 16 * 4 + 8 * 4], 50);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn test_precomp_self_reference_cycle_is_safe() {
         // A comp whose pre-comp layer references ITSELF must render empty
         // (cycle guard) instead of overflowing the stack.

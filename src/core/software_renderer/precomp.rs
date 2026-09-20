@@ -106,6 +106,85 @@ fn composition_content_revision(comp: &Composition) -> u64 {
     })
 }
 
+/// Rasterize an image sequence into a transformed layer buffer.
+///
+/// The main composition renderer and the nested pre-comp renderer must sample
+/// the same source pixels. Keeping the sequence sampling here also makes the
+/// WebP-first/PNG-fallback rule explicit for nested video layers.
+fn rasterize_texture_layer(
+    layer_buf: &mut [u8],
+    path: &str,
+    next_path: Option<&str>,
+    blend_t: f32,
+    min_x: u32,
+    min_y: u32,
+    max_x: u32,
+    max_y: u32,
+    bw: u32,
+    cx: f32,
+    cy: f32,
+    cos_r: f32,
+    sin_r: f32,
+    bounds_x: f32,
+    bounds_y: f32,
+) {
+    use crate::core::image_cache::with_image_cache;
+
+    with_image_cache(|cache| {
+        let Some(img) = cache.load_image(path).cloned() else {
+            return;
+        };
+        let next_img = next_path
+            .filter(|candidate| *candidate != path && blend_t > 0.0)
+            .and_then(|candidate| cache.load_image(candidate).cloned())
+            .filter(|next| next.width == img.width && next.height == img.height);
+        let img_w = img.width as f32;
+        let img_h = img.height as f32;
+
+        for py in min_y..max_y {
+            for px in min_x..max_x {
+                let dx = px as f32 - cx;
+                let dy = py as f32 - cy;
+                let lx = dx * cos_r + dy * sin_r;
+                let ly = -dx * sin_r + dy * cos_r;
+                let u = (lx / bounds_x + 1.0) * 0.5;
+                let v = (ly / bounds_y + 1.0) * 0.5;
+                if !(0.0..=1.0).contains(&u) || !(0.0..=1.0).contains(&v) {
+                    continue;
+                }
+
+                let tex_x = ((u * (img_w - 1.0)).round() as u32).min(img.width - 1);
+                let tex_y = ((v * (img_h - 1.0)).round() as u32).min(img.height - 1);
+                let tidx = ((tex_y * img.width + tex_x) * 4) as usize;
+                if tidx + 3 >= img.pixels.len() {
+                    continue;
+                }
+                let lidx = (((py - min_y) * bw + (px - min_x)) * 4) as usize;
+                if lidx + 3 >= layer_buf.len() {
+                    continue;
+                }
+
+                let sample = |channel: usize| -> u8 {
+                    let a = img.pixels[tidx + channel] as f32;
+                    let b = next_img
+                        .as_ref()
+                        .and_then(|next| {
+                            let next_idx = ((tex_y * next.width + tex_x) * 4) as usize;
+                            next.pixels.get(next_idx + channel).copied()
+                        })
+                        .map(f32::from)
+                        .unwrap_or(a);
+                    (a + (b - a) * blend_t).round().clamp(0.0, 255.0) as u8
+                };
+                layer_buf[lidx] = sample(0);
+                layer_buf[lidx + 1] = sample(1);
+                layer_buf[lidx + 2] = sample(2);
+                layer_buf[lidx + 3] = sample(3);
+            }
+        }
+    });
+}
+
 /// Render a single layer from `comp` at the given frame, returning an RGBA8 buffer
 /// of size `width * height * 4`. Used by effects like SetMatte that need another
 /// layer's pixel data.
@@ -226,6 +305,9 @@ fn render_precomp_layers_inner(
             LayerType::Solid { color } | LayerType::Text { color, .. } => *color,
             LayerType::Shape { color, .. } => *color,
             LayerType::Image { .. } => [0.2, 0.6, 0.9, 1.0],
+            // Video content is filled by the sequence rasterizer below; the
+            // fallback color only keeps this shared geometry setup alive.
+            LayerType::Video { .. } => [1.0, 1.0, 1.0, 1.0],
             LayerType::PreComp { .. } => [1.0, 1.0, 1.0, 1.0],
             _ => continue,
         };
@@ -285,44 +367,59 @@ fn render_precomp_layers_inner(
                 );
             }
             LayerType::Image { path } => {
-                // Texture sampling via image cache
-                use crate::core::image_cache::with_image_cache;
-                let img_path = path.clone();
-                with_image_cache(|cache| {
-                    if let Some(img) = cache.load_image(&img_path) {
-                        let img_w = img.width as f32;
-                        let img_h = img.height as f32;
-                        for py in min_y..max_y {
-                            for px in min_x..max_x {
-                                let dx = px as f32 - cx;
-                                let dy = py as f32 - cy;
-                                let lx = dx * cos_r + dy * sin_r;
-                                let ly = -dx * sin_r + dy * cos_r;
-                                let u = (lx / bounds_x + 1.0) * 0.5;
-                                let v = (ly / bounds_y + 1.0) * 0.5;
-                                #[allow(clippy::manual_range_contains)]
-                                if u < 0.0 || 1.0 < u || v < 0.0 || 1.0 < v {
-                                    continue;
-                                }
-                                let tex_x = ((u * (img_w - 1.0)).round() as u32).min(img.width - 1);
-                                let tex_y =
-                                    ((v * (img_h - 1.0)).round() as u32).min(img.height - 1);
-                                let tidx = ((tex_y * img.width + tex_x) * 4) as usize;
-                                if tidx + 3 >= img.pixels.len() {
-                                    continue;
-                                }
-                                let lidx = (((py - min_y) * bw + (px - min_x)) * 4) as usize;
-                                if lidx + 3 < layer_buf.len() {
-                                    let src_a = img.pixels[tidx + 3] as f32 / 255.0;
-                                    layer_buf[lidx] = img.pixels[tidx];
-                                    layer_buf[lidx + 1] = img.pixels[tidx + 1];
-                                    layer_buf[lidx + 2] = img.pixels[tidx + 2];
-                                    layer_buf[lidx + 3] = (src_a * 255.0) as u8;
-                                }
-                            }
-                        }
-                    }
-                });
+                rasterize_texture_layer(
+                    &mut layer_buf,
+                    path,
+                    None,
+                    0.0,
+                    min_x,
+                    min_y,
+                    max_x,
+                    max_y,
+                    bw,
+                    cx,
+                    cy,
+                    cos_r,
+                    sin_r,
+                    bounds_x,
+                    bounds_y,
+                );
+            }
+            LayerType::Video {
+                frames_dir,
+                frame_count,
+                speed,
+                ..
+            } => {
+                let source_position = (layer.remap_frame_f32(frame) * speed.max(0.0)).max(0.0);
+                let first = (source_position.floor() as u32).min(frame_count.saturating_sub(1));
+                let second = (first + 1).min(frame_count.saturating_sub(1));
+                let blend_t = if layer.frame_blending {
+                    (source_position - first as f32).clamp(0.0, 1.0)
+                } else {
+                    0.0
+                };
+                let first_path =
+                    crate::core::video_import::frame_path_in_dir(frames_dir, first);
+                let second_path =
+                    crate::core::video_import::frame_path_in_dir(frames_dir, second);
+                rasterize_texture_layer(
+                    &mut layer_buf,
+                    &first_path.to_string_lossy(),
+                    Some(&second_path.to_string_lossy()),
+                    blend_t,
+                    min_x,
+                    min_y,
+                    max_x,
+                    max_y,
+                    bw,
+                    cx,
+                    cy,
+                    cos_r,
+                    sin_r,
+                    bounds_x,
+                    bounds_y,
+                );
             }
             LayerType::Text {
                 text,
