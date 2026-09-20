@@ -3,8 +3,14 @@ use crate::KagariApp;
 use eframe::egui;
 
 pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
+    let pre_snapshot = if !app.drag_active() {
+        Some(app.history.current().clone())
+    } else {
+        None
+    };
     let comp = app.history.current_mut().active_composition_mut();
     let mut changed = false;
+    let mut project_changed = false;
 
     crate::ui::custom_widgets::ae_section_header(ui, "Working Space", "🎨");
 
@@ -74,6 +80,7 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
             {
                 comp.bit_depth = depth;
                 changed = true;
+                project_changed = true;
             }
         }
     });
@@ -150,6 +157,7 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
                 a as f32 / 255.0,
             ];
             changed = true;
+            project_changed = true;
         }
     });
 
@@ -172,6 +180,7 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
                 .changed()
             {
                 changed = true;
+                project_changed = true;
             }
         });
     });
@@ -474,7 +483,21 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
         });
     });
 
-    if changed {
+    if project_changed {
+        let pointer_down = ui.input(|input| input.pointer.any_down());
+        if pointer_down {
+            if !app.drag_active() {
+                if let Some(snapshot) = pre_snapshot {
+                    app.begin_drag_with_snapshot(snapshot, "Color Management Edit");
+                }
+            }
+        } else if app.drag_active() {
+            app.commit_drag();
+        } else if let Some(snapshot) = pre_snapshot {
+            app.begin_drag_with_snapshot(snapshot, "Color Management Edit");
+            app.commit_drag();
+        }
+    } else if changed {
         crate::core::frame_cache::bump_version();
     }
 }
