@@ -472,10 +472,10 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                     .min(1.0)
                                     * 100.0;
                                 app.modify_project(|p| {
-                                    let layer_count = p.compositions.len();
                                     let comp = p.active_composition_mut();
+                                    let layer_id = comp.next_layer_id("video");
                                     let mut layer = crate::core::timeline::Layer::new(
-                                        format!("video_{}", layer_count),
+                                        layer_id,
                                         name.clone(),
                                         crate::core::timeline::LayerType::Video {
                                             source: src.clone(),
@@ -529,10 +529,10 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                             })
                             .unwrap_or(100.0);
                         app.modify_project(|p| {
-                            let layer_count = p.compositions.len();
                             let comp = p.active_composition_mut();
+                            let layer_id = comp.next_layer_id("image");
                             let mut layer = crate::core::timeline::Layer::new(
-                                format!("img_{}", layer_count),
+                                layer_id,
                                 name.clone(),
                                 crate::core::timeline::LayerType::Image { path: src.clone() },
                                 comp_duration,

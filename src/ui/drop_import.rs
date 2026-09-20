@@ -41,7 +41,10 @@ pub fn handle_dropped_files(app: &mut KagariApp, ctx: &egui::Context) {
                         .min(1.0)
                         * 100.0;
                     let mut layer = crate::core::timeline::Layer::new(
-                        format!("vid_{}", asset.frames_dir.replace('/', "_")),
+                        app.history
+                            .current()
+                            .active_composition()
+                            .next_layer_id("video"),
                         name.clone(),
                         crate::core::timeline::LayerType::Video {
                             source: asset.source_path.clone(),
@@ -97,7 +100,10 @@ pub fn handle_dropped_files(app: &mut KagariApp, ctx: &egui::Context) {
                         };
                         let fit = ((cw / iw as f32).min(ch / ih as f32)).min(1.0) * 100.0;
                         let mut layer = crate::core::timeline::Layer::new(
-                            format!("img_{}", name),
+                            app.history
+                                .current()
+                                .active_composition()
+                                .next_layer_id("image"),
                             name.clone(),
                             crate::core::timeline::LayerType::Image {
                                 path: path_str.clone(),

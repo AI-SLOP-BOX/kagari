@@ -2364,6 +2364,17 @@ impl Composition {
         }
     }
 
+    pub fn next_layer_id(&self, prefix: &str) -> String {
+        let mut index = self.layers.len();
+        loop {
+            let candidate = format!("{prefix}_{index}");
+            if !self.layers.iter().any(|layer| layer.id == candidate) {
+                return candidate;
+            }
+            index = index.saturating_add(1);
+        }
+    }
+
     /// Look up a sub-composition by id (recursive search).
     /// The camera currently driving the render: first entry of `cameras`
     /// with `active == true`, else the legacy `active_camera` field.
@@ -3383,6 +3394,31 @@ pub fn export_youtube_chapters(markers: &[TimelineMarker], fps: u32) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn next_layer_id_skips_existing_ids() {
+        let mut comp = Composition::new("c".into(), "C".into(), 16, 16, 30, 30);
+        comp.layers.push(Layer::new(
+            "image_0".into(),
+            "First".into(),
+            LayerType::Null,
+            30,
+        ));
+        comp.layers.push(Layer::new(
+            "image_2".into(),
+            "Second".into(),
+            LayerType::Null,
+            30,
+        ));
+        assert_eq!(comp.next_layer_id("image"), "image_3");
+        comp.layers.push(Layer::new(
+            "image_3".into(),
+            "Third".into(),
+            LayerType::Null,
+            30,
+        ));
+        assert_eq!(comp.next_layer_id("image"), "image_4");
+    }
 
     #[test]
     fn project_item_missing_media_detection() {
