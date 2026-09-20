@@ -438,6 +438,8 @@ pub struct KagariApp {
     pub camera_view_angle: usize,
     pub font_family_idx: usize,
     pub faux_font_switches: (bool, bool, bool, bool),
+    /// Essential Graphics properties currently exposed for the MOGRT editor.
+    pub mogrt_properties: Vec<crate::core::mogrt_engine::EssentialProperty>,
     pub toasts: crate::ui::notification::ToastManager,
     pub frame_cache: crate::core::frame_cache::FrameCache,
     pub lazy_evaluator: crate::core::render_pipeline::LazyFrameEvaluator,
@@ -636,6 +638,7 @@ impl Default for KagariApp {
             camera_view_angle: 0,
             font_family_idx: 0,
             faux_font_switches: (false, false, false, false),
+            mogrt_properties: Vec::new(),
             show_command_palette: false,
             show_vectorscope: false,
             show_history_panel: false,
