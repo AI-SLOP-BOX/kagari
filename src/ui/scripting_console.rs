@@ -118,9 +118,6 @@ pub fn draw_scripting_console(app: &mut KagariApp, ui: &mut egui::Ui) {
             Ok(val) => output.push(format!("[OK] {} → {} ({:.4}s)", cmd, val, elapsed)),
             Err(e) => output.push(format!("[ERR] {} → {} ({:.4}s)", cmd, e, elapsed)),
         }
-        if automation_mode {
-            crate::core::frame_cache::bump_version();
-        }
         if output.len() > 200 {
             output.drain(0..50);
         }
@@ -214,9 +211,6 @@ pub fn draw_scripting_console(app: &mut KagariApp, ui: &mut egui::Ui) {
             Ok(val) => output.push(format!("[OK] {} → {} ({:.4}s)", cmd, val, elapsed)),
             Err(e) => output.push(format!("[ERR] {} → {} ({:.4}s)", cmd, e, elapsed)),
         }
-        if automation_mode {
-            crate::core::frame_cache::bump_version();
-        }
         if output.len() > 200 {
             output.drain(0..50);
         }
@@ -278,6 +272,14 @@ fn evaluate_script(script: &str, c: &ConsoleCtx) -> Result<String, String> {
 
 /// Execute an automation snippet against the live project.
 fn run_automation(app: &mut KagariApp, source: &str) -> Result<Vec<String>, String> {
-    let project = app.history.current_mut();
-    crate::core::automation::run_script(project, source)
+    // Keep the whole script as one history transaction.  The automation core
+    // already rolls its working copy back when evaluation fails; keeping the
+    // copy here also prevents a successful script from bypassing undo/redo.
+    let mut next_project = app.history.current().clone();
+    let logs = crate::core::automation::run_script(&mut next_project, source)?;
+    app.history
+        .commit_action(next_project, "Run automation script");
+    app.autosave.mark_dirty();
+    app.frame_cache.collect_garbage();
+    Ok(logs)
 }
