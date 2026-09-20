@@ -205,7 +205,10 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
 
             ui.horizontal(|ui| {
                 if ui.button("Import OTIO").clicked() {
-                    if let Ok(json_str) = std::fs::read_to_string(&app.otio_path) {
+                    if let Ok(json_str) = crate::core::project_migration::read_bounded_text_file(
+                        std::path::Path::new(&app.otio_path),
+                        crate::core::project_migration::MAX_PROJECT_JSON_BYTES,
+                    ) {
                         if let Ok(otio_timeline) =
                             crate::core::integration::OtioTimeline::from_json(&json_str)
                         {

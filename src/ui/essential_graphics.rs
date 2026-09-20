@@ -87,7 +87,10 @@ pub fn draw_essential_graphics(app: &mut KagariApp, ui: &mut egui::Ui) {
                 .add_filter("MOGRT Template", &["mogrt", "json"])
                 .pick_file()
             {
-                if let Ok(content) = std::fs::read_to_string(&path) {
+                if let Ok(content) = crate::core::project_migration::read_bounded_text_file(
+                    &path,
+                    32 * 1024 * 1024,
+                ) {
                     if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
                         let title = val
                             .get("title")

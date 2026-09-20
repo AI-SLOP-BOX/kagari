@@ -132,7 +132,10 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
                         .add_filter("WGSL Shader", &["wgsl", "frag"])
                         .pick_file()
                     {
-                        if let Ok(content) = std::fs::read_to_string(&path) {
+                        if let Ok(content) = crate::core::project_migration::read_bounded_text_file(
+                            &path,
+                            4 * 1024 * 1024,
+                        ) {
                             *wgsl_source = content;
                             *project_changed = true;
                         }

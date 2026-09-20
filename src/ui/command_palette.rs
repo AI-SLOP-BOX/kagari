@@ -433,8 +433,10 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                     .add_filter("Camera Track JSON", &["json"])
                     .pick_file()
                 {
-                    match std::fs::read_to_string(&path)
-                        .map_err(|e| e.to_string())
+                    match crate::core::project_migration::read_bounded_text_file(
+                        &path,
+                        32 * 1024 * 1024,
+                    )
                         .and_then(|s| crate::core::camera_track::BlenderCamTrack::parse(&s))
                     {
                         Ok(track) => {
@@ -459,8 +461,10 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                     .add_filter("Subtitles", &["srt", "vtt"])
                     .pick_file()
                 {
-                    match std::fs::read_to_string(&path)
-                        .map_err(|e| e.to_string())
+                    match crate::core::project_migration::read_bounded_text_file(
+                        &path,
+                        8 * 1024 * 1024,
+                    )
                         .map(|s| {
                             crate::core::subtitles::parse_srt(
                                 &s,
