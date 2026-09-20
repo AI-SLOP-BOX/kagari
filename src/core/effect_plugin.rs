@@ -776,6 +776,40 @@ pub fn evaluate_effects(effects: &[crate::core::timeline::Effect], frame: u32) -
     params
 }
 
+/// Returns whether the realtime GPU preview can represent this effect without
+/// silently dropping parameters. Effects outside this list are still valid in
+/// the software/export renderer, but the viewport must use that path so the
+/// preview never disagrees with the rendered result.
+pub fn gpu_preview_effect_supported(effect: &EffectType) -> bool {
+    matches!(
+        effect,
+        EffectType::GaussianBlur { .. }
+            | EffectType::ColorTint { .. }
+            | EffectType::DropShadow { .. }
+            | EffectType::ChromaticAberration { .. }
+            | EffectType::Vignette { .. }
+            | EffectType::Levels { .. }
+            | EffectType::HueSaturation { .. }
+            | EffectType::Glow { .. }
+            | EffectType::GlowPro { .. }
+            | EffectType::FilmGrain { .. }
+            | EffectType::MeshWarp { .. }
+            | EffectType::MotionBlur { .. }
+            | EffectType::LensFlare { .. }
+            | EffectType::Invert { .. }
+            | EffectType::Posterize { .. }
+            | EffectType::Tritone { .. }
+            | EffectType::CrtScanlines { .. }
+            | EffectType::FractalNoise { .. }
+            | EffectType::TurbulentDisplace { .. }
+            | EffectType::WaveWarp { .. }
+            | EffectType::Twirl { .. }
+            | EffectType::Bulge { .. }
+            | EffectType::Spherize { .. }
+            | EffectType::HeatDistortion { .. }
+    )
+}
+
 /// Thread-safe central registry for dynamic effect plugins.
 pub struct EffectPluginRegistry {
     plugins: std::sync::RwLock<std::collections::HashMap<String, Box<dyn RenderEffectPlugin>>>,
@@ -939,5 +973,19 @@ mod tests {
         let mut pixels = vec![100, 150, 200, 255];
         assert!(registry.process_layer("vendor.invert", &mut pixels, 1, 1, 0, 0.0));
         assert_eq!(pixels, vec![155, 105, 55, 255]);
+    }
+
+    #[test]
+    fn gpu_preview_support_rejects_effects_without_shader_mapping() {
+        let invert = EffectType::Invert {
+            invert_alpha: false,
+        };
+        let lut = EffectType::ColorGradeLUT {
+            lut_path: "missing.cube".to_string(),
+            intensity: crate::core::property::Animatable::new_constant(100.0),
+        };
+
+        assert!(gpu_preview_effect_supported(&invert));
+        assert!(!gpu_preview_effect_supported(&lut));
     }
 }

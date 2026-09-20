@@ -71,6 +71,36 @@ fn demo_reference_texture(ctx: &egui::Context) -> Option<egui::TextureHandle> {
     Some(texture)
 }
 
+fn software_preview_required(comp: &crate::core::timeline::Composition, frame: u32) -> bool {
+    let dof_enabled = comp.resolve_camera().dof_enabled_at(frame);
+
+    comp.layers
+        .iter()
+        .filter(|layer| layer.is_active(frame))
+        .any(|layer| {
+            matches!(
+                layer.layer_type,
+                crate::core::timeline::LayerType::AdjustmentLayer
+                    | crate::core::timeline::LayerType::Particle { .. }
+            ) || (matches!(layer.layer_type, crate::core::timeline::LayerType::Text { .. })
+                && (layer
+                    .text_animator
+                    .as_ref()
+                    .is_some_and(|animator| animator.enabled)
+                    || layer
+                        .text_animator_stack
+                        .as_ref()
+                        .is_some_and(|stack| !stack.animators.is_empty())))
+                || (dof_enabled && layer.is_3d)
+                || layer.effects.iter().any(|effect| {
+                    effect.enabled
+                        && !crate::core::effect_plugin::gpu_preview_effect_supported(
+                            &effect.effect_type,
+                        )
+                })
+        })
+}
+
 fn draw_view_menu_contents(ui: &mut egui::Ui, app: &mut KagariApp) {
     ui.checkbox(&mut app.show_handles, "Layer handles");
     ui.checkbox(&mut app.show_guides, "Safe-area guides");
@@ -553,6 +583,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             }?;
             if std::path::Path::new(path).is_file() { None } else { Some(layer.name.clone()) }
         });
+        let software_preview_required = software_preview_required(comp, current_frame);
         let aspect = comp.width as f32 / comp.height as f32;
 
         // ── One-shot bbox focus request (Shift+Z with selection) ──
@@ -632,6 +663,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             && !paint_preview_required
             && !source_map_effect_preview_required
             && !frame_blending_required
+            && !software_preview_required
         {
             if let Some(renderer) = &mut app.renderer {
             if let Some(wgpu_state) = &app.wgpu_state {
