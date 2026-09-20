@@ -632,7 +632,7 @@ pub fn render_frame_to_pixels(
         // Adjustment Layer: apply effects to the composite below, blended by
         // this layer's opacity and clipped to its mask region when present.
         if matches!(layer.layer_type, LayerType::AdjustmentLayer) {
-            if !layer.effects.is_empty() && l_opacity > 0.003 {
+            if layer.effects_enabled && !layer.effects.is_empty() && l_opacity > 0.003 {
                 let mut adjusted = buffer.clone();
                 crate::core::cpu_effects::apply_layer_effects(
                     Some(comp),
@@ -941,16 +941,18 @@ pub fn render_frame_to_pixels(
             }
 
             // Apply the layer's CPU effect stack to the full frame
-            crate::core::cpu_effects::apply_layer_effects(
-                Some(comp),
-                Some(sorted_idx),
-                &mut buffer,
-                width,
-                height,
-                &layer.effects,
-                effective_frame,
-                comp.fps,
-            );
+            if layer.effects_enabled {
+                crate::core::cpu_effects::apply_layer_effects(
+                    Some(comp),
+                    Some(sorted_idx),
+                    &mut buffer,
+                    width,
+                    height,
+                    &layer.effects,
+                    effective_frame,
+                    comp.fps,
+                );
+            }
             continue;
         }
 
@@ -2859,6 +2861,15 @@ mod shadow_tests {
         let px = render_frame_to_pixels(&comp, 0, 32, 32, 0.0, 0);
         let i = ((8 * 32 + 8) * 4) as usize;
         assert!(px[i] < 20, "white inverted to near-black, R={}", px[i]);
+    }
+
+    #[test]
+    fn test_layer_effects_toggle_bypasses_adjustment_stack() {
+        let mut comp = adjustment_test_comp(100.0);
+        comp.layers[1].effects_enabled = false;
+        let px = render_frame_to_pixels(&comp, 0, 32, 32, 0.0, 0);
+        let i = ((8 * 32 + 8) * 4) as usize;
+        assert!(px[i] > 235, "disabled adjustment effects must preserve white, R={}", px[i]);
     }
 
     #[test]

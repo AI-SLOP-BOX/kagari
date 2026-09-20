@@ -92,12 +92,12 @@ fn software_preview_required(comp: &crate::core::timeline::Composition, frame: u
                         .as_ref()
                         .is_some_and(|stack| !stack.animators.is_empty())))
                 || (dof_enabled && layer.is_3d)
-                || layer.effects.iter().any(|effect| {
+                || (layer.effects_enabled && layer.effects.iter().any(|effect| {
                     effect.enabled
                         && !crate::core::effect_plugin::gpu_preview_effect_supported(
                             &effect.effect_type,
                         )
-                })
+                }))
         })
 }
 
