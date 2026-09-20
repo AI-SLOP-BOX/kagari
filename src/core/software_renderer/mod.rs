@@ -1055,7 +1055,10 @@ pub fn render_frame_to_pixels(
             layer,
             frame,
             effective_frame,
-            source_frame: layer.remap_frame_f32(frame),
+            source_frame: match &layer.posterize_time {
+                Some(pt) if pt.enabled => effective_frame as f32,
+                _ => layer.remap_frame_f32(frame),
+            },
             masks,
             min_x,
             min_y,

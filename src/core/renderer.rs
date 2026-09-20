@@ -2087,10 +2087,14 @@ impl WgpuRenderer {
                 if let LayerType::Video {
                     frames_dir,
                     frame_count,
+                    speed,
                     ..
                 } = &layer.layer_type
                 {
-                    let seq_frame = frame.min(frame_count.saturating_sub(1));
+                    let seq_frame = ((effective_frame as f32) * speed.max(0.0))
+                        .floor()
+                        .max(0.0) as u32;
+                    let seq_frame = seq_frame.min(frame_count.saturating_sub(1));
                     if let Some((tw, th, bg)) = self.get_or_create_video_frame_texture(
                         &layer.id,
                         frames_dir,
