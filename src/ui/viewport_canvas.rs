@@ -34,7 +34,16 @@ pub fn draw_software_canvas(
         .layers
         .iter()
         .any(|layer| !layer.paint_strokes.is_empty());
-    if custom_lut_active || paint_preview_required {
+    let source_map_effect_preview_required = comp.layers.iter().any(|layer| {
+        layer.effects.iter().any(|effect| {
+            matches!(
+                &effect.effect_type,
+                crate::core::timeline::EffectType::DisplacementMap { .. }
+                    | crate::core::timeline::EffectType::CompoundBlur { .. }
+            )
+        })
+    });
+    if custom_lut_active || paint_preview_required || source_map_effect_preview_required {
         let max_preview_dim = 2048u32;
         let scale = (max_preview_dim as f32 / comp.width.max(comp.height) as f32).min(1.0);
         let render_width = ((comp.width as f32 * scale).round() as u32).max(1);
@@ -52,7 +61,7 @@ pub fn draw_software_canvas(
             &pixels,
         );
         let texture = ui.ctx().load_texture(
-            "custom-lut-software-preview",
+            "software-effect-preview",
             image,
             egui::TextureOptions::LINEAR,
         );

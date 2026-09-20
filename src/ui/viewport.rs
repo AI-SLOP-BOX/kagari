@@ -221,6 +221,21 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             .layers
             .iter()
             .any(|layer| !layer.paint_strokes.is_empty());
+        let source_map_effect_preview_required = app
+            .history
+            .current()
+            .active_composition()
+            .layers
+            .iter()
+            .any(|layer| {
+                layer.effects.iter().any(|effect| {
+                    matches!(
+                        &effect.effect_type,
+                        crate::core::timeline::EffectType::DisplacementMap { .. }
+                            | crate::core::timeline::EffectType::CompoundBlur { .. }
+                    )
+                })
+            });
         ui.horizontal(|ui| {
             let tab_frame = egui::Frame::none()
                 .fill(egui::Color32::TRANSPARENT)
@@ -605,6 +620,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             .unwrap_or(0)
             != 3
             && !paint_preview_required
+            && !source_map_effect_preview_required
         {
             if let Some(renderer) = &mut app.renderer {
             if let Some(wgpu_state) = &app.wgpu_state {
