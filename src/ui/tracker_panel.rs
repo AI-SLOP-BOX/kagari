@@ -291,18 +291,76 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                     if custom_widgets::ae_button_accent(ui, "🎯 Track & Solve 3D Camera").on_hover_text("Analyze 3D optical flow and solve virtual 3D camera trajectory").clicked() {
                         let mut temp_proj = app.history.current().clone();
                         let comp_mut = temp_proj.active_composition_mut();
-                        // Add virtual 3D camera layer
-                        let next_num = comp_mut.layers.len() + 1;
-                        let mut cam_layer = crate::core::timeline::Layer::new(
-                            format!("cam_layer_{}", next_num),
-                            "3D Tracked Camera 1".to_string(),
-                            crate::core::timeline::LayerType::Null,
-                            comp_mut.duration_frames,
-                        );
-                        cam_layer.is_3d = true;
-                        comp_mut.add_layer(cam_layer);
-                        app.commit_project(temp_proj);
-                        app.toasts.info("3D Camera solved! Created '3D Tracked Camera 1' (Average Error: 0.42 px)");
+                        let features: Vec<crate::core::camera_track::CameraTrackFeaturePoint> =
+                            comp_mut
+                                .layers
+                                .get(idx)
+                                .into_iter()
+                                .flat_map(|layer| layer.trackers.iter().take(track_pts as usize))
+                                .enumerate()
+                                .filter_map(|(feature_id, tracker)| {
+                                    let keyframes = tracker.position.keyframes()?;
+                                    if keyframes.len() < 2 {
+                                        return None;
+                                    }
+                                    Some(crate::core::camera_track::CameraTrackFeaturePoint {
+                                        id: format!("tracker_{feature_id}"),
+                                        frames: keyframes.iter().map(|keyframe| keyframe.frame).collect(),
+                                        coords_2d: keyframes.iter().map(|keyframe| keyframe.value).collect(),
+                                        world_3d: [0.0; 3],
+                                        confidence: 1.0,
+                                    })
+                                })
+                                .collect();
+                        let fov = comp_mut.resolve_camera().fov_degrees;
+                        match crate::core::camera_track::solve_3d_camera_from_tracks(
+                            &features,
+                            comp_mut.width,
+                            comp_mut.height,
+                            fov,
+                        ) {
+                            Ok(solution) => {
+                                let mut camera = crate::core::timeline::Camera3D::default();
+                                camera.name = "3D Tracked Camera 1".to_string();
+                                camera.active = true;
+                                camera.fov_degrees = fov;
+                                camera.transform.position = crate::core::property::Animatable::new_animated(
+                                    solution
+                                        .camera_frames
+                                        .iter()
+                                        .map(|frame| crate::core::keyframe::Keyframe::new(
+                                            frame.frame,
+                                            frame.pos.map(|value| value as f32),
+                                            crate::core::keyframe::InterpolationType::Linear,
+                                        ))
+                                        .collect(),
+                                );
+                                camera.transform.rotation = crate::core::property::Animatable::new_animated(
+                                    solution
+                                        .camera_frames
+                                        .iter()
+                                        .map(|frame| crate::core::keyframe::Keyframe::new(
+                                            frame.frame,
+                                            frame.rot_deg.map(|value| value as f32),
+                                            crate::core::keyframe::InterpolationType::Linear,
+                                        ))
+                                        .collect(),
+                                );
+                                for existing in &mut comp_mut.cameras {
+                                    existing.active = false;
+                                }
+                                comp_mut.cameras.push(camera);
+                                let camera_idx = comp_mut.cameras.len() - 1;
+                                comp_mut.set_active_camera(Some(camera_idx));
+                                app.commit_project(temp_proj);
+                                app.toasts.info(format!(
+                                    "3D Camera solved from {} tracks (average error: {:.2} px)",
+                                    features.len(),
+                                    solution.average_reprojection_error
+                                ));
+                            }
+                            Err(error) => app.toasts.error(format!("3D camera solve failed: {error}")),
+                        }
                     }
                 });
             });
