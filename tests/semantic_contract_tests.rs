@@ -8,6 +8,7 @@ use kagari_vfx::core::software_renderer::render_frame_to_pixels;
 use kagari_vfx::core::timeline::{Composition, Effect, EffectType, Layer, LayerType, Project};
 use serde_json::Value;
 use std::collections::HashSet;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::{Arc, Mutex};
 
 fn constant<T: Clone>(value: T) -> Animatable<T> {
@@ -61,6 +62,22 @@ fn patterned_pixels(width: u32, height: u32) -> Vec<u8> {
     pixels
 }
 
+struct MutationRng(u64);
+
+impl MutationRng {
+    fn next(&mut self) -> u64 {
+        self.0 = self
+            .0
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        self.0
+    }
+
+    fn choose<T: Copy>(&mut self, values: &[T]) -> T {
+        values[(self.next() as usize) % values.len()]
+    }
+}
+
 #[test]
 fn accepted_project_round_trip_preserves_render_semantics() {
     let project = semantic_project();
@@ -106,6 +123,105 @@ fn accepted_project_round_trip_preserves_render_semantics() {
                 first, after_round_trip,
                 "{name} changed render semantics after serialization at frame {frame}"
             );
+        }
+    }
+}
+
+#[test]
+fn structured_ast_mutations_validate_and_render_deterministically() {
+    let seed: Value = serde_json::to_value(semantic_project()).unwrap();
+    let mut rng = MutationRng(0xA57_5EED);
+
+    for case in 0..256 {
+        let mut mutated = seed.clone();
+        match case % 8 {
+            0 => {
+                mutated["compositions"][0]["width"] =
+                    serde_json::json!(rng.choose(&[0u32, 1, 2, 16, 32, 16_384, 16_385, u32::MAX,]))
+            }
+            1 => {
+                mutated["compositions"][0]["height"] =
+                    serde_json::json!(rng.choose(&[0u32, 1, 2, 16, 32, 16_384, 16_385, u32::MAX,]))
+            }
+            2 => {
+                mutated["compositions"][0]["fps"] =
+                    serde_json::json!(rng.choose(&[0u32, 1, 12, 24, 120, u32::MAX,]))
+            }
+            3 => {
+                mutated["compositions"][0]["duration_frames"] =
+                    serde_json::json!(rng.choose(&[0u32, 1, 2, 24, 10_000_001, u32::MAX,]))
+            }
+            4 => {
+                mutated["active_composition_idx"] =
+                    serde_json::json!(rng.choose(&[0usize, 1, usize::MAX,]))
+            }
+            5 => {
+                mutated["compositions"][0]["layers"][0]["transform"]["position"]["value"][1]
+                    ["frame"] = serde_json::json!(rng.choose(&[0u32, 1, 7, 23, 24, u32::MAX]))
+            }
+            6 => {
+                mutated["compositions"][0]["layers"][0]["effects"][0]["effect_type"]["ColorTint"]
+                    ["intensity"]["value"] =
+                    serde_json::json!(rng.choose(&[-100.0_f32, 0.0, 35.0, 100.0, 10_000.0]))
+            }
+            _ => {
+                mutated["future"][format!("field_{case}")] = serde_json::json!({
+                    "nested": [null, true, {"number": case}]
+                })
+            }
+        }
+
+        let json = serde_json::to_string(&mutated).unwrap();
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            kagari_vfx::core::project_migration::load_project_migrated(&json)
+        }));
+        let result = result.unwrap_or_else(|_| panic!("AST mutation {case} must not panic"));
+
+        match result {
+            Err(error) => assert!(
+                !error.trim().is_empty(),
+                "AST mutation {case} hid its error"
+            ),
+            Ok(project) => {
+                if let Err(error) = ProductionDocument::new(project.clone()).validate() {
+                    assert!(
+                        !error.trim().is_empty(),
+                        "AST mutation {case} hid validation error"
+                    );
+                    continue;
+                }
+
+                let composition = &project.compositions[0];
+                if composition.width > 64
+                    || composition.height > 64
+                    || composition.duration_frames == 0
+                {
+                    continue;
+                }
+                let frame = composition.duration_frames.saturating_sub(1).min(7);
+                let first = render_frame_to_pixels(
+                    composition,
+                    frame,
+                    composition.width,
+                    composition.height,
+                    0.0,
+                    0,
+                );
+                let second = render_frame_to_pixels(
+                    composition,
+                    frame,
+                    composition.width,
+                    composition.height,
+                    0.0,
+                    0,
+                );
+                assert_eq!(first, second, "AST mutation {case} was nondeterministic");
+                assert_eq!(
+                    first.len(),
+                    (composition.width * composition.height * 4) as usize,
+                    "AST mutation {case} returned the wrong pixel contract"
+                );
+            }
         }
     }
 }
