@@ -312,6 +312,73 @@ fn effects_extreme_values_no_panic() {
 }
 
 #[test]
+fn representative_effects_preserve_their_pixel_semantics() {
+    let w = 4;
+    let h = 1;
+    let input = vec![
+        10, 20, 30, 255, // below the threshold
+        120, 120, 120, 200, 200, 180, 160, 128, 250, 240, 230, 64,
+    ];
+
+    let mut inverted = input.clone();
+    kagari_vfx::core::cpu_effects::apply_layer_effects(
+        None,
+        None,
+        &mut inverted,
+        w,
+        h,
+        &[fx(EffectType::Invert {
+            invert_alpha: false,
+        })],
+        0,
+        30,
+    );
+    assert_eq!(
+        inverted,
+        vec![245, 235, 225, 255, 135, 135, 135, 200, 55, 75, 95, 128, 5, 15, 25, 64],
+        "Invert must transform RGB exactly and preserve alpha when disabled"
+    );
+
+    let mut thresholded = input.clone();
+    kagari_vfx::core::cpu_effects::apply_layer_effects(
+        None,
+        None,
+        &mut thresholded,
+        w,
+        h,
+        &[fx(EffectType::Threshold {
+            threshold: c32(128.0),
+        })],
+        0,
+        30,
+    );
+    assert_eq!(
+        thresholded,
+        vec![0, 0, 0, 255, 0, 0, 0, 200, 255, 255, 255, 128, 255, 255, 255, 64],
+        "Threshold must produce binary RGB values from luma without changing alpha"
+    );
+
+    let mut neutral_tint = input.clone();
+    kagari_vfx::core::cpu_effects::apply_layer_effects(
+        None,
+        None,
+        &mut neutral_tint,
+        w,
+        h,
+        &[fx(EffectType::ColorTint {
+            color: c32a4([1.0, 0.0, 0.0, 1.0]),
+            intensity: c32(0.0),
+        })],
+        0,
+        30,
+    );
+    assert_eq!(
+        neutral_tint, input,
+        "zero tint intensity must be an identity operation"
+    );
+}
+
+#[test]
 fn effects_nan_safety() {
     let w = 8u32;
     let h = 8u32;
@@ -544,6 +611,29 @@ fn expression_loopout_finite() {
     }
 }
 
+#[test]
+fn expression_nonfinite_results_fall_back_to_the_base_value() {
+    let engine = expression_engine::build_engine();
+    for script in ["1e308 * 1e308", "0.0 / 0.0", "sqrt(-1.0)"] {
+        let result = expression_engine::eval_f32(&engine, script, 42.0, 10, 30);
+        assert_eq!(
+            result, 42.0,
+            "non-finite expression must fall back: {script}"
+        );
+        assert!(result.is_finite());
+    }
+
+    assert_eq!(
+        expression_engine::eval_v2(&engine, "[1e308, 2e308]", [4.0, 5.0], 10, 30),
+        [4.0, 5.0]
+    );
+    assert_eq!(
+        expression_engine::eval_v2_with_diagnostics(&engine, "1e308 * 1e308", [4.0, 5.0], 10, 30,)
+            .0,
+        [4.0, 5.0]
+    );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // §4  Serialization Stress Tests
 // ─────────────────────────────────────────────────────────────────────────────
@@ -594,8 +684,8 @@ fn serialization_keyframe_density_roundtrip() {
     match &loaded.layers[0].transform.position {
         Animatable::Animated(kfs) => {
             assert_eq!(kfs.len(), 600);
-            assert!((kfs[0].value[0] - 0.0).abs() < 0.001);
-            assert!((kfs[599].value[0] - 59.9).abs() < 0.01);
+            assert_eq!(kfs[0].value[0], 0.0);
+            assert_eq!(kfs[599].value[0], 59.9);
         }
         _ => panic!("Expected Animated position"),
     }

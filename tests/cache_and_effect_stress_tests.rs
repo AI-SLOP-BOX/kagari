@@ -9,7 +9,7 @@ use kagari_vfx::core::software_renderer;
 use kagari_vfx::core::tile_cache::{self, TileCache};
 use kagari_vfx::core::timeline::{Composition, Effect, EffectType, Layer, LayerType};
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Barrier, Mutex};
 
 fn fx(effect_type: EffectType) -> Effect {
     Effect {
@@ -99,6 +99,74 @@ fn frame_cache_stale_entries_invisible_after_version_bump() {
     );
     // New cache uses version 2, its entry is valid
     assert!(cache2.is_cached(0), "New cache entry should be valid");
+}
+
+#[test]
+fn frame_cache_shared_access_keeps_pixels_and_invalidation_consistent() {
+    // FrameCache intentionally exposes mutable operations rather than hiding
+    // them behind a lock. This is the integration contract for callers that
+    // share it across render/UI workers: one lock guards every read-modify-
+    // write sequence, so readers never observe a partially replaced entry.
+    let version = 0xA11C_0000_u64 + std::process::id() as u64;
+    let cache = Arc::new(Mutex::new(FrameCache::with_version(64, version)));
+    let start = Arc::new(Barrier::new(4));
+    let mut handles = Vec::new();
+
+    let writer_cache = Arc::clone(&cache);
+    let writer_start = Arc::clone(&start);
+    handles.push(std::thread::spawn(move || {
+        writer_start.wait();
+        for frame in 0..240u32 {
+            let marker = (frame % 251) as u8;
+            let pixels = vec![marker; 4 * 4 * 4];
+            let mut cache = writer_cache
+                .lock()
+                .unwrap_or_else(|error| error.into_inner());
+            cache.insert(frame % 64, 4, 4, pixels);
+            cache.collect_garbage_below(version);
+        }
+    }));
+
+    for _ in 0..2 {
+        let reader_cache = Arc::clone(&cache);
+        let reader_start = Arc::clone(&start);
+        handles.push(std::thread::spawn(move || {
+            reader_start.wait();
+            for frame in 0..240u32 {
+                let mut cache = reader_cache
+                    .lock()
+                    .unwrap_or_else(|error| error.into_inner());
+                if let Some(entry) = cache.get(frame % 64) {
+                    assert_eq!(entry.version, version);
+                    assert_eq!(entry.width, 4);
+                    assert_eq!(entry.height, 4);
+                    assert_eq!(entry.pixels.len(), 4 * 4 * 4);
+                }
+            }
+        }));
+    }
+
+    let invalidator_cache = Arc::clone(&cache);
+    let invalidator_start = Arc::clone(&start);
+    handles.push(std::thread::spawn(move || {
+        invalidator_start.wait();
+        for layer in 0..240usize {
+            let mut cache = invalidator_cache
+                .lock()
+                .unwrap_or_else(|error| error.into_inner());
+            cache.invalidate_layers(&[layer % 8]);
+            assert!(cache.is_layer_dirty(layer % 8));
+            cache.clear_dirty();
+        }
+    }));
+
+    for handle in handles {
+        handle.join().expect("shared cache worker must not panic");
+    }
+
+    let cache = cache.lock().unwrap_or_else(|error| error.into_inner());
+    assert!(cache.current_version_len() <= 64);
+    assert!(!cache.is_layer_dirty(0));
 }
 
 #[test]

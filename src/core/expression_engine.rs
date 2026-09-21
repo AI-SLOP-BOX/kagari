@@ -44,6 +44,17 @@ fn dynamic_to_f64(v: &Dynamic) -> Option<f64> {
     None
 }
 
+fn finite_or_fallback(value: f64, fallback: f32) -> f32 {
+    let converted = value as f32;
+    if converted.is_finite() {
+        converted
+    } else if fallback.is_finite() {
+        fallback
+    } else {
+        0.0
+    }
+}
+
 thread_local! {
     static AUDIO_DATA: std::cell::RefCell<AudioExprData> = const { std::cell::RefCell::new(AudioExprData { amplitude: 0.0, bands: [0.0; 5] }) };
 }
@@ -1043,10 +1054,10 @@ pub fn eval_f32(engine: &Engine, script: &str, base: f32, frame: u32, fps: u32) 
     match engine.eval_with_scope::<Dynamic>(&mut scope, script) {
         Ok(val) => {
             if let Some(f) = dynamic_to_f64(&val) {
-                return f as f32;
+                return finite_or_fallback(f, base);
             }
             if let Ok(i) = val.as_int() {
-                return i as f32;
+                return finite_or_fallback(i as f64, base);
             }
             log::warn!("[ExprEngine] expression did not return a number: {:?}", val);
             base
@@ -1085,14 +1096,21 @@ pub fn eval_v2(engine: &Engine, script: &str, base: [f32; 2], frame: u32, fps: u
             // Array return
             if let Ok(arr) = val.clone().into_array() {
                 if arr.len() >= 2 {
-                    let x = arr[0].as_float().unwrap_or(base[0] as f64) as f32;
-                    let y = arr[1].as_float().unwrap_or(base[1] as f64) as f32;
+                    let x = arr[0]
+                        .as_float()
+                        .map(|value| finite_or_fallback(value, base[0]))
+                        .unwrap_or(base[0]);
+                    let y = arr[1]
+                        .as_float()
+                        .map(|value| finite_or_fallback(value, base[1]))
+                        .unwrap_or(base[1]);
                     return [x, y];
                 }
             }
             // Scalar return — AE standard applies scalar offset to X axis only
             if let Ok(f) = val.as_float() {
-                return [base[0] + f as f32, base[1]];
+                let x = finite_or_fallback(f, 0.0) + base[0];
+                return [if x.is_finite() { x } else { base[0] }, base[1]];
             }
             base
         }
@@ -1131,13 +1149,20 @@ pub fn eval_v2_with_diagnostics(
         Ok(val) => {
             if let Ok(arr) = val.clone().into_array() {
                 if arr.len() >= 2 {
-                    let x = arr[0].as_float().unwrap_or(base[0] as f64) as f32;
-                    let y = arr[1].as_float().unwrap_or(base[1] as f64) as f32;
+                    let x = arr[0]
+                        .as_float()
+                        .map(|value| finite_or_fallback(value, base[0]))
+                        .unwrap_or(base[0]);
+                    let y = arr[1]
+                        .as_float()
+                        .map(|value| finite_or_fallback(value, base[1]))
+                        .unwrap_or(base[1]);
                     return ([x, y], None);
                 }
             }
             if let Ok(f) = val.as_float() {
-                return ([base[0] + f as f32, base[1]], None);
+                let x = finite_or_fallback(f, 0.0) + base[0];
+                return ([if x.is_finite() { x } else { base[0] }, base[1]], None);
             }
             (base, Some("Expression returned non-numeric type".into()))
         }
@@ -1531,13 +1556,20 @@ pub fn eval_v2_with_comp(
                 if let Ok(arr) = val.clone().into_array() {
                     if arr.len() >= 2 {
                         return [
-                            arr[0].as_float().unwrap_or(base[0] as f64) as f32,
-                            arr[1].as_float().unwrap_or(base[1] as f64) as f32,
+                            arr[0]
+                                .as_float()
+                                .map(|value| finite_or_fallback(value, base[0]))
+                                .unwrap_or(base[0]),
+                            arr[1]
+                                .as_float()
+                                .map(|value| finite_or_fallback(value, base[1]))
+                                .unwrap_or(base[1]),
                         ];
                     }
                 }
                 if let Ok(f) = val.as_float() {
-                    return [base[0] + f as f32, base[1]];
+                    let x = finite_or_fallback(f, 0.0) + base[0];
+                    return [if x.is_finite() { x } else { base[0] }, base[1]];
                 }
                 base
             }
@@ -1575,10 +1607,10 @@ pub fn eval_f32_with_comp(
         match engine.eval_with_scope::<Dynamic>(&mut scope, script) {
             Ok(val) => {
                 if let Some(f) = dynamic_to_f64(&val) {
-                    return f as f32;
+                    return finite_or_fallback(f, base);
                 }
                 if let Ok(i) = val.as_int() {
-                    return i as f32;
+                    return finite_or_fallback(i as f64, base);
                 }
                 base
             }
@@ -1695,10 +1727,10 @@ pub fn eval_f32_with_loops(script: &str, base: f32, frame: u32, fps: u32, loops:
         match engine.eval_with_scope::<Dynamic>(&mut scope, &rewritten) {
             Ok(val) => {
                 if let Some(f) = dynamic_to_f64(&val) {
-                    return f as f32;
+                    return finite_or_fallback(f, base);
                 }
                 if let Ok(i) = val.as_int() {
-                    return i as f32;
+                    return finite_or_fallback(i as f64, base);
                 }
                 base
             }
@@ -1780,6 +1812,8 @@ pub fn eval_expression_f64(script: &str, vars: &[(&str, f64)]) -> f64 {
         }
         engine
             .eval_with_scope::<f64>(&mut scope, script)
+            .ok()
+            .filter(|value| value.is_finite())
             .unwrap_or(0.0)
     })
 }
