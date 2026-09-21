@@ -725,12 +725,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 } else {
                     app.playback.adaptive_preview_factor
                 };
-                let proxy_factor = crate::core::proxy::effective_proxy_scale(
-                    None,
-                    comp.comp_proxy.active_in_preview,
-                    comp.comp_proxy.global_resolution,
-                    false,
-                );
+                let proxy_factor = crate::core::proxy::composition_preview_scale(comp);
                 let display_px = (draw_w * ctx.pixels_per_point()).ceil();
                 let preview_px = ((display_px * effective_factor * proxy_factor) as u32)
                     .clamp(64, 4096);

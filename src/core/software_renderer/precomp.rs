@@ -437,9 +437,11 @@ fn render_precomp_layers_inner(
                 );
             }
             LayerType::Image { path } => {
+                let proxy_path = super::preview_proxy_path(layer, 0);
+                let image_path = proxy_path.as_deref().unwrap_or(path);
                 rasterize_texture_layer(
                     &mut layer_buf,
-                    path,
+                    image_path,
                     None,
                     0.0,
                     min_x,
@@ -473,15 +475,26 @@ fn render_precomp_layers_inner(
                 } else {
                     0.0
                 };
-                let first_path =
-                    crate::core::video_import::frame_path_in_dir(frames_dir, first);
+                let proxy_path = super::preview_proxy_path(layer, first);
+                let first_path = proxy_path
+                    .as_deref()
+                    .map(std::path::PathBuf::from)
+                    .unwrap_or_else(|| {
+                        crate::core::video_import::frame_path_in_dir(frames_dir, first)
+                    });
                 let second_path =
                     crate::core::video_import::frame_path_in_dir(frames_dir, second);
+                let first_path_text = first_path.to_string_lossy();
+                let second_path_text = second_path.to_string_lossy();
                 rasterize_texture_layer(
                     &mut layer_buf,
-                    &first_path.to_string_lossy(),
-                    Some(&second_path.to_string_lossy()),
-                    blend_t,
+                    &first_path_text,
+                    if proxy_path.is_some() {
+                        None
+                    } else {
+                        Some(&second_path_text)
+                    },
+                    if proxy_path.is_some() { 0.0 } else { blend_t },
                     min_x,
                     min_y,
                     max_x,

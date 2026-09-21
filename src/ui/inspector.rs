@@ -496,7 +496,85 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                                 project_changed = true;
                             }
                         });
-                    });
+                        });
+
+                    // ── Layer Proxy ──
+                    egui::Frame::none()
+                        .inner_margin(egui::Margin::symmetric(0.0, 4.0))
+                        .show(ui, |ui| {
+                            ui.collapsing("Preview Proxy", |ui| {
+                                ui.horizontal(|ui| {
+                                    let enabled_before = layer.proxy.enabled;
+                                    ui.checkbox(&mut layer.proxy.enabled, "Use layer proxy");
+                                    if enabled_before != layer.proxy.enabled {
+                                        project_changed = true;
+                                    }
+                                    if layer.proxy.enabled {
+                                        ui.label("Resolution:");
+                                        for (label, resolution) in [
+                                            ("½", crate::core::proxy::ProxyResolution::Half),
+                                            ("¼", crate::core::proxy::ProxyResolution::Quarter),
+                                            ("⅛", crate::core::proxy::ProxyResolution::Eighth),
+                                        ] {
+                                            if ui
+                                                .selectable_label(
+                                                    layer.proxy.resolution == resolution,
+                                                    label,
+                                                )
+                                                .clicked()
+                                            {
+                                                layer.proxy.resolution = resolution;
+                                                project_changed = true;
+                                            }
+                                        }
+                                    }
+                                });
+                                ui.horizontal(|ui| {
+                                    ui.label("Proxy media:");
+                                    let mut path_text =
+                                        layer.proxy.proxy_path.clone().unwrap_or_default();
+                                    if ui
+                                        .add(
+                                            egui::TextEdit::singleline(&mut path_text)
+                                                .desired_width(ui.available_width().max(80.0)),
+                                        )
+                                        .changed()
+                                    {
+                                        layer.proxy.proxy_path = if path_text.trim().is_empty() {
+                                            None
+                                        } else {
+                                            Some(path_text)
+                                        };
+                                        project_changed = true;
+                                    }
+                                });
+                                ui.horizontal(|ui| {
+                                    if ui.small_button("Choose file").clicked() {
+                                        if let Some(path) = rfd::FileDialog::new().pick_file() {
+                                            layer.proxy.proxy_path =
+                                                Some(path.to_string_lossy().into_owned());
+                                            project_changed = true;
+                                        }
+                                    }
+                                    if ui.small_button("Choose sequence folder").clicked() {
+                                        if let Some(path) = rfd::FileDialog::new().pick_folder() {
+                                            layer.proxy.proxy_path =
+                                                Some(path.to_string_lossy().into_owned());
+                                            project_changed = true;
+                                        }
+                                    }
+                                    if layer.proxy.proxy_path.is_some()
+                                        && ui.small_button("Clear").clicked()
+                                    {
+                                        layer.proxy.proxy_path = None;
+                                        project_changed = true;
+                                    }
+                                });
+                                ui.small(
+                                    "Used only in Viewer preview; exports always use full-quality media.",
+                                );
+                            });
+                        });
 
                     ui.add_space(8.0);
 

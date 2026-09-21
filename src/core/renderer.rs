@@ -1220,6 +1220,9 @@ pub struct WgpuRenderer {
     /// texture at display size anyway, so this is visually near-free and can
     /// cut fill-rate by 4-16x on 4K comps.
     preview_max_width: Option<u32>,
+    /// WgpuRenderer is a preview-only target; final/export paths use the
+    /// software renderer and never consult layer proxy media.
+    preview_proxies: bool,
 
     // GPU text rendering: cache of CPU-rasterized text textures keyed by (layer_id, text, font_size)
     text_texture_cache: std::cell::RefCell<TextTextureCache>,
@@ -1704,7 +1707,30 @@ impl WgpuRenderer {
             ram_ring_version: 0,
             ram_render_idx: usize::MAX,
             preview_max_width: None,
+            preview_proxies: true,
         }
+    }
+
+    fn preview_proxy_path(&self, layer: &Layer, sequence_frame: u32) -> Option<String> {
+        if !self.preview_proxies || !layer.proxy.enabled {
+            return None;
+        }
+        let raw_path = layer.proxy.proxy_path.as_deref()?;
+        let path = std::path::Path::new(raw_path);
+        if path.is_file() {
+            return Some(raw_path.to_string());
+        }
+        if path.is_dir() {
+            let frame = if matches!(&layer.layer_type, LayerType::Video { .. }) {
+                crate::core::video_import::frame_path_in_dir(raw_path, sequence_frame)
+            } else {
+                crate::core::video_import::frame_path_in_dir(raw_path, 0)
+            };
+            if frame.is_file() {
+                return Some(frame.to_string_lossy().into_owned());
+            }
+        }
+        None
     }
 
     /// Rebuild the combined mask+shadow+matte bind group (group 3) from
@@ -2147,9 +2173,12 @@ impl WgpuRenderer {
                 let mut is_precomp_frame = false;
                 let mut is_image_frame = false;
                 if let LayerType::Image { path } = &layer.layer_type {
+                    let image_path = self
+                        .preview_proxy_path(layer, 0)
+                        .unwrap_or_else(|| path.clone());
                     if let Some((tw, th, bg)) = self.get_or_create_image_texture(
                         &layer.id,
-                        path,
+                        &image_path,
                         crate::core::frame_cache::current_version(),
                     ) {
                         layer_w = tw as f32;
@@ -2173,12 +2202,19 @@ impl WgpuRenderer {
                         .floor()
                         .max(0.0) as u32;
                     let seq_frame = seq_frame.min(frame_count.saturating_sub(1));
-                    if let Some((tw, th, bg)) = self.get_or_create_video_frame_texture(
-                        &layer.id,
-                        frames_dir,
-                        seq_frame,
-                        crate::core::frame_cache::current_version(),
-                    ) {
+                    let version = crate::core::frame_cache::current_version();
+                    let texture = if let Some(proxy_path) =
+                        self.preview_proxy_path(layer, seq_frame)
+                    {
+                        self.get_or_create_image_texture(
+                            &format!("proxy:{}", layer.id),
+                            &proxy_path,
+                            version,
+                        )
+                    } else {
+                        self.get_or_create_video_frame_texture(&layer.id, frames_dir, seq_frame, version)
+                    };
+                    if let Some((tw, th, bg)) = texture {
                         layer_w = tw as f32;
                         layer_h = th as f32;
                         text_bind_group = Some(bg);

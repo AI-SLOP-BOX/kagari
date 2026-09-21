@@ -91,6 +91,23 @@ pub fn effective_proxy_scale(
     1.0
 }
 
+/// Return the smallest active preview scale required by a composition.
+/// Final/export paths do not call this helper and therefore remain full
+/// resolution.
+pub fn composition_preview_scale(comp: &crate::core::timeline::Composition) -> f32 {
+    let comp_scale = if comp.comp_proxy.active_in_preview {
+        comp.comp_proxy.global_resolution.factor()
+    } else {
+        1.0
+    };
+    comp.layers
+        .iter()
+        .filter(|layer| layer.proxy.enabled)
+        .map(|layer| layer.proxy.resolution.factor())
+        .fold(comp_scale, f32::min)
+        .clamp(0.125, 1.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -143,5 +160,23 @@ mod tests {
             effective_proxy_scale(None, false, ProxyResolution::Half, false),
             1.0
         );
+    }
+
+    #[test]
+    fn test_composition_preview_scale_includes_enabled_layer_proxy() {
+        let mut comp = crate::core::timeline::Composition::new(
+            "c".into(),
+            "Comp".into(),
+            1920,
+            1080,
+            30,
+            30,
+        );
+        comp.comp_proxy.active_in_preview = false;
+        let mut layer = crate::core::timeline::Layer::new_null("n".into(), "Null".into(), 30);
+        layer.proxy.enabled = true;
+        layer.proxy.resolution = ProxyResolution::Quarter;
+        comp.layers.push(layer);
+        assert_eq!(composition_preview_scale(&comp), 0.25);
     }
 }

@@ -331,6 +331,7 @@ type ParticleSimCacheEntry = (
 thread_local! {
     static RENDER_CANCEL: std::cell::RefCell<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>> =
         const { std::cell::RefCell::new(None) };
+    static RENDER_PREVIEW: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// Installs a cancellation flag for renders on the current thread.
@@ -349,13 +350,56 @@ fn render_cancelled() -> bool {
     })
 }
 
+/// Render through the software path in preview mode. Layer proxy media is
+/// scoped to this entry point so exports and CLI renders stay full quality.
+pub fn render_frame_to_pixels_preview(
+    comp: &Composition,
+    frame: u32,
+    width: u32,
+    height: u32,
+    exposure_ev: f32,
+    lut_mode: u32,
+) -> Vec<u8> {
+    RENDER_PREVIEW.with(|preview| {
+        let was_preview = preview.replace(true);
+        let pixels = render_frame_to_pixels(comp, frame, width, height, exposure_ev, lut_mode);
+        preview.set(was_preview);
+        pixels
+    })
+}
+
+pub(crate) fn preview_proxy_path(layer: &Layer, sequence_frame: u32) -> Option<String> {
+    let enabled = RENDER_PREVIEW.with(std::cell::Cell::get);
+    if !enabled || !layer.proxy.enabled {
+        return None;
+    }
+    let raw_path = layer.proxy.proxy_path.as_deref()?;
+    let path = std::path::Path::new(raw_path);
+    if path.is_file() {
+        return Some(raw_path.to_string());
+    }
+    if path.is_dir() {
+        let frame = if matches!(layer.layer_type, LayerType::Video { .. }) {
+            crate::core::video_import::frame_path_in_dir(raw_path, sequence_frame)
+        } else {
+            crate::core::video_import::frame_path_in_dir(raw_path, 0)
+        };
+        if frame.is_file() {
+            return Some(frame.to_string_lossy().into_owned());
+        }
+    }
+    None
+}
+
 fn source_media_dimensions(layer: &Layer) -> Option<(f32, f32)> {
     let path = match &layer.layer_type {
-        LayerType::Image { path } => path.clone(),
+        LayerType::Image { path } => preview_proxy_path(layer, 0).unwrap_or_else(|| path.clone()),
         LayerType::Video { frames_dir, .. } => {
-            crate::core::video_import::frame_path_in_dir(frames_dir, 0)
-                .to_string_lossy()
-                .to_string()
+            preview_proxy_path(layer, 0).unwrap_or_else(|| {
+                crate::core::video_import::frame_path_in_dir(frames_dir, 0)
+                    .to_string_lossy()
+                    .to_string()
+            })
         }
         _ => return None,
     };
@@ -1444,6 +1488,48 @@ mod tests {
             200,
             "index must clamp to last frame"
         );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn preview_uses_layer_proxy_media_but_final_render_does_not() {
+        let dir = std::env::temp_dir().join(format!(
+            "kagari_layer_proxy_test_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let frames = dir.join("frames");
+        std::fs::create_dir_all(&frames).unwrap();
+        let full_frame = frames.join("frame_00000.png");
+        let proxy_frame = dir.join("proxy.webp");
+        write_gray_png(&full_frame, 40);
+        write_gray_webp(&proxy_frame, 200);
+
+        let mut comp = Composition::new("proxy_comp".into(), "Proxy".into(), 16, 16, 30, 30);
+        let mut layer = Layer::new(
+            "video".into(),
+            "Proxy Video".into(),
+            LayerType::Video {
+                source: "test".into(),
+                frames_dir: frames.to_string_lossy().into_owned(),
+                frame_count: 1,
+                audio_wav: None,
+                speed: 1.0,
+            },
+            30,
+        );
+        layer.proxy.enabled = true;
+        layer.proxy.proxy_path = Some(proxy_frame.to_string_lossy().into_owned());
+        layer.transform.position = Animatable::new_constant([8.0, 8.0]);
+        comp.layers.push(layer);
+
+        let final_pixels = render_frame_to_pixels(&comp, 0, 16, 16, 0.0, 0);
+        let preview_pixels = render_frame_to_pixels_preview(&comp, 0, 16, 16, 0.0, 0);
+        let center = (8 * 16 * 4 + 8 * 4) as usize;
+        assert_eq!(final_pixels[center], 40);
+        assert_eq!(preview_pixels[center], 200);
 
         let _ = std::fs::remove_dir_all(&dir);
     }

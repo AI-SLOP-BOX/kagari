@@ -92,17 +92,29 @@ fn rasterize_image_layer(ctx: RasterCtx<'_>) {
                 } else {
                     0.0
                 };
-                (
+                let first_path = super::preview_proxy_path(layer, first).unwrap_or_else(|| {
                     crate::core::video_import::frame_path_in_dir(frames_dir, first)
                         .to_string_lossy()
-                        .to_string(),
-                    crate::core::video_import::frame_path_in_dir(frames_dir, second)
-                        .to_string_lossy()
-                        .to_string(),
-                    t,
+                        .to_string()
+                });
+                let second_path = crate::core::video_import::frame_path_in_dir(frames_dir, second)
+                    .to_string_lossy()
+                    .to_string();
+                (
+                    first_path,
+                    second_path,
+                    if super::preview_proxy_path(layer, first).is_some() {
+                        0.0
+                    } else {
+                        t
+                    },
                 )
             }
-            LayerType::Image { path } => (path.clone(), path.clone(), 0.0),
+            LayerType::Image { path } => (
+                super::preview_proxy_path(layer, 0).unwrap_or_else(|| path.clone()),
+                path.clone(),
+                0.0,
+            ),
             _ => unreachable!(),
         };
         with_image_cache(|cache| {
