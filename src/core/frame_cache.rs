@@ -10,6 +10,15 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
+fn expected_pixel_bytes(width: u32, height: u32) -> Option<usize> {
+    if width == 0 || height == 0 {
+        return None;
+    }
+    (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|pixels| pixels.checked_mul(4))
+}
+
 /// A monotonically increasing version counter.
 static GLOBAL_CACHE_VERSION: AtomicU64 = AtomicU64::new(1);
 
@@ -278,6 +287,12 @@ impl FrameCache {
         pixels: Vec<u8>,
         layer_indices: &[usize],
     ) {
+        let Some(expected_bytes) = expected_pixel_bytes(width, height) else {
+            return;
+        };
+        if pixels.len() != expected_bytes {
+            return;
+        }
         let ver = self.effective_version();
         let key = (frame, ver);
         let bytes_size = pixels.len();
@@ -286,6 +301,7 @@ impl FrameCache {
         if let Some(old) = self.entries.remove(&key) {
             self.current_memory_bytes = self.current_memory_bytes.saturating_sub(old.pixels.len());
         }
+        self.frame_layers.remove(&key);
 
         self.current_memory_bytes += bytes_size;
         self.entries.insert(
@@ -354,6 +370,7 @@ impl FrameCache {
                         removed.width,
                         removed.height,
                     );
+                    self.frame_layers.remove(&key);
                     self.current_memory_bytes = self
                         .current_memory_bytes
                         .saturating_sub(removed.pixels.len());
@@ -382,6 +399,7 @@ impl FrameCache {
         // Spill evicted entries to disk
         for (key, pixels, w, h) in evicted {
             let _ = disk_cache::write_frame(&key, &pixels, w, h);
+            self.frame_layers.remove(&key);
         }
         self.current_memory_bytes = self.current_memory_bytes.saturating_sub(freed_bytes);
     }
@@ -389,6 +407,7 @@ impl FrameCache {
     /// Discard the entire cache (RAM + disk).
     pub fn invalidate_all(&mut self) {
         self.entries.clear();
+        self.frame_layers.clear();
         self.current_memory_bytes = 0;
         disk_cache::clear_all();
     }
@@ -418,6 +437,7 @@ pub mod disk_cache {
     use std::sync::OnceLock;
 
     static MAX_DISK_BYTES: AtomicU64 = AtomicU64::new(50 * 1024 * 1024 * 1024); // 50 GB default
+    static WRITE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
     /// Set the maximum disk cache size in bytes. Called from Preferences.
     pub fn set_max_disk_bytes(bytes: u64) {
@@ -498,20 +518,42 @@ pub mod disk_cache {
 
     /// Write frame pixels to disk. Returns true on success.
     pub fn write_frame(key: &(u32, u64), pixels: &[u8], width: u32, height: u32) -> bool {
-        let frame_bytes = (width as usize)
-            .checked_mul(height as usize)
-            .and_then(|p| p.checked_mul(4))
-            .and_then(|p| p.checked_add(8))
-            .unwrap_or(0) as u64;
+        let Some(pixel_bytes) = super::expected_pixel_bytes(width, height) else {
+            return false;
+        };
+        if pixels.len() != pixel_bytes {
+            return false;
+        }
+        let Some(frame_bytes) = pixel_bytes.checked_add(8) else {
+            return false;
+        };
+        let frame_bytes = frame_bytes as u64;
         evict_if_over_budget(frame_bytes);
         let path = frame_path(key);
-        let header = width
-            .to_le_bytes()
-            .into_iter()
-            .chain(height.to_le_bytes())
-            .chain(pixels.iter().copied())
-            .collect::<Vec<u8>>();
-        std::fs::write(&path, &header).is_ok()
+        let mut header = Vec::with_capacity(frame_bytes as usize);
+        header.extend_from_slice(&width.to_le_bytes());
+        header.extend_from_slice(&height.to_le_bytes());
+        header.extend_from_slice(pixels);
+
+        let tmp_path = path.with_extension(format!(
+            "rgba.tmp.{}.{}",
+            std::process::id(),
+            WRITE_COUNTER.fetch_add(1, Ordering::Relaxed)
+        ));
+        let write_result = (|| {
+            use std::io::Write;
+
+            let mut file = std::fs::File::create(&tmp_path).ok()?;
+            file.write_all(&header).ok()?;
+            file.sync_all().ok()?;
+            drop(file);
+            std::fs::rename(&tmp_path, &path).ok()?;
+            Some(())
+        })();
+        if write_result.is_none() {
+            let _ = std::fs::remove_file(&tmp_path);
+        }
+        write_result.is_some()
     }
 
     /// Read frame pixels from disk. Returns (pixels, width, height) on success.
@@ -657,14 +699,45 @@ mod tests {
     }
 
     #[test]
+    fn invalid_pixel_shape_is_rejected_without_replacing_a_valid_frame() {
+        let mut cache = FrameCache::with_version(16, 7);
+        cache.insert_with_layers(3, 1, 1, vec![1, 2, 3, 255], &[4]);
+
+        cache.insert_with_layers(3, 2, 2, vec![9, 9, 9], &[8]);
+        cache.insert(4, 0, 1, vec![]);
+
+        let entry = cache
+            .get(3)
+            .expect("valid entry must survive invalid writes");
+        assert_eq!((entry.width, entry.height), (1, 1));
+        assert_eq!(entry.pixels.as_ref(), &[1, 2, 3, 255]);
+        assert_eq!(cache.cached_count(), 1);
+        assert_eq!(cache.current_memory_bytes, 4);
+        assert_eq!(cache.frame_layers.get(&(3, 7)).cloned(), Some([4].into()));
+    }
+
+    #[test]
+    fn stale_frame_layer_metadata_is_removed_with_evicted_pixels() {
+        let mut cache = FrameCache::with_version(16, 2);
+        cache.insert_with_layers(9, 1, 1, vec![0, 0, 0, 255], &[2, 5]);
+        assert!(cache.frame_layers.contains_key(&(9, 2)));
+
+        cache.collect_garbage_below(3);
+
+        assert!(!cache.entries.contains_key(&(9, 2)));
+        assert!(!cache.frame_layers.contains_key(&(9, 2)));
+        assert_eq!(cache.current_memory_bytes, 0);
+    }
+
+    #[test]
     fn test_lru_memory_limit_purging() {
         let mut cache = FrameCache::new(1024);
         cache.max_memory_bytes = 100; // Small limit for testing
 
-        let pixels = vec![255u8; 40]; // 40 bytes
-        cache.insert(1, 1, 1, pixels.clone());
-        cache.insert(2, 1, 1, pixels.clone());
-        cache.insert(3, 1, 1, pixels.clone()); // Total 120 bytes > 100 max
+        let pixels = vec![255u8; 40]; // 10x1 RGBA = 40 bytes
+        cache.insert(1, 10, 1, pixels.clone());
+        cache.insert(2, 10, 1, pixels.clone());
+        cache.insert(3, 10, 1, pixels.clone()); // Total 120 bytes > 100 max
 
         assert!(
             cache.current_memory_bytes <= 100,
@@ -702,12 +775,11 @@ mod memory_bound_tests {
     #[test]
     fn test_memory_budget_enforced_by_lru_eviction() {
         with_isolated_version(|| {
-            bump_version(); // isolate from other tests' cached frames
-            let mut cache = FrameCache::new(1000);
+            let mut cache = FrameCache::with_version(1000, 0xB0D6_E7);
             // 10 frames x 100KB = ~1MB budget
             cache.max_memory_bytes = 1_000_000;
 
-            let frame_bytes = 250 * 100; // 100KB per frame
+            let frame_bytes = 500 * 50 * 4; // 100KB per frame
             for i in 0..20u32 {
                 cache.insert(i, 500, 50, vec![0u8; frame_bytes]);
                 // Keep touching frame 0 so it stays MRU-hot
@@ -720,8 +792,6 @@ mod memory_bound_tests {
                 cache.current_memory_bytes
             );
             // Hot frame must survive eviction.
-            // NOTE: check across all versions because parallel tests share the
-            // global version counter and may bump it while this test runs.
             assert!(
                 cache.entries.keys().any(|(f, _)| *f == 0),
                 "LRU-hot frame must not be evicted"

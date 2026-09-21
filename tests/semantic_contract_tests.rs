@@ -1,7 +1,9 @@
 use kagari_vfx::core::cpu_effects::apply_layer_effects;
 use kagari_vfx::core::expression_engine::{build_engine, eval_f32};
 use kagari_vfx::core::keyframe::{InterpolationType, Keyframe};
-use kagari_vfx::core::parallel_render::{ParallelRenderQueue, RenderQueueItem, RenderStatus};
+use kagari_vfx::core::parallel_render::{
+    ParallelRenderQueue, RenderFailure, RenderQueueItem, RenderStatus,
+};
 use kagari_vfx::core::production_document::ProductionDocument;
 use kagari_vfx::core::property::Animatable;
 use kagari_vfx::core::software_renderer::render_frame_to_pixels;
@@ -518,6 +520,50 @@ fn linear_wipe_progresses_from_left_to_right_at_zero_degrees() {
 }
 
 #[test]
+fn invert_and_tint_have_pixel_level_semantics() {
+    let mut inverted = vec![12, 80, 200, 37, 255, 0, 17, 91];
+    apply_layer_effects(
+        None,
+        None,
+        &mut inverted,
+        2,
+        1,
+        &[Effect {
+            id: "invert".into(),
+            name: "Invert".into(),
+            effect_type: EffectType::Invert {
+                invert_alpha: false,
+            },
+            enabled: true,
+        }],
+        0,
+        24,
+    );
+    assert_eq!(inverted, vec![243, 175, 55, 37, 0, 255, 238, 91]);
+
+    let mut tinted = vec![100, 50, 0, 23];
+    apply_layer_effects(
+        None,
+        None,
+        &mut tinted,
+        1,
+        1,
+        &[Effect {
+            id: "tint".into(),
+            name: "Color Tint".into(),
+            effect_type: EffectType::ColorTint {
+                color: constant([1.0, 0.0, 0.0, 1.0]),
+                intensity: constant(50.0),
+            },
+            enabled: true,
+        }],
+        0,
+        24,
+    );
+    assert_eq!(tinted, vec![178, 25, 0, 23]);
+}
+
+#[test]
 fn mfr_render_reports_each_expected_frame_once() {
     let mut queue = ParallelRenderQueue::new();
     let item_count = 4;
@@ -626,5 +672,45 @@ fn mfr_cancellation_keeps_frame_identity_and_accounting_consistent() {
         queue.total_frames_rendered.load(Ordering::SeqCst) as usize,
         seen.len(),
         "progress accounting diverged from callback execution"
+    );
+}
+
+#[test]
+fn render_callback_failure_is_reported_with_item_and_frame_identity() {
+    let mut queue = ParallelRenderQueue::new();
+    queue.add_item(RenderQueueItem {
+        comp_name: "broken-comp".into(),
+        start_frame: 0,
+        end_frame: 4,
+        output_path: "/tmp/broken-comp.rgba".into(),
+        status: RenderStatus::Pending,
+    });
+
+    let external_cancel = std::sync::atomic::AtomicBool::new(false);
+    let result = queue.render_all_with_external_cancel_checked(&external_cancel, |_name, frame| {
+        assert_ne!(
+            frame, 2,
+            "frame 2 must be converted to a structured failure"
+        );
+        vec![0u8; 4]
+    });
+
+    assert_eq!(
+        result,
+        Err(RenderFailure {
+            item_index: 0,
+            frame: 2,
+        })
+    );
+    assert!(
+        queue.is_cancelled(),
+        "a worker failure must cancel the queue"
+    );
+    assert_eq!(
+        queue
+            .total_frames_rendered
+            .load(std::sync::atomic::Ordering::SeqCst),
+        2,
+        "frames after the failed callback must not be counted as rendered"
     );
 }
