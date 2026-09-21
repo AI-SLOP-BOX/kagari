@@ -34,7 +34,7 @@ is intentionally tracked separately from the core workflow.
 | Text | Fonts, tracking, leading, alignment, text-on-path, text animation | 🟡 | Rasterizer and text animator exist; advanced typography/layout compatibility is incomplete |
 | Shapes | Shape layers, fills/strokes, boolean paths, repeater/modifiers, extrusion | 🟡 | Shape engines exist; shape editing and renderer parity need more end-to-end tests |
 | 3D layers | 3D transforms, cameras, lights, depth, shadows, DOF | 🟡 | `advanced_3d_engine.rs`, camera/light UI, and software-rasterized OBJ layers with nested PreComp coverage; model materials, scene authoring, GPU mesh rendering, and broader interchange remain narrower than AE |
-| Scene cameras/lights | Camera and light layers in the timeline, animated scene objects, active-camera switching | 🟡 | Camera/light creation now writes to the real composition scene and active-camera/light render path; they are still represented as composition-level objects rather than first-class timeline layer types |
+| Scene cameras/lights | Camera and light layers in the timeline, animated scene objects, active-camera switching | 🟡 | Creation from the timeline, settings, menu, and 3D camera solve now creates linked scene rows; deletion and pre-compose preserve/remove the linked objects, and animated row transforms drive software-render camera/light values; richer first-class layer controls and GPU parity remain |
 | Motion tracking | Point tracking, planar tracking, camera solve, stabilization | 🟡 | Point/quad tracking, animated Corner Pin, target-aware stabilization, and 3D camera solving are connected to the tracker panel; real-footage workflow coverage, planar confidence UX, and production-quality solve accuracy still need work |
 | Roto / paint | Roto Brush, paint, clone, eraser, puppet | 🟡 | Tools and engines are present; temporal propagation/brush quality are not AE-level |
 | Keying | Chroma/linear key, matte cleanup, spill-like workflows | 🟡 | Keying modules and controls exist; production-grade edge handling still needs validation |
@@ -67,8 +67,9 @@ is intentionally tracked separately from the core workflow.
    nested compositions, but materials, scene authoring, GPU mesh rendering,
    interchange, depth, shadows, and DOF still need one connected authoring path.
 5. **Scene object authoring** — camera/light controls now affect the real scene,
-   but timeline-layer semantics, per-object selection, and transform binding are
-   still behind AE.
+   and linked timeline transforms survive deletion and pre-compose, but richer
+   first-class layer controls, per-object selection UX, and GPU parity are still
+   behind AE.
 6. **Text and shape authoring** — the data model is broad, but direct editing,
    typography fidelity, path editing, and modifier interaction are behind AE.
 7. **Workspace persistence** — saved workspaces must restore panel geometry,
