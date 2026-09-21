@@ -163,6 +163,11 @@ impl OtioTimeline {
                             speed: 1.0,
                         }
                     }
+                    (_, Some(ref_str)) if ref_str.starts_with("model3d:") => {
+                        LayerType::Model3D {
+                            path: ref_str["model3d:".len()..].to_string(),
+                        }
+                    }
                     (_, Some(ref_str)) if ref_str.starts_with("text:") => {
                         LayerType::new_text(&ref_str["text:".len()..], 48, [1.0, 1.0, 1.0, 1.0])
                     }
@@ -531,6 +536,40 @@ mod tests {
         } else {
             panic!("audio layer did not survive OTIO roundtrip");
         }
+    }
+
+    #[test]
+    fn otio_roundtrip_preserves_model3d_layers() {
+        let mut comp = Composition::new(
+            "model_comp".to_string(),
+            "Model Comp".to_string(),
+            1920,
+            1080,
+            30,
+            120,
+        );
+        comp.add_layer(Layer::new(
+            "model_1".to_string(),
+            "Hero OBJ".to_string(),
+            LayerType::Model3D {
+                path: "/assets/hero.obj".to_string(),
+            },
+            120,
+        ));
+
+        let otio = OtioTimeline::from_composition(&comp);
+        assert_eq!(
+            otio.tracks[0].items[0].media_reference.as_deref(),
+            Some("model3d:/assets/hero.obj")
+        );
+
+        let json = otio.to_json().unwrap();
+        let parsed = OtioTimeline::from_json(&json).unwrap();
+        let round_tripped = parsed.to_composition();
+        assert!(matches!(
+            &round_tripped.layers[0].layer_type,
+            LayerType::Model3D { path } if path == "/assets/hero.obj"
+        ));
     }
 
     #[test]
