@@ -1862,9 +1862,19 @@ fn apply_one_ctx(
                 );
             }
         }
-        EffectType::CustomShader { .. } => {
-            // Custom WGSL shaders are GPU-only; CPU renderer applies a identity passthrough.
-            // Users should switch to GPU preview for custom shader effects.
+        EffectType::CustomShader {
+            wgsl_source,
+            uniform_values,
+        } => {
+            crate::core::custom_shader_cpu::apply(
+                pixels,
+                width,
+                height,
+                wgsl_source,
+                uniform_values,
+                frame,
+                fps,
+            );
         }
         EffectType::MergePaths { .. } => {
             // Merge Paths is a vector shape operator, applied during shape rasterization.
@@ -2059,6 +2069,30 @@ mod tests {
             30,
         );
         assert_eq!(compound_blur, original);
+    }
+
+    #[test]
+    fn custom_shader_template_is_applied_through_cpu_effect_pipeline() {
+        let original = solid_layer(8, 8, 160, 96, 64);
+        let mut rendered = original.clone();
+        apply_layer_effects(
+            None,
+            None,
+            &mut rendered,
+            8,
+            8,
+            &[effect(
+                "custom-crt",
+                EffectType::CustomShader {
+                    wgsl_source: "// CRT Scanlines Shader".to_string(),
+                    uniform_values: vec![1.0, 1.0],
+                },
+            )],
+            0,
+            30,
+        );
+        assert_ne!(rendered, original);
+        assert!(rendered.chunks_exact(4).all(|pixel| pixel[3] == 255));
     }
 
     #[test]

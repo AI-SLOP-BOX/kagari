@@ -102,6 +102,7 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
             // Real-time naga WGSL validation & hot-reload status
             let status = crate::core::custom_shader_runtime::CustomShaderRegistry::global()
                 .validate_wgsl(wgsl_source);
+            let cpu_supported = crate::core::custom_shader_cpu::cpu_supported(wgsl_source);
             ui.horizontal(|ui| {
                 if status.is_valid {
                     ui.label(
@@ -121,6 +122,23 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
                             .color(colors::ACCENT_RED),
                     )
                     .on_hover_text(err_snippet);
+                }
+
+                if cpu_supported {
+                    ui.label(
+                        egui::RichText::new("CPU export fallback ready")
+                            .small()
+                            .color(colors::ACCENT_GREEN),
+                    );
+                } else {
+                    ui.label(
+                        egui::RichText::new("GPU-only custom WGSL")
+                            .small()
+                            .color(colors::ACCENT_YELLOW),
+                    )
+                    .on_hover_text(
+                        "Arbitrary WGSL is validated for GPU use; CPU preview/export supports the built-in templates only.",
+                    );
                 }
 
                 if ui
