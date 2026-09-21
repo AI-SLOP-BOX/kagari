@@ -64,6 +64,44 @@ fn insert_imported_sequence(
     ));
 }
 
+fn insert_imported_svg_masks(
+    app: &mut crate::KagariApp,
+    paths: Vec<crate::core::svg_ai_importer::SvgVectorPath>,
+    name: String,
+) {
+    let mask_count = paths.len();
+    app.modify_project(|project| {
+        let comp = project.active_composition_mut();
+        let layer_id = comp.next_layer_id("svg");
+        let mut layer = crate::core::timeline::Layer::new(
+            layer_id,
+            name.clone(),
+            crate::core::timeline::LayerType::Solid {
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
+            comp.duration_frames,
+        );
+        layer.transform.position = crate::core::property::Animatable::new_constant([
+            comp.width as f32 * 0.5,
+            comp.height as f32 * 0.5,
+        ]);
+        for (index, vector_path) in paths.into_iter().enumerate() {
+            let mut mask = crate::core::mask::Mask::new_closed(
+                format!("mask_svg_{}", index + 1),
+                vector_path.name.clone(),
+                vector_path.vertices.iter().map(|vertex| vertex.position).collect(),
+            );
+            mask.path = vector_path.to_mask_path();
+            layer.masks.push(mask);
+        }
+        comp.layers.push(layer);
+    });
+    app.toasts.info(format!(
+        "Imported SVG as editable mask layer: {} ({} paths)",
+        name, mask_count
+    ));
+}
+
 fn draw_reference_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context) {
     egui::TopBottomPanel::top("studio_header")
         .exact_height(68.0)
@@ -587,6 +625,42 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                             comp.layers.push(layer);
                         });
                         app.toasts.info(format!("Imported image: {}", name));
+                    }
+                    ui.close_menu();
+                }
+                if ui
+                    .button("Import SVG as Mask Layer...")
+                    .on_hover_text(
+                        "Import SVG path geometry as editable Bezier masks on a solid layer",
+                    )
+                    .clicked()
+                {
+                    if let Some(path) = rfd::FileDialog::new()
+                        .add_filter("SVG Vector", &["svg"])
+                        .pick_file()
+                    {
+                        match crate::core::project_migration::read_bounded_text_file(
+                            &path,
+                            16 * 1024 * 1024,
+                        ) {
+                            Ok(svg) => {
+                                let paths = crate::core::svg_ai_importer::parse_svg_document(&svg);
+                                if paths.is_empty() {
+                                    app.toasts.error(
+                                        "No supported SVG path geometry was found in this file",
+                                    );
+                                } else {
+                                    let name = path
+                                        .file_stem()
+                                        .map(|value| value.to_string_lossy().into_owned())
+                                        .unwrap_or_else(|| "svg".into());
+                                    insert_imported_svg_masks(app, paths, name);
+                                }
+                            }
+                            Err(error) => {
+                                app.toasts.error(format!("SVG import failed: {error}"));
+                            }
+                        }
                     }
                     ui.close_menu();
                 }

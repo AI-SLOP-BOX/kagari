@@ -20,7 +20,7 @@ is intentionally tracked separately from the core workflow.
 |---|---|---:|---|
 | Project files | Project save/open, recovery, autosave | ✅ | `core/project.rs`, `core/autosave.rs`, `ui/project_io.rs` |
 | Multiple compositions | Nested compositions and composition settings | ✅ | `core/timeline.rs`, precomp workflow and cache |
-| Media import | Still images, image sequences, video, audio, vector assets | 🟡 | Image/video/audio paths exist; relink now recurses through PreComps and rebuilds missing WebP caches, layer proxies can be generated from image/video media and work in preview, common compressed audio/video extensions enter through both project import and drag/drop, and numbered image sequences can be imported as WebP footage; vector import still needs hardening |
+| Media import | Still images, image sequences, video, audio, vector assets | 🟡 | Image/video/audio paths exist; relink now recurses through PreComps and rebuilds missing WebP caches, layer proxies can be generated from image/video media and work in preview, common compressed audio/video extensions enter through both project import and drag/drop, numbered image sequences can be imported as WebP footage, and SVG paths can enter as editable mask geometry; Illustrator feature coverage and vector styling still need hardening |
 | Layer model | Solids, footage, text, shapes, cameras, lights, nulls, audio | ✅ | `LayerType` and `Layer` in `core/timeline.rs` |
 | Layer timing | In/out, trimming, time stretch, reverse, freeze, time remap | ✅ | `Layer` time-remap operations and timeline actions |
 | Keyframes | Linear, hold, Bezier, spatial animation, value/speed graph | ✅ | `core/keyframe.rs`, `ui/graph_editor.rs`; pointer drag + one-step Undo is now covered by an egui integration test |
@@ -58,15 +58,18 @@ is intentionally tracked separately from the core workflow.
    and numbered image-sequence authoring now enters the normal WebP footage
    path; tracker/roto propagation still need complete user journeys rather
    than only engine tests.
-3. **3D production workflow** — imported models, cameras, lights, depth,
+3. **Vector/text production workflow** — SVG path geometry can now enter the
+   editable mask system, but Illustrator styling, shape fills, and robust SVG
+   transform parsing are still behind AE.
+4. **3D production workflow** — imported models, cameras, lights, depth,
    shadows, DOF, and compositing need one connected authoring path.
-4. **Text and shape authoring** — the data model is broad, but direct editing,
+5. **Text and shape authoring** — the data model is broad, but direct editing,
    typography fidelity, path editing, and modifier interaction are behind AE.
-5. **Workspace persistence** — saved workspaces must restore panel geometry,
+6. **Workspace persistence** — saved workspaces must restore panel geometry,
    timeline height, graph mode, and viewer state, not only tab indices.
-6. **Roto/paint temporal behavior** — propagation, caching, and correction
+7. **Roto/paint temporal behavior** — propagation, caching, and correction
    tools need to survive multi-frame edits and real footage.
-7. **Audio correction and interchange** — production audio formats and the
+8. **Audio correction and interchange** — production audio formats and the
    correction workflow need a complete non-ML baseline before model support.
 
 ## Implementation order
