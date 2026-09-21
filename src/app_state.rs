@@ -1697,6 +1697,71 @@ mod tests {
     }
 
     #[test]
+    fn command_palette_search_and_enter_executes_layer_action() {
+        let mut app = KagariApp::default();
+        app.show_home = false;
+        app.show_welcome = false;
+        let ctx = eframe::egui::Context::default();
+        let initial_layer_count = app.history.current().active_composition().layers.len();
+        let screen_rect = eframe::egui::Rect::from_min_size(
+            eframe::egui::Pos2::ZERO,
+            eframe::egui::vec2(1600.0, 900.0),
+        );
+        let command_modifiers = eframe::egui::Modifiers {
+            command: true,
+            ..Default::default()
+        };
+
+        let _ = ctx.run(
+            eframe::egui::RawInput {
+                screen_rect: Some(screen_rect),
+                modifiers: command_modifiers,
+                events: vec![eframe::egui::Event::Key {
+                    key: eframe::egui::Key::K,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: command_modifiers,
+                }],
+                ..Default::default()
+            },
+            |ctx| {
+                crate::ui::theme::configure_ae_theme(ctx);
+                app.update_panels(ctx);
+            },
+        );
+        assert!(app.show_command_palette);
+
+        let _ = ctx.run(
+            eframe::egui::RawInput {
+                screen_rect: Some(screen_rect),
+                events: vec![
+                    eframe::egui::Event::Text("Add Layer: New Solid Layer".into()),
+                    eframe::egui::Event::Key {
+                        key: eframe::egui::Key::Enter,
+                        physical_key: None,
+                        pressed: true,
+                        repeat: false,
+                        modifiers: eframe::egui::Modifiers::NONE,
+                    },
+                ],
+                ..Default::default()
+            },
+            |ctx| {
+                crate::ui::theme::configure_ae_theme(ctx);
+                app.update_panels(ctx);
+            },
+        );
+
+        assert!(!app.show_command_palette, "Enter must close after executing a command");
+        assert_eq!(
+            app.history.current().active_composition().layers.len(),
+            initial_layer_count + 1,
+            "command palette action must mutate the active composition"
+        );
+    }
+
+    #[test]
     fn responsive_studio_frames_render_without_panic() {
         for (width, height) in [(900.0, 700.0), (640.0, 480.0)] {
             let mut app = KagariApp::default();
