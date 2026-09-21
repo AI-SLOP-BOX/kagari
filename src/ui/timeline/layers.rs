@@ -1,8 +1,8 @@
 use super::utils::{draw_keyframe_tick, KeyframeTickResult};
 use eframe::egui;
 
-type KfMenuCb<'a> = Option<&'a mut dyn for<'r> FnMut(&'static str, u32, &'r egui::Response)>;
-type KfBoxSelCb<'a> = Option<&'a mut dyn FnMut(&'static str, Vec<u32>, bool)>;
+type KfMenuCb<'a> = Option<&'a mut dyn FnMut(&str, u32, &egui::Response)>;
+type KfBoxSelCb<'a> = Option<&'a mut dyn FnMut(&str, Vec<u32>, bool)>;
 
 /// Legacy signature kept for backward compatibility (no selection support).
 #[allow(clippy::too_many_arguments)]
@@ -49,14 +49,14 @@ pub fn draw_prop_row_ext(
     // Selected keyframes for this property (prop_key, frame). Empty => no highlight.
     selected_kfs: &std::collections::HashSet<(String, u32)>,
     // Stable key identifying this property within the layer (e.g. "position").
-    prop_key: &'static str,
+    prop_key: &str,
     // Optional mutator invoked when a keyframe is dragged: (old_frame, new_frame).
     // None => read-only display (legacy behavior).
     mut on_move: Option<&mut dyn FnMut(u32, u32)>,
     // Optional callback invoked when a keyframe tick is clicked:
     // (prop_key, frame, shift_held, cmd_ctrl_held). Use this to toggle
     // selection in app state.
-    mut on_select: Option<&mut dyn FnMut(&'static str, u32, bool, bool)>,
+    mut on_select: Option<&mut dyn FnMut(&str, u32, bool, bool)>,
     // Optional callback when a keyframe is right-clicked: caller attaches the
     // context menu to the returned response with mutable access to the track.
     mut on_menu: KfMenuCb<'_>,
@@ -66,18 +66,18 @@ pub fn draw_prop_row_ext(
     mut on_box_select: KfBoxSelCb<'_>,
     // Optional callback when a SELECTED keyframe is dragged and other
     // selected keyframes should follow: (prop_key, dragged_frame, delta_frames).
-    mut on_group_move: Option<&mut dyn FnMut(&'static str, u32, i32)>,
+    mut on_group_move: Option<&mut dyn FnMut(&str, u32, i32)>,
     snap_to: &[u32],
     // Optional callback when the row LABEL is double-clicked:
     // select every keyframe of this property (AE parity).
-    mut on_select_all: Option<&mut dyn FnMut(&'static str)>,
+    mut on_select_all: Option<&mut dyn FnMut(&str)>,
 ) -> Option<u32> {
     let mut requested_frame = None;
     let mut pending_move: Option<(u32, u32)> = None;
-    let mut pending_select: Option<(&'static str, u32, bool, bool)> = None;
-    let mut pending_menu: Option<(&'static str, u32, egui::Response)> = None;
+    let mut pending_select: Option<(String, u32, bool, bool)> = None;
+    let mut pending_menu: Option<(String, u32, egui::Response)> = None;
     let mut pending_box: Option<(Vec<u32>, bool)> = None;
-    let mut pending_group: Option<(&'static str, u32, i32)> = None;
+    let mut pending_group: Option<(String, u32, i32)> = None;
 
     // Marquee state persists across frames of an active Shift+drag.
     let marquee_id = egui::Id::new(("kf_marquee", prop_key));
@@ -189,10 +189,10 @@ pub fn draw_prop_row_ext(
                 ) {
                     (KeyframeTickResult::Clicked { shift, cmd }, _resp) => {
                         requested_frame = Some(kf_frame);
-                        pending_select = Some((prop_key, kf_frame, shift, cmd));
+                    pending_select = Some((prop_key.to_owned(), kf_frame, shift, cmd));
                     }
                     (KeyframeTickResult::RightClicked, resp) => {
-                        pending_menu = Some((prop_key, kf_frame, resp));
+                        pending_menu = Some((prop_key.to_owned(), kf_frame, resp));
                     }
                     (KeyframeTickResult::Dragged { new_frame }, _resp) => {
                         // Snap dragged keyframe to nearby keyframes on other properties
@@ -218,7 +218,7 @@ pub fn draw_prop_row_ext(
                             if is_selected && selected_kfs.len() > 1 {
                                 let delta = snapped as i64 - kf_frame as i64;
                                 let clamped = delta.clamp(i32::MIN as i64, i32::MAX as i64) as i32;
-                                pending_group = Some((prop_key, kf_frame, clamped));
+                                pending_group = Some((prop_key.to_owned(), kf_frame, clamped));
                             }
                         }
                     }
@@ -238,12 +238,12 @@ pub fn draw_prop_row_ext(
         }
         if let Some((pk, f, sh, cm)) = pending_select.take() {
             if let Some(ref mut cb) = on_select {
-                cb(pk, f, sh, cm);
+                cb(&pk, f, sh, cm);
             }
         }
         if let Some((pk, f, resp)) = pending_menu.take() {
             if let Some(ref mut cb) = on_menu {
-                cb(pk, f, &resp);
+                cb(&pk, f, &resp);
             }
         }
         if let Some((frames, additive)) = pending_box.take() {
@@ -253,7 +253,7 @@ pub fn draw_prop_row_ext(
         }
         if let Some((pk, dragged_f, delta)) = pending_group.take() {
             if let Some(ref mut cb) = on_group_move {
-                cb(pk, dragged_f, delta);
+                cb(&pk, dragged_f, delta);
             }
         }
     });

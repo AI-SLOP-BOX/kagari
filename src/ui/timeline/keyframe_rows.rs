@@ -49,56 +49,56 @@ pub fn draw_expanded_rows(
 
     // Collect selection toggles first; apply to app after the
     // row borrows end (app and layer cannot borrow together).
-    let mut select_requests: Vec<(&'static str, u32, bool, bool)> = Vec::new();
-    let mut select_all_reqs: Vec<&'static str> = Vec::new();
+    let mut select_requests: Vec<(String, u32, bool, bool)> = Vec::new();
+    let mut select_all_reqs: Vec<String> = Vec::new();
     // Right-click menu commands: (prop_key, frame, action)
     // 0=Linear 1=EasyEase 2=ToggleHold 3=TimeReverse 4=Delete
-    let mut kf_menu_cmds: Vec<(&'static str, u32, u8)> = Vec::new();
+    let mut kf_menu_cmds: Vec<(String, u32, u8)> = Vec::new();
 
     macro_rules! kf_menu_cb {
         () => {
-            Some(&mut |_pk: &'static str, f: u32, resp: &egui::Response| {
+            Some(&mut |_pk: &str, f: u32, resp: &egui::Response| {
                 resp.context_menu(|ui| {
                     ui.set_min_width(210.0);
                     if ui.button("⬤ Linear Interpolation").clicked() {
-                        kf_menu_cmds.push((_pk, f, 0));
+                        kf_menu_cmds.push((_pk.to_owned(), f, 0));
                         ui.close_menu();
                     }
                     if ui.button("◆ Easy Ease (F9)").clicked() {
-                        kf_menu_cmds.push((_pk, f, 1));
+                        kf_menu_cmds.push((_pk.to_owned(), f, 1));
                         ui.close_menu();
                     }
                     if ui.button("↗ Ease In (Shift+F9)").clicked() {
-                        kf_menu_cmds.push((_pk, f, 5));
+                        kf_menu_cmds.push((_pk.to_owned(), f, 5));
                         ui.close_menu();
                     }
                     if ui.button("↘ Ease Out (Ctrl+Shift+F9)").clicked() {
-                        kf_menu_cmds.push((_pk, f, 6));
+                        kf_menu_cmds.push((_pk.to_owned(), f, 6));
                         ui.close_menu();
                     }
                     if ui.button("🎯 Overshoot / Spring").clicked() {
-                        kf_menu_cmds.push((_pk, f, 7));
+                        kf_menu_cmds.push((_pk.to_owned(), f, 7));
                         ui.close_menu();
                     }
                     if ui.button("🏀 Bounce").clicked() {
-                        kf_menu_cmds.push((_pk, f, 8));
+                        kf_menu_cmds.push((_pk.to_owned(), f, 8));
                         ui.close_menu();
                     }
                     if ui.button("🪀 Elastic").clicked() {
-                        kf_menu_cmds.push((_pk, f, 9));
+                        kf_menu_cmds.push((_pk.to_owned(), f, 9));
                         ui.close_menu();
                     }
                     if ui.button("⬛ Toggle Hold Keyframe").clicked() {
-                        kf_menu_cmds.push((_pk, f, 2));
+                        kf_menu_cmds.push((_pk.to_owned(), f, 2));
                         ui.close_menu();
                     }
                     ui.separator();
                     if ui.button("⇄ Time-Reverse Keyframes").clicked() {
-                        kf_menu_cmds.push((_pk, f, 3));
+                        kf_menu_cmds.push((_pk.to_owned(), f, 3));
                         ui.close_menu();
                     }
                     if ui.button("🗑 Delete Keyframe (Del)").clicked() {
-                        kf_menu_cmds.push((_pk, f, 4));
+                        kf_menu_cmds.push((_pk.to_owned(), f, 4));
                         ui.close_menu();
                     }
                 });
@@ -107,9 +107,9 @@ pub fn draw_expanded_rows(
     }
 
     // Marquee box-select results: (prop_key, boxed frames)
-    let mut box_selects: Vec<(&'static str, Vec<u32>)> = Vec::new();
+    let mut box_selects: Vec<(String, Vec<u32>)> = Vec::new();
     // Group keyframe moves: (prop_key, dragged_frame, delta)
-    let mut group_moves: Vec<(&'static str, u32, i32)> = Vec::new();
+    let mut group_moves: Vec<(String, u32, i32)> = Vec::new();
 
     {
         let t = &mut layer.transform;
@@ -137,12 +137,12 @@ pub fn draw_expanded_rows(
                     move_kf(&mut t.position, old_f, new_f);
                     *moved = true;
                 }),
-                Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))),
+                Some(&mut |pk, f, shift, cmd| select_requests.push((pk.to_owned(), f, shift, cmd))),
                 kf_menu_cb!(),
-                Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk, frames))),
-                Some(&mut |pk, dragged_f, delta| group_moves.push((pk, dragged_f, delta))),
+                Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk.to_owned(), frames))),
+                Some(&mut |pk, dragged_f, delta| group_moves.push((pk.to_owned(), dragged_f, delta))),
                 all_kf_frames,
-                Some(&mut |pk| select_all_reqs.push(pk)),
+                Some(&mut |pk| select_all_reqs.push(pk.to_owned())),
             );
         }
         if show_transform_rows && (!kf_only || !scale_kfs.is_empty()) {
@@ -160,12 +160,12 @@ pub fn draw_expanded_rows(
                     move_kf(&mut t.scale, old_f, new_f);
                     *moved = true;
                 }),
-                Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))),
+                Some(&mut |pk, f, shift, cmd| select_requests.push((pk.to_owned(), f, shift, cmd))),
                 kf_menu_cb!(),
-                Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk, frames))),
-                Some(&mut |pk, dragged_f, delta| group_moves.push((pk, dragged_f, delta))),
+                Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk.to_owned(), frames))),
+                Some(&mut |pk, dragged_f, delta| group_moves.push((pk.to_owned(), dragged_f, delta))),
                 all_kf_frames,
-                Some(&mut |pk| select_all_reqs.push(pk)),
+                Some(&mut |pk| select_all_reqs.push(pk.to_owned())),
             );
         }
         if show_transform_rows && (!kf_only || !rot_kfs.is_empty()) {
@@ -183,12 +183,12 @@ pub fn draw_expanded_rows(
                     move_kf(&mut t.rotation, old_f, new_f);
                     *moved = true;
                 }),
-                Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))),
+                Some(&mut |pk, f, shift, cmd| select_requests.push((pk.to_owned(), f, shift, cmd))),
                 kf_menu_cb!(),
-                Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk, frames))),
-                Some(&mut |pk, dragged_f, delta| group_moves.push((pk, dragged_f, delta))),
+                Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk.to_owned(), frames))),
+                Some(&mut |pk, dragged_f, delta| group_moves.push((pk.to_owned(), dragged_f, delta))),
                 all_kf_frames,
-                Some(&mut |pk| select_all_reqs.push(pk)),
+                Some(&mut |pk| select_all_reqs.push(pk.to_owned())),
             );
         }
         if show_transform_rows && (!kf_only || !op_kfs.is_empty()) {
@@ -206,12 +206,12 @@ pub fn draw_expanded_rows(
                     move_kf(&mut t.opacity, old_f, new_f);
                     *moved = true;
                 }),
-                Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))),
+                Some(&mut |pk, f, shift, cmd| select_requests.push((pk.to_owned(), f, shift, cmd))),
                 kf_menu_cb!(),
-                Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk, frames))),
-                Some(&mut |pk, dragged_f, delta| group_moves.push((pk, dragged_f, delta))),
+                Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk.to_owned(), frames))),
+                Some(&mut |pk, dragged_f, delta| group_moves.push((pk.to_owned(), dragged_f, delta))),
                 all_kf_frames,
-                Some(&mut |pk| select_all_reqs.push(pk)),
+                Some(&mut |pk| select_all_reqs.push(pk.to_owned())),
             );
         }
         if reveal_mode == "Anchor Point" {
@@ -252,12 +252,12 @@ pub fn draw_expanded_rows(
                         move_kf($anim, old, new);
                         *project_changed = true;
                     }),
-                    Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))),
+                    Some(&mut |pk, f, shift, cmd| select_requests.push((pk.to_owned(), f, shift, cmd))),
                     kf_menu_cb!(),
-                    Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk, frames))),
-                    Some(&mut |pk, dragged, delta| group_moves.push((pk, dragged, delta))),
+                    Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk.to_owned(), frames))),
+                    Some(&mut |pk, dragged, delta| group_moves.push((pk.to_owned(), dragged, delta))),
                     all_kf_frames,
-                    Some(&mut |pk| select_all_reqs.push(pk)),
+                    Some(&mut |pk| select_all_reqs.push(pk.to_owned())),
                 );
             }};
         }
@@ -305,8 +305,7 @@ pub fn draw_expanded_rows(
         .default_open(false);
         hdr.show(ui, |ui| {
             for (label, param) in effect.effect_type.animatable_params() {
-                let prop_key_str = format!("fxid:{}::{}", effect.id, label);
-                let prop_key: &'static str = Box::leak(prop_key_str.into_boxed_str());
+                let prop_key = format!("fxid:{}::{}", effect.id, label);
                 let row_label = format!("  [{}] {}", fx_name, label);
                 match param {
                     ParamRef::Scalar(anim) => {
@@ -320,23 +319,23 @@ pub fn draw_expanded_rows(
                             zoom_span,
                             left_pane_w,
                             &prop_sel,
-                            prop_key,
+                            &prop_key,
                             Some(&mut |old_f, new_f| {
                                 move_kf(anim, old_f, new_f);
                                 *moved = true;
                             }),
                             Some(&mut |pk, f, shift, cmd| {
-                                select_requests.push((pk, f, shift, cmd))
+                                select_requests.push((pk.to_owned(), f, shift, cmd))
                             }),
                             kf_menu_cb!(),
                             Some(&mut |pk, frames: Vec<u32>, _add: bool| {
-                                box_selects.push((pk, frames))
+                                box_selects.push((pk.to_owned(), frames))
                             }),
                             Some(&mut |pk, dragged_f, delta| {
-                                group_moves.push((pk, dragged_f, delta))
+                                group_moves.push((pk.to_owned(), dragged_f, delta))
                             }),
                             all_kf_frames,
-                            Some(&mut |pk| select_all_reqs.push(pk)),
+                            Some(&mut |pk| select_all_reqs.push(pk.to_owned())),
                         );
                     }
                     ParamRef::Vec2(anim) => {
@@ -350,23 +349,23 @@ pub fn draw_expanded_rows(
                             zoom_span,
                             left_pane_w,
                             &prop_sel,
-                            prop_key,
+                            &prop_key,
                             Some(&mut |old_f, new_f| {
                                 move_kf(anim, old_f, new_f);
                                 *moved = true;
                             }),
                             Some(&mut |pk, f, shift, cmd| {
-                                select_requests.push((pk, f, shift, cmd))
+                                select_requests.push((pk.to_owned(), f, shift, cmd))
                             }),
                             kf_menu_cb!(),
                             Some(&mut |pk, frames: Vec<u32>, _add: bool| {
-                                box_selects.push((pk, frames))
+                                box_selects.push((pk.to_owned(), frames))
                             }),
                             Some(&mut |pk, dragged_f, delta| {
-                                group_moves.push((pk, dragged_f, delta))
+                                group_moves.push((pk.to_owned(), dragged_f, delta))
                             }),
                             all_kf_frames,
-                            Some(&mut |pk| select_all_reqs.push(pk)),
+                            Some(&mut |pk| select_all_reqs.push(pk.to_owned())),
                         );
                     }
                     ParamRef::Vec3(anim) => {
@@ -380,23 +379,23 @@ pub fn draw_expanded_rows(
                             zoom_span,
                             left_pane_w,
                             &prop_sel,
-                            prop_key,
+                            &prop_key,
                             Some(&mut |old_f, new_f| {
                                 move_kf(anim, old_f, new_f);
                                 *moved = true;
                             }),
                             Some(&mut |pk, f, shift, cmd| {
-                                select_requests.push((pk, f, shift, cmd))
+                                select_requests.push((pk.to_owned(), f, shift, cmd))
                             }),
                             kf_menu_cb!(),
                             Some(&mut |pk, frames: Vec<u32>, _add: bool| {
-                                box_selects.push((pk, frames))
+                                box_selects.push((pk.to_owned(), frames))
                             }),
                             Some(&mut |pk, dragged_f, delta| {
-                                group_moves.push((pk, dragged_f, delta))
+                                group_moves.push((pk.to_owned(), dragged_f, delta))
                             }),
                             all_kf_frames,
-                            Some(&mut |pk| select_all_reqs.push(pk)),
+                            Some(&mut |pk| select_all_reqs.push(pk.to_owned())),
                         );
                     }
                     ParamRef::Vec4Color(anim) => {
@@ -410,23 +409,23 @@ pub fn draw_expanded_rows(
                             zoom_span,
                             left_pane_w,
                             &prop_sel,
-                            prop_key,
+                            &prop_key,
                             Some(&mut |old_f, new_f| {
                                 move_kf(anim, old_f, new_f);
                                 *moved = true;
                             }),
                             Some(&mut |pk, f, shift, cmd| {
-                                select_requests.push((pk, f, shift, cmd))
+                                select_requests.push((pk.to_owned(), f, shift, cmd))
                             }),
                             kf_menu_cb!(),
                             Some(&mut |pk, frames: Vec<u32>, _add: bool| {
-                                box_selects.push((pk, frames))
+                                box_selects.push((pk.to_owned(), frames))
                             }),
                             Some(&mut |pk, dragged_f, delta| {
-                                group_moves.push((pk, dragged_f, delta))
+                                group_moves.push((pk.to_owned(), dragged_f, delta))
                             }),
                             all_kf_frames,
-                            Some(&mut |pk| select_all_reqs.push(pk)),
+                            Some(&mut |pk| select_all_reqs.push(pk.to_owned())),
                         );
                     }
                 }
@@ -436,8 +435,7 @@ pub fn draw_expanded_rows(
 
     // ── Puppet Pin rows (keyframeable positions) ──
     for pin in layer.puppet_pins.iter_mut() {
-        let pin_key_str = format!("pin_{}", pin.id);
-        let pin_key: &'static str = Box::leak(pin_key_str.into_boxed_str());
+        let pin_key = format!("pin_{}", pin.id);
         let moved_p: &mut bool = project_changed;
         let kfs = get_kfs(&pin.position);
         draw_prop_row_ext(
@@ -449,17 +447,17 @@ pub fn draw_expanded_rows(
             zoom_span,
             left_pane_w,
             &prop_sel,
-            pin_key,
+            &pin_key,
             Some(&mut |old_f, new_f| {
                 move_kf(&mut pin.position, old_f, new_f);
                 *moved_p = true;
             }),
-            Some(&mut |pk, f, shift, cmd| select_requests.push((pk, f, shift, cmd))),
+            Some(&mut |pk, f, shift, cmd| select_requests.push((pk.to_owned(), f, shift, cmd))),
             None,
-            Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk, frames))),
-            Some(&mut |pk, dragged_f, delta| group_moves.push((pk, dragged_f, delta))),
+            Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk.to_owned(), frames))),
+            Some(&mut |pk, dragged_f, delta| group_moves.push((pk.to_owned(), dragged_f, delta))),
             all_kf_frames,
-            Some(&mut |pk| select_all_reqs.push(pk)),
+            Some(&mut |pk| select_all_reqs.push(pk.to_owned())),
         );
     }
 
@@ -579,10 +577,10 @@ pub fn draw_expanded_rows(
         let t = &mut layer.transform;
         let sel_frames: Vec<u32> = selected_keyframes
             .iter()
-            .filter(|(li, p, _)| *li == i && p == pk)
+            .filter(|(li, p, _)| *li == i && p == &pk)
             .map(|(_, _, fr)| *fr)
             .collect();
-        match pk {
+        match pk.as_str() {
             "position" => match cmd {
                 3 => reverse_track(&mut t.position),
                 4 => delete_track_kf(&mut t.position, f),
@@ -673,7 +671,7 @@ pub fn draw_expanded_rows(
                             }
                         };
                     }
-                    match pk {
+                    match pk.as_str() {
                         "repeater_copies" => {
                             if let Some(a) = repeater.copies_animation.as_mut() {
                                 apply_repeater!(a);
@@ -722,7 +720,7 @@ pub fn draw_expanded_rows(
         for (pk, dragged_f, delta) in group_moves {
             let followers: Vec<u32> = selected_keyframes
                 .iter()
-                .filter(|(li, p, fr)| *li == i && p == pk && *fr != dragged_f)
+                .filter(|(li, p, fr)| *li == i && p == &pk && *fr != dragged_f)
                 .map(|(_, _, fr)| *fr)
                 .collect();
             if followers.is_empty() {
@@ -742,7 +740,7 @@ pub fn draw_expanded_rows(
                     }
                 }};
             }
-            match pk {
+            match pk.as_str() {
                 "position" => shift_track!(&mut t.position),
                 "scale" => shift_track!(&mut t.scale),
                 "rotation" => shift_track!(&mut t.rotation),
@@ -924,7 +922,7 @@ pub fn draw_expanded_rows(
 
     for (pk, f, shift, cmd) in select_requests {
         if f == u32::MAX {
-            let all = prop_all_frames(layer, pk);
+            let all = prop_all_frames(layer, &pk);
             if shift || cmd {
                 for fr in all {
                     selected_keyframes.insert((i, pk.to_string(), fr));
