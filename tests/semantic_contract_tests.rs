@@ -228,6 +228,32 @@ fn representative_effects_have_semantic_pixel_contracts() {
 }
 
 #[test]
+fn linear_wipe_progresses_from_left_to_right_at_zero_degrees() {
+    let mut pixels = vec![255u8; 8 * 4];
+    apply_layer_effects(
+        None,
+        None,
+        &mut pixels,
+        8,
+        1,
+        &[Effect {
+            id: "wipe".into(),
+            name: "Linear Wipe".into(),
+            effect_type: EffectType::LinearWipe {
+                completion: constant(50.0),
+                angle: constant(0.0),
+            },
+            enabled: true,
+        }],
+        0,
+        24,
+    );
+    let alpha: Vec<_> = pixels.chunks_exact(4).map(|pixel| pixel[3]).collect();
+    assert_eq!(&alpha[..4], &[255, 255, 255, 255]);
+    assert_eq!(&alpha[4..], &[0, 0, 0, 0]);
+}
+
+#[test]
 fn mfr_render_reports_each_expected_frame_once() {
     let mut queue = ParallelRenderQueue::new();
     let item_count = 4;

@@ -558,7 +558,7 @@ pub fn apply_linear_wipe(
     }
 
     let rad = angle_deg.to_radians();
-    let dir = [rad.sin(), -rad.cos()];
+    let dir = [rad.cos(), rad.sin()];
     let corners = [
         0.0,
         width.saturating_sub(1) as f32 * dir[0],
@@ -568,12 +568,16 @@ pub fn apply_linear_wipe(
     ];
     let min_proj = corners.iter().copied().fold(f32::INFINITY, f32::min);
     let max_proj = corners.iter().copied().fold(f32::NEG_INFINITY, f32::max);
-    let threshold = min_proj + (max_proj - min_proj) * (completion * 0.01);
 
     for y in 0..height {
         for x in 0..width {
             let proj = x as f32 * dir[0] + y as f32 * dir[1];
-            if proj < threshold {
+            let normalized = if max_proj > min_proj {
+                (proj - min_proj) / (max_proj - min_proj)
+            } else {
+                0.0
+            };
+            if normalized > completion * 0.01 {
                 let idx = ((y * width + x) * 4 + 3) as usize;
                 pixels[idx] = 0;
             }
