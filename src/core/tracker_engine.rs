@@ -614,11 +614,31 @@ impl TrackerEngine {
         stabilize_position: bool,
         stabilize_rotation: bool,
     ) {
-        if layer_idx >= comp.layers.len() {
+        Self::apply_stabilize_tracker_to_target(
+            comp,
+            layer_idx,
+            tracker_idx,
+            layer_idx,
+            stabilize_position,
+            stabilize_rotation,
+        );
+    }
+
+    /// Apply reverse stabilization from a tracker on one layer to another layer.
+    /// This is the target-aware form used by the tracker panel's Stabilize action.
+    pub fn apply_stabilize_tracker_to_target(
+        comp: &mut Composition,
+        source_layer_idx: usize,
+        tracker_idx: usize,
+        target_layer_idx: usize,
+        stabilize_position: bool,
+        stabilize_rotation: bool,
+    ) {
+        if source_layer_idx >= comp.layers.len() || target_layer_idx >= comp.layers.len() {
             return;
         }
 
-        let tracker_kfs = match comp.layers[layer_idx].trackers.get(tracker_idx) {
+        let tracker_kfs = match comp.layers[source_layer_idx].trackers.get(tracker_idx) {
             Some(t) => match &t.position {
                 Animatable::Animated(kfs) => kfs.clone(),
                 Animatable::Constant(pos) => {
@@ -633,7 +653,7 @@ impl TrackerEngine {
         }
 
         let base_pos = tracker_kfs[0].value;
-        let init_pos = comp.layers[layer_idx].transform.position.evaluate(0);
+        let init_pos = comp.layers[target_layer_idx].transform.position.evaluate(0);
 
         if stabilize_position {
             let mut stab_pos_kfs = Vec::new();
@@ -647,7 +667,7 @@ impl TrackerEngine {
                     InterpolationType::Linear,
                 ));
             }
-            comp.layers[layer_idx].transform.position = Animatable::Animated(stab_pos_kfs);
+            comp.layers[target_layer_idx].transform.position = Animatable::Animated(stab_pos_kfs);
         }
 
         if stabilize_rotation && tracker_kfs.len() > 1 {
@@ -655,7 +675,7 @@ impl TrackerEngine {
             let base_angle = (tracker_kfs[1].value[1] - tracker_kfs[0].value[1])
                 .atan2(tracker_kfs[1].value[0] - tracker_kfs[0].value[0])
                 .to_degrees();
-            let init_rot = comp.layers[layer_idx].transform.rotation.evaluate(0);
+            let init_rot = comp.layers[target_layer_idx].transform.rotation.evaluate(0);
 
             for i in 0..(tracker_kfs.len() - 1) {
                 let p1 = tracker_kfs[i].value;
@@ -668,7 +688,7 @@ impl TrackerEngine {
                     InterpolationType::Linear,
                 ));
             }
-            comp.layers[layer_idx].transform.rotation = Animatable::Animated(stab_rot_kfs);
+            comp.layers[target_layer_idx].transform.rotation = Animatable::Animated(stab_rot_kfs);
         }
     }
 }
@@ -774,6 +794,16 @@ mod tests {
             Keyframe::new(10, [200.0, 150.0], InterpolationType::Linear),
         ]);
         src_layer.trackers.push(tp);
+        let mut second_tp = TrackerPoint::new(
+            "tp_2".to_string(),
+            "Point2".to_string(),
+            [10.0, 20.0],
+        );
+        second_tp.position = Animatable::Animated(vec![
+            Keyframe::new(0, [10.0, 20.0], InterpolationType::Linear),
+            Keyframe::new(10, [40.0, 80.0], InterpolationType::Linear),
+        ]);
+        src_layer.trackers.push(second_tp);
         comp.layers.push(src_layer);
 
         let target_layer = Layer::new(
@@ -792,6 +822,64 @@ mod tests {
         assert_eq!(
             comp.layers[1].transform.position.evaluate(10),
             [200.0, 150.0]
+        );
+
+        TrackerEngine::apply_tracker_to_target(&mut comp, 0, 1, 1, true, false);
+        assert_eq!(
+            comp.layers[1].transform.position.evaluate(0),
+            [10.0, 20.0]
+        );
+        assert_eq!(
+            comp.layers[1].transform.position.evaluate(10),
+            [40.0, 80.0]
+        );
+    }
+
+    #[test]
+    fn test_stabilize_tracker_to_separate_target_inverts_motion() {
+        let mut comp = Composition::new(
+            "comp_stab".to_string(),
+            "StabilizeComp".to_string(),
+            1920,
+            1080,
+            30,
+            100,
+        );
+        let mut source = Layer::new(
+            "source".to_string(),
+            "Tracked Source".to_string(),
+            LayerType::Null,
+            100,
+        );
+        let mut tracker = TrackerPoint::new(
+            "track".to_string(),
+            "Track".to_string(),
+            [100.0, 100.0],
+        );
+        tracker.position = Animatable::Animated(vec![
+            Keyframe::new(0, [100.0, 100.0], InterpolationType::Linear),
+            Keyframe::new(10, [160.0, 140.0], InterpolationType::Linear),
+        ]);
+        source.trackers.push(tracker);
+        comp.layers.push(source);
+
+        let mut target = Layer::new(
+            "target".to_string(),
+            "Stabilized Target".to_string(),
+            LayerType::Null,
+            100,
+        );
+        target.transform.position = Animatable::new_constant([500.0, 300.0]);
+        comp.layers.push(target);
+
+        TrackerEngine::apply_stabilize_tracker_to_target(&mut comp, 0, 0, 1, true, false);
+        assert_eq!(
+            comp.layers[1].transform.position.evaluate(0),
+            [500.0, 300.0]
+        );
+        assert_eq!(
+            comp.layers[1].transform.position.evaluate(10),
+            [440.0, 260.0]
         );
     }
 

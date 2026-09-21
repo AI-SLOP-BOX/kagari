@@ -560,8 +560,27 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                     )
                     .clicked()
                 {
-                    app.toasts
-                        .info("Select the target layer in 'Apply to Layer' dropdown");
+                    if let Some(target_idx) = app.tracker_apply_target {
+                        app.modify_project(|p| {
+                            let comp = p.active_composition_mut();
+                            crate::core::tracker_engine::TrackerEngine::apply_tracker_to_target(
+                                comp,
+                                idx,
+                                active_tk_idx,
+                                target_idx,
+                                true,
+                                false,
+                            );
+                        });
+                        app.toasts.info(format!(
+                            "Applied Tracker {} position to layer {}",
+                            active_tk_idx + 1,
+                            target_idx + 1
+                        ));
+                    } else {
+                        app.toasts
+                            .info("Select the target layer in 'Apply to Layer' dropdown");
+                    }
                 }
             });
 
@@ -595,7 +614,7 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                     if custom_widgets::ae_button_accent(ui, "Apply Motion → Target").clicked() {
                         app.modify_project(|p| {
                             let comp = p.active_composition_mut();
-                            crate::core::tracker_engine::TrackerEngine::apply_tracker_to_target(comp, idx, 0, target_idx, true, false);
+                            crate::core::tracker_engine::TrackerEngine::apply_tracker_to_target(comp, idx, active_tk_idx, target_idx, true, false);
                         });
                         app.toasts.info(format!("Applied tracking to layer {}", target_idx + 1));
                     }
@@ -629,7 +648,7 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                     if custom_widgets::ae_button(ui, "🎥 Stabilize Motion").on_hover_text("Cancel camera shake by inverting motion onto target anchor/position").clicked() {
                         app.modify_project(|p| {
                             let comp = p.active_composition_mut();
-                            crate::core::tracker_engine::TrackerEngine::apply_tracker_to_target(comp, idx, 0, target_idx, true, true);
+                            crate::core::tracker_engine::TrackerEngine::apply_stabilize_tracker_to_target(comp, idx, active_tk_idx, target_idx, true, true);
                         });
                         app.toasts.info(format!("Stabilized motion applied to layer {}", target_idx + 1));
                     }
@@ -655,7 +674,7 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                         );
                         comp.add_layer(null_layer);
                         crate::core::tracker_engine::TrackerEngine::apply_tracker_to_target(
-                            comp, idx, 0, null_idx, true, false,
+                            comp, idx, active_tk_idx, null_idx, true, false,
                         );
                     });
                     app.toasts
