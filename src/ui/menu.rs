@@ -89,6 +89,15 @@ fn insert_imported_svg_masks(
             comp.width as f32 * 0.5,
             comp.height as f32 * 0.5,
         ]);
+        if let Some((stroke_color, stroke_width)) = paths.iter().find_map(|path| {
+            path.stroke_color
+                .filter(|_| path.stroke_width.is_finite() && path.stroke_width > 0.0)
+                .map(|color| (color, path.stroke_width))
+        }) {
+            layer.style.stroke.enabled = true;
+            layer.style.stroke.color = stroke_color;
+            layer.style.stroke.size = stroke_width;
+        }
         for (index, vector_path) in paths.into_iter().enumerate() {
             let mut mask = crate::core::mask::Mask::new_closed(
                 format!("mask_svg_{}", index + 1),
