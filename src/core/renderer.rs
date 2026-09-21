@@ -65,6 +65,29 @@ fn effective_render_frame(layer: &Layer, frame: u32, fps: u32) -> u32 {
     layer.effective_render_frame(frame, fps)
 }
 
+fn gpu_layer_draw_order(comp: &Composition, layers: &[&Layer], frame: u32) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..layers.len()).collect();
+    if !comp.layers.iter().any(|layer| layer.is_3d) {
+        return order;
+    }
+    order.sort_by(|&a, &b| {
+        let depth = |index: usize| {
+            let layer = layers[index];
+            if layer.is_3d {
+                let evaluated = effective_render_frame(layer, frame, comp.fps);
+                layer.transform_3d.position.evaluate(evaluated)[2]
+            } else {
+                0.0
+            }
+        };
+        depth(a)
+            .partial_cmp(&depth(b))
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.cmp(&b))
+    });
+    order
+}
+
 fn layer_position_at_render_frame(comp: &Composition, layer: &Layer, frame: u32) -> [f32; 2] {
     let effective_frame = effective_render_frame(layer, frame, comp.fps);
     let has_exprs = layer.transform.position_expression.is_some()
@@ -2810,7 +2833,8 @@ impl WgpuRenderer {
                         continue;
                     };
                     for instance in crate::core::shape_repeater::evaluate_shape_repeater_at_frame(
-                        repeater, frame,
+                        repeater,
+                        effective_render_frame(layer, frame, comp.fps),
                     ) {
                         let matrix = instance.transform_matrix;
                         let copy_transform = [
@@ -2830,6 +2854,36 @@ impl WgpuRenderer {
                         layer_textures.push(texture.clone());
                     }
                 }
+            }
+
+            // Keep GPU painter order consistent with the software compositor.
+            // A 3D composition must be sorted by the evaluated layer depth;
+            // iterating the project array directly makes remapped layers draw
+            // in the wrong front-to-back order.
+            let order = gpu_layer_draw_order(comp, &active_layers, frame);
+            if order.iter().enumerate().any(|(index, &value)| index != value) {
+                let old_active_layers = active_layers;
+                let old_comp_indices = comp_indices;
+                let old_uniforms = uniforms;
+                let old_layer_mask_plans = layer_mask_plans;
+                let old_layer_textures = layer_textures;
+                active_layers = order.iter().map(|&index| old_active_layers[index]).collect();
+                comp_indices = order
+                    .iter()
+                    .map(|&index| old_comp_indices[index])
+                    .collect();
+                uniforms = order
+                    .iter()
+                    .map(|&index| old_uniforms[index])
+                    .collect();
+                layer_mask_plans = order
+                    .iter()
+                    .map(|&index| old_layer_mask_plans[index].clone())
+                    .collect();
+                layer_textures = order
+                    .iter()
+                    .map(|&index| old_layer_textures[index].clone())
+                    .collect();
             }
 
             // Step 1b: Prepare track matte textures. For each layer with a track
@@ -3782,6 +3836,51 @@ mod tests {
         let velocity = layer_motion_velocity(&comp, &comp.layers[0], 15);
         assert!((velocity[0] - 1.0).abs() < 1e-5);
         assert!(velocity[1].abs() < 1e-5);
+    }
+
+    #[test]
+    fn gpu_draw_order_uses_remapped_3d_depth_and_keeps_2d_stable() {
+        let mut comp = Composition::new("comp".into(), "Depth order".into(), 64, 64, 30, 30);
+        let mut far = Layer::new(
+            "far".into(),
+            "Far".into(),
+            LayerType::Solid {
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
+            30,
+        );
+        far.is_3d = true;
+        far.transform_3d.position = crate::core::property::Animatable::new_animated(vec![
+            crate::core::keyframe::Keyframe::new(
+                0,
+                [32.0, 32.0, 10.0],
+                crate::core::keyframe::InterpolationType::Linear,
+            ),
+            crate::core::keyframe::Keyframe::new(
+                20,
+                [32.0, 32.0, 90.0],
+                crate::core::keyframe::InterpolationType::Linear,
+            ),
+        ]);
+        far.freeze_at(20);
+
+        let mut near = Layer::new(
+            "near".into(),
+            "Near".into(),
+            LayerType::Solid {
+                color: [0.0, 1.0, 0.0, 1.0],
+            },
+            30,
+        );
+        near.is_3d = true;
+        near.transform_3d.position = crate::core::property::Animatable::new_constant([
+            32.0, 32.0, 50.0,
+        ]);
+
+        comp.layers.push(far);
+        comp.layers.push(near);
+        let layers: Vec<&Layer> = comp.layers.iter().collect();
+        assert_eq!(gpu_layer_draw_order(&comp, &layers, 0), vec![1, 0]);
     }
 }
 

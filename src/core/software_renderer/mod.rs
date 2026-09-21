@@ -383,6 +383,15 @@ pub fn render_frame_to_pixels(
     render_frame_to_pixels_filtered(comp, frame, width, height, exposure_ev, lut_mode, None)
 }
 
+fn layer_depth_for_sort(comp: &Composition, layer: &Layer, frame: u32) -> f32 {
+    if layer.is_3d {
+        let effective_frame = layer.effective_render_frame(frame, comp.fps);
+        layer.transform_3d.position.evaluate(effective_frame)[2]
+    } else {
+        0.0
+    }
+}
+
 /// Render a frame while optionally limiting the top-level pass to one layer.
 ///
 /// Source-layer effects need a layer's pixels without losing the original
@@ -599,11 +608,7 @@ pub(crate) fn render_frame_to_pixels_filtered(
             .iter()
             .enumerate()
             .map(|(i, l)| {
-                let z = if l.is_3d {
-                    l.transform_3d.position.evaluate(frame)[2]
-                } else {
-                    0.0
-                };
+                let z = layer_depth_for_sort(comp, l, frame);
                 (i, z)
             })
             .collect();
@@ -2770,6 +2775,28 @@ mod shadow_tests {
             sum_near(59, 59) > sum_near(43, 43) * 1.5,
             "shadow must follow remapped caster position"
         );
+    }
+
+    #[test]
+    fn depth_sort_uses_time_remapped_3d_position() {
+        let mut comp = Composition::new("depth-remap".into(), "Depth remap".into(), 64, 64, 30, 30);
+        let mut layer = Layer::new(
+            "depth".into(),
+            "Animated depth".into(),
+            LayerType::Solid {
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
+            30,
+        );
+        layer.is_3d = true;
+        layer.transform_3d.position = Animatable::new_animated(vec![
+            Keyframe::new(0, [32.0, 32.0, 10.0], InterpolationType::Linear),
+            Keyframe::new(20, [32.0, 32.0, 90.0], InterpolationType::Linear),
+        ]);
+        layer.freeze_at(20);
+        comp.layers.push(layer);
+
+        assert_eq!(layer_depth_for_sort(&comp, &comp.layers[0], 0), 90.0);
     }
 
     #[test]
