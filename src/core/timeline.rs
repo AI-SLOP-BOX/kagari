@@ -2490,16 +2490,34 @@ impl Composition {
 
         match layer.scene_object.as_ref() {
             Some(SceneObjectRef::Camera { id }) => {
-                if let Some(camera_index) = self.cameras.iter().position(|camera| camera.id == *id) {
-                    let was_active = self.cameras[camera_index].active;
-                    self.cameras.remove(camera_index);
-                    if was_active {
-                        self.set_active_camera(None);
+                let still_referenced = self.layers.iter().any(|other| {
+                    matches!(
+                        other.scene_object.as_ref(),
+                        Some(SceneObjectRef::Camera { id: other_id }) if other_id == id
+                    )
+                });
+                if !still_referenced {
+                    if let Some(camera_index) =
+                        self.cameras.iter().position(|camera| camera.id == *id)
+                    {
+                        let was_active = self.cameras[camera_index].active;
+                        self.cameras.remove(camera_index);
+                        if was_active {
+                            self.set_active_camera(None);
+                        }
                     }
                 }
             }
             Some(SceneObjectRef::Light { id }) => {
-                self.lights.retain(|light| light.id != *id);
+                let still_referenced = self.layers.iter().any(|other| {
+                    matches!(
+                        other.scene_object.as_ref(),
+                        Some(SceneObjectRef::Light { id: other_id }) if other_id == id
+                    )
+                });
+                if !still_referenced {
+                    self.lights.retain(|light| light.id != *id);
+                }
             }
             None => {}
         }
@@ -2526,32 +2544,77 @@ impl Composition {
             })
             .collect();
 
+        let shared_camera_ids: std::collections::HashSet<&str> = camera_ids
+            .iter()
+            .copied()
+            .filter(|id| {
+                self.layers.iter().any(|layer| {
+                    matches!(
+                        layer.scene_object.as_ref(),
+                        Some(SceneObjectRef::Camera { id: layer_id }) if layer_id == id
+                    )
+                })
+            })
+            .collect();
         let mut moved_cameras = Vec::new();
+        let mut copied_cameras = Vec::new();
         self.cameras.retain(|camera| {
             if camera_ids.contains(camera.id.as_str()) {
-                moved_cameras.push(camera.clone());
-                false
+                if shared_camera_ids.contains(camera.id.as_str()) {
+                    copied_cameras.push(camera.clone());
+                    true
+                } else {
+                    moved_cameras.push(camera.clone());
+                    false
+                }
             } else {
                 true
             }
         });
-        if moved_cameras.iter().any(|camera| camera.active) {
+        let mut incoming_cameras = moved_cameras;
+        incoming_cameras.extend(copied_cameras);
+        if incoming_cameras.iter().any(|camera| camera.active) {
             for camera in &mut destination.cameras {
                 camera.active = false;
             }
         }
-        destination.cameras.extend(moved_cameras);
+        for camera in incoming_cameras {
+            destination.cameras.retain(|existing| existing.id != camera.id);
+            destination.cameras.push(camera);
+        }
 
+        let shared_light_ids: std::collections::HashSet<&str> = light_ids
+            .iter()
+            .copied()
+            .filter(|id| {
+                self.layers.iter().any(|layer| {
+                    matches!(
+                        layer.scene_object.as_ref(),
+                        Some(SceneObjectRef::Light { id: layer_id }) if layer_id == id
+                    )
+                })
+            })
+            .collect();
         let mut moved_lights = Vec::new();
+        let mut copied_lights = Vec::new();
         self.lights.retain(|light| {
             if light_ids.contains(light.id.as_str()) {
-                moved_lights.push(light.clone());
-                false
+                if shared_light_ids.contains(light.id.as_str()) {
+                    copied_lights.push(light.clone());
+                    true
+                } else {
+                    moved_lights.push(light.clone());
+                    false
+                }
             } else {
                 true
             }
         });
-        destination.lights.extend(moved_lights);
+        moved_lights.extend(copied_lights);
+        for light in moved_lights {
+            destination.lights.retain(|existing| existing.id != light.id);
+            destination.lights.push(light);
+        }
     }
 
     /// Resolve the active camera with the transform animated on its timeline
@@ -4026,6 +4089,65 @@ mod multi_camera_tests {
 
         comp.remove_layer_at(0).expect("light layer should exist");
         assert!(!comp.lights.iter().any(|light| light.id == "light_2"));
+    }
+
+    #[test]
+    fn shared_scene_object_survives_until_last_layer_is_removed() {
+        let mut comp = Composition::new("c".into(), "C".into(), 100, 100, 30, 30);
+        let mut camera = Camera3D::default();
+        camera.id = "camera_1".into();
+        comp.cameras.push(camera);
+        for index in 0..2 {
+            let mut layer = Layer::new(
+                format!("camera_layer_{index}"),
+                format!("Camera 1 copy {index}"),
+                LayerType::Null,
+                30,
+            );
+            layer.scene_object = Some(SceneObjectRef::Camera {
+                id: "camera_1".into(),
+            });
+            comp.layers.push(layer);
+        }
+
+        comp.remove_layer_at(0).expect("first shared row should exist");
+        assert!(comp.cameras.iter().any(|camera| camera.id == "camera_1"));
+        comp.remove_layer_at(0).expect("last shared row should exist");
+        assert!(!comp.cameras.iter().any(|camera| camera.id == "camera_1"));
+    }
+
+    #[test]
+    fn precompose_shared_scene_object_keeps_parent_and_child_bindings() {
+        let mut comp = Composition::new("main".into(), "Main".into(), 100, 100, 30, 30);
+        let mut camera = Camera3D::default();
+        camera.id = "camera_1".into();
+        camera.active = true;
+        comp.cameras.push(camera);
+        for index in 0..2 {
+            let mut layer = Layer::new(
+                format!("camera_layer_{index}"),
+                format!("Camera 1 copy {index}"),
+                LayerType::Null,
+                30,
+            );
+            layer.scene_object = Some(SceneObjectRef::Camera {
+                id: "camera_1".into(),
+            });
+            comp.layers.push(layer);
+        }
+
+        let nested = comp
+            .precompose_layers(
+                &["camera_layer_0".into()],
+                "sub1".into(),
+                "Sub Comp 1".into(),
+                PrecompAttributesMode::MoveToNewComp,
+            )
+            .expect("precompose should succeed");
+
+        assert!(comp.cameras.iter().any(|camera| camera.id == "camera_1"));
+        assert!(nested.cameras.iter().any(|camera| camera.id == "camera_1"));
+        assert_eq!(nested.resolve_camera().id, "camera_1");
     }
 
     #[test]
