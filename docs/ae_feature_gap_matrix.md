@@ -4,6 +4,15 @@ This is the working feature inventory for the replacement effort. It separates
 the existence of a Rust type or panel from an end-to-end feature that a user
 can operate, render, save, and undo.
 
+The baseline follows Adobe's documented workflow: import and organize footage,
+create and composite layers, animate properties and expressions, apply effects,
+preview with color management, and render/export. A row is not considered
+complete merely because a panel or enum exists: the acceptance path is operate
+the feature, save and reload the project, preview it, and render/export the
+result without a silent fallback to a different meaning.
+
+Reference baseline: <https://helpx.adobe.com/after-effects/desktop/get-started/understand-after-effects-workflow/workflows.html>
+
 Status:
 
 - `✅` implemented and connected to the normal workflow
@@ -42,7 +51,7 @@ is intentionally tracked separately from the core workflow.
 | Effects | Searchable effect library, animated parameters, presets | 🟡 | Large `EffectType` registry and controls; effect-standard parity is explicitly out of scope for exact cloning |
 | Particles / procedural | Particles, lightning, star field, audio spectrum and generators | 🟡 | Engines and render paths exist; authoring, caching, and interaction depth vary by feature |
 | Audio | Import, playback sync, mixing, meters, audio-to-keyframes | 🟡 | In-process Symphonia decoding now covers WAV/MP3/FLAC/Ogg/AIFF/CAF/MP4-family audio, project assets can be inserted as real audio layers, and the master VU/32-band display uses the live mix buffer; per-track metering and correction/interchange workflow still need work |
-| Preview | Cached frames, RAM preview, adaptive quality, audio sync | 🟡 | Cache and playback exist; true real-time GPU effect processing is still limited |
+| Preview | Cached frames, RAM preview, adaptive quality, audio sync | 🟡 | Cache and playback exist; GPU preview now explicitly falls back for unsupported blend modes, Shape Freeform/Stroke/3D geometry, layer styles, and multi-effect stacks; true real-time GPU effect processing is still limited |
 | Render queue | Multiple items, progress, cancellation/failure reporting | ✅ | `core/render_queue.rs`, `ui/render_queue.rs` |
 | Export | FFmpeg video, image/EXR paths, GIF, Lottie, MLT/OTIO-style interchange | 🟡 | Several exporters exist; codec/metadata/alpha compatibility needs broader fixture testing |
 | Essential Graphics / templates | Exposed controls, reusable motion-graphics templates, host-side overrides | 🟡 | Native MOGRT-style package and import/export UI exist; Adobe-host compatibility, richer property binding, and template validation remain narrower |
