@@ -347,12 +347,27 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                                         ))
                                         .collect(),
                                 );
+                                let camera_id = camera.id.clone();
+                                let camera_name = camera.name.clone();
+                                let camera_transform = camera.transform.clone();
                                 for existing in &mut comp_mut.cameras {
                                     existing.active = false;
                                 }
                                 comp_mut.cameras.push(camera);
                                 let camera_idx = comp_mut.cameras.len() - 1;
                                 comp_mut.set_active_camera(Some(camera_idx));
+                                let mut camera_layer = crate::core::timeline::Layer::new(
+                                    comp_mut.next_layer_id("camera"),
+                                    camera_name,
+                                    crate::core::timeline::LayerType::Null,
+                                    comp_mut.duration_frames,
+                                );
+                                camera_layer.is_3d = true;
+                                camera_layer.transform_3d = camera_transform;
+                                camera_layer.scene_object = Some(
+                                    crate::core::timeline::SceneObjectRef::Camera { id: camera_id },
+                                );
+                                comp_mut.add_layer(camera_layer);
                                 app.commit_project(temp_proj);
                                 app.toasts.info(format!(
                                     "3D Camera solved from {} tracks (average error: {:.2} px)",
