@@ -432,13 +432,10 @@ fn expand_repeated_svg_commands(tokens: Vec<String>) -> Vec<String> {
 
         let mut first_group = true;
         while index < tokens.len() && !is_svg_command_token(&tokens[index]) {
-            if index + arity > tokens.len()
-                || tokens[index..index + arity]
-                    .iter()
-                    .any(|token| is_svg_command_token(token))
-            {
+            let Some((group, consumed)) = next_svg_parameter_group(&tokens, index, command, arity)
+            else {
                 break;
-            }
+            };
             if !first_group {
                 let repeated_command = if matches!(command, 'M' | 'm') {
                     if command == 'M' {
@@ -451,12 +448,46 @@ fn expand_repeated_svg_commands(tokens: Vec<String>) -> Vec<String> {
                 };
                 expanded.push(repeated_command.to_string());
             }
-            expanded.extend(tokens[index..index + arity].iter().cloned());
-            index += arity;
+            expanded.extend(group);
+            index += consumed;
             first_group = false;
         }
     }
     expanded
+}
+
+/// Returns one complete parameter group, including SVG's compact arc-flag
+/// spelling (`A 10 10 0 01 20 20`). The two flags are the only path values
+/// allowed to be adjacent without a separator, so this can be normalized
+/// before the regular command parser consumes the group.
+fn next_svg_parameter_group(
+    tokens: &[String],
+    index: usize,
+    command: char,
+    arity: usize,
+) -> Option<(Vec<String>, usize)> {
+    if matches!(command, 'A' | 'a')
+        && index + 6 <= tokens.len()
+        && tokens[index + 3].len() == 2
+        && tokens[index + 3]
+            .chars()
+            .all(|character| matches!(character, '0' | '1'))
+    {
+        let mut group = tokens[index..index + 3].to_vec();
+        let mut flags = tokens[index + 3].chars();
+        group.push(flags.next()?.to_string());
+        group.push(flags.next()?.to_string());
+        group.extend(tokens[index + 4..index + 6].iter().cloned());
+        return Some((group, 6));
+    }
+    if index + arity > tokens.len()
+        || tokens[index..index + arity]
+            .iter()
+            .any(|token| is_svg_command_token(token))
+    {
+        return None;
+    }
+    Some((tokens[index..index + arity].to_vec(), arity))
 }
 
 fn is_svg_command_token(token: &str) -> bool {
@@ -1074,6 +1105,17 @@ mod tests {
             .expect("zero-radius arc should fall back to a line");
         assert_eq!(line.len(), 2);
         assert_eq!(line[1].position, [9.0, 10.0]);
+    }
+
+    #[test]
+    fn test_parse_svg_arc_accepts_compact_flag_pair() {
+        let verts = parse_svg_path_data("M 10 0 A 10 10 0 01 -10 0")
+            .expect("compact arc flags should parse");
+        assert_eq!(verts.len(), 3);
+        assert_eq!(
+            verts.last().expect("compact arc endpoint").position,
+            [-10.0, 0.0]
+        );
     }
 
     #[test]
