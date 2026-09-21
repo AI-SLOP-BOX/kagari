@@ -409,6 +409,8 @@ pub struct KagariApp {
     pub audio_playback: Option<crate::core::audio_playback::AudioPlayback>,
     /// Live audio meter (linear 0..1) from the mix, updated each UI frame.
     pub audio_meter: (f32, f32),
+    /// Live 32-band spectrum values derived from the same mix used by the VU meter.
+    pub audio_spectrum_bands: Vec<f32>,
     /// Whether the last viewport render used GPU (updated each frame by viewport)
     pub gpu_rendered: bool,
     /// Layer index being renamed (inline edit), None = not renaming
@@ -619,6 +621,7 @@ impl Default for KagariApp {
             audio_mixer_channels: Vec::new(),
             audio_playback: crate::core::audio_playback::AudioPlayback::new().ok(),
             audio_meter: (0.0, 0.0),
+            audio_spectrum_bands: vec![0.0; 32],
             gpu_rendered: false,
             renaming_layer: None,
             show_home: crate::ui::project_io::welcome_on_startup(),
@@ -1040,7 +1043,7 @@ impl KagariApp {
                 let project = self.history.current();
                 let comp = project.active_composition();
                 let dsp = self.master_dsp_params();
-                let (_mix, meter) = crate::core::audio_engine::mix_audio_sources_for_frame(
+                let (mix, meter) = crate::core::audio_engine::mix_audio_sources_for_frame(
                     comp,
                     self.playback.current_frame,
                     48000,
@@ -1053,6 +1056,16 @@ impl KagariApp {
                     db_to_lin(meter.peak_db_left),
                     db_to_lin(meter.peak_db_right),
                 );
+                let spectrum_options = crate::core::audio_spectrum::AudioSpectrumOptions {
+                    frequency_bands: 32,
+                    ..Default::default()
+                };
+                self.audio_spectrum_bands =
+                    crate::core::audio_spectrum::generate_audio_spectrum_bands(
+                        &mix,
+                        48000,
+                        &spectrum_options,
+                    );
             }
 
             // Mix only when audio graph or work area changes (not every frame)

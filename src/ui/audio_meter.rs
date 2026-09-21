@@ -7,21 +7,9 @@ pub fn draw_content(app: &mut KagariApp, ui: &mut egui::Ui) {
         ui.heading("MASTER VU");
         ui.separator();
 
-        let is_playing = app.playback.is_playing;
-        let current_frame = app.playback.current_frame;
-
         let vol = app.playback.master_volume;
-
-        // Calculate simulated peak levels based on playing state & frame phase
-        let (left_peak, right_peak) = if is_playing {
-            let t = current_frame as f32 * 0.2;
-            let l = ((t.sin().abs() * 0.7 + (t * 2.3).cos().abs() * 0.3) * vol).clamp(0.05, 0.98);
-            let r = (((t + 0.8).sin().abs() * 0.65 + ((t + 0.8) * 1.9).cos().abs() * 0.35) * vol)
-                .clamp(0.05, 0.95);
-            (l, r)
-        } else {
-            (0.02 * vol, 0.02 * vol)
-        };
+        let left_peak = (app.audio_meter.0 * vol).clamp(0.0, 1.0);
+        let right_peak = (app.audio_meter.1 * vol).clamp(0.0, 1.0);
 
         let meter_height = 200.0;
         let meter_width = 16.0;
@@ -52,17 +40,11 @@ pub fn draw_content(app: &mut KagariApp, ui: &mut egui::Ui) {
             ui.allocate_exact_size(egui::vec2(spectrum_w, spectrum_h), egui::Sense::hover());
         ui.painter().rect_filled(s_rect, 2.0, colors::BG_DEEPEST);
 
-        let bands = 32;
+        let bands = app.audio_spectrum_bands.len().max(1);
         let bar_w = (spectrum_w / bands as f32) - 1.0;
-        let phase = current_frame as f32 * 0.15;
 
         for i in 0..bands {
-            let freq_mult = (i as f32 * 0.4).sin().abs();
-            let amp = if is_playing {
-                ((phase + i as f32 * 0.3).sin().abs() * 0.7 + freq_mult * 0.3) * vol
-            } else {
-                0.05
-            };
+            let amp = app.audio_spectrum_bands.get(i).copied().unwrap_or(0.0) * vol;
             let bar_h = (amp * spectrum_h).clamp(2.0, spectrum_h);
             let bx = s_rect.left() + i as f32 * (bar_w + 1.0);
             let by = s_rect.bottom() - bar_h;
