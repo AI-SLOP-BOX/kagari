@@ -320,15 +320,7 @@ fn render_precomp_layers_inner(
             continue;
         }
 
-        let effective_frame = {
-            let f = layer.remap_frame(frame);
-            match &layer.posterize_time {
-                Some(pt) if pt.enabled => {
-                    crate::core::posterize_time::quantize_frame_posterize(f, precomp_comp.fps, pt)
-                }
-                _ => f,
-            }
-        };
+        let effective_frame = layer.effective_render_frame(frame, precomp_comp.fps);
         let (pos, scale, rotation, opacity) =
             precomp_comp.resolve_world_transform(layer, effective_frame);
         let l_opacity = (opacity / 100.0).clamp(0.0, 1.0);

@@ -814,10 +814,21 @@ fn all_effect_variants_render_constant_params() {
 
     for (name, effects) in &effects {
         let mut pixels = make_pixels(w, h);
+        let mut repeat = make_pixels(w, h);
         kagari_vfx::core::cpu_effects::apply_layer_effects(
             None,
             None,
             &mut pixels,
+            w,
+            h,
+            effects,
+            0,
+            30,
+        );
+        kagari_vfx::core::cpu_effects::apply_layer_effects(
+            None,
+            None,
+            &mut repeat,
             w,
             h,
             effects,
@@ -830,6 +841,7 @@ fn all_effect_variants_render_constant_params() {
             (w * h * 4) as usize,
             "{name}: wrong buffer size"
         );
+        assert_eq!(pixels, repeat, "{name}: same input must render identically");
     }
 }
 
@@ -869,6 +881,86 @@ fn representative_effects_change_pixels_semantically() {
     assert!(tinted[0] > tinted[1]);
     assert!(tinted[1] < input[1]);
     assert_eq!(tinted[3], input[3]);
+}
+
+#[test]
+fn effect_endpoint_contracts_match_pixel_semantics() {
+    let base = vec![
+        10, 20, 30, 255, 40, 50, 60, 255, 70, 80, 90, 255, 100, 110, 120, 255,
+    ];
+
+    let mut wipe_zero = base.clone();
+    kagari_vfx::core::cpu_effects::apply_layer_effects(
+        None,
+        None,
+        &mut wipe_zero,
+        4,
+        1,
+        &[fx(EffectType::LinearWipe {
+            completion: c32(0.0),
+            angle: c32(0.0),
+        })],
+        0,
+        30,
+    );
+    assert_eq!(wipe_zero, base, "0% wipe must preserve source pixels");
+
+    let mut wipe_full = base.clone();
+    kagari_vfx::core::cpu_effects::apply_layer_effects(
+        None,
+        None,
+        &mut wipe_full,
+        4,
+        1,
+        &[fx(EffectType::LinearWipe {
+            completion: c32(100.0),
+            angle: c32(0.0),
+        })],
+        0,
+        30,
+    );
+    assert!(
+        wipe_full.chunks_exact(4).all(|pixel| pixel[3] == 0),
+        "100% wipe must make every pixel transparent"
+    );
+
+    let mut shifted = vec![
+        10, 0, 0, 255, 20, 0, 0, 255, 30, 0, 0, 255, 40, 0, 0, 255,
+    ];
+    kagari_vfx::core::cpu_effects::apply_layer_effects(
+        None,
+        None,
+        &mut shifted,
+        4,
+        1,
+        &[fx(EffectType::Offset {
+            shift_x: c32(1.0),
+            shift_y: c32(0.0),
+        })],
+        0,
+        30,
+    );
+    assert_eq!(
+        shifted.chunks_exact(4).map(|pixel| pixel[0]).collect::<Vec<_>>(),
+        vec![40, 10, 20, 30],
+        "offset must wrap source pixels in the documented direction"
+    );
+
+    let mut threshold = vec![10, 10, 10, 77, 240, 240, 240, 88];
+    kagari_vfx::core::cpu_effects::apply_layer_effects(
+        None,
+        None,
+        &mut threshold,
+        2,
+        1,
+        &[fx(EffectType::Threshold {
+            threshold: c32(128.0),
+        })],
+        0,
+        30,
+    );
+    assert_eq!(&threshold[0..4], &[0, 0, 0, 77]);
+    assert_eq!(&threshold[4..8], &[255, 255, 255, 88]);
 }
 
 #[test]

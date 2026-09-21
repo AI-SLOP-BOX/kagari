@@ -2183,6 +2183,21 @@ impl Layer {
         self.remap_frame_f32(frame).round().max(0.0) as u32
     }
 
+    /// Return the source frame used by render-time layer evaluation.
+    ///
+    /// Time remapping is applied first, then optional posterize-time sampling
+    /// quantizes that source frame. Keeping this on Layer prevents the CPU,
+    /// GPU, precomp and shadow paths from drifting apart.
+    pub fn effective_render_frame(&self, frame: u32, fps: u32) -> u32 {
+        let remapped = self.remap_frame(frame);
+        match &self.posterize_time {
+            Some(settings) if settings.enabled => {
+                crate::core::posterize_time::quantize_frame_posterize(remapped, fps, settings)
+            }
+            _ => remapped,
+        }
+    }
+
     /// Evaluate time remapping without losing the fractional source frame.
     /// Video rasterization uses this for optional frame blending.
     pub fn remap_frame_f32(&self, frame: u32) -> f32 {

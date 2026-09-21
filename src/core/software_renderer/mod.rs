@@ -67,6 +67,12 @@ fn flatten_collapsed_limited(comp: &Composition, frame: u32, depth: u32) -> Comp
             expanded.push(layer);
             continue;
         };
+        // A collapsed PreComp still owns the source-time mapping for its
+        // children. The parent transform is evaluated at composition time,
+        // while the child content is evaluated at the mapped source frame.
+        // Without this split, freeze/reverse/time-stretched collapsed comps
+        // silently display the wrong child frame.
+        let child_frame = layer.effective_render_frame(frame, comp.fps);
         // Parent transform (already resolves parenting chains)
         let (ppos, pscale, prot, popa) = out.resolve_world_transform(
             &{
@@ -93,10 +99,10 @@ fn flatten_collapsed_limited(comp: &Composition, frame: u32, depth: u32) -> Comp
         let sub_cx = sub.width as f32 * 0.5;
         let sub_cy = sub.height as f32 * 0.5;
         for mut child in sub.layers.clone() {
-            if !child.is_active(frame) || !child.visible {
+            if !child.is_active(child_frame) || !child.visible {
                 continue;
             }
-            let (cpos, cscale, crot, copa) = sub.resolve_world_transform(&child, frame);
+            let (cpos, cscale, crot, copa) = sub.resolve_world_transform(&child, child_frame);
             // Compose: parent ∘ child (2D affine)
             let sx = cscale[0] * pscale[0] / 100.0;
             let sy = cscale[1] * pscale[1] / 100.0;
@@ -122,7 +128,7 @@ fn flatten_collapsed_limited(comp: &Composition, frame: u32, depth: u32) -> Comp
                     [ppos[0], ppos[1], 0.0]
                 };
                 let c_pos3d = if child.is_3d {
-                    child.transform_3d.position.evaluate(frame)
+                    child.transform_3d.position.evaluate(child_frame)
                 } else {
                     [cpos[0], cpos[1], 0.0]
                 };
@@ -132,7 +138,7 @@ fn flatten_collapsed_limited(comp: &Composition, frame: u32, depth: u32) -> Comp
                     [0.0, 0.0, prot]
                 };
                 let c_rot3d = if child.is_3d {
-                    child.transform_3d.rotation.evaluate(frame)
+                    child.transform_3d.rotation.evaluate(child_frame)
                 } else {
                     [0.0, 0.0, crot]
                 };
@@ -142,7 +148,7 @@ fn flatten_collapsed_limited(comp: &Composition, frame: u32, depth: u32) -> Comp
                     [pscale[0], pscale[1], 100.0]
                 };
                 let c_scale3d = if child.is_3d {
-                    child.transform_3d.scale.evaluate(frame)
+                    child.transform_3d.scale.evaluate(child_frame)
                 } else {
                     [cscale[0], cscale[1], 100.0]
                 };
@@ -508,15 +514,7 @@ pub(crate) fn render_frame_to_pixels_filtered(
                     return LayerRenderData::default(); // skip=true
                 }
 
-                let effective_frame = {
-                    let f = layer.remap_frame(frame);
-                    match &layer.posterize_time {
-                        Some(pt) if pt.enabled => {
-                            crate::core::posterize_time::quantize_frame_posterize(f, comp.fps, pt)
-                        }
-                        _ => f,
-                    }
-                };
+                let effective_frame = layer.effective_render_frame(frame, comp.fps);
                 let (pos, scale, rotation, opacity) =
                     comp.resolve_world_transform(layer, effective_frame);
                 let l_opacity = (opacity / 100.0).clamp(0.0, 1.0);
@@ -2667,6 +2665,7 @@ mod watchdog_tests {
 #[cfg(test)]
 mod shadow_tests {
     use super::*;
+    use crate::core::keyframe::{InterpolationType, Keyframe};
     use crate::core::property::Animatable;
     use crate::core::timeline::{Composition, Layer, LayerType, ShapeFillType, ShapeType};
 
@@ -2742,6 +2741,35 @@ mod shadow_tests {
         let px = render_frame_to_pixels(&comp, 0, 64, 64, 0.0, 0);
         let probe = ((46 * 64 + 44) * 4) as usize;
         assert!(px[probe] >= 240, "no caster -> no shadow, R={}", px[probe]);
+    }
+
+    #[test]
+    fn shadow_map_uses_caster_time_remap() {
+        let mut comp = shadow_test_comp(true);
+        let caster = comp.layers.get_mut(1).expect("caster layer");
+        caster.transform.position = Animatable::new_animated(vec![
+            Keyframe::new(0, [36.0, 36.0], InterpolationType::Linear),
+            Keyframe::new(20, [48.0, 48.0], InterpolationType::Linear),
+        ]);
+        caster.freeze_at(20);
+
+        let map = build_shadow_map(&comp, 0, 64, 64);
+        let sum_near = |cx: usize, cy: usize| {
+            let mut sum = 0.0;
+            for y in cy.saturating_sub(2)..=(cy + 2).min(63) {
+                for x in cx.saturating_sub(2)..=(cx + 2).min(63) {
+                    sum += map[y * 64 + x];
+                }
+            }
+            sum
+        };
+
+        // The frozen source position [48,48] projects near [59,59] for this
+        // light. The old [36,36] position projects near [43,43].
+        assert!(
+            sum_near(59, 59) > sum_near(43, 43) * 1.5,
+            "shadow must follow remapped caster position"
+        );
     }
 
     #[test]
@@ -2827,6 +2855,53 @@ mod shadow_tests {
             "child mapped around parent center: {:?}",
             lifted
         );
+    }
+
+    #[test]
+    fn collapsed_precomp_uses_parent_time_remap_for_child_frame() {
+        let mut comp =
+            Composition::new("collapse-remap".into(), "Collapse remap".into(), 64, 64, 30, 30);
+        let mut sub = Composition::new("sub-remap".into(), "Sub".into(), 64, 64, 30, 30);
+        let mut child = Layer::new(
+            "child".into(),
+            "Animated child".into(),
+            LayerType::Solid {
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
+            30,
+        );
+        // The child only exists at source frame 20. A collapsed parent frozen
+        // at frame 20 must still expand it while rendering composition frame 0.
+        child.in_frame = 20;
+        child.out_frame = 30;
+        child.transform.position = Animatable::new_animated(vec![
+            Keyframe::new(0, [8.0, 32.0], InterpolationType::Linear),
+            Keyframe::new(20, [48.0, 32.0], InterpolationType::Linear),
+        ]);
+        sub.layers.push(child);
+        comp.sub_compositions.push(sub);
+
+        let mut precomp = Layer::new(
+            "precomp".into(),
+            "Frozen collapsed".into(),
+            LayerType::PreComp {
+                comp_id: "sub-remap".into(),
+            },
+            30,
+        );
+        precomp.is_collapsed = true;
+        precomp.transform.position = Animatable::new_constant([32.0, 32.0]);
+        precomp.freeze_at(20);
+        comp.layers.push(precomp);
+
+        let flat = flatten_collapsed(&comp, 0);
+        let expanded = flat
+            .layers
+            .iter()
+            .find(|layer| layer.id == "child")
+            .expect("child active at the remapped source frame");
+        let position = expanded.transform.position.evaluate(0);
+        assert_eq!(position, [48.0, 32.0]);
     }
 
     #[test]

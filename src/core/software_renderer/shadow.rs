@@ -192,7 +192,11 @@ pub fn build_shadow_map(comp: &Composition, frame: u32, width: u32, height: u32)
             if !layer.is_active(frame) || !layer.visible || !layer.material.cast_shadows {
                 continue;
             }
-            let (pos, scale, rot, _op) = comp.resolve_world_transform(layer, frame);
+            // The light belongs to composition time, but each caster's
+            // geometry belongs to the layer's source time. This matters for
+            // frozen, reversed and posterized collapsed layers.
+            let layer_frame = layer.effective_render_frame(frame, comp.fps);
+            let (pos, scale, rot, _op) = comp.resolve_world_transform(layer, layer_frame);
             // Outline points: real shape geometry when available (ellipse,
             // polygon, star, rect), else the full-size rect quad.
             let (base_w, base_h) = match &layer.layer_type {
@@ -204,7 +208,7 @@ pub fn build_shadow_map(comp: &Composition, frame: u32, width: u32, height: u32)
                 | LayerType::PreComp { .. } => (comp.width as f32, comp.height as f32),
                 _ => continue,
             };
-            let mut local_pts = caster_outline_points(layer, base_w, base_h, frame);
+            let mut local_pts = caster_outline_points(layer, base_w, base_h, layer_frame);
             if local_pts.is_empty() {
                 let hw = base_w / 2.0;
                 let hh = base_h / 2.0;
@@ -214,7 +218,7 @@ pub fn build_shadow_map(comp: &Composition, frame: u32, width: u32, height: u32)
                 continue;
             }
             let lz = if layer.is_3d {
-                layer.transform_3d.position.evaluate(frame)[2]
+                layer.transform_3d.position.evaluate(layer_frame)[2]
             } else {
                 0.0
             };

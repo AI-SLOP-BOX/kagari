@@ -62,13 +62,7 @@ fn mat4_mul(a: [[f32; 4]; 4], b: [[f32; 4]; 4]) -> [[f32; 4]; 4] {
 }
 
 fn effective_render_frame(layer: &Layer, frame: u32, fps: u32) -> u32 {
-    let remapped = layer.remap_frame(frame);
-    match &layer.posterize_time {
-        Some(pt) if pt.enabled => {
-            crate::core::posterize_time::quantize_frame_posterize(remapped, fps, pt)
-        }
-        _ => remapped,
-    }
+    layer.effective_render_frame(frame, fps)
 }
 
 fn layer_position_at_render_frame(comp: &Composition, layer: &Layer, frame: u32) -> [f32; 2] {
