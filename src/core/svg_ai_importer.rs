@@ -63,6 +63,8 @@ pub fn parse_svg_path_data(d: &str) -> Result<Vec<MaskVertex>, String> {
     }
 
     let mut i = 0;
+    let mut last_cubic_control: Option<[f32; 2]> = None;
+    let mut last_quadratic_control: Option<[f32; 2]> = None;
     while i < tokens.len() {
         let cmd = &tokens[i];
         match cmd.as_str() {
@@ -77,6 +79,8 @@ pub fn parse_svg_path_data(d: &str) -> Result<Vec<MaskVertex>, String> {
                         [x, y]
                     };
                     vertices.push(MaskVertex::new(curr_pos[0], curr_pos[1]));
+                    last_cubic_control = None;
+                    last_quadratic_control = None;
                     i += 3;
                 } else {
                     break;
@@ -93,7 +97,35 @@ pub fn parse_svg_path_data(d: &str) -> Result<Vec<MaskVertex>, String> {
                         [x, y]
                     };
                     vertices.push(MaskVertex::new(curr_pos[0], curr_pos[1]));
+                    last_cubic_control = None;
+                    last_quadratic_control = None;
                     i += 3;
+                } else {
+                    break;
+                }
+            }
+            "H" | "h" => {
+                let is_rel = cmd == "h";
+                if i + 1 < tokens.len() {
+                    let x: f32 = tokens[i + 1].parse().map_err(|e| format!("H.x: {e}"))?;
+                    curr_pos[0] = if is_rel { curr_pos[0] + x } else { x };
+                    vertices.push(MaskVertex::new(curr_pos[0], curr_pos[1]));
+                    last_cubic_control = None;
+                    last_quadratic_control = None;
+                    i += 2;
+                } else {
+                    break;
+                }
+            }
+            "V" | "v" => {
+                let is_rel = cmd == "v";
+                if i + 1 < tokens.len() {
+                    let y: f32 = tokens[i + 1].parse().map_err(|e| format!("V.y: {e}"))?;
+                    curr_pos[1] = if is_rel { curr_pos[1] + y } else { y };
+                    vertices.push(MaskVertex::new(curr_pos[0], curr_pos[1]));
+                    last_cubic_control = None;
+                    last_quadratic_control = None;
+                    i += 2;
                 } else {
                     break;
                 }
@@ -135,12 +167,137 @@ pub fn parse_svg_path_data(d: &str) -> Result<Vec<MaskVertex>, String> {
                     vertices.push(dest_vert);
 
                     curr_pos = dest;
+                    last_cubic_control = Some(c1);
+                    last_quadratic_control = None;
                     i += 7;
                 } else {
                     break;
                 }
             }
+            "S" | "s" => {
+                let is_rel = cmd == "s";
+                if i + 4 < tokens.len() {
+                    let x2: f32 = tokens[i + 1].parse().map_err(|e| format!("S.x2: {e}"))?;
+                    let y2: f32 = tokens[i + 2].parse().map_err(|e| format!("S.y2: {e}"))?;
+                    let x: f32 = tokens[i + 3].parse().map_err(|e| format!("S.x: {e}"))?;
+                    let y: f32 = tokens[i + 4].parse().map_err(|e| format!("S.y: {e}"))?;
+                    let c0 = last_cubic_control
+                        .map(|previous| {
+                            [
+                                2.0 * curr_pos[0] - previous[0],
+                                2.0 * curr_pos[1] - previous[1],
+                            ]
+                        })
+                        .unwrap_or(curr_pos);
+                    let c1 = if is_rel {
+                        [curr_pos[0] + x2, curr_pos[1] + y2]
+                    } else {
+                        [x2, y2]
+                    };
+                    let dest = if is_rel {
+                        [curr_pos[0] + x, curr_pos[1] + y]
+                    } else {
+                        [x, y]
+                    };
+                    if let Some(previous) = vertices.last_mut() {
+                        previous.tangent_out =
+                            [c0[0] - previous.position[0], c0[1] - previous.position[1]];
+                    }
+                    let mut dest_vertex = MaskVertex::new(dest[0], dest[1]);
+                    dest_vertex.tangent_in = [c1[0] - dest[0], c1[1] - dest[1]];
+                    vertices.push(dest_vertex);
+                    curr_pos = dest;
+                    last_cubic_control = Some(c1);
+                    last_quadratic_control = None;
+                    i += 5;
+                } else {
+                    break;
+                }
+            }
+            "Q" | "q" => {
+                let is_rel = cmd == "q";
+                if i + 4 < tokens.len() {
+                    let x1: f32 = tokens[i + 1].parse().map_err(|e| format!("Q.x1: {e}"))?;
+                    let y1: f32 = tokens[i + 2].parse().map_err(|e| format!("Q.y1: {e}"))?;
+                    let x: f32 = tokens[i + 3].parse().map_err(|e| format!("Q.x: {e}"))?;
+                    let y: f32 = tokens[i + 4].parse().map_err(|e| format!("Q.y: {e}"))?;
+                    let control = if is_rel {
+                        [curr_pos[0] + x1, curr_pos[1] + y1]
+                    } else {
+                        [x1, y1]
+                    };
+                    let dest = if is_rel {
+                        [curr_pos[0] + x, curr_pos[1] + y]
+                    } else {
+                        [x, y]
+                    };
+                    let c0 = [
+                        curr_pos[0] + (control[0] - curr_pos[0]) * (2.0 / 3.0),
+                        curr_pos[1] + (control[1] - curr_pos[1]) * (2.0 / 3.0),
+                    ];
+                    let c1 = [
+                        dest[0] + (control[0] - dest[0]) * (2.0 / 3.0),
+                        dest[1] + (control[1] - dest[1]) * (2.0 / 3.0),
+                    ];
+                    if let Some(previous) = vertices.last_mut() {
+                        previous.tangent_out =
+                            [c0[0] - previous.position[0], c0[1] - previous.position[1]];
+                    }
+                    let mut dest_vertex = MaskVertex::new(dest[0], dest[1]);
+                    dest_vertex.tangent_in = [c1[0] - dest[0], c1[1] - dest[1]];
+                    vertices.push(dest_vertex);
+                    curr_pos = dest;
+                    last_quadratic_control = Some(control);
+                    last_cubic_control = None;
+                    i += 5;
+                } else {
+                    break;
+                }
+            }
+            "T" | "t" => {
+                let is_rel = cmd == "t";
+                if i + 2 < tokens.len() {
+                    let x: f32 = tokens[i + 1].parse().map_err(|e| format!("T.x: {e}"))?;
+                    let y: f32 = tokens[i + 2].parse().map_err(|e| format!("T.y: {e}"))?;
+                    let control = last_quadratic_control
+                        .map(|previous| {
+                            [
+                                2.0 * curr_pos[0] - previous[0],
+                                2.0 * curr_pos[1] - previous[1],
+                            ]
+                        })
+                        .unwrap_or(curr_pos);
+                    let dest = if is_rel {
+                        [curr_pos[0] + x, curr_pos[1] + y]
+                    } else {
+                        [x, y]
+                    };
+                    let c0 = [
+                        curr_pos[0] + (control[0] - curr_pos[0]) * (2.0 / 3.0),
+                        curr_pos[1] + (control[1] - curr_pos[1]) * (2.0 / 3.0),
+                    ];
+                    let c1 = [
+                        dest[0] + (control[0] - dest[0]) * (2.0 / 3.0),
+                        dest[1] + (control[1] - dest[1]) * (2.0 / 3.0),
+                    ];
+                    if let Some(previous) = vertices.last_mut() {
+                        previous.tangent_out =
+                            [c0[0] - previous.position[0], c0[1] - previous.position[1]];
+                    }
+                    let mut dest_vertex = MaskVertex::new(dest[0], dest[1]);
+                    dest_vertex.tangent_in = [c1[0] - dest[0], c1[1] - dest[1]];
+                    vertices.push(dest_vertex);
+                    curr_pos = dest;
+                    last_quadratic_control = Some(control);
+                    last_cubic_control = None;
+                    i += 3;
+                } else {
+                    break;
+                }
+            }
             "Z" | "z" => {
+                last_cubic_control = None;
+                last_quadratic_control = None;
                 i += 1;
             }
             _ => {
@@ -195,5 +352,27 @@ mod tests {
         assert_eq!(verts[0].tangent_out, [20.0, 20.0]); // (30 - 10, 40 - 20)
         assert_eq!(verts[1].position, [70.0, 80.0]);
         assert_eq!(verts[1].tangent_in, [-20.0, -20.0]); // (50 - 70, 60 - 80)
+    }
+
+    #[test]
+    fn test_parse_svg_line_and_quadratic_commands() {
+        let verts = parse_svg_path_data("M 0 0 H 10 V 20 Q 15 25 20 20 T 30 20")
+            .expect("common SVG commands should parse");
+        assert_eq!(verts.len(), 5);
+        assert_eq!(verts[1].position, [10.0, 0.0]);
+        assert_eq!(verts[2].position, [10.0, 20.0]);
+        assert_eq!(verts[3].position, [20.0, 20.0]);
+        assert!((verts[4].tangent_in[0] + 10.0 / 3.0).abs() < 1e-5);
+        assert!((verts[4].tangent_in[1] + 10.0 / 3.0).abs() < 1e-5);
+        assert_eq!(verts[4].position, [30.0, 20.0]);
+    }
+
+    #[test]
+    fn test_parse_svg_smooth_cubic_reflects_previous_handle() {
+        let verts = parse_svg_path_data("M 0 0 C 10 0 10 10 20 10 S 30 20 40 10")
+            .expect("smooth cubic command should parse");
+        assert_eq!(verts.len(), 3);
+        assert_eq!(verts[1].tangent_out, [10.0, 0.0]);
+        assert_eq!(verts[2].tangent_in, [-10.0, 10.0]);
     }
 }
