@@ -60,6 +60,16 @@ pub fn apply_layer_effects_ctx(
     fps: u32,
     light_screen: Option<[f32; 2]>,
 ) {
+    let Some(expected_len) = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|pixels| pixels.checked_mul(4))
+    else {
+        return;
+    };
+    if pixels.len() != expected_len {
+        return;
+    }
+
     for effect in effects {
         if !effect.enabled {
             continue;

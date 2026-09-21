@@ -62,6 +62,14 @@ fn patterned_pixels(width: u32, height: u32) -> Vec<u8> {
     pixels
 }
 
+fn distinct_rgb_count(pixels: &[u8]) -> usize {
+    pixels
+        .chunks_exact(4)
+        .map(|pixel| (pixel[0], pixel[1], pixel[2]))
+        .collect::<HashSet<_>>()
+        .len()
+}
+
 struct MutationRng(u64);
 
 impl MutationRng {
@@ -259,6 +267,82 @@ fn valid_expression_contracts_are_checked_semantically() {
 }
 
 #[test]
+fn generated_safe_expression_trees_match_their_oracle() {
+    #[derive(Clone)]
+    struct Expr {
+        source: String,
+        expected: f32,
+    }
+
+    fn build(depth: usize, seed: &mut u32) -> Expr {
+        if depth == 0 {
+            let leaf = match *seed % 3 {
+                0 => Expr {
+                    source: "value".into(),
+                    expected: 6.0,
+                },
+                1 => Expr {
+                    source: "2.0".into(),
+                    expected: 2.0,
+                },
+                _ => Expr {
+                    source: "3.0".into(),
+                    expected: 3.0,
+                },
+            };
+            *seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            return leaf;
+        }
+
+        *seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        let left = build(depth - 1, seed);
+        let right = build(depth - 1, seed);
+        match *seed % 4 {
+            0 => Expr {
+                source: format!("({}) + ({})", left.source, right.source),
+                expected: left.expected + right.expected,
+            },
+            1 => Expr {
+                source: format!("({}) - ({})", left.source, right.source),
+                expected: left.expected - right.expected,
+            },
+            2 => Expr {
+                source: format!("({}) * ({})", left.source, right.source),
+                expected: left.expected * right.expected,
+            },
+            _ => Expr {
+                source: format!(
+                    "clamp({}, -100.0, 100.0) + clamp({}, -100.0, 100.0)",
+                    left.source, right.source
+                ),
+                expected: left.expected.clamp(-100.0, 100.0)
+                    + right.expected.clamp(-100.0, 100.0),
+            },
+        }
+    }
+
+    let engine = build_engine();
+    let mut seed = 0x51A7_5EED;
+    for depth in 0..=6 {
+        for case in 0..32 {
+            let expression = build(depth, &mut seed);
+            let actual = eval_f32(&engine, &expression.source, 6.0, 48, 24);
+            assert!(
+                actual.is_finite(),
+                "generated expression {depth}/{case} returned {actual}: {}",
+                expression.source
+            );
+            assert!(
+                (actual - expression.expected).abs() < 1e-4,
+                "generated expression {depth}/{case} changed meaning: {} -> {actual}, expected {}",
+                expression.source,
+                expression.expected
+            );
+        }
+    }
+}
+
+#[test]
 fn representative_effects_have_semantic_pixel_contracts() {
     let width = 8;
     let height = 8;
@@ -274,7 +358,7 @@ fn representative_effects_have_semantic_pixel_contracts() {
             "color tint",
             EffectType::ColorTint {
                 color: constant([1.0, 0.0, 0.0, 1.0]),
-                intensity: constant(100.0),
+                intensity: constant(35.0),
             },
         ),
         (
@@ -337,10 +421,74 @@ fn representative_effects_have_semantic_pixel_contracts() {
             "{name} accepted a non-identity parameter but changed nothing"
         );
         assert!(
+            distinct_rgb_count(&rendered) > 1,
+            "{name} collapsed the frame to one RGB color"
+        );
+        assert!(
             rendered.chunks_exact(4).any(|pixel| pixel[3] > 0),
             "{name} erased every pixel's alpha"
         );
     }
+}
+
+#[test]
+fn invalid_effect_buffer_shape_is_a_safe_no_op() {
+    let effect = Effect {
+        id: "blur".into(),
+        name: "Gaussian Blur".into(),
+        effect_type: EffectType::GaussianBlur {
+            blur_radius: constant(8.0),
+        },
+        enabled: true,
+    };
+
+    for (width, height, length) in [(4, 4, 0), (4, 4, 3), (4, 4, 4 * 4 * 4 - 1), (0, 8, 4)] {
+        let mut pixels = vec![73u8; length];
+        let before = pixels.clone();
+        apply_layer_effects(
+            None,
+            None,
+            &mut pixels,
+            width,
+            height,
+            std::slice::from_ref(&effect),
+            0,
+            24,
+        );
+        assert_eq!(pixels, before, "invalid {width}x{height}/{length} buffer mutated");
+    }
+}
+
+#[test]
+fn threshold_has_binary_rgb_semantics_and_preserves_alpha() {
+    let mut pixels = vec![
+        20, 80, 20, 17, // below threshold
+        240, 200, 240, 39, // above threshold
+        128, 128, 128, 91, // exactly threshold
+        0, 0, 255, 123, // below luminance threshold
+    ];
+    apply_layer_effects(
+        None,
+        None,
+        &mut pixels,
+        4,
+        1,
+        &[Effect {
+            id: "threshold".into(),
+            name: "Threshold".into(),
+            effect_type: EffectType::Threshold {
+                threshold: constant(128.0),
+            },
+            enabled: true,
+        }],
+        0,
+        24,
+    );
+
+    assert_eq!(&pixels[0..4], &[0, 0, 0, 17]);
+    assert_eq!(&pixels[4..8], &[255, 255, 255, 39]);
+    assert_eq!(&pixels[8..12], &[255, 255, 255, 91]);
+    assert_eq!(&pixels[12..16], &[0, 0, 0, 123]);
 }
 
 #[test]
@@ -423,5 +571,60 @@ fn mfr_render_reports_each_expected_frame_once() {
             .total_frames_rendered
             .load(std::sync::atomic::Ordering::SeqCst),
         (item_count as u32) * frames_per_item
+    );
+}
+
+#[test]
+fn mfr_cancellation_keeps_frame_identity_and_accounting_consistent() {
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+    let mut queue = ParallelRenderQueue::new();
+    for item in 0..4 {
+        queue.add_item(RenderQueueItem {
+            comp_name: format!("cancel-{item}"),
+            start_frame: 0,
+            end_frame: 255,
+            output_path: format!("/tmp/cancel-{item}.rgba"),
+            status: RenderStatus::Pending,
+        });
+    }
+
+    let external_cancel = Arc::new(AtomicBool::new(false));
+    let first_callback = AtomicUsize::new(0);
+    let seen = Arc::new(Mutex::new(Vec::<(String, u32)>::new()));
+    let seen_for_callback = Arc::clone(&seen);
+    let cancel_for_callback = Arc::clone(&external_cancel);
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(4)
+        .build()
+        .expect("test rayon pool must build");
+    let result = pool.install(|| {
+        queue.render_all_mfr_with_external_cancel_checked(&external_cancel, move |name, frame| {
+            seen_for_callback
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .push((name.to_owned(), frame));
+            if first_callback.fetch_add(1, Ordering::SeqCst) == 0 {
+                cancel_for_callback.store(true, Ordering::SeqCst);
+            }
+            std::thread::yield_now();
+            vec![0u8; 4]
+        })
+    });
+
+    assert_eq!(result, Ok(()), "cooperative cancellation is not a render error");
+    assert!(queue.is_cancelled(), "workers must publish cancellation");
+    let seen = seen.lock().unwrap_or_else(|error| error.into_inner());
+    let unique: HashSet<_> = seen.iter().cloned().collect();
+    assert_eq!(unique.len(), seen.len(), "cancellation duplicated a frame");
+    assert!(!seen.is_empty(), "the first callback must have started");
+    assert!(
+        seen.len() <= queue.total_frames as usize,
+        "cancellation rendered more callbacks than the queue total"
+    );
+    assert_eq!(
+        queue.total_frames_rendered.load(Ordering::SeqCst) as usize,
+        seen.len(),
+        "progress accounting diverged from callback execution"
     );
 }

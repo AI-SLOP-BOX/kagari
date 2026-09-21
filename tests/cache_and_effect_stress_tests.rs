@@ -81,6 +81,23 @@ fn frame_cache_insert_get_eviction_cycle() {
 }
 
 #[test]
+fn frame_cache_replacing_a_frame_updates_bytes_and_pixels_atomically() {
+    let mut cache = FrameCache::with_version(8, 0xCACE_0001);
+    let first = vec![11u8; 4 * 4 * 4];
+    cache.insert(7, 4, 4, first);
+    assert_eq!(cache.current_memory_bytes, 4 * 4 * 4);
+
+    let replacement = vec![222u8; 8 * 8 * 4];
+    cache.insert(7, 8, 8, replacement);
+    assert_eq!(cache.current_memory_bytes, 8 * 8 * 4);
+    assert_eq!(cache.cached_count(), 1, "replacement must not duplicate a key");
+
+    let entry = cache.get(7).expect("replacement must remain readable");
+    assert_eq!((entry.width, entry.height), (8, 8));
+    assert!(entry.pixels.iter().all(|&pixel| pixel == 222));
+}
+
+#[test]
 fn frame_cache_stale_entries_invisible_after_version_bump() {
     // Use version override to isolate from global counter races
     let mut cache = FrameCache::with_version(100, 1);
