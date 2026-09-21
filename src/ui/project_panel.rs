@@ -567,6 +567,18 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
                         }
                     }
                 }
+                ProjectItemType::Audio {
+                    path,
+                    duration_sec: _,
+                } => Layer::new(
+                    format!("layer_audio_{}", len),
+                    item.name,
+                    LayerType::Audio {
+                        path,
+                        volume: crate::core::property::Animatable::new_constant(1.0),
+                    },
+                    comp.duration_frames,
+                ),
                 _ => Layer::new(
                     format!("layer_gen_{}", len),
                     item.name,

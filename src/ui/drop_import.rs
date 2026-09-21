@@ -120,7 +120,7 @@ pub fn handle_dropped_files(app: &mut KagariApp, ctx: &egui::Context) {
                     Err(e) => app.toasts.error(format!("Cannot read {}: {}", name, e)),
                 }
             }
-            "wav" => {
+            "wav" | "mp3" | "m4a" | "aac" | "flac" | "ogg" | "aiff" | "aif" | "caf" => {
                 let (cw, ch) = {
                     let c = app.history.current().active_composition();
                     (c.width as f32, c.height as f32)
@@ -139,7 +139,8 @@ pub fn handle_dropped_files(app: &mut KagariApp, ctx: &egui::Context) {
                 layer.out_frame = app.history.current().active_composition().duration_frames;
                 insert_layer(app, layer, &format!("audio '{}'", name));
             }
-            "mp4" | "mov" | "mkv" | "avi" | "webm" | "av1" => {
+            "mp4" | "mov" | "mkv" | "avi" | "webm" | "m4v" | "mpeg" | "mpg" | "ts"
+            | "m2ts" | "av1" | "ivf" => {
                 if !crate::core::video_import::ffmpeg_available() {
                     app.toasts.error("Video import needs ffmpeg on PATH");
                     continue;
