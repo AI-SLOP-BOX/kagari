@@ -488,6 +488,43 @@ fn malformed_project_json_does_not_panic() {
     assert!(result.is_err());
 }
 
+/// Regression: CPU rendering must evaluate animated effect parameters at the
+/// same remapped layer frame used by the rest of the layer pipeline.
+#[test]
+fn time_remap_drives_animated_effect_parameters() {
+    let mut comp = Composition::new("c1".into(), "Remapped effects".into(), 8, 8, 30, 60);
+    let mut layer = Layer::new(
+        "l1".into(),
+        "Solid".into(),
+        LayerType::Solid {
+            color: [1.0, 1.0, 1.0, 1.0],
+        },
+        60,
+    );
+    layer.time_remap = Some(Animatable::new_constant(30.0));
+    layer.effects.push(Effect {
+        id: "tint".into(),
+        name: "Tint".into(),
+        effect_type: EffectType::ColorTint {
+            color: Animatable::new_constant([1.0, 0.0, 0.0, 1.0]),
+            intensity: Animatable::new_animated(vec![
+                Keyframe::new(0, 0.0, InterpolationType::Linear),
+                Keyframe::new(30, 100.0, InterpolationType::Linear),
+            ]),
+        },
+        enabled: true,
+    });
+    comp.layers.push(layer);
+
+    let pixels = kagari_vfx::core::software_renderer::render_frame_to_pixels(
+        &comp, 0, 8, 8, 0.0, 0,
+    );
+    let center = &pixels[(4 * 8 + 4) * 4..][..4];
+    assert!(center[0] > 240, "remapped effect should keep red channel high");
+    assert!(center[1] < 20, "effect must be evaluated at remapped frame");
+    assert!(center[2] < 20, "effect must be evaluated at remapped frame");
+}
+
 // ─── Effects: Echo & SetMatte ───────────────────────────────────────────────
 
 /// Regression: Echo effect must not panic with zero-length pixel buffer.

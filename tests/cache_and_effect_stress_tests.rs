@@ -141,6 +141,10 @@ fn frame_cache_shared_access_keeps_pixels_and_invalidation_consistent() {
                     assert_eq!(entry.width, 4);
                     assert_eq!(entry.height, 4);
                     assert_eq!(entry.pixels.len(), 4 * 4 * 4);
+                    assert!(
+                        entry.pixels.windows(2).all(|pair| pair[0] == pair[1]),
+                        "cache reader observed a partially replaced pixel buffer"
+                    );
                 }
             }
         }));
@@ -827,6 +831,44 @@ fn all_effect_variants_render_constant_params() {
             "{name}: wrong buffer size"
         );
     }
+}
+
+#[test]
+fn representative_effects_change_pixels_semantically() {
+    let input = vec![64, 128, 192, 255];
+
+    let mut inverted = input.clone();
+    kagari_vfx::core::cpu_effects::apply_layer_effects(
+        None,
+        None,
+        &mut inverted,
+        1,
+        1,
+        &[fx(EffectType::Invert {
+            invert_alpha: false,
+        })],
+        0,
+        30,
+    );
+    assert_eq!(inverted, vec![191, 127, 63, 255]);
+
+    let mut tinted = input.clone();
+    kagari_vfx::core::cpu_effects::apply_layer_effects(
+        None,
+        None,
+        &mut tinted,
+        1,
+        1,
+        &[fx(EffectType::ColorTint {
+            color: c32a4([1.0, 0.0, 0.0, 1.0]),
+            intensity: c32(100.0),
+        })],
+        0,
+        30,
+    );
+    assert!(tinted[0] > tinted[1]);
+    assert!(tinted[1] < input[1]);
+    assert_eq!(tinted[3], input[3]);
 }
 
 #[test]

@@ -2074,14 +2074,14 @@ impl WgpuRenderer {
                     || layer.transform.opacity_expression.is_some();
                 let (pos, scale, rotation, opacity) =
                     if layer.parent_id.is_some() || layer_has_exprs {
-                        let (p, s, r, o) = comp.resolve_world_transform(layer, frame);
+                        let (p, s, r, o) = comp.resolve_world_transform(layer, effective_frame);
                         (p, s, r, o / 100.0)
                     } else {
                         (
-                            layer.transform.position.evaluate(frame),
-                            layer.transform.scale.evaluate(frame),
-                            layer.transform.rotation.evaluate(frame),
-                            layer.transform.opacity.evaluate(frame),
+                            layer.transform.position.evaluate(effective_frame),
+                            layer.transform.scale.evaluate(effective_frame),
+                            layer.transform.rotation.evaluate(effective_frame),
+                            layer.transform.opacity.evaluate(effective_frame),
                         )
                     };
 
@@ -2220,7 +2220,7 @@ impl WgpuRenderer {
                 }
                 layer_textures.push(text_bind_group);
 
-                let anc = layer.transform.anchor_point.evaluate(frame);
+                let anc = layer.transform.anchor_point.evaluate(effective_frame);
 
                 // Compute layer-to-world transformation matrix
                 let m_size = [
@@ -2268,7 +2268,7 @@ impl WgpuRenderer {
 
                 // Total projection * model matrix
                 let transform_matrix = if layer.is_3d {
-                    comp.resolve_world_transform_3d(layer, frame)
+                    comp.resolve_world_transform_3d(layer, effective_frame)
                 } else {
                     mat4_mul(m_proj, m_model)
                 };
@@ -2423,7 +2423,7 @@ impl WgpuRenderer {
                     color = [1.0, 1.0, 1.0, 1.0];
                 }
 
-                let mut ep = evaluate_effects(&layer.effects, frame);
+                let mut ep = evaluate_effects(&layer.effects, effective_frame);
 
                 // Lens flare light-link: track a comp light's projected position
                 if ep.flare_enabled == 1 {
@@ -2437,14 +2437,14 @@ impl WgpuRenderer {
                         })
                     {
                         if let Some(light) = comp.lights.iter().find(|l| l.name == light_name) {
-                            let lp = light.position.evaluate(frame);
+                            let lp = light.position.evaluate(effective_frame);
                             if let Some(sp) =
                                 crate::core::timeline::project_point_to_screen_at_frame(
                                     comp.resolve_camera(),
                                     lp,
                                     comp.width as f32,
                                     comp.height as f32,
-                                    frame,
+                                    effective_frame,
                                 )
                             {
                                 ep.flare_pos_x = sp[0];
@@ -2457,17 +2457,21 @@ impl WgpuRenderer {
                 // Shape parameters for GPU SDFs: polygon/star point count, rectangle corner radius
                 let shape_params_eval: [f32; 4] = match &layer.layer_type {
                     LayerType::Shape { shape_type, .. } => match shape_type {
-                        ShapeType::Polygon { sides, .. } => [sides.evaluate(frame), 0.0, 0.0, 0.0],
-                        ShapeType::Star { points, .. } => [points.evaluate(frame), 0.0, 0.0, 0.0],
+                        ShapeType::Polygon { sides, .. } => {
+                            [sides.evaluate(effective_frame), 0.0, 0.0, 0.0]
+                        }
+                        ShapeType::Star { points, .. } => {
+                            [points.evaluate(effective_frame), 0.0, 0.0, 0.0]
+                        }
                         ShapeType::Rectangle {
                             corner_radius,
                             width,
                             height,
                             ..
                         } => {
-                            let cr = corner_radius.evaluate(frame);
-                            let w = width.evaluate(frame).max(1.0);
-                            let h = height.evaluate(frame).max(1.0);
+                            let cr = corner_radius.evaluate(effective_frame);
+                            let w = width.evaluate(effective_frame).max(1.0);
+                            let h = height.evaluate(effective_frame).max(1.0);
                             // Normalize corner radius to 0..0.5 of the smaller half-size
                             [0.0, (cr / w.min(h)).clamp(0.0, 0.5), 0.0, 0.0]
                         }
@@ -2582,17 +2586,20 @@ impl WgpuRenderer {
                     trim_start: layer
                         .trim_paths
                         .as_ref()
-                        .map(|t| t.start.evaluate(frame) / 100.0)
+                        .map(|t| t.start.evaluate(effective_frame) / 100.0)
                         .unwrap_or(0.0),
                     trim_end: layer
                         .trim_paths
                         .as_ref()
-                        .map(|t| t.end.evaluate(frame) / 100.0)
+                        .map(|t| t.end.evaluate(effective_frame) / 100.0)
                         .unwrap_or(1.0),
                     trim_offset: layer
                         .trim_paths
                         .as_ref()
-                        .map(|t| t.offset.evaluate(frame).to_radians() / std::f32::consts::TAU)
+                        .map(|t| {
+                            t.offset.evaluate(effective_frame).to_radians()
+                                / std::f32::consts::TAU
+                        })
                         .unwrap_or(0.0),
                     _pad_trim: 0.0,
 
