@@ -281,7 +281,7 @@ pub fn parse_svg_path_data(d: &str) -> Result<Vec<MaskVertex>, String> {
             _ => {
                 i += 1;
             }
-        }
+        };
     }
 
     Ok(vertices)
@@ -372,8 +372,8 @@ pub fn parse_svg_document(svg_text: &str) -> Vec<SvgVectorPath> {
         if tag.is_empty() || tag.starts_with('!') || tag.starts_with('?') {
             continue;
         }
-        if tag.starts_with('/') {
-            let name = tag[1..]
+        if let Some(stripped_tag) = tag.strip_prefix('/') {
+            let name = stripped_tag
                 .split_whitespace()
                 .next()
                 .unwrap_or_default()
@@ -717,8 +717,9 @@ fn parse_svg_color(value: &str) -> Option<[f32; 4]> {
     };
     let rgb = if let Some(rgb) = named {
         rgb
-    } else if let Some(hex) = value.strip_prefix('#') {
-        let rgb = match hex.len() {
+    } else {
+        let hex = value.strip_prefix('#')?;
+        match hex.len() {
             3 => [
                 u8::from_str_radix(&hex[0..1].repeat(2), 16).ok()?,
                 u8::from_str_radix(&hex[1..2].repeat(2), 16).ok()?,
@@ -730,10 +731,7 @@ fn parse_svg_color(value: &str) -> Option<[f32; 4]> {
                 u8::from_str_radix(&hex[4..6], 16).ok()?,
             ],
             _ => return None,
-        };
-        rgb
-    } else {
-        return None;
+        }
     };
     Some([
         rgb[0] as f32 / 255.0,
