@@ -72,10 +72,9 @@ fn gpu_layer_draw_order(comp: &Composition, layers: &[&Layer], frame: u32) -> Ve
     }
     order.sort_by(|&a, &b| {
         let depth = |index: usize| {
-            let layer = layers[index];
-            if layer.is_3d {
-                let evaluated = effective_render_frame(layer, frame, comp.fps);
-                layer.transform_3d.position.evaluate(evaluated)[2]
+                let layer = layers[index];
+                if layer.is_3d {
+                    layer.transform_3d.position.evaluate(frame)[2]
             } else {
                 0.0
             }
@@ -89,15 +88,14 @@ fn gpu_layer_draw_order(comp: &Composition, layers: &[&Layer], frame: u32) -> Ve
 }
 
 fn layer_position_at_render_frame(comp: &Composition, layer: &Layer, frame: u32) -> [f32; 2] {
-    let effective_frame = effective_render_frame(layer, frame, comp.fps);
     let has_exprs = layer.transform.position_expression.is_some()
         || layer.transform.rotation_expression.is_some()
         || layer.transform.scale_expression.is_some()
         || layer.transform.opacity_expression.is_some();
     if layer.parent_id.is_some() || has_exprs {
-        comp.resolve_world_transform(layer, effective_frame).0
+        comp.resolve_world_transform(layer, frame).0
     } else {
-        layer.transform.position.evaluate(effective_frame)
+        layer.transform.position.evaluate(frame)
     }
 }
 
@@ -2114,14 +2112,14 @@ impl WgpuRenderer {
                     || layer.transform.opacity_expression.is_some();
                 let (pos, scale, rotation, opacity) =
                     if layer.parent_id.is_some() || layer_has_exprs {
-                        let (p, s, r, o) = comp.resolve_world_transform(layer, effective_frame);
+                        let (p, s, r, o) = comp.resolve_world_transform(layer, frame);
                         (p, s, r, o / 100.0)
                     } else {
                         (
-                            layer.transform.position.evaluate(effective_frame),
-                            layer.transform.scale.evaluate(effective_frame),
-                            layer.transform.rotation.evaluate(effective_frame),
-                            layer.transform.opacity.evaluate(effective_frame),
+                            layer.transform.position.evaluate(frame),
+                            layer.transform.scale.evaluate(frame),
+                            layer.transform.rotation.evaluate(frame),
+                            layer.transform.opacity.evaluate(frame),
                         )
                     };
 
@@ -2260,7 +2258,7 @@ impl WgpuRenderer {
                 }
                 layer_textures.push(text_bind_group);
 
-                let anc = layer.transform.anchor_point.evaluate(effective_frame);
+                let anc = layer.transform.anchor_point.evaluate(frame);
 
                 // Compute layer-to-world transformation matrix
                 let m_size = [
@@ -2308,7 +2306,7 @@ impl WgpuRenderer {
 
                 // Total projection * model matrix
                 let transform_matrix = if layer.is_3d {
-                    comp.resolve_world_transform_3d(layer, effective_frame)
+                    comp.resolve_world_transform_3d(layer, frame)
                 } else {
                     mat4_mul(m_proj, m_model)
                 };
@@ -2463,7 +2461,7 @@ impl WgpuRenderer {
                     color = [1.0, 1.0, 1.0, 1.0];
                 }
 
-                let mut ep = evaluate_effects(&layer.effects, effective_frame);
+                let mut ep = evaluate_effects(&layer.effects, frame);
 
                 // Lens flare light-link: track a comp light's projected position
                 if ep.flare_enabled == 1 {
@@ -2477,14 +2475,14 @@ impl WgpuRenderer {
                         })
                     {
                         if let Some(light) = comp.lights.iter().find(|l| l.name == light_name) {
-                            let lp = light.position.evaluate(effective_frame);
+                            let lp = light.position.evaluate(frame);
                             if let Some(sp) =
                                 crate::core::timeline::project_point_to_screen_at_frame(
                                     comp.resolve_camera(),
                                     lp,
                                     comp.width as f32,
                                     comp.height as f32,
-                                    effective_frame,
+                                    frame,
                                 )
                             {
                                 ep.flare_pos_x = sp[0];
@@ -3839,7 +3837,7 @@ mod tests {
     }
 
     #[test]
-    fn gpu_draw_order_uses_remapped_3d_depth_and_keeps_2d_stable() {
+    fn gpu_draw_order_uses_composition_time_depth_and_keeps_2d_stable() {
         let mut comp = Composition::new("comp".into(), "Depth order".into(), 64, 64, 30, 30);
         let mut far = Layer::new(
             "far".into(),
@@ -3880,7 +3878,7 @@ mod tests {
         comp.layers.push(far);
         comp.layers.push(near);
         let layers: Vec<&Layer> = comp.layers.iter().collect();
-        assert_eq!(gpu_layer_draw_order(&comp, &layers, 0), vec![1, 0]);
+        assert_eq!(gpu_layer_draw_order(&comp, &layers, 0), vec![0, 1]);
     }
 }
 

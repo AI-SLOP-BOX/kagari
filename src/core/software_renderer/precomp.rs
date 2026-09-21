@@ -320,9 +320,8 @@ fn render_precomp_layers_inner(
             continue;
         }
 
-        let effective_frame = layer.effective_render_frame(frame, precomp_comp.fps);
-        let (pos, scale, rotation, opacity) =
-            precomp_comp.resolve_world_transform(layer, effective_frame);
+        let source_frame = layer.effective_render_frame(frame, precomp_comp.fps);
+        let (pos, scale, rotation, opacity) = precomp_comp.resolve_world_transform(layer, frame);
         let l_opacity = (opacity / 100.0).clamp(0.0, 1.0);
         if l_opacity < 0.001 {
             continue;
@@ -338,7 +337,7 @@ fn render_precomp_layers_inner(
                     width,
                     height,
                     &layer.effects,
-                    effective_frame,
+                    source_frame,
                     precomp_comp.fps,
                 );
                 for i in (0..buffer.len()).step_by(4) {
@@ -433,7 +432,7 @@ fn render_precomp_layers_inner(
                     *stroke_width,
                     1.0,
                     shape_type,
-                    effective_frame,
+                    source_frame,
                     layer.trim_paths.as_ref(),
                 );
             }
@@ -462,7 +461,11 @@ fn render_precomp_layers_inner(
                 speed,
                 ..
             } => {
-                let source_position = (layer.remap_frame_f32(frame) * speed.max(0.0)).max(0.0);
+                let source_position = (match &layer.posterize_time {
+                    Some(settings) if settings.enabled => source_frame as f32,
+                    _ => layer.remap_frame_f32(frame),
+                } * speed.max(0.0))
+                    .max(0.0);
                 let first = (source_position.floor() as u32).min(frame_count.saturating_sub(1));
                 let second = (first + 1).min(frame_count.saturating_sub(1));
                 let blend_t = if layer.frame_blending {
@@ -497,7 +500,7 @@ fn render_precomp_layers_inner(
                     let nested_pixels = render_precomp_layers(
                         precomp_comp,
                         nested_comp,
-                        effective_frame,
+                        source_frame,
                         width,
                         height,
                     );
@@ -636,7 +639,7 @@ fn render_precomp_layers_inner(
                 } else {
                     stroke.end_frame
                 };
-                if effective_frame < stroke.start_frame || effective_frame > end_f {
+                if source_frame < stroke.start_frame || source_frame > end_f {
                     continue;
                 }
                 let half = stroke.size * 0.5;
@@ -659,7 +662,7 @@ fn render_precomp_layers_inner(
                 } else {
                     stroke.end_frame
                 };
-                if effective_frame < stroke.start_frame || effective_frame > end_f {
+                if source_frame < stroke.start_frame || source_frame > end_f {
                     continue;
                 }
                 // Quick AABB test: skip strokes entirely outside the dirty rect
@@ -730,7 +733,7 @@ fn render_precomp_layers_inner(
                 .iter()
                 .map(|pin| {
                     let s = to_buf(pin.comp_source);
-                    let d = to_buf(pin.position.evaluate(effective_frame));
+                    let d = to_buf(pin.position.evaluate(source_frame));
                     (s, d)
                 })
                 .collect();
@@ -744,7 +747,7 @@ fn render_precomp_layers_inner(
             bw,
             bh,
             &layer.effects,
-            effective_frame,
+            source_frame,
             precomp_comp.fps,
         );
 

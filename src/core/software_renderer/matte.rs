@@ -24,9 +24,9 @@ pub(crate) fn render_matte_buffer(
             if idx > 0 {
                 let matte_layer = &comp.layers[idx - 1];
                 if matte_layer.is_active(frame) && matte_layer.visible {
-                    let m_frame = matte_layer.remap_frame(frame);
+                    let source_frame = matte_layer.effective_render_frame(frame, comp.fps);
                     let (m_pos, m_scale, m_rot, m_opa) =
-                        comp.resolve_world_transform(matte_layer, m_frame);
+                        comp.resolve_world_transform(matte_layer, frame);
                     let m_opacity = (m_opa / 100.0).clamp(0.0, 1.0);
                     let m_rad = m_rot.to_radians();
                     let _m_cos = m_rad.cos();
@@ -117,14 +117,14 @@ pub(crate) fn render_matte_buffer(
                             let (shape_w, shape_h) = match shape_type {
                                 ShapeType::Rectangle { width, height, .. }
                                 | ShapeType::Ellipse { width, height } => {
-                                    (width.evaluate(m_frame), height.evaluate(m_frame))
+                                    (width.evaluate(source_frame), height.evaluate(source_frame))
                                 }
                                 ShapeType::Star { outer_radius, .. }
                                 | ShapeType::Polygon {
                                     radius: outer_radius,
                                     ..
                                 } => {
-                                    let diameter = outer_radius.evaluate(m_frame).abs() * 2.0;
+                                    let diameter = outer_radius.evaluate(source_frame).abs() * 2.0;
                                     (diameter, diameter)
                                 }
                                 ShapeType::FreeformBezier { points, .. } => {
@@ -156,7 +156,7 @@ pub(crate) fn render_matte_buffer(
                                 *stroke_width,
                                 m_opacity,
                                 shape_type,
-                                m_frame,
+                                source_frame,
                                 matte_layer.trim_paths.as_ref(),
                             );
                         }
@@ -171,9 +171,12 @@ pub(crate) fn render_matte_buffer(
                                         speed,
                                         ..
                                     } => {
-                                        let source_position =
-                                            (matte_layer.remap_frame_f32(frame)
-                                                * speed.max(0.0))
+                                        let source_position = (match &matte_layer.posterize_time {
+                                            Some(settings) if settings.enabled => {
+                                                source_frame as f32
+                                            }
+                                            _ => matte_layer.remap_frame_f32(frame),
+                                        } * speed.max(0.0))
                                                 .max(0.0);
                                         let first = (source_position.floor() as u32)
                                             .min(frame_count.saturating_sub(1));
@@ -276,7 +279,7 @@ pub(crate) fn render_matte_buffer(
                                 comp.sub_compositions.iter().find(|c| c.id == *comp_id)
                             {
                                 let sub_buf =
-                                    render_precomp_layers(comp, sub_comp, m_frame, m_bw, m_bh);
+                                    render_precomp_layers(comp, sub_comp, source_frame, m_bw, m_bh);
                                 // Copy sub-comp pixels into matte buffer, applying matte layer opacity
                                 for i in (0..m_buf.len()).step_by(4) {
                                     if i + 3 < sub_buf.len() && i + 3 < m_buf.len() {
@@ -309,7 +312,7 @@ pub(crate) fn render_matte_buffer(
                             matte_comp.layers = vec![matte_source];
                             let particle_pixels = render_frame_to_pixels(
                                 &matte_comp,
-                                m_frame,
+                                frame,
                                 m_bw,
                                 m_bh,
                                 0.0,

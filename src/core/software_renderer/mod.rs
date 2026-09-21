@@ -378,10 +378,9 @@ pub fn render_frame_to_pixels(
     render_frame_to_pixels_filtered(comp, frame, width, height, exposure_ev, lut_mode, None)
 }
 
-fn layer_depth_for_sort(comp: &Composition, layer: &Layer, frame: u32) -> f32 {
+fn layer_depth_for_sort(_comp: &Composition, layer: &Layer, frame: u32) -> f32 {
     if layer.is_3d {
-        let effective_frame = layer.effective_render_frame(frame, comp.fps);
-        layer.transform_3d.position.evaluate(effective_frame)[2]
+        layer.transform_3d.position.evaluate(frame)[2]
     } else {
         0.0
     }
@@ -498,7 +497,7 @@ pub(crate) fn render_frame_to_pixels_filtered(
     // eliminating redundant property evaluation during the sequential pass.
     #[derive(Default)]
     struct LayerRenderData {
-        effective_frame: u32,
+        source_frame: u32,
         pos: [f32; 2],
         scale: [f32; 2],
         rotation: f32,
@@ -518,9 +517,8 @@ pub(crate) fn render_frame_to_pixels_filtered(
                     return LayerRenderData::default(); // skip=true
                 }
 
-                let effective_frame = layer.effective_render_frame(frame, comp.fps);
-                let (pos, scale, rotation, opacity) =
-                    comp.resolve_world_transform(layer, effective_frame);
+                let source_frame = layer.effective_render_frame(frame, comp.fps);
+                let (pos, scale, rotation, opacity) = comp.resolve_world_transform(layer, frame);
                 let l_opacity = (opacity / 100.0).clamp(0.0, 1.0);
                 if l_opacity < 0.001 {
                     return LayerRenderData::default();
@@ -528,20 +526,20 @@ pub(crate) fn render_frame_to_pixels_filtered(
 
                 // ── Depth of field: circle-of-confusion for 3D layers ──
                 let dof_blur = if layer.is_3d
-                    && comp.resolve_camera().dof_enabled_at(effective_frame)
+                    && comp.resolve_camera().dof_enabled_at(frame)
                 {
-                    let z = layer.transform_3d.position.evaluate(effective_frame)[2];
+                    let z = layer.transform_3d.position.evaluate(frame)[2];
                     let dof = crate::core::camera_dof::CameraDofSettings {
-                        focus_distance: comp.resolve_camera().focus_distance_at(effective_frame),
-                        aperture: comp.resolve_camera().aperture_at(effective_frame),
-                        f_stop: comp.resolve_camera().aperture_at(effective_frame),
+                        focus_distance: comp.resolve_camera().focus_distance_at(frame),
+                        aperture: comp.resolve_camera().aperture_at(frame),
+                        f_stop: comp.resolve_camera().aperture_at(frame),
                         blur_level: 100.0,
                         iris_sides: comp.resolve_camera().dof_iris_sides,
                         anamorphic_ratio: 1.0,
                         optical_vignetting: 0.0,
                     };
                     crate::core::camera_dof::calculate_circle_of_confusion(z, &dof)
-                        .clamp(0.0, comp.resolve_camera().dof_max_blur_at(effective_frame))
+                        .clamp(0.0, comp.resolve_camera().dof_max_blur_at(frame))
                 } else {
                     0.0
                 };
@@ -570,7 +568,7 @@ pub(crate) fn render_frame_to_pixels_filtered(
                 }
 
                 LayerRenderData {
-                    effective_frame,
+                    source_frame,
                     pos,
                     scale,
                     rotation,
@@ -644,7 +642,7 @@ pub(crate) fn render_frame_to_pixels_filtered(
             // layer handled via sorted_idx;
             continue;
         }
-        let effective_frame = ld.effective_frame;
+        let source_frame = ld.source_frame;
         let pos = ld.pos;
         let scale = ld.scale;
         let rotation = ld.rotation;
@@ -663,7 +661,7 @@ pub(crate) fn render_frame_to_pixels_filtered(
                     width,
                     height,
                     &layer.effects,
-                    effective_frame,
+                    source_frame,
                     comp.fps,
                 );
                 let use_mask = !masks.is_empty();
@@ -757,7 +755,7 @@ pub(crate) fn render_frame_to_pixels_filtered(
         if let LayerType::PreComp { comp_id } = &layer.layer_type {
             if let Some(sub_comp) = comp.find_sub_comp(comp_id) {
                 let mut sub_pixels =
-                    render_precomp_layers(comp, sub_comp, effective_frame, width, height);
+                    render_precomp_layers(comp, sub_comp, source_frame, width, height);
                 if !sub_pixels.is_empty() {
                     if !layer.effects.is_empty() && layer.effects_enabled {
                         crate::core::cpu_effects::apply_layer_effects(
@@ -767,7 +765,7 @@ pub(crate) fn render_frame_to_pixels_filtered(
                             width,
                             height,
                             &layer.effects,
-                            effective_frame,
+                            source_frame,
                             comp.fps,
                         );
                     }
@@ -895,7 +893,7 @@ pub(crate) fn render_frame_to_pixels_filtered(
             let sim_key = (
                 crate::core::frame_cache::current_version(),
                 layer.id.clone(),
-                effective_frame.min(2000),
+                frame.min(2000),
                 em_bits,
             );
             let dt = 1.0 / comp.fps.max(1) as f32;
@@ -913,7 +911,7 @@ pub(crate) fn render_frame_to_pixels_filtered(
                 None => {
                     let mut ps = crate::core::particle_system::ParticleSystem::new(em);
                     // Cap simulation length for performance on very long compositions
-                    let sim_frames = effective_frame.min(2000);
+                    let sim_frames = frame.min(2000);
                     for _ in 0..=sim_frames {
                         ps.update(dt, pos[0], pos[1]);
                     }
@@ -933,10 +931,10 @@ pub(crate) fn render_frame_to_pixels_filtered(
                 // Project particles through the active camera: Z drives
                 // screen position and size scaling.
                 let cam = comp.resolve_camera();
-                let cpos = cam.transform.position.evaluate(effective_frame);
-                let crot = cam.transform.rotation.evaluate(effective_frame);
+                let cpos = cam.transform.position.evaluate(frame);
+                let crot = cam.transform.rotation.evaluate(frame);
                 let rad = crot[2].to_radians();
-                let fov = cam.fov_at(effective_frame).max(1.0).to_radians();
+                let fov = cam.fov_at(frame).max(1.0).to_radians();
                 let focal = (height as f32 * 0.5) / (fov * 0.5).tan();
                 let proj = crate::core::particle_system::CameraProjection {
                     cam_x: cpos[0],
@@ -950,11 +948,11 @@ pub(crate) fn render_frame_to_pixels_filtered(
                     &mut buffer,
                     width,
                     height,
-                    effective_frame as f32 * dt,
+                    frame as f32 * dt,
                     Some(&proj),
                 );
             } else {
-                ps.render(&mut buffer, width, height, effective_frame as f32 * dt);
+                ps.render(&mut buffer, width, height, frame as f32 * dt);
             }
 
             // Apply the layer's CPU effect stack to the full frame
@@ -966,7 +964,7 @@ pub(crate) fn render_frame_to_pixels_filtered(
                     width,
                     height,
                     &layer.effects,
-                    effective_frame,
+                    source_frame,
                     comp.fps,
                 );
             }
@@ -1012,12 +1010,12 @@ pub(crate) fn render_frame_to_pixels_filtered(
         // For 3D layers, use perspective projection from camera
         let (bounds_x, bounds_y, _perspective_uvs) = if layer.is_3d {
             let cam = comp.resolve_camera();
-            let layer_rot_3d = layer.transform_3d.rotation.evaluate(effective_frame);
+            let layer_rot_3d = layer.transform_3d.rotation.evaluate(frame);
             if let Some(projected) = perspective_project_layer(
-                cam.fov_at(effective_frame),
-                cam.transform.position.evaluate(effective_frame),
-                cam.transform.rotation.evaluate(effective_frame),
-                layer.transform_3d.position.evaluate(effective_frame),
+                cam.fov_at(frame),
+                cam.transform.position.evaluate(frame),
+                cam.transform.rotation.evaluate(frame),
+                layer.transform_3d.position.evaluate(frame),
                 layer_rot_3d,
                 scale,
                 base_w,
@@ -1054,7 +1052,7 @@ pub(crate) fn render_frame_to_pixels_filtered(
             // were silently clipped at the local-buffer edge.
             let instances = crate::core::shape_repeater::evaluate_shape_repeater_at_frame(
                 repeater,
-                effective_frame,
+                source_frame,
             );
             for instance in instances {
                 let m = instance.transform_matrix;
@@ -1085,9 +1083,9 @@ pub(crate) fn render_frame_to_pixels_filtered(
             comp,
             layer,
             frame,
-            effective_frame,
+            effective_frame: source_frame,
             source_frame: match &layer.posterize_time {
-                Some(pt) if pt.enabled => effective_frame as f32,
+                Some(pt) if pt.enabled => layer.effective_render_frame(frame, comp.fps) as f32,
                 _ => layer.remap_frame_f32(frame),
             },
             masks,
@@ -1115,7 +1113,8 @@ pub(crate) fn render_frame_to_pixels_filtered(
         postfx::apply_post_fx(postfx::PostFxCtx {
             comp,
             layer,
-            effective_frame,
+            effective_frame: source_frame,
+            frame,
             sorted_idx,
             layer_buf: &mut layer_buf[..],
             min_x,
@@ -2744,7 +2743,7 @@ mod shadow_tests {
     }
 
     #[test]
-    fn shadow_map_uses_caster_time_remap() {
+    fn shadow_map_keeps_caster_transform_on_composition_time() {
         let mut comp = shadow_test_comp(true);
         let caster = comp.layers.get_mut(1).expect("caster layer");
         caster.transform.position = Animatable::new_animated(vec![
@@ -2764,16 +2763,17 @@ mod shadow_tests {
             sum
         };
 
-        // The frozen source position [48,48] projects near [59,59] for this
-        // light. The old [36,36] position projects near [43,43].
+        // Time remapping freezes the caster's source content, not its layer
+        // transform. The composition-time position [36,36] projects near
+        // [43,43], while the source-frame position [48,48] is near [59,59].
         assert!(
-            sum_near(59, 59) > sum_near(43, 43) * 1.5,
-            "shadow must follow remapped caster position"
+            sum_near(43, 43) > sum_near(59, 59) * 1.5,
+            "shadow must follow composition-time caster transform"
         );
     }
 
     #[test]
-    fn depth_sort_uses_time_remapped_3d_position() {
+    fn depth_sort_keeps_layer_transform_on_composition_time() {
         let mut comp = Composition::new("depth-remap".into(), "Depth remap".into(), 64, 64, 30, 30);
         let mut layer = Layer::new(
             "depth".into(),
@@ -2791,7 +2791,7 @@ mod shadow_tests {
         layer.freeze_at(20);
         comp.layers.push(layer);
 
-        assert_eq!(layer_depth_for_sort(&comp, &comp.layers[0], 0), 90.0);
+        assert_eq!(layer_depth_for_sort(&comp, &comp.layers[0], 0), 10.0);
     }
 
     #[test]

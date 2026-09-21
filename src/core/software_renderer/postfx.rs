@@ -12,6 +12,7 @@ pub(crate) struct PostFxCtx<'a> {
     pub comp: &'a Composition,
     pub layer: &'a Layer,
     pub effective_frame: u32,
+    pub frame: u32,
     pub sorted_idx: usize,
     pub layer_buf: &'a mut [u8],
     pub min_x: u32,
@@ -33,6 +34,7 @@ pub(crate) fn apply_post_fx(ctx: PostFxCtx<'_>) {
         comp,
         layer,
         effective_frame,
+        frame,
         sorted_idx,
         layer_buf,
         min_x,
@@ -68,10 +70,10 @@ pub(crate) fn apply_post_fx(ctx: PostFxCtx<'_>) {
                     .and_then(|light| {
                         crate::core::timeline::project_point_to_screen_at_frame(
                             comp.resolve_camera(),
-                            light.position.evaluate(effective_frame),
+                            light.position.evaluate(frame),
                             bw as f32,
                             bh as f32,
-                            effective_frame,
+                            frame,
                         )
                     })
             })
@@ -97,8 +99,8 @@ pub(crate) fn apply_post_fx(ctx: PostFxCtx<'_>) {
     // smears the layer buffer along the motion vector.
     if layer.motion_blur && comp.motion_blur_shutter_angle > 0.0 {
         let fps = comp.fps.max(1);
-        let f_prev = effective_frame.saturating_sub(1);
-        let f_next = effective_frame.saturating_add(1);
+        let f_prev = frame.saturating_sub(1);
+        let f_next = frame.saturating_add(1);
         let (p_prev, _, _, _) = comp.resolve_world_transform(layer, f_prev);
         let (p_next, _, _, _) = comp.resolve_world_transform(layer, f_next);
         let vel_x = (p_next[0] - p_prev[0]) * 0.5;
@@ -127,12 +129,12 @@ pub(crate) fn apply_post_fx(ctx: PostFxCtx<'_>) {
     // Enhanced: spot light cone falloff, inverse-square attenuation, light color tinting.
     if layer.is_3d {
         let mat = &layer.material;
-        let layer_z = layer.transform_3d.position.evaluate(effective_frame)[2];
+        let layer_z = layer.transform_3d.position.evaluate(frame)[2];
         let mut shade_r = mat.ambient;
         let mut shade_g = mat.ambient;
         let mut shade_b = mat.ambient;
         for light in &comp.lights {
-            let lpos = light.position.evaluate(effective_frame);
+            let lpos = light.position.evaluate(frame);
             let lx = cx - lpos[0];
             let ly = cy - lpos[1];
             let lz = layer_z - lpos[2];

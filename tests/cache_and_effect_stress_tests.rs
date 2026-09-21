@@ -884,6 +884,59 @@ fn representative_effects_change_pixels_semantically() {
 }
 
 #[test]
+fn blur_and_vignette_preserve_effect_specific_pixel_relationships() {
+    let width = 9;
+    let height = 9;
+    let center = ((height / 2) * width + width / 2) as usize * 4;
+    let neighbor = ((height / 2) * width + width / 2 + 1) as usize * 4;
+    let corner = 0;
+
+    let mut impulse = vec![0u8; (width * height * 4) as usize];
+    impulse[center..center + 4].copy_from_slice(&[255, 255, 255, 255]);
+    kagari_vfx::core::cpu_effects::apply_layer_effects(
+        None,
+        None,
+        &mut impulse,
+        width,
+        height,
+        &[fx(EffectType::GaussianBlur {
+            blur_radius: c32(2.0),
+        })],
+        0,
+        30,
+    );
+    assert!(impulse[neighbor] > 0, "blur must spread energy to a neighbor");
+    assert!(impulse[center] < 255, "blur must reduce the impulse peak");
+    assert!(impulse[center + 3] > 0, "blur must retain alpha coverage");
+    assert!(impulse[center + 3] < 255, "blur must soften alpha coverage");
+
+    let mut vignette = vec![200u8; (width * height * 4) as usize];
+    for pixel in vignette.chunks_exact_mut(4) {
+        pixel[3] = 255;
+    }
+    kagari_vfx::core::cpu_effects::apply_layer_effects(
+        None,
+        None,
+        &mut vignette,
+        width,
+        height,
+        &[fx(EffectType::Vignette {
+            intensity: c32(100.0),
+            roundness: c32(1.0),
+            feather: c32(50.0),
+            color: c32a4([0.0, 0.0, 0.0, 1.0]),
+        })],
+        0,
+        30,
+    );
+    assert!(
+        vignette[corner] < vignette[center],
+        "vignette must darken the corner more than the center"
+    );
+    assert_eq!(vignette[corner + 3], 255, "vignette must preserve alpha");
+}
+
+#[test]
 fn effect_endpoint_contracts_match_pixel_semantics() {
     let base = vec![
         10, 20, 30, 255, 40, 50, 60, 255, 70, 80, 90, 255, 100, 110, 120, 255,

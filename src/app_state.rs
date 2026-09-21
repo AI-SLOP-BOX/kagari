@@ -1641,6 +1641,62 @@ mod tests {
     }
 
     #[test]
+    fn studio_event_loop_toggles_command_palette_with_keyboard_input() {
+        let mut app = KagariApp::default();
+        app.show_home = false;
+        app.show_welcome = false;
+        let ctx = eframe::egui::Context::default();
+        let screen_rect = eframe::egui::Rect::from_min_size(
+            eframe::egui::Pos2::ZERO,
+            eframe::egui::vec2(1600.0, 900.0),
+        );
+
+        let key_event = || eframe::egui::Event::Key {
+            key: eframe::egui::Key::K,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: eframe::egui::Modifiers {
+                command: true,
+                ..Default::default()
+            },
+        };
+        let modifiers = eframe::egui::Modifiers {
+            command: true,
+            ..Default::default()
+        };
+
+        let _ = ctx.run(
+            eframe::egui::RawInput {
+                screen_rect: Some(screen_rect),
+                modifiers,
+                events: vec![key_event()],
+                ..Default::default()
+            },
+            |ctx| {
+                crate::ui::theme::configure_ae_theme(ctx);
+                app.update_panels(ctx);
+            },
+        );
+        assert!(app.show_command_palette, "Cmd+K must open the command palette");
+        assert!(app.command_palette_search.is_empty());
+
+        let _ = ctx.run(
+            eframe::egui::RawInput {
+                screen_rect: Some(screen_rect),
+                modifiers,
+                events: vec![key_event()],
+                ..Default::default()
+            },
+            |ctx| {
+                crate::ui::theme::configure_ae_theme(ctx);
+                app.update_panels(ctx);
+            },
+        );
+        assert!(!app.show_command_palette, "Cmd+K must close the command palette");
+    }
+
+    #[test]
     fn responsive_studio_frames_render_without_panic() {
         for (width, height) in [(900.0, 700.0), (640.0, 480.0)] {
             let mut app = KagariApp::default();

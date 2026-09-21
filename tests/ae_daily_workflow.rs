@@ -111,6 +111,42 @@ fn time_stretch_doubles_duration() {
     assert_eq!(layer.remap_frame(120), 60);
 }
 
+#[test]
+fn time_remap_freezes_source_without_freezing_layer_transform() {
+    let mut comp = Composition::new("c1".into(), "Time semantics".into(), 64, 64, 30, 30);
+    let mut layer = Layer::new(
+        "solid".into(),
+        "Animated transform".into(),
+        LayerType::Solid {
+            color: [1.0, 0.0, 0.0, 1.0],
+        },
+        30,
+    );
+    layer.transform.scale = Animatable::new_constant([20.0, 20.0]);
+    layer.transform.position = Animatable::new_animated(vec![
+        Keyframe::new(0, [16.0, 16.0], InterpolationType::Linear),
+        Keyframe::new(20, [48.0, 48.0], InterpolationType::Linear),
+    ]);
+    layer.freeze_at(20);
+    comp.layers.push(layer);
+
+    let pixels = render_frame_to_pixels(&comp, 0, 64, 64, 0.0, 0);
+    let red_sum_in = |x0: usize, y0: usize, x1: usize, y1: usize| -> u64 {
+        (y0..y1)
+            .flat_map(|y| (x0..x1).map(move |x| ((y * 64 + x) * 4) as usize))
+            .map(|index| pixels[index] as u64)
+            .sum()
+    };
+    let at_composition_position = red_sum_in(10, 10, 22, 22);
+    let at_frozen_source_position = red_sum_in(42, 42, 54, 54);
+    assert!(
+        at_composition_position > at_frozen_source_position * 3,
+        "time remap must not freeze transform position: comp={} source={}",
+        at_composition_position,
+        at_frozen_source_position
+    );
+}
+
 // ── Precompose Workflow ──
 
 #[test]
