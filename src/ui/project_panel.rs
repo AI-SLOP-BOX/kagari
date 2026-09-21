@@ -526,27 +526,108 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
         }
 
         if let Some((asset_idx, new_path, new_name)) = replace_info {
-            if let Some(asset) = temp_project.assets.get_mut(asset_idx) {
-                let old_name = asset.name.clone();
+            let Some(asset) = temp_project.assets.get(asset_idx) else {
+                return;
+            };
+            let old_name = asset.name.clone();
+            let (old_path, is_video_asset) = match &asset.item_type {
+                ProjectItemType::Image { path, .. }
+                | ProjectItemType::Video { path, .. }
+                | ProjectItemType::Audio { path, .. } => (
+                    Some(path.clone()),
+                    matches!(&asset.item_type, ProjectItemType::Video { .. }),
+                ),
+                _ => (None, false),
+            };
+            let media_matches = |candidate: &str| {
+                old_path.as_deref().is_some_and(|path| candidate == path)
+                    || candidate.ends_with(&old_name)
+            };
+
+            // A video layer is rendered from its decoded frame sequence, not
+            // directly from `source`. Replacing only that source leaves the
+            // old frames_dir in place, so pre-decode every frame-rate variant
+            // before mutating the project.
+            let mut imported_video_by_fps = std::collections::HashMap::new();
+            let mut import_error = None;
+            if is_video_asset {
+                for comp in &temp_project.compositions {
+                    let needs_video = comp.layers.iter().any(|layer| {
+                        if let LayerType::Video { source, .. } = &layer.layer_type {
+                            layer.name == old_name || media_matches(source)
+                        } else {
+                            false
+                        }
+                    });
+                    if !needs_video || imported_video_by_fps.contains_key(&comp.fps) {
+                        continue;
+                    }
+                    let stem = std::path::Path::new(&new_path)
+                        .file_stem()
+                        .map(|value| value.to_string_lossy())
+                        .unwrap_or_else(|| std::borrow::Cow::Borrowed("video"));
+                    let safe_stem: String = stem
+                        .chars()
+                        .map(|ch| if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_') { ch } else { '_' })
+                        .collect();
+                    let destination = std::env::temp_dir()
+                        .join("kagari_media")
+                        .join("relinked")
+                        .join(format!("asset_{asset_idx}_{}fps_{safe_stem}", comp.fps));
+                    match crate::core::video_import::import_video(
+                        &new_path,
+                        &destination,
+                        comp.fps as f32,
+                    ) {
+                        Ok(imported) => {
+                            imported_video_by_fps.insert(comp.fps, imported);
+                        }
+                        Err(error) => {
+                            import_error = Some(error);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if let Some(error) = import_error {
+                app.toasts.error(format!("Could not replace video footage: {error}"));
+            } else {
+                let asset = temp_project.assets.get_mut(asset_idx).expect("asset index checked above");
                 asset.name = new_name.clone();
                 match &mut asset.item_type {
-                    ProjectItemType::Image { path, .. } => *path = new_path.clone(),
-                    ProjectItemType::Video { path, .. } => *path = new_path.clone(),
-                    ProjectItemType::Audio { path, .. } => *path = new_path.clone(),
+                    ProjectItemType::Image { path, .. }
+                    | ProjectItemType::Video { path, .. }
+                    | ProjectItemType::Audio { path, .. } => *path = new_path.clone(),
                     _ => {}
                 }
-                // Update layers using this footage
+
                 for comp in &mut temp_project.compositions {
                     for layer in &mut comp.layers {
+                        let matched_video_name = layer.name == old_name;
                         if layer.name == old_name {
                             layer.name = new_name.clone();
                         }
                         match &mut layer.layer_type {
-                            LayerType::Image { path } if path.contains(&old_name) => {
+                            LayerType::Image { path } if media_matches(path) => {
                                 *path = new_path.clone();
                             }
-                            LayerType::Audio { path, .. } if path.contains(&old_name) => {
+                            LayerType::Audio { path, .. } if media_matches(path) => {
                                 *path = new_path.clone();
+                            }
+                            LayerType::Video {
+                                source,
+                                frames_dir,
+                                frame_count,
+                                audio_wav,
+                                ..
+                            } if is_video_asset && (matched_video_name || media_matches(source)) => {
+                                if let Some(imported) = imported_video_by_fps.get(&comp.fps) {
+                                    *source = imported.source_path.clone();
+                                    *frames_dir = imported.frames_dir.clone();
+                                    *frame_count = imported.frame_count;
+                                    *audio_wav = imported.audio_wav.clone();
+                                }
                             }
                             _ => {}
                         }
