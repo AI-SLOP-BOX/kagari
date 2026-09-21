@@ -125,6 +125,10 @@ fn draw_view_menu_contents(ui: &mut egui::Ui, app: &mut KagariApp) {
     ui.checkbox(&mut app.show_guides, "Safe-area guides");
     ui.checkbox(&mut app.show_grid, "Grid");
     ui.checkbox(&mut app.viewport_show_stats, "Preview statistics");
+    ui.separator();
+    ui.collapsing("Preview Proxy", |ui| {
+        crate::ui::proxy_panel::draw_proxy_controls(app, ui);
+    });
     if let Some(idx) = app.selection.selected_layer_idx {
         ui.separator();
         ui.menu_button("Anchor snapping", |ui| {
@@ -721,8 +725,15 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 } else {
                     app.playback.adaptive_preview_factor
                 };
+                let proxy_factor = crate::core::proxy::effective_proxy_scale(
+                    None,
+                    comp.comp_proxy.active_in_preview,
+                    comp.comp_proxy.global_resolution,
+                    false,
+                );
                 let display_px = (draw_w * ctx.pixels_per_point()).ceil();
-                let preview_px = ((display_px * effective_factor) as u32).clamp(64, 4096);
+                let preview_px = ((display_px * effective_factor * proxy_factor) as u32)
+                    .clamp(64, 4096);
                 renderer.set_preview_max_width(Some(preview_px));
 
                 // ── RAM preview: incremental pre-pass, a few frames per UI frame ──

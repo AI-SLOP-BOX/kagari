@@ -37,7 +37,14 @@ pub fn draw_software_canvas(
     let software_preview_required = comp.width > 0 && comp.height > 0;
     if software_preview_required || custom_lut_active {
         let max_preview_dim = 2048u32;
-        let scale = (max_preview_dim as f32 / comp.width.max(comp.height) as f32).min(1.0);
+        let proxy_factor = crate::core::proxy::effective_proxy_scale(
+            None,
+            comp.comp_proxy.active_in_preview,
+            comp.comp_proxy.global_resolution,
+            false,
+        );
+        let proxy_max_dim = ((max_preview_dim as f32 * proxy_factor).round() as u32).max(64);
+        let scale = (proxy_max_dim as f32 / comp.width.max(comp.height) as f32).min(1.0);
         let render_width = ((comp.width as f32 * scale).round() as u32).max(1);
         let render_height = ((comp.height as f32 * scale).round() as u32).max(1);
         let pixels = crate::core::software_renderer::render_frame_to_pixels(
