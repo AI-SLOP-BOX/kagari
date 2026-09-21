@@ -379,26 +379,24 @@ pub fn draw_timeline_header(
         }
         if ui
             .button("+ Camera")
-            .on_hover_text("Add 3D Camera layer")
+            .on_hover_text("Add a 3D camera to the composition")
             .clicked()
         {
-            let id = format!("layer_{}", comp.layers.len());
-            let name = format!("Camera {}", comp.layers.len() + 1);
-            let mut layer = Layer::new(id, name, LayerType::Null, total_frames);
-            layer.is_3d = true;
-            comp.add_layer(layer);
+            let mut camera = crate::core::timeline::Camera3D::default();
+            camera.name = format!("Camera {}", comp.cameras.len() + 1);
+            comp.cameras.push(camera);
+            let camera_idx = comp.cameras.len().saturating_sub(1);
+            comp.set_active_camera(Some(camera_idx));
             project_changed = true;
         }
         if ui
             .button("+ Light")
-            .on_hover_text("Add Point Light layer")
+            .on_hover_text("Add a point light to the composition")
             .clicked()
         {
-            let id = format!("layer_{}", comp.layers.len());
-            let name = format!("Light {}", comp.layers.len() + 1);
-            let mut layer = Layer::new(id, name, LayerType::Null, total_frames);
-            layer.is_3d = true;
-            comp.add_layer(layer);
+            let mut light = crate::core::timeline::Light3D::default();
+            light.name = format!("Light {}", comp.lights.len() + 1);
+            comp.lights.push(light);
             project_changed = true;
         }
         if ui.button("+ Shape").clicked() {
