@@ -1,4 +1,4 @@
-use crate::core::timeline::{Layer, LayerType, ProjectItem, ProjectItemType};
+use crate::core::timeline::{Composition, Layer, LayerType, ProjectItem, ProjectItemType};
 use crate::ui::custom_widgets;
 use crate::ui::theme::colors;
 use crate::KagariApp;
@@ -33,6 +33,77 @@ fn classify_imported_media(path: &std::path::Path) -> ProjectItemType {
             width: 1920,
             height: 1080,
         }
+    }
+}
+
+fn media_path_matches(candidate: &str, old_path: Option<&str>, old_name: &str) -> bool {
+    old_path.is_some_and(|path| candidate == path) || candidate.ends_with(old_name)
+}
+
+fn composition_contains_video_replacement(
+    comp: &Composition,
+    old_name: &str,
+    old_path: Option<&str>,
+) -> bool {
+    comp.layers.iter().any(|layer| {
+        matches!(&layer.layer_type, LayerType::Video { source, .. }
+            if layer.name == old_name || media_path_matches(source, old_path, old_name))
+    }) || comp
+        .sub_compositions
+        .iter()
+        .any(|sub| composition_contains_video_replacement(sub, old_name, old_path))
+}
+
+fn replace_media_in_composition(
+    comp: &mut Composition,
+    old_name: &str,
+    old_path: Option<&str>,
+    new_name: &str,
+    new_path: &str,
+    is_video_asset: bool,
+    imported_video_by_fps: &std::collections::HashMap<u32, crate::core::video_import::VideoAsset>,
+) {
+    for layer in &mut comp.layers {
+        let matched_name = layer.name == old_name;
+        if matched_name {
+            layer.name = new_name.to_string();
+        }
+        match &mut layer.layer_type {
+            LayerType::Image { path } if media_path_matches(path, old_path, old_name) => {
+                *path = new_path.to_string();
+            }
+            LayerType::Audio { path, .. } if media_path_matches(path, old_path, old_name) => {
+                *path = new_path.to_string();
+            }
+            LayerType::Video {
+                source,
+                frames_dir,
+                frame_count,
+                audio_wav,
+                ..
+            } if is_video_asset
+                && (matched_name || media_path_matches(source, old_path, old_name)) =>
+            {
+                if let Some(imported) = imported_video_by_fps.get(&comp.fps) {
+                    *source = imported.source_path.clone();
+                    *frames_dir = imported.frames_dir.clone();
+                    *frame_count = imported.frame_count;
+                    *audio_wav = imported.audio_wav.clone();
+                }
+            }
+            _ => {}
+        }
+    }
+    for sub in &mut comp.sub_compositions {
+        replace_media_in_composition(
+            sub,
+            old_name,
+            old_path,
+            new_name,
+            new_path,
+            is_video_asset,
+            imported_video_by_fps,
+        );
     }
 }
 
@@ -562,11 +633,6 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
                 ),
                 _ => (None, false),
             };
-            let media_matches = |candidate: &str| {
-                old_path.as_deref().is_some_and(|path| candidate == path)
-                    || candidate.ends_with(&old_name)
-            };
-
             // A video layer is rendered from its decoded frame sequence, not
             // directly from `source`. Replacing only that source leaves the
             // old frames_dir in place, so pre-decode every frame-rate variant
@@ -575,13 +641,11 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
             let mut import_error = None;
             if is_video_asset {
                 for comp in &temp_project.compositions {
-                    let needs_video = comp.layers.iter().any(|layer| {
-                        if let LayerType::Video { source, .. } = &layer.layer_type {
-                            layer.name == old_name || media_matches(source)
-                        } else {
-                            false
-                        }
-                    });
+                    let needs_video = composition_contains_video_replacement(
+                        comp,
+                        &old_name,
+                        old_path.as_deref(),
+                    );
                     if !needs_video || imported_video_by_fps.contains_key(&comp.fps) {
                         continue;
                     }
@@ -626,35 +690,15 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
                 }
 
                 for comp in &mut temp_project.compositions {
-                    for layer in &mut comp.layers {
-                        let matched_video_name = layer.name == old_name;
-                        if layer.name == old_name {
-                            layer.name = new_name.clone();
-                        }
-                        match &mut layer.layer_type {
-                            LayerType::Image { path } if media_matches(path) => {
-                                *path = new_path.clone();
-                            }
-                            LayerType::Audio { path, .. } if media_matches(path) => {
-                                *path = new_path.clone();
-                            }
-                            LayerType::Video {
-                                source,
-                                frames_dir,
-                                frame_count,
-                                audio_wav,
-                                ..
-                            } if is_video_asset && (matched_video_name || media_matches(source)) => {
-                                if let Some(imported) = imported_video_by_fps.get(&comp.fps) {
-                                    *source = imported.source_path.clone();
-                                    *frames_dir = imported.frames_dir.clone();
-                                    *frame_count = imported.frame_count;
-                                    *audio_wav = imported.audio_wav.clone();
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
+                    replace_media_in_composition(
+                        comp,
+                        &old_name,
+                        old_path.as_deref(),
+                        &new_name,
+                        &new_path,
+                        is_video_asset,
+                        &imported_video_by_fps,
+                    );
                 }
                 app.toasts
                     .info(format!("Replaced footage: '{}' → '{}'", old_name, new_name));
@@ -670,8 +714,9 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
 
 #[cfg(test)]
 mod tests {
-    use super::classify_imported_media;
-    use crate::core::timeline::ProjectItemType;
+    use super::{classify_imported_media, replace_media_in_composition};
+    use crate::core::timeline::{Composition, Layer, LayerType, ProjectItemType};
+    use std::collections::HashMap;
     use std::path::Path;
 
     #[test]
@@ -700,6 +745,65 @@ mod tests {
             classify_imported_media(Path::new("still.webp")),
             ProjectItemType::Image { .. }
         ));
+    }
+
+    #[test]
+    fn replace_footage_updates_nested_precomp_video_layers() {
+        let mut root = Composition::new("root".into(), "Root".into(), 64, 64, 24, 24);
+        let mut nested = Composition::new("nested".into(), "Nested".into(), 64, 64, 24, 24);
+        nested.layers.push(Layer::new(
+            "video".into(),
+            "Shot".into(),
+            LayerType::Video {
+                source: "/old/shot.mp4".into(),
+                frames_dir: "/old/cache".into(),
+                frame_count: 4,
+                audio_wav: Some("/old/audio.wav".into()),
+                speed: 1.0,
+            },
+            24,
+        ));
+        root.sub_compositions.push(nested);
+
+        let mut imported = HashMap::new();
+        imported.insert(
+            24,
+            crate::core::video_import::VideoAsset {
+                source_path: "/new/shot.mp4".into(),
+                frames_dir: "/new/cache".into(),
+                frame_count: 8,
+                fps: 24.0,
+                width: 64,
+                height: 64,
+                audio_wav: Some("/new/audio.wav".into()),
+            },
+        );
+
+        replace_media_in_composition(
+            &mut root,
+            "Shot",
+            Some("/old/shot.mp4"),
+            "Shot Replaced",
+            "/new/shot.mp4",
+            true,
+            &imported,
+        );
+
+        let LayerType::Video {
+            source,
+            frames_dir,
+            frame_count,
+            audio_wav,
+            ..
+        } = &root.sub_compositions[0].layers[0].layer_type
+        else {
+            panic!("expected nested video layer");
+        };
+        assert_eq!(root.sub_compositions[0].layers[0].name, "Shot Replaced");
+        assert_eq!(source, "/new/shot.mp4");
+        assert_eq!(frames_dir, "/new/cache");
+        assert_eq!(*frame_count, 8);
+        assert_eq!(audio_wav.as_deref(), Some("/new/audio.wav"));
     }
 }
 
