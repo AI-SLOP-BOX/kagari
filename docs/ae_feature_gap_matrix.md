@@ -34,6 +34,7 @@ is intentionally tracked separately from the core workflow.
 | Text | Fonts, tracking, leading, alignment, text-on-path, text animation | 🟡 | Rasterizer and text animator exist; advanced typography/layout compatibility is incomplete |
 | Shapes | Shape layers, fills/strokes, boolean paths, repeater/modifiers, extrusion | 🟡 | Shape engines exist; shape editing and renderer parity need more end-to-end tests |
 | 3D layers | 3D transforms, cameras, lights, depth, shadows, DOF | 🟡 | `advanced_3d_engine.rs`, camera/light UI, and software-rasterized OBJ layers with nested PreComp coverage; model materials, scene authoring, GPU mesh rendering, and broader interchange remain narrower than AE |
+| Scene cameras/lights | Camera and light layers in the timeline, animated scene objects, active-camera switching | 🟡 | Camera/light creation now writes to the real composition scene and active-camera/light render path; they are still represented as composition-level objects rather than first-class timeline layer types |
 | Motion tracking | Point tracking, planar tracking, camera solve, stabilization | 🟡 | Point/quad tracking, animated Corner Pin, target-aware stabilization, and 3D camera solving are connected to the tracker panel; real-footage workflow coverage, planar confidence UX, and production-quality solve accuracy still need work |
 | Roto / paint | Roto Brush, paint, clone, eraser, puppet | 🟡 | Tools and engines are present; temporal propagation/brush quality are not AE-level |
 | Keying | Chroma/linear key, matte cleanup, spill-like workflows | 🟡 | Keying modules and controls exist; production-grade edge handling still needs validation |
@@ -44,6 +45,7 @@ is intentionally tracked separately from the core workflow.
 | Preview | Cached frames, RAM preview, adaptive quality, audio sync | 🟡 | Cache and playback exist; true real-time GPU effect processing is still limited |
 | Render queue | Multiple items, progress, cancellation/failure reporting | ✅ | `core/render_queue.rs`, `ui/render_queue.rs` |
 | Export | FFmpeg video, image/EXR paths, GIF, Lottie, MLT/OTIO-style interchange | 🟡 | Several exporters exist; codec/metadata/alpha compatibility needs broader fixture testing |
+| Essential Graphics / templates | Exposed controls, reusable motion-graphics templates, host-side overrides | 🟡 | Native MOGRT-style package and import/export UI exist; Adobe-host compatibility, richer property binding, and template validation remain narrower |
 | Plugin/integration | Plug-ins, scripting, interchange with external tools | 🟡 | OFX/SDK bridges and Rhai exist; third-party plug-in compatibility is not complete |
 | Workspaces | Dockable panels, resize, saved workspace layouts | 🟡 | SavedWorkspace persists panel widths, timeline height, graph mode, viewer state, and compact drawers; restore now runs before panel layout, while full dock visibility/custom panel topology remains narrower than AE |
 | UI operations | Search/command palette, shortcuts, inspector, graph editor, undo/redo | 🟡 | Core paths exist; more real egui event/E2E tests are required for production confidence |
@@ -64,13 +66,16 @@ is intentionally tracked separately from the core workflow.
 4. **3D production workflow** — imported OBJ models now render in top-level and
    nested compositions, but materials, scene authoring, GPU mesh rendering,
    interchange, depth, shadows, and DOF still need one connected authoring path.
-5. **Text and shape authoring** — the data model is broad, but direct editing,
+5. **Scene object authoring** — camera/light controls now affect the real scene,
+   but timeline-layer semantics, per-object selection, and transform binding are
+   still behind AE.
+6. **Text and shape authoring** — the data model is broad, but direct editing,
    typography fidelity, path editing, and modifier interaction are behind AE.
-6. **Workspace persistence** — saved workspaces must restore panel geometry,
+7. **Workspace persistence** — saved workspaces must restore panel geometry,
    timeline height, graph mode, and viewer state, not only tab indices.
-7. **Roto/paint temporal behavior** — propagation, caching, and correction
+8. **Roto/paint temporal behavior** — propagation, caching, and correction
    tools need to survive multi-frame edits and real footage.
-8. **Audio correction and interchange** — production audio formats and the
+9. **Audio correction and interchange** — production audio formats and the
    correction workflow need a complete non-ML baseline before model support.
 
 ## Implementation order
