@@ -1014,6 +1014,9 @@ pub fn handle_global_shortcuts(
                 extracted_layers.reverse();
                 new_comp.layers = extracted_layers;
 
+                let moved_layers = new_comp.layers.clone();
+                comp_mut.move_scene_objects_to(&mut new_comp, &moved_layers);
+
                 let precomp_layer = crate::core::timeline::Layer::new(
                     format!("layer_{}", precomp_id),
                     precomp_name,

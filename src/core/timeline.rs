@@ -2507,6 +2507,53 @@ impl Composition {
         Some(layer)
     }
 
+    /// Move camera/light scene objects referenced by `layers` into a nested
+    /// composition. Timeline layers keep their stable object IDs, so moving
+    /// the matching scene entries is enough to preserve render semantics.
+    pub fn move_scene_objects_to(&mut self, destination: &mut Composition, layers: &[Layer]) {
+        let camera_ids: std::collections::HashSet<&str> = layers
+            .iter()
+            .filter_map(|layer| match layer.scene_object.as_ref() {
+                Some(SceneObjectRef::Camera { id }) => Some(id.as_str()),
+                _ => None,
+            })
+            .collect();
+        let light_ids: std::collections::HashSet<&str> = layers
+            .iter()
+            .filter_map(|layer| match layer.scene_object.as_ref() {
+                Some(SceneObjectRef::Light { id }) => Some(id.as_str()),
+                _ => None,
+            })
+            .collect();
+
+        let mut moved_cameras = Vec::new();
+        self.cameras.retain(|camera| {
+            if camera_ids.contains(camera.id.as_str()) {
+                moved_cameras.push(camera.clone());
+                false
+            } else {
+                true
+            }
+        });
+        if moved_cameras.iter().any(|camera| camera.active) {
+            for camera in &mut destination.cameras {
+                camera.active = false;
+            }
+        }
+        destination.cameras.extend(moved_cameras);
+
+        let mut moved_lights = Vec::new();
+        self.lights.retain(|light| {
+            if light_ids.contains(light.id.as_str()) {
+                moved_lights.push(light.clone());
+                false
+            } else {
+                true
+            }
+        });
+        destination.lights.extend(moved_lights);
+    }
+
     /// Look up a sub-composition by id (recursive search).
     /// The camera currently driving the render: first entry of `cameras`
     /// with `active == true`, else the legacy `active_camera` field.
@@ -3078,6 +3125,9 @@ impl Composition {
                 }
             }
         }
+
+        let moved_layers = new_sub_comp.layers.clone();
+        self.move_scene_objects_to(&mut new_sub_comp, &moved_layers);
 
         let insert_idx = min_idx.min(self.layers.len());
         self.layers.insert(insert_idx, precomp_layer);
@@ -3817,6 +3867,53 @@ mod tests {
             sub_comp.layers[0].transform.position.evaluate(0),
             [123.0, 456.0]
         );
+    }
+
+    #[test]
+    fn test_precompose_moves_referenced_scene_objects() {
+        let mut comp = Composition::new("main".into(), "Main".into(), 1920, 1080, 30, 300);
+        let mut camera = Camera3D::default();
+        camera.id = "camera_1".into();
+        camera.active = true;
+        comp.cameras.push(camera);
+        let mut camera_layer = Layer::new(
+            "camera_layer".into(),
+            "Camera 1".into(),
+            LayerType::Null,
+            300,
+        );
+        camera_layer.scene_object = Some(SceneObjectRef::Camera {
+            id: "camera_1".into(),
+        });
+        let mut light = Light3D::default();
+        light.id = "light_2".into();
+        comp.lights.push(light);
+        let mut light_layer = Layer::new(
+            "light_layer".into(),
+            "Light 2".into(),
+            LayerType::Null,
+            300,
+        );
+        light_layer.scene_object = Some(SceneObjectRef::Light {
+            id: "light_2".into(),
+        });
+        comp.add_layer(camera_layer);
+        comp.add_layer(light_layer);
+
+        let nested = comp
+            .precompose_layers(
+                &["camera_layer".into(), "light_layer".into()],
+                "sub1".into(),
+                "Sub Comp 1".into(),
+                PrecompAttributesMode::MoveToNewComp,
+            )
+            .expect("precompose should succeed");
+
+        assert!(!comp.cameras.iter().any(|camera| camera.id == "camera_1"));
+        assert!(!comp.lights.iter().any(|light| light.id == "light_2"));
+        assert!(nested.cameras.iter().any(|camera| camera.id == "camera_1"));
+        assert!(nested.lights.iter().any(|light| light.id == "light_2"));
+        assert_eq!(nested.resolve_camera().id, "camera_1");
     }
 }
 
