@@ -170,18 +170,22 @@ pub fn read_project_json_file(path: &std::path::Path) -> Result<String, String> 
 
 /// Read a user-selected text file without allocating beyond the caller's
 /// declared limit.
-pub fn read_bounded_text_file(
-    path: &std::path::Path,
-    max_bytes: usize,
-) -> Result<String, String> {
-    let metadata = std::fs::metadata(path).map_err(|e| e.to_string())?;
+pub fn read_bounded_text_file(path: &std::path::Path, max_bytes: usize) -> Result<String, String> {
+    use std::io::Read;
+
+    let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
+    let metadata = file.metadata().map_err(|e| e.to_string())?;
     if metadata.len() > max_bytes as u64 {
-        return Err(format!(
-            "File exceeds the {} byte limit",
-            max_bytes
-        ));
+        return Err(format!("File exceeds the {} byte limit", max_bytes));
     }
-    std::fs::read_to_string(path).map_err(|e| e.to_string())
+    let mut text = String::new();
+    file.take(max_bytes.saturating_add(1) as u64)
+        .read_to_string(&mut text)
+        .map_err(|e| e.to_string())?;
+    if text.len() > max_bytes {
+        return Err(format!("File exceeds the {} byte limit", max_bytes));
+    }
+    Ok(text)
 }
 
 /// Migrate JSON schema from `from_version` to `CURRENT_SCHEMA_VERSION`.
@@ -267,6 +271,34 @@ mod tests {
 
         let error = load_project_migrated(&json).unwrap_err();
         assert!(error.contains("validation"));
+    }
+
+    #[test]
+    fn bounded_project_reader_returns_explicit_errors() {
+        let dir = std::env::temp_dir().join(format!(
+            "kagari_bounded_reader_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let oversized = dir.join("oversized.json");
+        std::fs::write(&oversized, b"123456789").unwrap();
+
+        let error = read_bounded_text_file(&oversized, 8).unwrap_err();
+        assert!(error.contains("8 byte limit"), "unexpected error: {error}");
+
+        let invalid_utf8 = dir.join("invalid-utf8.json");
+        std::fs::write(&invalid_utf8, [0xff, 0xfe]).unwrap();
+        let error = read_bounded_text_file(&invalid_utf8, 8).unwrap_err();
+        assert!(
+            !error.is_empty(),
+            "invalid text must be reported to the caller"
+        );
+
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
 

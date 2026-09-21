@@ -364,6 +364,55 @@ fn parallel_render_progress_callback_accuracy() {
 }
 
 #[test]
+fn parallel_render_mfr_survives_concurrent_cancel_without_overcounting() {
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Barrier;
+    use std::thread;
+
+    let mut queue = ParallelRenderQueue::new();
+    for item in 0..8 {
+        queue.add_item(RenderQueueItem {
+            comp_name: format!("comp_{item}"),
+            start_frame: 0,
+            end_frame: 63,
+            output_path: format!("/tmp/stress_{item}.png"),
+            status: kagari_vfx::core::parallel_render::RenderStatus::Pending,
+        });
+    }
+    let external_cancel = Arc::new(AtomicBool::new(false));
+    let first_frame_started = Arc::new(Barrier::new(2));
+    let cancel_for_thread = Arc::clone(&external_cancel);
+    let barrier_for_thread = Arc::clone(&first_frame_started);
+    let canceller = thread::spawn(move || {
+        barrier_for_thread.wait();
+        cancel_for_thread.store(true, Ordering::SeqCst);
+    });
+    let callback_barrier = Arc::clone(&first_frame_started);
+    let callback_started = Arc::new(AtomicBool::new(false));
+    let callback_started_once = Arc::clone(&callback_started);
+
+    queue.render_all_mfr_with_external_cancel(&external_cancel, move |_, _| {
+        if !callback_started_once.swap(true, Ordering::SeqCst) {
+            callback_barrier.wait();
+        }
+        thread::yield_now();
+        vec![0u8; 4]
+    });
+    canceller.join().unwrap();
+
+    let rendered = queue.total_frames_rendered.load(Ordering::SeqCst);
+    assert!(
+        queue.is_cancelled(),
+        "worker cancellation must be observable"
+    );
+    assert!(
+        rendered <= queue.total_frames,
+        "cancelled render overcounted frames: {rendered} > {}",
+        queue.total_frames
+    );
+}
+
+#[test]
 fn render_stats_calculation() {
     let stats = RenderStats {
         frames_rendered: 100,

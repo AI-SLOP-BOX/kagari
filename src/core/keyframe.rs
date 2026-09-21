@@ -320,8 +320,8 @@ mod tests {
         let t1 = solve_bezier_eased_time(1.0, 0.25, 0.1, 0.25, 1.0);
         let t_mid = solve_bezier_eased_time(0.5, 0.25, 0.1, 0.25, 1.0);
 
-        assert!((t0 - 0.0).abs() < 1e-5);
-        assert!((t1 - 1.0).abs() < 1e-5);
+        assert_eq!(t0, 0.0);
+        assert_eq!(t1, 1.0);
         assert!(t_mid > 0.0 && t_mid < 1.0);
     }
 

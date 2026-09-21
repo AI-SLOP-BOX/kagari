@@ -1606,6 +1606,41 @@ mod tests {
     }
 
     #[test]
+    fn studio_event_loop_closes_drag_transaction_on_pointer_release() {
+        let mut app = KagariApp::default();
+        app.show_home = false;
+        app.show_welcome = false;
+        app.begin_drag("integration test drag");
+        assert!(app.drag_active());
+
+        let ctx = eframe::egui::Context::default();
+        let _ = ctx.run(
+            eframe::egui::RawInput {
+                screen_rect: Some(eframe::egui::Rect::from_min_size(
+                    eframe::egui::Pos2::ZERO,
+                    eframe::egui::vec2(1600.0, 900.0),
+                )),
+                events: vec![eframe::egui::Event::PointerButton {
+                    pos: eframe::egui::pos2(24.0, 24.0),
+                    button: eframe::egui::PointerButton::Primary,
+                    pressed: false,
+                    modifiers: eframe::egui::Modifiers::NONE,
+                }],
+                ..Default::default()
+            },
+            |ctx| {
+                crate::ui::theme::configure_ae_theme(ctx);
+                app.update_panels(ctx);
+            },
+        );
+
+        assert!(
+            !app.drag_active(),
+            "release must close the open transaction"
+        );
+    }
+
+    #[test]
     fn responsive_studio_frames_render_without_panic() {
         for (width, height) in [(900.0, 700.0), (640.0, 480.0)] {
             let mut app = KagariApp::default();
