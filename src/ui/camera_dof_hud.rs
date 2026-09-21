@@ -11,51 +11,59 @@ pub fn draw_camera_dof_hud(app: &mut KagariApp, ui: &mut egui::Ui) {
     };
 
     {
-    ui.horizontal(|ui| {
-        ui.style_mut().spacing.item_spacing.x = 4.0;
-        ui.small("📷 3D DoF:");
+        ui.horizontal(|ui| {
+            ui.style_mut().spacing.item_spacing.x = 4.0;
+            ui.small("📷 3D DoF:");
 
-        let selected_idx = app.selection.selected_layer_idx;
+            let selected_idx = app.selection.selected_layer_idx;
 
-        // 1. Auto-Focus to Selected Layer Button
-        if ui
-            .button("🎯 Focus to Layer")
-            .on_hover_text("Auto-calculate Focus Distance to selected 3D Layer")
-            .clicked()
-        {
-            let target_info = if let Some(idx) = selected_idx {
-                let comp = app.history.current().active_composition();
-                if idx < comp.layers.len() {
-                    let target_pos = comp.layers[idx].transform.position.evaluate(current_f);
-                    let distance = (target_pos[0].powi(2) + target_pos[1].powi(2))
+            // 1. Auto-Focus to Selected Layer Button
+            if ui
+                .button("🎯 Focus to Layer")
+                .on_hover_text("Auto-calculate Focus Distance to selected 3D Layer")
+                .clicked()
+            {
+                let target_info = if let Some(idx) = selected_idx {
+                    let comp = app.history.current().active_composition();
+                    if idx < comp.layers.len() {
+                        let target_pos = if comp.layers[idx].is_3d {
+                            comp.layers[idx].transform_3d.position.evaluate(current_f)
+                        } else {
+                            let pos = comp.layers[idx].transform.position.evaluate(current_f);
+                            [pos[0], pos[1], 0.0]
+                        };
+                        let camera_pos =
+                            comp.resolve_camera().transform.position.evaluate(current_f);
+                        let distance = ((target_pos[0] - camera_pos[0]).powi(2)
+                            + (target_pos[1] - camera_pos[1]).powi(2)
+                            + (target_pos[2] - camera_pos[2]).powi(2))
                         .sqrt()
                         .max(10.0);
-                    Some((comp.layers[idx].name.clone(), distance))
+                        Some((comp.layers[idx].name.clone(), distance))
+                    } else {
+                        None
+                    }
                 } else {
                     None
-                }
-            } else {
-                None
-            };
+                };
 
-            if let Some((layer_name, distance)) = target_info {
-                let temp_proj = app.history.current_mut();
-                let comp_mut = temp_proj.active_composition_mut();
-                if let Some(cam) = comp_mut.cameras.iter_mut().find(|c| c.active) {
+                if let Some((layer_name, distance)) = target_info {
+                    let temp_proj = app.history.current_mut();
+                    let comp_mut = temp_proj.active_composition_mut();
+                    let cam = comp_mut.resolve_camera_mut();
                     cam.focus_distance = distance;
                     cam.dof_enabled = true;
                     project_changed = true;
+                    app.toasts.info(format!(
+                        "Focused 3D Camera to '{}' ({:.0}px)",
+                        layer_name, distance
+                    ));
                 }
-                app.toasts.info(format!(
-                    "Focused 3D Camera to '{}' ({:.0}px)",
-                    layer_name, distance
-                ));
             }
-        }
 
-        // 2. DoF Enabled Checkbox
-        let comp = app.history.current_mut().active_composition_mut();
-        if let Some(cam) = comp.cameras.iter_mut().find(|c| c.active) {
+            // 2. DoF Enabled Checkbox
+            let comp = app.history.current_mut().active_composition_mut();
+            let cam = comp.resolve_camera_mut();
             if ui.checkbox(&mut cam.dof_enabled, "DoF").changed() {
                 project_changed = true;
             }
@@ -120,10 +128,7 @@ pub fn draw_camera_dof_hud(app: &mut KagariApp, ui: &mut egui::Ui) {
             {
                 project_changed = true;
             }
-        } else {
-            ui.weak("(No Active 3D Camera)");
-        }
-    });
+        });
     }
 
     if project_changed {
