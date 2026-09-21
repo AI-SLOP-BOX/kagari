@@ -411,6 +411,8 @@ pub struct KagariApp {
     pub audio_meter: (f32, f32),
     /// Live 32-band spectrum values derived from the same mix used by the VU meter.
     pub audio_spectrum_bands: Vec<f32>,
+    /// Per-layer post-fader peaks for the Audio Mixer strips.
+    pub audio_track_meters: Vec<(f32, f32)>,
     /// Whether the last viewport render used GPU (updated each frame by viewport)
     pub gpu_rendered: bool,
     /// Layer index being renamed (inline edit), None = not renaming
@@ -622,6 +624,7 @@ impl Default for KagariApp {
             audio_playback: crate::core::audio_playback::AudioPlayback::new().ok(),
             audio_meter: (0.0, 0.0),
             audio_spectrum_bands: vec![0.0; 32],
+            audio_track_meters: Vec::new(),
             gpu_rendered: false,
             renaming_layer: None,
             show_home: crate::ui::project_io::welcome_on_startup(),
@@ -1056,6 +1059,7 @@ impl KagariApp {
                     db_to_lin(meter.peak_db_left),
                     db_to_lin(meter.peak_db_right),
                 );
+                self.audio_track_meters = meter.track_peaks;
                 let spectrum_options = crate::core::audio_spectrum::AudioSpectrumOptions {
                     frequency_bands: 32,
                     ..Default::default()

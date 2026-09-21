@@ -205,11 +205,15 @@ pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
                         );
 
                         // ── Mini VU meter (per-track) ──
-                        // Use the global meter as a rough proxy; per-track metering
-                        // would require separate mix buffers per track.
+                        // The audio engine reports each layer's post-fader peak,
+                        // so a loud track no longer makes every strip look active.
                         let level = if *has_audio && !ch.mute {
-                            let gain_linear = 10f32.powf(ch.gain_db / 20.0);
-                            (app.audio_meter.0.max(app.audio_meter.1) * gain_linear).clamp(0.0, 1.0)
+                            let (left, right) = app
+                                .audio_track_meters
+                                .get(idx)
+                                .copied()
+                                .unwrap_or((0.0, 0.0));
+                            left.max(right).clamp(0.0, 1.0)
                         } else {
                             0.0
                         };

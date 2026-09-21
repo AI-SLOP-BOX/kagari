@@ -122,6 +122,8 @@ pub struct AudioFrameMeter {
     pub peak_db_right: f32,
     pub rms_db_left: f32,
     pub rms_db_right: f32,
+    /// Per-layer post-fader peaks, indexed by composition layer order.
+    pub track_peaks: Vec<(f32, f32)>,
 }
 
 impl Default for AudioFrameMeter {
@@ -131,6 +133,7 @@ impl Default for AudioFrameMeter {
             peak_db_right: -90.0,
             rms_db_left: -90.0,
             rms_db_right: -90.0,
+            track_peaks: Vec::new(),
         }
     }
 }
@@ -858,6 +861,7 @@ pub fn mix_audio_sources_for_frame_with_state(
     let mut sum_sq_r = 0.0f32;
     let mut max_peak_l = 0.0f32;
     let mut max_peak_r = 0.0f32;
+    let mut track_peaks = vec![(0.0f32, 0.0f32); comp.layers.len()];
     let fps = comp.fps.max(1) as f32;
 
     for (layer_idx, layer) in comp.layers.iter().enumerate() {
@@ -988,13 +992,22 @@ pub fn mix_audio_sources_for_frame_with_state(
             layer_samples[r_idx] = sample_r;
         }
         apply_layer_audio_effects(&mut layer_samples, layer, sample_rate as f32, frame);
+        let mut track_peak_l = 0.0f32;
+        let mut track_peak_r = 0.0f32;
         for i in 0..buffer_size {
             let l_idx = i * 2;
             let r_idx = i * 2 + 1;
             let gl = gain * (1.0 - pan.max(0.0));
             let gr = gain * (1.0 - (-pan).max(0.0));
-            stereo_output[l_idx] += layer_samples[l_idx] * gl;
-            stereo_output[r_idx] += layer_samples[r_idx] * gr;
+            let layer_l = layer_samples[l_idx] * gl;
+            let layer_r = layer_samples[r_idx] * gr;
+            track_peak_l = track_peak_l.max(layer_l.abs());
+            track_peak_r = track_peak_r.max(layer_r.abs());
+            stereo_output[l_idx] += layer_l;
+            stereo_output[r_idx] += layer_r;
+        }
+        if let Some(track_peak) = track_peaks.get_mut(layer_idx) {
+            *track_peak = (track_peak_l, track_peak_r);
         }
     }
 
@@ -1099,6 +1112,7 @@ pub fn mix_audio_sources_for_frame_with_state(
             peak_db_right: to_db(max_peak_r),
             rms_db_left: to_db(rms_l),
             rms_db_right: to_db(rms_r),
+            track_peaks,
         },
     )
 }
@@ -1332,6 +1346,9 @@ mod multitrack_tests {
         assert!((mix[0] - 0.75).abs() < 0.01, "mix[0] = {}", mix[0]);
         // Meter reflects the combined level
         assert!(meter.peak_db_left > -5.0, "peak {} dB", meter.peak_db_left);
+        assert_eq!(meter.track_peaks.len(), 2);
+        assert!((meter.track_peaks[0].0 - 0.5).abs() < 0.01);
+        assert!((meter.track_peaks[1].0 - 0.25).abs() < 0.01);
         let _ = Animatable::<f32>::new_constant;
         let _ = Keyframe::new(0, 0.0f32, crate::core::keyframe::InterpolationType::Linear);
 
