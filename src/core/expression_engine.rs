@@ -1,3 +1,4 @@
+use crate::core::property::Animatable;
 use rhai::{export_module, exported_module};
 /// Rhai-powered AE-compatible expression evaluation engine.
 ///
@@ -144,6 +145,62 @@ thread_local! {
     /// Lets zero-state helpers like the canonical `wiggle(freq, amp)` behave
     /// time-aware without changing their Rhai signatures.
     static CURRENT_TIME: std::cell::Cell<f64> = const { std::cell::Cell::new(0.0) };
+    static VALUE_AT_TIME_CONTEXT: std::cell::RefCell<Option<ValueAtTimeContext>> = const { std::cell::RefCell::new(None) };
+}
+
+#[derive(Clone)]
+struct ValueAtTimeContext {
+    current_value: f32,
+    source: Option<Animatable<f32>>,
+    fps: f64,
+}
+
+struct ValueAtTimeGuard {
+    previous: Option<ValueAtTimeContext>,
+}
+
+impl ValueAtTimeGuard {
+    fn install(context: ValueAtTimeContext) -> Self {
+        let previous = VALUE_AT_TIME_CONTEXT.with(|slot| slot.replace(Some(context)));
+        Self { previous }
+    }
+}
+
+impl Drop for ValueAtTimeGuard {
+    fn drop(&mut self) {
+        let previous = self.previous.take();
+        VALUE_AT_TIME_CONTEXT.with(|slot| {
+            slot.replace(previous);
+        });
+    }
+}
+
+fn sample_value_at_time(context: &ValueAtTimeContext, time: f64) -> f64 {
+    if !time.is_finite() {
+        return context.current_value as f64;
+    }
+    if let Some(source) = &context.source {
+        let frame = (time * context.fps) as f32;
+        let value = source.value_at_f32(frame);
+        if value.is_finite() {
+            return value as f64;
+        }
+    }
+    context.current_value as f64
+}
+
+fn with_value_at_time_context<T>(
+    base: f32,
+    source: Option<Animatable<f32>>,
+    fps: u32,
+    evaluate: impl FnOnce() -> T,
+) -> T {
+    let _guard = ValueAtTimeGuard::install(ValueAtTimeContext {
+        current_value: if base.is_finite() { base } else { 0.0 },
+        source,
+        fps: fps.max(1) as f64,
+    });
+    evaluate()
 }
 
 fn set_current_time(t: f64) {
@@ -720,25 +777,33 @@ pub fn build_engine() -> Engine {
 
     // --- AE valueAtTime(t): sample a property value at an arbitrary time ---
     engine.register_fn("valueAtTime", |t: f64| -> f64 {
-        let cur_t = current_time();
-        if !t.is_finite() {
-            return cur_t;
-        }
-        // Approximate time-evaluated property value based on linear slope around current time
-        t
+        VALUE_AT_TIME_CONTEXT.with(|slot| {
+            slot.borrow()
+                .as_ref()
+                .map(|context| sample_value_at_time(context, t))
+                .unwrap_or(0.0)
+        })
     });
 
     // --- AE velocityAtTime(t): approximate temporal derivative of property at time t ---
     engine.register_fn("velocityAtTime", |t: f64| -> f64 {
         let dt = 0.001f64;
-        let t_a = t - dt;
-        let t_b = t + dt;
-        // Finite difference velocity approximation
-        if t.is_finite() {
-            (t_b - t_a) / (2.0 * dt)
-        } else {
-            0.0
+        if !t.is_finite() {
+            return 0.0;
         }
+        VALUE_AT_TIME_CONTEXT.with(|slot| {
+            let Some(context) = slot.borrow().as_ref().cloned() else {
+                return 0.0;
+            };
+            let before = sample_value_at_time(&context, t - dt);
+            let after = sample_value_at_time(&context, t + dt);
+            let velocity = (after - before) / (2.0 * dt);
+            if velocity.is_finite() {
+                velocity
+            } else {
+                0.0
+            }
+        })
     });
 
     // --- AE wiggle with octaves: wiggle(freq, amp, octaves, amp_octaves) ---
@@ -1040,6 +1105,29 @@ pub fn build_engine() -> Engine {
 /// - `fps`   : frames per second (i64)
 /// - `value` : the un-animated base value (f64)
 pub fn eval_f32(engine: &Engine, script: &str, base: f32, frame: u32, fps: u32) -> f32 {
+    with_value_at_time_context(base, None, fps, || {
+        eval_f32_inner(engine, script, base, frame, fps)
+    })
+}
+
+pub fn eval_f32_with_property(
+    engine: &Engine,
+    script: &str,
+    base: f32,
+    frame: u32,
+    fps: u32,
+    source: &Animatable<f32>,
+) -> f32 {
+    let source = script
+        .contains("valueAtTime")
+        .then(|| source.clone())
+        .or_else(|| script.contains("velocityAtTime").then(|| source.clone()));
+    with_value_at_time_context(base, source, fps, || {
+        eval_f32_inner(engine, script, base, frame, fps)
+    })
+}
+
+fn eval_f32_inner(engine: &Engine, script: &str, base: f32, frame: u32, fps: u32) -> f32 {
     let time = frame as f64 / fps.max(1) as f64;
     set_current_time(time);
     let mut scope = Scope::new();
@@ -1590,35 +1678,72 @@ pub fn eval_f32_with_comp(
     comp_snap: &CompSnapshot,
     this_layer: Option<&LayerSnapshot>,
 ) -> f32 {
-    COMP_ENGINE.with(|engine| {
-        let time = frame as f64 / fps.max(1) as f64;
-        set_current_time(time);
-        let mut scope = Scope::new();
-        scope.push("time", time);
-        scope.push("frame", frame as i64);
-        scope.push("fps", fps as i64);
-        scope.push("index", 0i64); // layer index (threaded at call sites later)
-        scope.push("value", base as f64);
-        scope.push("thisComp", comp_snap.clone());
-        if let Some(tl) = this_layer {
-            scope.push("thisLayer", tl.clone());
-        }
+    eval_f32_with_comp_source(script, base, frame, fps, comp_snap, this_layer, None)
+}
 
-        match engine.eval_with_scope::<Dynamic>(&mut scope, script) {
-            Ok(val) => {
-                if let Some(f) = dynamic_to_f64(&val) {
-                    return finite_or_fallback(f, base);
-                }
-                if let Ok(i) = val.as_int() {
-                    return finite_or_fallback(i as f64, base);
-                }
-                base
+pub fn eval_f32_with_comp_and_property(
+    script: &str,
+    base: f32,
+    frame: u32,
+    fps: u32,
+    comp_snap: &CompSnapshot,
+    this_layer: Option<&LayerSnapshot>,
+    source: &Animatable<f32>,
+) -> f32 {
+    eval_f32_with_comp_source(
+        script,
+        base,
+        frame,
+        fps,
+        comp_snap,
+        this_layer,
+        Some(source),
+    )
+}
+
+fn eval_f32_with_comp_source(
+    script: &str,
+    base: f32,
+    frame: u32,
+    fps: u32,
+    comp_snap: &CompSnapshot,
+    this_layer: Option<&LayerSnapshot>,
+    source: Option<&Animatable<f32>>,
+) -> f32 {
+    let source =
+        source.filter(|_| script.contains("valueAtTime") || script.contains("velocityAtTime"));
+    let source = source.cloned();
+    with_value_at_time_context(base, source, fps, || {
+        COMP_ENGINE.with(|engine| {
+            let time = frame as f64 / fps.max(1) as f64;
+            set_current_time(time);
+            let mut scope = Scope::new();
+            scope.push("time", time);
+            scope.push("frame", frame as i64);
+            scope.push("fps", fps as i64);
+            scope.push("index", 0i64); // layer index (threaded at call sites later)
+            scope.push("value", base as f64);
+            scope.push("thisComp", comp_snap.clone());
+            if let Some(tl) = this_layer {
+                scope.push("thisLayer", tl.clone());
             }
-            Err(e) => {
-                log::warn!("[ExprEngine] eval_f32_with_comp error: {}", e);
-                base
+
+            match engine.eval_with_scope::<Dynamic>(&mut scope, script) {
+                Ok(val) => {
+                    if let Some(f) = dynamic_to_f64(&val) {
+                        return finite_or_fallback(f, base);
+                    }
+                    if let Ok(i) = val.as_int() {
+                        return finite_or_fallback(i as f64, base);
+                    }
+                    base
+                }
+                Err(e) => {
+                    log::warn!("[ExprEngine] eval_f32_with_comp error: {}", e);
+                    base
+                }
             }
-        }
+        })
     })
 }
 

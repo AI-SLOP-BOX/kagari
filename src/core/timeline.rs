@@ -422,6 +422,21 @@ impl Expression {
         }
     }
 
+    pub fn evaluate_f32_with_property(
+        &self,
+        base: f32,
+        frame: u32,
+        fps: u32,
+        source: &Animatable<f32>,
+    ) -> f32 {
+        match self {
+            Expression::Raw(script) => RHAI_ENGINE.with(|engine| {
+                expression_engine::eval_f32_with_property(engine, script, base, frame, fps, source)
+            }),
+            _ => self.evaluate_f32(base, frame, fps),
+        }
+    }
+
     pub fn evaluate_v2(&self, base: [f32; 2], frame: u32, fps: u32) -> [f32; 2] {
         let time = frame as f32 / fps.max(1) as f32;
         match self {
@@ -633,7 +648,7 @@ impl Transform2D {
                 let loops = self.compute_loop_vals(frame, fps, LoopProp::Rotation);
                 expression_engine::eval_f32_with_loops(script, base, frame, fps, loops)
             }
-            Some(expr) => expr.evaluate_f32(base, eval_frame, fps),
+            Some(expr) => expr.evaluate_f32_with_property(base, eval_frame, fps, &self.rotation),
             None => base,
         }
     }
@@ -677,7 +692,7 @@ impl Transform2D {
                 let loops = self.compute_loop_vals(frame, fps, LoopProp::Opacity);
                 expression_engine::eval_f32_with_loops(script, base, frame, fps, loops)
             }
-            Some(expr) => expr.evaluate_f32(base, eval_frame, fps),
+            Some(expr) => expr.evaluate_f32_with_property(base, eval_frame, fps, &self.opacity),
             None => base,
         }
     }
@@ -2534,26 +2549,28 @@ impl Composition {
             let base_rot = layer.transform.eval_rotation(frame, fps);
             let rot = raw_script(&layer.transform.rotation_expression)
                 .map(|s| {
-                    expression_engine::eval_f32_with_comp(
+                    expression_engine::eval_f32_with_comp_and_property(
                         s,
                         base_rot,
                         frame,
                         fps,
                         &comp_snap,
                         this_snap.as_ref(),
+                        &layer.transform.rotation,
                     )
                 })
                 .unwrap_or(base_rot);
             let base_opa = layer.transform.eval_opacity(frame, fps);
             let opa = raw_script(&layer.transform.opacity_expression)
                 .map(|s| {
-                    expression_engine::eval_f32_with_comp(
+                    expression_engine::eval_f32_with_comp_and_property(
                         s,
                         base_opa,
                         frame,
                         fps,
                         &comp_snap,
                         this_snap.as_ref(),
+                        &layer.transform.opacity,
                     )
                 })
                 .unwrap_or(base_opa);

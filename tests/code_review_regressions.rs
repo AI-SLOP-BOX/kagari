@@ -6,6 +6,7 @@
 use kagari_vfx::core::ae_effects_pack::*;
 use kagari_vfx::core::echo_effect::{blend_echo_frame, EchoOperator};
 use kagari_vfx::core::expression_engine;
+use kagari_vfx::core::keyframe::{InterpolationType, Keyframe};
 use kagari_vfx::core::particle_system::*;
 use kagari_vfx::core::property::Animatable;
 use kagari_vfx::core::timeline::*;
@@ -206,8 +207,7 @@ fn seed_random_large_values_do_not_panic() {
     assert!(r.is_finite());
 }
 
-/// Regression: valueAtTime and velocityAtTime are stubs returning 0.0.
-/// They must not panic and should return finite values.
+/// Regression: valueAtTime and velocityAtTime must remain finite.
 #[test]
 fn stub_functions_return_finite() {
     let engine = expression_engine::build_engine();
@@ -215,6 +215,45 @@ fn stub_functions_return_finite() {
     let v2: f64 = engine.eval(r#"velocityAtTime(1.0)"#).unwrap();
     assert!(v1.is_finite());
     assert!(v2.is_finite());
+}
+
+#[test]
+fn value_at_time_and_velocity_sample_the_animated_property() {
+    let property = Animatable::new_animated(vec![
+        Keyframe::new(0, 0.0, InterpolationType::Linear),
+        Keyframe::new(30, 100.0, InterpolationType::Linear),
+    ]);
+    let expression = Expression::Raw("valueAtTime(time + 0.25)".into());
+    let sampled = expression.evaluate_f32_with_property(50.0, 15, 30, &property);
+    assert_eq!(sampled, 75.0, "valueAtTime must sample the property curve");
+
+    let velocity = Expression::Raw("velocityAtTime(time)".into())
+        .evaluate_f32_with_property(50.0, 15, 30, &property);
+    assert!((velocity - 100.0).abs() < 0.01, "velocity was {velocity}");
+}
+
+#[test]
+fn composition_transform_expression_uses_property_sampling_context() {
+    let mut composition = Composition::new("comp".into(), "Comp".into(), 64, 64, 30, 60);
+    let mut layer = Layer::new(
+        "layer".into(),
+        "Layer".into(),
+        LayerType::Solid {
+            color: [1.0, 1.0, 1.0, 1.0],
+        },
+        60,
+    );
+    layer.transform.rotation = Animatable::new_animated(vec![
+        Keyframe::new(0, 0.0, InterpolationType::Linear),
+        Keyframe::new(30, 100.0, InterpolationType::Linear),
+    ]);
+    layer.transform.rotation_expression = Some(Expression::Raw("valueAtTime(time + 0.25)".into()));
+    composition.layers.push(layer);
+
+    let rotation = composition
+        .resolve_world_transform(&composition.layers[0], 15)
+        .2;
+    assert_eq!(rotation, 75.0);
 }
 
 /// Regression: expression engine sandbox limits prevent resource exhaustion.
