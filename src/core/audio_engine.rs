@@ -751,11 +751,21 @@ pub fn mix_audio_sources_for_frame_with_state(
             continue;
         }
         // Resolve the WAV path + gain for this layer
-        let (wav_path, gain_db) = match &layer.layer_type {
-            LayerType::Audio { path, volume } => (Some(path.clone()), volume.evaluate(frame)),
+        let (wav_path, gain_db, playback_speed) = match &layer.layer_type {
+            LayerType::Audio { path, volume } => (Some(path.clone()), volume.evaluate(frame), 1.0),
             LayerType::Video {
-                audio_wav: Some(w), ..
-            } => (Some(w.clone()), 0.0f32),
+                audio_wav: Some(w),
+                speed,
+                ..
+            } => (
+                Some(w.clone()),
+                0.0f32,
+                if speed.is_finite() && *speed > 0.0 {
+                    *speed
+                } else {
+                    1.0
+                },
+            ),
             _ => continue,
         };
         let mut gain = 10.0f32.powf(gain_db / 20.0);
@@ -812,7 +822,7 @@ pub fn mix_audio_sources_for_frame_with_state(
 
         let mut layer_samples = vec![0.0f32; buffer_size * 2];
         for i in 0..buffer_size {
-            let t = time_start + i as f32 / sample_rate as f32;
+            let t = (time_start + i as f32 / sample_rate as f32) * playback_speed;
             let (sample_l, sample_r) = match &source {
                 Some(buf) => {
                     let idx =
@@ -1262,6 +1272,41 @@ mod multitrack_tests {
             &MasterDspParams::bypass(),
         );
         assert!((mix[0] - 0.4).abs() < 0.01, "mix[0] = {}", mix[0]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn video_audio_follows_positive_playback_speed() {
+        let dir = std::env::temp_dir().join(format!("kagari_audio_speed_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let wav = dir.join("speed.wav");
+        let samples: Vec<f32> = (0..1_000).map(|index| index as f32 / 1_000.0).collect();
+        write_wav(&wav, &samples, 1_000);
+
+        let mut comp = Composition::new("c".into(), "Audio speed".into(), 64, 64, 10, 10);
+        let mut layer = Layer::new(
+            "video".into(),
+            "Video with audio".into(),
+            LayerType::Video {
+                source: "video".into(),
+                frames_dir: dir.to_string_lossy().into_owned(),
+                frame_count: 10,
+                audio_wav: Some(wav.to_string_lossy().into_owned()),
+                speed: 2.0,
+            },
+            10,
+        );
+        layer.in_frame = 0;
+        layer.out_frame = 10;
+        comp.layers.push(layer);
+
+        let (mix, _) =
+            mix_audio_sources_for_frame(&comp, 1, 1_000, 1, None, &MasterDspParams::bypass());
+        assert!(
+            (mix[0] - 0.2).abs() < 0.02,
+            "speed-adjusted sample = {}",
+            mix[0]
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
