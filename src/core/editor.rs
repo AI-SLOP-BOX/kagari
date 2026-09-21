@@ -67,17 +67,17 @@ enum SessionState {
 pub struct EditorSession<'a> {
     history: &'a mut ProjectHistory,
     snapshot: Option<Project>,
-    label: &'static str,
+    label: String,
     state: SessionState,
 }
 
 impl<'a> EditorSession<'a> {
     /// Create a new editing session.
-    pub fn new(history: &'a mut ProjectHistory, label: &'static str) -> Self {
+    pub fn new(history: &'a mut ProjectHistory, label: impl Into<String>) -> Self {
         Self {
             history,
             snapshot: None,
-            label,
+            label: label.into(),
             state: SessionState::Active,
         }
     }
@@ -136,7 +136,7 @@ impl<'a> EditorSession<'a> {
             let generation_before = self.history.generation();
             let current = self.history.current().clone();
             self.history
-                .commit_drag_action(snapshot, current, self.label);
+                .commit_drag_action(snapshot, current, &self.label);
             if self.history.generation() != generation_before {
                 crate::core::frame_cache::bump_version();
             }
@@ -680,10 +680,7 @@ mod tests {
 
         // Make some edits to have multiple entries
         for i in 0..5 {
-            let mut session = EditorSession::new(
-                &mut history,
-                Box::leak(format!("Edit {}", i).into_boxed_str()),
-            );
+            let mut session = EditorSession::new(&mut history, format!("Edit {}", i));
             session.current_mut().compositions[0].name = format!("State {}", i);
             session.commit();
         }
