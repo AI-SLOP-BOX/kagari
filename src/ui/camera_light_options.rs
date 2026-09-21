@@ -3,6 +3,49 @@ use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
 
+fn add_camera_with_layer(comp: &mut crate::core::timeline::Composition) {
+    let mut camera = crate::core::timeline::Camera3D::default();
+    camera.id = comp.next_camera_id();
+    camera.name = format!("Camera {}", comp.cameras.len() + 1);
+    camera.active = false;
+    let camera_id = camera.id.clone();
+    let camera_name = camera.name.clone();
+    let camera_transform = camera.transform.clone();
+    comp.cameras.push(camera);
+
+    let mut layer = crate::core::timeline::Layer::new(
+        comp.next_layer_id("camera"),
+        camera_name,
+        crate::core::timeline::LayerType::Null,
+        comp.duration_frames,
+    );
+    layer.is_3d = true;
+    layer.transform_3d = camera_transform;
+    layer.scene_object = Some(crate::core::timeline::SceneObjectRef::Camera { id: camera_id });
+    comp.add_layer(layer);
+}
+
+fn add_light_with_layer(comp: &mut crate::core::timeline::Composition) {
+    let mut light = crate::core::timeline::Light3D::default();
+    light.id = comp.next_light_id();
+    light.name = format!("Light {}", comp.lights.len() + 1);
+    let light_id = light.id.clone();
+    let light_name = light.name.clone();
+    let light_position = light.position.clone();
+    comp.lights.push(light);
+
+    let mut layer = crate::core::timeline::Layer::new(
+        comp.next_layer_id("light"),
+        light_name,
+        crate::core::timeline::LayerType::Null,
+        comp.duration_frames,
+    );
+    layer.is_3d = true;
+    layer.transform_3d.position = light_position;
+    layer.scene_object = Some(crate::core::timeline::SceneObjectRef::Light { id: light_id });
+    comp.add_layer(layer);
+}
+
 pub fn draw_camera_light_options(app: &mut KagariApp, ui: &mut egui::Ui) {
     let current_frame = app.playback.current_frame;
     let pre_snapshot = if !app.drag_active() {
@@ -30,16 +73,7 @@ pub fn draw_camera_light_options(app: &mut KagariApp, ui: &mut egui::Ui) {
                     .on_hover_text("Add another camera to the scene")
                     .clicked()
                 {
-                    let next_name = format!("Camera {}", comp.cameras.len() + 1);
-                    let fov = comp.resolve_camera().fov_degrees;
-                    let c = crate::core::timeline::Camera3D {
-                        id: comp.next_camera_id(),
-                        name: next_name,
-                        active: false,
-                        fov_degrees: fov,
-                        ..crate::core::timeline::Camera3D::default()
-                    };
-                    comp.cameras.push(c);
+                    add_camera_with_layer(comp);
                     changed = true;
                 }
             });
@@ -64,7 +98,19 @@ pub fn draw_camera_light_options(app: &mut KagariApp, ui: &mut egui::Ui) {
                 changed = true;
             }
             if let Some(i) = remove_idx {
-                comp.cameras.remove(i);
+                let camera_id = comp.cameras.get(i).map(|camera| camera.id.clone());
+                if let Some(camera_id) = camera_id {
+                    if let Some(layer_idx) = comp.layers.iter().position(|layer| {
+                        matches!(
+                            layer.scene_object.as_ref(),
+                            Some(crate::core::timeline::SceneObjectRef::Camera { id }) if id == &camera_id
+                        )
+                    }) {
+                        let _ = comp.remove_layer_at(layer_idx);
+                    } else {
+                        comp.cameras.remove(i);
+                    }
+                }
                 changed = true;
             }
             ui.separator();
@@ -247,9 +293,7 @@ pub fn draw_camera_light_options(app: &mut KagariApp, ui: &mut egui::Ui) {
                     .color(colors::TEXT_MUTED),
             );
             if crate::ui::custom_widgets::ae_button_accent(ui, "+ Add Light").clicked() {
-                let mut light = crate::core::timeline::Light3D::default();
-                light.id = comp.next_light_id();
-                comp.lights.push(light);
+                add_light_with_layer(comp);
                 changed = true;
             }
         } else {
@@ -394,9 +438,7 @@ pub fn draw_camera_light_options(app: &mut KagariApp, ui: &mut egui::Ui) {
 
             ui.add_space(4.0);
             if crate::ui::custom_widgets::ae_button(ui, "+ Add Light").clicked() {
-                let mut light = crate::core::timeline::Light3D::default();
-                light.id = comp.next_light_id();
-                comp.lights.push(light);
+                add_light_with_layer(comp);
                 changed = true;
             }
         }
