@@ -106,7 +106,14 @@ fn composition_content_revision(comp: &Composition) -> u64 {
     let Ok(bytes) = serde_json::to_vec(comp) else {
         return crate::core::frame_cache::current_version();
     };
-    bytes.iter().fold(0xcbf29ce484222325, |hash, byte| {
+    // Preview proxy media and final media must never share a cached nested
+    // composition frame, even though the serialized project is identical.
+    let seed = if super::preview_proxy_active() {
+        0x84222325cbf29ce4u64
+    } else {
+        0xcbf29ce484222325u64
+    };
+    bytes.iter().fold(seed, |hash, byte| {
         (hash ^ u64::from(*byte)).wrapping_mul(0x100000001b3)
     })
 }

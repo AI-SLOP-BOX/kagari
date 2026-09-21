@@ -391,6 +391,10 @@ pub(crate) fn preview_proxy_path(layer: &Layer, sequence_frame: u32) -> Option<S
     None
 }
 
+pub(crate) fn preview_proxy_active() -> bool {
+    RENDER_PREVIEW.with(std::cell::Cell::get)
+}
+
 fn source_media_dimensions(layer: &Layer) -> Option<(f32, f32)> {
     let path = match &layer.layer_type {
         LayerType::Image { path } => preview_proxy_path(layer, 0).unwrap_or_else(|| path.clone()),
@@ -2063,6 +2067,62 @@ mod tests {
 
         let pixels = render_frame_to_pixels(&comp, 1, 16, 16, 0.0, 0);
         assert_eq!(pixels[8 * 16 * 4 + 8 * 4], 50);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn precomp_proxy_cache_is_separate_from_final_cache() {
+        let dir = std::env::temp_dir().join(format!(
+            "kagari_precomp_proxy_cache_test_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let frames = dir.join("frames");
+        std::fs::create_dir_all(&frames).unwrap();
+        write_gray_png(&frames.join("frame_00000.png"), 40);
+        let proxy = dir.join("proxy.webp");
+        write_gray_webp(&proxy, 200);
+
+        let mut sub = Composition::new("proxy_sub".into(), "Proxy Sub".into(), 16, 16, 30, 30);
+        let mut video = Layer::new(
+            "video".into(),
+            "Proxy Video".into(),
+            LayerType::Video {
+                source: "test".into(),
+                frames_dir: frames.to_string_lossy().into_owned(),
+                frame_count: 1,
+                audio_wav: None,
+                speed: 1.0,
+            },
+            30,
+        );
+        video.proxy.enabled = true;
+        video.proxy.proxy_path = Some(proxy.to_string_lossy().into_owned());
+        video.transform.position = Animatable::new_constant([8.0, 8.0]);
+        sub.layers.push(video);
+
+        let mut comp = Composition::new("proxy_outer".into(), "Proxy Outer".into(), 16, 16, 30, 30);
+        comp.sub_compositions.push(sub);
+        let mut precomp = Layer::new(
+            "proxy_ref".into(),
+            "Proxy PreComp".into(),
+            LayerType::PreComp {
+                comp_id: "proxy_sub".into(),
+            },
+            30,
+        );
+        precomp.transform.position = Animatable::new_constant([8.0, 8.0]);
+        comp.layers.push(precomp);
+
+        let final_before = render_frame_to_pixels(&comp, 0, 16, 16, 0.0, 0);
+        let preview = render_frame_to_pixels_preview(&comp, 0, 16, 16, 0.0, 0);
+        let final_after = render_frame_to_pixels(&comp, 0, 16, 16, 0.0, 0);
+        let center = (8 * 16 * 4 + 8 * 4) as usize;
+        assert_eq!(final_before[center], 40);
+        assert_eq!(preview[center], 200);
+        assert_eq!(final_after[center], 40);
 
         let _ = std::fs::remove_dir_all(&dir);
     }
