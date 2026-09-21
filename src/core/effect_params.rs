@@ -792,6 +792,9 @@ impl EffectType {
         frame: u32,
         value: f32,
     ) -> bool {
+        if !value.is_finite() {
+            return false;
+        }
         for (name, parameter) in self.animatable_params() {
             if name != parameter_name {
                 continue;
@@ -853,6 +856,9 @@ impl EffectType {
         frame: u32,
         value: f32,
     ) -> bool {
+        if !value.is_finite() {
+            return false;
+        }
         for (name, parameter) in self.animatable_params() {
             if name != parameter_name {
                 continue;
@@ -868,6 +874,9 @@ impl EffectType {
                         .keyframes()
                         .is_some_and(|keys| keys.iter().any(|key| key.frame == frame));
                     next[component] = value;
+                    if !next.iter().all(|component| component.is_finite()) {
+                        return false;
+                    }
                     let interpolation = track
                         .keyframes()
                         .and_then(|keys| keys.iter().find(|key| key.frame == frame))
@@ -897,6 +906,9 @@ impl EffectType {
                         .keyframes()
                         .is_some_and(|keys| keys.iter().any(|key| key.frame == frame));
                     next[component] = value;
+                    if !next.iter().all(|component| component.is_finite()) {
+                        return false;
+                    }
                     let interpolation = track
                         .keyframes()
                         .and_then(|keys| keys.iter().find(|key| key.frame == frame))
@@ -926,6 +938,9 @@ impl EffectType {
                         .keyframes()
                         .is_some_and(|keys| keys.iter().any(|key| key.frame == frame));
                     next[component] = value;
+                    if !next.iter().all(|component| component.is_finite()) {
+                        return false;
+                    }
                     let interpolation = track
                         .keyframes()
                         .and_then(|keys| keys.iter().find(|key| key.frame == frame))
@@ -972,6 +987,7 @@ impl EffectType {
                             .keyframes()?
                             .iter()
                             .find(|k| k.frame == from_frame)
+                            .filter(|k| k.value.is_finite())
                             .map(|k| (k.value, k.interpolation)),
                         _ => None,
                     }
@@ -1011,16 +1027,19 @@ impl EffectType {
                             .keyframes()?
                             .iter()
                             .find(|k| k.frame == from_frame)
+                            .filter(|k| k.value.iter().all(|value| value.is_finite()))
                             .map(|k| (k.value[component], k.interpolation)),
                         ParamRefRef::Vec3(track) if component < 3 => track
                             .keyframes()?
                             .iter()
                             .find(|k| k.frame == from_frame)
+                            .filter(|k| k.value.iter().all(|value| value.is_finite()))
                             .map(|k| (k.value[component], k.interpolation)),
                         ParamRefRef::Vec4Color(track) if component < 4 => track
                             .keyframes()?
                             .iter()
                             .find(|k| k.frame == from_frame)
+                            .filter(|k| k.value.iter().all(|value| value.is_finite()))
                             .map(|k| (k.value[component], k.interpolation)),
                         _ => None,
                     }
@@ -1986,6 +2005,54 @@ mod registration_tests {
                 1
             ),
             _ => panic!("blur radius must be scalar"),
+        }
+    }
+
+    #[test]
+    fn non_finite_keyframe_edits_are_rejected_without_mutation() {
+        let mut effect = EffectType::GaussianBlur {
+            blur_radius: Animatable::new_animated(vec![crate::core::keyframe::Keyframe::new(
+                10,
+                f32::NAN,
+                crate::core::keyframe::InterpolationType::Hold,
+            )]),
+        };
+
+        assert!(!effect.set_scalar_parameter_keyframe("Blur Radius", 20, f32::NAN));
+        assert!(!effect.set_scalar_parameter_keyframe("Blur Radius", 20, f32::INFINITY));
+        assert!(!effect.move_scalar_parameter_keyframe("Blur Radius", 10, 20));
+        match effect.animatable_params_ref()[0].1 {
+            ParamRefRef::Scalar(track) => {
+                let keys = track.keyframes().expect("track remains animated");
+                assert_eq!(keys.len(), 1);
+                assert_eq!(keys[0].frame, 10);
+                assert!(keys[0].value.is_nan());
+            }
+            _ => panic!("blur radius must be scalar"),
+        }
+    }
+
+    #[test]
+    fn non_finite_component_edits_are_rejected_without_mutation() {
+        let mut effect = EffectType::ColorTint {
+            color: Animatable::new_animated(vec![crate::core::keyframe::Keyframe::new(
+                10,
+                [0.1, f32::NAN, 0.3, 1.0],
+                crate::core::keyframe::InterpolationType::Linear,
+            )]),
+            intensity: c(),
+        };
+
+        assert!(!effect.set_parameter_component_keyframe("Tint Color", 1, 20, f32::NAN));
+        assert!(!effect.move_parameter_component_keyframe("Tint Color", 1, 10, 20));
+        match effect.animatable_params_ref()[0].1 {
+            ParamRefRef::Vec4Color(track) => {
+                let keys = track.keyframes().expect("track remains animated");
+                assert_eq!(keys.len(), 1);
+                assert_eq!(keys[0].frame, 10);
+                assert!(keys[0].value[1].is_nan());
+            }
+            _ => panic!("tint color must be a color track"),
         }
     }
 
