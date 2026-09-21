@@ -168,6 +168,9 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
             let mut next_frame = None;
             // Deferred tracker spawn: populated inside group closure, consumed after comp borrow ends.
             let mut pending_tracker: Option<(usize, usize, u32, u32)> = None; // (layer_idx, tracker_idx, start, end)
+            let mut pending_generate_proxy: Option<(usize, crate::core::proxy::ProxyResolution)> =
+                None;
+            let mut proxy_toast: Option<Result<String, String>> = None;
 
             let mut selected_prop = app.selection.selected_property.clone();
             let pre_edit_snapshot = app.history.current().clone();
@@ -569,6 +572,16 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                                         layer.proxy.proxy_path = None;
                                         project_changed = true;
                                     }
+                                    if ui
+                                        .small_button("Generate")
+                                        .on_hover_text(
+                                            "Create a WebP proxy from this layer's source media",
+                                        )
+                                        .clicked()
+                                    {
+                                        pending_generate_proxy =
+                                            Some((idx, layer.proxy.resolution));
+                                    }
                                 });
                                 ui.small(
                                     "Used only in Viewer preview; exports always use full-quality media.",
@@ -855,6 +868,37 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                     );
                 }
 
+                if let Some((proxy_idx, resolution)) = pending_generate_proxy.take() {
+                    let layer_snapshot = temp_project
+                        .active_composition()
+                        .layers
+                        .get(proxy_idx)
+                        .cloned();
+                    if let Some(layer_snapshot) = layer_snapshot {
+                        let destination = std::env::temp_dir()
+                            .join("kagari_media")
+                            .join("proxies");
+                        match crate::core::proxy::generate_preview_proxy_for_layer(
+                            &layer_snapshot,
+                            resolution,
+                            &destination,
+                        ) {
+                            Ok(path) => {
+                                if let Some(layer) = temp_project
+                                    .active_composition_mut()
+                                    .layers
+                                    .get_mut(proxy_idx)
+                                {
+                                    layer.proxy.proxy_path = Some(path.clone());
+                                    layer.proxy.enabled = true;
+                                    project_changed = true;
+                                    proxy_toast = Some(Ok(path));
+                                }
+                            }
+                            Err(error) => proxy_toast = Some(Err(error)),
+                        }
+                    }
+                }
                 // ── Transactional Commit (Issue #2 fix) ──────────────────────────────
                 // begin_drag() captures a pre-edit snapshot the moment the pointer goes
                 // down (no-op if already started). The live project is mutated in-place
@@ -912,6 +956,14 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                 }
             } else {
                 ui.weak("Select a layer in the timeline to view properties");
+            }
+            if let Some(result) = proxy_toast {
+                match result {
+                    Ok(path) => app
+                        .toasts
+                        .info(format!("Preview proxy generated: {}", path)),
+                    Err(error) => app.toasts.error(format!("Proxy generation failed: {error}")),
+                }
             }
             });
     }
