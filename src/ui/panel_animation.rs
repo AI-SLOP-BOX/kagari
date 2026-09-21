@@ -169,6 +169,52 @@ mod tests {
     }
 
     #[test]
+    fn test_long_adversarial_trace_preserves_animation_invariants() {
+        let mut animation = PanelAnimation::new_opening();
+        let mut entropy = 0x9e37_79b9_u32;
+
+        for frame in 0..20_000 {
+            entropy = entropy
+                .wrapping_mul(1_664_525)
+                .wrapping_add(1_013_904_223);
+            if frame % 113 == 0 {
+                animation.set_open(entropy & 1 == 0);
+            }
+            if frame % 997 == 0 {
+                animation.progress = if entropy & 2 == 0 {
+                    f32::NAN
+                } else {
+                    f32::INFINITY
+                };
+            }
+            let dt = match frame % 19 {
+                0 => f32::NAN,
+                1 => f32::NEG_INFINITY,
+                2 => f32::INFINITY,
+                _ => ((entropy >> 8) % 5_000) as f32 / 1_000.0 - 1.0,
+            };
+            animation.update(dt);
+
+            assert!(animation.progress.is_finite());
+            assert!(animation.target.is_finite());
+            assert!(animation.speed.is_finite());
+            assert!((0.0..=1.0).contains(&animation.progress));
+            assert!((0.0..=1.0).contains(&animation.target));
+            if !animation.is_animating() {
+                assert_eq!(animation.progress, animation.target);
+            }
+        }
+
+        animation.speed = 2.2;
+        animation.set_open(true);
+        for _ in 0..300 {
+            animation.update(1.0 / 60.0);
+        }
+        assert_eq!(animation.progress, 1.0);
+        assert!(animation.is_open);
+    }
+
+    #[test]
     fn test_update_converges() {
         let mut a = PanelAnimation::new(false);
         a.set_open(true);
