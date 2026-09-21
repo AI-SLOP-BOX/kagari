@@ -1605,6 +1605,13 @@ pub fn draw_graph_editor(
             egui::vec2(ui.available_width(), graph_height),
             egui::Sense::click_and_drag(),
         );
+        #[cfg(test)]
+        ui.ctx().data_mut(|d| {
+            d.insert_temp(
+                egui::Id::new(("ae_graph_canvas_rect", &layer.id, &graph_prop)),
+                rect,
+            );
+        });
         ui.painter().rect_filled(rect, 4.0, egui::Color32::from_gray(25));
         ui.painter().rect_stroke(rect, 4.0, egui::Stroke::new(1.0_f32, egui::Color32::from_gray(50)));
 
@@ -2067,6 +2074,13 @@ pub fn draw_graph_editor(
 
                 // --- Anchor point: drag horizontally to retime, vertically to change value ---
                 let anchor_rect = egui::Rect::from_center_size(pt, egui::vec2(14.0, 14.0));
+                #[cfg(test)]
+                ui.ctx().data_mut(|d| {
+                    d.insert_temp(
+                        egui::Id::new(("ae_graph_anchor_rect", &layer.id, &graph_prop, *kf_frame)),
+                        anchor_rect,
+                    );
+                });
                 let anchor_token = active_drag
                     .filter(|drag| drag.current_frame == *kf_frame)
                     .map(|drag| drag.original_frame as usize)

@@ -178,8 +178,17 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
             if app.show_graph_editor {
                 if let Some(selected_idx) = app.selection.selected_layer_idx {
                     let duration_f = temp_project.active_composition().duration_frames;
+                    let fps = temp_project.active_composition().fps;
                     if let Some(layer) = temp_project.active_composition_mut().layers.get_mut(selected_idx) {
-                        crate::ui::graph_editor::draw_animation_graph_editor(&mut app.selection.selected_property, ui, duration_f, layer, current_frame);
+                        crate::ui::graph_editor::draw_graph_editor(
+                            &mut app.selection.selected_property,
+                            ui,
+                            duration_f,
+                            fps,
+                            layer,
+                            &mut project_changed,
+                            &mut app.linked_tangent,
+                        );
                     }
                     if let Some(curve) = automation_curve.as_mut() {
                         crate::ui::graph_editor::draw_automation_curve(ui, curve, &mut project_changed);

@@ -1606,6 +1606,104 @@ mod tests {
     }
 
     #[test]
+    fn graph_editor_pointer_drag_moves_keyframe_and_commits_one_undo_step() {
+        use crate::core::keyframe::{InterpolationType, Keyframe};
+        use crate::core::property::Animatable;
+        use eframe::egui::{self, Event, Modifiers, PointerButton, Pos2, RawInput, Rect};
+
+        let mut app = KagariApp::default();
+        app.show_home = false;
+        app.show_welcome = false;
+        app.startup_animation.progress = 1.0;
+        app.startup_animation.target = 1.0;
+        app.show_graph_editor = true;
+        app.selection.selected_property = Some("Position X".to_string());
+
+        let layer_id = {
+            let project = app.history.current_mut();
+            let layer = &mut project.active_composition_mut().layers[1];
+            layer.transform.position = Animatable::new_animated(vec![
+                Keyframe::new(0, [100.0, 540.0], InterpolationType::Linear),
+                Keyframe::new(30, [300.0, 540.0], InterpolationType::Linear),
+            ]);
+            layer.id.clone()
+        };
+
+        let ctx = eframe::egui::Context::default();
+        let screen_rect = Rect::from_min_size(Pos2::ZERO, eframe::egui::vec2(1600.0, 1200.0));
+        let run_frame = |app: &mut KagariApp, events: Vec<Event>| {
+            let _ = ctx.run(
+                RawInput {
+                    screen_rect: Some(screen_rect),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    crate::ui::theme::configure_ae_theme(ctx);
+                    app.update_panels(ctx);
+                },
+            );
+        };
+
+        run_frame(&mut app, Vec::new());
+        let anchor_id = egui::Id::new(("ae_graph_anchor_rect", &layer_id, "Position X", 30_u32));
+        let anchor_rect: Rect = ctx
+            .data(|d| d.get_temp(anchor_id))
+            .expect("graph editor must expose the rendered keyframe anchor");
+        let start = anchor_rect.center();
+        let target = start + eframe::egui::vec2(70.0, -12.0);
+
+        run_frame(
+            &mut app,
+            vec![Event::PointerMoved(start)],
+        );
+        run_frame(
+            &mut app,
+            vec![Event::PointerButton {
+                pos: start,
+                button: PointerButton::Primary,
+                pressed: true,
+                modifiers: Modifiers::NONE,
+            }],
+        );
+        run_frame(&mut app, vec![Event::PointerMoved(target)]);
+        run_frame(
+            &mut app,
+            vec![
+                Event::PointerMoved(target),
+                Event::PointerButton {
+                    pos: target,
+                    button: PointerButton::Primary,
+                    pressed: false,
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+        );
+
+        let keyframes = app.history.current().active_composition().layers[1]
+            .transform
+            .position
+            .keyframes()
+            .expect("position remains animated");
+        assert!(
+            keyframes.iter().any(|key| key.frame != 30 && (key.value[0] - 300.0).abs() > 0.1),
+            "pointer drag must change the selected keyframe's frame or value: {keyframes:?}"
+        );
+        assert_eq!(app.history.len(), 2, "one pointer gesture must create one undo step");
+        assert!(!app.drag_active(), "pointer release must close the graph edit transaction");
+
+        assert!(app.history.undo().is_some(), "the graph edit must be undoable");
+        let restored = app.history.current().active_composition().layers[1]
+            .transform
+            .position
+            .keyframes()
+            .expect("position remains animated after undo");
+        assert_eq!(restored[0].frame, 0);
+        assert_eq!(restored[1].frame, 30);
+        assert_eq!(restored[1].value, [300.0, 540.0]);
+    }
+
+    #[test]
     fn studio_event_loop_closes_drag_transaction_on_pointer_release() {
         let mut app = KagariApp::default();
         app.show_home = false;
