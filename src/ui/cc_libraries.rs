@@ -103,6 +103,7 @@ pub fn draw_cc_libraries(app: &mut KagariApp, ui: &mut egui::Ui) {
             .filter(|a| query.is_empty() || a.name.to_lowercase().contains(&query))
             .map(|a| match &a.item_type {
                 ProjectItemType::Image { path, .. } => format!("{} — {}", a.name, path),
+                ProjectItemType::Model3D { path } => format!("{} — {} (OBJ)", a.name, path),
                 ProjectItemType::Video { path, duration_sec } => {
                     format!("{} — {} ({:.1}s)", a.name, path, duration_sec)
                 }

@@ -2153,6 +2153,7 @@ impl WgpuRenderer {
                 let (mut layer_w, mut layer_h) = match &layer.layer_type {
                     LayerType::Solid { .. } => (1.0, 1.0),
                     LayerType::Image { .. } => (1.0, 1.0),
+                    LayerType::Model3D { .. } => (comp.width as f32, comp.height as f32),
                     LayerType::Video { .. } => (1.0, 1.0),
                     LayerType::Text { font_size, .. } => (1.0, *font_size as f32 * 10.0), // Overridden below if text texture rasterization succeeds
                     LayerType::Shape { .. } => (1.0, 1.0),
@@ -2371,6 +2372,17 @@ impl WgpuRenderer {
                         0.5,
                     ),
                     LayerType::Image { .. } | LayerType::Video { .. } => (
+                        1u32,
+                        0u32,
+                        [1.0, 1.0, 1.0, 1.0],
+                        0u32,
+                        [0.0, 0.0],
+                        [1.0, 1.0],
+                        [[1.0, 1.0, 1.0, 1.0], [0.0, 0.0, 0.0, 1.0]],
+                        [0.5, 0.5],
+                        0.5,
+                    ),
+                    LayerType::Model3D { .. } => (
                         1u32,
                         0u32,
                         [1.0, 1.0, 1.0, 1.0],

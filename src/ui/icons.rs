@@ -261,6 +261,7 @@ pub fn layer_icon(lt: &crate::core::timeline::LayerType) -> &'static str {
     match lt {
         LayerType::Video { .. } => p::FILM_STRIP,
         LayerType::Image { .. } => p::IMAGE,
+        LayerType::Model3D { .. } => p::CUBE,
         LayerType::Audio { .. } => p::WAVEFORM,
         LayerType::Text { .. } => p::TEXT_T,
         LayerType::Shape { .. } => p::POLYGON,

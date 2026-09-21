@@ -61,6 +61,10 @@ pub enum LayerType {
     Image {
         path: String,
     },
+    /// Wavefront OBJ mesh rendered through the software 3D preview path.
+    Model3D {
+        path: String,
+    },
     /// Video layer: plays a pre-extracted frame sequence (see video_import).
     /// `frames_dir` holds frame_%05d.webp files decoded at import time (older
     /// projects may still contain PNG frames); rendering samples the sequence
@@ -3036,6 +3040,9 @@ pub enum ProjectItemType {
         width: u32,
         height: u32,
     },
+    Model3D {
+        path: String,
+    },
     Video {
         path: String,
         duration_sec: f32,
@@ -3076,6 +3083,7 @@ impl ProjectItem {
     pub fn media_path(&self) -> Option<&str> {
         match &self.item_type {
             ProjectItemType::Image { path, .. }
+            | ProjectItemType::Model3D { path }
             | ProjectItemType::Video { path, .. }
             | ProjectItemType::Audio { path, .. } => Some(path),
             _ => None,
@@ -3214,6 +3222,7 @@ impl Project {
         for item in &self.assets {
             match &item.item_type {
                 ProjectItemType::Image { path, .. }
+                | ProjectItemType::Model3D { path }
                 | ProjectItemType::Video { path, .. }
                 | ProjectItemType::Audio { path, .. } => {
                     if !path.is_empty() {
@@ -3228,6 +3237,11 @@ impl Project {
             for l in &c.layers {
                 match &l.layer_type {
                     LayerType::Image { path, .. } | LayerType::Audio { path, .. } => {
+                        if !path.is_empty() {
+                            deps.insert(path.clone());
+                        }
+                    }
+                    LayerType::Model3D { path } => {
                         if !path.is_empty() {
                             deps.insert(path.clone());
                         }
@@ -3291,6 +3305,12 @@ impl Project {
                         relinked_count += 1;
                     }
                 }
+                ProjectItemType::Model3D { path } => {
+                    if let Some(new_p) = find_file(path) {
+                        *path = new_p;
+                        relinked_count += 1;
+                    }
+                }
                 ProjectItemType::Video { path, .. } => {
                     if let Some(new_p) = find_file(path) {
                         *path = new_p;
@@ -3315,6 +3335,12 @@ impl Project {
             for layer in &mut comp.layers {
                 match &mut layer.layer_type {
                     LayerType::Image { path } => {
+                        if let Some(new_p) = find_file(path) {
+                            *path = new_p;
+                            *relinked_count += 1;
+                        }
+                    }
+                    LayerType::Model3D { path } => {
                         if let Some(new_p) = find_file(path) {
                             *path = new_p;
                             *relinked_count += 1;

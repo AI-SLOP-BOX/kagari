@@ -7,6 +7,7 @@ use rayon::prelude::*;
 mod composite;
 mod mask;
 mod matte;
+mod model3d_raster;
 mod postfx;
 mod precomp;
 mod raster;
@@ -1031,6 +1032,7 @@ pub(crate) fn render_frame_to_pixels_filtered(
                 // circles stay circular on non-square compositions.
                 (comp.width as f32, comp.width as f32)
             }
+            LayerType::Model3D { .. } => (comp.width as f32, comp.height as f32),
             LayerType::Image { .. } | LayerType::Video { .. } => source_media_dimensions(layer)
                 .unwrap_or((comp.width as f32, comp.height as f32)),
             _ => continue, // Null or audio layers don't output visual pixels
@@ -1042,6 +1044,7 @@ pub(crate) fn render_frame_to_pixels_filtered(
         let base_color = match &layer.layer_type {
             LayerType::Solid { color } | LayerType::Text { color, .. } => *color,
             LayerType::Shape { color, .. } => *color,
+            LayerType::Model3D { .. } => [0.72, 0.78, 0.9, 1.0],
             LayerType::Image { .. } | LayerType::Video { .. } => [0.2, 0.6, 0.9, 1.0], // fallback image color
             LayerType::PreComp { .. } => [1.0, 1.0, 1.0, 1.0],
             _ => continue,

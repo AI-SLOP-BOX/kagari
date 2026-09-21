@@ -27,6 +27,8 @@ fn classify_imported_media(path: &std::path::Path) -> ProjectItemType {
             path: file_path,
             duration_sec: 10.0,
         }
+    } else if extension == "obj" {
+        ProjectItemType::Model3D { path: file_path }
     } else {
         ProjectItemType::Image {
             path: file_path,
@@ -181,6 +183,9 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
                             }
                             ProjectItemType::Image { width, height, .. } => {
                                 ui.small(format!("{} x {} px | RGB 8-bpc", width, height));
+                            }
+                            ProjectItemType::Model3D { .. } => {
+                                ui.small("Wavefront OBJ | 3D Model");
                             }
                             ProjectItemType::Video { duration_sec, .. } => {
                                 ui.small(format!("Video | {:.1}s", duration_sec));
@@ -408,6 +413,10 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
                         ui.small(format!("File: {}", path));
                         ui.small(format!("Dimensions: {} x {} px", width, height));
                     }
+                    ProjectItemType::Model3D { path } => {
+                        ui.small(format!("File: {}", path));
+                        ui.small("Format: Wavefront OBJ");
+                    }
                     ProjectItemType::Video { path, duration_sec } => {
                         ui.small(format!("File: {}", path));
                         ui.small(format!("Duration: {:.1}s", duration_sec));
@@ -516,6 +525,27 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
                     LayerType::Image { path },
                     comp.duration_frames,
                 ),
+                ProjectItemType::Model3D { path } => {
+                    let mut layer = Layer::new(
+                        format!("layer_model3d_{}", len),
+                        item.name,
+                        LayerType::Model3D { path },
+                        comp.duration_frames,
+                    );
+                    layer.is_3d = true;
+                    layer.transform.position =
+                        crate::core::property::Animatable::new_constant([
+                            comp.width as f32 * 0.5,
+                            comp.height as f32 * 0.5,
+                        ]);
+                    layer.transform_3d.position =
+                        crate::core::property::Animatable::new_constant([
+                            0.0,
+                            0.0,
+                            (comp.width.max(comp.height) as f32 * 0.6).max(600.0),
+                        ]);
+                    layer
+                }
                 ProjectItemType::Solid { color } => Layer::new(
                     format!("layer_solid_{}", len),
                     item.name,
@@ -601,6 +631,9 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
                         LayerType::Image { path } => {
                             used_names.insert(path.clone());
                         }
+                        LayerType::Model3D { path } => {
+                            used_names.insert(path.clone());
+                        }
                         LayerType::Video { source, .. } => {
                             used_names.insert(source.clone());
                         }
@@ -642,6 +675,7 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
             let old_name = asset.name.clone();
             let (old_path, is_video_asset) = match &asset.item_type {
                 ProjectItemType::Image { path, .. }
+                | ProjectItemType::Model3D { path }
                 | ProjectItemType::Video { path, .. }
                 | ProjectItemType::Audio { path, .. } => (
                     Some(path.clone()),
@@ -701,6 +735,7 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
                 asset.name = new_name.clone();
                 match &mut asset.item_type {
                     ProjectItemType::Image { path, .. }
+                    | ProjectItemType::Model3D { path }
                     | ProjectItemType::Video { path, .. }
                     | ProjectItemType::Audio { path, .. } => *path = new_path.clone(),
                     _ => {}
@@ -761,6 +796,14 @@ mod tests {
         assert!(matches!(
             classify_imported_media(Path::new("still.webp")),
             ProjectItemType::Image { .. }
+        ));
+    }
+
+    #[test]
+    fn project_panel_classifies_obj_as_3d_model_asset() {
+        assert!(matches!(
+            classify_imported_media(Path::new("hero.OBJ")),
+            ProjectItemType::Model3D { .. }
         ));
     }
 
@@ -848,6 +891,7 @@ fn draw_asset_row(
     let (icon_svg, item_tag) = match &item.item_type {
         T::Composition { .. } => (crate::ui::icons::SVG_COMPOSITION, "Composition"),
         T::Image { .. } => (crate::ui::icons::SVG_FILE, "Footage Image"),
+        T::Model3D { .. } => (crate::ui::icons::SVG_SWITCH_3D, "3D Model"),
         T::Video { .. } => (crate::ui::icons::SVG_FILE, "Footage Video"),
         T::Audio { .. } => (crate::ui::icons::SVG_AUDIO, "Audio File"),
         T::Solid { .. } => (crate::ui::icons::SVG_WINDOW_MAXIMIZE, "Solid Color"),

@@ -788,6 +788,33 @@ pub fn draw_layer_type_specs(
                     *project_changed = true;
                 }
             }
+            LayerType::Model3D { path } => {
+                let before = path.clone();
+                ui.label(egui::RichText::new("3D Model Layer").strong());
+                ui.horizontal(|ui| {
+                    ui.label("OBJ:");
+                    ui.text_edit_singleline(path);
+                });
+                if !path.is_empty()
+                    && ui
+                        .small("📂 Reveal File")
+                        .on_hover_text("Open the OBJ source file location")
+                        .clicked()
+                {
+                    crate::ui::project_io::reveal_in_file_manager(std::path::Path::new(
+                        path.as_str(),
+                    ));
+                }
+                if before != *path {
+                    *project_changed = true;
+                }
+                ui.label(
+                    egui::RichText::new(
+                        "OBJ models use the composition camera and 3D transform controls.",
+                    )
+                    .small(),
+                );
+            }
             LayerType::Image { path } => {
                 let val_before = path.clone();
                 ui.text_edit_singleline(path);

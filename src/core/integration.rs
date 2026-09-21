@@ -64,6 +64,7 @@ impl OtioTimeline {
         for layer in &comp.layers {
             let media_ref = match &layer.layer_type {
                 LayerType::Image { path } => Some(path.clone()),
+                LayerType::Model3D { path } => Some(format!("model3d:{path}")),
                 LayerType::Video {
                     source,
                     frames_dir,

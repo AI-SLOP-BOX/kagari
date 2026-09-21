@@ -17,6 +17,7 @@ fn layer_icon(lt: &LayerType) -> &'static str {
     match lt {
         LayerType::Video { .. } => "🎬",
         LayerType::Image { .. } => "🖼",
+        LayerType::Model3D { .. } => "🧊",
         LayerType::Audio { .. } => "🔊",
         LayerType::Text { .. } => "T",
         LayerType::Shape { .. } => "◆",

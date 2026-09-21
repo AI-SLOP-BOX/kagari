@@ -64,6 +64,49 @@ fn insert_imported_sequence(
     ));
 }
 
+fn insert_imported_model3d(
+    app: &mut crate::KagariApp,
+    path: std::path::PathBuf,
+    name: String,
+) {
+    let (comp_w, comp_h, comp_duration) = {
+        let comp = app.history.current().active_composition();
+        (comp.width as f32, comp.height as f32, comp.duration_frames)
+    };
+    let source = path.to_string_lossy().into_owned();
+    app.modify_project(|project| {
+        let asset_id = format!("model3d_asset_{}", project.assets.len() + 1);
+        project.assets.push(crate::core::timeline::ProjectItem::new(
+            asset_id,
+            name.clone(),
+            crate::core::timeline::ProjectItemType::Model3D {
+                path: source.clone(),
+            },
+        ));
+        let comp = project.active_composition_mut();
+        let mut layer = crate::core::timeline::Layer::new(
+            comp.next_layer_id("model3d"),
+            name.clone(),
+            crate::core::timeline::LayerType::Model3D {
+                path: source.clone(),
+            },
+            comp_duration,
+        );
+        layer.is_3d = true;
+        layer.transform.position = crate::core::property::Animatable::new_constant([
+            comp_w * 0.5,
+            comp_h * 0.5,
+        ]);
+        layer.transform_3d.position = crate::core::property::Animatable::new_constant([
+            0.0,
+            0.0,
+            (comp_w.max(comp_h) * 0.6).max(600.0),
+        ]);
+        comp.layers.push(layer);
+    });
+    app.toasts.info(format!("Imported 3D model: {}", name));
+}
+
 fn insert_imported_svg_masks(
     app: &mut crate::KagariApp,
     paths: Vec<crate::core::svg_ai_importer::SvgVectorPath>,
@@ -427,6 +470,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                             used_names.insert(l.name.clone());
                             match &l.layer_type {
                                 crate::core::timeline::LayerType::Image { path } => { used_names.insert(path.clone()); }
+                                crate::core::timeline::LayerType::Model3D { path } => { used_names.insert(path.clone()); }
                                 crate::core::timeline::LayerType::Video { source, .. } => { used_names.insert(source.clone()); }
                                 crate::core::timeline::LayerType::Audio { path, .. } => { used_names.insert(path.clone()); }
                                 _ => {}
@@ -684,6 +728,40 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                             }
                             Err(error) => {
                                 app.toasts.error(format!("SVG import failed: {error}"));
+                            }
+                        }
+                    }
+                    ui.close_menu();
+                }
+                if ui
+                    .button("Import OBJ 3D Model...")
+                    .on_hover_text("Import a Wavefront OBJ mesh as a camera-rendered 3D layer")
+                    .clicked()
+                {
+                    if let Some(path) = rfd::FileDialog::new()
+                        .add_filter("Wavefront OBJ", &["obj"])
+                        .pick_file()
+                    {
+                        match crate::core::project_migration::read_bounded_text_file(
+                            &path,
+                            128 * 1024 * 1024,
+                        )
+                        .and_then(|obj| {
+                            let mesh = crate::core::obj_loader::parse_obj_str(&obj)?;
+                            if mesh.vertices.is_empty() || mesh.indices.is_empty() {
+                                return Err("OBJ contains no renderable faces".to_string());
+                            }
+                            Ok(())
+                        }) {
+                            Ok(()) => {
+                                let name = path
+                                    .file_stem()
+                                    .map(|value| value.to_string_lossy().into_owned())
+                                    .unwrap_or_else(|| "model".into());
+                                insert_imported_model3d(app, path, name);
+                            }
+                            Err(error) => {
+                                app.toasts.error(format!("OBJ import failed: {error}"));
                             }
                         }
                     }

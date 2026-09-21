@@ -82,6 +82,7 @@ fn software_preview_required(comp: &crate::core::timeline::Composition, frame: u
                 layer.layer_type,
                 crate::core::timeline::LayerType::AdjustmentLayer
                     | crate::core::timeline::LayerType::Particle { .. }
+                    | crate::core::timeline::LayerType::Model3D { .. }
             ) || (matches!(layer.layer_type, crate::core::timeline::LayerType::Text { .. })
                 && (layer
                     .text_formatting
@@ -605,6 +606,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
         let missing_media = comp.layers.iter().filter(|layer| layer.is_active(current_frame)).find_map(|layer| {
             let path = match &layer.layer_type {
                 crate::core::timeline::LayerType::Image { path } => Some(path),
+                crate::core::timeline::LayerType::Model3D { path } => Some(path),
                 crate::core::timeline::LayerType::Video { source, .. } => Some(source),
                 _ => None,
             }?;

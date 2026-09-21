@@ -43,6 +43,9 @@ pub(crate) fn rasterize_layer_content(ctx: RasterCtx<'_>) {
     if let LayerType::Text { .. } = &ctx.layer.layer_type {
         return super::text_raster::rasterize_text_layer(ctx);
     }
+    if let LayerType::Model3D { .. } = &ctx.layer.layer_type {
+        return super::model3d_raster::rasterize_model3d_layer(ctx);
+    }
     if matches!(
         ctx.layer.layer_type,
         LayerType::Image { .. } | LayerType::Video { .. }

@@ -23,6 +23,7 @@ pub fn draw_flowchart_inspector(app: &mut KagariApp, ui: &mut egui::Ui) {
                         crate::core::timeline::LayerType::Text { .. } => "Text",
                         crate::core::timeline::LayerType::Solid { .. } => "Solid",
                         crate::core::timeline::LayerType::Image { .. } => "Image",
+                        crate::core::timeline::LayerType::Model3D { .. } => "Model 3D",
                         crate::core::timeline::LayerType::Video { .. } => "Video",
                         crate::core::timeline::LayerType::Shape { .. } => "Shape",
                         crate::core::timeline::LayerType::Null => "Null",

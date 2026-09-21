@@ -235,6 +235,7 @@ pub fn draw_node_graph_panel(
                         crate::core::timeline::LayerType::Video { .. } => "Video",
                         LayerType::Solid { .. } => "█",
                         LayerType::Image { .. } => "🖼",
+                        LayerType::Model3D { .. } => "🧊",
                         LayerType::Text { .. } => "T",
                         LayerType::Shape { .. } => "⬡",
                         LayerType::Null => "⌖",

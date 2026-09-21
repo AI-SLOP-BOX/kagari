@@ -369,6 +369,9 @@ fn render_precomp_layers_inner(
                 // circles stay circular on non-square compositions.
                 (precomp_comp.width as f32, precomp_comp.width as f32)
             }
+            LayerType::Model3D { .. } => {
+                (precomp_comp.width as f32, precomp_comp.height as f32)
+            }
             LayerType::Image { .. } | LayerType::Video { .. } => {
                 (precomp_comp.width as f32, precomp_comp.height as f32)
             }
@@ -385,6 +388,7 @@ fn render_precomp_layers_inner(
             // Video content is filled by the sequence rasterizer below; the
             // fallback color only keeps this shared geometry setup alive.
             LayerType::Video { .. } => [1.0, 1.0, 1.0, 1.0],
+            LayerType::Model3D { .. } => [0.72, 0.78, 0.9, 1.0],
             LayerType::PreComp { .. } => [1.0, 1.0, 1.0, 1.0],
             _ => continue,
         };
@@ -542,6 +546,39 @@ fn render_precomp_layers_inner(
                         bounds_y,
                     );
                 }
+            }
+            LayerType::Model3D { .. } => {
+                // Reuse the top-level mesh rasterizer for nested model layers,
+                // but isolate the layer and make the temporary composition
+                // transparent so its background cannot occlude sibling layers.
+                let mut isolated = precomp_comp.clone();
+                isolated.layers = vec![layer.clone()];
+                isolated.background_color[3] = 0.0;
+                let model_pixels = super::render_frame_to_pixels(
+                    &isolated,
+                    source_frame,
+                    width,
+                    height,
+                    0.0,
+                    0,
+                );
+                rasterize_pixel_layer(
+                    &mut layer_buf,
+                    &model_pixels,
+                    width,
+                    height,
+                    min_x,
+                    min_y,
+                    max_x,
+                    max_y,
+                    bw,
+                    cx,
+                    cy,
+                    cos_r,
+                    sin_r,
+                    bounds_x,
+                    bounds_y,
+                );
             }
             LayerType::Text {
                 text,

@@ -20,7 +20,7 @@ is intentionally tracked separately from the core workflow.
 |---|---|---:|---|
 | Project files | Project save/open, recovery, autosave | ✅ | `core/project.rs`, `core/autosave.rs`, `ui/project_io.rs` |
 | Multiple compositions | Nested compositions and composition settings | ✅ | `core/timeline.rs`, precomp workflow and cache |
-| Media import | Still images, image sequences, video, audio, vector assets | 🟡 | Image/video/audio paths exist; relink now recurses through PreComps and rebuilds missing WebP caches, layer proxies can be generated from image/video media and work in preview, common compressed audio/video extensions enter through both project import and drag/drop, numbered image sequences can be imported as WebP footage, and SVG paths can enter as editable mask geometry; Illustrator feature coverage and vector styling still need hardening |
+| Media import | Still images, image sequences, video, audio, vector assets | 🟡 | Image/video/audio paths exist; relink now recurses through PreComps and rebuilds missing WebP caches, layer proxies can be generated from image/video media and work in preview, common compressed audio/video extensions enter through both project import and drag/drop, numbered image sequences can be imported as WebP footage, SVG paths can enter as editable mask geometry, and OBJ files can enter the project bin as real 3D model assets; Illustrator feature coverage and vector styling still need hardening |
 | Layer model | Solids, footage, text, shapes, cameras, lights, nulls, audio | ✅ | `LayerType` and `Layer` in `core/timeline.rs` |
 | Layer timing | In/out, trimming, time stretch, reverse, freeze, time remap | ✅ | `Layer` time-remap operations and timeline actions |
 | Keyframes | Linear, hold, Bezier, spatial animation, value/speed graph | ✅ | `core/keyframe.rs`, `ui/graph_editor.rs`; pointer drag + one-step Undo is now covered by an egui integration test |
@@ -33,7 +33,7 @@ is intentionally tracked separately from the core workflow.
 | 2D transforms | Position, scale, rotation, anchor, opacity, direct manipulation | ✅ | viewport + inspector + timeline |
 | Text | Fonts, tracking, leading, alignment, text-on-path, text animation | 🟡 | Rasterizer and text animator exist; advanced typography/layout compatibility is incomplete |
 | Shapes | Shape layers, fills/strokes, boolean paths, repeater/modifiers, extrusion | 🟡 | Shape engines exist; shape editing and renderer parity need more end-to-end tests |
-| 3D layers | 3D transforms, cameras, lights, depth, shadows, DOF | 🟡 | `advanced_3d_engine.rs`, camera/light UI; model import and scene workflows are narrower than AE |
+| 3D layers | 3D transforms, cameras, lights, depth, shadows, DOF | 🟡 | `advanced_3d_engine.rs`, camera/light UI, and software-rasterized OBJ layers with nested PreComp coverage; model materials, scene authoring, GPU mesh rendering, and broader interchange remain narrower than AE |
 | Motion tracking | Point tracking, planar tracking, camera solve, stabilization | 🟡 | Point/quad tracking, animated Corner Pin, target-aware stabilization, and 3D camera solving are connected to the tracker panel; real-footage workflow coverage, planar confidence UX, and production-quality solve accuracy still need work |
 | Roto / paint | Roto Brush, paint, clone, eraser, puppet | 🟡 | Tools and engines are present; temporal propagation/brush quality are not AE-level |
 | Keying | Chroma/linear key, matte cleanup, spill-like workflows | 🟡 | Keying modules and controls exist; production-grade edge handling still needs validation |
@@ -61,8 +61,9 @@ is intentionally tracked separately from the core workflow.
 3. **Vector/text production workflow** — SVG path geometry can now enter the
    editable mask system, but Illustrator styling, shape fills, and robust SVG
    transform parsing are still behind AE.
-4. **3D production workflow** — imported models, cameras, lights, depth,
-   shadows, DOF, and compositing need one connected authoring path.
+4. **3D production workflow** — imported OBJ models now render in top-level and
+   nested compositions, but materials, scene authoring, GPU mesh rendering,
+   interchange, depth, shadows, and DOF still need one connected authoring path.
 5. **Text and shape authoring** — the data model is broad, but direct editing,
    typography fidelity, path editing, and modifier interaction are behind AE.
 6. **Workspace persistence** — saved workspaces must restore panel geometry,

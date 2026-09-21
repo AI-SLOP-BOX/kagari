@@ -1208,6 +1208,7 @@ fn cmd_info(project_path: &str) -> Result<(), Box<dyn std::error::Error>> {
                 kagari_vfx::core::timeline::LayerType::Solid { .. } => "Solid",
                 kagari_vfx::core::timeline::LayerType::Text { .. } => "Text",
                 kagari_vfx::core::timeline::LayerType::Image { .. } => "Image",
+                kagari_vfx::core::timeline::LayerType::Model3D { .. } => "Model3D",
                 kagari_vfx::core::timeline::LayerType::Video { .. } => "Video",
                 kagari_vfx::core::timeline::LayerType::Shape { .. } => "Shape",
                 kagari_vfx::core::timeline::LayerType::Null => "Null",
