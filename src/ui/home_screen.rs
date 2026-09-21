@@ -159,7 +159,7 @@ fn thumb_for(
 
 // ── Data model ────────────────────────────────────────────────
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum HomeNav {
     Home,
     Compositing,
@@ -186,6 +186,44 @@ fn set_home_nav(ctx: &egui::Context, nav: HomeNav) {
         d.insert_temp(egui::Id::new("home_nav"), nav);
         d.insert_temp(egui::Id::new("home_search_reset"), true);
     });
+}
+
+fn target_nav_for_label(label: &str) -> Option<HomeNav> {
+    match label {
+        "ホーム" => Some(HomeNav::Home),
+        "プロジェクトを開く" => Some(HomeNav::Projects),
+        "新規プロジェクト" => Some(HomeNav::NewProject),
+        "編集" => Some(HomeNav::Compositing),
+        "エフェクト" => Some(HomeNav::Effects),
+        "素材" => Some(HomeNav::Projects),
+        "チュートリアル" => Some(HomeNav::Tutorial),
+        "ドキュメント" => Some(HomeNav::Documentation),
+        "書き出し" => Some(HomeNav::Render),
+        "設定" => Some(HomeNav::Settings),
+        _ => None,
+    }
+}
+
+fn interact_target_nav(
+    ui: &mut egui::Ui,
+    ctx: &egui::Context,
+    rect: egui::Rect,
+    label: &str,
+    id_scope: &str,
+) {
+    let Some(nav) = target_nav_for_label(label) else {
+        return;
+    };
+    if ui
+        .interact(
+            rect,
+            egui::Id::new((id_scope, label)),
+            egui::Sense::click(),
+        )
+        .clicked()
+    {
+        set_home_nav(ctx, nav);
+    }
 }
 
 /// Select one of the reference-facing pages before drawing a UI snapshot.
@@ -765,12 +803,14 @@ fn draw_settings_target(app: &mut KagariApp, ctx: &egui::Context) {
         let nav = [(crate::ui::icons::SVG_HOME, "ホーム", 140.0), (crate::ui::icons::SVG_FOLDER, "プロジェクトを開く", 196.0), (crate::ui::icons::SVG_FILE_PLUS, "新規プロジェクト", 252.0), (crate::ui::icons::SVG_BOOK, "チュートリアル", 342.0), (crate::ui::icons::SVG_DOCUMENT, "ドキュメント", 398.0), (crate::ui::icons::SVG_SETTINGS, "設定", 498.0), (crate::ui::icons::SVG_POWER, "終了", 554.0)];
         for (icon, label, y) in nav {
             let active = label == "設定";
+            let nav_rect = egui::Rect::from_min_max(egui::pos2(17.0, r.top() + y - 5.0), egui::pos2(left.right(), r.top() + y + 47.0));
             if active {
-                ui.painter().rect_filled(egui::Rect::from_min_max(egui::pos2(17.0, r.top() + y - 5.0), egui::pos2(left.right(), r.top() + y + 47.0)), 0.0, egui::Color32::from_rgb(27, 35, 42));
+                ui.painter().rect_filled(nav_rect, 0.0, egui::Color32::from_rgb(27, 35, 42));
                 ui.painter().rect_filled(egui::Rect::from_min_size(egui::pos2(17.0, r.top() + y - 5.0), egui::vec2(4.0, 52.0)), 0.0, egui::Color32::from_rgb(255, 111, 28));
             }
             crate::ui::icons::render_svg_at(ui, format!("settings-target-nav-{label}"), icon, egui::vec2(28.0, 28.0), if active { egui::Color32::from_rgb(255, 145, 50) } else { egui::Color32::from_rgb(193, 205, 218) }, egui::pos2(40.0, r.top() + y + 5.0));
             ui.painter().text(egui::pos2(87.0, r.top() + y + 19.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(16.0), if active { colors::TEXT_PRIMARY } else { egui::Color32::from_rgb(193, 205, 218) });
+            interact_target_nav(ui, ctx, nav_rect, label, "settings-target-nav");
         }
         ui.painter().line_segment([egui::pos2(36.0, r.top() + 319.0), egui::pos2(254.0, r.top() + 319.0)], egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(50, 62, 72)));
         ui.painter().text(egui::pos2(35.0, r.bottom() - 44.0), egui::Align2::LEFT_CENTER, "Kagari VFX   v0.1.0", egui::FontId::proportional(14.0), egui::Color32::from_rgb(157, 169, 183));
@@ -827,10 +867,12 @@ fn draw_settings_target_responsive(app: &mut KagariApp, ctx: &egui::Context) {
         for (index, (icon, label)) in nav.into_iter().enumerate() {
             let y = r.top() + 112.0 + index as f32 * if narrow { 52.0 } else { 55.0 };
             let active = label == "設定";
-            if active { ui.painter().rect_filled(egui::Rect::from_min_max(egui::pos2(0.0, y - 6.0), egui::pos2(left.right(), y + 43.0)), 0.0, egui::Color32::from_rgb(27, 35, 42)); ui.painter().rect_filled(egui::Rect::from_min_size(egui::pos2(0.0, y - 6.0), egui::vec2(4.0, 49.0)), 0.0, egui::Color32::from_rgb(255, 111, 28)); }
+            let nav_rect = egui::Rect::from_min_max(egui::pos2(0.0, y - 6.0), egui::pos2(left.right(), y + 43.0));
+            if active { ui.painter().rect_filled(nav_rect, 0.0, egui::Color32::from_rgb(27, 35, 42)); ui.painter().rect_filled(egui::Rect::from_min_size(egui::pos2(0.0, y - 6.0), egui::vec2(4.0, 49.0)), 0.0, egui::Color32::from_rgb(255, 111, 28)); }
             let icon_x = if narrow { (left_width - 24.0) * 0.5 } else { 28.0 };
             crate::ui::icons::render_svg_at(ui, format!("settings-responsive-nav-{index}"), icon, egui::vec2(24.0, 24.0), if active { egui::Color32::from_rgb(255, 145, 50) } else { egui::Color32::from_rgb(193, 205, 218) }, egui::pos2(icon_x, y + 5.0));
             if !narrow { ui.painter().text(egui::pos2(72.0, y + 17.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(14.0), if active { colors::TEXT_PRIMARY } else { egui::Color32::from_rgb(193, 205, 218) }); }
+            interact_target_nav(ui, ctx, nav_rect, label, "settings-responsive-nav");
         }
         if !narrow { ui.painter().text(egui::pos2(20.0, r.bottom() - 26.0), egui::Align2::LEFT_CENTER, "Kagari VFX  v0.1.0", egui::FontId::proportional(11.0), colors::TEXT_SECONDARY); }
         let categories = [(crate::ui::icons::SVG_SETTINGS, "一般"), (crate::ui::icons::SVG_PALETTE, "外観"), (crate::ui::icons::SVG_GPU, "パフォーマンス"), (crate::ui::icons::SVG_KEYBOARD, "ショートカット"), (crate::ui::icons::SVG_FOLDER, "メディア"), (crate::ui::icons::SVG_AUDIO, "オーディオ"), (crate::ui::icons::SVG_LAYERS, "プラグイン"), (crate::ui::icons::SVG_FILE, "保存")];
@@ -971,7 +1013,7 @@ fn draw_export_target(app: &mut KagariApp, ctx: &egui::Context) {
         if !narrow { ui.painter().text(egui::pos2(108.0,r.top()+59.0),egui::Align2::LEFT_CENTER,"Kagari",egui::FontId::proportional(if width>=1200.0 {27.0}else{20.0}),colors::TEXT_PRIMARY); ui.painter().text(egui::pos2(if width>=1200.0 {190.0}else{167.0},r.top()+59.0),egui::Align2::LEFT_CENTER,"VFX",egui::FontId::proportional(if width>=1200.0 {27.0}else{20.0}),egui::Color32::from_rgb(161,174,190)); }
         let nav=[(crate::ui::icons::SVG_HOME,"ホーム"),(crate::ui::icons::SVG_FOLDER,"プロジェクトを開く"),(crate::ui::icons::SVG_FILE_PLUS,"新規プロジェクト"),(crate::ui::icons::SVG_LAYERS,"編集"),(crate::ui::icons::SVG_EFFECTS,"エフェクト"),(crate::ui::icons::SVG_FOLDER,"素材"),(crate::ui::icons::SVG_AUDIO,"オーディオ"),(crate::ui::icons::SVG_TOOL_TEXT,"テキスト"),(crate::ui::icons::SVG_ARROW_RIGHT,"トランジション"),(crate::ui::icons::SVG_PALETTE,"カラー"),(crate::ui::icons::SVG_EXPORT,"書き出し"),(crate::ui::icons::SVG_BOOK,"チュートリアル"),(crate::ui::icons::SVG_DOCUMENT,"ドキュメント"),(crate::ui::icons::SVG_SETTINGS,"設定"),(crate::ui::icons::SVG_POWER,"終了")];
         let start=r.top()+if width>=1200.0{113.0}else{104.0};
-        for (index,(icon,label)) in nav.into_iter().enumerate() { let y=start+index as f32*if width>=1200.0{41.0}else{36.0}; let active=label=="書き出し"; if active { ui.painter().rect_filled(egui::Rect::from_min_max(egui::pos2(10.0,y-5.0),egui::pos2(sidebar.right(),y+37.0)),0.0,egui::Color32::from_rgb(27,35,42)); ui.painter().rect_filled(egui::Rect::from_min_size(egui::pos2(10.0,y-5.0),egui::vec2(4.0,42.0)),0.0,egui::Color32::from_rgb(255,111,28)); } let ix=if narrow{(left_width-22.0)*0.5}else{34.0}; crate::ui::icons::render_svg_at(ui,format!("export-nav-{index}"),icon,egui::vec2(22.0,22.0),if active{egui::Color32::from_rgb(255,145,50)}else{egui::Color32::from_rgb(193,205,218)},egui::pos2(ix,y+5.0)); if !narrow {ui.painter().text(egui::pos2(80.0,y+16.0),egui::Align2::LEFT_CENTER,label,egui::FontId::proportional(if width>=1200.0{14.0}else{11.0}),if active{colors::TEXT_PRIMARY}else{egui::Color32::from_rgb(193,205,218)});}}
+        for (index,(icon,label)) in nav.into_iter().enumerate() { let y=start+index as f32*if width>=1200.0{41.0}else{36.0}; let active=label=="書き出し"; let nav_rect=egui::Rect::from_min_max(egui::pos2(10.0,y-5.0),egui::pos2(sidebar.right(),y+37.0)); if active { ui.painter().rect_filled(nav_rect,0.0,egui::Color32::from_rgb(27,35,42)); ui.painter().rect_filled(egui::Rect::from_min_size(egui::pos2(10.0,y-5.0),egui::vec2(4.0,42.0)),0.0,egui::Color32::from_rgb(255,111,28)); } let ix=if narrow{(left_width-22.0)*0.5}else{34.0}; crate::ui::icons::render_svg_at(ui,format!("export-nav-{index}"),icon,egui::vec2(22.0,22.0),if active{egui::Color32::from_rgb(255,145,50)}else{egui::Color32::from_rgb(193,205,218)},egui::pos2(ix,y+5.0)); if !narrow {ui.painter().text(egui::pos2(80.0,y+16.0),egui::Align2::LEFT_CENTER,label,egui::FontId::proportional(if width>=1200.0{14.0}else{11.0}),if active{colors::TEXT_PRIMARY}else{egui::Color32::from_rgb(193,205,218)});} interact_target_nav(ui,ctx,nav_rect,label,"export-target-nav");}
         if !narrow && !short { ui.painter().text(egui::pos2(32.0,r.bottom()-27.0),egui::Align2::LEFT_CENTER,"Kagari VFX   v0.1.0",egui::FontId::proportional(13.0),colors::TEXT_SECONDARY); }
         let main=egui::Rect::from_min_max(egui::pos2(sidebar.right(),r.top()),r.right_bottom());
         let margin=if width>=1200.0{34.0}else{16.0}; let title_x=main.left()+margin;
@@ -4828,5 +4870,48 @@ mod tests {
             ctx.data(|data| data.get_temp::<usize>(egui::Id::new("reference-effect-narrow-category"))),
             Some(3)
         );
+    }
+
+    #[test]
+    fn target_sidebar_navigation_changes_page_state() {
+        assert_eq!(target_nav_for_label("ホーム"), Some(HomeNav::Home));
+        assert_eq!(target_nav_for_label("エフェクト"), Some(HomeNav::Effects));
+        assert_eq!(target_nav_for_label("終了"), None);
+
+        let mut app = KagariApp::default();
+        let ctx = egui::Context::default();
+        set_home_nav(&ctx, HomeNav::Render);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(640.0, 720.0));
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(screen),
+                ..Default::default()
+            },
+            |ctx| draw(&mut app, ctx),
+        );
+        let point = egui::pos2(34.0, 160.0);
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(screen),
+                events: vec![
+                    egui::Event::PointerMoved(point),
+                    egui::Event::PointerButton {
+                        pos: point,
+                        button: egui::PointerButton::Primary,
+                        pressed: true,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                    egui::Event::PointerButton {
+                        pos: point,
+                        button: egui::PointerButton::Primary,
+                        pressed: false,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+                ..Default::default()
+            },
+            |ctx| draw(&mut app, ctx),
+        );
+        assert_eq!(home_nav(&ctx), HomeNav::Home);
     }
 }
