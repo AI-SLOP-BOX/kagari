@@ -2482,6 +2482,31 @@ impl Composition {
         }
     }
 
+    /// Remove a timeline layer and the scene object owned by that layer.
+    /// Ordinary layers are removed without any additional cleanup.
+    pub fn remove_layer_at(&mut self, index: usize) -> Option<Layer> {
+        let layer = self.layers.get(index)?.clone();
+        self.layers.remove(index);
+
+        match layer.scene_object.as_ref() {
+            Some(SceneObjectRef::Camera { id }) => {
+                if let Some(camera_index) = self.cameras.iter().position(|camera| camera.id == *id) {
+                    let was_active = self.cameras[camera_index].active;
+                    self.cameras.remove(camera_index);
+                    if was_active {
+                        self.set_active_camera(None);
+                    }
+                }
+            }
+            Some(SceneObjectRef::Light { id }) => {
+                self.lights.retain(|light| light.id != *id);
+            }
+            None => {}
+        }
+
+        Some(layer)
+    }
+
     /// Look up a sub-composition by id (recursive search).
     /// The camera currently driving the render: first entry of `cameras`
     /// with `active == true`, else the legacy `active_camera` field.
@@ -3828,6 +3853,51 @@ mod multi_camera_tests {
         let legacy: Layer =
             serde_json::from_value(legacy_value).expect("legacy layer should deserialize");
         assert!(legacy.scene_object.is_none());
+    }
+
+    #[test]
+    fn removing_scene_layer_removes_its_camera_or_light() {
+        let mut comp = Composition::new("c".into(), "C".into(), 100, 100, 30, 30);
+
+        let mut camera = Camera3D::default();
+        camera.id = "camera_1".into();
+        camera.name = "Camera 1".into();
+        comp.cameras.push(camera);
+        comp.set_active_camera(Some(0));
+
+        let mut camera_layer = Layer::new(
+            "camera_layer".into(),
+            "Camera 1".into(),
+            LayerType::Null,
+            30,
+        );
+        camera_layer.is_3d = true;
+        camera_layer.scene_object = Some(SceneObjectRef::Camera {
+            id: "camera_1".into(),
+        });
+        comp.layers.push(camera_layer);
+
+        let mut light = Light3D::default();
+        light.id = "light_2".into();
+        let mut light_layer = Layer::new(
+            "light_layer".into(),
+            "Light 2".into(),
+            LayerType::Null,
+            30,
+        );
+        light_layer.is_3d = true;
+        light_layer.scene_object = Some(SceneObjectRef::Light {
+            id: "light_2".into(),
+        });
+        comp.lights.push(light);
+        comp.layers.push(light_layer);
+
+        comp.remove_layer_at(0).expect("camera layer should exist");
+        assert!(comp.cameras.is_empty());
+        assert!(comp.resolve_camera().active);
+
+        comp.remove_layer_at(0).expect("light layer should exist");
+        assert!(!comp.lights.iter().any(|light| light.id == "light_2"));
     }
 
     #[test]

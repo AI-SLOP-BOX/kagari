@@ -1119,7 +1119,7 @@ pub fn handle_global_shortcuts(
                     let comp = project.active_composition_mut();
                     for idx in indices {
                         if idx < comp.layers.len() {
-                            comp.layers.remove(idx);
+                            let _ = comp.remove_layer_at(idx);
                         }
                     }
                 });
