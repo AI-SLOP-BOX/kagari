@@ -17,16 +17,15 @@ type WbPair = (f32, f32);
 /// (hue_deg −180..180, saturation −100..100, lightness −100..100).
 type HslTriple = (f32, f32, f32);
 
-fn read_single_f32(
-    app: &KagariApp,
-    effect_name: &str,
-    field: fn(&EffectType) -> Option<f32>,
-) -> Option<f32> {
+fn read_single_f32<F>(app: &KagariApp, effect_name: &str, field: F) -> Option<f32>
+where
+    F: Fn(&EffectType, u32) -> Option<f32>,
+{
     let idx = app.selection.selected_layer_idx?;
     let comp = app.history.current().active_composition();
     let layer = comp.layers.get(idx)?;
     let e = layer.effects.iter().find(|e| e.name == effect_name)?;
-    field(&e.effect_type)
+    field(&e.effect_type, app.playback.current_frame)
 }
 
 fn read_wb(app: &KagariApp) -> Option<WbPair> {
@@ -82,7 +81,7 @@ fn write_single_f32(
     let Some(idx) = app.selection.selected_layer_idx else {
         return;
     };
-    let _cur_frame = app.playback.current_frame;
+    let cur_frame = app.playback.current_frame;
     app.modify_project(move |p| {
         let comp = p.active_composition_mut();
         let Some(layer) = comp.layers.get_mut(idx) else {
@@ -90,8 +89,11 @@ fn write_single_f32(
         };
         if let Some(e) = layer.effects.iter_mut().find(|e| e.name == effect_name) {
             e.enabled = true;
-            // If already present, update value at current frame to preserve keyframes
-            e.effect_type = make(crate::core::property::Animatable::new_constant(value));
+            if let EffectType::Vibrance { amount } = &mut e.effect_type {
+                amount.set_value_at_frame(cur_frame, value);
+            } else {
+                e.effect_type = make(crate::core::property::Animatable::new_constant(value));
+            }
             return;
         }
         let build = || make(crate::core::property::Animatable::new_constant(value));
@@ -815,8 +817,8 @@ pub fn draw_lumetri_color(app: &mut KagariApp, ui: &mut egui::Ui) {
 
             // ── Vibrance ──
             ui.small("Vibrance");
-            let mut vib = read_single_f32(app, VIB_EFFECT, |et| match et {
-                EffectType::Vibrance { amount } => Some(amount.evaluate(0)),
+            let mut vib = read_single_f32(app, VIB_EFFECT, |et, frame| match et {
+                EffectType::Vibrance { amount } => Some(amount.evaluate(frame)),
                 _ => None,
             })
             .unwrap_or(0.0);
