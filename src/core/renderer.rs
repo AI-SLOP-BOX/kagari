@@ -1,5 +1,7 @@
 use crate::core::effect_plugin::evaluate_effects;
-use crate::core::timeline::{Composition, LayerType, ShapeFillType, ShapeType, TrackMatteMode};
+use crate::core::timeline::{
+    Composition, Layer, LayerType, ShapeFillType, ShapeType, TrackMatteMode,
+};
 use half::f16;
 
 use std::sync::Arc;
@@ -57,6 +59,39 @@ fn mat4_mul(a: [[f32; 4]; 4], b: [[f32; 4]; 4]) -> [[f32; 4]; 4] {
         }
     }
     out
+}
+
+fn effective_render_frame(layer: &Layer, frame: u32, fps: u32) -> u32 {
+    let remapped = layer.remap_frame(frame);
+    match &layer.posterize_time {
+        Some(pt) if pt.enabled => {
+            crate::core::posterize_time::quantize_frame_posterize(remapped, fps, pt)
+        }
+        _ => remapped,
+    }
+}
+
+fn layer_position_at_render_frame(comp: &Composition, layer: &Layer, frame: u32) -> [f32; 2] {
+    let effective_frame = effective_render_frame(layer, frame, comp.fps);
+    let has_exprs = layer.transform.position_expression.is_some()
+        || layer.transform.rotation_expression.is_some()
+        || layer.transform.scale_expression.is_some()
+        || layer.transform.opacity_expression.is_some();
+    if layer.parent_id.is_some() || has_exprs {
+        comp.resolve_world_transform(layer, effective_frame).0
+    } else {
+        layer.transform.position.evaluate(effective_frame)
+    }
+}
+
+fn layer_motion_velocity(comp: &Composition, layer: &Layer, frame: u32) -> [f32; 2] {
+    let previous = layer_position_at_render_frame(comp, layer, frame.saturating_sub(1));
+    let next = layer_position_at_render_frame(comp, layer, frame.saturating_add(1));
+    [
+        ((next[0] - previous[0]) * 0.5).clamp(-100_000.0, 100_000.0),
+        ((next[1] - previous[1]) * 0.5).clamp(-100_000.0, 100_000.0),
+    ]
+    .map(|value| if value.is_finite() { value } else { 0.0 })
 }
 
 #[repr(C)]
@@ -2051,19 +2086,7 @@ impl WgpuRenderer {
                     continue;
                 }
                 comp_indices.push(comp_idx);
-                let effective_frame = {
-                    let remapped = layer.remap_frame(frame);
-                    match &layer.posterize_time {
-                        Some(pt) if pt.enabled => {
-                            crate::core::posterize_time::quantize_frame_posterize(
-                                remapped,
-                                comp.fps,
-                                pt,
-                            )
-                        }
-                        _ => remapped,
-                    }
-                };
+                let effective_frame = effective_render_frame(layer, frame, comp.fps);
 
                 // Retrieve transform values at the current frame.
                 // Parented layers and expression-driven layers resolve through the full
@@ -2452,6 +2475,12 @@ impl WgpuRenderer {
                             }
                         }
                     }
+                }
+
+                if ep.motionblur_enabled == 1 {
+                    let velocity = layer_motion_velocity(comp, layer, frame);
+                    ep.motionblur_velocity_x = velocity[0];
+                    ep.motionblur_velocity_y = velocity[1];
                 }
 
                 // Shape parameters for GPU SDFs: polygon/star point count, rectangle corner radius
@@ -3729,6 +3758,36 @@ mod tests {
             composition_cache_key(&first),
             composition_cache_key(&changed)
         );
+    }
+
+    #[test]
+    fn motion_velocity_tracks_animated_layer_position() {
+        let mut comp = Composition::new("comp".into(), "Motion".into(), 64, 64, 30, 60);
+        let mut layer = crate::core::timeline::Layer::new(
+            "layer".into(),
+            "Layer".into(),
+            LayerType::Solid {
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
+            60,
+        );
+        layer.transform.position = crate::core::property::Animatable::new_animated(vec![
+            crate::core::keyframe::Keyframe::new(
+                0,
+                [10.0, 20.0],
+                crate::core::keyframe::InterpolationType::Linear,
+            ),
+            crate::core::keyframe::Keyframe::new(
+                30,
+                [40.0, 20.0],
+                crate::core::keyframe::InterpolationType::Linear,
+            ),
+        ]);
+        comp.layers.push(layer);
+
+        let velocity = layer_motion_velocity(&comp, &comp.layers[0], 15);
+        assert!((velocity[0] - 1.0).abs() < 1e-5);
+        assert!(velocity[1].abs() < 1e-5);
     }
 }
 
