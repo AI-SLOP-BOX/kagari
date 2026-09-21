@@ -17,6 +17,17 @@ impl PanelAnimation {
         }
     }
 
+    pub fn new_opening() -> Self {
+        let mut animation = Self::new(false);
+        animation.target = 1.0;
+        animation.speed = 2.2;
+        animation
+    }
+
+    pub fn is_animating(&self) -> bool {
+        (self.progress - self.target).abs() >= 0.001
+    }
+
     pub fn update(&mut self, dt: f32) {
         if (self.progress - self.target).abs() < 0.001 {
             self.progress = self.target;
@@ -81,6 +92,15 @@ mod tests {
         assert_eq!(a.progress, 0.0);
         assert_eq!(a.target, 0.0);
         assert!(!a.is_open);
+    }
+
+    #[test]
+    fn test_new_opening_starts_closed_and_targets_open() {
+        let animation = PanelAnimation::new_opening();
+        assert_eq!(animation.progress, 0.0);
+        assert_eq!(animation.target, 1.0);
+        assert!(!animation.is_open);
+        assert!(animation.is_animating());
     }
 
     #[test]

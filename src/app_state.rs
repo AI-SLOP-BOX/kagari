@@ -417,6 +417,8 @@ pub struct KagariApp {
     pub tracker_apply_target: Option<usize>,
     /// Home screen (landing): browser directory, selection, search.
     pub show_home: bool,
+    /// One-shot launch transition for the first rendered frame.
+    pub startup_animation: crate::ui::panel_animation::PanelAnimation,
     pub home_dir: std::path::PathBuf,
     pub home_selected: Option<std::path::PathBuf>,
     pub home_search: String,
@@ -620,6 +622,7 @@ impl Default for KagariApp {
             gpu_rendered: false,
             renaming_layer: None,
             show_home: crate::ui::project_io::welcome_on_startup(),
+            startup_animation: crate::ui::panel_animation::PanelAnimation::new_opening(),
             home_dir: std::env::var("HOME")
                 .map(std::path::PathBuf::from)
                 .unwrap_or_else(|_| std::env::temp_dir()),
@@ -895,10 +898,67 @@ impl eframe::App for KagariApp {
 }
 
 impl KagariApp {
+    fn draw_startup_animation(&self, ctx: &eframe::egui::Context) {
+        if !self.startup_animation.is_animating() {
+            return;
+        }
+
+        let progress = crate::ui::panel_animation::PanelAnimation::ease(
+            self.startup_animation.progress,
+        );
+        let screen = ctx.screen_rect();
+        let painter = ctx.layer_painter(eframe::egui::LayerId::new(
+            eframe::egui::Order::Foreground,
+            eframe::egui::Id::new("kagari-startup-transition"),
+        ));
+        let veil_alpha = ((1.0 - progress) * 232.0).round() as u8;
+        painter.rect_filled(
+            screen,
+            0.0,
+            eframe::egui::Color32::from_rgba_unmultiplied(7, 13, 19, veil_alpha),
+        );
+
+        let logo_alpha = if progress < 0.58 {
+            (progress / 0.58).clamp(0.0, 1.0)
+        } else {
+            ((1.0 - progress) / 0.42).clamp(0.0, 1.0)
+        };
+        let logo_size = (screen.width().min(screen.height()) * 0.13).clamp(64.0, 118.0)
+            * (0.88 + progress * 0.12);
+        let logo_rect = eframe::egui::Rect::from_center_size(
+            eframe::egui::pos2(screen.center().x, screen.center().y - 18.0),
+            eframe::egui::vec2(logo_size, logo_size),
+        );
+        if let Some(texture) = self.home_banner.as_ref() {
+            painter.image(
+                texture.id(),
+                logo_rect,
+                eframe::egui::Rect::from_min_max(
+                    eframe::egui::pos2(0.0, 0.0),
+                    eframe::egui::pos2(1.0, 1.0),
+                ),
+                eframe::egui::Color32::from_white_alpha((logo_alpha * 255.0).round() as u8),
+            );
+        }
+        painter.text(
+            eframe::egui::pos2(screen.center().x, logo_rect.bottom() + 22.0),
+            eframe::egui::Align2::CENTER_TOP,
+            "Kagari VFX",
+            eframe::egui::FontId::proportional((logo_size * 0.22).clamp(16.0, 24.0)),
+            eframe::egui::Color32::from_white_alpha((logo_alpha * 220.0).round() as u8),
+        );
+    }
+
     /// Panel and dialog drawing extracted from [`eframe::App::update`] so the
     /// full UI can run headlessly in tests (`_frame` was unused).
     pub fn update_panels(&mut self, ctx: &eframe::egui::Context) {
         use eframe::egui;
+        let opening_was_active = self.startup_animation.is_animating();
+        self.startup_animation
+            .update(ctx.input(|input| input.unstable_dt));
+        if opening_was_active || self.startup_animation.is_animating() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(16));
+        }
 
         // Global drag safety net: any pointer release while a transaction is
         // open seals it, even if the owning widget missed the release event
@@ -1183,26 +1243,31 @@ impl KagariApp {
             crate::ui::home_screen::draw(self, ctx);
             crate::ui::shortcuts_dialog::draw_shortcuts_dialog(self, ctx);
             self.toasts.draw(ctx);
+            self.draw_startup_animation(ctx);
             self.playback.current_frame = current_frame;
             return;
         }
         if self.show_guided_tutorial {
             crate::ui::tutorial_workspace::draw(self, ctx);
+            self.draw_startup_animation(ctx);
             self.playback.current_frame = current_frame;
             return;
         }
         if self.ui_tabs.left_tab_idx == 1 && self.ui_tabs.right_tab_idx == 0 {
             crate::ui::effects_workspace::draw(self, ctx);
+            self.draw_startup_animation(ctx);
             self.playback.current_frame = current_frame;
             return;
         }
         if self.active_tool == crate::ui::toolbar::ActiveTool::Text {
             crate::ui::text_workspace::draw(self, ctx);
+            self.draw_startup_animation(ctx);
             self.playback.current_frame = current_frame;
             return;
         }
         if self.ui_tabs.left_tab_idx == 1 && self.ui_tabs.right_tab_idx == 19 {
             crate::ui::color_workspace::draw(self, ctx);
+            self.draw_startup_animation(ctx);
             self.playback.current_frame = current_frame;
             return;
         }
@@ -1211,12 +1276,14 @@ impl KagariApp {
         });
         if assets_workspace && self.ui_tabs.left_tab_idx == 0 && self.ui_tabs.right_tab_idx == 30 {
             crate::ui::asset_library::draw(self, ctx);
+            self.draw_startup_animation(ctx);
             self.playback.current_frame = current_frame;
             return;
         }
         if self.viewer_maximized {
             crate::ui::menu::draw(self, ctx);
             crate::ui::viewport::draw(self, ctx, current_frame);
+            self.draw_startup_animation(ctx);
             self.playback.current_frame = current_frame;
             return;
         }
@@ -1496,6 +1563,7 @@ impl KagariApp {
         crate::ui::vectorscope::draw_vectorscope_window(self, ctx);
         crate::ui::shortcuts_dialog::draw_shortcuts_dialog(self, ctx);
         self.toasts.draw(ctx);
+        self.draw_startup_animation(ctx);
         self.playback.current_frame = current_frame;
     }
 }
