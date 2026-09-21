@@ -1959,7 +1959,12 @@ pub fn draw_graph_editor(
                     let drag_display = active_channel_drag.filter(|drag| drag.current_frame == *frame);
                     let display_frame = drag_display.map(|drag| drag.current_frame).unwrap_or(*frame);
                     let display_value = drag_display.map(|drag| drag.current_value).unwrap_or(*value);
-                    let key_token = drag_display.map(|drag| drag.anchor_id).unwrap_or(index);
+                    // Use the frame identity for egui IDs. An array index is
+                    // not stable after a retime sorts the keyframes and can
+                    // make the drag state attach to a neighbouring key.
+                    let key_token = drag_display
+                        .map(|drag| drag.original_frame as usize)
+                        .unwrap_or(*frame as usize);
                     let key_pos = egui::pos2(frame_to_x(display_frame), val_to_y(display_value));
                     let key_rect = egui::Rect::from_center_size(key_pos, egui::vec2(14.0, 14.0));
                     let key_response = ui.interact(
