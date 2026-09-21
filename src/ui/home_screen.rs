@@ -817,12 +817,28 @@ fn draw_settings_target(app: &mut KagariApp, ctx: &egui::Context) {
 
         ui.painter().text(egui::pos2(category.left() + 30.0, r.top() + 44.0), egui::Align2::LEFT_CENTER, "設定", egui::FontId::proportional(24.0), colors::TEXT_PRIMARY);
         let categories = [(crate::ui::icons::SVG_SETTINGS, "一般"), (crate::ui::icons::SVG_PALETTE, "外観"), (crate::ui::icons::SVG_GPU, "パフォーマンス"), (crate::ui::icons::SVG_KEYBOARD, "ショートカット"), (crate::ui::icons::SVG_FOLDER, "メディア"), (crate::ui::icons::SVG_AUDIO, "オーディオ"), (crate::ui::icons::SVG_LAYERS, "プラグイン"), (crate::ui::icons::SVG_FILE, "保存")];
+        let category_id = egui::Id::new("settings-target-category");
+        let mut selected_category = ctx
+            .data_mut(|data| data.get_temp::<usize>(category_id))
+            .unwrap_or(0)
+            .min(categories.len().saturating_sub(1));
         for (index, (icon, label)) in categories.into_iter().enumerate() {
             let y = r.top() + 84.0 + index as f32 * 53.0;
-            if index == 0 { ui.painter().rect_filled(egui::Rect::from_min_max(egui::pos2(category.left() + 17.0, y), egui::pos2(category.right(), y + 53.0)), 0.0, egui::Color32::from_rgb(27, 35, 42)); ui.painter().rect_filled(egui::Rect::from_min_size(egui::pos2(category.left() + 17.0, y), egui::vec2(4.0, 53.0)), 0.0, egui::Color32::from_rgb(255, 111, 28)); }
-            crate::ui::icons::render_svg_at(ui, format!("settings-target-category-{index}"), icon, egui::vec2(25.0, 25.0), if index == 0 { egui::Color32::from_rgb(255, 128, 30) } else { colors::TEXT_SECONDARY }, egui::pos2(category.left() + 37.0, y + 14.0));
-            ui.painter().text(egui::pos2(category.left() + 82.0, y + 27.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(15.0), if index == 0 { colors::TEXT_PRIMARY } else { colors::TEXT_SECONDARY });
+            let active = index == selected_category;
+            let row_rect = egui::Rect::from_min_max(
+                egui::pos2(category.left() + 17.0, y),
+                egui::pos2(category.right(), y + 53.0),
+            );
+            if active { ui.painter().rect_filled(row_rect, 0.0, egui::Color32::from_rgb(27, 35, 42)); ui.painter().rect_filled(egui::Rect::from_min_size(egui::pos2(category.left() + 17.0, y), egui::vec2(4.0, 53.0)), 0.0, egui::Color32::from_rgb(255, 111, 28)); }
+            crate::ui::icons::render_svg_at(ui, format!("settings-target-category-{index}"), icon, egui::vec2(25.0, 25.0), if active { egui::Color32::from_rgb(255, 128, 30) } else { colors::TEXT_SECONDARY }, egui::pos2(category.left() + 37.0, y + 14.0));
+            ui.painter().text(egui::pos2(category.left() + 82.0, y + 27.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(15.0), if active { colors::TEXT_PRIMARY } else { colors::TEXT_SECONDARY });
+            let response = ui.interact(row_rect, egui::Id::new(("settings-target-category-row", index)), egui::Sense::click());
+            if response.clicked() {
+                selected_category = index;
+                open_settings_category(app, ctx, index);
+            }
         }
+        ctx.data_mut(|data| data.insert_temp(category_id, selected_category));
         draw_settings_target_content(ui, content);
     });
 }
@@ -876,19 +892,47 @@ fn draw_settings_target_responsive(app: &mut KagariApp, ctx: &egui::Context) {
         }
         if !narrow { ui.painter().text(egui::pos2(20.0, r.bottom() - 26.0), egui::Align2::LEFT_CENTER, "Kagari VFX  v0.1.0", egui::FontId::proportional(11.0), colors::TEXT_SECONDARY); }
         let categories = [(crate::ui::icons::SVG_SETTINGS, "一般"), (crate::ui::icons::SVG_PALETTE, "外観"), (crate::ui::icons::SVG_GPU, "パフォーマンス"), (crate::ui::icons::SVG_KEYBOARD, "ショートカット"), (crate::ui::icons::SVG_FOLDER, "メディア"), (crate::ui::icons::SVG_AUDIO, "オーディオ"), (crate::ui::icons::SVG_LAYERS, "プラグイン"), (crate::ui::icons::SVG_FILE, "保存")];
+        let category_id = egui::Id::new("settings-target-category");
+        let mut selected_category = ctx
+            .data_mut(|data| data.get_temp::<usize>(category_id))
+            .unwrap_or(0)
+            .min(categories.len().saturating_sub(1));
         if !narrow { ui.painter().text(egui::pos2(category.left() + 20.0, r.top() + 36.0), egui::Align2::LEFT_CENTER, "設定", egui::FontId::proportional(20.0), colors::TEXT_PRIMARY); }
         for (index, (icon, label)) in categories.into_iter().enumerate() {
             let y = r.top() + if narrow { 35.0 } else { 76.0 } + index as f32 * if narrow { 44.0 } else { 49.0 };
-            if index == 0 { ui.painter().rect_filled(egui::Rect::from_min_max(egui::pos2(category.left(), y), egui::pos2(category.right(), y + 46.0)), 0.0, egui::Color32::from_rgb(27, 35, 42)); ui.painter().rect_filled(egui::Rect::from_min_size(egui::pos2(category.left(), y), egui::vec2(3.0, 46.0)), 0.0, egui::Color32::from_rgb(255, 111, 28)); }
-            crate::ui::icons::render_svg_at(ui, format!("settings-responsive-category-{index}"), icon, egui::vec2(21.0, 21.0), if index == 0 { egui::Color32::from_rgb(255, 128, 30) } else { colors::TEXT_SECONDARY }, egui::pos2(if narrow { category.left() + (category_width - 21.0) * 0.5 } else { category.left() + 20.0 }, y + 12.0));
-            if !narrow { ui.painter().text(egui::pos2(category.left() + 53.0, y + 23.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(13.0), if index == 0 { colors::TEXT_PRIMARY } else { colors::TEXT_SECONDARY }); }
+            let active = index == selected_category;
+            let row_rect = egui::Rect::from_min_max(egui::pos2(category.left(), y), egui::pos2(category.right(), y + 46.0));
+            if active { ui.painter().rect_filled(row_rect, 0.0, egui::Color32::from_rgb(27, 35, 42)); ui.painter().rect_filled(egui::Rect::from_min_size(egui::pos2(category.left(), y), egui::vec2(3.0, 46.0)), 0.0, egui::Color32::from_rgb(255, 111, 28)); }
+            crate::ui::icons::render_svg_at(ui, format!("settings-responsive-category-{index}"), icon, egui::vec2(21.0, 21.0), if active { egui::Color32::from_rgb(255, 128, 30) } else { colors::TEXT_SECONDARY }, egui::pos2(if narrow { category.left() + (category_width - 21.0) * 0.5 } else { category.left() + 20.0 }, y + 12.0));
+            if !narrow { ui.painter().text(egui::pos2(category.left() + 53.0, y + 23.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(13.0), if active { colors::TEXT_PRIMARY } else { colors::TEXT_SECONDARY }); }
+            if ui.interact(row_rect, egui::Id::new(("settings-responsive-category-row", index)), egui::Sense::click()).clicked() {
+                selected_category = index;
+                open_settings_category(app, ctx, index);
+            }
         }
+        ctx.data_mut(|data| data.insert_temp(category_id, selected_category));
         if narrow {
             draw_settings_responsive_narrow_content(ui, content);
         } else {
             draw_settings_responsive_content(ui, content, false);
         }
     });
+}
+
+fn open_settings_category(app: &mut KagariApp, ctx: &egui::Context, category: usize) {
+    let preferences_category: usize = match category {
+        0 => 0, // General
+        1 => 6, // UI Appearance
+        2 => 1, // Performance
+        3 => 7, // Keyboard Shortcuts
+        4 => 2, // Cache / Media
+        5 => 0, // Audio is currently part of General preferences
+        6 => 8, // Plugins
+        7 => 5, // Auto-save
+        _ => 0,
+    };
+    ctx.data_mut(|data| data.insert_temp(egui::Id::new("ae_prefs_category"), preferences_category));
+    app.show_preferences = true;
 }
 
 fn draw_settings_responsive_narrow_content(ui: &mut egui::Ui, content: egui::Rect) {
@@ -4913,5 +4957,114 @@ mod tests {
             |ctx| draw(&mut app, ctx),
         );
         assert_eq!(home_nav(&ctx), HomeNav::Home);
+    }
+
+    #[test]
+    fn settings_category_click_opens_the_matching_functional_preferences_section() {
+        let mut app = KagariApp::default();
+        let ctx = egui::Context::default();
+        set_home_nav(&ctx, HomeNav::Settings);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1536.0, 900.0));
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(screen),
+                ..Default::default()
+            },
+            |ctx| draw(&mut app, ctx),
+        );
+
+        for y in (150..340).step_by(2) {
+            let point = egui::pos2(330.0, y as f32);
+            let _ = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(screen),
+                    events: vec![
+                        egui::Event::PointerMoved(point),
+                        egui::Event::PointerButton {
+                            pos: point,
+                            button: egui::PointerButton::Primary,
+                            pressed: true,
+                            modifiers: egui::Modifiers::NONE,
+                        },
+                        egui::Event::PointerButton {
+                            pos: point,
+                            button: egui::PointerButton::Primary,
+                            pressed: false,
+                            modifiers: egui::Modifiers::NONE,
+                        },
+                    ],
+                    ..Default::default()
+                },
+                |ctx| draw(&mut app, ctx),
+            );
+            if ctx.data(|data| data.get_temp::<usize>(egui::Id::new("settings-target-category")))
+                == Some(2)
+            {
+                break;
+            }
+        }
+
+        assert!(app.show_preferences);
+        assert_eq!(
+            ctx.data(|data| data.get_temp::<usize>(egui::Id::new("settings-target-category"))),
+            Some(2)
+        );
+        assert_eq!(
+            ctx.data(|data| data.get_temp::<usize>(egui::Id::new("ae_prefs_category"))),
+            Some(1),
+            "Performance must open the real Performance preferences section"
+        );
+    }
+
+    #[test]
+    fn responsive_settings_category_click_keeps_the_same_functional_route() {
+        let mut app = KagariApp::default();
+        let ctx = egui::Context::default();
+        set_home_nav(&ctx, HomeNav::Settings);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(900.0, 640.0));
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(screen),
+                ..Default::default()
+            },
+            |ctx| draw(&mut app, ctx),
+        );
+
+        for y in (120..320).step_by(2) {
+            let point = egui::pos2(90.0, y as f32);
+            let _ = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(screen),
+                    events: vec![
+                        egui::Event::PointerMoved(point),
+                        egui::Event::PointerButton {
+                            pos: point,
+                            button: egui::PointerButton::Primary,
+                            pressed: true,
+                            modifiers: egui::Modifiers::NONE,
+                        },
+                        egui::Event::PointerButton {
+                            pos: point,
+                            button: egui::PointerButton::Primary,
+                            pressed: false,
+                            modifiers: egui::Modifiers::NONE,
+                        },
+                    ],
+                    ..Default::default()
+                },
+                |ctx| draw(&mut app, ctx),
+            );
+            if ctx.data(|data| data.get_temp::<usize>(egui::Id::new("settings-target-category")))
+                == Some(2)
+            {
+                break;
+            }
+        }
+
+        assert!(app.show_preferences);
+        assert_eq!(
+            ctx.data(|data| data.get_temp::<usize>(egui::Id::new("ae_prefs_category"))),
+            Some(1)
+        );
     }
 }
