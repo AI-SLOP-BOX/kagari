@@ -37,10 +37,10 @@ is intentionally tracked separately from the core workflow.
 | Motion tracking | Point tracking, planar tracking, camera solve, stabilization | 🟡 | Point/quad tracking, animated Corner Pin, target-aware stabilization, and 3D camera solving are connected to the tracker panel; real-footage workflow coverage, planar confidence UX, and production-quality solve accuracy still need work |
 | Roto / paint | Roto Brush, paint, clone, eraser, puppet | 🟡 | Tools and engines are present; temporal propagation/brush quality are not AE-level |
 | Keying | Chroma/linear key, matte cleanup, spill-like workflows | 🟡 | Keying modules and controls exist; production-grade edge handling still needs validation |
-| Color | Curves, levels, LUT, color management, scopes, HDR paths | 🟡 | Broad core coverage; consistent 8/16/32-bit and GPU path parity remains a gap |
+| Color | Curves, levels, LUT, color management, scopes, HDR paths | 🟡 | Broad core coverage; live Lumetri histogram now samples the current rendered frame and ramp presets write Color Balance values; consistent 8/16/32-bit and GPU path parity remains a gap |
 | Effects | Searchable effect library, animated parameters, presets | 🟡 | Large `EffectType` registry and controls; effect-standard parity is explicitly out of scope for exact cloning |
 | Particles / procedural | Particles, lightning, star field, audio spectrum and generators | 🟡 | Engines and render paths exist; authoring, caching, and interaction depth vary by feature |
-| Audio | Import, playback sync, mixing, meters, audio-to-keyframes | 🟡 | In-process Symphonia decoding now covers WAV/MP3/FLAC/Ogg/AIFF/CAF/MP4-family audio, and project assets can be inserted as real audio layers; correction and interchange workflow still need work |
+| Audio | Import, playback sync, mixing, meters, audio-to-keyframes | 🟡 | In-process Symphonia decoding now covers WAV/MP3/FLAC/Ogg/AIFF/CAF/MP4-family audio, project assets can be inserted as real audio layers, and the master VU/32-band display uses the live mix buffer; per-track metering and correction/interchange workflow still need work |
 | Preview | Cached frames, RAM preview, adaptive quality, audio sync | 🟡 | Cache and playback exist; true real-time GPU effect processing is still limited |
 | Render queue | Multiple items, progress, cancellation/failure reporting | ✅ | `core/render_queue.rs`, `ui/render_queue.rs` |
 | Export | FFmpeg video, image/EXR paths, GIF, Lottie, MLT/OTIO-style interchange | 🟡 | Several exporters exist; codec/metadata/alpha compatibility needs broader fixture testing |
