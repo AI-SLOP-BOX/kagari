@@ -97,6 +97,10 @@ fn software_preview_required(comp: &crate::core::timeline::Composition, frame: u
                     bevel_depth,
                     ..
                 } if *extrusion_depth > 0.0 || *bevel_depth > 0.0
+            ) || matches!(
+                &layer.layer_type,
+                crate::core::timeline::LayerType::Shape { stroke_width, .. }
+                    if *stroke_width > 0.0
             ) || (matches!(
                 layer.layer_type,
                 crate::core::timeline::LayerType::Text { .. }
@@ -3475,6 +3479,18 @@ mod review_regression_tests {
             bevel_depth: 0.0,
         };
         comp.layers[0] = layer;
+        assert!(software_preview_required(&comp, 0));
+
+        if let crate::core::timeline::LayerType::Shape { stroke_width, .. } =
+            &mut comp.layers[0].layer_type
+        {
+            *stroke_width = 3.0;
+        }
+        if let crate::core::timeline::LayerType::Shape { extrusion_depth, .. } =
+            &mut comp.layers[0].layer_type
+        {
+            *extrusion_depth = 0.0;
+        }
         assert!(software_preview_required(&comp, 0));
     }
 }
