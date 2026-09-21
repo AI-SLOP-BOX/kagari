@@ -40,18 +40,22 @@ fn media_path_matches(candidate: &str, old_path: Option<&str>, old_name: &str) -
     old_path.is_some_and(|path| candidate == path) || candidate.ends_with(old_name)
 }
 
-fn composition_contains_video_replacement(
+fn collect_video_replacement_fps(
     comp: &Composition,
     old_name: &str,
     old_path: Option<&str>,
-) -> bool {
-    comp.layers.iter().any(|layer| {
+    fps_values: &mut std::collections::HashSet<u32>,
+) {
+    let has_video = comp.layers.iter().any(|layer| {
         matches!(&layer.layer_type, LayerType::Video { source, .. }
             if layer.name == old_name || media_path_matches(source, old_path, old_name))
-    }) || comp
-        .sub_compositions
-        .iter()
-        .any(|sub| composition_contains_video_replacement(sub, old_name, old_path))
+    });
+    if has_video {
+        fps_values.insert(comp.fps.max(1));
+    }
+    for sub in &comp.sub_compositions {
+        collect_video_replacement_fps(sub, old_name, old_path, fps_values);
+    }
 }
 
 fn replace_media_in_composition(
@@ -640,15 +644,16 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
             let mut imported_video_by_fps = std::collections::HashMap::new();
             let mut import_error = None;
             if is_video_asset {
+                let mut required_fps = std::collections::HashSet::new();
                 for comp in &temp_project.compositions {
-                    let needs_video = composition_contains_video_replacement(
+                    collect_video_replacement_fps(
                         comp,
                         &old_name,
                         old_path.as_deref(),
+                        &mut required_fps,
                     );
-                    if !needs_video || imported_video_by_fps.contains_key(&comp.fps) {
-                        continue;
-                    }
+                }
+                for fps in required_fps {
                     let stem = std::path::Path::new(&new_path)
                         .file_stem()
                         .map(|value| value.to_string_lossy())
@@ -660,14 +665,14 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
                     let destination = std::env::temp_dir()
                         .join("kagari_media")
                         .join("relinked")
-                        .join(format!("asset_{asset_idx}_{}fps_{safe_stem}", comp.fps));
+                        .join(format!("asset_{asset_idx}_{fps}fps_{safe_stem}"));
                     match crate::core::video_import::import_video(
                         &new_path,
                         &destination,
-                        comp.fps as f32,
+                        fps as f32,
                     ) {
                         Ok(imported) => {
-                            imported_video_by_fps.insert(comp.fps, imported);
+                            imported_video_by_fps.insert(fps, imported);
                         }
                         Err(error) => {
                             import_error = Some(error);
