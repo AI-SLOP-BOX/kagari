@@ -521,9 +521,14 @@ fn render_precomp_layers_inner(
             }
             LayerType::PreComp { comp_id } => {
                 if let Some(nested_comp) = precomp_comp.find_sub_comp(comp_id) {
+                    let mut resolved_nested_comp = nested_comp.clone();
+                    crate::core::essential_properties::apply_essential_overrides(
+                        &mut resolved_nested_comp,
+                        &layer.essential_properties,
+                    );
                     let nested_pixels = render_precomp_layers(
                         precomp_comp,
-                        nested_comp,
+                        &resolved_nested_comp,
                         source_frame,
                         width,
                         height,

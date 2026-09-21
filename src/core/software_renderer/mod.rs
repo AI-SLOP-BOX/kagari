@@ -803,8 +803,18 @@ pub(crate) fn render_frame_to_pixels_filtered(
         // through the layer's transform (position / scale / rotation / opacity).
         if let LayerType::PreComp { comp_id } = &layer.layer_type {
             if let Some(sub_comp) = comp.find_sub_comp(comp_id) {
-                let mut sub_pixels =
-                    render_precomp_layers(comp, sub_comp, source_frame, width, height);
+                let mut resolved_sub_comp = sub_comp.clone();
+                crate::core::essential_properties::apply_essential_overrides(
+                    &mut resolved_sub_comp,
+                    &layer.essential_properties,
+                );
+                let mut sub_pixels = render_precomp_layers(
+                    comp,
+                    &resolved_sub_comp,
+                    source_frame,
+                    width,
+                    height,
+                );
                 if !sub_pixels.is_empty() {
                     if !layer.effects.is_empty() && layer.effects_enabled {
                         crate::core::cpu_effects::apply_layer_effects(
@@ -1927,6 +1937,71 @@ mod tests {
             pixels[center] > 180,
             "PreComp should render nested shape (R={})",
             pixels[center]
+        );
+    }
+
+    #[test]
+    fn test_precomp_essential_property_override_reaches_nested_render() {
+        let mut sub = Composition::new(
+            "essential_sub".into(),
+            "Essential Sub".into(),
+            16,
+            16,
+            30,
+            30,
+        );
+        sub.background_color = [0.0, 0.0, 0.0, 0.0];
+        let mut solid = Layer::new(
+            "solid".into(),
+            "Color Target".into(),
+            LayerType::Solid {
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
+            30,
+        );
+        solid.transform.position = Animatable::new_constant([8.0, 8.0]);
+        sub.layers.push(solid);
+
+        let mut comp = Composition::new(
+            "essential_main".into(),
+            "Essential Main".into(),
+            16,
+            16,
+            30,
+            30,
+        );
+        comp.background_color = [0.0, 0.0, 0.0, 0.0];
+        comp.sub_compositions.push(sub);
+        let mut precomp = Layer::new(
+            "precomp".into(),
+            "Essential Instance".into(),
+            LayerType::PreComp {
+                comp_id: "essential_sub".into(),
+            },
+            30,
+        );
+        precomp.transform.position = Animatable::new_constant([8.0, 8.0]);
+        precomp.essential_properties.push(
+            crate::core::essential_properties::EssentialProperty {
+                name: "Color".into(),
+                prop_type: crate::core::essential_properties::EssentialPropertyType::Color,
+                value: crate::core::essential_properties::EssentialValue::Color([
+                    0.0, 1.0, 0.0, 1.0,
+                ]),
+                overridden: true,
+                min_value: 0.0,
+                max_value: 100.0,
+                options: Vec::new(),
+            },
+        );
+        comp.layers.push(precomp);
+
+        let pixels = render_frame_to_pixels(&comp, 0, 16, 16, 0.0, 0);
+        let center = ((8 * 16 + 8) * 4) as usize;
+        assert!(
+            pixels[center + 1] > 180 && pixels[center] < 40,
+            "Essential Property color should reach nested render: {:?}",
+            &pixels[center..center + 4]
         );
     }
 
