@@ -24,6 +24,26 @@ pub struct Mesh3DModel {
     pub bounds_max: [f32; 3],
 }
 
+fn resolve_obj_index(raw: &str, item_count: usize, kind: &str) -> Result<usize, String> {
+    let parsed: i32 = raw
+        .parse()
+        .map_err(|error| format!("{kind} index: {error}"))?;
+    if parsed == 0 {
+        return Err(format!("{kind} index cannot be zero"));
+    }
+    let index = if parsed > 0 {
+        parsed as usize - 1
+    } else {
+        item_count
+            .checked_sub(parsed.unsigned_abs() as usize)
+            .ok_or_else(|| format!("{kind} index out of range: {raw}"))?
+    };
+    if index >= item_count {
+        return Err(format!("{kind} index out of range: {raw}"));
+    }
+    Ok(index)
+}
+
 impl Mesh3DModel {
     /// Parses a Wavefront OBJ string format.
     pub fn parse_obj(obj_str: &str) -> Result<Self, String> {
@@ -82,27 +102,20 @@ impl Mesh3DModel {
                     if parts.len() >= 4 {
                         let parse_vertex = |spec: &str| -> Result<Mesh3DVertex, String> {
                             let tokens: Vec<&str> = spec.split('/').collect();
-                            let pos_idx: usize =
-                                tokens[0].parse().map_err(|e| format!("Face idx: {e}"))?;
-                            let pos = *positions
-                                .get(pos_idx.checked_sub(1).ok_or("0-index")?)
-                                .ok_or("Vertex position index out of range")?;
+                            let pos_idx = resolve_obj_index(tokens[0], positions.len(), "Vertex")?;
+                            let pos = positions[pos_idx];
 
                             let uv = if tokens.len() > 1 && !tokens[1].is_empty() {
-                                let uv_idx: usize =
-                                    tokens[1].parse().map_err(|e| format!("UV idx: {e}"))?;
-                                *uvs.get(uv_idx.checked_sub(1).ok_or("0-index")?)
-                                    .unwrap_or(&[0.0, 0.0])
+                                let uv_idx = resolve_obj_index(tokens[1], uvs.len(), "UV")?;
+                                uvs[uv_idx]
                             } else {
                                 [0.0, 0.0]
                             };
 
                             let normal = if tokens.len() > 2 && !tokens[2].is_empty() {
-                                let norm_idx: usize =
-                                    tokens[2].parse().map_err(|e| format!("Norm idx: {e}"))?;
-                                *normals
-                                    .get(norm_idx.checked_sub(1).ok_or("0-index")?)
-                                    .unwrap_or(&[0.0, 0.0, 1.0])
+                                let norm_idx =
+                                    resolve_obj_index(tokens[2], normals.len(), "Normal")?;
+                                normals[norm_idx]
                             } else {
                                 [0.0, 0.0, 1.0]
                             };
@@ -114,21 +127,17 @@ impl Mesh3DModel {
                             })
                         };
 
-                        let v0 = parse_vertex(parts[1])?;
-                        let v1 = parse_vertex(parts[2])?;
-                        let v2 = parse_vertex(parts[3])?;
-
-                        triangles.push(Mesh3DTriangle {
-                            vertices: [v0, v1, v2],
-                        });
-
-                        // Quad fan polygon triangulation
-                        if parts.len() >= 5 {
-                            let v3 = parse_vertex(parts[4])?;
-                            let v0_clone = parse_vertex(parts[1])?;
-                            let v2_clone = parse_vertex(parts[3])?;
+                        let face_vertices: Vec<Mesh3DVertex> = parts[1..]
+                            .iter()
+                            .map(|spec| parse_vertex(spec))
+                            .collect::<Result<_, _>>()?;
+                        for triangle_index in 1..face_vertices.len().saturating_sub(1) {
                             triangles.push(Mesh3DTriangle {
-                                vertices: [v0_clone, v2_clone, v3],
+                                vertices: [
+                                    face_vertices[0].clone(),
+                                    face_vertices[triangle_index].clone(),
+                                    face_vertices[triangle_index + 1].clone(),
+                                ],
                             });
                         }
                     }
@@ -171,5 +180,36 @@ f 1/1/1 2/2/1 3/3/1
         assert_eq!(mesh.triangles.len(), 1);
         assert_eq!(mesh.triangles[0].vertices[1].position, [1.0, 0.0, 0.0]);
         assert_eq!(mesh.bounds_max[0], 1.0);
+    }
+
+    #[test]
+    fn test_parse_negative_indices_and_ngon_fan() {
+        let obj_data = "\
+v 0.0 0.0 0.0
+v 1.0 0.0 0.0
+v 1.0 1.0 0.0
+v 0.0 1.0 0.0
+v -0.5 0.5 0.0
+vt 0.0 0.0
+vt 1.0 0.0
+vt 1.0 1.0
+vt 0.0 1.0
+vt 0.5 0.5
+vn 0.0 0.0 1.0
+f -5/-5/-1 -4/-4/-1 -3/-3/-1 -2/-2/-1 -1/-1/-1
+";
+        let mesh = Mesh3DModel::parse_obj(obj_data).expect("negative OBJ indices should parse");
+        assert_eq!(mesh.triangles.len(), 3);
+        assert_eq!(mesh.triangles[0].vertices[0].position, [0.0, 0.0, 0.0]);
+        assert_eq!(mesh.triangles[2].vertices[2].position, [-0.5, 0.5, 0.0]);
+        assert_eq!(mesh.triangles[1].vertices[2].uv, [0.0, 1.0]);
+    }
+
+    #[test]
+    fn test_parse_rejects_zero_or_out_of_range_indices() {
+        let zero = "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 0 2 3\n";
+        let out_of_range = "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 -4\n";
+        assert!(Mesh3DModel::parse_obj(zero).is_err());
+        assert!(Mesh3DModel::parse_obj(out_of_range).is_err());
     }
 }
