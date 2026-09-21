@@ -823,11 +823,17 @@ pub fn start_parallel_export(
                 ));
             });
 
-            queue.render_all_with_external_cancel(&cancel_flag, |comp_name, frame| {
-                render_frame_fn(comp_name, frame)
-            });
+            let render_result = queue.render_all_with_external_cancel_checked(
+                &cancel_flag,
+                |comp_name, frame| render_frame_fn(comp_name, frame),
+            );
 
-            if cancel_flag.load(Ordering::SeqCst) || queue.is_cancelled() {
+            if let Err(failure) = render_result {
+                let _ = tx.send(ExportEvent::Error(format!(
+                    "Parallel export failed at item {} frame {}",
+                    failure.item_index, failure.frame
+                )));
+            } else if cancel_flag.load(Ordering::SeqCst) || queue.is_cancelled() {
                 let _ = tx.send(ExportEvent::Error("Parallel export canceled".to_string()));
             } else {
                 let _ = tx.send(ExportEvent::Finished(format!(

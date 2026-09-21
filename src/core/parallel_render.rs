@@ -1,6 +1,6 @@
 use rayon::prelude::*;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// Render queue item representing a composition to be rendered.
 #[derive(Debug, Clone)]
@@ -22,6 +22,20 @@ pub enum RenderStatus {
 
 /// Progress callback: (item_index, frames_done, total_frames).
 type ProgressCallback = dyn Fn(usize, u32, u32) + Send + Sync;
+
+/// A render callback failed for one concrete queue item/frame.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderFailure {
+    pub item_index: usize,
+    pub frame: u32,
+}
+
+fn record_first_failure(slot: &Mutex<Option<RenderFailure>>, failure: RenderFailure) {
+    let mut recorded = slot.lock().unwrap_or_else(|error| error.into_inner());
+    if recorded.is_none() {
+        *recorded = Some(failure);
+    }
+}
 
 /// Parallel render queue that processes multiple compositions and/or frames
 /// using rayon's thread pool.
@@ -81,11 +95,33 @@ impl ParallelRenderQueue {
     where
         F: Fn(&str, u32) -> Vec<u8> + Sync,
     {
+        let _ = self.render_all_with_external_cancel_checked(external_cancel, render_frame);
+    }
+
+    /// Render all items while converting a callback panic into a structured
+    /// failure. The legacy wrapper keeps its fire-and-forget API, while callers
+    /// that own a background worker can report the exact item/frame.
+    pub fn render_all_with_external_cancel_checked<F>(
+        &self,
+        external_cancel: &AtomicBool,
+        render_frame: F,
+    ) -> Result<(), RenderFailure>
+    where
+        F: Fn(&str, u32) -> Vec<u8> + Sync,
+    {
+        let failure = Arc::new(Mutex::new(None::<RenderFailure>));
 
         self.items
             .par_iter()
             .enumerate()
             .for_each(|(item_idx, item)| {
+                if failure
+                    .lock()
+                    .unwrap_or_else(|error| error.into_inner())
+                    .is_some()
+                {
+                    return;
+                }
                 if self.is_cancelled() || external_cancel.load(Ordering::Relaxed) {
                     self.cancel();
                     return;
@@ -95,20 +131,60 @@ impl ParallelRenderQueue {
                     return;
                 }
                 for frame in item.start_frame..=item.end_frame {
+                    if failure
+                        .lock()
+                        .unwrap_or_else(|error| error.into_inner())
+                        .is_some()
+                    {
+                        return;
+                    }
                     if self.is_cancelled() || external_cancel.load(Ordering::Relaxed) {
                         self.cancel();
                         return;
                     }
 
-                    let _pixels = render_frame(&item.comp_name, frame);
+                    let render_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
+                        || render_frame(&item.comp_name, frame),
+                    ));
+                    if render_result.is_err() {
+                        self.cancel();
+                        record_first_failure(
+                            &failure,
+                            RenderFailure {
+                                item_index: item_idx,
+                                frame,
+                            },
+                        );
+                        return;
+                    }
                     self.total_frames_rendered.fetch_add(1, Ordering::Relaxed);
 
                     if let Some(cb) = &self.progress {
                         let done = self.total_frames_rendered.load(Ordering::Relaxed);
-                        cb(item_idx, done, self.total_frames);
+                        let callback_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
+                            || cb(item_idx, done, self.total_frames),
+                        ));
+                        if callback_result.is_err() {
+                            self.cancel();
+                            record_first_failure(
+                                &failure,
+                                RenderFailure {
+                                    item_index: item_idx,
+                                    frame,
+                                },
+                            );
+                            return;
+                        }
                     }
                 }
             });
+
+        let result = failure
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .clone()
+            .map_or(Ok(()), Err);
+        result
     }
 
     /// Multi-frame rendering (MFR): render all frames of all items in parallel
@@ -136,10 +212,32 @@ impl ParallelRenderQueue {
     ) where
         F: Fn(&str, u32) -> Vec<u8> + Sync,
     {
+        let _ = self.render_all_mfr_with_external_cancel_checked(external_cancel, render_frame);
+    }
+
+    /// MFR variant that reports callback failures instead of unwinding the
+    /// rayon worker pool.
+    pub fn render_all_mfr_with_external_cancel_checked<F>(
+        &self,
+        external_cancel: &AtomicBool,
+        render_frame: F,
+    ) -> Result<(), RenderFailure>
+    where
+        F: Fn(&str, u32) -> Vec<u8> + Sync,
+    {
+        let failure = Arc::new(Mutex::new(None::<RenderFailure>));
+
         self.items
             .par_iter()
             .enumerate()
             .for_each(|(item_idx, item)| {
+                if failure
+                    .lock()
+                    .unwrap_or_else(|error| error.into_inner())
+                    .is_some()
+                {
+                    return;
+                }
                 if self.is_cancelled() || external_cancel.load(Ordering::Relaxed) {
                     self.cancel();
                     return;
@@ -150,20 +248,59 @@ impl ParallelRenderQueue {
                 }
                 let frames: Vec<u32> = (item.start_frame..=item.end_frame).collect();
                 frames.par_iter().for_each(|&frame| {
+                    if failure
+                        .lock()
+                        .unwrap_or_else(|error| error.into_inner())
+                        .is_some()
+                    {
+                        return;
+                    }
                     if self.is_cancelled() || external_cancel.load(Ordering::Relaxed) {
                         self.cancel();
                         return;
                     }
 
-                    let _pixels = render_frame(&item.comp_name, frame);
+                    let render_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
+                        || render_frame(&item.comp_name, frame),
+                    ));
+                    if render_result.is_err() {
+                        self.cancel();
+                        record_first_failure(
+                            &failure,
+                            RenderFailure {
+                                item_index: item_idx,
+                                frame,
+                            },
+                        );
+                        return;
+                    }
                     self.total_frames_rendered.fetch_add(1, Ordering::Relaxed);
 
                     if let Some(cb) = &self.progress {
                         let done = self.total_frames_rendered.load(Ordering::Relaxed);
-                        cb(item_idx, done, self.total_frames);
+                        let callback_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
+                            || cb(item_idx, done, self.total_frames),
+                        ));
+                        if callback_result.is_err() {
+                            self.cancel();
+                            record_first_failure(
+                                &failure,
+                                RenderFailure {
+                                    item_index: item_idx,
+                                    frame,
+                                },
+                            );
+                        }
                     }
                 });
             });
+
+        let result = failure
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .clone()
+            .map_or(Ok(()), Err);
+        result
     }
 }
 
@@ -307,6 +444,67 @@ mod tests {
         });
         assert_eq!(counter.load(Ordering::SeqCst), 1);
         assert!(queue.is_cancelled());
+    }
+
+    #[test]
+    fn render_callback_panic_is_reported_without_unwinding() {
+        let mut queue = ParallelRenderQueue::new();
+        queue.add_item(RenderQueueItem {
+            comp_name: "panic".into(),
+            start_frame: 7,
+            end_frame: 9,
+            output_path: "/tmp/panic".into(),
+            status: RenderStatus::Pending,
+        });
+        let external_cancel = AtomicBool::new(false);
+
+        let result = queue.render_all_with_external_cancel_checked(&external_cancel, |_, _| {
+            panic!("synthetic render failure")
+        });
+
+        assert_eq!(
+            result,
+            Err(RenderFailure {
+                item_index: 0,
+                frame: 7,
+            })
+        );
+        assert!(queue.is_cancelled());
+        assert_eq!(queue.total_frames_rendered.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn mfr_progress_panic_is_reported_without_unwinding() {
+        let mut queue = ParallelRenderQueue::new();
+        queue.add_item(RenderQueueItem {
+            comp_name: "progress panic".into(),
+            start_frame: 2,
+            end_frame: 4,
+            output_path: "/tmp/progress-panic".into(),
+            status: RenderStatus::Pending,
+        });
+        queue.set_progress_callback(|_, _, _| panic!("synthetic progress failure"));
+        let external_cancel = AtomicBool::new(false);
+
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(1)
+            .build()
+            .unwrap();
+        let result = pool.install(|| {
+            queue.render_all_mfr_with_external_cancel_checked(&external_cancel, |_, _| {
+                vec![0u8; 4]
+            })
+        });
+
+        assert_eq!(
+            result,
+            Err(RenderFailure {
+                item_index: 0,
+                frame: 2,
+            })
+        );
+        assert!(queue.is_cancelled());
+        assert_eq!(queue.total_frames_rendered.load(Ordering::SeqCst), 1);
     }
 
     #[test]
