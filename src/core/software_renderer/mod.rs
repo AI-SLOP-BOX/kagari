@@ -96,13 +96,16 @@ fn flatten_collapsed_limited(comp: &Composition, frame: u32, depth: u32) -> Comp
         // Compose: parent ∘ child (2D affine). Sub-comp coordinates are
         // absolute within the sub frame; map them relative to the sub center
         // onto the parent layer's center before scaling/rotating.
-        let sub_cx = sub.width as f32 * 0.5;
-        let sub_cy = sub.height as f32 * 0.5;
-        for mut child in sub.layers.clone() {
+        let flattened_sub = flatten_collapsed_limited(sub, child_frame, depth + 1);
+        let sub_cx = flattened_sub.width as f32 * 0.5;
+        let sub_cy = flattened_sub.height as f32 * 0.5;
+        for child_source in &flattened_sub.layers {
+            let mut child = child_source.clone();
             if !child.is_active(child_frame) || !child.visible {
                 continue;
             }
-            let (cpos, cscale, crot, copa) = sub.resolve_world_transform(&child, child_frame);
+            let (cpos, cscale, crot, copa) =
+                flattened_sub.resolve_world_transform(&child, child_frame);
             // Compose: parent ∘ child (2D affine)
             let sx = cscale[0] * pscale[0] / 100.0;
             let sy = cscale[1] * pscale[1] / 100.0;
@@ -174,14 +177,6 @@ fn flatten_collapsed_limited(comp: &Composition, frame: u32, depth: u32) -> Comp
         }
     }
     out.layers = expanded;
-    // Recurse for nested collapsed precomps brought in by expansion
-    if out
-        .layers
-        .iter()
-        .any(|l| l.is_collapsed && matches!(l.layer_type, LayerType::PreComp { .. }))
-    {
-        return flatten_collapsed_limited(&out, frame, depth + 1);
-    }
     out
 }
 
@@ -2929,6 +2924,57 @@ mod shadow_tests {
             .expect("child active at the remapped source frame");
         let position = expanded.transform.position.evaluate(0);
         assert_eq!(position, [48.0, 32.0]);
+    }
+
+    #[test]
+    fn nested_collapsed_precomp_inherits_parent_source_frame() {
+        let mut inner =
+            Composition::new("inner-remap".into(), "Inner".into(), 64, 64, 30, 30);
+        let mut child = Layer::new(
+            "nested-child".into(),
+            "Nested child".into(),
+            LayerType::Solid {
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
+            30,
+        );
+        child.in_frame = 20;
+        child.out_frame = 30;
+        inner.layers.push(child);
+
+        let mut middle =
+            Composition::new("middle-remap".into(), "Middle".into(), 64, 64, 30, 30);
+        middle.sub_compositions.push(inner);
+        let mut nested = Layer::new(
+            "nested-precomp".into(),
+            "Nested collapsed".into(),
+            LayerType::PreComp {
+                comp_id: "inner-remap".into(),
+            },
+            30,
+        );
+        nested.is_collapsed = true;
+        middle.layers.push(nested);
+
+        let mut root = Composition::new("root-remap".into(), "Root".into(), 64, 64, 30, 30);
+        root.sub_compositions.push(middle);
+        let mut outer = Layer::new(
+            "outer-precomp".into(),
+            "Outer collapsed".into(),
+            LayerType::PreComp {
+                comp_id: "middle-remap".into(),
+            },
+            30,
+        );
+        outer.is_collapsed = true;
+        outer.freeze_at(20);
+        root.layers.push(outer);
+
+        let flat = flatten_collapsed(&root, 0);
+        assert!(
+            flat.layers.iter().any(|layer| layer.id == "nested-child"),
+            "nested collapsed content must be evaluated at the outer mapped frame"
+        );
     }
 
     #[test]
