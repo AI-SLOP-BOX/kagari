@@ -1012,49 +1012,42 @@ impl EffectType {
         from_frame: u32,
         to_frame: u32,
     ) -> bool {
+        // Vector parameters have one shared keyframe stream. Moving a graph
+        // channel therefore moves the whole vector keyframe; the caller then
+        // updates the selected component at the destination. This keeps the
+        // other channels from disappearing at the source frame.
         if from_frame == to_frame {
             return false;
         }
-        let Some((value, interpolation)) =
-            self.animatable_params_ref()
-                .into_iter()
-                .find_map(|(name, parameter)| {
-                    if name != parameter_name {
-                        return None;
-                    }
-                    match parameter {
-                        ParamRefRef::Vec2(track) if component < 2 => track
-                            .keyframes()?
+        macro_rules! move_vector_track {
+            ($track:expr, $component_count:expr) => {{
+                if component >= $component_count {
+                    false
+                } else {
+                    let source_is_finite = $track.keyframes().is_some_and(|keyframes| {
+                        keyframes
                             .iter()
-                            .find(|k| k.frame == from_frame)
-                            .filter(|k| k.value.iter().all(|value| value.is_finite()))
-                            .map(|k| (k.value[component], k.interpolation)),
-                        ParamRefRef::Vec3(track) if component < 3 => track
-                            .keyframes()?
-                            .iter()
-                            .find(|k| k.frame == from_frame)
-                            .filter(|k| k.value.iter().all(|value| value.is_finite()))
-                            .map(|k| (k.value[component], k.interpolation)),
-                        ParamRefRef::Vec4Color(track) if component < 4 => track
-                            .keyframes()?
-                            .iter()
-                            .find(|k| k.frame == from_frame)
-                            .filter(|k| k.value.iter().all(|value| value.is_finite()))
-                            .map(|k| (k.value[component], k.interpolation)),
-                        _ => None,
-                    }
-                })
-        else {
-            return false;
-        };
-        if !self.remove_parameter_component_keyframe(parameter_name, from_frame) {
-            return false;
+                            .find(|keyframe| keyframe.frame == from_frame)
+                            .is_some_and(|keyframe| {
+                                keyframe.value.iter().all(|value| value.is_finite())
+                            })
+                    });
+                    source_is_finite && $track.move_keyframe(from_frame, to_frame)
+                }
+            }};
         }
-        if !self.set_parameter_component_keyframe(parameter_name, component, to_frame, value) {
-            return false;
+        for (name, parameter) in self.animatable_params() {
+            if name != parameter_name {
+                continue;
+            }
+            return match parameter {
+                ParamRef::Vec2(track) => move_vector_track!(track, 2),
+                ParamRef::Vec3(track) => move_vector_track!(track, 3),
+                ParamRef::Vec4Color(track) => move_vector_track!(track, 4),
+                ParamRef::Scalar(_) => false,
+            };
         }
-        self.set_parameter_keyframe_interpolation_at_frame(parameter_name, to_frame, interpolation);
-        true
+        false
     }
 
     pub fn set_parameter_keyframe_interpolation_at_frame(
@@ -2057,7 +2050,7 @@ mod registration_tests {
     }
 
     #[test]
-    fn component_keyframe_move_preserves_interpolation_and_other_channels() {
+    fn component_keyframe_move_preserves_the_shared_vector_keyframe() {
         let mut effect = EffectType::ColorTint {
             color: Animatable::new_animated(vec![crate::core::keyframe::Keyframe::new(
                 10,
@@ -2133,7 +2126,7 @@ mod registration_tests {
     }
 
     #[test]
-    fn component_keyframe_move_merges_into_existing_destination_key() {
+    fn component_keyframe_move_replaces_existing_destination_vector_keyframe() {
         let mut effect = EffectType::ColorTint {
             color: Animatable::new_animated(vec![
                 crate::core::keyframe::Keyframe::new(
@@ -2152,7 +2145,7 @@ mod registration_tests {
         assert!(effect.move_parameter_component_keyframe("Tint Color", 0, 5, 15));
         match effect.animatable_params_ref()[0].1 {
             ParamRefRef::Vec4Color(track) => {
-                assert_eq!(track.evaluate(15), [0.9, 0.8, 0.7, 1.0]);
+                assert_eq!(track.evaluate(15), [0.9, 0.2, 0.3, 1.0]);
                 assert_eq!(
                     track
                         .keyframes()
@@ -2162,6 +2155,7 @@ mod registration_tests {
                         .count(),
                     1
                 );
+                assert!(track.keyframes().unwrap().iter().all(|key| key.frame != 5));
             }
             _ => panic!("tint color must be a color track"),
         }

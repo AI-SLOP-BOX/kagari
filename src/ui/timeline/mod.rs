@@ -75,7 +75,13 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
             }
 
             let mut project_changed = false;
-            let pre_edit_snapshot = if !app.drag_active() && (app.show_graph_editor || ui.input(|i| i.pointer.any_down())) {
+            // A full project clone is only needed while a pointer gesture can
+            // mutate the timeline. Cloning merely because Graph Editor is
+            // visible made an idle editor pay the snapshot cost every frame.
+            let pointer_gesture = ui.input(|i| {
+                i.pointer.any_pressed() || i.pointer.any_down() || i.pointer.any_released()
+            });
+            let pre_edit_snapshot = if !app.drag_active() && pointer_gesture {
                 Some(app.history.current().clone())
             } else {
                 None
