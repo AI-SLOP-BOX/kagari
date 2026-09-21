@@ -738,6 +738,9 @@ impl Default for Transform3D {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Camera3D {
+    /// Stable scene-object identity used by timeline camera layers.
+    #[serde(default = "default_camera_id")]
+    pub id: String,
     pub name: String,
     pub active: bool,
     pub fov_degrees: f32,
@@ -770,9 +773,14 @@ fn default_dof_max_blur() -> f32 {
     16.0
 }
 
+fn default_camera_id() -> String {
+    "camera_active".to_string()
+}
+
 impl Default for Camera3D {
     fn default() -> Self {
         Self {
+            id: default_camera_id(),
             name: "Active Camera".to_string(),
             active: true,
             fov_degrees: 50.0,
@@ -789,6 +797,15 @@ impl Default for Camera3D {
             dof_iris_sides: 0,
         }
     }
+}
+
+/// A non-rendering timeline layer that exposes a composition camera or light
+/// as a selectable scene object, while the actual scene settings remain in
+/// the composition's camera/light collections.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SceneObjectRef {
+    Camera { id: String },
+    Light { id: String },
 }
 
 impl Camera3D {
@@ -1954,6 +1971,8 @@ pub struct Layer {
     pub trackers: Vec<TrackerPoint>,
 
     pub is_3d: bool,
+    #[serde(default)]
+    pub scene_object: Option<SceneObjectRef>,
     pub transform_3d: Transform3D,
 
     #[serde(default)]
@@ -2115,6 +2134,7 @@ impl Layer {
             time_remap: None,
             trackers: Vec::new(),
             is_3d: false,
+            scene_object: None,
             transform_3d: Transform3D::default(),
             material: MaterialOptions::default(),
             blend_mode: BlendMode::Normal,
@@ -2434,6 +2454,28 @@ impl Composition {
         loop {
             let candidate = format!("{prefix}_{index}");
             if !self.layers.iter().any(|layer| layer.id == candidate) {
+                return candidate;
+            }
+            index = index.saturating_add(1);
+        }
+    }
+
+    pub fn next_camera_id(&self) -> String {
+        let mut index = self.cameras.len().saturating_add(1);
+        loop {
+            let candidate = format!("camera_{index}");
+            if candidate != self.active_camera.id && !self.cameras.iter().any(|camera| camera.id == candidate) {
+                return candidate;
+            }
+            index = index.saturating_add(1);
+        }
+    }
+
+    pub fn next_light_id(&self) -> String {
+        let mut index = self.lights.len().saturating_add(1);
+        loop {
+            let candidate = format!("light_{index}");
+            if !self.lights.iter().any(|light| light.id == candidate) {
                 return candidate;
             }
             index = index.saturating_add(1);
@@ -3550,13 +3592,7 @@ mod tests {
         );
         assert!(missing.is_media_missing());
 
-        let solid = ProjectItem::new(
-            "b",
-            "bg",
-            ProjectItemType::Solid {
-                color: [0.0; 4],
-            },
-        );
+        let solid = ProjectItem::new("b", "bg", ProjectItemType::Solid { color: [0.0; 4] });
         assert_eq!(solid.media_path(), None);
         assert!(!solid.is_media_missing());
     }
@@ -3763,6 +3799,36 @@ mod tests {
 mod multi_camera_tests {
     use super::*;
     use crate::core::keyframe::{InterpolationType, Keyframe};
+
+    #[test]
+    fn scene_object_ids_are_unique_and_layer_refs_are_backward_compatible() {
+        let mut comp = Composition::new("c".into(), "C".into(), 100, 100, 30, 30);
+        assert_eq!(comp.next_camera_id(), "camera_1");
+        assert_eq!(comp.next_light_id(), "light_2");
+
+        let mut camera = Camera3D::default();
+        camera.id = "camera_1".into();
+        comp.cameras.push(camera);
+        assert_eq!(comp.next_camera_id(), "camera_2");
+
+        let mut layer = Layer::new("camera_layer".into(), "Camera 1".into(), LayerType::Null, 30);
+        layer.scene_object = Some(SceneObjectRef::Camera {
+            id: "camera_1".into(),
+        });
+        let json = serde_json::to_string(&layer).expect("scene layer should serialize");
+        let restored: Layer = serde_json::from_str(&json).expect("scene layer should deserialize");
+        assert_eq!(restored.scene_object, layer.scene_object);
+
+        let mut legacy_value: serde_json::Value =
+            serde_json::from_str(&json).expect("serialized layer should be valid JSON");
+        legacy_value
+            .as_object_mut()
+            .expect("layer JSON should be an object")
+            .remove("scene_object");
+        let legacy: Layer =
+            serde_json::from_value(legacy_value).expect("legacy layer should deserialize");
+        assert!(legacy.scene_object.is_none());
+    }
 
     #[test]
     fn test_resolve_camera_prefers_active_flag() {
@@ -4151,11 +4217,7 @@ mod robustness_tests {
         // Huge loop via string building — capped by max_operations
         let evil2 = "let s = \"\"; for i in 0..1000000 { s += \"x\"; } 42";
         let r2 = eval_f32(&engine, evil2, 7.5, 0, 30);
-        assert_eq!(
-            r2, 7.5,
-            "runaway loop must fall back to base, got {}",
-            r2
-        );
+        assert_eq!(r2, 7.5, "runaway loop must fall back to base, got {}", r2);
         // Engine must not be poisoned: valid scripts still evaluate afterwards.
         assert_eq!(eval_f32(&engine, "1 + 2", 0.0, 0, 30), 3.0);
     }

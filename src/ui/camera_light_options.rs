@@ -33,6 +33,7 @@ pub fn draw_camera_light_options(app: &mut KagariApp, ui: &mut egui::Ui) {
                     let next_name = format!("Camera {}", comp.cameras.len() + 1);
                     let fov = comp.resolve_camera().fov_degrees;
                     let c = crate::core::timeline::Camera3D {
+                        id: comp.next_camera_id(),
                         name: next_name,
                         active: false,
                         fov_degrees: fov,
@@ -246,7 +247,9 @@ pub fn draw_camera_light_options(app: &mut KagariApp, ui: &mut egui::Ui) {
                     .color(colors::TEXT_MUTED),
             );
             if crate::ui::custom_widgets::ae_button_accent(ui, "+ Add Light").clicked() {
-                comp.lights.push(crate::core::timeline::Light3D::default());
+                let mut light = crate::core::timeline::Light3D::default();
+                light.id = comp.next_light_id();
+                comp.lights.push(light);
                 changed = true;
             }
         } else {
@@ -391,7 +394,9 @@ pub fn draw_camera_light_options(app: &mut KagariApp, ui: &mut egui::Ui) {
 
             ui.add_space(4.0);
             if crate::ui::custom_widgets::ae_button(ui, "+ Add Light").clicked() {
-                comp.lights.push(crate::core::timeline::Light3D::default());
+                let mut light = crate::core::timeline::Light3D::default();
+                light.id = comp.next_light_id();
+                comp.lights.push(light);
                 changed = true;
             }
         }

@@ -1068,14 +1068,10 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         ui.close_menu();
                     }
                     if ui.button("Light").on_hover_text("Adds a 3D light to the composition").clicked() {
-                        let n = app.history.current().active_composition().lights.len();
+                        let comp = app.history.current().active_composition();
                         let mut light = crate::core::timeline::Light3D::default();
-                        let nanos = std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .map(|d| d.subsec_nanos())
-                            .unwrap_or(0);
-                        light.id = format!("light_{}_{nanos}", n);
-                        light.name = format!("Light {}", n + 1);
+                        light.id = comp.next_light_id();
+                        light.name = format!("Light {}", comp.lights.len() + 1);
                         let name = light.name.clone();
                         app.modify_project(|project| {
                             project.active_composition_mut().lights.push(light);

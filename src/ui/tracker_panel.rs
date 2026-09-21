@@ -321,6 +321,7 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                         ) {
                             Ok(solution) => {
                                 let mut camera = crate::core::timeline::Camera3D::default();
+                                camera.id = comp_mut.next_camera_id();
                                 camera.name = "3D Tracked Camera 1".to_string();
                                 camera.active = true;
                                 camera.fov_degrees = fov;

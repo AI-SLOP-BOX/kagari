@@ -383,10 +383,23 @@ pub fn draw_timeline_header(
             .clicked()
         {
             let mut camera = crate::core::timeline::Camera3D::default();
+            camera.id = comp.next_camera_id();
             camera.name = format!("Camera {}", comp.cameras.len() + 1);
+            let camera_id = camera.id.clone();
             comp.cameras.push(camera);
             let camera_idx = comp.cameras.len().saturating_sub(1);
             comp.set_active_camera(Some(camera_idx));
+            let mut layer = Layer::new(
+                comp.next_layer_id("camera"),
+                format!("Camera {}", comp.cameras.len()),
+                LayerType::Null,
+                total_frames,
+            );
+            layer.is_3d = true;
+            layer.scene_object = Some(crate::core::timeline::SceneObjectRef::Camera {
+                id: camera_id,
+            });
+            comp.add_layer(layer);
             project_changed = true;
         }
         if ui
@@ -395,8 +408,21 @@ pub fn draw_timeline_header(
             .clicked()
         {
             let mut light = crate::core::timeline::Light3D::default();
+            light.id = comp.next_light_id();
             light.name = format!("Light {}", comp.lights.len() + 1);
+            let light_id = light.id.clone();
             comp.lights.push(light);
+            let mut layer = Layer::new(
+                comp.next_layer_id("light"),
+                format!("Light {}", comp.lights.len()),
+                LayerType::Null,
+                total_frames,
+            );
+            layer.is_3d = true;
+            layer.scene_object = Some(crate::core::timeline::SceneObjectRef::Light {
+                id: light_id,
+            });
+            comp.add_layer(layer);
             project_changed = true;
         }
         if ui.button("+ Shape").clicked() {
