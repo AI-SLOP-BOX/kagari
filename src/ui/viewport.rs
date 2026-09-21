@@ -1127,19 +1127,28 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                             let radius = ctx.data_mut(|d| {
                                 d.get_temp::<f32>(egui::Id::new("paint_size")).unwrap_or(12.0)
                             }) * 0.5;
-                            let proj = app.history.current_mut().active_composition_mut();
-                            if let Some(layer) = proj.layers.get_mut(sel_li) {
-                                if let Some(pos) = layer.paint_strokes.iter().rposition(|s| {
-                                    s.points.iter().any(|p| {
-                                        let dx = p[0] - pt[0];
-                                        let dy = p[1] - pt[1];
-                                        dx * dx + dy * dy <= radius * radius
-                                    })
-                                }) {
-                                    layer.paint_strokes.remove(pos);
-                                    crate::core::frame_cache::bump_version();
-                                    app.toasts.info("Stroke erased");
+                            app.begin_drag("Erase Paint Stroke");
+                            let mut erased = false;
+                            {
+                                let proj = app.history.current_mut().active_composition_mut();
+                                if let Some(layer) = proj.layers.get_mut(sel_li) {
+                                    if let Some(pos) = layer.paint_strokes.iter().rposition(|s| {
+                                        s.points.iter().any(|p| {
+                                            let dx = p[0] - pt[0];
+                                            let dy = p[1] - pt[1];
+                                            dx * dx + dy * dy <= radius * radius
+                                        })
+                                    }) {
+                                        layer.paint_strokes.remove(pos);
+                                        erased = true;
+                                    }
                                 }
+                            }
+                            if erased {
+                                app.commit_drag();
+                                app.toasts.info("Stroke erased");
+                            } else {
+                                app.cancel_drag();
                             }
                         }
                     }
