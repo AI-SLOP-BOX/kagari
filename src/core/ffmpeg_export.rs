@@ -933,4 +933,36 @@ mod tests {
         let cfg2 = cfg.clone();
         assert_eq!(cfg.output_path, cfg2.output_path);
     }
+
+    #[test]
+    fn parallel_export_reports_render_callback_failure_to_caller() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let items = vec![crate::core::parallel_render::RenderQueueItem {
+            comp_name: "Broken Comp".into(),
+            start_frame: 12,
+            end_frame: 12,
+            output_path: "/tmp/parallel-export-test.mp4".into(),
+            status: crate::core::parallel_render::RenderStatus::Pending,
+        }];
+        let cancel_flag = Arc::new(AtomicBool::new(false));
+
+        start_parallel_export(
+            items,
+            tx,
+            cancel_flag,
+            Arc::new(|_: &str, _: u32| -> Vec<u8> { panic!("synthetic render failure") }),
+        )
+        .expect("parallel export worker must start");
+
+        let event = rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("parallel export must report callback failure");
+        match event {
+            ExportEvent::Error(message) => {
+                assert!(message.contains("item 0"));
+                assert!(message.contains("frame 12"));
+            }
+            other => panic!("expected an export error, got {other:?}"),
+        }
+    }
 }
