@@ -1993,6 +1993,11 @@ pub struct Layer {
     pub puppet_pins: Vec<PuppetPin>,
     #[serde(default)]
     pub paint_strokes: Vec<PaintStroke>,
+    /// Persistent Roto Brush source strokes. The generated matte remains an
+    /// editable result, while these strokes let the user refine it after a
+    /// project reload instead of losing the authoring input in egui state.
+    #[serde(default)]
+    pub roto_brush_strokes: Vec<crate::core::roto_brush_engine::RotoStroke>,
 
     /// Blend adjacent source frames when video speed or time-remap lands
     /// between frames. Disabled by default for legacy project parity.
@@ -2146,6 +2151,7 @@ impl Layer {
             masks: Vec::new(),
             puppet_pins: Vec::new(),
             paint_strokes: Vec::new(),
+            roto_brush_strokes: Vec::new(),
             frame_blending: false,
             markers: Vec::new(),
             auto_orient: crate::core::auto_orient::AutoOrientMode::Off,

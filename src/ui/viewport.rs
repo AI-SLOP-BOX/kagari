@@ -1697,6 +1697,20 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             }
             if let Some(sel_li) = app.selection.selected_layer_idx {
                 let stroke_list_id = egui::Id::new(("roto_strokes", sel_li));
+                if ctx
+                    .data(|d| d.get_temp::<Vec<EngineRotoStroke>>(stroke_list_id))
+                    .is_none()
+                {
+                    let persisted_strokes = app
+                        .history
+                        .current()
+                        .active_composition()
+                        .layers
+                        .get(sel_li)
+                        .map(|layer| layer.roto_brush_strokes.clone())
+                        .unwrap_or_default();
+                    ctx.data_mut(|d| d.insert_temp(stroke_list_id, persisted_strokes));
+                }
                 if clear_roto {
                     ctx.data_mut(|d| d.remove::<Vec<EngineRotoStroke>>(stroke_list_id));
                     let mut cleared = app.history.current().clone();
@@ -1706,6 +1720,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                         .get_mut(sel_li)
                     {
                         layer.masks.retain(|mask| mask.name != "Roto Brush Matte");
+                        layer.roto_brush_strokes.clear();
                     }
                     app.commit_project(cleared);
                     app.toasts.info("Roto Brush matte cleared");
@@ -1812,6 +1827,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                                     let mut temp_proj = app.history.current().clone();
                                     let comp = temp_proj.active_composition_mut();
                                     if let Some(layer) = comp.layers.get_mut(sel_li) {
+                                        layer.roto_brush_strokes = all_strokes.clone();
                                         if let Some(mask) = layer
                                             .masks
                                             .iter_mut()
