@@ -172,14 +172,16 @@ fn render_with_cancel<F>(
     cancel_flag: &std::sync::Arc<std::sync::atomic::AtomicBool>,
     render_frame_fn: &F,
     frame_idx: u32,
-) -> Vec<u8>
+) -> Result<Vec<u8>, ()>
 where
     F: Fn(u32) -> Vec<u8>,
 {
     crate::core::software_renderer::set_render_cancel_flag(Some(cancel_flag.clone()));
-    let pixels = render_frame_fn(frame_idx);
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        render_frame_fn(frame_idx)
+    }));
     crate::core::software_renderer::set_render_cancel_flag(None);
-    pixels
+    result.map_err(|_| ())
 }
 
 pub fn start_export_cancelable<F>(
@@ -374,16 +376,33 @@ where
                 // Indexed range keeps output order; install the cooperative
                 // cancel flag on each worker thread (it is thread-local).
                 use rayon::prelude::*;
-                let mut frames: Vec<(u32, Vec<u8>)> = (next_frame..chunk_end)
+                let rendered_frames: Vec<Result<(u32, Vec<u8>), u32>> = (next_frame..chunk_end)
                     .into_par_iter()
                     .map(|frame_idx| {
                         let flag = cancel_flag.clone();
                         crate::core::software_renderer::set_render_cancel_flag(Some(flag));
-                        let pixels = render_frame_fn(frame_idx);
+                        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            render_frame_fn(frame_idx)
+                        }));
                         crate::core::software_renderer::set_render_cancel_flag(None);
-                        (frame_idx, pixels)
+                        result
+                            .map(|pixels| (frame_idx, pixels))
+                            .map_err(|_| frame_idx)
                     })
                     .collect();
+                let mut frames = Vec::with_capacity(rendered_frames.len());
+                for rendered in rendered_frames {
+                    match rendered {
+                        Ok(frame) => frames.push(frame),
+                        Err(frame_idx) => {
+                            let _ = tx.send(ExportEvent::Error(format!(
+                                "Render callback failed at frame {}",
+                                frame_idx
+                            )));
+                            return;
+                        }
+                    }
+                }
                 frames.sort_by_key(|(frame_idx, _)| *frame_idx);
 
                 for (frame_idx, pixels) in frames {
@@ -576,7 +595,17 @@ where
                     return; // guard drops, kills child
                 }
 
-                let pixels = render_with_cancel(&cancel_flag, &render_frame_fn, frame_idx);
+                let pixels = match render_with_cancel(&cancel_flag, &render_frame_fn, frame_idx) {
+                    Ok(pixels) => pixels,
+                    Err(()) => {
+                        let _ = tx.send(ExportEvent::Error(format!(
+                            "Render callback failed during palette pass at frame {}",
+                            frame_idx
+                        )));
+                        let _ = std::fs::remove_file(&palette_path);
+                        return;
+                    }
+                };
                 if pixels.len() != frame_bytes {
                     let _ = tx.send(ExportEvent::Error(format!(
                         "Frame {} pixel data mismatch: expected {} bytes, got {}",
@@ -695,7 +724,17 @@ where
                     return; // guard drops, kills child
                 }
 
-                let pixels = render_with_cancel(&cancel_flag, &render_frame_fn, frame_idx);
+                let pixels = match render_with_cancel(&cancel_flag, &render_frame_fn, frame_idx) {
+                    Ok(pixels) => pixels,
+                    Err(()) => {
+                        let _ = tx.send(ExportEvent::Error(format!(
+                            "Render callback failed during GIF pass at frame {}",
+                            frame_idx
+                        )));
+                        let _ = std::fs::remove_file(&palette_path);
+                        return;
+                    }
+                };
                 if pixels.len() != frame_bytes {
                     let _ = tx.send(ExportEvent::Error(format!(
                         "Frame {} pixel data mismatch: expected {} bytes, got {}",
@@ -882,7 +921,18 @@ pub fn start_png_sequence_export<F>(
                 let _ = tx.send(ExportEvent::Error("Export canceled".to_string()));
                 return;
             }
-            let pixels = render_frame(f);
+            let pixels = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                render_frame(f)
+            })) {
+                Ok(pixels) => pixels,
+                Err(_) => {
+                    let _ = tx.send(ExportEvent::Error(format!(
+                        "Render callback failed at frame {}",
+                        f
+                    )));
+                    return;
+                }
+            };
             let path = dir.join(format!("{}_{:04}.png", stem, f));
             if let Err(e) =
                 image::save_buffer(&path, &pixels, width, height, image::ColorType::Rgba8)
@@ -964,5 +1014,45 @@ mod tests {
             }
             other => panic!("expected an export error, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn render_with_cancel_converts_callback_panic_to_error() {
+        let cancel_flag = Arc::new(AtomicBool::new(false));
+        let result = render_with_cancel(
+            &cancel_flag,
+            &|_: u32| -> Vec<u8> { panic!("synthetic render failure") },
+            3,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn png_sequence_reports_render_callback_failure_to_caller() {
+        let dir = std::env::temp_dir().join(format!(
+            "kagari-png-panic-test-{}",
+            std::process::id()
+        ));
+        let (tx, rx) = std::sync::mpsc::channel();
+        start_png_sequence_export(
+            dir.clone(),
+            "frame".into(),
+            1,
+            1,
+            1,
+            0,
+            tx,
+            Arc::new(AtomicBool::new(false)),
+            |_frame| panic!("synthetic render failure"),
+        );
+
+        let event = rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("PNG export must report callback failure");
+        match event {
+            ExportEvent::Error(message) => assert!(message.contains("frame 0")),
+            other => panic!("expected an export error, got {other:?}"),
+        }
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
