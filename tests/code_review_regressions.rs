@@ -233,6 +233,30 @@ fn value_at_time_and_velocity_sample_the_animated_property() {
 }
 
 #[test]
+fn vector_value_at_time_samples_position_and_scale_properties() {
+    let property = Animatable::new_animated(vec![
+        Keyframe::new(0, [0.0, 0.0], InterpolationType::Linear),
+        Keyframe::new(30, [100.0, 200.0], InterpolationType::Linear),
+    ]);
+    let engine = expression_engine::build_engine();
+    let sampled = expression_engine::eval_v2_with_property(
+        &engine,
+        "valueAtTime(time + 0.25)",
+        [50.0, 100.0],
+        15,
+        30,
+        &property,
+    );
+    assert_eq!(sampled, [75.0, 150.0]);
+
+    let expression = Expression::Raw("valueAtTime(time + 0.25)".into());
+    assert_eq!(
+        expression.evaluate_v2_with_property([50.0, 100.0], 15, 30, &property),
+        [75.0, 150.0]
+    );
+}
+
+#[test]
 fn composition_transform_expression_uses_property_sampling_context() {
     let mut composition = Composition::new("comp".into(), "Comp".into(), 64, 64, 30, 60);
     let mut layer = Layer::new(
@@ -247,12 +271,23 @@ fn composition_transform_expression_uses_property_sampling_context() {
         Keyframe::new(0, 0.0, InterpolationType::Linear),
         Keyframe::new(30, 100.0, InterpolationType::Linear),
     ]);
+    layer.transform.position = Animatable::new_animated(vec![
+        Keyframe::new(0, [0.0, 0.0], InterpolationType::Linear),
+        Keyframe::new(30, [100.0, 200.0], InterpolationType::Linear),
+    ]);
+    layer.transform.position_expression = Some(Expression::Raw("valueAtTime(time + 0.25)".into()));
+    layer.transform.scale = Animatable::new_animated(vec![
+        Keyframe::new(0, [100.0, 100.0], InterpolationType::Linear),
+        Keyframe::new(30, [200.0, 300.0], InterpolationType::Linear),
+    ]);
+    layer.transform.scale_expression = Some(Expression::Raw("valueAtTime(time + 0.25)".into()));
     layer.transform.rotation_expression = Some(Expression::Raw("valueAtTime(time + 0.25)".into()));
     composition.layers.push(layer);
 
-    let rotation = composition
-        .resolve_world_transform(&composition.layers[0], 15)
-        .2;
+    let (position, scale, rotation, _) =
+        composition.resolve_world_transform(&composition.layers[0], 15);
+    assert_eq!(position, [75.0, 150.0]);
+    assert_eq!(scale, [175.0, 250.0]);
     assert_eq!(rotation, 75.0);
 }
 

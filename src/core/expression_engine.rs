@@ -151,8 +151,15 @@ thread_local! {
 #[derive(Clone)]
 struct ValueAtTimeContext {
     current_value: f32,
-    source: Option<Animatable<f32>>,
+    current_vector: Option<[f32; 2]>,
+    source: Option<SampledProperty>,
     fps: f64,
+}
+
+#[derive(Clone)]
+enum SampledProperty {
+    Scalar(Animatable<f32>),
+    Vector(Animatable<[f32; 2]>),
 }
 
 struct ValueAtTimeGuard {
@@ -179,7 +186,7 @@ fn sample_value_at_time(context: &ValueAtTimeContext, time: f64) -> f64 {
     if !time.is_finite() {
         return context.current_value as f64;
     }
-    if let Some(source) = &context.source {
+    if let Some(SampledProperty::Scalar(source)) = &context.source {
         let frame = (time * context.fps) as f32;
         let value = source.value_at_f32(frame);
         if value.is_finite() {
@@ -187,6 +194,19 @@ fn sample_value_at_time(context: &ValueAtTimeContext, time: f64) -> f64 {
         }
     }
     context.current_value as f64
+}
+
+fn sample_vector_at_time(context: &ValueAtTimeContext, time: f64) -> [f32; 2] {
+    if time.is_finite() {
+        if let Some(SampledProperty::Vector(source)) = &context.source {
+            let frame = (time * context.fps) as f32;
+            let value = source.value_at_f32(frame.max(0.0));
+            if value.iter().all(|component| component.is_finite()) {
+                return value;
+            }
+        }
+    }
+    context.current_vector.unwrap_or([context.current_value; 2])
 }
 
 fn with_value_at_time_context<T>(
@@ -197,7 +217,26 @@ fn with_value_at_time_context<T>(
 ) -> T {
     let _guard = ValueAtTimeGuard::install(ValueAtTimeContext {
         current_value: if base.is_finite() { base } else { 0.0 },
-        source,
+        current_vector: None,
+        source: source.map(SampledProperty::Scalar),
+        fps: fps.max(1) as f64,
+    });
+    evaluate()
+}
+
+fn with_vector_value_at_time_context<T>(
+    base: [f32; 2],
+    source: Option<Animatable<[f32; 2]>>,
+    fps: u32,
+    evaluate: impl FnOnce() -> T,
+) -> T {
+    let _guard = ValueAtTimeGuard::install(ValueAtTimeContext {
+        current_value: if base[0].is_finite() { base[0] } else { 0.0 },
+        current_vector: Some([
+            if base[0].is_finite() { base[0] } else { 0.0 },
+            if base[1].is_finite() { base[1] } else { 0.0 },
+        ]),
+        source: source.map(SampledProperty::Vector),
         fps: fps.max(1) as f64,
     });
     evaluate()
@@ -776,32 +815,53 @@ pub fn build_engine() -> Engine {
     });
 
     // --- AE valueAtTime(t): sample a property value at an arbitrary time ---
-    engine.register_fn("valueAtTime", |t: f64| -> f64 {
+    engine.register_fn("valueAtTime", |t: f64| -> Dynamic {
         VALUE_AT_TIME_CONTEXT.with(|slot| {
-            slot.borrow()
-                .as_ref()
-                .map(|context| sample_value_at_time(context, t))
-                .unwrap_or(0.0)
+            let Some(context) = slot.borrow().as_ref().cloned() else {
+                return Dynamic::from_float(0.0);
+            };
+            match context.source {
+                Some(SampledProperty::Vector(_)) => Dynamic::from_array(
+                    sample_vector_at_time(&context, t)
+                        .into_iter()
+                        .map(|component| Dynamic::from_float(component as f64))
+                        .collect(),
+                ),
+                _ => Dynamic::from_float(sample_value_at_time(&context, t)),
+            }
         })
     });
 
     // --- AE velocityAtTime(t): approximate temporal derivative of property at time t ---
-    engine.register_fn("velocityAtTime", |t: f64| -> f64 {
+    engine.register_fn("velocityAtTime", |t: f64| -> Dynamic {
         let dt = 0.001f64;
         if !t.is_finite() {
-            return 0.0;
+            return Dynamic::from_float(0.0);
         }
         VALUE_AT_TIME_CONTEXT.with(|slot| {
             let Some(context) = slot.borrow().as_ref().cloned() else {
-                return 0.0;
+                return Dynamic::from_float(0.0);
             };
+            if matches!(context.source, Some(SampledProperty::Vector(_))) {
+                let before = sample_vector_at_time(&context, t - dt);
+                let after = sample_vector_at_time(&context, t + dt);
+                return Dynamic::from_array(
+                    before
+                        .into_iter()
+                        .zip(after)
+                        .map(|(before, after)| {
+                            Dynamic::from_float(((after - before) as f64) / (2.0 * dt))
+                        })
+                        .collect(),
+                );
+            }
             let before = sample_value_at_time(&context, t - dt);
             let after = sample_value_at_time(&context, t + dt);
             let velocity = (after - before) / (2.0 * dt);
             if velocity.is_finite() {
-                velocity
+                Dynamic::from_float(velocity)
             } else {
-                0.0
+                Dynamic::from_float(0.0)
             }
         })
     });
@@ -1124,6 +1184,23 @@ pub fn eval_f32_with_property(
         .or_else(|| script.contains("velocityAtTime").then(|| source.clone()));
     with_value_at_time_context(base, source, fps, || {
         eval_f32_inner(engine, script, base, frame, fps)
+    })
+}
+
+pub fn eval_v2_with_property(
+    engine: &Engine,
+    script: &str,
+    base: [f32; 2],
+    frame: u32,
+    fps: u32,
+    source: &Animatable<[f32; 2]>,
+) -> [f32; 2] {
+    let source = script
+        .contains("valueAtTime")
+        .then(|| source.clone())
+        .or_else(|| script.contains("velocityAtTime").then(|| source.clone()));
+    with_vector_value_at_time_context(base, source, fps, || {
+        eval_v2(engine, script, base, frame, fps)
     })
 }
 
@@ -1666,6 +1743,22 @@ pub fn eval_v2_with_comp(
                 base
             }
         }
+    })
+}
+
+pub fn eval_v2_with_comp_and_property(
+    script: &str,
+    base: [f32; 2],
+    frame: u32,
+    fps: u32,
+    comp_snap: &CompSnapshot,
+    this_layer: Option<&LayerSnapshot>,
+    source: &Animatable<[f32; 2]>,
+) -> [f32; 2] {
+    let source = (script.contains("valueAtTime") || script.contains("velocityAtTime"))
+        .then(|| source.clone());
+    with_vector_value_at_time_context(base, source, fps, || {
+        eval_v2_with_comp(script, base, frame, fps, comp_snap, this_layer)
     })
 }
 

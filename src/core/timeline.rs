@@ -458,6 +458,21 @@ impl Expression {
             _ => base,
         }
     }
+
+    pub fn evaluate_v2_with_property(
+        &self,
+        base: [f32; 2],
+        frame: u32,
+        fps: u32,
+        source: &Animatable<[f32; 2]>,
+    ) -> [f32; 2] {
+        match self {
+            Expression::Raw(script) => RHAI_ENGINE.with(|engine| {
+                expression_engine::eval_v2_with_property(engine, script, base, frame, fps, source)
+            }),
+            _ => self.evaluate_v2(base, frame, fps),
+        }
+    }
 }
 
 // ─── Transform ─────────────────────────────────────────────────────────────
@@ -561,7 +576,7 @@ impl Transform2D {
                 let loops = self.compute_loop_vals(frame, fps, LoopProp::Position);
                 expression_engine::eval_v2_with_loops(script, base, frame, fps, loops)
             }
-            Some(expr) => expr.evaluate_v2(base, eval_frame, fps),
+            Some(expr) => expr.evaluate_v2_with_property(base, eval_frame, fps, &self.position),
             None => base,
         }
     }
@@ -670,7 +685,7 @@ impl Transform2D {
                 let loops = self.compute_loop_vals(frame, fps, LoopProp::Scale);
                 expression_engine::eval_v2_with_loops(script, base, frame, fps, loops)
             }
-            Some(expr) => expr.evaluate_v2(base, eval_frame, fps),
+            Some(expr) => expr.evaluate_v2_with_property(base, eval_frame, fps, &self.scale),
             None => base,
         }
     }
@@ -2523,26 +2538,28 @@ impl Composition {
             let base_pos = layer.transform.eval_position(frame, fps);
             let pos = raw_script(&layer.transform.position_expression)
                 .map(|s| {
-                    expression_engine::eval_v2_with_comp(
+                    expression_engine::eval_v2_with_comp_and_property(
                         s,
                         base_pos,
                         frame,
                         fps,
                         &comp_snap,
                         this_snap.as_ref(),
+                        &layer.transform.position,
                     )
                 })
                 .unwrap_or(base_pos);
             let base_scale = layer.transform.eval_scale(frame, fps);
             let scale = raw_script(&layer.transform.scale_expression)
                 .map(|s| {
-                    expression_engine::eval_v2_with_comp(
+                    expression_engine::eval_v2_with_comp_and_property(
                         s,
                         base_scale,
                         frame,
                         fps,
                         &comp_snap,
                         this_snap.as_ref(),
+                        &layer.transform.scale,
                     )
                 })
                 .unwrap_or(base_scale);
