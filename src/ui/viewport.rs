@@ -83,18 +83,32 @@ fn software_preview_required(comp: &crate::core::timeline::Composition, frame: u
                 crate::core::timeline::LayerType::AdjustmentLayer
                     | crate::core::timeline::LayerType::Particle { .. }
                     | crate::core::timeline::LayerType::Model3D { .. }
-            ) || (matches!(layer.layer_type, crate::core::timeline::LayerType::Text { .. })
-                && (layer
-                    .text_formatting
-                    .is_some()
-                    || layer
+            ) || matches!(
+                &layer.layer_type,
+                crate::core::timeline::LayerType::Shape {
+                    shape_type:
+                        crate::core::timeline::ShapeType::FreeformBezier { .. },
+                    ..
+                }
+            ) || matches!(
+                &layer.layer_type,
+                crate::core::timeline::LayerType::Shape {
+                    extrusion_depth,
+                    bevel_depth,
+                    ..
+                } if *extrusion_depth > 0.0 || *bevel_depth > 0.0
+            ) || (matches!(
+                layer.layer_type,
+                crate::core::timeline::LayerType::Text { .. }
+            ) && (layer.text_formatting.is_some()
+                || layer
                     .text_animator
                     .as_ref()
                     .is_some_and(|animator| animator.enabled)
-                    || layer
-                        .text_animator_stack
-                        .as_ref()
-                        .is_some_and(|stack| !stack.animators.is_empty())))
+                || layer
+                    .text_animator_stack
+                    .as_ref()
+                    .is_some_and(|stack| !stack.animators.is_empty())))
                 || (dof_enabled && layer.is_3d)
                 || layer.style.drop_shadow.enabled
                 || layer.style.outer_glow.enabled
@@ -3413,6 +3427,54 @@ mod review_regression_tests {
             },
             enabled: true,
         });
+        assert!(software_preview_required(&comp, 0));
+    }
+
+    #[test]
+    fn unsupported_shape_geometry_uses_software_preview() {
+        let mut comp = crate::core::timeline::Composition::new(
+            "comp".to_string(),
+            "Comp".to_string(),
+            320,
+            180,
+            30,
+            30,
+        );
+        let mut layer = crate::core::timeline::Layer::new(
+            "shape".to_string(),
+            "Freeform".to_string(),
+            crate::core::timeline::LayerType::Shape {
+                shape_type: crate::core::timeline::ShapeType::FreeformBezier {
+                    points: vec![[0.0, 0.0], [20.0, 0.0], [10.0, 20.0]],
+                    tangents: vec![([0.0, 0.0], [0.0, 0.0]); 3],
+                    closed: true,
+                },
+                color: [1.0, 0.0, 0.0, 1.0],
+                stroke_color: [0.0, 0.0, 0.0, 0.0],
+                stroke_width: 0.0,
+                fill_type: Default::default(),
+                extrusion_depth: 0.0,
+                bevel_depth: 0.0,
+            },
+            30,
+        );
+        comp.layers.push(layer.clone());
+        assert!(software_preview_required(&comp, 0));
+
+        layer.layer_type = crate::core::timeline::LayerType::Shape {
+            shape_type: crate::core::timeline::ShapeType::Rectangle {
+                width: crate::core::property::Animatable::new_constant(20.0),
+                height: crate::core::property::Animatable::new_constant(20.0),
+                corner_radius: crate::core::property::Animatable::new_constant(0.0),
+            },
+            color: [1.0, 0.0, 0.0, 1.0],
+            stroke_color: [0.0, 0.0, 0.0, 0.0],
+            stroke_width: 0.0,
+            fill_type: Default::default(),
+            extrusion_depth: 2.0,
+            bevel_depth: 0.0,
+        };
+        comp.layers[0] = layer;
         assert!(software_preview_required(&comp, 0));
     }
 }
