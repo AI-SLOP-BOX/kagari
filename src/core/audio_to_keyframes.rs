@@ -15,7 +15,7 @@ pub fn convert_audio_to_keyframes(
     comp: &mut Composition,
     audio_path: &str,
 ) -> Result<String, String> {
-    let buf = AudioBuffer::load_wav(Path::new(audio_path))
+    let buf = AudioBuffer::load_audio(Path::new(audio_path))
         .map_err(|e| format!("Failed to decode audio: {}", e))?;
 
     let fps = comp.fps.max(1);
@@ -101,7 +101,7 @@ pub fn convert_multiband_audio_to_keyframes(
     audio_path: &str,
     options: Option<crate::core::audio_dsp::AudioKeyframeOptions>,
 ) -> Result<String, String> {
-    let buf = AudioBuffer::load_wav(Path::new(audio_path))
+    let buf = AudioBuffer::load_audio(Path::new(audio_path))
         .map_err(|e| format!("Failed to decode audio: {}", e))?;
 
     let fps = comp.fps.max(1);
@@ -171,7 +171,7 @@ pub fn convert_selected_band_to_keyframes(
     audio_path: &str,
     band: crate::core::audio_dsp::AudioExtractBand,
 ) -> Result<String, String> {
-    let buf = AudioBuffer::load_wav(Path::new(audio_path))
+    let buf = AudioBuffer::load_audio(Path::new(audio_path))
         .map_err(|e| format!("Failed to decode audio: {}", e))?;
     let fps = comp.fps.max(1);
     let multiband = crate::core::audio_dsp::extract_multiband_audio_keyframes(

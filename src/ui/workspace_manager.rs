@@ -139,6 +139,10 @@ pub struct SavedWorkspace {
     pub right_panel_width: f32,
     #[serde(default)]
     pub timeline_height: f32,
+    #[serde(default)]
+    pub compact_project_drawer: bool,
+    #[serde(default)]
+    pub compact_inspector_drawer: bool,
 }
 
 impl Default for SavedWorkspace {
@@ -159,6 +163,8 @@ impl Default for SavedWorkspace {
             left_panel_width: 0.0,
             right_panel_width: 0.0,
             timeline_height: 0.0,
+            compact_project_drawer: false,
+            compact_inspector_drawer: false,
         }
     }
 }
@@ -181,6 +187,12 @@ impl SavedWorkspace {
             left_panel_width: panel_width(ctx, "left_panel", true),
             right_panel_width: panel_width(ctx, "right_panel", true),
             timeline_height: panel_width(ctx, "timeline_panel", false),
+            compact_project_drawer: ctx
+                .data(|data| data.get_temp::<bool>(egui::Id::new("compact_project_drawer")))
+                .unwrap_or(false),
+            compact_inspector_drawer: ctx
+                .data(|data| data.get_temp::<bool>(egui::Id::new("compact_inspector_drawer")))
+                .unwrap_or(false),
         }
     }
 
@@ -196,9 +208,40 @@ impl SavedWorkspace {
         app.viewer_maximized = self.viewer_maximized;
         app.show_graph_editor = self.show_graph_editor;
         app.timeline_zoom = self.timeline_zoom;
-        restore_panel_size(app.ui_ctx.as_ref(), "left_panel", self.left_panel_width, true);
-        restore_panel_size(app.ui_ctx.as_ref(), "right_panel", self.right_panel_width, true);
-        restore_panel_size(app.ui_ctx.as_ref(), "timeline_panel", self.timeline_height, false);
+        if let Some(ctx) = app.ui_ctx.as_ref() {
+            ctx.data_mut(|data| {
+                data.insert_temp(
+                    egui::Id::new("compact_project_drawer"),
+                    self.compact_project_drawer,
+                );
+                data.insert_temp(
+                    egui::Id::new("compact_inspector_drawer"),
+                    self.compact_inspector_drawer,
+                );
+                data.insert_temp(workspace_restore_id(), self.clone());
+            });
+            ctx.request_repaint();
+        }
+    }
+
+    fn restore_panel_sizes(&self, ctx: &egui::Context) {
+        restore_panel_size(ctx, "left_panel", self.left_panel_width, true);
+        restore_panel_size(ctx, "right_panel", self.right_panel_width, true);
+        restore_panel_size(ctx, "timeline_panel", self.timeline_height, false);
+    }
+}
+
+fn workspace_restore_id() -> egui::Id {
+    egui::Id::new("pending_workspace_restore")
+}
+
+/// Applies a workspace's persisted egui panel geometry before the panels are
+/// laid out. Applying it from inside a panel closure is too late: egui stores
+/// that panel's measured size again when the closure returns.
+pub fn restore_pending_workspace(ctx: &egui::Context) {
+    let pending = ctx.data_mut(|data| data.remove_temp::<SavedWorkspace>(workspace_restore_id()));
+    if let Some(workspace) = pending {
+        workspace.restore_panel_sizes(ctx);
     }
 }
 
@@ -215,14 +258,11 @@ fn panel_width(ctx: &egui::Context, id: &str, horizontal: bool) -> f32 {
 }
 
 fn restore_panel_size(
-    ctx: Option<&egui::Context>,
+    ctx: &egui::Context,
     id: &str,
     size: f32,
     horizontal: bool,
 ) {
-    let Some(ctx) = ctx else {
-        return;
-    };
     if !size.is_finite() || size <= 0.0 {
         return;
     }
@@ -239,4 +279,47 @@ fn restore_panel_size(
             },
         );
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_workspace_json_defaults_new_drawer_state() {
+        let workspace: SavedWorkspace = serde_json::from_str(r#"{"name":"Legacy"}"#)
+            .expect("legacy workspace should remain readable");
+        assert!(!workspace.compact_project_drawer);
+        assert!(!workspace.compact_inspector_drawer);
+        assert_eq!(workspace.timeline_height, 0.0);
+    }
+
+    #[test]
+    fn pending_workspace_restore_applies_geometry_once() {
+        let ctx = egui::Context::default();
+        ctx.data_mut(|data| {
+            data.insert_temp(
+                workspace_restore_id(),
+                SavedWorkspace {
+                    left_panel_width: 321.0,
+                    right_panel_width: 345.0,
+                    timeline_height: 278.0,
+                    ..Default::default()
+                },
+            );
+        });
+
+        restore_pending_workspace(&ctx);
+
+        assert_eq!(
+            panel_width(&ctx, "left_panel", true),
+            321.0,
+            "left panel width should be restored before layout"
+        );
+        assert_eq!(panel_width(&ctx, "right_panel", true), 345.0);
+        assert_eq!(panel_width(&ctx, "timeline_panel", false), 278.0);
+        assert!(ctx
+            .data_mut(|data| data.remove_temp::<SavedWorkspace>(workspace_restore_id()))
+            .is_none());
+    }
 }

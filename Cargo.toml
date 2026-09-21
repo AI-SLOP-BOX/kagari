@@ -34,6 +34,22 @@ rfd = { version = "0.14", optional = true }
 rayon = "1.8"
 # rodio: audio playback for synced AV preview (gui only)
 rodio = { version = "0.19", optional = true }
+# Symphonia: in-process decoding for imported audio assets and waveform analysis
+symphonia = { version = "0.5.5", default-features = false, features = [
+    "aac",
+    "adpcm",
+    "aiff",
+    "alac",
+    "caf",
+    "flac",
+    "isomp4",
+    "mkv",
+    "mp3",
+    "ogg",
+    "pcm",
+    "vorbis",
+    "wav",
+] }
 # clap: CLI argument parsing
 clap = { version = "4", features = ["derive"], optional = true }
 # png: headless frame export

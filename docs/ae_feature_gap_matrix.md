@@ -40,12 +40,12 @@ is intentionally tracked separately from the core workflow.
 | Color | Curves, levels, LUT, color management, scopes, HDR paths | 🟡 | Broad core coverage; consistent 8/16/32-bit and GPU path parity remains a gap |
 | Effects | Searchable effect library, animated parameters, presets | 🟡 | Large `EffectType` registry and controls; effect-standard parity is explicitly out of scope for exact cloning |
 | Particles / procedural | Particles, lightning, star field, audio spectrum and generators | 🟡 | Engines and render paths exist; authoring, caching, and interaction depth vary by feature |
-| Audio | Import, playback sync, mixing, meters, audio-to-keyframes | 🟡 | WAV-centric path is implemented; broader codec/import and correction workflow need work |
+| Audio | Import, playback sync, mixing, meters, audio-to-keyframes | 🟡 | In-process Symphonia decoding now covers WAV/MP3/FLAC/Ogg/AIFF/MP4-family audio; correction and interchange workflow still need work |
 | Preview | Cached frames, RAM preview, adaptive quality, audio sync | 🟡 | Cache and playback exist; true real-time GPU effect processing is still limited |
 | Render queue | Multiple items, progress, cancellation/failure reporting | ✅ | `core/render_queue.rs`, `ui/render_queue.rs` |
 | Export | FFmpeg video, image/EXR paths, GIF, Lottie, MLT/OTIO-style interchange | 🟡 | Several exporters exist; codec/metadata/alpha compatibility needs broader fixture testing |
 | Plugin/integration | Plug-ins, scripting, interchange with external tools | 🟡 | OFX/SDK bridges and Rhai exist; third-party plug-in compatibility is not complete |
-| Workspaces | Dockable panels, resize, saved workspace layouts | 🟡 | SavedWorkspace already persists panel widths, timeline height, graph mode, and viewer state; visibility/drawer state and reliable restore timing still need coverage |
+| Workspaces | Dockable panels, resize, saved workspace layouts | 🟡 | SavedWorkspace persists panel widths, timeline height, graph mode, viewer state, and compact drawers; restore now runs before panel layout, while full dock visibility/custom panel topology remains narrower than AE |
 | UI operations | Search/command palette, shortcuts, inspector, graph editor, undo/redo | 🟡 | Core paths exist; more real egui event/E2E tests are required for production confidence |
 | Reliability | Bounded caches, crash recovery, deterministic renders, safe file I/O | 🟡 | Strong unit/integration coverage; sanitizer/stress and hostile-project coverage still need expansion |
 
@@ -71,13 +71,16 @@ is intentionally tracked separately from the core workflow.
 
 The next work should follow user-visible leverage and verification cost:
 
-1. Make workspace layouts serializable and restorable for every visible panel.
-2. Add a real footage workflow test covering import → relink/proxy → tracking →
+1. Add a real footage workflow test covering import → relink/proxy → tracking →
    render/export.
-3. Close the GPU preview/export semantic differences with pixel-contract tests.
-4. Expand 3D model/camera/light authoring and its render fixtures.
-5. Strengthen roto/paint propagation and audio correction without requiring an
+2. Close the GPU preview/export semantic differences with pixel-contract tests.
+3. Expand 3D model/camera/light authoring and its render fixtures.
+4. Strengthen roto/paint propagation and audio correction without requiring an
    ML model.
+
+Workspace layout persistence has now been implemented for the geometry and
+compact drawer state listed above; the remaining workspace gap is a richer dock
+topology/visibility model.
 
 This file is intentionally conservative: a module or enum alone does not turn
 the row green.

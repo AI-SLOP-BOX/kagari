@@ -953,6 +953,8 @@ impl KagariApp {
     /// full UI can run headlessly in tests (`_frame` was unused).
     pub fn update_panels(&mut self, ctx: &eframe::egui::Context) {
         use eframe::egui;
+        self.ui_ctx = Some(ctx.clone());
+        crate::ui::workspace_manager::restore_pending_workspace(ctx);
         let opening_was_active = self.startup_animation.is_animating();
         self.startup_animation
             .update(ctx.input(|input| input.unstable_dt));
@@ -1237,7 +1239,6 @@ impl KagariApp {
             ctx.request_repaint_after(std::time::Duration::from_secs_f32(1.0 / effective_fps));
         }
 
-        self.ui_ctx = Some(ctx.clone());
         crate::ui::shortcuts::handle_global_shortcuts(self, ctx, &mut current_frame, total_frames);
         if self.show_home {
             crate::ui::home_screen::draw(self, ctx);

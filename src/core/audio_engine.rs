@@ -6,19 +6,19 @@
 /// - Peak RMS VU meter calculation for audio mixers
 use crate::core::timeline::{Composition, EffectType, Layer, LayerType};
 
-/// Validates that a WAV path is safe to load: rejects path traversal (`..`)
+/// Validates that an audio path is safe to load: rejects path traversal (`..`)
 /// and absolute paths outside the project directory.
 /// Returns `Err(reason)` if the path is suspicious, `Ok(())` if safe.
-pub fn validate_wav_path(path: &str) -> Result<(), String> {
+pub fn validate_audio_path(path: &str) -> Result<(), String> {
     let p = std::path::Path::new(path);
     // Reject empty paths
     if path.is_empty() {
-        return Err("WAV path is empty".into());
+        return Err("audio path is empty".into());
     }
     // Reject paths with .. components (traversal)
     for component in p.components() {
         if matches!(component, std::path::Component::ParentDir) {
-            return Err(format!("WAV path contains '..' traversal: {}", path));
+            return Err(format!("audio path contains '..' traversal: {}", path));
         }
     }
     // Reject absolute paths to sensitive system directories
@@ -27,16 +27,21 @@ pub fn validate_wav_path(path: &str) -> Result<(), String> {
         for prefix in &forbidden {
             if let Ok(canonical) = p.canonicalize() {
                 if canonical.starts_with(prefix) {
-                    return Err(format!("WAV path targets system directory: {}", path));
+                    return Err(format!("audio path targets system directory: {}", path));
                 }
             }
             // If canonicalize fails (path doesn't exist yet), check prefix string
             if p.starts_with(prefix) {
-                return Err(format!("WAV path targets system directory: {}", path));
+                return Err(format!("audio path targets system directory: {}", path));
             }
         }
     }
     Ok(())
+}
+
+/// Backwards-compatible name retained for callers that only accept WAV input.
+pub fn validate_wav_path(path: &str) -> Result<(), String> {
+    validate_audio_path(path)
 }
 
 #[allow(dead_code)]
@@ -131,7 +136,7 @@ impl Default for AudioFrameMeter {
 }
 
 /// Mix audio tracks across all active layers for a given frame window into a 2-channel stereo f32 buffer.
-/// Delegates to `mix_audio_sources_for_frame` for real WAV sampling.
+/// Delegates to `mix_audio_sources_for_frame` for decoded audio sampling.
 #[allow(dead_code)]
 /// Master DSP parameters (passed from UI controls to audio engine).
 #[derive(Debug, Clone)]
@@ -367,6 +372,118 @@ impl AudioBuffer {
         })
     }
 
+    /// Decodes a supported audio container in-process into normalized f32 PCM.
+    /// WAV keeps the strict PCM parser above; compressed and non-WAV formats use
+    /// Symphonia so preview, waveform analysis, and audio keyframes share one path.
+    pub fn load_audio(path: &std::path::Path) -> Result<Self, String> {
+        const MAX_AUDIO_BYTES: u64 = 512 * 1024 * 1024;
+        const MAX_DECODED_SAMPLES: usize = (512 * 1024 * 1024) / std::mem::size_of::<f32>();
+
+        let path_str = path.to_string_lossy();
+        validate_audio_path(&path_str)?;
+        let metadata = std::fs::metadata(path)
+            .map_err(|e| format!("cannot stat audio file: {}", e))?;
+        if metadata.len() > MAX_AUDIO_BYTES {
+            return Err("audio file exceeds the 512 MiB limit".into());
+        }
+        if path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("wav"))
+        {
+            return Self::load_wav(path);
+        }
+
+        use symphonia::core::audio::SampleBuffer;
+        use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
+        use symphonia::core::errors::Error as SymphoniaError;
+        use symphonia::core::formats::FormatOptions;
+        use symphonia::core::io::MediaSourceStream;
+        use symphonia::core::meta::MetadataOptions;
+        use symphonia::core::probe::Hint;
+
+        let file = std::fs::File::open(path)
+            .map_err(|e| format!("cannot open audio file: {}", e))?;
+        let mss = MediaSourceStream::new(Box::new(file), Default::default());
+        let mut hint = Hint::new();
+        if let Some(ext) = path.extension().and_then(|ext| ext.to_str()) {
+            hint.with_extension(ext);
+        }
+        let probed = symphonia::default::get_probe()
+            .format(
+                &hint,
+                mss,
+                &FormatOptions::default(),
+                &MetadataOptions::default(),
+            )
+            .map_err(|e| format!("cannot probe audio file: {}", e))?;
+        let mut format = probed.format;
+        let track = format
+            .tracks()
+            .iter()
+            .find(|track| track.codec_params.codec != CODEC_TYPE_NULL)
+            .ok_or_else(|| "audio file has no supported audio track".to_string())?;
+        let track_id = track.id;
+        let mut decoder = symphonia::default::get_codecs()
+            .make(&track.codec_params, &DecoderOptions::default())
+            .map_err(|e| format!("cannot create audio decoder: {}", e))?;
+        let mut sample_buffer: Option<SampleBuffer<f32>> = None;
+        let mut samples = Vec::new();
+        let mut sample_rate = 0u32;
+        let mut channels = 0u16;
+
+        loop {
+            let packet = match format.next_packet() {
+                Ok(packet) => packet,
+                Err(SymphoniaError::ResetRequired) => break,
+                Err(SymphoniaError::IoError(error))
+                    if error.kind() == std::io::ErrorKind::UnexpectedEof => break,
+                Err(error) => return Err(format!("cannot read audio packet: {}", error)),
+            };
+            if packet.track_id() != track_id {
+                continue;
+            }
+            let decoded = match decoder.decode(&packet) {
+                Ok(decoded) => decoded,
+                Err(SymphoniaError::DecodeError(_)) => continue,
+                Err(SymphoniaError::IoError(_)) => continue,
+                Err(error) => return Err(format!("cannot decode audio packet: {}", error)),
+            };
+            let spec = *decoded.spec();
+            let packet_channels = spec.channels.count();
+            if packet_channels == 0 || packet_channels > u16::MAX as usize {
+                return Err("audio track has an invalid channel count".into());
+            }
+            if sample_buffer.is_none() {
+                let duration = decoded.capacity() as usize;
+                if duration.saturating_mul(packet_channels) > MAX_DECODED_SAMPLES {
+                    return Err("decoded audio exceeds the 512 MiB limit".into());
+                }
+                sample_buffer = Some(SampleBuffer::<f32>::new(decoded.capacity() as u64, spec));
+                sample_rate = spec.rate;
+                channels = packet_channels as u16;
+            }
+            let buffer = sample_buffer
+                .as_mut()
+                .expect("sample buffer initialized above");
+            buffer.copy_interleaved_ref(decoded);
+            let decoded_samples = buffer.samples();
+            if samples.len().saturating_add(decoded_samples.len()) > MAX_DECODED_SAMPLES {
+                return Err("decoded audio exceeds the 512 MiB limit".into());
+            }
+            samples.extend_from_slice(decoded_samples);
+        }
+
+        if samples.is_empty() || sample_rate == 0 || channels == 0 {
+            return Err("audio file contains no decodable samples".into());
+        }
+        Ok(Self {
+            samples,
+            sample_rate,
+            channels,
+        })
+    }
+
     /// Peak amplitude in [0, 1] at a given time offset (± window/2 seconds).
     pub fn peak_at(&self, time_sec: f32, window_sec: f32) -> f32 {
         let start_sample = ((time_sec - window_sec * 0.5).max(0.0) * self.sample_rate as f32)
@@ -489,6 +606,34 @@ mod wav_tests {
 
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    #[test]
+    fn generic_audio_loader_keeps_wav_compatibility() {
+        let dir = std::env::temp_dir().join(format!("kagari_audio_loader_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("tone.wav");
+        write_test_wav(&path, &[0.0, 0.25, -0.25, 0.5], 8000);
+
+        let buf = AudioBuffer::load_audio(&path).expect("generic loader must accept WAV");
+        assert_eq!(buf.sample_rate, 8000);
+        assert_eq!(buf.channels, 1);
+        assert_eq!(buf.samples.len(), 4);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn unsupported_compressed_audio_returns_error_cleanly() {
+        let dir = std::env::temp_dir().join(format!("kagari_audio_bad_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("broken.mp3");
+        std::fs::write(&path, b"not an MP3").unwrap();
+
+        let result = AudioBuffer::load_audio(&path);
+        assert!(result.is_err());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
 
 /// Apply per-layer audio effects (BassTreble) to stereo interleaved samples.
@@ -579,10 +724,10 @@ fn mix_precomp_audio(
                         Some(buf.clone())
                     } else {
                         drop(map);
-                        if validate_wav_path(path).is_err() {
+                        if validate_audio_path(path).is_err() {
                             None
                         } else {
-                            let loaded = AudioBuffer::load_wav(std::path::Path::new(path))
+                            let loaded = AudioBuffer::load_audio(std::path::Path::new(path))
                                 .ok()
                                 .map(|b| std::sync::Arc::new(b.resample(sample_rate)));
                             if let Some(buf) = &loaded {
@@ -629,10 +774,10 @@ fn mix_precomp_audio(
                         Some(buf.clone())
                     } else {
                         drop(map);
-                        if validate_wav_path(w).is_err() {
+                        if validate_audio_path(w).is_err() {
                             None
                         } else {
-                            let loaded = AudioBuffer::load_wav(std::path::Path::new(w))
+                            let loaded = AudioBuffer::load_audio(std::path::Path::new(w))
                                 .ok()
                                 .map(|b| std::sync::Arc::new(b.resample(sample_rate)));
                             if let Some(buf) = &loaded {
@@ -674,11 +819,11 @@ fn mix_precomp_audio(
     }
 }
 
-/// Mixes ALL audio-carrying layers (Audio layers + Video layers with WAVs)
+/// Mixes ALL audio-carrying layers (Audio layers + Video layers with extracted audio)
 /// at the given frame into a stereo buffer, respecting per-layer volume and
 /// active ranges. This is the real backing for the audio mixer UI.
 ///
-/// WAVs are decoded once and cached per path in a thread-local map.
+/// Audio files are decoded once and cached per path in a process-local map.
 pub fn mix_audio_sources_for_frame(
     comp: &Composition,
     frame: u32,
@@ -793,7 +938,7 @@ pub fn mix_audio_sources_for_frame_with_state(
         }
         let time_start = (frame.saturating_sub(layer.in_frame)) as f32 / fps;
 
-        // Source samples: real WAV if present, otherwise silent placeholder
+        // Source samples: decoded audio if present, otherwise silent placeholder
         let source: Option<std::sync::Arc<AudioBuffer>> = match &wav_path {
             Some(p) => {
                 let map = cache.lock().unwrap_or_else(|e| e.into_inner());
@@ -801,10 +946,10 @@ pub fn mix_audio_sources_for_frame_with_state(
                     Some(buf.clone())
                 } else {
                     drop(map);
-                    if validate_wav_path(p).is_err() {
+                    if validate_audio_path(p).is_err() {
                         None
                     } else {
-                        let loaded = AudioBuffer::load_wav(std::path::Path::new(p))
+                        let loaded = AudioBuffer::load_audio(std::path::Path::new(p))
                             .ok()
                             .map(|b| std::sync::Arc::new(b.resample(sample_rate)));
                         if let Some(buf) = &loaded {
@@ -958,10 +1103,10 @@ pub fn mix_audio_sources_for_frame_with_state(
     )
 }
 
-/// Energy-based onset (beat) detection over a WAV file.
+/// Energy-based onset (beat) detection over a supported audio file.
 /// Returns comp-frame indices where transients occur, sorted & deduped.
 pub fn detect_beat_frames(path: &std::path::Path, total_frames: u32, fps: f32) -> Vec<u32> {
-    let Ok(buf) = AudioBuffer::load_wav(path) else {
+    let Ok(buf) = AudioBuffer::load_audio(path) else {
         return Vec::new();
     };
     if buf.samples.is_empty() || total_frames == 0 || fps <= 0.0 {

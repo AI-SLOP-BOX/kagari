@@ -1387,7 +1387,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                 let key = egui::Id::new(("tl_waveform", apath.as_str()));
                                 let cached: std::sync::Arc<(Vec<f32>, f32)> = ui.ctx().data_mut(|d| {
                                     d.get_temp::<std::sync::Arc<(Vec<f32>, f32)>>(key).unwrap_or_else(|| {
-                                        let built = crate::core::audio_engine::AudioBuffer::load_wav(std::path::Path::new(&apath))
+                                        let built = crate::core::audio_engine::AudioBuffer::load_audio(std::path::Path::new(&apath))
                                             .map(|b| {
                                                 let dur = b.samples.len() as f32
                                                     / (b.sample_rate.max(1) as f32 * b.channels.max(1) as f32);
@@ -1650,7 +1650,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                     d.get_temp::<std::sync::Arc<Vec<f32>>>(wav_id)
                                         .unwrap_or_else(|| {
                                             let peaks = std::cell::RefCell::new(Vec::new());
-                                            if let Ok(buf) = crate::core::audio_engine::AudioBuffer::load_wav(std::path::Path::new(wav_path)) {
+                                            if let Ok(buf) = crate::core::audio_engine::AudioBuffer::load_audio(std::path::Path::new(wav_path)) {
                                                 *peaks.borrow_mut() = buf.waveform_peaks(200);
                                             }
                                             let peaks = std::sync::Arc::new(peaks.into_inner());
@@ -1684,7 +1684,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                     d.get_temp::<std::sync::Arc<Vec<f32>>>(wav_id)
                                         .unwrap_or_else(|| {
                                             let peaks = std::cell::RefCell::new(Vec::new());
-                                            if let Ok(buf) = crate::core::audio_engine::AudioBuffer::load_wav(std::path::Path::new(path)) {
+                                            if let Ok(buf) = crate::core::audio_engine::AudioBuffer::load_audio(std::path::Path::new(path)) {
                                                 *peaks.borrow_mut() = buf.waveform_peaks(200);
                                             }
                                             let peaks = std::sync::Arc::new(peaks.into_inner());
@@ -1734,7 +1734,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                 let key = egui::Id::new(("tl_wf_exp", apath.as_str()));
                                 let cached: std::sync::Arc<(Vec<f32>, f32)> = ui.ctx().data_mut(|d| {
                                     d.get_temp::<std::sync::Arc<(Vec<f32>, f32)>>(key).unwrap_or_else(|| {
-                                        let built = crate::core::audio_engine::AudioBuffer::load_wav(std::path::Path::new(&apath))
+                                        let built = crate::core::audio_engine::AudioBuffer::load_audio(std::path::Path::new(&apath))
                                             .map(|b| {
                                                 let dur = b.samples.len() as f32
                                                     / (b.sample_rate.max(1) as f32 * b.channels.max(1) as f32);
