@@ -20,7 +20,7 @@ is intentionally tracked separately from the core workflow.
 |---|---|---:|---|
 | Project files | Project save/open, recovery, autosave | ✅ | `core/project.rs`, `core/autosave.rs`, `ui/project_io.rs` |
 | Multiple compositions | Nested compositions and composition settings | ✅ | `core/timeline.rs`, precomp workflow and cache |
-| Media import | Still images, image sequences, video, audio, vector assets | 🟡 | Image/video/audio paths exist; format coverage and missing-media relink still need hardening |
+| Media import | Still images, image sequences, video, audio, vector assets | 🟡 | Image/video/audio paths exist; relink now recurses through PreComps and rebuilds missing WebP caches, while sequence/codec coverage and proxy workflows still need hardening |
 | Layer model | Solids, footage, text, shapes, cameras, lights, nulls, audio | ✅ | `LayerType` and `Layer` in `core/timeline.rs` |
 | Layer timing | In/out, trimming, time stretch, reverse, freeze, time remap | ✅ | `Layer` time-remap operations and timeline actions |
 | Keyframes | Linear, hold, Bezier, spatial animation, value/speed graph | ✅ | `core/keyframe.rs`, `ui/graph_editor.rs`; pointer drag + one-step Undo is now covered by an egui integration test |
@@ -53,8 +53,9 @@ is intentionally tracked separately from the core workflow.
 
 1. **Preview/render architecture** — GPU preview and CPU/export still have
    paths that do not share the same effect execution and cache behavior.
-2. **Real footage workflows** — relink, proxy, image-sequence/codec coverage,
-   and tracker/roto propagation need complete user journeys rather than only
+2. **Real footage workflows** — relink is now connected through nested PreComps
+   with cache rebuilds, but proxy, image-sequence/codec coverage, and
+   tracker/roto propagation still need complete user journeys rather than only
    engine tests.
 3. **3D production workflow** — imported models, cameras, lights, depth,
    shadows, DOF, and compositing need one connected authoring path.

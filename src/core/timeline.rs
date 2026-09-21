@@ -3307,31 +3307,53 @@ impl Project {
             }
         }
 
-        // Relink layers across all compositions
-        for comp in &mut self.compositions {
+        fn relink_comp(
+            comp: &mut Composition,
+            find_file: &dyn Fn(&str) -> Option<String>,
+            relinked_count: &mut usize,
+        ) {
             for layer in &mut comp.layers {
                 match &mut layer.layer_type {
                     LayerType::Image { path } => {
                         if let Some(new_p) = find_file(path) {
                             *path = new_p;
-                            relinked_count += 1;
+                            *relinked_count += 1;
                         }
                     }
-                    LayerType::Video { source, .. } => {
+                    LayerType::Video {
+                        source,
+                        frames_dir,
+                        frame_count,
+                        audio_wav,
+                        ..
+                    } => {
                         if let Some(new_p) = find_file(source) {
                             *source = new_p;
-                            relinked_count += 1;
+                            // The old extraction belongs to the missing source. Force the
+                            // relink pass to decode the newly found movie before rendering.
+                            frames_dir.clear();
+                            *frame_count = 0;
+                            *audio_wav = None;
+                            *relinked_count += 1;
                         }
                     }
                     LayerType::Audio { path, .. } => {
                         if let Some(new_p) = find_file(path) {
                             *path = new_p;
-                            relinked_count += 1;
+                            *relinked_count += 1;
                         }
                     }
                     _ => {}
                 }
             }
+            for sub in &mut comp.sub_compositions {
+                relink_comp(sub, find_file, relinked_count);
+            }
+        }
+
+        // Relink layers across the full precomp tree, not only the top-level comps.
+        for comp in &mut self.compositions {
+            relink_comp(comp, &find_file, &mut relinked_count);
         }
 
         relinked_count
@@ -3511,6 +3533,56 @@ mod tests {
         );
         assert_eq!(solid.media_path(), None);
         assert!(!solid.is_media_missing());
+    }
+
+    #[test]
+    fn relink_recurses_into_precomps_and_invalidates_video_cache() {
+        let root = std::env::temp_dir().join(format!(
+            "kagari_relink_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock should be after unix epoch")
+                .as_nanos()
+        ));
+        let footage_dir = root.join("Footage");
+        std::fs::create_dir_all(&footage_dir).expect("test footage directory should be created");
+        let footage = footage_dir.join("nested.mp4");
+        std::fs::write(&footage, b"test placeholder").expect("test footage should be created");
+
+        let mut project = Project::default();
+        let mut sub = Composition::new("sub".into(), "Nested".into(), 64, 64, 24, 24);
+        sub.layers.push(Layer::new(
+            "video".into(),
+            "Nested Video".into(),
+            LayerType::Video {
+                source: "/missing/nested.mp4".into(),
+                frames_dir: "/old/cache/frames".into(),
+                frame_count: 12,
+                audio_wav: Some("/old/cache/audio.wav".into()),
+                speed: 1.0,
+            },
+            24,
+        ));
+        project.compositions[0].sub_compositions.push(sub);
+
+        assert_eq!(project.resolve_relative_footage_paths(&root), 1);
+        let LayerType::Video {
+            source,
+            frames_dir,
+            frame_count,
+            audio_wav,
+            ..
+        } = &project.compositions[0].sub_compositions[0].layers[0].layer_type
+        else {
+            panic!("expected nested video layer");
+        };
+        assert_eq!(source, &footage.to_string_lossy());
+        assert!(frames_dir.is_empty());
+        assert_eq!(*frame_count, 0);
+        assert!(audio_wav.is_none());
+
+        std::fs::remove_dir_all(root).expect("test footage should be removable");
     }
 
     #[test]

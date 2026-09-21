@@ -240,6 +240,20 @@ pub fn open_project_from_path(app: &mut KagariApp, path: &std::path::Path) -> Re
             app.toasts
                 .info(format!("Auto-relinked {} missing footage items", relinked));
         }
+        let cache_root = project_dir.join(".kagari_media").join("relinked");
+        let (refreshed, errors) =
+            crate::core::video_import::refresh_missing_video_caches(&mut project, &cache_root);
+        if refreshed > 0 {
+            app.toasts.info(format!(
+                "Rebuilt {} relinked video cache{}",
+                refreshed,
+                if refreshed == 1 { "" } else { "s" }
+            ));
+        }
+        for error in errors {
+            app.toasts
+                .warning(format!("Could not rebuild relinked video cache: {error}"));
+        }
     }
 
     app.history = crate::core::history::ProjectHistory::new(project);

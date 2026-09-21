@@ -288,6 +288,112 @@ pub fn import_video(src_path: &str, dest_dir: &Path, fps: f32) -> Result<VideoAs
     })
 }
 
+/// Rebuilds missing decoded frame caches for video layers after a project
+/// relink. The source movie is the authoritative media; an old or missing
+/// `frames_dir` must never leave a relinked layer showing stale footage.
+///
+/// Returns the number of refreshed layers and non-fatal errors for sources
+/// that could not be decoded. Errors are collected so one offline clip does
+/// not prevent the rest of a project from opening.
+pub fn refresh_missing_video_caches(
+    project: &mut crate::core::timeline::Project,
+    destination_root: &Path,
+) -> (usize, Vec<String>) {
+    use std::collections::HashMap;
+
+    let mut cache: HashMap<(String, u32), VideoAsset> = HashMap::new();
+    let mut refreshed = 0usize;
+    let mut errors = Vec::new();
+    for comp in &mut project.compositions {
+        refresh_missing_video_caches_in_comp(
+            comp,
+            destination_root,
+            &mut cache,
+            &mut refreshed,
+            &mut errors,
+        );
+    }
+    (refreshed, errors)
+}
+
+fn refresh_missing_video_caches_in_comp(
+    comp: &mut crate::core::timeline::Composition,
+    destination_root: &Path,
+    cache: &mut std::collections::HashMap<(String, u32), VideoAsset>,
+    refreshed: &mut usize,
+    errors: &mut Vec<String>,
+) {
+    for layer in &mut comp.layers {
+        let Some((source, frames_dir, frame_count)) = (match &layer.layer_type {
+            crate::core::timeline::LayerType::Video {
+                source,
+                frames_dir,
+                frame_count,
+                ..
+            } => Some((source.clone(), frames_dir.clone(), *frame_count)),
+            _ => None,
+        }) else {
+            continue;
+        };
+
+        let first_frame = frame_path_in_dir(&frames_dir, 0);
+        let last_frame = frame_path_in_dir(&frames_dir, frame_count.saturating_sub(1));
+        let cache_is_valid = frame_count > 0 && first_frame.is_file() && last_frame.is_file();
+        if cache_is_valid || !Path::new(&source).is_file() {
+            continue;
+        }
+
+        let key = (source.clone(), comp.fps.max(1));
+        let asset = if let Some(existing) = cache.get(&key) {
+            existing.clone()
+        } else {
+            let stem = Path::new(&source)
+                .file_stem()
+                .map(|value| value.to_string_lossy())
+                .unwrap_or_else(|| std::borrow::Cow::Borrowed("video"));
+            let safe_stem: String = stem
+                .chars()
+                .map(|ch| {
+                    if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_') {
+                        ch
+                    } else {
+                        '_'
+                    }
+                })
+                .collect();
+            let destination = destination_root.join(format!("{}_{}fps", safe_stem, comp.fps.max(1)));
+            match import_video(&source, &destination, comp.fps.max(1) as f32) {
+                Ok(asset) => {
+                    cache.insert(key.clone(), asset.clone());
+                    asset
+                }
+                Err(error) => {
+                    errors.push(format!("{}: {}", source, error));
+                    continue;
+                }
+            }
+        };
+
+        if let crate::core::timeline::LayerType::Video {
+            source: layer_source,
+            frames_dir: layer_frames_dir,
+            frame_count: layer_frame_count,
+            audio_wav: layer_audio_wav,
+            ..
+        } = &mut layer.layer_type
+        {
+            *layer_source = asset.source_path;
+            *layer_frames_dir = asset.frames_dir;
+            *layer_frame_count = asset.frame_count;
+            *layer_audio_wav = asset.audio_wav;
+            *refreshed += 1;
+        }
+    }
+    for sub in &mut comp.sub_compositions {
+        refresh_missing_video_caches_in_comp(sub, destination_root, cache, refreshed, errors);
+    }
+}
+
 /// Returns the extracted frame path (WebP preferred, PNG fallback), clamped to
 /// the imported sequence range.
 pub fn frame_path(asset: &VideoAsset, frame: u32) -> PathBuf {
@@ -374,5 +480,78 @@ mod tests {
         assert!(first.is_dir());
         assert!(second.is_dir());
         std::fs::remove_dir_all(root).expect("test directories should be removable");
+    }
+
+    #[test]
+    fn refresh_rebuilds_missing_video_cache_from_source() {
+        if !ffmpeg_available() {
+            return;
+        }
+
+        let root = std::env::temp_dir().join(format!(
+            "kagari_video_relink_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock should be after unix epoch")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("test root should be created");
+        let source = root.join("clip.mp4");
+        let encoded = Command::new("ffmpeg")
+            .args([
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=c=red:s=32x32:r=10",
+                "-t",
+                "0.2",
+                "-an",
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+            ])
+            .arg(&source)
+            .output()
+            .expect("ffmpeg should be executable when reported available");
+        if !encoded.status.success() {
+            std::fs::remove_dir_all(root).expect("test root should be removable");
+            return;
+        }
+
+        let mut project = crate::core::timeline::Project::default();
+        project.compositions[0].layers.push(crate::core::timeline::Layer::new(
+            "video".into(),
+            "Clip".into(),
+            crate::core::timeline::LayerType::Video {
+                source: source.to_string_lossy().into_owned(),
+                frames_dir: root.join("missing").to_string_lossy().into_owned(),
+                frame_count: 0,
+                audio_wav: None,
+                speed: 1.0,
+            },
+            30,
+        ));
+
+        let cache_root = root.join("cache");
+        let (refreshed, errors) = refresh_missing_video_caches(&mut project, &cache_root);
+        assert_eq!(refreshed, 1);
+        assert!(errors.is_empty(), "unexpected cache errors: {errors:?}");
+        let crate::core::timeline::LayerType::Video {
+            frames_dir,
+            frame_count,
+            audio_wav,
+            ..
+        } = &project.compositions[0].layers.last().unwrap().layer_type
+        else {
+            panic!("expected refreshed video layer");
+        };
+        assert!(*frame_count > 0);
+        assert!(frame_path_in_dir(frames_dir, 0).is_file());
+        assert!(audio_wav.is_none());
+
+        std::fs::remove_dir_all(root).expect("test root should be removable");
     }
 }
