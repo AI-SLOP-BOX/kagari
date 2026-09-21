@@ -38,7 +38,7 @@ pub fn parse_svg_path_data(d: &str) -> Result<Vec<MaskVertex>, String> {
     let mut vertices: Vec<MaskVertex> = Vec::new();
     let mut curr_pos = [0.0f32, 0.0f32];
 
-    let tokens = tokenize_svg_path(d);
+    let tokens = expand_repeated_svg_commands(tokenize_svg_path(d));
 
     let mut i = 0;
     let mut last_cubic_control: Option<[f32; 2]> = None;
@@ -346,6 +346,81 @@ fn is_svg_path_command(character: char) -> bool {
             | 'Z'
             | 'z'
     )
+}
+
+fn svg_command_arity(command: char) -> Option<usize> {
+    match command {
+        'M' | 'm' | 'L' | 'l' | 'T' | 't' => Some(2),
+        'H' | 'h' | 'V' | 'v' => Some(1),
+        'C' | 'c' => Some(6),
+        'S' | 's' | 'Q' | 'q' => Some(4),
+        'Z' | 'z' => Some(0),
+        _ => None,
+    }
+}
+
+/// Expands SVG's implicit repeated parameter groups into explicit commands.
+/// For example `M0 0 10 0 10 10` becomes `M0 0 L10 0 L10 10`, which keeps
+/// the main parser small while matching the grammar emitted by Illustrator.
+fn expand_repeated_svg_commands(tokens: Vec<String>) -> Vec<String> {
+    let mut expanded = Vec::with_capacity(tokens.len());
+    let mut index = 0;
+    while index < tokens.len() {
+        let Some(command) = tokens[index]
+            .chars()
+            .next()
+            .filter(|_| tokens[index].len() == 1)
+        else {
+            index += 1;
+            continue;
+        };
+        if !is_svg_path_command(command) {
+            index += 1;
+            continue;
+        }
+        index += 1;
+        let Some(arity) = svg_command_arity(command) else {
+            while index < tokens.len() && !is_svg_command_token(&tokens[index]) {
+                index += 1;
+            }
+            continue;
+        };
+        expanded.push(command.to_string());
+        if arity == 0 {
+            continue;
+        }
+
+        let mut first_group = true;
+        while index < tokens.len() && !is_svg_command_token(&tokens[index]) {
+            if index + arity > tokens.len()
+                || tokens[index..index + arity]
+                    .iter()
+                    .any(|token| is_svg_command_token(token))
+            {
+                break;
+            }
+            if !first_group {
+                let repeated_command = if matches!(command, 'M' | 'm') {
+                    if command == 'M' {
+                        'L'
+                    } else {
+                        'l'
+                    }
+                } else {
+                    command
+                };
+                expanded.push(repeated_command.to_string());
+            }
+            expanded.extend(tokens[index..index + arity].iter().cloned());
+            index += arity;
+            first_group = false;
+        }
+    }
+    expanded
+}
+
+fn is_svg_command_token(token: &str) -> bool {
+    token.len() == 1 && token.chars().next().is_some_and(is_svg_path_command)
 }
 
 /// Extracts all vector shapes from an SVG file string.
@@ -775,6 +850,25 @@ mod tests {
         assert_eq!(verts.len(), 2);
         assert_eq!(verts[0].position, [10.0, -20.0]);
         assert_eq!(verts[1].position, [30.0, -40.0]);
+    }
+
+    #[test]
+    fn test_parse_svg_path_expands_repeated_move_and_line_groups() {
+        let verts = parse_svg_path_data("M0 0 10 0 10 10 L20 10 20 20")
+            .expect("repeated SVG coordinate groups should parse");
+        assert_eq!(
+            verts
+                .iter()
+                .map(|vertex| vertex.position)
+                .collect::<Vec<_>>(),
+            vec![
+                [0.0, 0.0],
+                [10.0, 0.0],
+                [10.0, 10.0],
+                [20.0, 10.0],
+                [20.0, 20.0]
+            ]
+        );
     }
 
     #[test]
