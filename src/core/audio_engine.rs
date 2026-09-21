@@ -1041,16 +1041,29 @@ pub fn mix_composition_to_wav(
         return None;
     }
 
-    let dir = std::env::temp_dir();
-    let path = dir.join(format!("kagari_mix_{}.wav", std::process::id()));
-    let data_len = (all_samples.len() * 2) as u32;
-    let byte_rate = sample_rate * 2 * 2;
+    let data_len = all_samples
+        .len()
+        .checked_mul(2)
+        .and_then(|size| u32::try_from(size).ok())?;
+    let riff_size = 36u32.checked_add(data_len)?;
+    let byte_rate = sample_rate.checked_mul(2)?.checked_mul(2)?;
     let block_align = 4u16;
     let bits_per_sample = 16u16;
 
-    let mut f = std::fs::File::create(&path).ok()?;
+    static MIX_FILE_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let sequence = MIX_FILE_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let path = std::env::temp_dir().join(format!(
+        "kagari_mix_{}_{}.wav",
+        std::process::id(),
+        sequence
+    ));
+    let mut f = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+        .ok()?;
     f.write_all(b"RIFF").ok()?;
-    f.write_all(&(36 + data_len).to_le_bytes()).ok()?;
+    f.write_all(&riff_size.to_le_bytes()).ok()?;
     f.write_all(b"WAVE").ok()?;
     f.write_all(b"fmt ").ok()?;
     f.write_all(&16u32.to_le_bytes()).ok()?;
@@ -1186,6 +1199,37 @@ mod multitrack_tests {
         assert_eq!(audio.sample_rate, 48_000);
         assert_eq!(audio.samples.len(), 30 * 1_600 * 2);
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn concurrent_mixes_receive_distinct_output_paths() {
+        let comp = Composition::new("c".into(), "Concurrent mix".into(), 64, 64, 30, 2);
+        let handles: Vec<_> = (0..2)
+            .map(|_| {
+                let comp = comp.clone();
+                std::thread::spawn(move || {
+                    mix_composition_to_wav(
+                        &comp,
+                        0,
+                        2,
+                        48_000,
+                        None,
+                        &MasterDspParams::bypass(),
+                    )
+                    .expect("concurrent mix must produce a WAV")
+                })
+            })
+            .collect();
+        let paths: Vec<_> = handles
+            .into_iter()
+            .map(|handle| handle.join().expect("mix worker must not panic"))
+            .collect();
+
+        assert_ne!(paths[0], paths[1]);
+        for path in paths {
+            assert!(path.is_file());
+            let _ = std::fs::remove_file(path);
+        }
     }
 
     #[test]
