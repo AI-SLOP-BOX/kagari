@@ -4,6 +4,38 @@ use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
 
+fn classify_imported_media(path: &std::path::Path) -> ProjectItemType {
+    let file_path = path.to_string_lossy().into_owned();
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(str::to_ascii_lowercase)
+        .unwrap_or_default();
+    if matches!(
+        extension.as_str(),
+        "mp4" | "mov" | "mkv" | "webm" | "avi" | "m4v" | "mpeg" | "mpg" | "ts" | "m2ts" | "av1" | "ivf"
+    ) {
+        ProjectItemType::Video {
+            path: file_path,
+            duration_sec: 10.0,
+        }
+    } else if matches!(
+        extension.as_str(),
+        "wav" | "mp3" | "m4a" | "aac" | "flac" | "ogg" | "aiff" | "aif"
+    ) {
+        ProjectItemType::Audio {
+            path: file_path,
+            duration_sec: 10.0,
+        }
+    } else {
+        ProjectItemType::Image {
+            path: file_path,
+            width: 1920,
+            height: 1080,
+        }
+    }
+}
+
 fn project_icon_action(
     ui: &mut egui::Ui,
     id: &'static str,
@@ -125,7 +157,11 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
             if let Some(path) = rfd::FileDialog::new()
                 .add_filter(
                     "Media Footage",
-                    &["png", "jpg", "jpeg", "webp", "wav", "mp3", "mp4"],
+                    &[
+                        "png", "jpg", "jpeg", "webp", "avif", "wav", "mp3", "m4a", "flac",
+                        "ogg", "aiff", "mp4", "mov", "mkv", "webm", "avi", "m4v", "mpeg", "mpg",
+                        "ts", "m2ts", "av1", "ivf",
+                    ],
                 )
                 .pick_file()
             {
@@ -365,21 +401,8 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
                 .unwrap_or_default()
                 .to_string_lossy()
                 .to_string();
-            let file_path = path.to_string_lossy().to_string();
             let item_count = temp_project.assets.len() + 1;
-
-            let item_type = if file_name.ends_with(".wav") || file_name.ends_with(".mp3") {
-                ProjectItemType::Audio {
-                    path: file_path,
-                    duration_sec: 10.0,
-                }
-            } else {
-                ProjectItemType::Image {
-                    path: file_path,
-                    width: 1920,
-                    height: 1080,
-                }
-            };
+            let item_type = classify_imported_media(&path);
 
             temp_project.assets.push(ProjectItem::new(
                 format!("imported_{}", item_count),
@@ -645,6 +668,41 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::classify_imported_media;
+    use crate::core::timeline::ProjectItemType;
+    use std::path::Path;
+
+    #[test]
+    fn project_panel_classifies_video_containers_as_video_assets() {
+        for extension in ["mp4", "MOV", "webm", "mkv", "av1"] {
+            assert!(matches!(
+                classify_imported_media(Path::new(&format!("clip.{extension}"))),
+                ProjectItemType::Video { .. }
+            ));
+        }
+    }
+
+    #[test]
+    fn project_panel_classifies_audio_formats_without_case_sensitive_suffixes() {
+        for extension in ["wav", "MP3", "m4a", "flac", "aiff"] {
+            assert!(matches!(
+                classify_imported_media(Path::new(&format!("take.{extension}"))),
+                ProjectItemType::Audio { .. }
+            ));
+        }
+    }
+
+    #[test]
+    fn project_panel_keeps_unknown_media_as_image_fallback() {
+        assert!(matches!(
+            classify_imported_media(Path::new("still.webp")),
+            ProjectItemType::Image { .. }
+        ));
+    }
+}
+
 /// One row of the asset list; shared by root listing and folder bins.
 #[allow(clippy::too_many_arguments)]
 fn draw_asset_row(
@@ -730,7 +788,11 @@ fn draw_asset_row(
                 if let Some(path) = rfd::FileDialog::new()
                     .add_filter(
                         "Media Footage",
-                        &["png", "jpg", "jpeg", "webp", "wav", "mp3", "mp4"],
+                        &[
+                            "png", "jpg", "jpeg", "webp", "avif", "wav", "mp3", "m4a", "flac",
+                            "ogg", "aiff", "mp4", "mov", "mkv", "webm", "avi", "m4v", "mpeg", "mpg",
+                            "ts", "m2ts", "av1", "ivf",
+                        ],
                     )
                     .pick_file()
                 {
