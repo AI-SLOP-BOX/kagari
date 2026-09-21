@@ -1963,7 +1963,7 @@ pub fn draw_graph_editor(
                 let channel_drag_id = egui::Id::new(("effect_channel_drag", &layer.id, &graph_prop));
                 let active_channel_drag: Option<GraphKeyframeDrag> = ui.ctx().data(|d| d.get_temp(channel_drag_id));
                 for (index, (frame, value)) in channel_keys.iter().enumerate() {
-                    let drag_display = active_channel_drag.filter(|drag| drag.current_frame == *frame);
+                    let drag_display = active_channel_drag.filter(|drag| drag.anchor_id == index);
                     let display_frame = drag_display.map(|drag| drag.current_frame).unwrap_or(*frame);
                     let display_value = drag_display.map(|drag| drag.current_value).unwrap_or(*value);
                     // Use the frame identity for egui IDs. An array index is
@@ -2066,8 +2066,7 @@ pub fn draw_graph_editor(
             let active_drag: Option<GraphKeyframeDrag> = ui.ctx().data(|d| d.get_temp(drag_state_id));
 
             for (kf_idx, kf_frame, kf_val) in &kf_positions {
-                let drag_display = active_drag
-                    .filter(|drag| drag.current_frame == *kf_frame);
+                let drag_display = active_drag.filter(|drag| drag.anchor_id == *kf_idx);
                 let display_frame = drag_display.map(|drag| drag.current_frame).unwrap_or(*kf_frame);
                 let display_value = drag_display.map(|drag| drag.current_value).unwrap_or(*kf_val);
                 let pt = egui::pos2(frame_to_x(display_frame), val_to_y(display_value));
@@ -2082,7 +2081,7 @@ pub fn draw_graph_editor(
                     );
                 });
                 let anchor_token = active_drag
-                    .filter(|drag| drag.current_frame == *kf_frame)
+                    .filter(|drag| drag.anchor_id == *kf_idx)
                     .map(|drag| drag.original_frame as usize)
                     .unwrap_or(*kf_idx);
                 let anchor_resp = ui.interact(
