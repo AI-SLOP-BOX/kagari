@@ -358,6 +358,22 @@ fn wheel_widget(ui: &mut egui::Ui, label: &str, arr: &mut [f32; 3]) -> bool {
 }
 
 pub fn draw_lumetri_color(app: &mut KagariApp, ui: &mut egui::Ui) {
+    let histogram_pixels = {
+        let comp = app.history.current().active_composition();
+        let width = 128u32;
+        let height = ((width * comp.height.max(1)) / comp.width.max(1)).clamp(24, 96);
+        crate::core::software_renderer::render_frame_to_pixels(
+            comp,
+            app.playback.current_frame,
+            width,
+            height,
+            0.0,
+            0,
+        )
+    };
+    let histogram = crate::core::color_correction::compute_luma_histogram(&histogram_pixels);
+    let histogram_peak = histogram.iter().copied().max().unwrap_or(0).max(1) as f32;
+
     // ── 📊 Live 256-Bin Luma & RGB Histogram Analyzer HUD ──
     ui.group(|ui| {
         ui.horizontal(|ui| {
@@ -385,12 +401,14 @@ pub fn draw_lumetri_color(app: &mut KagariApp, ui: &mut egui::Ui) {
         let bin_w = histo_w / bins as f32;
 
         for i in 0..bins {
-            let norm_x = i as f32 / bins as f32;
-            // Simulated real-time luma distribution wave
-            let luma_val = ((norm_x * 4.0 - 1.5).sin().abs() * 0.7
-                + (norm_x * 8.0).cos().abs() * 0.3)
-                .clamp(0.05, 0.95);
+            let start = i * 256 / bins;
+            let end = ((i + 1) * 256 / bins).max(start + 1).min(256);
+            let sample_count: u32 = histogram[start..end].iter().sum();
+            let luma_val = (sample_count as f32 / histogram_peak)
+                .sqrt()
+                .clamp(0.0, 1.0);
             let bar_h = luma_val * histo_h;
+            let norm_x = i as f32 / bins as f32;
 
             let bx = h_rect.left() + i as f32 * bin_w;
             let by = h_rect.bottom() - bar_h;
@@ -423,17 +441,37 @@ pub fn draw_lumetri_color(app: &mut KagariApp, ui: &mut egui::Ui) {
                 .color(colors::ACCENT_CYAN),
         );
         ui.small("1-Tap Apply Trend Gradient Ramps:");
+        let mut picked_ramp: Option<LookPreset> = None;
         ui.horizontal(|ui| {
             if ui.button("⚡ Cyberpunk Pink/Cyan").clicked() {
-                // Color ramp apply trigger
+                picked_ramp = Some((
+                    "Cyberpunk Pink/Cyan",
+                    [-20.0, 8.0, 28.0],
+                    [18.0, -10.0, 24.0],
+                    [30.0, -6.0, 18.0],
+                ));
             }
             if ui.button("🌅 Sunset Gold").clicked() {
-                // Sunset ramp apply trigger
+                picked_ramp = Some((
+                    "Sunset Gold",
+                    [28.0, 10.0, -18.0],
+                    [16.0, 4.0, -8.0],
+                    [-6.0, -2.0, 22.0],
+                ));
             }
             if ui.button("🌊 Deep Ocean").clicked() {
-                // Deep Ocean ramp apply trigger
+                picked_ramp = Some((
+                    "Deep Ocean",
+                    [-18.0, 2.0, 30.0],
+                    [-10.0, 0.0, 18.0],
+                    [4.0, 8.0, 24.0],
+                ));
             }
         });
+        if let Some((name, shadows, midtones, highlights)) = picked_ramp {
+            write_cb(app, shadows, midtones, highlights, true);
+            app.toasts.info(format!("Applied ramp '{name}'"));
+        }
     });
 
     ui.add_space(6.0);
