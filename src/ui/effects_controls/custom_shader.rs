@@ -132,12 +132,12 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
                     );
                 } else {
                     ui.label(
-                        egui::RichText::new("GPU-only custom WGSL")
+                        egui::RichText::new("CPU fallback unavailable")
                             .small()
                             .color(colors::ACCENT_YELLOW),
                     )
                     .on_hover_text(
-                        "Arbitrary WGSL is validated for GPU use; CPU preview/export supports the built-in templates only.",
+                        "Arbitrary WGSL is validated for syntax only; CPU preview/export supports the built-in templates only.",
                     );
                 }
 
