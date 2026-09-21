@@ -73,11 +73,15 @@ fn insert_imported_svg_masks(
     app.modify_project(|project| {
         let comp = project.active_composition_mut();
         let layer_id = comp.next_layer_id("svg");
+        let fill_color = paths
+            .iter()
+            .find_map(|path| path.fill_color)
+            .unwrap_or([1.0, 1.0, 1.0, 1.0]);
         let mut layer = crate::core::timeline::Layer::new(
             layer_id,
             name.clone(),
             crate::core::timeline::LayerType::Solid {
-                color: [1.0, 1.0, 1.0, 1.0],
+                color: fill_color,
             },
             comp.duration_frames,
         );
