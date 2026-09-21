@@ -288,6 +288,137 @@ pub fn import_video(src_path: &str, dest_dir: &Path, fps: f32) -> Result<VideoAs
     })
 }
 
+/// Import a numbered still-image sequence through the same WebP frame cache
+/// used by video footage. The selected file determines the directory, prefix,
+/// and extension; siblings with the same prefix are sorted by numeric suffix
+/// and rewritten as contiguous `frame_%05d.webp` files.
+pub fn import_image_sequence(
+    src_path: &Path,
+    dest_dir: &Path,
+    fps: f32,
+) -> Result<VideoAsset, String> {
+    if !fps.is_finite() || fps < 1.0 || fps > MAX_IMPORT_FPS {
+        return Err(format!(
+            "fps must be finite and between 1 and {}",
+            MAX_IMPORT_FPS
+        ));
+    }
+    if !src_path.is_file() {
+        return Err(format!("source file not found: {}", src_path.display()));
+    }
+    let extension = src_path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(str::to_ascii_lowercase)
+        .ok_or_else(|| "image sequence source has no extension".to_string())?;
+    if !matches!(extension.as_str(), "png" | "jpg" | "jpeg" | "bmp" | "tga" | "webp") {
+        return Err(format!("unsupported image sequence format: .{extension}"));
+    }
+    let stem = src_path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| "image sequence source has no valid filename".to_string())?;
+    let split_at = stem
+        .char_indices()
+        .rev()
+        .find(|(_, ch)| !ch.is_ascii_digit())
+        .map(|(index, ch)| index + ch.len_utf8())
+        .ok_or_else(|| "image sequence filename must end with frame digits".to_string())?;
+    let prefix = &stem[..split_at];
+    if prefix.is_empty() || stem[split_at..].is_empty() {
+        return Err("image sequence filename must contain a prefix and frame digits".to_string());
+    }
+    let _source_frame: u32 = stem[split_at..]
+        .parse()
+        .map_err(|_| "image sequence frame number is out of range".to_string())?;
+    let parent = src_path
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+
+    let mut frames: Vec<(u32, PathBuf)> = std::fs::read_dir(parent)
+        .map_err(|error| format!("could not scan image sequence directory: {error}"))?
+        .flatten()
+        .filter_map(|entry| {
+            let path = entry.path();
+            let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+            if ext != extension {
+                return None;
+            }
+            let candidate_stem = path.file_stem()?.to_str()?;
+            if !candidate_stem.starts_with(prefix) {
+                return None;
+            }
+            let suffix = &candidate_stem[prefix.len()..];
+            let frame = suffix.parse::<u32>().ok()?;
+            Some((frame, path))
+        })
+        .collect();
+    frames.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+    frames.dedup_by_key(|(frame, _)| *frame);
+    if frames.is_empty() || !frames.iter().any(|(_, path)| path == src_path) {
+        return Err(format!(
+            "no numbered image sequence found for {}",
+            src_path.display()
+        ));
+    }
+    if frames.len() > MAX_IMPORT_FRAMES as usize {
+        return Err(format!(
+            "image sequence contains too many frames (limit {})",
+            MAX_IMPORT_FRAMES
+        ));
+    }
+    let (width, height) = image::image_dimensions(&frames[0].1)
+        .map_err(|error| format!("could not read image sequence dimensions: {error}"))?;
+    if width == 0
+        || height == 0
+        || width > MAX_IMPORT_DIMENSION
+        || height > MAX_IMPORT_DIMENSION
+    {
+        return Err(format!(
+            "image sequence dimensions must be within {}x{}",
+            MAX_IMPORT_DIMENSION, MAX_IMPORT_DIMENSION
+        ));
+    }
+
+    let import_dir = create_unique_import_dir(dest_dir)?;
+    let frames_dir = import_dir.join("frames");
+    if let Err(error) = std::fs::create_dir_all(&frames_dir) {
+        let _ = std::fs::remove_dir_all(&import_dir);
+        return Err(format!("failed to create image sequence cache: {error}"));
+    }
+    for (output_index, (_, source)) in frames.iter().enumerate() {
+        let image = match image::open(source) {
+            Ok(image) => image,
+            Err(error) => {
+                let _ = std::fs::remove_dir_all(&import_dir);
+                return Err(format!(
+                    "could not decode sequence frame {}: {error}",
+                    source.display()
+                ));
+            }
+        };
+        let target = frames_dir.join(format!("frame_{output_index:05}.webp"));
+        if let Err(error) = image.save_with_format(&target, image::ImageFormat::WebP) {
+            let _ = std::fs::remove_dir_all(&import_dir);
+            return Err(format!(
+                "could not encode sequence frame {}: {error}",
+                source.display()
+            ));
+        }
+    }
+
+    Ok(VideoAsset {
+        source_path: src_path.to_string_lossy().into_owned(),
+        frames_dir: frames_dir.to_string_lossy().into_owned(),
+        frame_count: frames.len() as u32,
+        fps,
+        width,
+        height,
+        audio_wav: None,
+    })
+}
+
 /// Rebuilds missing decoded frame caches for video layers after a project
 /// relink. The source movie is the authoritative media; an old or missing
 /// `frames_dir` must never leave a relinked layer showing stale footage.
@@ -480,6 +611,39 @@ mod tests {
         assert!(first.is_dir());
         assert!(second.is_dir());
         std::fs::remove_dir_all(root).expect("test directories should be removable");
+    }
+
+    #[test]
+    fn image_sequence_import_reindexes_frames_as_webp() {
+        let root = std::env::temp_dir().join(format!(
+            "kagari_image_sequence_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock should be after unix epoch")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("test root should be created");
+        for frame in [1u32, 2, 4] {
+            let image = image::RgbaImage::from_pixel(
+                8,
+                4,
+                image::Rgba([frame as u8, 20, 40, 255]),
+            );
+            image
+                .save(root.join(format!("shot_{frame:04}.png")))
+                .expect("source frame should be writable");
+        }
+
+        let source = root.join("shot_0002.png");
+        let asset = import_image_sequence(&source, &root.join("cache"), 24.0)
+            .expect("numbered stills should import");
+        assert_eq!(asset.frame_count, 3);
+        assert!(frame_path(&asset, 0).ends_with("frame_00000.webp"));
+        assert!(frame_path(&asset, 2).is_file());
+        assert_eq!(image::image_dimensions(frame_path(&asset, 1)).unwrap(), (8, 4));
+
+        std::fs::remove_dir_all(root).expect("test root should be removable");
     }
 
     #[test]

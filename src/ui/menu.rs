@@ -23,6 +23,47 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
     draw_studio_header(app, ctx);
 }
 
+fn insert_imported_sequence(
+    app: &mut crate::KagariApp,
+    asset: crate::core::video_import::VideoAsset,
+    name: String,
+) {
+    let (comp_w, comp_h, comp_duration) = {
+        let comp = app.history.current().active_composition();
+        (comp.width as f32, comp.height as f32, comp.duration_frames)
+    };
+    let fit = ((comp_w / asset.width.max(1) as f32)
+        .min(comp_h / asset.height.max(1) as f32))
+        .min(1.0)
+        * 100.0;
+    app.modify_project(|p| {
+        let comp = p.active_composition_mut();
+        let layer_id = comp.next_layer_id("image_sequence");
+        let mut layer = crate::core::timeline::Layer::new(
+            layer_id,
+            name.clone(),
+            crate::core::timeline::LayerType::Video {
+                source: asset.source_path.clone(),
+                frames_dir: asset.frames_dir.clone(),
+                frame_count: asset.frame_count,
+                audio_wav: None,
+                speed: 1.0,
+            },
+            comp_duration,
+        );
+        layer.transform.position = crate::core::property::Animatable::new_constant([
+            comp_w * 0.5,
+            comp_h * 0.5,
+        ]);
+        layer.transform.scale = crate::core::property::Animatable::new_constant([fit, fit]);
+        comp.layers.push(layer);
+    });
+    app.toasts.info(format!(
+        "Imported image sequence: {} ({} frames)",
+        name, asset.frame_count
+    ));
+}
+
 fn draw_reference_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context) {
     egui::TopBottomPanel::top("studio_header")
         .exact_height(68.0)
@@ -546,6 +587,37 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                             comp.layers.push(layer);
                         });
                         app.toasts.info(format!("Imported image: {}", name));
+                    }
+                    ui.close_menu();
+                }
+                if ui.button("Import Image Sequence...").clicked() {
+                    if let Some(path) = rfd::FileDialog::new()
+                        .add_filter("Image Sequence", &["png", "jpg", "jpeg", "bmp", "tga", "webp"])
+                        .pick_file()
+                    {
+                        let fps = app.history.current().active_composition().fps.max(1) as f32;
+                        let name = path
+                            .file_stem()
+                            .map(|value| value.to_string_lossy().to_string())
+                            .unwrap_or_else(|| "image_sequence".to_string());
+                        let destination = std::env::temp_dir()
+                            .join("kagari_media")
+                            .join("image_sequences")
+                            .join(&name);
+                        app.toasts.info(format!(
+                            "Importing image sequence '{}' as WebP frames...",
+                            name
+                        ));
+                        match crate::core::video_import::import_image_sequence(
+                            &path,
+                            &destination,
+                            fps,
+                        ) {
+                            Ok(asset) => insert_imported_sequence(app, asset, name),
+                            Err(error) => app.toasts.error(format!(
+                                "Image sequence import failed: {error}"
+                            )),
+                        }
                     }
                     ui.close_menu();
                 }
