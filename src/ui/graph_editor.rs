@@ -523,6 +523,10 @@ fn effect_parameter_channel_keyframes(layer: &Layer, property: &str) -> Vec<(u32
                 continue;
             }
             return match parameter {
+                crate::core::effect_params::ParamRefRef::Scalar(track) => track
+                    .keyframes()
+                    .map(|keys| keys.iter().map(|key| (key.frame, key.value)).collect())
+                    .unwrap_or_default(),
                 crate::core::effect_params::ParamRefRef::Vec2(track) => track
                     .keyframes()
                     .map(|keys| {
@@ -547,7 +551,6 @@ fn effect_parameter_channel_keyframes(layer: &Layer, property: &str) -> Vec<(u32
                             .collect()
                     })
                     .unwrap_or_default(),
-                _ => vec![],
             };
         }
     }
@@ -1597,6 +1600,7 @@ pub fn draw_graph_editor(
                     .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value[ci])).collect())
                     .unwrap_or_default()
             }
+            p if is_effect_property(p) => effect_parameter_channel_keyframes(layer, p),
             _ => vec![],
         };
 
@@ -1723,19 +1727,8 @@ pub fn draw_graph_editor(
                                     .unwrap_or_default()
                             }
                             p if is_effect_property(p) => {
-                                parse_effect_property(p)
-                                    .and_then(|(effect_id, label, _)| {
-                                        layer.effects.iter().find(|effect| effect.id == effect_id).and_then(|effect| {
-                                            effect.effect_type.animatable_params_ref().into_iter().find_map(|(name, parameter)| {
-                                                (name == label).then_some(match parameter {
-                                                    crate::core::effect_params::ParamRefRef::Scalar(track) => track.keyframes().map(|k| k.iter().map(|kf| (kf.frame, kf.value)).collect()).unwrap_or_default(),
-                                                    _ => vec![],
-                                                })
-                                            })
-                                        })
-                                    })
-                                    .unwrap_or_default()
-                            },
+                                effect_parameter_channel_keyframes(layer, p)
+                            }
                             _ => vec![],
                         };
                         let near_anchor = anchor_pts.iter().any(|&(f, v)| {
