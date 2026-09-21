@@ -20,7 +20,7 @@ is intentionally tracked separately from the core workflow.
 |---|---|---:|---|
 | Project files | Project save/open, recovery, autosave | ✅ | `core/project.rs`, `core/autosave.rs`, `ui/project_io.rs` |
 | Multiple compositions | Nested compositions and composition settings | ✅ | `core/timeline.rs`, precomp workflow and cache |
-| Media import | Still images, image sequences, video, audio, vector assets | 🟡 | Image/video/audio paths exist; relink now recurses through PreComps and rebuilds missing WebP caches, and layer proxies work in preview; sequence/codec coverage and background proxy generation still need hardening |
+| Media import | Still images, image sequences, video, audio, vector assets | 🟡 | Image/video/audio paths exist; relink now recurses through PreComps and rebuilds missing WebP caches, layer proxies work in preview, and common compressed audio/video extensions enter through both project import and drag/drop; image-sequence authoring, vector import, and background proxy generation still need hardening |
 | Layer model | Solids, footage, text, shapes, cameras, lights, nulls, audio | ✅ | `LayerType` and `Layer` in `core/timeline.rs` |
 | Layer timing | In/out, trimming, time stretch, reverse, freeze, time remap | ✅ | `Layer` time-remap operations and timeline actions |
 | Keyframes | Linear, hold, Bezier, spatial animation, value/speed graph | ✅ | `core/keyframe.rs`, `ui/graph_editor.rs`; pointer drag + one-step Undo is now covered by an egui integration test |
@@ -34,13 +34,13 @@ is intentionally tracked separately from the core workflow.
 | Text | Fonts, tracking, leading, alignment, text-on-path, text animation | 🟡 | Rasterizer and text animator exist; advanced typography/layout compatibility is incomplete |
 | Shapes | Shape layers, fills/strokes, boolean paths, repeater/modifiers, extrusion | 🟡 | Shape engines exist; shape editing and renderer parity need more end-to-end tests |
 | 3D layers | 3D transforms, cameras, lights, depth, shadows, DOF | 🟡 | `advanced_3d_engine.rs`, camera/light UI; model import and scene workflows are narrower than AE |
-| Motion tracking | Point tracking, planar tracking, camera solve, stabilization | 🟡 | Engines and tracker panel exist; applying/repairing tracks across real footage needs more workflow tests |
+| Motion tracking | Point tracking, planar tracking, camera solve, stabilization | 🟡 | Point/quad tracking, animated Corner Pin, target-aware stabilization, and 3D camera solving are connected to the tracker panel; real-footage workflow coverage, planar confidence UX, and production-quality solve accuracy still need work |
 | Roto / paint | Roto Brush, paint, clone, eraser, puppet | 🟡 | Tools and engines are present; temporal propagation/brush quality are not AE-level |
 | Keying | Chroma/linear key, matte cleanup, spill-like workflows | 🟡 | Keying modules and controls exist; production-grade edge handling still needs validation |
 | Color | Curves, levels, LUT, color management, scopes, HDR paths | 🟡 | Broad core coverage; consistent 8/16/32-bit and GPU path parity remains a gap |
 | Effects | Searchable effect library, animated parameters, presets | 🟡 | Large `EffectType` registry and controls; effect-standard parity is explicitly out of scope for exact cloning |
 | Particles / procedural | Particles, lightning, star field, audio spectrum and generators | 🟡 | Engines and render paths exist; authoring, caching, and interaction depth vary by feature |
-| Audio | Import, playback sync, mixing, meters, audio-to-keyframes | 🟡 | In-process Symphonia decoding now covers WAV/MP3/FLAC/Ogg/AIFF/MP4-family audio; correction and interchange workflow still need work |
+| Audio | Import, playback sync, mixing, meters, audio-to-keyframes | 🟡 | In-process Symphonia decoding now covers WAV/MP3/FLAC/Ogg/AIFF/CAF/MP4-family audio, and project assets can be inserted as real audio layers; correction and interchange workflow still need work |
 | Preview | Cached frames, RAM preview, adaptive quality, audio sync | 🟡 | Cache and playback exist; true real-time GPU effect processing is still limited |
 | Render queue | Multiple items, progress, cancellation/failure reporting | ✅ | `core/render_queue.rs`, `ui/render_queue.rs` |
 | Export | FFmpeg video, image/EXR paths, GIF, Lottie, MLT/OTIO-style interchange | 🟡 | Several exporters exist; codec/metadata/alpha compatibility needs broader fixture testing |
@@ -55,7 +55,7 @@ is intentionally tracked separately from the core workflow.
    paths that do not share the same effect execution and cache behavior.
 2. **Real footage workflows** — relink is now connected through nested PreComps
    with cache rebuilds, and preview proxy selection is connected, but
-   image-sequence/codec coverage, background proxy generation, and tracker/roto
+   image-sequence authoring, background proxy generation, and tracker/roto
    propagation still need complete user journeys rather than only engine tests.
 3. **3D production workflow** — imported models, cameras, lights, depth,
    shadows, DOF, and compositing need one connected authoring path.
@@ -73,7 +73,7 @@ is intentionally tracked separately from the core workflow.
 The next work should follow user-visible leverage and verification cost:
 
 1. Add a real footage workflow test covering import → relink/proxy → tracking →
-   render/export.
+   render/export, including a compressed audio layer inserted from the project bin.
 2. Close the GPU preview/export semantic differences with pixel-contract tests.
 3. Expand 3D model/camera/light authoring and its render fixtures.
 4. Strengthen roto/paint propagation and audio correction without requiring an
