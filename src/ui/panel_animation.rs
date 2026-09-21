@@ -29,6 +29,22 @@ impl PanelAnimation {
     }
 
     pub fn update(&mut self, dt: f32) {
+        if !self.target.is_finite() {
+            self.target = 0.0;
+        }
+        if !self.progress.is_finite() {
+            self.progress = 0.0;
+        }
+        if !self.speed.is_finite() || self.speed < 0.0 {
+            self.speed = 0.0;
+        }
+        self.target = self.target.clamp(0.0, 1.0);
+        self.progress = self.progress.clamp(0.0, 1.0);
+        let dt = if dt.is_finite() {
+            dt.clamp(0.0, 0.25)
+        } else {
+            0.0
+        };
         if (self.progress - self.target).abs() < 0.001 {
             self.progress = self.target;
             self.is_open = self.target >= 1.0;
@@ -101,6 +117,55 @@ mod tests {
         assert_eq!(animation.target, 1.0);
         assert!(!animation.is_open);
         assert!(animation.is_animating());
+    }
+
+    #[test]
+    fn test_update_sanitizes_invalid_state_and_frame_delta() {
+        let mut animation = PanelAnimation::new_opening();
+        animation.progress = f32::NAN;
+        animation.target = f32::INFINITY;
+        animation.speed = f32::NEG_INFINITY;
+        animation.update(f32::NAN);
+        assert!(animation.progress.is_finite());
+        assert!(animation.target.is_finite());
+        assert!(animation.speed.is_finite());
+        assert!((0.0..=1.0).contains(&animation.progress));
+        assert!((0.0..=1.0).contains(&animation.target));
+    }
+
+    #[test]
+    fn test_irregular_frame_deltas_never_overshoot() {
+        let mut animation = PanelAnimation::new_opening();
+        for dt in [0.0, 0.001, 0.25, -1.0, 0.016, 0.033, 10.0, 0.008] {
+            animation.update(dt);
+            assert!(animation.progress.is_finite());
+            assert!((0.0..=1.0).contains(&animation.progress));
+        }
+        animation.set_open(false);
+        for dt in [f32::INFINITY, 0.016, 0.25, 0.004, 0.032] {
+            animation.update(dt);
+            assert!(animation.progress.is_finite());
+            assert!((0.0..=1.0).contains(&animation.progress));
+        }
+    }
+
+    #[test]
+    fn test_reversing_mid_flight_converges_to_latest_target() {
+        let mut animation = PanelAnimation::new_opening();
+        animation.update(0.08);
+        assert!(animation.progress > 0.0 && animation.progress < 1.0);
+        animation.set_open(false);
+        for _ in 0..120 {
+            animation.update(1.0 / 60.0);
+        }
+        assert_eq!(animation.progress, 0.0);
+        assert!(!animation.is_open);
+        animation.set_open(true);
+        for _ in 0..120 {
+            animation.update(1.0 / 60.0);
+        }
+        assert_eq!(animation.progress, 1.0);
+        assert!(animation.is_open);
     }
 
     #[test]

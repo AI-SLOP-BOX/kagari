@@ -1624,4 +1624,51 @@ mod tests {
         drive_frames(&mut app, 2);
         assert!(app.show_home, "home must stay up without input");
     }
+
+    #[test]
+    fn startup_animation_survives_extreme_sizes_and_irregular_frame_times() {
+        let mut app = KagariApp::default();
+        app.show_home = true;
+        app.home_dir = std::env::temp_dir();
+        let ctx = eframe::egui::Context::default();
+        let sizes = [
+            (1536.0, 1024.0),
+            (900.0, 700.0),
+            (640.0, 480.0),
+            (320.0, 240.0),
+            (1.0, 1.0),
+            (2400.0, 1400.0),
+        ];
+
+        for frame in 0..40 {
+            let (width, height) = sizes[frame % sizes.len()];
+            let dt = match frame {
+                0 => 0.0,
+                1 => 0.25,
+                2 => 0.001,
+                3 => 0.033,
+                _ if frame % 7 == 0 => 0.05,
+                _ => 1.0 / 60.0,
+            };
+            let _ = ctx.run(
+                eframe::egui::RawInput {
+                    screen_rect: Some(eframe::egui::Rect::from_min_size(
+                        eframe::egui::Pos2::ZERO,
+                        eframe::egui::vec2(width, height),
+                    )),
+                    predicted_dt: dt,
+                    ..Default::default()
+                },
+                |ctx| {
+                    crate::ui::theme::configure_ae_theme(ctx);
+                    app.update_panels(ctx);
+                },
+            );
+            assert!(app.startup_animation.progress.is_finite());
+            assert!((0.0..=1.0).contains(&app.startup_animation.progress));
+        }
+
+        assert_eq!(app.startup_animation.progress, 1.0);
+        assert!(!app.startup_animation.is_animating());
+    }
 }
