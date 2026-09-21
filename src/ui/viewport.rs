@@ -114,6 +114,18 @@ fn software_preview_required(comp: &crate::core::timeline::Composition, frame: u
                     .as_ref()
                     .is_some_and(|stack| !stack.animators.is_empty())))
                 || (dof_enabled && layer.is_3d)
+                // The GPU shader currently implements only these seven blend
+                // modes. Unsupported modes must not silently render as Normal.
+                || !matches!(
+                    layer.blend_mode,
+                    crate::core::timeline::BlendMode::Normal
+                        | crate::core::timeline::BlendMode::Multiply
+                        | crate::core::timeline::BlendMode::Screen
+                        | crate::core::timeline::BlendMode::Overlay
+                        | crate::core::timeline::BlendMode::Add
+                        | crate::core::timeline::BlendMode::Darken
+                        | crate::core::timeline::BlendMode::Lighten
+                )
                 || layer.style.drop_shadow.enabled
                 || layer.style.outer_glow.enabled
                 || layer.style.inner_glow.enabled
@@ -3492,5 +3504,21 @@ mod review_regression_tests {
             *extrusion_depth = 0.0;
         }
         assert!(software_preview_required(&comp, 0));
+
+        let mut blend_comp = comp.clone();
+        if let crate::core::timeline::LayerType::Shape { stroke_width, .. } =
+            &mut blend_comp.layers[0].layer_type
+        {
+            *stroke_width = 0.0;
+        }
+        if let crate::core::timeline::LayerType::Shape { extrusion_depth, .. } =
+            &mut blend_comp.layers[0].layer_type
+        {
+            *extrusion_depth = 0.0;
+        }
+        blend_comp.layers[0].blend_mode = crate::core::timeline::BlendMode::Difference;
+        assert!(software_preview_required(&blend_comp, 0));
+        blend_comp.layers[0].blend_mode = crate::core::timeline::BlendMode::Normal;
+        assert!(!software_preview_required(&blend_comp, 0));
     }
 }
