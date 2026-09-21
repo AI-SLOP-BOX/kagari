@@ -2127,6 +2127,12 @@ fn draw_reference_render_narrow(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
     let start = egui::Rect::from_min_size(egui::pos2(queue.right() - 55.0, queue.top() + 5.0), egui::vec2(50.0, 19.0));
     ui.painter().rect(start, 3.0, colors::ACCENT_BLUE, egui::Stroke::NONE);
     ui.painter().text(start.center(), egui::Align2::CENTER_CENTER, "Start Render", egui::FontId::proportional(6.0), egui::Color32::WHITE);
+    if ui.interact(add, egui::Id::new("reference-render-narrow-add"), egui::Sense::click()).clicked() {
+        queue_active_composition(app);
+    }
+    if ui.interact(start, egui::Id::new("reference-render-narrow-start"), egui::Sense::click()).clicked() {
+        start_active_composition_export(app, ctx);
+    }
     let header_y = queue.top() + 29.0;
     for (x, label) in [(queue.left() + 28.0, "Composition"), (queue.left() + 108.0, "Settings"), (queue.left() + 201.0, "Output"), (queue.right() - 37.0, "Status")] {
         ui.painter().text(egui::pos2(x, header_y), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(5.0), colors::TEXT_MUTED);
@@ -2159,6 +2165,25 @@ fn draw_reference_render_narrow(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
     ui.allocate_space(egui::vec2(294.0, 260.0));
 }
 
+fn queue_active_composition(app: &mut KagariApp) -> bool {
+    let comp_name = app.history.current().active_composition().name.clone();
+    if app.render_queue_items.contains(&comp_name) {
+        return false;
+    }
+    app.render_queue_items.push(comp_name.clone());
+    app.render_item_status
+        .insert(comp_name, crate::app_state::QueueItemStatus::Queued);
+    app.toasts.info("Composition added to render queue");
+    true
+}
+
+fn start_active_composition_export(app: &mut KagariApp, ctx: &egui::Context) {
+    if !app.export.is_exporting {
+        let comp_name = app.history.current().active_composition().name.clone();
+        crate::ui::export_dialog::start_comp_export(app, ctx, &comp_name);
+    }
+}
+
 fn draw_reference_render_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui::Context) {
     let compact = ui.available_height() < 900.0;
     ui.painter().rect_filled(ui.max_rect(), 0.0, egui::Color32::from_rgb(11, 19, 26));
@@ -2180,18 +2205,12 @@ fn draw_reference_render_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui
                 ui.label(egui::RichText::new("Render Queue").size(if narrow { 12.0 } else { 24.0 }).strong());
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.add(egui::Button::new(egui::RichText::new(if started { "Rendering..." } else { "✦ Start Render" }).size(if narrow { 8.0 } else { 12.0 }).color(egui::Color32::WHITE)).fill(colors::ACCENT_BLUE).min_size(egui::vec2(if narrow { 54.0 } else { 0.0 }, if narrow { 20.0 } else { 0.0 })).rounding(5.0)).clicked() && !app.export.is_exporting {
-                        let comp_name = app.history.current().active_composition().name.clone();
-                        crate::ui::export_dialog::start_comp_export(app, ctx, &comp_name);
+                        start_active_composition_export(app, ctx);
                         started = app.export.is_exporting;
                     }
                     ui.add_space(if narrow { 4.0 } else { 8.0 });
                     if ui.add(egui::Button::new(egui::RichText::new("+ Add to Queue").size(if narrow { 8.0 } else { 12.0 })).min_size(egui::vec2(if narrow { 58.0 } else { 0.0 }, if narrow { 20.0 } else { 0.0 })).rounding(5.0)).clicked() {
-                        let comp_name = app.history.current().active_composition().name.clone();
-                        if !app.render_queue_items.contains(&comp_name) {
-                            app.render_queue_items.push(comp_name.clone());
-                            app.render_item_status.insert(comp_name, crate::app_state::QueueItemStatus::Queued);
-                            app.toasts.info("Composition added to render queue");
-                        }
+                        queue_active_composition(app);
                     }
                 });
             });
@@ -4691,5 +4710,58 @@ mod tests {
         let (text, _, active) = task_summary(&app);
         assert!(!active);
         assert!(text.contains("No background tasks"));
+    }
+
+    #[test]
+    fn render_queue_action_deduplicates_active_composition() {
+        let mut app = KagariApp::default();
+        assert!(queue_active_composition(&mut app));
+        assert!(!queue_active_composition(&mut app));
+        assert_eq!(app.render_queue_items.len(), 1);
+        assert_eq!(app.render_item_status.len(), 1);
+    }
+
+    #[test]
+    fn narrow_render_add_button_updates_real_queue_state() {
+        let mut app = KagariApp::default();
+        let ctx = egui::Context::default();
+        set_home_nav(&ctx, HomeNav::Render);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(338.0, 296.0));
+
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(screen),
+                ..Default::default()
+            },
+            |ctx| draw(&mut app, ctx),
+        );
+        let _ = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(screen),
+                events: vec![
+                    egui::Event::PointerMoved(egui::pos2(190.0, 29.0)),
+                    egui::Event::PointerButton {
+                        pos: egui::pos2(190.0, 29.0),
+                        button: egui::PointerButton::Primary,
+                        pressed: true,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                    egui::Event::PointerButton {
+                        pos: egui::pos2(190.0, 29.0),
+                        button: egui::PointerButton::Primary,
+                        pressed: false,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ],
+                ..Default::default()
+            },
+            |ctx| draw(&mut app, ctx),
+        );
+
+        assert_eq!(app.render_queue_items.len(), 1);
+        assert!(app.render_item_status.values().all(|status| matches!(
+            status,
+            crate::app_state::QueueItemStatus::Queued
+        )));
     }
 }

@@ -2005,7 +2005,7 @@ fn apply_one_ctx(
 mod tests {
     use super::*;
     use crate::core::property::Animatable;
-    use crate::core::timeline::{Effect, EffectType};
+    use crate::core::timeline::{Composition, Effect, EffectType};
 
     fn solid_layer(w: u32, h: u32, r: u8, g: u8, b: u8) -> Vec<u8> {
         let mut px = vec![0u8; (w * h * 4) as usize];
@@ -2069,6 +2069,119 @@ mod tests {
             30,
         );
         assert_eq!(compound_blur, original);
+    }
+
+    fn patterned_layer(width: u32, height: u32) -> Vec<u8> {
+        let mut pixels = vec![0u8; (width * height * 4) as usize];
+        for y in 0..height {
+            for x in 0..width {
+                let i = ((y * width + x) * 4) as usize;
+                pixels[i] = (x * 13).min(255) as u8;
+                pixels[i + 1] = (y * 13).min(255) as u8;
+                pixels[i + 2] = 96;
+                pixels[i + 3] = 255;
+            }
+        }
+        pixels
+    }
+
+    fn source_map_composition(width: u32, height: u32) -> Composition {
+        let mut comp = Composition::new(
+            "source-map-effects".into(),
+            "Source map effects".into(),
+            width,
+            height,
+            30,
+            30,
+        );
+        comp.background_color = [0.0, 0.0, 0.0, 0.0];
+        let mut source = crate::core::timeline::Layer::new(
+            "source".into(),
+            "Source map".into(),
+            crate::core::timeline::LayerType::Shape {
+                shape_type: crate::core::timeline::ShapeType::Rectangle {
+                    width: Animatable::new_constant(width as f32 * 0.5),
+                    height: Animatable::new_constant(height as f32),
+                    corner_radius: Animatable::new_constant(0.0),
+                },
+                color: [1.0, 1.0, 1.0, 1.0],
+                stroke_color: [0.0, 0.0, 0.0, 0.0],
+                stroke_width: 0.0,
+                fill_type: Default::default(),
+                extrusion_depth: 0.0,
+                bevel_depth: 0.0,
+            },
+            30,
+        );
+        source.transform.position = Animatable::new_constant([
+            width as f32 * 0.25,
+            height as f32 * 0.5,
+        ]);
+        comp.layers.push(source);
+        comp.layers.push(crate::core::timeline::Layer::new(
+            "target".into(),
+            "Target".into(),
+            crate::core::timeline::LayerType::Solid {
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
+            30,
+        ));
+        comp
+    }
+
+    #[test]
+    fn displacement_map_resolves_a_real_source_layer() {
+        let width = 16;
+        let height = 16;
+        let comp = source_map_composition(width, height);
+        let original = patterned_layer(width, height);
+        let mut rendered = original.clone();
+        apply_layer_effects(
+            Some(&comp),
+            Some(1),
+            &mut rendered,
+            width,
+            height,
+            &[effect(
+                "displacement",
+                EffectType::DisplacementMap {
+                    source_layer: Animatable::new_constant(0.0),
+                    max_horizontal: Animatable::new_constant(5.0),
+                    max_vertical: Animatable::new_constant(0.0),
+                },
+            )],
+            0,
+            30,
+        );
+        assert_ne!(rendered, original, "resolved source map must affect target pixels");
+        assert!(rendered.chunks_exact(4).all(|pixel| pixel[3] == 255));
+    }
+
+    #[test]
+    fn compound_blur_resolves_a_real_source_layer() {
+        let width = 16;
+        let height = 16;
+        let comp = source_map_composition(width, height);
+        let original = patterned_layer(width, height);
+        let mut rendered = original.clone();
+        apply_layer_effects(
+            Some(&comp),
+            Some(1),
+            &mut rendered,
+            width,
+            height,
+            &[effect(
+                "compound-blur",
+                EffectType::CompoundBlur {
+                    source_layer: Animatable::new_constant(0.0),
+                    max_blur: Animatable::new_constant(4.0),
+                },
+            )],
+            0,
+            30,
+        );
+        assert_ne!(rendered, original, "resolved blur map must affect target pixels");
+        assert!(rendered.chunks_exact(4).all(|pixel| pixel[3] == 255));
     }
 
     #[test]
