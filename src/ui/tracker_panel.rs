@@ -438,16 +438,95 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                         )
                         .clicked()
                     {
-                        app.toasts.info(
-                            "Planar surface tracked across work area with subpixel homography!",
-                        );
+                        if tracker_count < 4 {
+                            app.toasts.error("Planar tracking needs four tracker points");
+                        } else {
+                            let end_frame = app.playback.work_area_out.unwrap_or_else(|| {
+                                app.history
+                                    .current()
+                                    .active_composition()
+                                    .duration_frames
+                                    .saturating_sub(1)
+                            });
+                            if end_frame <= current_frame {
+                                app.toasts.error(
+                                    "Nothing to track: extend the work area past the playhead",
+                                );
+                            } else {
+                                let mut baked_frames = 0usize;
+                                app.modify_project(|p| {
+                                    let comp = p.active_composition_mut();
+                                    let track = crate::core::tracker_engine::TrackerEngine::analyze_quad_track(
+                                        comp,
+                                        idx,
+                                        [0, 1, 2, 3],
+                                        current_frame,
+                                        end_frame,
+                                    );
+                                    baked_frames = track.frames.len();
+                                    if let Some(layer) = comp.layers.get_mut(idx) {
+                                        for slot in 0..4usize {
+                                            let keyframes = track
+                                                .frames
+                                                .iter()
+                                                .zip(&track.corners)
+                                                .map(|(frame, corners)| {
+                                                    crate::core::keyframe::Keyframe::new(
+                                                        *frame,
+                                                        corners[slot],
+                                                        crate::core::keyframe::InterpolationType::Linear,
+                                                    )
+                                                })
+                                                .collect();
+                                            layer.trackers[slot].position =
+                                                crate::core::property::Animatable::Animated(keyframes);
+                                        }
+                                    }
+                                });
+                                if baked_frames > 0 {
+                                    crate::core::frame_cache::bump_version();
+                                    app.toasts.info(format!(
+                                        "Planar surface tracked: {} frames baked to trackers",
+                                        baked_frames
+                                    ));
+                                } else {
+                                    app.toasts.error("Planar tracking produced no frames");
+                                }
+                            }
+                        }
                     }
                     if custom_widgets::ae_button(ui, "📐 Align Surface Corners")
                         .on_hover_text("Snap planar surface to layer bounding box")
                         .clicked()
                     {
-                        app.toasts
-                            .info("Planar surface corners aligned to layer bounds");
+                        app.modify_project(|p| {
+                            let comp = p.active_composition_mut();
+                            if let Some(layer) = comp.layers.get_mut(idx) {
+                                let [width, height] = layer.bounding_size();
+                                let position = layer.transform.position.evaluate(current_frame);
+                                let scale = layer.transform.scale.evaluate(current_frame);
+                                let half_width = width * scale[0].abs() / 200.0;
+                                let half_height = height * scale[1].abs() / 200.0;
+                                let corners = [
+                                    [position[0] - half_width, position[1] - half_height],
+                                    [position[0] + half_width, position[1] - half_height],
+                                    [position[0] + half_width, position[1] + half_height],
+                                    [position[0] - half_width, position[1] + half_height],
+                                ];
+                                for (tracker, corner) in
+                                    layer.trackers.iter_mut().take(4).zip(corners)
+                                {
+                                    tracker.position.set_keyframe(
+                                        crate::core::keyframe::Keyframe::new(
+                                            current_frame,
+                                            corner,
+                                            crate::core::keyframe::InterpolationType::Linear,
+                                        ),
+                                    );
+                                }
+                            }
+                        });
+                        app.toasts.info("Planar surface corners aligned to layer bounds");
                     }
                 });
             });
@@ -677,31 +756,47 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                         app.toasts.info(format!("Applied tracking to layer {}", target_idx + 1));
                     }
                     if custom_widgets::ae_button(ui, "Apply as Corner Pin → Target").on_hover_text("Create a CornerPin effect on the target using the tracked quad corners").clicked() {
+                        let end_frame = app.playback.work_area_out.unwrap_or_else(|| {
+                            app.history
+                                .current()
+                                .active_composition()
+                                .duration_frames
+                                .saturating_sub(1)
+                        });
+                        let mut applied = false;
                         app.modify_project(|p| {
                             let comp = p.active_composition_mut();
-                            // Get current quad corners from the 4 trackers
-                            let src_layer = if let Some(l) = comp.layers.get(idx) { l } else { return };
-                            if src_layer.trackers.len() < 4 { return; }
-                            let tl = src_layer.trackers[0].position.evaluate(current_frame);
-                            let tr = src_layer.trackers[1].position.evaluate(current_frame);
-                            let br = src_layer.trackers[2].position.evaluate(current_frame);
-                            let bl = src_layer.trackers[3].position.evaluate(current_frame);
-
-                            let corner_pin = crate::core::timeline::EffectType::CornerPin {
-                                top_left: crate::core::property::Animatable::new_constant(tl),
-                                top_right: crate::core::property::Animatable::new_constant(tr),
-                                bottom_right: crate::core::property::Animatable::new_constant(br),
-                                bottom_left: crate::core::property::Animatable::new_constant(bl),
+                            let Some(src_layer) = comp.layers.get(idx) else { return };
+                            if src_layer.trackers.len() < 4 || end_frame < current_frame {
+                                return;
+                            }
+                            let track = crate::core::tracker_engine::QuadTrackData {
+                                frames: (current_frame..=end_frame).collect(),
+                                corners: (current_frame..=end_frame)
+                                    .map(|frame| {
+                                        [
+                                            src_layer.trackers[0].position.evaluate(frame),
+                                            src_layer.trackers[1].position.evaluate(frame),
+                                            src_layer.trackers[2].position.evaluate(frame),
+                                            src_layer.trackers[3].position.evaluate(frame),
+                                        ]
+                                    })
+                                    .collect(),
                             };
-                            let effect = crate::core::timeline::Effect {
-                                id: format!("corner_pin_{}", comp.layers[target_idx].effects.len()),
-                                name: "Corner Pin (from Tracker)".to_string(),
-                                effect_type: corner_pin,
-                                enabled: true,
-                            };
-                            comp.layers[target_idx].effects.push(effect);
+                            if let Some(target) = comp.layers.get_mut(target_idx) {
+                                applied = crate::core::tracker_engine::apply_quad_track_to_corner_pin(
+                                    target, &track,
+                                );
+                            }
                         });
-                        app.toasts.info(format!("Applied Corner Pin to layer {}", target_idx + 1));
+                        if applied {
+                            app.toasts.info(format!(
+                                "Applied animated Corner Pin to layer {}",
+                                target_idx + 1
+                            ));
+                        } else {
+                            app.toasts.error("Could not apply Corner Pin: need four tracked points");
+                        }
                     }
                     if custom_widgets::ae_button(ui, "🎥 Stabilize Motion").on_hover_text("Cancel camera shake by inverting motion onto target anchor/position").clicked() {
                         app.modify_project(|p| {
