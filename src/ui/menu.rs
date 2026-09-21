@@ -72,46 +72,58 @@ fn insert_imported_svg_masks(
     let mask_count = paths.len();
     app.modify_project(|project| {
         let comp = project.active_composition_mut();
-        let layer_id = comp.next_layer_id("svg");
-        let fill_color = paths
-            .iter()
-            .find_map(|path| path.fill_color)
-            .unwrap_or([1.0, 1.0, 1.0, 1.0]);
-        let mut layer = crate::core::timeline::Layer::new(
-            layer_id,
-            name.clone(),
-            crate::core::timeline::LayerType::Solid {
-                color: fill_color,
-            },
-            comp.duration_frames,
-        );
-        layer.transform.position = crate::core::property::Animatable::new_constant([
-            comp.width as f32 * 0.5,
-            comp.height as f32 * 0.5,
-        ]);
-        if let Some((stroke_color, stroke_width)) = paths.iter().find_map(|path| {
-            path.stroke_color
-                .filter(|_| path.stroke_width.is_finite() && path.stroke_width > 0.0)
-                .map(|color| (color, path.stroke_width))
-        }) {
-            layer.style.stroke.enabled = true;
-            layer.style.stroke.color = stroke_color;
-            layer.style.stroke.size = stroke_width;
-        }
         for (index, vector_path) in paths.into_iter().enumerate() {
+            let path_label = if vector_path.name.trim().is_empty() {
+                format!("Path {}", index + 1)
+            } else {
+                vector_path.name.clone()
+            };
+            let layer_name = if mask_count == 1 {
+                name.clone()
+            } else {
+                format!("{} - {}", name, path_label)
+            };
+            let fill_color = vector_path
+                .fill_color
+                .unwrap_or([0.0, 0.0, 0.0, 0.0]);
+            let mut layer = crate::core::timeline::Layer::new(
+                comp.next_layer_id("svg"),
+                layer_name,
+                crate::core::timeline::LayerType::Solid { color: fill_color },
+                comp.duration_frames,
+            );
+            layer.transform.position = crate::core::property::Animatable::new_constant([
+                comp.width as f32 * 0.5,
+                comp.height as f32 * 0.5,
+            ]);
             let mut mask = crate::core::mask::Mask::new_closed(
                 format!("mask_svg_{}", index + 1),
-                vector_path.name.clone(),
-                vector_path.vertices.iter().map(|vertex| vertex.position).collect(),
+                path_label,
+                vector_path
+                    .vertices
+                    .iter()
+                    .map(|vertex| vertex.position)
+                    .collect(),
             );
             mask.path = vector_path.to_mask_path();
+            if let Some((stroke_color, stroke_width)) = vector_path
+                .stroke_color
+                .filter(|_| vector_path.stroke_width.is_finite() && vector_path.stroke_width > 0.0)
+                .map(|color| (color, vector_path.stroke_width))
+            {
+                layer.style.stroke.enabled = true;
+                layer.style.stroke.color = stroke_color;
+                layer.style.stroke.size = stroke_width;
+            }
             layer.masks.push(mask);
+            comp.layers.push(layer);
         }
-        comp.layers.push(layer);
     });
     app.toasts.info(format!(
-        "Imported SVG as editable mask layer: {} ({} paths)",
-        name, mask_count
+        "Imported SVG as {} editable mask layer{}: {}",
+        mask_count,
+        if mask_count == 1 { "" } else { "s" },
+        name
     ));
 }
 
