@@ -179,7 +179,13 @@ fn export_mogrt(app: &mut KagariApp) {
         }
     };
     let package = MogrtPackage::new(manifest, project_json);
-    let path = std::env::temp_dir().join(format!("{}.mogrt", comp.name));
+    let Some(path) = rfd::FileDialog::new()
+        .add_filter("Kagari Motion Graphics Template", &["mogrt"])
+        .set_file_name(format!("{}.mogrt", comp.name.replace(['/', '\\'], "_")))
+        .save_file()
+    else {
+        return;
+    };
     match package
         .to_json()
         .map_err(|error| error.to_string())
