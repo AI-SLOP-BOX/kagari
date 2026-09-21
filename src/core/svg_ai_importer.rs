@@ -273,6 +273,43 @@ pub fn parse_svg_path_data(d: &str) -> Result<Vec<MaskVertex>, String> {
                     break;
                 }
             }
+            "A" | "a" => {
+                let is_rel = cmd == "a";
+                if i + 7 < tokens.len() {
+                    let rx: f32 = tokens[i + 1].parse().map_err(|e| format!("A.rx: {e}"))?;
+                    let ry: f32 = tokens[i + 2].parse().map_err(|e| format!("A.ry: {e}"))?;
+                    let rotation: f32 = tokens[i + 3]
+                        .parse()
+                        .map_err(|e| format!("A.rotation: {e}"))?;
+                    let large_arc: f32 = tokens[i + 4]
+                        .parse()
+                        .map_err(|e| format!("A.large_arc: {e}"))?;
+                    let sweep: f32 = tokens[i + 5].parse().map_err(|e| format!("A.sweep: {e}"))?;
+                    let x: f32 = tokens[i + 6].parse().map_err(|e| format!("A.x: {e}"))?;
+                    let y: f32 = tokens[i + 7].parse().map_err(|e| format!("A.y: {e}"))?;
+                    let dest = if is_rel {
+                        [curr_pos[0] + x, curr_pos[1] + y]
+                    } else {
+                        [x, y]
+                    };
+                    append_svg_arc(
+                        &mut vertices,
+                        curr_pos,
+                        dest,
+                        rx,
+                        ry,
+                        rotation,
+                        large_arc > 0.5,
+                        sweep > 0.5,
+                    );
+                    curr_pos = dest;
+                    last_cubic_control = None;
+                    last_quadratic_control = None;
+                    i += 8;
+                } else {
+                    break;
+                }
+            }
             "Z" | "z" => {
                 last_cubic_control = None;
                 last_quadratic_control = None;
@@ -343,6 +380,8 @@ fn is_svg_path_command(character: char) -> bool {
             | 'q'
             | 'T'
             | 't'
+            | 'A'
+            | 'a'
             | 'Z'
             | 'z'
     )
@@ -354,6 +393,7 @@ fn svg_command_arity(command: char) -> Option<usize> {
         'H' | 'h' | 'V' | 'v' => Some(1),
         'C' | 'c' => Some(6),
         'S' | 's' | 'Q' | 'q' => Some(4),
+        'A' | 'a' => Some(7),
         'Z' | 'z' => Some(0),
         _ => None,
     }
@@ -421,6 +461,141 @@ fn expand_repeated_svg_commands(tokens: Vec<String>) -> Vec<String> {
 
 fn is_svg_command_token(token: &str) -> bool {
     token.len() == 1 && token.chars().next().is_some_and(is_svg_path_command)
+}
+
+/// Converts one SVG elliptical arc into one or more cubic Bezier segments.
+///
+/// Mask paths store cubic handles as offsets from each vertex, so each arc
+/// segment becomes a destination vertex whose incoming handle is derived from
+/// the exact ellipse derivative. This keeps imported circles editable instead
+/// of flattening them into a polygon.
+fn append_svg_arc(
+    vertices: &mut Vec<MaskVertex>,
+    start: [f32; 2],
+    end: [f32; 2],
+    rx: f32,
+    ry: f32,
+    rotation_degrees: f32,
+    large_arc: bool,
+    sweep: bool,
+) {
+    let rx = rx.abs();
+    let ry = ry.abs();
+    if !rx.is_finite() || !ry.is_finite() || !rotation_degrees.is_finite() {
+        vertices.push(MaskVertex::new(end[0], end[1]));
+        return;
+    }
+    if (start[0] - end[0]).abs() <= f32::EPSILON && (start[1] - end[1]).abs() <= f32::EPSILON {
+        return;
+    }
+    if rx <= f32::EPSILON || ry <= f32::EPSILON {
+        vertices.push(MaskVertex::new(end[0], end[1]));
+        return;
+    }
+
+    let phi = rotation_degrees.to_radians();
+    let (sin_phi, cos_phi) = phi.sin_cos();
+    let dx = (start[0] - end[0]) * 0.5;
+    let dy = (start[1] - end[1]) * 0.5;
+    let x_prime = cos_phi * dx + sin_phi * dy;
+    let y_prime = -sin_phi * dx + cos_phi * dy;
+
+    let radii_ratio = x_prime * x_prime / (rx * rx) + y_prime * y_prime / (ry * ry);
+    let scale = radii_ratio.sqrt().max(1.0);
+    let rx = rx * scale;
+    let ry = ry * scale;
+    let rx_sq = rx * rx;
+    let ry_sq = ry * ry;
+    let x_prime_sq = x_prime * x_prime;
+    let y_prime_sq = y_prime * y_prime;
+    let denominator = rx_sq * y_prime_sq + ry_sq * x_prime_sq;
+    let numerator = (rx_sq * ry_sq - rx_sq * y_prime_sq - ry_sq * x_prime_sq).max(0.0);
+    let sign = if large_arc == sweep { -1.0 } else { 1.0 };
+    let coefficient = if denominator <= f32::EPSILON {
+        0.0
+    } else {
+        sign * (numerator / denominator).sqrt()
+    };
+    let center_x_prime = coefficient * rx * y_prime / ry;
+    let center_y_prime = coefficient * -ry * x_prime / rx;
+    let center = [
+        cos_phi * center_x_prime - sin_phi * center_y_prime + (start[0] + end[0]) * 0.5,
+        sin_phi * center_x_prime + cos_phi * center_y_prime + (start[1] + end[1]) * 0.5,
+    ];
+
+    let vector_start = [
+        (x_prime - center_x_prime) / rx,
+        (y_prime - center_y_prime) / ry,
+    ];
+    let vector_end = [
+        (-x_prime - center_x_prime) / rx,
+        (-y_prime - center_y_prime) / ry,
+    ];
+    let angle_between =
+        |a: [f32; 2], b: [f32; 2]| (a[0] * b[1] - a[1] * b[0]).atan2(a[0] * b[0] + a[1] * b[1]);
+    let start_angle = angle_between([1.0, 0.0], vector_start);
+    let mut sweep_angle = angle_between(vector_start, vector_end);
+    if !sweep && sweep_angle > 0.0 {
+        sweep_angle -= std::f32::consts::TAU;
+    } else if sweep && sweep_angle < 0.0 {
+        sweep_angle += std::f32::consts::TAU;
+    }
+    let segment_count = (sweep_angle.abs() / (std::f32::consts::FRAC_PI_2))
+        .ceil()
+        .max(1.0) as usize;
+    let segment_angle = sweep_angle / segment_count as f32;
+    let rotate_point = |angle: f32| {
+        let (sin_angle, cos_angle) = angle.sin_cos();
+        [
+            center[0] + cos_phi * rx * cos_angle - sin_phi * ry * sin_angle,
+            center[1] + sin_phi * rx * cos_angle + cos_phi * ry * sin_angle,
+        ]
+    };
+    let derivative = |angle: f32| {
+        let (sin_angle, cos_angle) = angle.sin_cos();
+        [
+            -cos_phi * rx * sin_angle - sin_phi * ry * cos_angle,
+            -sin_phi * rx * sin_angle + cos_phi * ry * cos_angle,
+        ]
+    };
+
+    let mut previous_position = start;
+    for segment in 0..segment_count {
+        let angle_start = start_angle + segment as f32 * segment_angle;
+        let angle_end = angle_start + segment_angle;
+        let kappa = (4.0 / 3.0) * (segment_angle * 0.25).tan();
+        let control_start = {
+            let tangent = derivative(angle_start);
+            [
+                previous_position[0] + kappa * tangent[0],
+                previous_position[1] + kappa * tangent[1],
+            ]
+        };
+        let destination = if segment + 1 == segment_count {
+            end
+        } else {
+            rotate_point(angle_end)
+        };
+        let tangent_end = derivative(angle_end);
+        let control_end = [
+            destination[0] - kappa * tangent_end[0],
+            destination[1] - kappa * tangent_end[1],
+        ];
+
+        if let Some(previous) = vertices.last_mut() {
+            previous.tangent_out = [
+                control_start[0] - previous.position[0],
+                control_start[1] - previous.position[1],
+            ];
+        }
+        let mut destination_vertex = MaskVertex::new(destination[0], destination[1]);
+        destination_vertex.tangent_in = [
+            control_end[0] - destination[0],
+            control_end[1] - destination[1],
+        ];
+        vertices.push(destination_vertex);
+        previous_position = destination;
+    }
 }
 
 /// Extracts all vector shapes from an SVG file string.
@@ -869,6 +1044,36 @@ mod tests {
                 [20.0, 20.0]
             ]
         );
+    }
+
+    #[test]
+    fn test_parse_svg_elliptical_arc_creates_editable_bezier_segments() {
+        let verts =
+            parse_svg_path_data("M 10 0 A 10 10 0 0 1 -10 0").expect("elliptical arc should parse");
+        assert_eq!(verts.len(), 3);
+        assert_eq!(verts[0].position, [10.0, 0.0]);
+        assert_eq!(verts.last().expect("arc endpoint").position, [-10.0, 0.0]);
+        assert!(verts
+            .iter()
+            .flat_map(|vertex| vertex.tangent_in.into_iter().chain(vertex.tangent_out))
+            .all(f32::is_finite));
+        assert!(verts[0].tangent_out[1] > 0.0);
+        assert!(verts[2].tangent_in[1] > 0.0);
+    }
+
+    #[test]
+    fn test_parse_svg_relative_arc_and_degenerate_radii() {
+        let verts = parse_svg_path_data("M 10 0 a 10 10 0 0 1 -10 10")
+            .expect("relative elliptical arc should parse");
+        assert_eq!(
+            verts.last().expect("relative arc endpoint").position,
+            [0.0, 10.0]
+        );
+
+        let line = parse_svg_path_data("M 1 2 A 0 8 0 0 1 9 10")
+            .expect("zero-radius arc should fall back to a line");
+        assert_eq!(line.len(), 2);
+        assert_eq!(line[1].position, [9.0, 10.0]);
     }
 
     #[test]
