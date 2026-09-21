@@ -2554,6 +2554,36 @@ impl Composition {
         destination.lights.extend(moved_lights);
     }
 
+    /// Resolve the active camera with the transform animated on its timeline
+    /// scene layer, while leaving the serialized scene object unchanged.
+    pub fn resolve_camera_at(&self) -> Camera3D {
+        let mut camera = self.resolve_camera().clone();
+        if let Some(layer) = self.layers.iter().find(|layer| {
+            matches!(
+                layer.scene_object.as_ref(),
+                Some(SceneObjectRef::Camera { id }) if id == &camera.id
+            )
+        }) {
+            camera.transform.position = layer.transform_3d.position.clone();
+            camera.transform.rotation = layer.transform_3d.rotation.clone();
+        }
+        camera
+    }
+
+    /// Resolve a light position from its timeline scene layer when one exists.
+    pub fn light_position_at(&self, light: &Light3D, frame: u32) -> [f32; 3] {
+        self.layers
+            .iter()
+            .find(|layer| {
+                matches!(
+                    layer.scene_object.as_ref(),
+                    Some(SceneObjectRef::Light { id }) if id == &light.id
+                )
+            })
+            .map(|layer| layer.transform_3d.position.evaluate(frame))
+            .unwrap_or_else(|| light.position.evaluate(frame))
+    }
+
     /// Look up a sub-composition by id (recursive search).
     /// The camera currently driving the render: first entry of `cameras`
     /// with `active == true`, else the legacy `active_camera` field.
@@ -2924,7 +2954,8 @@ impl Composition {
         let scale3d = layer.transform_3d.scale.evaluate(frame);
 
         // Perspective Projection Matrix for Camera
-        let fov_rad = self.resolve_camera().fov_at(frame).to_radians();
+        let render_camera = self.resolve_camera_at();
+        let fov_rad = render_camera.fov_at(frame).to_radians();
         let aspect = self.width as f32 / self.height.max(1) as f32;
         // Guard against degenerate FOV (e.g. fov_degrees=0 → tan(0)=0 → division by zero)
         let f = if fov_rad.abs() < 1e-4 {

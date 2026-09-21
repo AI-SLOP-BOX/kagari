@@ -368,7 +368,7 @@ fn apply_one_ctx(
             if *iris_linked {
                 let (aperture, iris_sides) = comp
                     .map(|c| {
-                        let cam = c.resolve_camera();
+                        let cam = c.resolve_camera_at();
                         (cam.aperture, cam.dof_iris_sides)
                     })
                     .unwrap_or((2.8, 8));

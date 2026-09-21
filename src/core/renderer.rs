@@ -2523,10 +2523,11 @@ impl WgpuRenderer {
                         })
                     {
                         if let Some(light) = comp.lights.iter().find(|l| l.name == light_name) {
-                            let lp = light.position.evaluate(frame);
+                            let lp = comp.light_position_at(light, frame);
+                            let render_camera = comp.resolve_camera_at();
                             if let Some(sp) =
                                 crate::core::timeline::project_point_to_screen_at_frame(
-                                    comp.resolve_camera(),
+                                    &render_camera,
                                     lp,
                                     comp.width as f32,
                                     comp.height as f32,

@@ -50,6 +50,7 @@ pub(crate) fn apply_post_fx(ctx: PostFxCtx<'_>) {
         dof_blur,
         ..
     } = ctx;
+    let render_camera = comp.resolve_camera_at();
     // Phase 2: apply the layer's CPU effect stack.
     // Resolve lens-flare light links (project the named light through the camera).
     let flare_light_screen = if layer.effects_enabled {
@@ -69,8 +70,8 @@ pub(crate) fn apply_post_fx(ctx: PostFxCtx<'_>) {
                     .find(|l| l.name == light_name)
                     .and_then(|light| {
                         crate::core::timeline::project_point_to_screen_at_frame(
-                            comp.resolve_camera(),
-                            light.position.evaluate(frame),
+                            &render_camera,
+                            comp.light_position_at(light, frame),
                             bw as f32,
                             bh as f32,
                             frame,
@@ -134,7 +135,7 @@ pub(crate) fn apply_post_fx(ctx: PostFxCtx<'_>) {
         let mut shade_g = mat.ambient;
         let mut shade_b = mat.ambient;
         for light in &comp.lights {
-            let lpos = light.position.evaluate(frame);
+            let lpos = comp.light_position_at(light, frame);
             let lx = cx - lpos[0];
             let ly = cy - lpos[1];
             let lz = layer_z - lpos[2];

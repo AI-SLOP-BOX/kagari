@@ -86,7 +86,7 @@ fn shade(layer: &Layer, comp: &crate::core::timeline::Composition, world: [f32; 
             let contribution = match source.light_type {
                 LightType::Ambient => source.intensity / 100.0,
                 LightType::Point | LightType::Spot { .. } | LightType::Parallel => {
-                    let direction = normalize(sub(source.position.evaluate(frame), world));
+                    let direction = normalize(sub(comp.light_position_at(source, frame), world));
                     (dot(normal, direction).max(0.0) * source.intensity / 100.0)
                         .min(1.0)
                 }
@@ -144,7 +144,7 @@ pub(crate) fn rasterize_model3d_layer(ctx: RasterCtx<'_>) {
     let position = layer.transform_3d.position.evaluate(frame);
     let rotation = layer.transform_3d.rotation.evaluate(frame);
     let model_scale = layer.transform_3d.scale.evaluate(frame).map(|value| value / 100.0);
-    let camera = comp.resolve_camera();
+    let camera = comp.resolve_camera_at();
     let mut projected = Vec::with_capacity(mesh.vertices.len());
     for vertex in &mesh.vertices {
         let local = [
@@ -159,7 +159,7 @@ pub(crate) fn rasterize_model3d_layer(ctx: RasterCtx<'_>) {
             position[2] + rotated[2],
         ];
         let screen = crate::core::timeline::project_point_to_screen_at_frame(
-            camera,
+            &camera,
             world_point,
             width as f32,
             height as f32,

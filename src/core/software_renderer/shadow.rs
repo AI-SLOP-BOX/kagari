@@ -182,7 +182,7 @@ pub fn build_shadow_map(comp: &Composition, frame: u32, width: u32, height: u32)
         if !light.casts_shadows || light.intensity <= 0.0 {
             continue;
         }
-        let lpos = light.position.evaluate(frame);
+        let lpos = comp.light_position_at(light, frame);
         let strength =
             ((light.shadow_darkness / 100.0) * (light.intensity / 100.0)).clamp(0.0, 1.0);
         if strength <= 0.003 {

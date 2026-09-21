@@ -478,6 +478,7 @@ pub(crate) fn render_frame_to_pixels_filtered(
     if size == 0 {
         return Vec::new();
     }
+    let render_camera = comp.resolve_camera_at();
     // Composition background colour (Comp Settings > Background Color).
     let (bg_r, bg_g, bg_b, bg_a) = {
         let bg = comp.background_color;
@@ -574,21 +575,19 @@ pub(crate) fn render_frame_to_pixels_filtered(
                 }
 
                 // ── Depth of field: circle-of-confusion for 3D layers ──
-                let dof_blur = if layer.is_3d
-                    && comp.resolve_camera().dof_enabled_at(frame)
-                {
+                let dof_blur = if layer.is_3d && render_camera.dof_enabled_at(frame) {
                     let z = layer.transform_3d.position.evaluate(frame)[2];
                     let dof = crate::core::camera_dof::CameraDofSettings {
-                        focus_distance: comp.resolve_camera().focus_distance_at(frame),
-                        aperture: comp.resolve_camera().aperture_at(frame),
-                        f_stop: comp.resolve_camera().aperture_at(frame),
+                        focus_distance: render_camera.focus_distance_at(frame),
+                        aperture: render_camera.aperture_at(frame),
+                        f_stop: render_camera.aperture_at(frame),
                         blur_level: 100.0,
-                        iris_sides: comp.resolve_camera().dof_iris_sides,
+                        iris_sides: render_camera.dof_iris_sides,
                         anamorphic_ratio: 1.0,
                         optical_vignetting: 0.0,
                     };
                     crate::core::camera_dof::calculate_circle_of_confusion(z, &dof)
-                        .clamp(0.0, comp.resolve_camera().dof_max_blur_at(frame))
+                        .clamp(0.0, render_camera.dof_max_blur_at(frame))
                 } else {
                     0.0
                 };
@@ -989,7 +988,7 @@ pub(crate) fn render_frame_to_pixels_filtered(
             if depth_enabled {
                 // Project particles through the active camera: Z drives
                 // screen position and size scaling.
-                let cam = comp.resolve_camera();
+                let cam = &render_camera;
                 let cpos = cam.transform.position.evaluate(frame);
                 let crot = cam.transform.rotation.evaluate(frame);
                 let rad = crot[2].to_radians();
@@ -1070,7 +1069,7 @@ pub(crate) fn render_frame_to_pixels_filtered(
 
         // For 3D layers, use perspective projection from camera
         let (bounds_x, bounds_y, _perspective_uvs) = if layer.is_3d {
-            let cam = comp.resolve_camera();
+            let cam = &render_camera;
             let layer_rot_3d = layer.transform_3d.rotation.evaluate(frame);
             if let Some(projected) = perspective_project_layer(
                 cam.fov_at(frame),

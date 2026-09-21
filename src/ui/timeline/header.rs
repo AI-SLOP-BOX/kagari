@@ -386,6 +386,7 @@ pub fn draw_timeline_header(
             camera.id = comp.next_camera_id();
             camera.name = format!("Camera {}", comp.cameras.len() + 1);
             let camera_id = camera.id.clone();
+            let camera_transform = camera.transform.clone();
             comp.cameras.push(camera);
             let camera_idx = comp.cameras.len().saturating_sub(1);
             comp.set_active_camera(Some(camera_idx));
@@ -396,6 +397,7 @@ pub fn draw_timeline_header(
                 total_frames,
             );
             layer.is_3d = true;
+            layer.transform_3d = camera_transform;
             layer.scene_object = Some(crate::core::timeline::SceneObjectRef::Camera {
                 id: camera_id,
             });
@@ -411,6 +413,7 @@ pub fn draw_timeline_header(
             light.id = comp.next_light_id();
             light.name = format!("Light {}", comp.lights.len() + 1);
             let light_id = light.id.clone();
+            let light_position = light.position.clone();
             comp.lights.push(light);
             let mut layer = Layer::new(
                 comp.next_layer_id("light"),
@@ -419,6 +422,7 @@ pub fn draw_timeline_header(
                 total_frames,
             );
             layer.is_3d = true;
+            layer.transform_3d.position = light_position;
             layer.scene_object = Some(crate::core::timeline::SceneObjectRef::Light {
                 id: light_id,
             });
