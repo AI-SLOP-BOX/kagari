@@ -3474,6 +3474,38 @@ mod review_regression_tests {
     }
 
     #[test]
+    fn semantically_incomplete_effect_uses_software_preview() {
+        let mut comp = crate::core::timeline::Composition::new(
+            "comp".to_string(),
+            "Comp".to_string(),
+            320,
+            180,
+            30,
+            30,
+        );
+        let mut layer = crate::core::timeline::Layer::new(
+            "layer".to_string(),
+            "Layer".to_string(),
+            crate::core::timeline::LayerType::Solid {
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
+            30,
+        );
+        layer.effects.push(crate::core::timeline::Effect {
+            id: "hue-saturation".to_string(),
+            name: "Hue/Saturation".to_string(),
+            effect_type: crate::core::timeline::EffectType::HueSaturation {
+                hue_shift: crate::core::property::Animatable::new_constant(45.0),
+                saturation: crate::core::property::Animatable::new_constant(20.0),
+                lightness: crate::core::property::Animatable::new_constant(0.0),
+            },
+            enabled: true,
+        });
+        comp.layers.push(layer);
+        assert!(software_preview_required(&comp, 0));
+    }
+
+    #[test]
     fn unsupported_shape_geometry_uses_software_preview() {
         let mut comp = crate::core::timeline::Composition::new(
             "comp".to_string(),
