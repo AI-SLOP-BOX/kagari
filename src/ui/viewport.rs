@@ -1696,7 +1696,15 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                     });
             }
             if let Some(sel_li) = app.selection.selected_layer_idx {
-                let stroke_list_id = egui::Id::new(("roto_strokes", sel_li));
+                let stroke_layer_id = app
+                    .history
+                    .current()
+                    .active_composition()
+                    .layers
+                    .get(sel_li)
+                    .map(|layer| layer.id.as_str())
+                    .unwrap_or("missing-layer");
+                let stroke_list_id = egui::Id::new(("roto_strokes", stroke_layer_id));
                 if ctx
                     .data(|d| d.get_temp::<Vec<EngineRotoStroke>>(stroke_list_id))
                     .is_none()
