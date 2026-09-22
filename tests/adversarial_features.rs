@@ -150,6 +150,7 @@ fn roto_output_is_binary_for_binary_input() {
         stroke_type: RotoStrokeType::Background,
         points: vec![[1.0, 1.0]],
         radius: 1.0,
+        frame: None,
     };
     let result = generate_rotobrush_matte(&pixels, 4, 4, &[stroke], &Default::default());
     assert_eq!(result.len(), 16);
@@ -391,6 +392,7 @@ fn roto_matte_is_deterministic() {
         stroke_type: RotoStrokeType::Foreground,
         points: vec![[4.0, 4.0], [8.0, 8.0]],
         radius: 2.0,
+        frame: None,
     }];
     let settings = RotoBrushSettings::default();
     assert_eq!(
@@ -709,6 +711,7 @@ contract_test!(roto_out_of_bounds_stroke_is_safe, {
         stroke_type: RotoStrokeType::Foreground,
         points: vec![[999.0, -999.0]],
         radius: 5.0,
+        frame: None,
     };
     let result = generate_rotobrush_matte(&[0; 4 * 4 * 4], 4, 4, &[stroke], &Default::default());
     assert_eq!(result.len(), 16);
@@ -718,6 +721,7 @@ contract_test!(roto_negative_radius_is_safe, {
         stroke_type: RotoStrokeType::Foreground,
         points: vec![[1.0, 1.0]],
         radius: -5.0,
+        frame: None,
     };
     assert_eq!(
         generate_rotobrush_matte(&[0; 4 * 4 * 4], 4, 4, &[stroke], &Default::default()).len(),

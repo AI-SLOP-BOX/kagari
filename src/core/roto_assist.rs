@@ -292,6 +292,42 @@ pub fn apply_roto_refinement(
     true
 }
 
+pub fn set_roto_matte_keyframe(
+    mask: &mut Mask,
+    frame: u32,
+    polygon: Vec<[f32; 2]>,
+) -> bool {
+    if polygon.len() < 3
+        || polygon
+            .iter()
+            .flatten()
+            .any(|coordinate| !coordinate.is_finite())
+    {
+        return false;
+    }
+    let new_keyframe = Keyframe::new(frame, polygon, InterpolationType::Hold);
+    if let Animatable::Constant(existing) = &mask.path.vertices {
+        let initial = existing.clone();
+        mask.path.vertices = if frame == 0 {
+            Animatable::Animated(vec![new_keyframe])
+        } else {
+            Animatable::Animated(vec![
+                Keyframe::new(0, initial, InterpolationType::Hold),
+                new_keyframe,
+            ])
+        };
+    } else if let Animatable::Animated(keyframes) = &mut mask.path.vertices {
+        if let Some(existing) = keyframes.iter_mut().find(|keyframe| keyframe.frame == frame) {
+            *existing = new_keyframe;
+        } else {
+            keyframes.push(new_keyframe);
+        }
+        keyframes.sort_by_key(|keyframe| keyframe.frame);
+    }
+    mask.path.tangents = None;
+    true
+}
+
 fn smooth_closed(vertices: &[[f32; 2]], amount: f32) -> Vec<[f32; 2]> {
     if vertices.len() < 3 {
         return vertices.to_vec();
@@ -864,6 +900,25 @@ mod tests {
         assert_ne!(refined, original);
         assert_eq!(mask.feather.evaluate(0), 6.0);
         assert_eq!(mask.expansion.evaluate(0), -2.5);
+    }
+
+    #[test]
+    fn roto_matte_corrections_are_frame_keyed_and_hold_variable_vertex_counts() {
+        let mut mask = square_mask();
+        let original = mask.path.vertices.evaluate(0);
+        let first = vec![[1.0, 1.0], [5.0, 1.0], [3.0, 5.0]];
+        let corrected = vec![[2.0, 1.0], [6.0, 1.0], [7.0, 3.0], [3.0, 6.0]];
+        assert!(set_roto_matte_keyframe(&mut mask, 4, first.clone()));
+        assert!(set_roto_matte_keyframe(&mut mask, 8, corrected.clone()));
+        assert_eq!(mask.path.vertices.evaluate(3), original);
+        assert_eq!(mask.path.vertices.evaluate(4), first);
+        assert_eq!(mask.path.vertices.evaluate(7), first);
+        assert_eq!(mask.path.vertices.evaluate(8), corrected);
+        assert!(!set_roto_matte_keyframe(
+            &mut mask,
+            9,
+            vec![[f32::NAN, 0.0], [1.0, 0.0], [0.0, 1.0]],
+        ));
     }
 
     #[test]

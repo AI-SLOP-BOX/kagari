@@ -18,6 +18,16 @@ pub struct RotoStroke {
     pub stroke_type: RotoStrokeType,
     pub points: Vec<[f32; 2]>,
     pub radius: f32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frame: Option<u32>,
+}
+
+pub fn strokes_for_frame(strokes: &[RotoStroke], frame: u32) -> Vec<RotoStroke> {
+    strokes
+        .iter()
+        .filter(|stroke| stroke.frame.is_none() || stroke.frame == Some(frame))
+        .cloned()
+        .collect()
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -407,11 +417,13 @@ mod tests {
                 stroke_type: RotoStrokeType::Foreground,
                 points: vec![[8.0, 16.0]],
                 radius: 4.0,
+                frame: None,
             },
             RotoStroke {
                 stroke_type: RotoStrokeType::Background,
                 points: vec![[24.0, 16.0]],
                 radius: 4.0,
+                frame: None,
             },
         ];
 
@@ -446,6 +458,7 @@ mod tests {
             stroke_type: RotoStrokeType::Foreground,
             points: vec![[1.0, 1.0]],
             radius: 0.0,
+            frame: None,
         };
         let settings = RotoBrushSettings {
             feather_radius: 0.0,
@@ -458,6 +471,20 @@ mod tests {
             .enumerate()
             .filter(|(i, _)| *i != 4)
             .all(|(_, a)| *a < 200));
+    }
+
+    #[test]
+    fn frame_scoped_strokes_do_not_leak_between_frames_and_legacy_strokes_remain_global() {
+        let stroke = |frame| RotoStroke {
+            stroke_type: RotoStrokeType::Foreground,
+            points: vec![[1.0, 1.0]],
+            radius: 2.0,
+            frame,
+        };
+        let strokes = vec![stroke(Some(3)), stroke(Some(7)), stroke(None)];
+        assert_eq!(strokes_for_frame(&strokes, 3).len(), 2);
+        assert_eq!(strokes_for_frame(&strokes, 7).len(), 2);
+        assert_eq!(strokes_for_frame(&strokes, 5).len(), 1);
     }
 
     #[test]

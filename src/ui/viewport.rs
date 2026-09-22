@@ -2045,6 +2045,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                                     },
                                     points: pts.clone(),
                                     radius,
+                                    frame: Some(current_frame),
                                 });
                                 ctx.data_mut(|d| d.insert_temp(stroke_list_id, all_strokes.clone()));
                                 let feather = ctx.data_mut(|d| {
@@ -2060,11 +2061,16 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                                     contrast,
                                     ..Default::default()
                                 };
+                                let frame_strokes =
+                                    crate::core::roto_brush_engine::strokes_for_frame(
+                                        &all_strokes,
+                                        current_frame,
+                                    );
                                 let mask_buf = generate_rotobrush_matte(
                                     &pixels,
                                     cw,
                                     ch,
-                                    &all_strokes,
+                                    &frame_strokes,
                                     &settings,
                                 );
                                 let polygon = trace_contour_to_polygon(&mask_buf, cw, ch, 2.0);
@@ -2079,12 +2085,21 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                                             .iter_mut()
                                             .find(|mask| mask.name == "Roto Brush Matte")
                                         {
-                                            mask.path = crate::core::mask::MaskPath::new_closed(polygon);
+                                            crate::core::roto_assist::set_roto_matte_keyframe(
+                                                mask,
+                                                current_frame,
+                                                polygon.clone(),
+                                            );
                                             mask.feather = crate::core::property::Animatable::new_constant(feather);
                                         } else {
                                             let mut mask = crate::core::mask::Mask::new_closed(
                                                 "roto_brush_matte".to_owned(),
                                                 "Roto Brush Matte".to_owned(),
+                                                polygon.clone(),
+                                            );
+                                            crate::core::roto_assist::set_roto_matte_keyframe(
+                                                &mut mask,
+                                                current_frame,
                                                 polygon,
                                             );
                                             mask.feather = crate::core::property::Animatable::new_constant(feather);
@@ -2093,7 +2108,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                                     }
                                     app.commit_project(temp_proj);
                                     if has_polygon {
-                                        app.toasts.info(if all_strokes.len() == 1 {
+                                        app.toasts.info(if frame_strokes.len() == 1 {
                                             if is_fg { "Roto Brush: Foreground matte created" } else { "Roto Brush: Background refinement added" }
                                         } else {
                                             "Roto Brush: Matte refined from all strokes"

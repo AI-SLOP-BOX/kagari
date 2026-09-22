@@ -15,11 +15,13 @@ fn roto_brush_strokes_survive_layer_roundtrip() {
         stroke_type: RotoStrokeType::Foreground,
         points: vec![[12.0, 8.0], [14.0, 9.0]],
         radius: 6.0,
+        frame: Some(12),
     });
     layer.roto_brush_strokes.push(RotoStroke {
         stroke_type: RotoStrokeType::Background,
         points: vec![[2.0, 4.0]],
         radius: 3.0,
+        frame: Some(13),
     });
 
     let json = serde_json::to_string(&layer).expect("layer should serialize");
@@ -27,6 +29,14 @@ fn roto_brush_strokes_survive_layer_roundtrip() {
     assert_eq!(restored.roto_brush_strokes.len(), 2);
     assert_eq!(restored.roto_brush_strokes[0].stroke_type, RotoStrokeType::Foreground);
     assert_eq!(restored.roto_brush_strokes[0].points, vec![[12.0, 8.0], [14.0, 9.0]]);
+    assert_eq!(restored.roto_brush_strokes[0].frame, Some(12));
+}
+
+#[test]
+fn legacy_roto_strokes_without_frame_remain_global() {
+    let json = r#"{"stroke_type":"Foreground","points":[[1.0,2.0]],"radius":3.0}"#;
+    let restored: RotoStroke = serde_json::from_str(json).expect("legacy stroke should deserialize");
+    assert_eq!(restored.frame, None);
 }
 
 #[test]
