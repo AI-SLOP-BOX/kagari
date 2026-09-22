@@ -157,6 +157,31 @@ fn software_preview_required(comp: &crate::core::timeline::Composition, frame: u
         })
 }
 
+fn render_roto_brush_source_frame(
+    comp: &crate::core::timeline::Composition,
+    layer_index: usize,
+    frame: u32,
+) -> Vec<u8> {
+    let mut source_comp = comp.clone();
+    source_comp.background_color = [0.0; 4];
+    for layer in &mut source_comp.layers {
+        layer.track_matte = crate::core::timeline::TrackMatteMode::None;
+    }
+    let Some(layer) = source_comp.layers.get_mut(layer_index) else {
+        return Vec::new();
+    };
+    layer.masks.clear();
+    crate::core::software_renderer::render_frame_to_pixels_filtered(
+        &source_comp,
+        frame,
+        source_comp.width,
+        source_comp.height,
+        0.0,
+        0,
+        Some(layer_index),
+    )
+}
+
 fn draw_view_menu_contents(ui: &mut egui::Ui, app: &mut KagariApp) {
     ui.checkbox(&mut app.show_handles, "Layer handles");
     ui.checkbox(&mut app.show_guides, "Safe-area guides");
@@ -1806,8 +1831,10 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                             let comp_ro = app.history.current().active_composition();
                             let cw = comp_ro.width;
                             let ch = comp_ro.height;
-                            let pixels = crate::core::software_renderer::render_frame_to_pixels(
-                                comp_ro, current_frame, cw, ch, 0.0, 0,
+                            let pixels = render_roto_brush_source_frame(
+                                comp_ro,
+                                sel_li,
+                                current_frame,
                             );
                             if !pixels.is_empty() && pixels.len() == (cw * ch * 4) as usize {
                                 let radius = ctx.data_mut(|d| {
@@ -3532,6 +3559,50 @@ mod review_regression_tests {
         comp.layers[0].masks[0].wiggle =
             Some(crate::core::wiggle_paths::WigglePathsOptions::default());
         assert!(software_preview_required(&comp, 0));
+    }
+
+    #[test]
+    fn roto_source_frame_isolated_from_other_layers_background_and_existing_masks() {
+        let mut comp = crate::core::timeline::Composition::new(
+            "roto-source".to_string(),
+            "Roto source".to_string(),
+            32,
+            32,
+            30,
+            30,
+        );
+        comp.background_color = [0.0, 1.0, 0.0, 1.0];
+        let mut target = crate::core::timeline::Layer::new(
+            "target".to_string(),
+            "Target".to_string(),
+            crate::core::timeline::LayerType::Solid {
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
+            30,
+        );
+        target.masks.push(crate::core::mask::Mask::new_rect(
+            "existing".to_string(),
+            "Existing mask".to_string(),
+            0.0,
+            0.0,
+            2.0,
+            2.0,
+        ));
+        target.track_matte = crate::core::timeline::TrackMatteMode::AlphaMatte;
+        let mut unrelated = crate::core::timeline::Layer::new(
+            "unrelated".to_string(),
+            "Unrelated".to_string(),
+            crate::core::timeline::LayerType::Solid {
+                color: [0.0, 0.0, 1.0, 1.0],
+            },
+            30,
+        );
+        unrelated.track_matte = crate::core::timeline::TrackMatteMode::LumaMatte;
+        comp.layers.extend([target, unrelated]);
+
+        let pixels = render_roto_brush_source_frame(&comp, 0, 0);
+        let center = ((16 * 32 + 16) * 4) as usize;
+        assert_eq!(&pixels[center..center + 4], &[255, 0, 0, 255]);
     }
 
     #[test]
