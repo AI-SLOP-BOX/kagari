@@ -1317,28 +1317,29 @@ impl KagariApp {
 
         egui::TopBottomPanel::bottom("ae_status_bar")
             .frame(status_frame)
-            .default_height(22.0)
-            .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    if ctx.screen_rect().width() >= 1200.0 {
-                        ui.label(
-                            egui::RichText::new("Frame Render Time")
-                                .small()
-                                .color(crate::ui::theme::colors::TEXT_MUTED),
-                        );
-                        let render_ms = if self.playback.preview_render_ema_ms > 0.0 {
-                            self.playback.preview_render_ema_ms
-                        } else {
-                            12.0
-                        };
-                        ui.label(
-                            egui::RichText::new(format!("{:.0}ms", render_ms))
-                                .small()
-                                .color(crate::ui::theme::colors::TEXT_MUTED),
-                        );
-                    } else {
+                .default_height(22.0)
+                .show(ctx, |ui| {
+                    ui.horizontal(|ui| {
                         let status_width = ctx.screen_rect().width();
                         ui.style_mut().spacing.item_spacing.x = 6.0;
+                        if status_width >= 1200.0 {
+                            ui.label(
+                                egui::RichText::new("Frame Render Time")
+                                    .small()
+                                    .color(crate::ui::theme::colors::TEXT_MUTED),
+                            );
+                            let render_ms = if self.playback.preview_render_ema_ms > 0.0 {
+                                self.playback.preview_render_ema_ms
+                            } else {
+                                12.0
+                            };
+                            ui.label(
+                                egui::RichText::new(format!("{:.0}ms", render_ms))
+                                    .small()
+                                    .color(crate::ui::theme::colors::TEXT_MUTED),
+                            );
+                            ui.separator();
+                        }
                         if status_width >= 950.0 {
                             let (gpu_label, gpu_color) = if self.gpu_rendered {
                                 (
@@ -1551,7 +1552,6 @@ impl KagariApp {
                                 );
                             }
                         });
-                    }
                 });
             });
 

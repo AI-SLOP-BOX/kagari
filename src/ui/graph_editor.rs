@@ -81,6 +81,12 @@ fn axis_3d(prop: &str) -> usize {
     }
 }
 
+fn clamp_bezier_x(value: f32, first_bound: f32, second_bound: f32) -> f32 {
+    let lower = first_bound.min(second_bound).clamp(0.0, 1.0);
+    let upper = first_bound.max(second_bound).clamp(0.0, 1.0);
+    value.clamp(lower, upper)
+}
+
 /// Graph properties for effects use the effect instance id, not its display
 /// name. Two instances may have the same name, and names can also be
 /// localized or edited without changing which parameter is selected.
@@ -2523,14 +2529,20 @@ pub fn draw_graph_editor(
                             .unwrap_or(points);
                         let mut next = points;
                         if out_resp.dragged() {
-                            next[2] = (out_base[2] + out_resp.drag_delta().x / 44.0)
-                                .clamp(out_base[0] + 0.01, 1.0);
+                            next[2] = clamp_bezier_x(
+                                out_base[2] + out_resp.drag_delta().x / 44.0,
+                                out_base[0] + 0.01,
+                                1.0,
+                            );
                             next[3] =
                                 (out_base[3] - out_resp.drag_delta().y / 24.0).clamp(-1.5, 2.5);
                         }
                         if in_resp.dragged() {
-                            next[0] = (in_base[0] - in_resp.drag_delta().x / 44.0)
-                                .clamp(0.0, in_base[2] - 0.01);
+                            next[0] = clamp_bezier_x(
+                                in_base[0] - in_resp.drag_delta().x / 44.0,
+                                0.0,
+                                in_base[2] - 0.01,
+                            );
                             next[1] = (in_base[1] + in_resp.drag_delta().y / 24.0).clamp(-1.5, 2.5);
                         }
                         if (out_resp.dragged() || in_resp.dragged())
@@ -3144,7 +3156,7 @@ pub fn draw_graph_editor(
                     .unwrap_or([bx1, by1, bx2, by2]);
                 if h_out_resp.dragged() {
                     let d = h_out_resp.drag_delta();
-                    let nx2 = (out_base[2] + d.x / 44.0).clamp(out_base[0] + 0.01, 1.0);
+                    let nx2 = clamp_bezier_x(out_base[2] + d.x / 44.0, out_base[0] + 0.01, 1.0);
                     let ny2 = (out_base[3] - d.y / 24.0).clamp(-1.5, 2.5);
                     if *linked_tangent {
                         let mir_x = (1.0 - nx2).clamp(0.0, nx2 - 0.01);
@@ -3155,7 +3167,7 @@ pub fn draw_graph_editor(
                 }
                 if h_in_resp.dragged() {
                     let d = h_in_resp.drag_delta();
-                    let nx1 = (in_base[0] - d.x / 44.0).clamp(0.0, in_base[2] - 0.01);
+                    let nx1 = clamp_bezier_x(in_base[0] - d.x / 44.0, 0.0, in_base[2] - 0.01);
                     let ny1 = (in_base[1] + d.y / 24.0).clamp(-1.5, 2.5);
                     if *linked_tangent {
                         let mir_x = (1.0 - nx1).clamp(nx1 + 0.01, 1.0);
@@ -3713,13 +3725,20 @@ fn compute_velocity_curve(keyframes: &[(u32, f32)], fps: u32) -> Vec<(f32, f32)>
 #[cfg(test)]
 mod tests {
     use super::{
-        axis_3d, draw_graph_editor, map_layer_interpolation, move_and_set_channel,
+        axis_3d, clamp_bezier_x, draw_graph_editor, map_layer_interpolation, move_and_set_channel,
         parse_effect_property, remove_camera_key, rove_keyframes, set_camera_key_ease,
         set_camera_key_interpolation, GraphKeyframeDrag,
     };
     use crate::core::keyframe::{InterpolationType, Keyframe};
     use crate::core::property::Animatable;
     use crate::core::timeline::{Layer, LayerType};
+
+    #[test]
+    fn bezier_x_clamp_handles_collapsed_bounds_without_panicking() {
+        assert_eq!(clamp_bezier_x(0.5, 1.01, 1.0), 1.0);
+        assert_eq!(clamp_bezier_x(0.5, 0.0, -0.01), 0.0);
+        assert_eq!(clamp_bezier_x(0.5, 0.2, 0.8), 0.5);
+    }
 
     #[test]
     fn active_drag_visual_follows_keyframe_after_sorting() {

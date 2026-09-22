@@ -2682,6 +2682,17 @@ fn apply_effect_by_name(app: &mut crate::KagariApp, effect_name: &str) {
                         },
                         enabled: true,
                     },
+                    "Shift Channels" => crate::core::timeline::Effect {
+                        id: format!("shiftch_{}", len),
+                        name: "Shift Channels".to_string(),
+                        effect_type: crate::core::timeline::EffectType::ShiftChannels {
+                            take_red: crate::core::property::Animatable::new_constant(0.0),
+                            take_green: crate::core::property::Animatable::new_constant(1.0),
+                            take_blue: crate::core::property::Animatable::new_constant(2.0),
+                            take_alpha: crate::core::property::Animatable::new_constant(3.0),
+                        },
+                        enabled: true,
+                    },
                     "Echo" => crate::core::timeline::Effect {
                         id: format!("echo_{}", len),
                         name: "Echo".to_string(),

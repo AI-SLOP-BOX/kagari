@@ -110,6 +110,7 @@ pub fn draw_mask_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                         .show(ui, |ui| {
                             for (m_idx, mask) in layer.masks.iter_mut().enumerate() {
                                 ui.collapsing(format!("🎭 {}", mask.name), |ui| {
+                                    let mut path_vertices_changed = false;
                                     ui.horizontal(|ui| {
                                         ui.checkbox(&mut mask.enabled, "Enabled");
                                         ui.checkbox(&mut mask.inverted, "Inverted");
@@ -270,6 +271,7 @@ pub fn draw_mask_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                                                 {
                                                     verts[vi][0] = x;
                                                     *project_changed_flag = true;
+                                                    path_vertices_changed = true;
                                                 }
                                                 if ui
                                                     .add(
@@ -281,6 +283,7 @@ pub fn draw_mask_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                                                 {
                                                     verts[vi][1] = y;
                                                     *project_changed_flag = true;
+                                                    path_vertices_changed = true;
                                                 }
                                                 if can_delete && ui.small_button("✕").clicked() {
                                                     to_delete = Some(vi);
@@ -294,7 +297,7 @@ pub fn draw_mask_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                                                     verts,
                                                 );
                                             *project_changed_flag = true;
-                                        } else if *project_changed_flag {
+                                        } else if path_vertices_changed {
                                             mask.path.vertices =
                                                 crate::core::property::Animatable::new_constant(
                                                     verts,
