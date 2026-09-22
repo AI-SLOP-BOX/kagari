@@ -1831,11 +1831,12 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                                     &settings,
                                 );
                                 let polygon = trace_contour_to_polygon(&mask_buf, cw, ch, 2.0);
-                                if polygon.len() >= 3 {
-                                    let mut temp_proj = app.history.current().clone();
-                                    let comp = temp_proj.active_composition_mut();
-                                    if let Some(layer) = comp.layers.get_mut(sel_li) {
-                                        layer.roto_brush_strokes = all_strokes.clone();
+                                let has_polygon = polygon.len() >= 3;
+                                let mut temp_proj = app.history.current().clone();
+                                let comp = temp_proj.active_composition_mut();
+                                if let Some(layer) = comp.layers.get_mut(sel_li) {
+                                    layer.roto_brush_strokes = all_strokes.clone();
+                                    if has_polygon {
                                         if let Some(mask) = layer
                                             .masks
                                             .iter_mut()
@@ -1852,15 +1853,17 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                                             mask.feather = crate::core::property::Animatable::new_constant(feather);
                                             layer.masks.push(mask);
                                         }
-                                        app.commit_project(temp_proj);
+                                    }
+                                    app.commit_project(temp_proj);
+                                    if has_polygon {
                                         app.toasts.info(if all_strokes.len() == 1 {
                                             if is_fg { "Roto Brush: Foreground matte created" } else { "Roto Brush: Background refinement added" }
                                         } else {
                                             "Roto Brush: Matte refined from all strokes"
                                         });
+                                    } else {
+                                        app.toasts.info("Roto Brush stroke saved; try broader strokes to create a distinct matte");
                                     }
-                                } else {
-                                    app.toasts.info("Roto Brush: No distinct region found — try broader strokes");
                                 }
                             }
                         }
