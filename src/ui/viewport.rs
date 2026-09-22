@@ -4247,6 +4247,93 @@ mod review_regression_tests {
     }
 
     #[test]
+    fn roto_brush_stroke_propagation_survives_project_roundtrip() {
+        let mut app = KagariApp::default();
+        let mut project = app.history.current().clone();
+        let comp = project.active_composition_mut();
+        comp.width = 32;
+        comp.height = 32;
+        comp.duration_frames = 3;
+        comp.layers.clear();
+        let mut layer = crate::core::timeline::Layer::new(
+            "roto-target".into(),
+            "Roto target".into(),
+            crate::core::timeline::LayerType::Solid {
+                color: [0.8, 0.7, 0.6, 1.0],
+            },
+            3,
+        );
+        layer.out_frame = 2;
+        comp.layers.push(layer);
+        app.commit_project(project);
+
+        let ctx = egui::Context::default();
+        let stroke = EngineRotoStroke {
+            stroke_type: RotoStrokeType::Foreground,
+            points: vec![[8.0, 16.0], [24.0, 16.0]],
+            radius: 4.0,
+            frame: Some(1),
+        };
+        start_roto_segment_job(
+            &app,
+            &ctx,
+            0,
+            1,
+            Vec::new(),
+            vec![stroke],
+            RotoBrushSettings {
+                feather_radius: 0.0,
+                ..Default::default()
+            },
+            0.0,
+        )
+        .unwrap();
+
+        let started = std::time::Instant::now();
+        while ctx
+            .data(|data| {
+                data.get_temp::<std::sync::Arc<RotoSegmentJob>>(egui::Id::new(
+                    "roto_segment_job",
+                ))
+            })
+            .is_some()
+        {
+            poll_roto_segment_job(&mut app, &ctx);
+            assert!(started.elapsed() < std::time::Duration::from_secs(5));
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+
+        start_roto_flow_bake(&app, &ctx, 0, 1).unwrap();
+        let started = std::time::Instant::now();
+        while ctx
+            .data(|data| {
+                data.get_temp::<std::sync::Arc<RotoFlowJob>>(egui::Id::new(
+                    "roto_flow_bake_job",
+                ))
+            })
+            .is_some()
+        {
+            poll_roto_flow_bake(&mut app, &ctx);
+            assert!(started.elapsed() < std::time::Duration::from_secs(5));
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+
+        let saved = serde_json::to_vec(app.history.current()).unwrap();
+        let restored: crate::core::timeline::Project = serde_json::from_slice(&saved).unwrap();
+        let restored_layer = &restored.active_composition().layers[0];
+        assert_eq!(restored_layer.roto_brush_strokes.len(), 1);
+        let matte = restored_layer
+            .masks
+            .iter()
+            .find(|mask| mask.name == "Roto Brush Matte")
+            .expect("generated roto matte should survive project save/reload");
+        let Animatable::Animated(keyframes) = &matte.path.vertices else {
+            panic!("propagated matte should contain per-frame keyframes");
+        };
+        assert_eq!(keyframes.iter().map(|keyframe| keyframe.frame).collect::<Vec<_>>(), [0, 1, 2]);
+    }
+
+    #[test]
     fn semantically_incomplete_effect_uses_software_preview() {
         let mut comp = crate::core::timeline::Composition::new(
             "comp".to_string(),
