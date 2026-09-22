@@ -781,9 +781,27 @@ pub fn evaluate_effects(effects: &[crate::core::timeline::Effect], frame: u32) -
 /// the software/export renderer, but the viewport must use that path so the
 /// preview never disagrees with the rendered result.
 pub fn gpu_preview_effect_supported(effect: &EffectType) -> bool {
-    matches!(
-        effect,
-        EffectType::GaussianBlur { .. }
+    match effect {
+        // These shader paths currently diverge from the export renderer:
+        // motion blur uses transform velocity instead of the effect's angle,
+        // grain is not seeded by the current frame, fractal noise overwrites
+        // alpha and ignores its fractal type, Tritone drops its mid color,
+        // GlowPro is approximated by the simpler GPU glow, displacement
+        // variants omit authored parameters, Heat Distortion uses a different
+        // time scale, and invert-alpha is not implemented by the shader.
+        EffectType::MotionBlur { .. }
+        | EffectType::FilmGrain { .. }
+        | EffectType::FractalNoise { .. }
+        | EffectType::Tritone { .. }
+        | EffectType::GlowPro { .. }
+        | EffectType::TurbulentDisplace { .. }
+        | EffectType::WaveWarp { .. }
+        | EffectType::Spherize { .. }
+        | EffectType::HeatDistortion { .. }
+        | EffectType::Invert { invert_alpha: true } => false,
+        _ => matches!(
+            effect,
+            EffectType::GaussianBlur { .. }
             | EffectType::ColorTint { .. }
             | EffectType::DropShadow { .. }
             | EffectType::ChromaticAberration { .. }
@@ -791,23 +809,15 @@ pub fn gpu_preview_effect_supported(effect: &EffectType) -> bool {
             | EffectType::Levels { .. }
             | EffectType::HueSaturation { .. }
             | EffectType::Glow { .. }
-            | EffectType::GlowPro { .. }
-            | EffectType::FilmGrain { .. }
             | EffectType::MeshWarp { .. }
-            | EffectType::MotionBlur { .. }
             | EffectType::LensFlare { .. }
-            | EffectType::Invert { .. }
+            | EffectType::Invert { invert_alpha: false }
             | EffectType::Posterize { .. }
-            | EffectType::Tritone { .. }
             | EffectType::CrtScanlines { .. }
-            | EffectType::FractalNoise { .. }
-            | EffectType::TurbulentDisplace { .. }
-            | EffectType::WaveWarp { .. }
             | EffectType::Twirl { .. }
             | EffectType::Bulge { .. }
-            | EffectType::Spherize { .. }
-            | EffectType::HeatDistortion { .. }
-    )
+        ),
+    }
 }
 
 /// Thread-safe central registry for dynamic effect plugins.
@@ -987,5 +997,70 @@ mod tests {
 
         assert!(gpu_preview_effect_supported(&invert));
         assert!(!gpu_preview_effect_supported(&lut));
+    }
+
+    #[test]
+    fn gpu_preview_falls_back_when_shader_semantics_diverge_from_export() {
+        use crate::core::property::Animatable;
+
+        fn constant<T: Clone>(value: T) -> Animatable<T> {
+            Animatable::new_constant(value)
+        }
+        let unsupported = [
+            EffectType::MotionBlur {
+                shutter_angle: constant(180.0),
+                samples: 16,
+            },
+            EffectType::FilmGrain {
+                intensity: constant(50.0),
+                grain_size: 2.0,
+                color_film: true,
+            },
+            EffectType::FractalNoise {
+                fractal_type: constant(1.0),
+                contrast: constant(100.0),
+                brightness: constant(0.0),
+                complexity: constant(5.0),
+                evolution: constant(0.0),
+            },
+            EffectType::Tritone {
+                shadow_color: constant([0.0, 0.0, 0.0]),
+                mid_color: constant([0.5, 0.5, 0.5]),
+                highlight_color: constant([1.0, 1.0, 1.0]),
+            },
+            EffectType::GlowPro {
+                threshold: constant(0.8),
+                radius: constant(20.0),
+                intensity: constant(2.0),
+            },
+            EffectType::TurbulentDisplace {
+                amount: constant(10.0),
+                size: constant(5.0),
+                evolution: constant(0.0),
+                complexity: constant(5.0),
+            },
+            EffectType::WaveWarp {
+                wave_height: constant(10.0),
+                wave_width: constant(20.0),
+                speed: constant(1.0),
+                direction_deg: constant(45.0),
+                wave_type: 2,
+                pinning: 1,
+            },
+            EffectType::Spherize {
+                radius: constant(100.0),
+                refractive_index: constant(1.5),
+            },
+            EffectType::HeatDistortion {
+                strength: constant(20.0),
+                speed: constant(1.0),
+            },
+            EffectType::Invert { invert_alpha: true },
+        ];
+
+        assert!(unsupported.iter().all(|effect| !gpu_preview_effect_supported(effect)));
+        assert!(gpu_preview_effect_supported(&EffectType::Invert {
+            invert_alpha: false,
+        }));
     }
 }
