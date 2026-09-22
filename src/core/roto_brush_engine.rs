@@ -101,36 +101,47 @@ pub fn generate_rotobrush_matte(
                 bg_points.push(pt);
             }
 
-            let px = pt[0] as i32;
-            let py = pt[1] as i32;
-            let rad = radius.ceil() as i32;
-            let sample_step = (rad / 8).max(1);
+            let class_samples = if stroke.stroke_type == RotoStrokeType::Foreground {
+                &mut fg_samples
+            } else {
+                &mut bg_samples
+            };
+            if class_samples.len() >= MAX_COLOR_SAMPLES_PER_CLASS {
+                continue;
+            }
 
-            for dy in (-rad..=rad).step_by(sample_step as usize) {
+            let px = pt[0].round() as i64;
+            let py = pt[1].round() as i64;
+            let rad = radius.ceil() as i64;
+            let sample_step = (rad / 8).max(1);
+            if pt[0] + radius < 0.0
+                || pt[1] + radius < 0.0
+                || pt[0] - radius >= width as f32
+                || pt[1] - radius >= height as f32
+            {
+                continue;
+            }
+
+            'sample: for dy in (-rad..=rad).step_by(sample_step as usize) {
                 let y = py + dy;
-                if y < 0 || y >= height as i32 {
+                if y < 0 || y >= height as i64 {
                     continue;
                 }
                 for dx in (-rad..=rad).step_by(sample_step as usize) {
                     let x = px + dx;
-                    if x < 0 || x >= width as i32 {
+                    if x < 0 || x >= width as i64 {
                         continue;
                     }
-                    if (dx * dx + dy * dy) as f32 <= r_sq {
-                        let idx = ((y as u32 * width + x as u32) * 4) as usize;
+                    if (dx as f64).powi(2) + (dy as f64).powi(2) <= r_sq as f64 {
+                        let idx = (y as usize * width as usize + x as usize) * 4;
                         let color = [
                             src_pixels[idx] as f32,
                             src_pixels[idx + 1] as f32,
                             src_pixels[idx + 2] as f32,
                         ];
-                        if stroke.stroke_type == RotoStrokeType::Foreground
-                            && fg_samples.len() < MAX_COLOR_SAMPLES_PER_CLASS
-                        {
-                            fg_samples.push(color);
-                        } else if stroke.stroke_type == RotoStrokeType::Background
-                            && bg_samples.len() < MAX_COLOR_SAMPLES_PER_CLASS
-                        {
-                            bg_samples.push(color);
+                        class_samples.push(color);
+                        if class_samples.len() >= MAX_COLOR_SAMPLES_PER_CLASS {
+                            break 'sample;
                         }
                     }
                 }
