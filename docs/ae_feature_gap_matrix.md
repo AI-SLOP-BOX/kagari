@@ -45,7 +45,7 @@ is intentionally tracked separately from the core workflow.
 | 3D layers | 3D transforms, cameras, lights, depth, shadows, DOF | 🟡 | `advanced_3d_engine.rs`, camera/light UI, and software-rasterized OBJ layers with nested PreComp coverage; model materials, scene authoring, GPU mesh rendering, and broader interchange remain narrower than AE |
 | Scene cameras/lights | Camera and light layers in the timeline, animated scene objects, active-camera switching | 🟡 | Creation from the timeline, settings, menu, and 3D camera solve now creates linked scene rows; deletion and pre-compose preserve/remove the linked objects, and animated row transforms drive software-render camera/light values; richer first-class layer controls and GPU parity remain |
 | Motion tracking | Point tracking, planar tracking, camera solve, stabilization | 🟡 | Point/quad tracking, animated Corner Pin, target-aware stabilization, and 3D camera solving are connected to the tracker panel; real-footage workflow coverage, planar confidence UX, and production-quality solve accuracy still need work |
-| Roto / paint | Roto Brush, paint, clone, eraser, puppet | 🟡 | Tools and engines are present; temporal propagation/brush quality are not AE-level |
+| Roto / paint | Roto Brush, paint, clone, eraser, puppet | 🟡 | Roto Brush source strokes now survive save/reload (including strokes that do not yet yield a contour), remain isolated by layer identity, and tracker propagation rejects reversed ranges and safely samples `u32` boundary frames; temporal segmentation, edge quality, cache/revision workflow, and paint/clone/puppet parity remain well below AE |
 | Keying | Chroma/linear key, matte cleanup, spill-like workflows | 🟡 | Keying modules and controls exist; production-grade edge handling still needs validation |
 | Color | Curves, levels, LUT, color management, scopes, HDR paths | 🟡 | Broad core coverage; live Lumetri histogram now samples the current rendered frame and ramp presets write Color Balance values; consistent 8/16/32-bit and GPU path parity remains a gap |
 | Effects | Searchable effect library, animated parameters, presets | 🟡 | Large `EffectType` registry and controls; effect-standard parity is explicitly out of scope for exact cloning |
@@ -83,8 +83,10 @@ is intentionally tracked separately from the core workflow.
    typography fidelity, path editing, and modifier interaction are behind AE.
 7. **Workspace persistence** — saved workspaces must restore panel geometry,
    timeline height, graph mode, and viewer state, not only tab indices.
-8. **Roto/paint temporal behavior** — propagation, caching, and correction
-   tools need to survive multi-frame edits and real footage.
+8. **Roto/paint temporal behavior** — source strokes now persist and tracker
+   propagation is range-safe, but per-frame segmentation, edge refinement,
+   propagation review/correction, caching, and real-footage quality remain
+   substantially behind AE.
 9. **Audio correction and interchange** — production audio formats and the
    correction workflow need a complete non-ML baseline before model support.
 
