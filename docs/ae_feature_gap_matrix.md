@@ -45,17 +45,21 @@ is intentionally tracked separately from the core workflow.
 | 3D layers | 3D transforms, cameras, lights, depth, shadows, DOF | 🟡 | `advanced_3d_engine.rs`, camera/light UI, and software-rasterized OBJ layers with nested PreComp coverage; model materials, scene authoring, GPU mesh rendering, and broader interchange remain narrower than AE |
 | Scene cameras/lights | Camera and light layers in the timeline, animated scene objects, active-camera switching | 🟡 | Creation from the timeline, settings, menu, and 3D camera solve now creates linked scene rows; deletion and pre-compose preserve/remove the linked objects, and animated row transforms drive software-render camera/light values; richer first-class layer controls and GPU parity remain |
 | Motion tracking | Point tracking, planar tracking, camera solve, stabilization | 🟡 | Point/quad tracking, animated Corner Pin, target-aware stabilization, and 3D camera solving are connected to the tracker panel; real-footage workflow coverage, planar confidence UX, and production-quality solve accuracy still need work |
-| Roto / paint | Roto Brush, paint, clone, eraser, puppet | 🟡 | Roto Brush source strokes now survive save/reload (including strokes that do not yet yield a contour), remain isolated by layer identity, and tracker propagation rejects reversed ranges and safely samples `u32` boundary frames; segmentation uses bounded color sampling, exact linear-time Euclidean distance transforms, and separable feathering instead of pixel×stroke-point or pixel×kernel scans, but temporal segmentation, edge quality, cache/revision workflow, and paint/clone/puppet parity remain well below AE |
+| Roto / paint | Roto Brush, paint, clone, eraser, puppet | 🟡 | Roto Brush source strokes persist and remain isolated by layer identity; tracker propagation is range-safe and segmentation is bounded/linear-time, but temporal propagation quality, edge refinement, cache/revision workflow, and paint/clone/puppet parity remain well below AE |
+| Content-Aware Fill | Remove an object across a sequence with generated replacement frames | 🟡 | `core/content_aware_engine.rs` and `ui/content_aware_fill.rs` provide a mask-driven fill workflow, but temporal consistency, difficult backgrounds, and quality/performance acceptance against real footage are not established |
+| Motion blur | Per-layer and comp motion blur with shutter controls | 🟡 | Layer/comp switches and shutter controls exist; temporal sampling quality, GPU/export parity, and representative fast-motion image tests remain incomplete |
 | Keying | Chroma/linear key, matte cleanup, spill-like workflows | 🟡 | Keying modules and controls exist; production-grade edge handling still needs validation |
 | Color | Curves, levels, LUT, color management, scopes, HDR paths | 🟡 | Broad core coverage; live Lumetri histogram now samples the current rendered frame and ramp presets write Color Balance values; consistent 8/16/32-bit and GPU path parity remains a gap |
 | Effects | Searchable effect library, animated parameters, presets | 🟡 | Large `EffectType` registry and controls; effect-standard parity is explicitly out of scope for exact cloning |
 | Particles / procedural | Particles, lightning, star field, audio spectrum and generators | 🟡 | Engines and render paths exist; authoring, caching, and interaction depth vary by feature |
-| Audio | Import, playback sync, mixing, meters, audio-to-keyframes | 🟡 | In-process Symphonia decoding now covers WAV/MP3/FLAC/Ogg/AIFF/CAF/MP4-family audio, project assets can be inserted as real audio layers, and the master VU/32-band display uses the live mix buffer; per-track metering and correction/interchange workflow still need work |
+| Audio | Import, playback sync, mixing, meters, audio-to-keyframes | 🟡 | In-process Symphonia decoding covers WAV/MP3/FLAC/Ogg/AIFF/CAF/MP4-family audio; project-bin insertion, save/reload, undo/redo, and mixer output have an egui workflow test. Decoded buffers now share a sample-rate-aware LRU capped at 256 MiB/4096 entries; per-track metering, correction/interchange, long-session playback sync, and broader device testing remain |
 | Preview | Cached frames, RAM preview, adaptive quality, audio sync | 🟡 | Cache and playback exist; GPU preview falls back for unsupported blend modes, Shape Freeform/Stroke/3D geometry, layer styles, multi-effect stacks, and every effect whose shader math/parameter mapping is not yet verified against export; the audited direct-GPU allowlist currently includes Color Tint, Levels, Lens Flare, and RGB-only Invert, so preview correctness takes precedence over GPU acceleration while exact parity remains unfinished |
 | Render queue | Multiple items, progress, cancellation/failure reporting | ✅ | `core/render_queue.rs`, `ui/render_queue.rs` |
 | Export | FFmpeg video, image/EXR paths, GIF, Lottie, MLT/OTIO-style interchange | 🟡 | Several exporters exist; codec/metadata/alpha compatibility needs broader fixture testing |
 | Essential Graphics / templates | Exposed controls, reusable motion-graphics templates, host-side overrides | 🟡 | Native MOGRT-style package and import/export UI exist; Adobe-host compatibility, richer property binding, and template validation remain narrower |
 | Plugin/integration | Plug-ins, scripting, interchange with external tools | 🟡 | OFX/SDK bridges and Rhai exist; third-party plug-in compatibility is not complete |
+| Team collaboration | Shared projects, presence, merge/sync, review comments | 🔴 | No equivalent shared-project/presence/review workflow found; Adobe documents Team Projects and Frame.io integration |
+| Adobe ecosystem links | Dynamic Link, Creative Cloud Libraries, Cinema 4D integration | 🟡 | Kagari has internal project assets and limited interchange, but these Adobe-host integrations are not equivalent or broadly compatible |
 | Workspaces | Dockable panels, resize, saved workspace layouts | 🟡 | SavedWorkspace persists panel widths, timeline height, graph mode, viewer state, and compact drawers; restore now runs before panel layout, while full dock visibility/custom panel topology remains narrower than AE |
 | UI operations | Search/command palette, shortcuts, inspector, graph editor, undo/redo | 🟡 | Core paths exist; more real egui event/E2E tests are required for production confidence |
 | Reliability | Bounded caches, crash recovery, deterministic renders, safe file I/O | 🟡 | Strong unit/integration coverage; sanitizer/stress and hostile-project coverage still need expansion |
@@ -94,12 +98,21 @@ is intentionally tracked separately from the core workflow.
 
 The next work should follow user-visible leverage and verification cost:
 
-1. Add a real footage workflow test covering import → relink/proxy → tracking →
-   render/export, including a compressed audio layer inserted from the project bin.
+1. Expand real-footage workflow tests to cover import → relink/proxy → tracking
+   → render/export as one journey, including compressed audio from the project bin.
 2. Close the GPU preview/export semantic differences with pixel-contract tests.
 3. Expand 3D model/camera/light authoring and its render fixtures.
-4. Strengthen roto/paint propagation and audio correction without requiring an
-   ML model.
+4. Strengthen roto/paint propagation and Content-Aware Fill against real
+   footage; improve audio correction and long-session sync without requiring
+   an ML model.
+
+## Adobe reference pages
+
+- [After Effects workflows](https://helpx.adobe.com/after-effects/desktop/get-started/understand-after-effects-workflow/workflows.html)
+- [After Effects features](https://www.adobe.com/products/aftereffects/features.html)
+- [Motion tracking and stabilization](https://helpx.adobe.com/after-effects/desktop/animate-in-after-effects/track-motion/tracking-stabilizing-motion-cs5.html)
+- [Rendering and export](https://helpx.adobe.com/after-effects/desktop/render-and-export/basics-of-rendering-and-exporting/basics-rendering-exporting.html)
+- [Team Projects](https://helpx.adobe.com/after-effects/desktop/collaboration-with-others/team-projects/collaborate-using-team-projects.html)
 
 Workspace layout persistence has now been implemented for the geometry and
 compact drawer state listed above; the remaining workspace gap is a richer dock

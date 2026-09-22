@@ -5,6 +5,12 @@
 /// - Per-layer animated volume/gain evaluation (`volume.evaluate(frame)`)
 /// - Peak RMS VU meter calculation for audio mixers
 use crate::core::timeline::{Composition, EffectType, Layer, LayerType};
+use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, Mutex, OnceLock};
+
+const MAX_DECODED_AUDIO_BYTES: usize = 512 * 1024 * 1024;
+const MAX_AUDIO_CACHE_BYTES: usize = 256 * 1024 * 1024;
+const MAX_AUDIO_CACHE_ENTRIES: usize = 4096;
 
 /// Validates that an audio path is safe to load: rejects path traversal (`..`)
 /// and absolute paths outside the project directory.
@@ -81,11 +87,19 @@ impl AudioBuffer {
             return self.clone();
         }
 
-        let ratio = self.sample_rate as f64 / target_sample_rate as f64;
         let channels = self.channels.max(1) as usize;
-        let num_frames = (self.samples.len() / channels) as f64;
-        let new_frames = (num_frames / ratio) as usize;
-        let mut out = Vec::with_capacity(new_frames * channels);
+        let source_frames = self.samples.len() / channels;
+        let new_frames = source_frames as f64 * target_sample_rate as f64 / self.sample_rate as f64;
+        let max_samples = MAX_DECODED_AUDIO_BYTES / std::mem::size_of::<f32>();
+        if !new_frames.is_finite()
+            || new_frames > (max_samples / channels) as f64
+            || new_frames > usize::MAX as f64
+        {
+            return self.clone();
+        }
+        let new_frames = new_frames as usize;
+        let ratio = self.sample_rate as f64 / target_sample_rate as f64;
+        let mut out = Vec::with_capacity(new_frames.saturating_mul(channels));
 
         for i in 0..new_frames {
             let src_f = i as f64 * ratio;
@@ -113,6 +127,108 @@ impl AudioBuffer {
             channels: self.channels,
         }
     }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct AudioCacheKey {
+    path: String,
+    sample_rate: u32,
+}
+
+struct DecodedAudioCache {
+    entries: HashMap<AudioCacheKey, Arc<AudioBuffer>>,
+    least_to_most_recent: VecDeque<AudioCacheKey>,
+    bytes: usize,
+    max_bytes: usize,
+}
+
+impl DecodedAudioCache {
+    fn new(max_bytes: usize) -> Self {
+        Self {
+            entries: HashMap::new(),
+            least_to_most_recent: VecDeque::new(),
+            bytes: 0,
+            max_bytes,
+        }
+    }
+
+    fn get(&mut self, key: &AudioCacheKey) -> Option<Arc<AudioBuffer>> {
+        let value = self.entries.get(key)?.clone();
+        if let Some(index) = self
+            .least_to_most_recent
+            .iter()
+            .position(|entry| entry == key)
+        {
+            self.least_to_most_recent.remove(index);
+        }
+        self.least_to_most_recent.push_back(key.clone());
+        Some(value)
+    }
+
+    fn insert(&mut self, key: AudioCacheKey, value: Arc<AudioBuffer>) {
+        let bytes = value
+            .samples
+            .len()
+            .saturating_mul(std::mem::size_of::<f32>());
+        if bytes > self.max_bytes {
+            return;
+        }
+        self.remove(&key);
+        while self.entries.len() >= MAX_AUDIO_CACHE_ENTRIES
+            || self.bytes.saturating_add(bytes) > self.max_bytes
+        {
+            let Some(oldest) = self.least_to_most_recent.pop_front() else {
+                break;
+            };
+            self.remove(&oldest);
+        }
+        self.bytes = self.bytes.saturating_add(bytes);
+        self.least_to_most_recent.push_back(key.clone());
+        self.entries.insert(key, value);
+    }
+
+    fn remove(&mut self, key: &AudioCacheKey) {
+        if let Some(value) = self.entries.remove(key) {
+            self.bytes = self.bytes.saturating_sub(
+                value
+                    .samples
+                    .len()
+                    .saturating_mul(std::mem::size_of::<f32>()),
+            );
+        }
+        self.least_to_most_recent.retain(|entry| entry != key);
+    }
+}
+
+fn audio_cache() -> &'static Mutex<DecodedAudioCache> {
+    static CACHE: OnceLock<Mutex<DecodedAudioCache>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(DecodedAudioCache::new(MAX_AUDIO_CACHE_BYTES)))
+}
+
+fn load_cached_audio(path: &str, sample_rate: u32) -> Option<Arc<AudioBuffer>> {
+    let key = AudioCacheKey {
+        path: path.to_owned(),
+        sample_rate,
+    };
+    if let Some(buffer) = audio_cache()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .get(&key)
+    {
+        return Some(buffer);
+    }
+    if validate_audio_path(path).is_err() {
+        return None;
+    }
+    let buffer = AudioBuffer::load_audio(std::path::Path::new(path))
+        .ok()?
+        .resample(sample_rate);
+    let buffer = Arc::new(buffer);
+    audio_cache()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .insert(key, buffer.clone());
+    Some(buffer)
 }
 
 #[allow(dead_code)]
@@ -281,6 +397,69 @@ mod tests {
             "silent comp should have very low peak"
         );
     }
+
+    #[test]
+    fn decoded_audio_cache_enforces_byte_budget_and_lru_order() {
+        let mut cache = DecodedAudioCache::new(16);
+        let make_buffer = |value| {
+            Arc::new(AudioBuffer {
+                samples: vec![value, value],
+                sample_rate: 48_000,
+                channels: 2,
+            })
+        };
+        let key = |path: &str| AudioCacheKey {
+            path: path.to_owned(),
+            sample_rate: 48_000,
+        };
+
+        cache.insert(key("a.wav"), make_buffer(0.1));
+        cache.insert(key("b.wav"), make_buffer(0.2));
+        assert_eq!(cache.bytes, 16);
+        assert!(cache.get(&key("a.wav")).is_some());
+
+        cache.insert(key("c.wav"), make_buffer(0.3));
+        assert!(cache.get(&key("a.wav")).is_some());
+        assert!(cache.get(&key("b.wav")).is_none());
+        assert!(cache.get(&key("c.wav")).is_some());
+        assert!(cache.bytes <= cache.max_bytes);
+    }
+
+    #[test]
+    fn decoded_audio_cache_key_includes_requested_sample_rate() {
+        let mut cache = DecodedAudioCache::new(32);
+        let buffer = Arc::new(AudioBuffer {
+            samples: vec![0.25, 0.5],
+            sample_rate: 44_100,
+            channels: 2,
+        });
+        cache.insert(
+            AudioCacheKey {
+                path: "same.wav".into(),
+                sample_rate: 44_100,
+            },
+            buffer.clone(),
+        );
+        assert!(cache
+            .get(&AudioCacheKey {
+                path: "same.wav".into(),
+                sample_rate: 48_000,
+            })
+            .is_none());
+    }
+
+    #[test]
+    fn resample_falls_back_to_source_when_output_exceeds_memory_limit() {
+        let source = AudioBuffer {
+            samples: vec![0.25],
+            sample_rate: 1,
+            channels: 1,
+        };
+
+        let result = source.resample(u32::MAX);
+        assert_eq!(result.samples, source.samples);
+        assert_eq!(result.sample_rate, source.sample_rate);
+    }
 }
 
 // ── WAV loading & waveform extraction ───────────────────────────────────────
@@ -380,12 +559,12 @@ impl AudioBuffer {
     /// Symphonia so preview, waveform analysis, and audio keyframes share one path.
     pub fn load_audio(path: &std::path::Path) -> Result<Self, String> {
         const MAX_AUDIO_BYTES: u64 = 512 * 1024 * 1024;
-        const MAX_DECODED_SAMPLES: usize = (512 * 1024 * 1024) / std::mem::size_of::<f32>();
+        const MAX_DECODED_SAMPLES: usize = MAX_DECODED_AUDIO_BYTES / std::mem::size_of::<f32>();
 
         let path_str = path.to_string_lossy();
         validate_audio_path(&path_str)?;
-        let metadata = std::fs::metadata(path)
-            .map_err(|e| format!("cannot stat audio file: {}", e))?;
+        let metadata =
+            std::fs::metadata(path).map_err(|e| format!("cannot stat audio file: {}", e))?;
         if metadata.len() > MAX_AUDIO_BYTES {
             return Err("audio file exceeds the 512 MiB limit".into());
         }
@@ -692,12 +871,6 @@ fn mix_precomp_audio(
     pan: f32,
     fps: f32,
 ) {
-    use std::collections::HashMap;
-    use std::sync::Mutex;
-    static WAV_CACHE: std::sync::OnceLock<Mutex<HashMap<String, std::sync::Arc<AudioBuffer>>>> =
-        std::sync::OnceLock::new();
-    let cache = WAV_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-
     for layer in &sub_comp.layers {
         if !layer.is_active(sub_frame) || !layer.visible {
             continue;
@@ -721,28 +894,7 @@ fn mix_precomp_audio(
                 let vol_db = volume.evaluate(sub_frame);
                 let layer_gain = gain * 10.0f32.powf(vol_db / 20.0);
                 let time_start = (sub_frame.saturating_sub(layer.in_frame)) as f32 / fps;
-                let source = {
-                    let map = cache.lock().unwrap_or_else(|e| e.into_inner());
-                    if let Some(buf) = map.get(path) {
-                        Some(buf.clone())
-                    } else {
-                        drop(map);
-                        if validate_audio_path(path).is_err() {
-                            None
-                        } else {
-                            let loaded = AudioBuffer::load_audio(std::path::Path::new(path))
-                                .ok()
-                                .map(|b| std::sync::Arc::new(b.resample(sample_rate)));
-                            if let Some(buf) = &loaded {
-                                cache
-                                    .lock()
-                                    .unwrap_or_else(|e| e.into_inner())
-                                    .insert(path.clone(), buf.clone());
-                            }
-                            loaded
-                        }
-                    }
-                };
+                let source = load_cached_audio(path, sample_rate);
                 if let Some(buf) = source {
                     for i in 0..buffer_size {
                         let t = time_start + i as f32 / sample_rate as f32;
@@ -771,28 +923,7 @@ fn mix_precomp_audio(
                 audio_wav: Some(w), ..
             } => {
                 let time_start = (sub_frame.saturating_sub(layer.in_frame)) as f32 / fps;
-                let source = {
-                    let map = cache.lock().unwrap_or_else(|e| e.into_inner());
-                    if let Some(buf) = map.get(w) {
-                        Some(buf.clone())
-                    } else {
-                        drop(map);
-                        if validate_audio_path(w).is_err() {
-                            None
-                        } else {
-                            let loaded = AudioBuffer::load_audio(std::path::Path::new(w))
-                                .ok()
-                                .map(|b| std::sync::Arc::new(b.resample(sample_rate)));
-                            if let Some(buf) = &loaded {
-                                cache
-                                    .lock()
-                                    .unwrap_or_else(|e| e.into_inner())
-                                    .insert(w.clone(), buf.clone());
-                            }
-                            loaded
-                        }
-                    }
-                };
+                let source = load_cached_audio(w, sample_rate);
                 if let Some(buf) = source {
                     for i in 0..buffer_size {
                         let t = time_start + i as f32 / sample_rate as f32;
@@ -837,7 +968,15 @@ pub fn mix_audio_sources_for_frame(
     dsp: &MasterDspParams,
 ) -> (Vec<f32>, AudioFrameMeter) {
     let mut state = MasterDspState::default();
-    mix_audio_sources_for_frame_with_state(comp, frame, sample_rate, buffer_size, mixer, dsp, &mut state)
+    mix_audio_sources_for_frame_with_state(
+        comp,
+        frame,
+        sample_rate,
+        buffer_size,
+        mixer,
+        dsp,
+        &mut state,
+    )
 }
 
 pub fn mix_audio_sources_for_frame_with_state(
@@ -849,13 +988,6 @@ pub fn mix_audio_sources_for_frame_with_state(
     dsp: &MasterDspParams,
     dsp_state: &mut MasterDspState,
 ) -> (Vec<f32>, AudioFrameMeter) {
-    use std::collections::HashMap;
-    use std::sync::Mutex;
-
-    static WAV_CACHE: std::sync::OnceLock<Mutex<HashMap<String, std::sync::Arc<AudioBuffer>>>> =
-        std::sync::OnceLock::new();
-    let cache = WAV_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-
     let mut stereo_output = vec![0.0f32; buffer_size * 2];
     let mut sum_sq_l = 0.0f32;
     let mut sum_sq_r = 0.0f32;
@@ -944,28 +1076,7 @@ pub fn mix_audio_sources_for_frame_with_state(
 
         // Source samples: decoded audio if present, otherwise silent placeholder
         let source: Option<std::sync::Arc<AudioBuffer>> = match &wav_path {
-            Some(p) => {
-                let map = cache.lock().unwrap_or_else(|e| e.into_inner());
-                if let Some(buf) = map.get(p) {
-                    Some(buf.clone())
-                } else {
-                    drop(map);
-                    if validate_audio_path(p).is_err() {
-                        None
-                    } else {
-                        let loaded = AudioBuffer::load_audio(std::path::Path::new(p))
-                            .ok()
-                            .map(|b| std::sync::Arc::new(b.resample(sample_rate)));
-                        if let Some(buf) = &loaded {
-                            cache
-                                .lock()
-                                .unwrap_or_else(|e| e.into_inner())
-                                .insert(p.clone(), buf.clone());
-                        }
-                        loaded
-                    }
-                }
-            }
+            Some(path) => load_cached_audio(path, sample_rate),
             None => None,
         };
 
@@ -1358,15 +1469,8 @@ mod multitrack_tests {
     #[test]
     fn mixed_wav_uses_composition_fps_for_audio_duration() {
         let comp = Composition::new("c".into(), "Duration".into(), 64, 64, 30, 30);
-        let path = mix_composition_to_wav(
-            &comp,
-            0,
-            30,
-            48_000,
-            None,
-            &MasterDspParams::bypass(),
-        )
-        .expect("empty composition still produces a silent audio track");
+        let path = mix_composition_to_wav(&comp, 0, 30, 48_000, None, &MasterDspParams::bypass())
+            .expect("empty composition still produces a silent audio track");
         let audio = AudioBuffer::load_wav(&path).expect("mixed WAV must be readable");
         assert_eq!(audio.sample_rate, 48_000);
         assert_eq!(audio.samples.len(), 30 * 1_600 * 2);
