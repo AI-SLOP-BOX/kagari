@@ -627,7 +627,7 @@ impl Default for KagariApp {
             audio_track_meters: Vec::new(),
             gpu_rendered: false,
             renaming_layer: None,
-            show_home: crate::ui::project_io::welcome_on_startup(),
+            show_home: true,
             startup_animation: crate::ui::panel_animation::PanelAnimation::new_opening(),
             home_dir: std::env::var("HOME")
                 .map(std::path::PathBuf::from)

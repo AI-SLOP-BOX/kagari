@@ -172,7 +172,7 @@ fn insert_imported_svg_masks(
 
 fn draw_reference_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context) {
     egui::TopBottomPanel::top("studio_header")
-        .exact_height(68.0)
+        .exact_height(48.0)
         .resizable(false)
         .frame(egui::Frame::none().fill(egui::Color32::from_rgb(10, 18, 24)))
         .show(ctx, |ui| {
@@ -181,17 +181,7 @@ fn draw_reference_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context)
                 [egui::pos2(rect.left(), rect.bottom() - 1.0), egui::pos2(rect.right(), rect.bottom() - 1.0)],
                 egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(43, 55, 65)),
             );
-            for (x, color) in [(23.0, egui::Color32::from_rgb(255, 78, 76)), (45.0, egui::Color32::from_rgb(255, 190, 42)), (67.0, egui::Color32::from_rgb(40, 204, 81))] {
-                ui.painter().circle_filled(egui::pos2(x, rect.top() + 16.0), 6.0, color);
-            }
-            ui.painter().line_segment(
-                [egui::pos2(rect.left(), rect.top() + 30.0), egui::pos2(rect.right(), rect.top() + 30.0)],
-                egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(36, 48, 58)),
-            );
-            let content_rect = egui::Rect::from_min_max(
-                egui::pos2(rect.left(), rect.top() + 30.0),
-                rect.right_bottom(),
-            );
+            let content_rect = rect;
             ui.allocate_new_ui(
                 egui::UiBuilder::new().max_rect(content_rect).layout(egui::Layout::left_to_right(egui::Align::Center)),
                 |ui| {
@@ -209,7 +199,7 @@ fn draw_reference_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context)
                     ui.add_space(22.0);
                     crate::ui::icons::render_svg_bytes(ui, "studio-breadcrumb-arrow", crate::ui::icons::SVG_CHEVRON_RIGHT, egui::vec2(18.0, 18.0), crate::ui::theme::colors::TEXT_SECONDARY);
                     ui.add_space(18.0);
-                    ui.painter().line_segment([egui::pos2(ui.cursor().left(), rect.top() + 28.0), egui::pos2(ui.cursor().left(), rect.bottom() - 28.0)], egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(42, 54, 64)));
+                    ui.painter().line_segment([egui::pos2(ui.cursor().left(), rect.top() + 10.0), egui::pos2(ui.cursor().left(), rect.bottom() - 10.0)], egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(42, 54, 64)));
                     ui.add_space(18.0);
                     crate::ui::icons::render_svg_bytes(ui, "studio-project-folder", crate::ui::icons::SVG_FOLDER, egui::vec2(18.0, 18.0), egui::Color32::from_rgb(174, 190, 207));
                     ui.add_space(10.0);
