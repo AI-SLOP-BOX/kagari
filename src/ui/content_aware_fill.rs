@@ -150,6 +150,10 @@ pub fn draw_content_aware_fill(app: &mut KagariApp, ui: &mut egui::Ui) {
             return;
         }
         let polygon = mask.path.to_polygon(frame_idx, 12);
+        if !mask.path.is_closed || polygon.len() < 3 {
+            app.toasts.error("Content-Aware Fill requires a closed mask with at least three vertices");
+            return;
+        }
         let method = match method_idx {
             1 => crate::core::content_aware_engine::FillMethod::Surface,
             2 => crate::core::content_aware_engine::FillMethod::EdgeBlend,
@@ -163,6 +167,10 @@ pub fn draw_content_aware_fill(app: &mut KagariApp, ui: &mut egui::Ui) {
         let expansion = mask.expansion.evaluate(frame_idx) + alpha_exp;
         let fill_region =
             crate::core::software_renderer::offset_polygon_vertices(&polygon, expansion);
+        if fill_region.len() < 3 {
+            app.toasts.error("The selected mask is too small to generate a fill patch");
+            return;
+        }
         for y in 0..h {
             for x in 0..w {
                 if !crate::core::mask::point_in_polygon(x as f32, y as f32, &fill_region) {
@@ -221,7 +229,10 @@ pub fn draw_content_aware_fill(app: &mut KagariApp, ui: &mut egui::Ui) {
                     frame_idx + 1
                 ));
             }
-            Err(error) => app.toasts.error(format!("Failed to write fill asset: {error}")),
+            Err(error) => {
+                let _ = std::fs::remove_file(&temp_path);
+                app.toasts.error(format!("Failed to write fill asset: {error}"));
+            }
         }
     }
 
