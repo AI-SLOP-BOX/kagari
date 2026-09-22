@@ -788,12 +788,15 @@ pub fn gpu_preview_effect_supported(effect: &EffectType) -> bool {
         // alpha and ignores its fractal type, Tritone drops its mid color,
         // GlowPro is approximated by the simpler GPU glow, displacement
         // variants omit authored parameters, Heat Distortion uses a different
-        // time scale, and invert-alpha is not implemented by the shader.
+        // time scale, Hue/Saturation drops hue shift, GPU Glow does not match
+        // the CPU blur kernel, and invert-alpha is not implemented by shader.
         EffectType::MotionBlur { .. }
         | EffectType::FilmGrain { .. }
         | EffectType::FractalNoise { .. }
         | EffectType::Tritone { .. }
+        | EffectType::Glow { .. }
         | EffectType::GlowPro { .. }
+        | EffectType::HueSaturation { .. }
         | EffectType::TurbulentDisplace { .. }
         | EffectType::WaveWarp { .. }
         | EffectType::Spherize { .. }
@@ -807,8 +810,6 @@ pub fn gpu_preview_effect_supported(effect: &EffectType) -> bool {
             | EffectType::ChromaticAberration { .. }
             | EffectType::Vignette { .. }
             | EffectType::Levels { .. }
-            | EffectType::HueSaturation { .. }
-            | EffectType::Glow { .. }
             | EffectType::MeshWarp { .. }
             | EffectType::LensFlare { .. }
             | EffectType::Invert { invert_alpha: false }
@@ -1032,6 +1033,17 @@ mod tests {
                 threshold: constant(0.8),
                 radius: constant(20.0),
                 intensity: constant(2.0),
+            },
+            EffectType::Glow {
+                threshold: constant(80.0),
+                radius: constant(20.0),
+                intensity: constant(100.0),
+                color: constant([1.0, 1.0, 1.0, 1.0]),
+            },
+            EffectType::HueSaturation {
+                hue_shift: constant(45.0),
+                saturation: constant(20.0),
+                lightness: constant(0.0),
             },
             EffectType::TurbulentDisplace {
                 amount: constant(10.0),
