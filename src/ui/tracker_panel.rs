@@ -991,7 +991,7 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                             .iter_mut()
                             .find(|mask| mask.name == "Roto Brush Matte")?;
                         crate::core::roto_assist::apply_roto_refinement(
-                            mask, smoothness, feather, edge_shift,
+                            mask, current_frame, smoothness, feather, edge_shift,
                         )
                         .then_some(())
                     })

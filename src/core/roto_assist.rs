@@ -49,6 +49,7 @@ pub fn bake_tracked_mask(
 /// properties so preview and export share the same result.
 pub fn apply_roto_refinement(
     mask: &mut Mask,
+    frame: u32,
     smoothness: f32,
     feather_px: f32,
     edge_shift_px: f32,
@@ -92,8 +93,8 @@ pub fn apply_roto_refinement(
     } else {
         0.0
     };
-    mask.feather = Animatable::new_constant(feather);
-    mask.expansion = Animatable::new_constant(edge_shift);
+    mask.feather.set_value_at_frame(frame, feather);
+    mask.expansion.set_value_at_frame(frame, edge_shift);
     true
 }
 
@@ -586,7 +587,7 @@ mod tests {
         let mut mask = square_mask();
         let original = mask.path.vertices.evaluate(0);
 
-        assert!(apply_roto_refinement(&mut mask, 4.0, 6.0, -2.5));
+        assert!(apply_roto_refinement(&mut mask, 0, 4.0, 6.0, -2.5));
 
         let refined = mask.path.vertices.evaluate(0);
         assert_eq!(refined.len(), original.len());
@@ -603,15 +604,29 @@ mod tests {
             Keyframe::new(0, vertices.clone(), InterpolationType::Linear),
             Keyframe::new(10, vertices, InterpolationType::Linear),
         ]);
+        mask.feather = Animatable::new_animated(vec![
+            Keyframe::new(0, 2.0, InterpolationType::Linear),
+            Keyframe::new(20, 4.0, InterpolationType::Linear),
+        ]);
+        mask.expansion = Animatable::new_animated(vec![
+            Keyframe::new(0, -2.0, InterpolationType::Linear),
+            Keyframe::new(20, 2.0, InterpolationType::Linear),
+        ]);
 
-        apply_roto_refinement(&mut mask, 10.0, 3.0, 1.0);
+        apply_roto_refinement(&mut mask, 10, 10.0, 3.0, 1.0);
 
         let Animatable::Animated(keyframes) = &mask.path.vertices else {
             panic!("refinement must preserve animation")
         };
         assert_eq!(keyframes.len(), 2);
         assert!(keyframes.iter().all(|keyframe| keyframe.value.len() == 4));
+        assert_eq!(mask.feather.keyframes().unwrap().len(), 3);
+        assert_eq!(mask.expansion.keyframes().unwrap().len(), 3);
+        assert_eq!(mask.feather.evaluate(0), 2.0);
         assert_eq!(mask.feather.evaluate(10), 3.0);
+        assert_eq!(mask.feather.evaluate(20), 4.0);
+        assert_eq!(mask.expansion.evaluate(0), -2.0);
         assert_eq!(mask.expansion.evaluate(10), 1.0);
+        assert_eq!(mask.expansion.evaluate(20), 2.0);
     }
 }
