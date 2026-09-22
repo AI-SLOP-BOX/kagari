@@ -57,6 +57,187 @@ pub fn bake_tracked_mask_from_trackers(
     bake_tracked_mask(base_mask, tracker, start_frame, end_frame)
 }
 
+/// Propagates a roto boundary through every frame using local dense motion
+/// between adjacent source images. The frame provider must return the
+/// selected layer rendered into composition-sized RGBA pixels.
+pub fn bake_optical_flow_mask<F>(
+    base_mask: &Mask,
+    anchor_frame: u32,
+    start_frame: u32,
+    end_frame: u32,
+    width: u32,
+    height: u32,
+    mut frame_provider: F,
+) -> Result<Animatable<Vec<[f32; 2]>>, String>
+where
+    F: FnMut(u32) -> Option<Vec<u8>>,
+{
+    if end_frame < start_frame || anchor_frame < start_frame || anchor_frame > end_frame {
+        return Err("roto propagation range must contain the anchor frame".into());
+    }
+    let expected_len = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .filter(|_| width > 0 && height > 0)
+        .ok_or_else(|| "invalid composition dimensions for roto propagation".to_owned())?;
+    let mut boundary = base_mask.path.to_polygon(anchor_frame, 16);
+    if boundary.len() < 3 {
+        return Err("Roto Brush Matte has no closed boundary to propagate".into());
+    }
+
+    let anchor_pixels = frame_provider(anchor_frame)
+        .ok_or_else(|| format!("Could not render source frame {anchor_frame}"))?;
+    if anchor_pixels.len() != expected_len {
+        return Err(format!("Source frame {anchor_frame} has invalid dimensions"));
+    }
+
+    let flow_scale = (320.0 / width.max(height) as f32).min(1.0);
+    let flow_width = ((width as f32 * flow_scale).round() as u32).max(1);
+    let flow_height = ((height as f32 * flow_scale).round() as u32).max(1);
+    let anchor_small = downsample_rgba(&anchor_pixels, width, height, flow_width, flow_height);
+    let mut keyframes = vec![Keyframe::new(
+        anchor_frame,
+        boundary.clone(),
+        InterpolationType::Linear,
+    )];
+
+    for direction in [-1i64, 1i64] {
+        let mut previous_frame = anchor_frame;
+        let mut previous_small = anchor_small.clone();
+        boundary = base_mask.path.to_polygon(anchor_frame, 16);
+        loop {
+            let next_frame = previous_frame as i64 + direction;
+            if next_frame < start_frame as i64 || next_frame > end_frame as i64 {
+                break;
+            }
+            let next_frame = next_frame as u32;
+            let pixels = frame_provider(next_frame)
+                .ok_or_else(|| format!("Could not render source frame {next_frame}"))?;
+            if pixels.len() != expected_len {
+                return Err(format!("Source frame {next_frame} has invalid dimensions"));
+            }
+            let current_small = downsample_rgba(&pixels, width, height, flow_width, flow_height);
+            let flow = crate::core::optical_flow_timewarp::compute_dense_optical_flow(
+                &previous_small,
+                &current_small,
+                flow_width,
+                flow_height,
+                1,
+                4,
+            );
+            let reverse_flow = crate::core::optical_flow_timewarp::compute_dense_optical_flow(
+                &current_small,
+                &previous_small,
+                flow_width,
+                flow_height,
+                1,
+                4,
+            );
+            boundary = warp_roto_boundary_with_flow(
+                &boundary,
+                &flow,
+                &reverse_flow,
+                width,
+                height,
+            );
+            keyframes.push(Keyframe::new(
+                next_frame,
+                boundary.clone(),
+                InterpolationType::Linear,
+            ));
+            previous_frame = next_frame;
+            previous_small = current_small;
+        }
+    }
+
+    keyframes.sort_by_key(|keyframe| keyframe.frame);
+    Ok(Animatable::Animated(keyframes))
+}
+
+fn downsample_rgba(source: &[u8], width: u32, height: u32, out_w: u32, out_h: u32) -> Vec<u8> {
+    let mut output = vec![0u8; out_w as usize * out_h as usize * 4];
+    for y in 0..out_h {
+        let sy = (((y as f32 + 0.5) * height as f32 / out_h as f32).floor() as u32)
+            .min(height - 1);
+        for x in 0..out_w {
+            let sx = (((x as f32 + 0.5) * width as f32 / out_w as f32).floor() as u32)
+                .min(width - 1);
+            let src = ((sy * width + sx) * 4) as usize;
+            let dst = ((y * out_w + x) * 4) as usize;
+            output[dst..dst + 4].copy_from_slice(&source[src..src + 4]);
+        }
+    }
+    output
+}
+
+fn warp_roto_boundary_with_flow(
+    boundary: &[[f32; 2]],
+    flow: &crate::core::optical_flow_timewarp::DenseFlowField,
+    reverse_flow: &crate::core::optical_flow_timewarp::DenseFlowField,
+    width: u32,
+    height: u32,
+) -> Vec<[f32; 2]> {
+    if width == 0
+        || height == 0
+        || flow.width == 0
+        || flow.height == 0
+        || reverse_flow.width != flow.width
+        || reverse_flow.height != flow.height
+    {
+        return boundary.to_vec();
+    }
+    boundary
+        .iter()
+        .map(|point| {
+            let forward = sample_dense_flow(flow, point[0], point[1], width, height);
+            let scale_x = width as f32 / flow.width as f32;
+            let scale_y = height as f32 / flow.height as f32;
+            let mapped = [
+                point[0] + forward[0] * scale_x,
+                point[1] + forward[1] * scale_y,
+            ];
+            let backward = sample_dense_flow(reverse_flow, mapped[0], mapped[1], width, height);
+            let round_trip_error = (forward[0] + backward[0])
+                .hypot(forward[1] + backward[1]);
+            let tolerance = 1.5 + forward[0].hypot(forward[1]) * 0.5;
+            if !round_trip_error.is_finite() || round_trip_error > tolerance {
+                *point
+            } else {
+                mapped
+            }
+        })
+        .collect()
+}
+
+fn sample_dense_flow(
+    flow: &crate::core::optical_flow_timewarp::DenseFlowField,
+    x: f32,
+    y: f32,
+    width: u32,
+    height: u32,
+) -> [f32; 2] {
+    let fx = (x * flow.width as f32 / width as f32)
+        .clamp(0.0, flow.width.saturating_sub(1) as f32);
+    let fy = (y * flow.height as f32 / height as f32)
+        .clamp(0.0, flow.height.saturating_sub(1) as f32);
+    let x0 = fx.floor() as u32;
+    let y0 = fy.floor() as u32;
+    let x1 = (x0 + 1).min(flow.width - 1);
+    let y1 = (y0 + 1).min(flow.height - 1);
+    let tx = fx - x0 as f32;
+    let ty = fy - y0 as f32;
+    let a = flow.get(x0, y0);
+    let b = flow.get(x1, y0);
+    let c = flow.get(x0, y1);
+    let d = flow.get(x1, y1);
+    [
+        (a[0] * (1.0 - tx) + b[0] * tx) * (1.0 - ty)
+            + (c[0] * (1.0 - tx) + d[0] * tx) * ty,
+        (a[1] * (1.0 - tx) + b[1] * tx) * (1.0 - ty)
+            + (c[1] * (1.0 - tx) + d[1] * tx) * ty,
+    ]
+}
+
 /// Applies roto cleanup settings to the stored mask geometry. Smoothing keeps
 /// the keyframe vertex count stable; feather and edge shift use native mask
 /// properties so preview and export share the same result.
@@ -520,6 +701,60 @@ mod tests {
         let error = bake_tracked_mask_from_trackers(&square_mask(), &[], 0, 0, 10)
             .expect_err("missing tracker must be reported");
         assert!(error.contains("tracker point 1"));
+    }
+
+    #[test]
+    fn optical_flow_propagation_tracks_local_frame_motion() {
+        fn textured_frame(width: u32, height: u32, shift_x: i32) -> Vec<u8> {
+            let mut rgba = vec![0u8; width as usize * height as usize * 4];
+            for y in 0..height {
+                for x in 0..width {
+                    let source_x = x as i32 - shift_x;
+                    let index = ((y * width + x) * 4) as usize;
+                    if source_x >= 0 && source_x < width as i32 {
+                        let mut value = (source_x as u32)
+                            .wrapping_mul(0x45d9_f3b)
+                            .wrapping_add(y.wrapping_mul(0x119d_e1f3));
+                        value ^= value >> 16;
+                        value = value.wrapping_mul(0x45d9_f3b);
+                        value ^= value >> 16;
+                        rgba[index] = value as u8;
+                        rgba[index + 1] = (value >> 8) as u8;
+                        rgba[index + 2] = (value >> 16) as u8;
+                        rgba[index + 3] = 255;
+                    }
+                }
+            }
+            rgba
+        }
+
+        let mask = Mask::new_rect("roto".into(), "Roto".into(), 8.0, 8.0, 16.0, 16.0);
+        let left = textured_frame(64, 48, -2);
+        let source = textured_frame(64, 48, 0);
+        let right = textured_frame(64, 48, 2);
+        let baked = bake_optical_flow_mask(&mask, 1, 0, 2, 64, 48, |frame| {
+            Some(match frame {
+                0 => left.clone(),
+                1 => source.clone(),
+                _ => right.clone(),
+            })
+        })
+        .expect("bidirectional flow propagation should bake");
+
+        let Animatable::Animated(keyframes) = baked else {
+            panic!("expected animated mask path");
+        };
+        assert_eq!(keyframes.len(), 3);
+        assert_eq!(keyframes[0].frame, 0);
+        assert_eq!(keyframes[1].frame, 1);
+        assert_eq!(keyframes[2].frame, 2);
+        let left_point = keyframes[0].value[0];
+        let anchor_point = keyframes[1].value[0];
+        let right_point = keyframes[2].value[0];
+        assert!((left_point[0] - anchor_point[0] + 2.0).abs() <= 1.0);
+        assert!((right_point[0] - anchor_point[0] - 2.0).abs() <= 1.0);
+        assert!((left_point[1] - anchor_point[1]).abs() <= 1.0);
+        assert!((right_point[1] - anchor_point[1]).abs() <= 1.0);
     }
 
     #[test]
