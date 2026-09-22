@@ -170,6 +170,7 @@ fn prepare_roto_brush_source(
     Some(source_comp)
 }
 
+#[cfg(test)]
 fn render_roto_brush_source_frame(
     comp: &crate::core::timeline::Composition,
     layer_index: usize,
@@ -200,6 +201,233 @@ type RotoFlowCompletion = (
 struct RotoFlowJob {
     receiver: std::sync::Mutex<std::sync::mpsc::Receiver<RotoFlowCompletion>>,
     cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+struct RotoSegmentCompletion {
+    composition_id: String,
+    composition_width: u32,
+    composition_height: u32,
+    composition_fps: u32,
+    layer_id: String,
+    source_layer_snapshot: Vec<u8>,
+    previous_strokes: Vec<EngineRotoStroke>,
+    strokes: Vec<EngineRotoStroke>,
+    frame: u32,
+    feather: f32,
+    result: Result<Option<Vec<[f32; 2]>>, String>,
+}
+
+struct RotoSegmentJob {
+    receiver: std::sync::Mutex<std::sync::mpsc::Receiver<RotoSegmentCompletion>>,
+}
+
+fn start_roto_segment_job(
+    app: &KagariApp,
+    ctx: &egui::Context,
+    layer_index: usize,
+    frame: u32,
+    previous_strokes: Vec<EngineRotoStroke>,
+    strokes: Vec<EngineRotoStroke>,
+    settings: RotoBrushSettings,
+    feather: f32,
+) -> Result<(), String> {
+    let job_id = egui::Id::new("roto_segment_job");
+    if ctx
+        .data(|data| data.get_temp::<std::sync::Arc<RotoSegmentJob>>(job_id))
+        .is_some()
+    {
+        return Err("Roto Brush is still analyzing the previous stroke".into());
+    }
+    let composition = app.history.current().active_composition().clone();
+    let layer = composition
+        .layers
+        .get(layer_index)
+        .ok_or_else(|| "Selected layer no longer exists".to_owned())?;
+    if !layer.is_active(frame) {
+        return Err("Move the playhead inside the selected layer before painting".into());
+    }
+    let frame_strokes = crate::core::roto_brush_engine::strokes_for_frame(&strokes, frame);
+    if !frame_strokes
+        .iter()
+        .any(|stroke| stroke.stroke_type == RotoStrokeType::Foreground)
+    {
+        return Err("Add a foreground stroke on this frame before refining its matte".into());
+    }
+    let source_layer_snapshot = serde_json::to_vec(layer)
+        .map_err(|error| format!("Could not snapshot source layer: {error}"))?;
+    let layer_id = layer.id.clone();
+    let composition_id = composition.id.clone();
+    let composition_width = composition.width;
+    let composition_height = composition.height;
+    let composition_fps = composition.fps;
+    let source_comp = prepare_roto_brush_source(&composition, layer_index)
+        .ok_or_else(|| "Selected source layer is unavailable".to_owned())?;
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let job = std::sync::Arc::new(RotoSegmentJob {
+        receiver: std::sync::Mutex::new(receiver),
+    });
+    ctx.data_mut(|data| data.insert_temp(job_id, job));
+    let worker_ctx = ctx.clone();
+    let worker_strokes = frame_strokes;
+    let spawn_result = std::thread::Builder::new()
+        .name("kagari-roto-segment".into())
+        .spawn(move || {
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let pixels = crate::core::software_renderer::render_frame_to_pixels_filtered(
+                    &source_comp,
+                    frame,
+                    source_comp.width,
+                    source_comp.height,
+                    0.0,
+                    0,
+                    Some(layer_index),
+                );
+                let expected = (source_comp.width as usize)
+                    .checked_mul(source_comp.height as usize)
+                    .and_then(|pixels| pixels.checked_mul(4))
+                    .ok_or_else(|| "Composition dimensions exceed supported limits".to_owned())?;
+                if pixels.len() != expected {
+                    return Err("Could not render the selected source frame for Roto Brush".into());
+                }
+                let matte = generate_rotobrush_matte(
+                    &pixels,
+                    source_comp.width,
+                    source_comp.height,
+                    &worker_strokes,
+                    &settings,
+                );
+                let polygon = trace_contour_to_polygon(
+                    &matte,
+                    source_comp.width,
+                    source_comp.height,
+                    2.0,
+                );
+                Ok((polygon.len() >= 3).then_some(polygon))
+            }))
+            .unwrap_or_else(|_| Err("Roto Brush worker encountered an internal error".into()));
+            let _ = sender.send(RotoSegmentCompletion {
+                composition_id,
+                composition_width,
+                composition_height,
+                composition_fps,
+                layer_id,
+                source_layer_snapshot,
+                previous_strokes,
+                strokes,
+                frame,
+                feather,
+                result,
+            });
+            worker_ctx.request_repaint();
+        });
+    if let Err(error) = spawn_result {
+        ctx.data_mut(|data| data.remove::<std::sync::Arc<RotoSegmentJob>>(job_id));
+        return Err(format!("Could not start Roto Brush analysis: {error}"));
+    }
+    Ok(())
+}
+
+fn poll_roto_segment_job(app: &mut KagariApp, ctx: &egui::Context) {
+    let job_id = egui::Id::new("roto_segment_job");
+    let Some(job) = ctx.data(|data| data.get_temp::<std::sync::Arc<RotoSegmentJob>>(job_id)) else {
+        return;
+    };
+    let received = match job.receiver.lock() {
+        Ok(receiver) => receiver.try_recv(),
+        Err(_) => Err(std::sync::mpsc::TryRecvError::Disconnected),
+    };
+    let completion = match received {
+        Ok(completion) => completion,
+        Err(std::sync::mpsc::TryRecvError::Empty) => {
+            ctx.request_repaint_after(std::time::Duration::from_millis(100));
+            return;
+        }
+        Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+            ctx.data_mut(|data| data.remove::<std::sync::Arc<RotoSegmentJob>>(job_id));
+            app.toasts.error("Roto Brush worker stopped unexpectedly");
+            return;
+        }
+    };
+    ctx.data_mut(|data| data.remove::<std::sync::Arc<RotoSegmentJob>>(job_id));
+    let stroke_state_id = egui::Id::new(("roto_strokes", completion.layer_id.as_str()));
+    let restore_strokes = |ctx: &egui::Context| {
+        ctx.data_mut(|data| data.insert_temp(stroke_state_id, completion.previous_strokes.clone()));
+    };
+    let mut project = app.history.current().clone();
+    let comp = project.active_composition_mut();
+    if comp.id != completion.composition_id
+        || comp.width != completion.composition_width
+        || comp.height != completion.composition_height
+        || comp.fps != completion.composition_fps
+    {
+        restore_strokes(ctx);
+        app.toasts.error("Composition changed; Roto Brush result was discarded");
+        return;
+    }
+    let Some(layer_index) = comp
+        .layers
+        .iter()
+        .position(|layer| layer.id == completion.layer_id)
+    else {
+        restore_strokes(ctx);
+        app.toasts.error("Source layer changed; Roto Brush result was discarded");
+        return;
+    };
+    let layer_matches = serde_json::to_vec(&comp.layers[layer_index])
+        .ok()
+        .as_deref()
+        == Some(completion.source_layer_snapshot.as_slice());
+    if !layer_matches {
+        restore_strokes(ctx);
+        app.toasts.error("Source layer changed during analysis; Roto Brush result was discarded");
+        return;
+    }
+    let polygon = match completion.result {
+        Ok(polygon) => polygon,
+        Err(error) => {
+            restore_strokes(ctx);
+            app.toasts.error(error);
+            return;
+        }
+    };
+    let frame_stroke_count = crate::core::roto_brush_engine::strokes_for_frame(
+        &completion.strokes,
+        completion.frame,
+    )
+    .len();
+    let has_polygon = polygon.is_some();
+    let layer = &mut comp.layers[layer_index];
+    layer.roto_brush_strokes = completion.strokes;
+    if let Some(polygon) = polygon {
+        if let Some(mask) = layer
+            .masks
+            .iter_mut()
+            .find(|mask| mask.name == "Roto Brush Matte")
+        {
+            crate::core::roto_assist::set_roto_matte_keyframe(mask, completion.frame, polygon);
+            mask.feather = Animatable::new_constant(completion.feather);
+        } else {
+            let mut mask = crate::core::mask::Mask::new_closed(
+                "roto_brush_matte".to_owned(),
+                "Roto Brush Matte".to_owned(),
+                polygon.clone(),
+            );
+            crate::core::roto_assist::set_roto_matte_keyframe(&mut mask, completion.frame, polygon);
+            mask.feather = Animatable::new_constant(completion.feather);
+            layer.masks.push(mask);
+        }
+    }
+    app.commit_project(project);
+    if has_polygon {
+        app.toasts.info(if frame_stroke_count == 1 {
+            "Roto Brush matte updated from foreground stroke"
+        } else {
+            "Roto Brush matte refined from foreground/background strokes"
+        });
+    } else {
+        app.toasts
+            .info("Roto Brush stroke saved; add marks around the subject to create a matte");
+    }
 }
 
 fn start_roto_flow_bake(
@@ -476,6 +704,7 @@ fn draw_view_menu_contents(ui: &mut egui::Ui, app: &mut KagariApp) {
 
 pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
     poll_roto_flow_bake(app, ctx);
+    poll_roto_segment_job(app, ctx);
     // Only clone the project to the production document when history has actually
     // changed. The generation counter avoids a full deep clone every frame.
     let hist_gen = app.history.generation();
@@ -1891,6 +2120,17 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                             if ui.button("Propagate with layer tracker").clicked() {
                                 propagate_roto = true;
                             }
+                            let segment_job = ctx.data(|data| {
+                                data.get_temp::<std::sync::Arc<RotoSegmentJob>>(egui::Id::new(
+                                    "roto_segment_job",
+                                ))
+                            });
+                            if segment_job.is_some() {
+                                ui.horizontal(|ui| {
+                                    ui.spinner();
+                                    ui.label("Analyzing matte…");
+                                });
+                            }
                             let flow_job = ctx.data(|data| {
                                 data.get_temp::<std::sync::Arc<RotoFlowJob>>(egui::Id::new(
                                     "roto_flow_bake_job",
@@ -1998,17 +2238,24 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                     }
                 }
                 let stroke_id = egui::Id::new(("roto_live_stroke", sel_li));
+                let segment_busy = ctx
+                    .data(|data| {
+                        data.get_temp::<std::sync::Arc<RotoSegmentJob>>(egui::Id::new(
+                            "roto_segment_job",
+                        ))
+                    })
+                    .is_some();
                 let alt_held = ctx.input(|i| i.modifiers.alt);
                 let fg_pref = ctx.data_mut(|d| d.get_temp::<bool>(egui::Id::new("roto_fg_mode")).unwrap_or(true));
                 let is_fg = if alt_held { false } else { fg_pref };
-                if viewport_response.drag_started() {
+                if !segment_busy && viewport_response.drag_started() {
                     if let Some(pp) = viewport_response.interact_pointer_pos() {
                         let cx = (pp.x - origin_x) / draw_w * comp_w;
                         let cy = (pp.y - origin_y) / draw_h * comp_h;
                         ctx.data_mut(|d| d.insert_temp(stroke_id, vec![[cx, cy]]));
                     }
                 }
-                if viewport_response.dragged() {
+                if !segment_busy && viewport_response.dragged() {
                     if let Some(pp) = viewport_response.interact_pointer_pos() {
                         let cx = (pp.x - origin_x) / draw_w * comp_w;
                         let cy = (pp.y - origin_y) / draw_h * comp_h;
@@ -2017,105 +2264,59 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                         ctx.data_mut(|d| d.insert_temp(stroke_id, pts));
                     }
                 }
-                if viewport_response.drag_stopped() {
+                if !segment_busy && viewport_response.drag_stopped() {
                     let pts_opt = ctx.data_mut(|d| d.remove_temp::<Vec<[f32; 2]>>(stroke_id));
                     if let Some(pts) = pts_opt {
                         if pts.len() >= 2 {
-                            let comp_ro = app.history.current().active_composition();
-                            let cw = comp_ro.width;
-                            let ch = comp_ro.height;
-                            let pixels = render_roto_brush_source_frame(
-                                comp_ro,
+                            let radius = ctx.data_mut(|data| {
+                                data.get_temp::<f32>(egui::Id::new("roto_brush_radius"))
+                                    .unwrap_or(8.0)
+                            });
+                            let previous_strokes = ctx.data_mut(|data| {
+                                data.get_temp::<Vec<EngineRotoStroke>>(stroke_list_id)
+                                    .unwrap_or_default()
+                            });
+                            let mut all_strokes = previous_strokes.clone();
+                            all_strokes.push(EngineRotoStroke {
+                                stroke_type: if is_fg {
+                                    RotoStrokeType::Foreground
+                                } else {
+                                    RotoStrokeType::Background
+                                },
+                                points: pts,
+                                radius,
+                                frame: Some(current_frame),
+                            });
+                            ctx.data_mut(|data| data.insert_temp(stroke_list_id, all_strokes.clone()));
+                            let feather = ctx.data_mut(|data| {
+                                data.get_temp::<f32>(egui::Id::new("roto_feather_radius"))
+                                    .unwrap_or(3.0)
+                            });
+                            let contrast = ctx.data_mut(|data| {
+                                data.get_temp::<f32>(egui::Id::new("roto_contrast"))
+                                    .unwrap_or(1.0)
+                            });
+                            let settings = RotoBrushSettings {
+                                feather_radius: feather,
+                                contrast,
+                                ..Default::default()
+                            };
+                            match start_roto_segment_job(
+                                app,
+                                ctx,
                                 sel_li,
                                 current_frame,
-                            );
-                            if !pixels.is_empty() && pixels.len() == (cw * ch * 4) as usize {
-                                let radius = ctx.data_mut(|d| {
-                                    d.get_temp::<f32>(egui::Id::new("roto_brush_radius")).unwrap_or(8.0)
-                                });
-                                let mut all_strokes = ctx.data_mut(|d| {
-                                    d.get_temp::<Vec<EngineRotoStroke>>(stroke_list_id)
-                                        .unwrap_or_default()
-                                });
-                                all_strokes.push(EngineRotoStroke {
-                                    stroke_type: if is_fg {
-                                        RotoStrokeType::Foreground
-                                    } else {
-                                        RotoStrokeType::Background
-                                    },
-                                    points: pts.clone(),
-                                    radius,
-                                    frame: Some(current_frame),
-                                });
-                                ctx.data_mut(|d| d.insert_temp(stroke_list_id, all_strokes.clone()));
-                                let feather = ctx.data_mut(|d| {
-                                    d.get_temp::<f32>(egui::Id::new("roto_feather_radius"))
-                                        .unwrap_or(3.0)
-                                });
-                                let contrast = ctx.data_mut(|d| {
-                                    d.get_temp::<f32>(egui::Id::new("roto_contrast"))
-                                        .unwrap_or(1.0)
-                                });
-                                let settings = RotoBrushSettings {
-                                    feather_radius: feather,
-                                    contrast,
-                                    ..Default::default()
-                                };
-                                let frame_strokes =
-                                    crate::core::roto_brush_engine::strokes_for_frame(
-                                        &all_strokes,
-                                        current_frame,
-                                    );
-                                let mask_buf = generate_rotobrush_matte(
-                                    &pixels,
-                                    cw,
-                                    ch,
-                                    &frame_strokes,
-                                    &settings,
-                                );
-                                let polygon = trace_contour_to_polygon(&mask_buf, cw, ch, 2.0);
-                                let has_polygon = polygon.len() >= 3;
-                                let mut temp_proj = app.history.current().clone();
-                                let comp = temp_proj.active_composition_mut();
-                                if let Some(layer) = comp.layers.get_mut(sel_li) {
-                                    layer.roto_brush_strokes = all_strokes.clone();
-                                    if has_polygon {
-                                        if let Some(mask) = layer
-                                            .masks
-                                            .iter_mut()
-                                            .find(|mask| mask.name == "Roto Brush Matte")
-                                        {
-                                            crate::core::roto_assist::set_roto_matte_keyframe(
-                                                mask,
-                                                current_frame,
-                                                polygon.clone(),
-                                            );
-                                            mask.feather = crate::core::property::Animatable::new_constant(feather);
-                                        } else {
-                                            let mut mask = crate::core::mask::Mask::new_closed(
-                                                "roto_brush_matte".to_owned(),
-                                                "Roto Brush Matte".to_owned(),
-                                                polygon.clone(),
-                                            );
-                                            crate::core::roto_assist::set_roto_matte_keyframe(
-                                                &mut mask,
-                                                current_frame,
-                                                polygon,
-                                            );
-                                            mask.feather = crate::core::property::Animatable::new_constant(feather);
-                                            layer.masks.push(mask);
-                                        }
-                                    }
-                                    app.commit_project(temp_proj);
-                                    if has_polygon {
-                                        app.toasts.info(if frame_strokes.len() == 1 {
-                                            if is_fg { "Roto Brush: Foreground matte created" } else { "Roto Brush: Background refinement added" }
-                                        } else {
-                                            "Roto Brush: Matte refined from all strokes"
-                                        });
-                                    } else {
-                                        app.toasts.info("Roto Brush stroke saved; try broader strokes to create a distinct matte");
-                                    }
+                                previous_strokes.clone(),
+                                all_strokes,
+                                settings,
+                                feather,
+                            ) {
+                                Ok(()) => app.toasts.info("Roto Brush matte analysis started"),
+                                Err(error) => {
+                                    ctx.data_mut(|data| {
+                                        data.insert_temp(stroke_list_id, previous_strokes)
+                                    });
+                                    app.toasts.error(error);
                                 }
                             }
                         }
@@ -3811,6 +4012,147 @@ mod review_regression_tests {
         let pixels = render_roto_brush_source_frame(&comp, 0, 0);
         let center = ((16 * 32 + 16) * 4) as usize;
         assert_eq!(&pixels[center..center + 4], &[255, 0, 0, 255]);
+    }
+
+    #[test]
+    fn roto_stroke_analysis_runs_async_and_commits_strokes_with_the_matte() {
+        let mut app = KagariApp::default();
+        let mut project = app.history.current().clone();
+        let comp = project.active_composition_mut();
+        comp.width = 32;
+        comp.height = 32;
+        comp.duration_frames = 3;
+        comp.layers.clear();
+        comp.layers.push(crate::core::timeline::Layer::new(
+            "roto-target".into(),
+            "Roto target".into(),
+            crate::core::timeline::LayerType::Solid {
+                color: [0.8, 0.7, 0.6, 1.0],
+            },
+            3,
+        ));
+        app.commit_project(project);
+        app.selection.selected_layer_idx = Some(0);
+
+        let frame = 1;
+        let stroke = EngineRotoStroke {
+            stroke_type: RotoStrokeType::Foreground,
+            points: vec![[8.0, 16.0], [24.0, 16.0]],
+            radius: 4.0,
+            frame: Some(frame),
+        };
+        let ctx = egui::Context::default();
+        start_roto_segment_job(
+            &app,
+            &ctx,
+            0,
+            frame,
+            Vec::new(),
+            vec![stroke],
+            RotoBrushSettings {
+                feather_radius: 0.0,
+                ..Default::default()
+            },
+            0.0,
+        )
+        .unwrap();
+
+        let started = std::time::Instant::now();
+        loop {
+            poll_roto_segment_job(&mut app, &ctx);
+            if ctx
+                .data(|data| {
+                    data.get_temp::<std::sync::Arc<RotoSegmentJob>>(egui::Id::new(
+                        "roto_segment_job",
+                    ))
+                })
+                .is_none()
+            {
+                break;
+            }
+            assert!(started.elapsed() < std::time::Duration::from_secs(5));
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+
+        let layer = &app.history.current().active_composition().layers[0];
+        assert_eq!(layer.roto_brush_strokes.len(), 1);
+        let matte = layer
+            .masks
+            .iter()
+            .find(|mask| mask.name == "Roto Brush Matte")
+            .expect("background worker should commit the generated matte");
+        assert!(matte.path.vertices_at_frame(frame).len() >= 3);
+    }
+
+    #[test]
+    fn roto_stroke_analysis_discards_results_if_the_source_layer_changes() {
+        let mut app = KagariApp::default();
+        let mut project = app.history.current().clone();
+        let comp = project.active_composition_mut();
+        comp.width = 32;
+        comp.height = 32;
+        comp.duration_frames = 3;
+        comp.layers.clear();
+        comp.layers.push(crate::core::timeline::Layer::new(
+            "roto-target".into(),
+            "Roto target".into(),
+            crate::core::timeline::LayerType::Solid {
+                color: [0.8, 0.7, 0.6, 1.0],
+            },
+            3,
+        ));
+        app.commit_project(project);
+        app.selection.selected_layer_idx = Some(0);
+
+        let frame = 1;
+        let stroke = EngineRotoStroke {
+            stroke_type: RotoStrokeType::Foreground,
+            points: vec![[8.0, 16.0], [24.0, 16.0]],
+            radius: 4.0,
+            frame: Some(frame),
+        };
+        let ctx = egui::Context::default();
+        start_roto_segment_job(
+            &app,
+            &ctx,
+            0,
+            frame,
+            Vec::new(),
+            vec![stroke],
+            RotoBrushSettings::default(),
+            3.0,
+        )
+        .unwrap();
+
+        let mut changed_project = app.history.current().clone();
+        changed_project.active_composition_mut().layers[0]
+            .transform
+            .position = Animatable::new_constant([3.0, 4.0]);
+        app.commit_project(changed_project);
+
+        let started = std::time::Instant::now();
+        loop {
+            poll_roto_segment_job(&mut app, &ctx);
+            if ctx
+                .data(|data| {
+                    data.get_temp::<std::sync::Arc<RotoSegmentJob>>(egui::Id::new(
+                        "roto_segment_job",
+                    ))
+                })
+                .is_none()
+            {
+                break;
+            }
+            assert!(started.elapsed() < std::time::Duration::from_secs(5));
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+
+        let layer = &app.history.current().active_composition().layers[0];
+        assert!(layer.roto_brush_strokes.is_empty());
+        assert!(!layer
+            .masks
+            .iter()
+            .any(|mask| mask.name == "Roto Brush Matte"));
     }
 
     #[test]
