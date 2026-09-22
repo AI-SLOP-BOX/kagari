@@ -143,8 +143,8 @@ pub fn generate_rotobrush_matte(
             let d_bg_color = color_dist_sq([r, g, b], bg_mean);
 
             // Spatial distance to nearest FG/BG strokes
-            let min_d_fg_pos = fg_distance[i].powi(2);
-            let min_d_bg_pos = bg_distance[i].powi(2);
+            let min_d_fg_pos = fg_distance[i];
+            let min_d_bg_pos = bg_distance[i];
 
             let spatial_fg_weight = if !fg_points.is_empty() {
                 (-min_d_fg_pos / (2.0 * spatial_sigma_sq)).exp()
@@ -241,55 +241,79 @@ fn distance_field_from_points(width: u32, height: u32, points: &[[f32; 2]]) -> V
 
     let w = width as usize;
     let h = height as usize;
+    let mut seeds = vec![false; len];
     for point in points {
         if !point[0].is_finite() || !point[1].is_finite() {
             continue;
         }
         let x = (point[0].round() as i64).clamp(0, width as i64 - 1) as usize;
         let y = (point[1].round() as i64).clamp(0, height as i64 - 1) as usize;
-        distance[y * w + x] = 0.0;
+        seeds[y * w + x] = true;
     }
 
-    let diagonal = std::f32::consts::SQRT_2;
+    let mut horizontal = vec![f32::INFINITY; len];
     for y in 0..h {
-        for x in 0..w {
-            let i = y * w + x;
-            let mut best = distance[i];
-            if x > 0 {
-                best = best.min(distance[i - 1] + 1.0);
-            }
-            if y > 0 {
-                best = best.min(distance[i - w] + 1.0);
-                if x > 0 {
-                    best = best.min(distance[i - w - 1] + diagonal);
-                }
-                if x + 1 < w {
-                    best = best.min(distance[i - w + 1] + diagonal);
-                }
-            }
-            distance[i] = best;
-        }
+        let start = y * w;
+        let row: Vec<f32> = seeds[start..start + w]
+            .iter()
+            .map(|&seed| if seed { 0.0 } else { f32::INFINITY })
+            .collect();
+        horizontal[start..start + w].copy_from_slice(&squared_distance_transform_1d(&row));
     }
-    for y in (0..h).rev() {
-        for x in (0..w).rev() {
-            let i = y * w + x;
-            let mut best = distance[i];
-            if x + 1 < w {
-                best = best.min(distance[i + 1] + 1.0);
-            }
-            if y + 1 < h {
-                best = best.min(distance[i + w] + 1.0);
-                if x > 0 {
-                    best = best.min(distance[i + w - 1] + diagonal);
-                }
-                if x + 1 < w {
-                    best = best.min(distance[i + w + 1] + diagonal);
-                }
-            }
-            distance[i] = best;
+    for x in 0..w {
+        let column: Vec<f32> = (0..h).map(|y| horizontal[y * w + x]).collect();
+        let transformed = squared_distance_transform_1d(&column);
+        for (y, value) in transformed.into_iter().enumerate() {
+            distance[y * w + x] = value;
         }
     }
     distance
+}
+
+fn squared_distance_transform_1d(input: &[f32]) -> Vec<f32> {
+    let mut output = vec![f32::INFINITY; input.len()];
+    let Some(first) = input.iter().position(|value| value.is_finite()) else {
+        return output;
+    };
+
+    let mut sites = vec![0usize; input.len()];
+    let mut boundaries = vec![0.0f64; input.len() + 1];
+    let mut envelope = 0usize;
+    sites[0] = first;
+    boundaries[0] = f64::NEG_INFINITY;
+    boundaries[1] = f64::INFINITY;
+
+    for q in first + 1..input.len() {
+        if !input[q].is_finite() {
+            continue;
+        }
+        let qf = q as f64;
+        loop {
+            let p = sites[envelope];
+            let pf = p as f64;
+            let intersection = ((input[q] as f64 + qf * qf)
+                - (input[p] as f64 + pf * pf))
+                / (2.0 * (qf - pf));
+            if intersection > boundaries[envelope] {
+                envelope += 1;
+                sites[envelope] = q;
+                boundaries[envelope] = intersection;
+                boundaries[envelope + 1] = f64::INFINITY;
+                break;
+            }
+            envelope -= 1;
+        }
+    }
+
+    envelope = 0;
+    for (q, out) in output.iter_mut().enumerate() {
+        while boundaries[envelope + 1] < q as f64 {
+            envelope += 1;
+        }
+        let delta = q as f64 - sites[envelope] as f64;
+        *out = (delta * delta + input[sites[envelope]] as f64) as f32;
+    }
+    output
 }
 
 fn color_dist_sq(c1: [f32; 3], c2: [f32; 3]) -> f32 {
@@ -405,11 +429,17 @@ mod tests {
     }
 
     #[test]
-    fn distance_field_tracks_nearest_stroke_in_linear_passes() {
+    fn distance_field_matches_exact_nearest_euclidean_distance() {
         let distances = distance_field_from_points(5, 5, &[[1.0, 1.0], [3.0, 3.0]]);
         assert_eq!(distances[1 * 5 + 1], 0.0);
-        assert!((distances[1 * 5 + 2] - 1.0).abs() < 1e-6);
-        assert!((distances[0] - std::f32::consts::SQRT_2).abs() < 1e-6);
-        assert!((distances[4 * 5 + 4] - std::f32::consts::SQRT_2).abs() < 1e-6);
+        for y in 0..5 {
+            for x in 0..5 {
+                let expected = [[1.0f32, 1.0f32], [3.0, 3.0]]
+                    .iter()
+                    .map(|point| (x as f32 - point[0]).powi(2) + (y as f32 - point[1]).powi(2))
+                    .fold(f32::INFINITY, f32::min);
+                assert!((distances[y * 5 + x] - expected).abs() < 1e-5);
+            }
+        }
     }
 }
