@@ -1735,31 +1735,42 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 }
                 if propagate_roto {
                     let mut propagated = app.history.current().clone();
+                    let active_tracker_idx = ctx.data(|d| {
+                        d.get_temp::<usize>(egui::Id::new("ae_active_tracker_pt_idx"))
+                            .unwrap_or(0)
+                    });
                     let result = propagated
                         .active_composition_mut()
                         .layers
                         .get_mut(sel_li)
+                        .ok_or_else(|| {
+                            format!("Selected layer {} no longer exists", sel_li + 1)
+                        })
                         .and_then(|layer| {
-                            let tracker = layer.trackers.first()?.clone();
-                            let mask = layer
+                            let mask_idx = layer
                                 .masks
-                                .iter_mut()
-                                .find(|mask| mask.name == "Roto Brush Matte")?;
-                            let baked = crate::core::roto_assist::bake_tracked_mask(
-                                mask,
-                                &tracker,
+                                .iter()
+                                .position(|mask| mask.name == "Roto Brush Matte")
+                                .ok_or_else(|| {
+                                    "Create a Roto Brush Matte before propagation".to_owned()
+                                })?;
+                            let baked = crate::core::roto_assist::bake_tracked_mask_from_trackers(
+                                &layer.masks[mask_idx],
+                                &layer.trackers,
+                                active_tracker_idx,
                                 layer.in_frame,
                                 layer.out_frame.max(layer.in_frame.saturating_add(1)),
-                            )
-                            .ok()?;
-                            mask.path.vertices = baked;
-                            Some(())
+                            )?;
+                            layer.masks[mask_idx].path.vertices = baked;
+                            Ok(())
                         });
-                    if result.is_some() {
-                        app.commit_project(propagated);
-                        app.toasts.info("Roto Brush matte propagated across the layer");
-                    } else {
-                        app.toasts.info("Add a tracker to this layer before propagation");
+                    match result {
+                        Ok(()) => {
+                            app.commit_project(propagated);
+                            app.toasts
+                                .info("Roto Brush matte propagated with the selected tracker");
+                        }
+                        Err(error) => app.toasts.error(error),
                     }
                 }
                 let stroke_id = egui::Id::new(("roto_live_stroke", sel_li));

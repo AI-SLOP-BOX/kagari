@@ -45,7 +45,7 @@ is intentionally tracked separately from the core workflow.
 | 3D layers | 3D transforms, cameras, lights, depth, shadows, DOF | 🟡 | `advanced_3d_engine.rs`, camera/light UI, and software-rasterized OBJ layers with nested PreComp coverage; model materials, scene authoring, GPU mesh rendering, and broader interchange remain narrower than AE |
 | Scene cameras/lights | Camera and light layers in the timeline, animated scene objects, active-camera switching | 🟡 | Creation from the timeline, settings, menu, and 3D camera solve now creates linked scene rows; deletion and pre-compose preserve/remove the linked objects, and animated row transforms drive software-render camera/light values; richer first-class layer controls and GPU parity remain |
 | Motion tracking | Point tracking, planar tracking, camera solve, stabilization | 🟡 | Point/quad tracking, animated Corner Pin, target-aware stabilization, and 3D camera solving are connected to the tracker panel; real-footage workflow coverage, planar confidence UX, and production-quality solve accuracy still need work |
-| Roto / paint | Roto Brush, paint, clone, eraser, puppet | 🟡 | Roto Brush source strokes persist and remain isolated by layer identity; tracker propagation is range-safe, segmentation is bounded/linear-time, and the Tracker panel now applies bounded closed-path smoothing plus actual mask feather/expansion as an undoable edit. Optical-flow propagation, matte-quality review/cache workflow, color decontamination, and paint/clone/puppet parity remain well below AE |
+| Roto / paint | Roto Brush, paint, clone, eraser, puppet | 🟡 | Roto Brush source strokes persist and remain isolated by layer identity; Tracker propagation now uses the selected tracker point with explicit missing-index errors, segmentation is bounded/linear-time, and the Tracker panel applies closed-path smoothing plus mask feather/expansion as an undoable edit. Propagation still translates the matte rather than re-segmenting image content; optical-flow propagation, matte review/cache, color decontamination, and paint/clone/puppet parity remain well below AE |
 | Content-Aware Fill | Remove an object across a sequence with generated replacement frames | 🟡 | `core/content_aware_engine.rs` and `ui/content_aware_fill.rs` provide a mask-driven fill workflow, but temporal consistency, difficult backgrounds, and quality/performance acceptance against real footage are not established |
 | Motion blur | Per-layer and comp motion blur with shutter controls | 🟡 | Layer/comp switches and shutter controls exist; temporal sampling quality, GPU/export parity, and representative fast-motion image tests remain incomplete |
 | Keying | Chroma/linear key, matte cleanup, spill-like workflows | 🟡 | Keying modules and controls exist; production-grade edge handling still needs validation |
@@ -88,9 +88,10 @@ is intentionally tracked separately from the core workflow.
 7. **Workspace persistence** — saved workspaces must restore panel geometry,
    timeline height, graph mode, and viewer state, not only tab indices.
 8. **Roto/paint temporal behavior** — a user can now apply geometry smoothing,
-   feather, and expansion to the actual stored matte with Undo, but this is not
-   temporal segmentation: optical-flow propagation, propagation review,
-   correction caching, and real-footage quality remain substantially behind AE.
+   feather, and expansion to the actual stored matte with Undo, and can choose
+   which tracker drives its translation. This is not temporal segmentation:
+   optical-flow propagation, propagation review, correction caching, and
+   real-footage quality remain substantially behind AE.
 9. **Audio correction and interchange** — production audio formats and the
    correction workflow need a complete non-ML baseline before model support.
 

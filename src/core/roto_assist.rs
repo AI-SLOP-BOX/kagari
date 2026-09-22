@@ -44,6 +44,19 @@ pub fn bake_tracked_mask(
     Ok(Animatable::Animated(kfs))
 }
 
+pub fn bake_tracked_mask_from_trackers(
+    base_mask: &Mask,
+    trackers: &[TrackerPoint],
+    tracker_index: usize,
+    start_frame: u32,
+    end_frame: u32,
+) -> Result<Animatable<Vec<[f32; 2]>>, String> {
+    let tracker = trackers
+        .get(tracker_index)
+        .ok_or_else(|| format!("tracker point {} does not exist", tracker_index + 1))?;
+    bake_tracked_mask(base_mask, tracker, start_frame, end_frame)
+}
+
 /// Applies roto cleanup settings to the stored mask geometry. Smoothing keeps
 /// the keyframe vertex count stable; feather and edge shift use native mask
 /// properties so preview and export share the same result.
@@ -485,6 +498,28 @@ mod tests {
             }
             _ => panic!("expected animated"),
         }
+    }
+
+    #[test]
+    fn bake_tracked_mask_uses_the_selected_tracker_point() {
+        let mask = square_mask();
+        let stationary = TrackerPoint::new("stationary".into(), "Stationary".into(), [0.0, 0.0]);
+        let selected = moving_tracker();
+        let baked = bake_tracked_mask_from_trackers(&mask, &[stationary, selected], 1, 0, 10)
+            .expect("selected tracker should bake");
+        let Animatable::Animated(keyframes) = baked else {
+            panic!("expected animated mask")
+        };
+        assert_eq!(keyframes.first().unwrap().value[0], [0.0, 0.0]);
+        assert!((keyframes.last().unwrap().value[0][0] - 40.0).abs() < 0.01);
+        assert!((keyframes.last().unwrap().value[0][1] + 10.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn bake_tracked_mask_rejects_missing_tracker_index() {
+        let error = bake_tracked_mask_from_trackers(&square_mask(), &[], 0, 0, 10)
+            .expect_err("missing tracker must be reported");
+        assert!(error.contains("tracker point 1"));
     }
 
     #[test]
