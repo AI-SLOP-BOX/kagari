@@ -149,9 +149,6 @@ mod tests {
             .iter()
             .map(|p| ((p[0] - p[1]).abs()) / std::f32::consts::SQRT_2)
             .fold(0.0f32, f32::max);
-        assert!(
-            max_off > 0.0,
-            "smooth zigzag left the diagonal undisplaced"
-        );
+        assert!(max_off > 0.0, "smooth zigzag left the diagonal undisplaced");
     }
 }

@@ -144,18 +144,17 @@ fn ffmpeg_audio_wav_dash_rejected() {
     let (tx, _rx) = std::sync::mpsc::channel();
     let rendered = Arc::new(AtomicUsize::new(0));
     let probe = Arc::clone(&rendered);
-    let err = start_export_cancelable(
-        config,
-        tx,
-        Arc::new(AtomicBool::new(false)),
-        move |_| {
-            probe.fetch_add(1, Ordering::SeqCst);
-            vec![0u8; 1920 * 1080 * 4]
-        },
-    )
+    let err = start_export_cancelable(config, tx, Arc::new(AtomicBool::new(false)), move |_| {
+        probe.fetch_add(1, Ordering::SeqCst);
+        vec![0u8; 1920 * 1080 * 4]
+    })
     .expect_err("dash-prefixed audio_wav must be rejected");
     // Validation must precede spawning: no frame may render.
-    assert_eq!(rendered.load(Ordering::SeqCst), 0, "rejected export rendered frames");
+    assert_eq!(
+        rendered.load(Ordering::SeqCst),
+        0,
+        "rejected export rendered frames"
+    );
     if kagari_vfx::core::ffmpeg_export::is_ffmpeg_available() {
         assert!(
             err.contains("must not start with"),
@@ -184,17 +183,16 @@ fn ffmpeg_output_path_dash_rejected() {
     let (tx, _rx) = std::sync::mpsc::channel();
     let rendered = Arc::new(AtomicUsize::new(0));
     let probe = Arc::clone(&rendered);
-    let err = start_export_cancelable(
-        config,
-        tx,
-        Arc::new(AtomicBool::new(false)),
-        move |_| {
-            probe.fetch_add(1, Ordering::SeqCst);
-            vec![0u8; 1920 * 1080 * 4]
-        },
-    )
+    let err = start_export_cancelable(config, tx, Arc::new(AtomicBool::new(false)), move |_| {
+        probe.fetch_add(1, Ordering::SeqCst);
+        vec![0u8; 1920 * 1080 * 4]
+    })
     .expect_err("dash-prefixed output_path must be rejected");
-    assert_eq!(rendered.load(Ordering::SeqCst), 0, "rejected export rendered frames");
+    assert_eq!(
+        rendered.load(Ordering::SeqCst),
+        0,
+        "rejected export rendered frames"
+    );
     if kagari_vfx::core::ffmpeg_export::is_ffmpeg_available() {
         assert!(
             err.contains("must not start with"),

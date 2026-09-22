@@ -233,7 +233,10 @@ fn generate_video_proxy(
         let output = proxy_dir.join(format!("frame_{frame:05}.webp"));
         if let Err(error) = proxy.save_with_format(&output, image::ImageFormat::WebP) {
             let _ = std::fs::remove_dir_all(&proxy_dir);
-            return Err(format!("could not encode video proxy frame {}: {error}", frame));
+            return Err(format!(
+                "could not encode video proxy frame {}: {error}",
+                frame
+            ));
         }
     }
     Ok(proxy_dir.to_string_lossy().into_owned())
@@ -300,14 +303,8 @@ mod tests {
 
     #[test]
     fn test_composition_preview_scale_includes_enabled_layer_proxy() {
-        let mut comp = crate::core::timeline::Composition::new(
-            "c".into(),
-            "Comp".into(),
-            1920,
-            1080,
-            30,
-            30,
-        );
+        let mut comp =
+            crate::core::timeline::Composition::new("c".into(), "Comp".into(), 1920, 1080, 30, 30);
         comp.comp_proxy.active_in_preview = false;
         let mut layer = crate::core::timeline::Layer::new_null("n".into(), "Null".into(), 30);
         layer.proxy.enabled = true;

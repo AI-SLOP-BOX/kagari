@@ -143,9 +143,10 @@ impl ParallelRenderQueue {
                         return;
                     }
 
-                    let render_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
-                        || render_frame(&item.comp_name, frame),
-                    ));
+                    let render_result =
+                        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            render_frame(&item.comp_name, frame)
+                        }));
                     if render_result.is_err() {
                         self.cancel();
                         record_first_failure(
@@ -161,9 +162,10 @@ impl ParallelRenderQueue {
 
                     if let Some(cb) = &self.progress {
                         let done = self.total_frames_rendered.load(Ordering::Relaxed);
-                        let callback_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
-                            || cb(item_idx, done, self.total_frames),
-                        ));
+                        let callback_result =
+                            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                cb(item_idx, done, self.total_frames)
+                            }));
                         if callback_result.is_err() {
                             self.cancel();
                             record_first_failure(
@@ -260,9 +262,10 @@ impl ParallelRenderQueue {
                         return;
                     }
 
-                    let render_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
-                        || render_frame(&item.comp_name, frame),
-                    ));
+                    let render_result =
+                        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            render_frame(&item.comp_name, frame)
+                        }));
                     if render_result.is_err() {
                         self.cancel();
                         record_first_failure(
@@ -278,9 +281,10 @@ impl ParallelRenderQueue {
 
                     if let Some(cb) = &self.progress {
                         let done = self.total_frames_rendered.load(Ordering::Relaxed);
-                        let callback_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
-                            || cb(item_idx, done, self.total_frames),
-                        ));
+                        let callback_result =
+                            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                cb(item_idx, done, self.total_frames)
+                            }));
                         if callback_result.is_err() {
                             self.cancel();
                             record_first_failure(
@@ -491,9 +495,7 @@ mod tests {
             .build()
             .unwrap();
         let result = pool.install(|| {
-            queue.render_all_mfr_with_external_cancel_checked(&external_cancel, |_, _| {
-                vec![0u8; 4]
-            })
+            queue.render_all_mfr_with_external_cancel_checked(&external_cancel, |_, _| vec![0u8; 4])
         });
 
         assert_eq!(

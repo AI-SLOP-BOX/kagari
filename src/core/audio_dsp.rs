@@ -809,9 +809,8 @@ mod tests {
     fn test_auto_gain_moves_rms_toward_target_without_unbounded_boost() {
         let mut buf = vec![0.1f32; 4096];
         apply_auto_gain(&mut buf, -18.0);
-        let rms = (buf.iter().map(|s| f64::from(*s).powi(2)).sum::<f64>()
-            / buf.len() as f64)
-            .sqrt();
+        let rms =
+            (buf.iter().map(|s| f64::from(*s).powi(2)).sum::<f64>() / buf.len() as f64).sqrt();
         assert!((20.0 * rms.log10() + 18.0).abs() < 0.1);
 
         let mut silence = vec![0.0f32; 64];

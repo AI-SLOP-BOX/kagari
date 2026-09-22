@@ -273,80 +273,84 @@ pub fn draw_expression_selector(
     fps: Option<u32>,
 ) {
     let active = expr_opt.is_some();
-    egui::CollapsingHeader::new(if active { "fx  Expression • Active" } else { "fx" })
-        .id_salt(("expression_section", label))
-        .default_open(false)
-        .show(ui, |ui| {
+    egui::CollapsingHeader::new(if active {
+        "fx  Expression • Active"
+    } else {
+        "fx"
+    })
+    .id_salt(("expression_section", label))
+    .default_open(false)
+    .show(ui, |ui| {
         ui.horizontal(|ui| {
-        let expr_text = match expr_opt {
-            Some(Expression::Wiggle {
-                frequency,
-                amplitude,
-            }) => format!("wiggle({}, {})", frequency, amplitude),
-            Some(Expression::TimeDriver { multiplier, offset }) => {
-                format!("time * {} + {}", multiplier, offset)
+            let expr_text = match expr_opt {
+                Some(Expression::Wiggle {
+                    frequency,
+                    amplitude,
+                }) => format!("wiggle({}, {})", frequency, amplitude),
+                Some(Expression::TimeDriver { multiplier, offset }) => {
+                    format!("time * {} + {}", multiplier, offset)
+                }
+                Some(Expression::LoopOut) => "loopOut()".to_string(),
+                Some(Expression::PingPong) => "loopOut(\"pingpong\")".to_string(),
+                Some(Expression::Raw(s)) => format!("Custom: {}...", &s[..s.len().min(20)]),
+                None => "None".to_string(),
+            };
+
+            let before = expr_opt.clone();
+            let combo_id = ui.make_persistent_id(format!("ae_expr_combo_{}", label));
+            egui::ComboBox::from_id_salt(combo_id)
+                .selected_text(expr_text)
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(expr_opt, None, "None");
+                    ui.selectable_value(
+                        expr_opt,
+                        Some(Expression::Wiggle {
+                            frequency: 2.0,
+                            amplitude: 50.0,
+                        }),
+                        "Wiggle (2Hz, 50px)",
+                    );
+                    ui.selectable_value(
+                        expr_opt,
+                        Some(Expression::TimeDriver {
+                            multiplier: 30.0,
+                            offset: 0.0,
+                        }),
+                        "Time Spin (30°/s)",
+                    );
+                    ui.selectable_value(expr_opt, Some(Expression::LoopOut), "loopOut(\"cycle\")");
+                    ui.selectable_value(
+                        expr_opt,
+                        Some(Expression::PingPong),
+                        "loopOut(\"pingpong\")",
+                    );
+                    ui.selectable_value(
+                        expr_opt,
+                        Some(Expression::Raw("value".into())),
+                        "Custom Script...",
+                    );
+                });
+
+            // Keep the helper available without the ambiguous pickwhip glyph.
+            if custom_widgets::ae_icon_button(
+                ui,
+                "fx",
+                "Create a starter expression for this property",
+            )
+            .clicked()
+            {
+                *expr_opt = Some(Expression::Wiggle {
+                    frequency: 3.0,
+                    amplitude: 25.0,
+                });
+                *project_changed = true;
             }
-            Some(Expression::LoopOut) => "loopOut()".to_string(),
-            Some(Expression::PingPong) => "loopOut(\"pingpong\")".to_string(),
-            Some(Expression::Raw(s)) => format!("Custom: {}...", &s[..s.len().min(20)]),
-            None => "None".to_string(),
-        };
 
-        let before = expr_opt.clone();
-        let combo_id = ui.make_persistent_id(format!("ae_expr_combo_{}", label));
-        egui::ComboBox::from_id_salt(combo_id)
-            .selected_text(expr_text)
-            .show_ui(ui, |ui| {
-                ui.selectable_value(expr_opt, None, "None");
-                ui.selectable_value(
-                    expr_opt,
-                    Some(Expression::Wiggle {
-                        frequency: 2.0,
-                        amplitude: 50.0,
-                    }),
-                    "Wiggle (2Hz, 50px)",
-                );
-                ui.selectable_value(
-                    expr_opt,
-                    Some(Expression::TimeDriver {
-                        multiplier: 30.0,
-                        offset: 0.0,
-                    }),
-                    "Time Spin (30°/s)",
-                );
-                ui.selectable_value(expr_opt, Some(Expression::LoopOut), "loopOut(\"cycle\")");
-                ui.selectable_value(
-                    expr_opt,
-                    Some(Expression::PingPong),
-                    "loopOut(\"pingpong\")",
-                );
-                ui.selectable_value(
-                    expr_opt,
-                    Some(Expression::Raw("value".into())),
-                    "Custom Script...",
-                );
-            });
-
-        // Keep the helper available without the ambiguous pickwhip glyph.
-        if custom_widgets::ae_icon_button(
-            ui,
-            "fx",
-            "Create a starter expression for this property",
-        )
-        .clicked()
-        {
-            *expr_opt = Some(Expression::Wiggle {
-                frequency: 3.0,
-                amplitude: 25.0,
-            });
-            *project_changed = true;
-        }
-
-        if before != *expr_opt {
-            *project_changed = true;
-        }
+            if before != *expr_opt {
+                *project_changed = true;
+            }
         });
-        });
+    });
 
     // Inline script editor for Raw expressions
     let mut remove_requested = false;
@@ -578,7 +582,7 @@ pub fn draw_property_ui<
                 colors::TEXT_SECONDARY
             },
         )
-            .clicked()
+        .clicked()
         {
             if has_keyframes {
                 let current_val = property.evaluate(current_frame);
@@ -701,7 +705,6 @@ pub fn draw_property_ui<
                 ui.close_menu();
             }
         });
-
     });
 
     next_frame

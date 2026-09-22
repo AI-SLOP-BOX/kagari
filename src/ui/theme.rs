@@ -300,8 +300,8 @@ fn configure_fonts(ctx: &egui::Context) {
 
     // Keep the product UI visually consistent even when the host OS does not
     // provide Inter. The bundled variable font contains the requested UI weights.
-    let bundled_inter = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("assets/fonts/Inter.ttf");
+    let bundled_inter =
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/fonts/Inter.ttf");
     if let Ok(data) = std::fs::read(bundled_inter) {
         fonts
             .font_data
@@ -462,9 +462,20 @@ pub fn draw_section_header_svg(ui: &mut egui::Ui, title: &str, icon: &'static st
         let (rect, _) = ui.allocate_exact_size(egui::vec2(3.0, 16.0), egui::Sense::hover());
         ui.painter().rect_filled(rect, 1.0, colors::ACCENT_BLUE);
         ui.add_space(4.0);
-        crate::ui::icons::render_svg_bytes(ui, title, icon, egui::vec2(14.0, 14.0), colors::TEXT_PRIMARY);
+        crate::ui::icons::render_svg_bytes(
+            ui,
+            title,
+            icon,
+            egui::vec2(14.0, 14.0),
+            colors::TEXT_PRIMARY,
+        );
         ui.add_space(4.0);
-        ui.label(egui::RichText::new(title).small().strong().color(colors::TEXT_PRIMARY));
+        ui.label(
+            egui::RichText::new(title)
+                .small()
+                .strong()
+                .color(colors::TEXT_PRIMARY),
+        );
     });
     ui.add_space(2.0);
 }
@@ -472,17 +483,13 @@ pub fn draw_section_header_svg(ui: &mut egui::Ui, title: &str, icon: &'static st
 /// Helper: Draw a calm pro tab: plain text with a thin blue underline when
 /// selected. Deliberately no filled background (avoids heavy pill tabs).
 pub fn draw_custom_tab(ui: &mut egui::Ui, selected: bool, title: &str) -> egui::Response {
-    let text = egui::RichText::new(title)
-        .small()
-        .color(if selected {
-            colors::TEXT_PRIMARY
-        } else {
-            colors::TEXT_SECONDARY
-        });
+    let text = egui::RichText::new(title).small().color(if selected {
+        colors::TEXT_PRIMARY
+    } else {
+        colors::TEXT_SECONDARY
+    });
 
-    let response = ui.add(
-        egui::Label::new(text).sense(egui::Sense::click()),
-    );
+    let response = ui.add(egui::Label::new(text).sense(egui::Sense::click()));
     if selected {
         let rect = response.rect;
         ui.painter().line_segment(

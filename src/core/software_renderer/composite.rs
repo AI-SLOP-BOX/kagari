@@ -24,11 +24,7 @@ pub(crate) struct CompositeCtx<'a> {
 
 /// Composite `layer_buf` over `buffer` (both RGBA8) with the layer's
 /// blend mode, track matte, and composite-time opacity.
-pub(crate) fn composite_layer_buffer(
-    buffer: &mut [u8],
-    layer_buf: &[u8],
-    ctx: &CompositeCtx<'_>,
-) {
+pub(crate) fn composite_layer_buffer(buffer: &mut [u8], layer_buf: &[u8], ctx: &CompositeCtx<'_>) {
     let CompositeCtx {
         layer,
         matte,
@@ -41,8 +37,7 @@ pub(crate) fn composite_layer_buffer(
         blend_linear,
         l_opacity,
     } = ctx;
-    let (min_x, min_y, bw, bh, width, height) =
-        (*min_x, *min_y, *bw, *bh, *width, *height);
+    let (min_x, min_y, bw, bh, width, height) = (*min_x, *min_y, *bw, *bh, *width, *height);
     let (blend_linear, l_opacity) = (*blend_linear, *l_opacity);
     for ly in 0..bh {
         for lx in 0..bw {

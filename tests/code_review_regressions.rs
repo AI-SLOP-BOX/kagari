@@ -516,11 +516,13 @@ fn time_remap_drives_animated_effect_parameters() {
     });
     comp.layers.push(layer);
 
-    let pixels = kagari_vfx::core::software_renderer::render_frame_to_pixels(
-        &comp, 0, 8, 8, 0.0, 0,
-    );
+    let pixels =
+        kagari_vfx::core::software_renderer::render_frame_to_pixels(&comp, 0, 8, 8, 0.0, 0);
     let center = &pixels[(4 * 8 + 4) * 4..][..4];
-    assert!(center[0] > 240, "remapped effect should keep red channel high");
+    assert!(
+        center[0] > 240,
+        "remapped effect should keep red channel high"
+    );
     assert!(center[1] < 20, "effect must be evaluated at remapped frame");
     assert!(center[2] < 20, "effect must be evaluated at remapped frame");
 }

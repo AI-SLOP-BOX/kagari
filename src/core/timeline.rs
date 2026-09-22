@@ -4098,6 +4098,56 @@ mod multi_camera_tests {
     }
 
     #[test]
+    fn scene_layer_transforms_drive_render_camera_and_light_values() {
+        let mut comp = Composition::new("c".into(), "C".into(), 100, 100, 30, 30);
+
+        let mut camera = Camera3D::default();
+        camera.id = "camera_1".into();
+        camera.active = true;
+        comp.cameras.push(camera);
+        let mut camera_layer = Layer::new(
+            "camera_layer".into(),
+            "Camera 1".into(),
+            LayerType::Null,
+            30,
+        );
+        camera_layer.is_3d = true;
+        camera_layer.scene_object = Some(SceneObjectRef::Camera {
+            id: "camera_1".into(),
+        });
+        camera_layer.transform_3d.position = Animatable::new_constant([10.0, 20.0, -300.0]);
+        camera_layer.transform_3d.rotation = Animatable::new_constant([5.0, 10.0, 15.0]);
+        comp.layers.push(camera_layer);
+
+        let mut light = Light3D::default();
+        light.id = "light_2".into();
+        comp.lights.push(light.clone());
+        let mut light_layer = Layer::new(
+            "light_layer".into(),
+            "Light 2".into(),
+            LayerType::Null,
+            30,
+        );
+        light_layer.is_3d = true;
+        light_layer.scene_object = Some(SceneObjectRef::Light {
+            id: "light_2".into(),
+        });
+        light_layer.transform_3d.position = Animatable::new_constant([40.0, 50.0, -100.0]);
+        comp.layers.push(light_layer);
+
+        let resolved_camera = comp.resolve_camera_at();
+        assert_eq!(
+            resolved_camera.transform.position.evaluate(0),
+            [10.0, 20.0, -300.0]
+        );
+        assert_eq!(
+            resolved_camera.transform.rotation.evaluate(0),
+            [5.0, 10.0, 15.0]
+        );
+        assert_eq!(comp.light_position_at(&light, 0), [40.0, 50.0, -100.0]);
+    }
+
+    #[test]
     fn shared_scene_object_survives_until_last_layer_is_removed() {
         let mut comp = Composition::new("c".into(), "C".into(), 100, 100, 30, 30);
         let mut camera = Camera3D::default();

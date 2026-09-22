@@ -279,15 +279,8 @@ pub(crate) fn render_single_layer_pixels(
         }
 
         depth.set(current + 1);
-        let pixels = render_frame_to_pixels_filtered(
-            comp,
-            frame,
-            width,
-            height,
-            0.0,
-            0,
-            Some(layer_idx),
-        );
+        let pixels =
+            render_frame_to_pixels_filtered(comp, frame, width, height, 0.0, 0, Some(layer_idx));
         depth.set(current);
         pixels
     })
@@ -478,7 +471,7 @@ fn render_precomp_layers_inner(
                     Some(settings) if settings.enabled => source_frame as f32,
                     _ => layer.remap_frame_f32(frame),
                 } * speed.max(0.0))
-                    .max(0.0);
+                .max(0.0);
                 let first = (source_position.floor() as u32).min(frame_count.saturating_sub(1));
                 let second = (first + 1).min(frame_count.saturating_sub(1));
                 let blend_t = if layer.frame_blending {
@@ -493,8 +486,7 @@ fn render_precomp_layers_inner(
                     .unwrap_or_else(|| {
                         crate::core::video_import::frame_path_in_dir(frames_dir, first)
                     });
-                let second_path =
-                    crate::core::video_import::frame_path_in_dir(frames_dir, second);
+                let second_path = crate::core::video_import::frame_path_in_dir(frames_dir, second);
                 let first_path_text = first_path.to_string_lossy();
                 let second_path_text = second_path.to_string_lossy();
                 rasterize_texture_layer(
@@ -755,7 +747,12 @@ fn render_precomp_layers_inner(
                     let source_pts: Vec<[f32; 2]> = stroke
                         .points
                         .iter()
-                        .map(|&p| to_buf_local([p[0] + stroke.clone_offset[0], p[1] + stroke.clone_offset[1]]))
+                        .map(|&p| {
+                            to_buf_local([
+                                p[0] + stroke.clone_offset[0],
+                                p[1] + stroke.clone_offset[1],
+                            ])
+                        })
                         .collect();
                     crate::core::paint::draw_clone_stroke_with_brush(
                         &mut layer_buf,

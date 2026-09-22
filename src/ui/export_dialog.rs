@@ -316,8 +316,7 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
     }
 
     if export_channel_disconnected && app.export.is_exporting {
-        let message =
-            "Export worker stopped unexpectedly before reporting a result".to_string();
+        let message = "Export worker stopped unexpectedly before reporting a result".to_string();
         app.export.export_status = Some(format!("Error: {}", message));
         app.export.is_exporting = false;
         finished_export = true;

@@ -70,7 +70,11 @@ fn draw_property_row(app: &mut KagariApp, ui: &mut egui::Ui, index: usize) -> bo
             ui.label(egui::RichText::new(&property.name).strong());
             ui.weak(&property.target_property_path);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.small_button("✕").on_hover_text("Remove exposed property").clicked() {
+                if ui
+                    .small_button("✕")
+                    .on_hover_text("Remove exposed property")
+                    .clicked()
+                {
                     remove = true;
                 }
             });
@@ -128,8 +132,12 @@ fn draw_property_row(app: &mut KagariApp, ui: &mut egui::Ui, index: usize) -> bo
                 let mut value = value;
                 let mut changed = false;
                 ui.horizontal(|ui| {
-                    changed |= ui.add(egui::DragValue::new(&mut value[0]).prefix("X ")).changed();
-                    changed |= ui.add(egui::DragValue::new(&mut value[1]).prefix("Y ")).changed();
+                    changed |= ui
+                        .add(egui::DragValue::new(&mut value[0]).prefix("X "))
+                        .changed();
+                    changed |= ui
+                        .add(egui::DragValue::new(&mut value[1]).prefix("Y "))
+                        .changed();
                 });
                 if changed {
                     apply_property_edit(app, index, EssentialPropertyType::Point2D { value });
@@ -144,7 +152,10 @@ fn draw_property_row(app: &mut KagariApp, ui: &mut egui::Ui, index: usize) -> bo
                     .selected_text(options.get(selected).map(String::as_str).unwrap_or("-"))
                     .show_ui(ui, |ui| {
                         for (option_index, option) in options.iter().enumerate() {
-                            if ui.selectable_value(&mut selected, option_index, option).clicked() {
+                            if ui
+                                .selectable_value(&mut selected, option_index, option)
+                                .clicked()
+                            {
                                 apply_property_edit(
                                     app,
                                     index,
@@ -174,7 +185,8 @@ fn export_mogrt(app: &mut KagariApp) {
     let project_json = match serde_json::to_string(project) {
         Ok(json) => json,
         Err(error) => {
-            app.toasts.error(format!("MOGRT project serialization failed: {error}"));
+            app.toasts
+                .error(format!("MOGRT project serialization failed: {error}"));
             return;
         }
     };
@@ -193,20 +205,22 @@ fn export_mogrt(app: &mut KagariApp) {
     {
         Ok(()) => {
             crate::ui::project_io::reveal_in_file_manager(&path);
-            app.toasts.info(format!("MOGRT exported: {}", path.display()));
+            app.toasts
+                .info(format!("MOGRT exported: {}", path.display()));
         }
         Err(error) => app.toasts.error(format!("MOGRT export failed: {error}")),
     }
 }
 
 fn import_mogrt(app: &mut KagariApp, path: &std::path::Path) {
-    let content = match crate::core::project_migration::read_bounded_text_file(path, 64 * 1024 * 1024) {
-        Ok(content) => content,
-        Err(error) => {
-            app.toasts.error(error);
-            return;
-        }
-    };
+    let content =
+        match crate::core::project_migration::read_bounded_text_file(path, 64 * 1024 * 1024) {
+            Ok(content) => content,
+            Err(error) => {
+                app.toasts.error(error);
+                return;
+            }
+        };
     let package = match MogrtPackage::from_json(&content) {
         Ok(package) => package,
         Err(error) => {
@@ -246,7 +260,8 @@ fn import_mogrt(app: &mut KagariApp, path: &std::path::Path) {
     app.commit_project(merged);
     app.selection.selected_layer_idx = None;
     app.selection.selected_layers.clear();
-    app.toasts.info(format!("MOGRT imported: {}", package.manifest.name));
+    app.toasts
+        .info(format!("MOGRT imported: {}", package.manifest.name));
 }
 
 pub fn draw_essential_graphics(app: &mut KagariApp, ui: &mut egui::Ui) {
@@ -294,11 +309,18 @@ pub fn draw_essential_graphics(app: &mut KagariApp, ui: &mut egui::Ui) {
     }
 
     if app.mogrt_properties.is_empty() {
-        ui.weak("Expose a text, solid, or layer opacity property to make it editable in the template.");
+        ui.weak(
+            "Expose a text, solid, or layer opacity property to make it editable in the template.",
+        );
     }
-    if ui.button("➕ Expose Active Layer Property to MOGRT").clicked() {
+    if ui
+        .button("➕ Expose Active Layer Property to MOGRT")
+        .clicked()
+    {
         match expose_selected_layer(app) {
-            Some(name) => app.toasts.info(format!("Exposed {name} to Essential Graphics")),
+            Some(name) => app
+                .toasts
+                .info(format!("Exposed {name} to Essential Graphics")),
             None => app.toasts.error("Select a layer first"),
         }
     }

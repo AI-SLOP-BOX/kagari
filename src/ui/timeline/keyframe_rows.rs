@@ -24,11 +24,7 @@ pub fn draw_expanded_rows(
     project_changed: &mut bool,
 ) {
     // Keyframe drag-to-move: mutator maps a prop label to its Animatable
-    fn move_kf<T: Clone>(
-        anim: &mut crate::core::property::Animatable<T>,
-        old_f: u32,
-        new_f: u32,
-    ) {
+    fn move_kf<T: Clone>(anim: &mut crate::core::property::Animatable<T>, old_f: u32, new_f: u32) {
         let _ = anim.move_keyframe(old_f, new_f);
     }
     let pos_kfs = get_kfs(&layer.transform.position);
@@ -125,7 +121,10 @@ pub fn draw_expanded_rows(
         if show_transform_rows && (!kf_only || !pos_kfs.is_empty()) {
             draw_prop_row_ext(
                 ui,
-                &format!("  Position    {:.0}, {:.0}", position_value[0], position_value[1]),
+                &format!(
+                    "  Position    {:.0}, {:.0}",
+                    position_value[0], position_value[1]
+                ),
                 &pos_kfs,
                 current_frame,
                 start_frame,
@@ -139,8 +138,12 @@ pub fn draw_expanded_rows(
                 }),
                 Some(&mut |pk, f, shift, cmd| select_requests.push((pk.to_owned(), f, shift, cmd))),
                 kf_menu_cb!(),
-                Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk.to_owned(), frames))),
-                Some(&mut |pk, dragged_f, delta| group_moves.push((pk.to_owned(), dragged_f, delta))),
+                Some(&mut |pk, frames: Vec<u32>, _add: bool| {
+                    box_selects.push((pk.to_owned(), frames))
+                }),
+                Some(&mut |pk, dragged_f, delta| {
+                    group_moves.push((pk.to_owned(), dragged_f, delta))
+                }),
                 all_kf_frames,
                 Some(&mut |pk| select_all_reqs.push(pk.to_owned())),
             );
@@ -148,7 +151,10 @@ pub fn draw_expanded_rows(
         if show_transform_rows && (!kf_only || !scale_kfs.is_empty()) {
             draw_prop_row_ext(
                 ui,
-                &format!("  Scale       {:.0}%, {:.0}%", scale_value[0], scale_value[1]),
+                &format!(
+                    "  Scale       {:.0}%, {:.0}%",
+                    scale_value[0], scale_value[1]
+                ),
                 &scale_kfs,
                 current_frame,
                 start_frame,
@@ -162,8 +168,12 @@ pub fn draw_expanded_rows(
                 }),
                 Some(&mut |pk, f, shift, cmd| select_requests.push((pk.to_owned(), f, shift, cmd))),
                 kf_menu_cb!(),
-                Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk.to_owned(), frames))),
-                Some(&mut |pk, dragged_f, delta| group_moves.push((pk.to_owned(), dragged_f, delta))),
+                Some(&mut |pk, frames: Vec<u32>, _add: bool| {
+                    box_selects.push((pk.to_owned(), frames))
+                }),
+                Some(&mut |pk, dragged_f, delta| {
+                    group_moves.push((pk.to_owned(), dragged_f, delta))
+                }),
                 all_kf_frames,
                 Some(&mut |pk| select_all_reqs.push(pk.to_owned())),
             );
@@ -185,8 +195,12 @@ pub fn draw_expanded_rows(
                 }),
                 Some(&mut |pk, f, shift, cmd| select_requests.push((pk.to_owned(), f, shift, cmd))),
                 kf_menu_cb!(),
-                Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk.to_owned(), frames))),
-                Some(&mut |pk, dragged_f, delta| group_moves.push((pk.to_owned(), dragged_f, delta))),
+                Some(&mut |pk, frames: Vec<u32>, _add: bool| {
+                    box_selects.push((pk.to_owned(), frames))
+                }),
+                Some(&mut |pk, dragged_f, delta| {
+                    group_moves.push((pk.to_owned(), dragged_f, delta))
+                }),
                 all_kf_frames,
                 Some(&mut |pk| select_all_reqs.push(pk.to_owned())),
             );
@@ -208,8 +222,12 @@ pub fn draw_expanded_rows(
                 }),
                 Some(&mut |pk, f, shift, cmd| select_requests.push((pk.to_owned(), f, shift, cmd))),
                 kf_menu_cb!(),
-                Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk.to_owned(), frames))),
-                Some(&mut |pk, dragged_f, delta| group_moves.push((pk.to_owned(), dragged_f, delta))),
+                Some(&mut |pk, frames: Vec<u32>, _add: bool| {
+                    box_selects.push((pk.to_owned(), frames))
+                }),
+                Some(&mut |pk, dragged_f, delta| {
+                    group_moves.push((pk.to_owned(), dragged_f, delta))
+                }),
                 all_kf_frames,
                 Some(&mut |pk| select_all_reqs.push(pk.to_owned())),
             );
@@ -252,10 +270,16 @@ pub fn draw_expanded_rows(
                         move_kf($anim, old, new);
                         *project_changed = true;
                     }),
-                    Some(&mut |pk, f, shift, cmd| select_requests.push((pk.to_owned(), f, shift, cmd))),
+                    Some(&mut |pk, f, shift, cmd| {
+                        select_requests.push((pk.to_owned(), f, shift, cmd))
+                    }),
                     kf_menu_cb!(),
-                    Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk.to_owned(), frames))),
-                    Some(&mut |pk, dragged, delta| group_moves.push((pk.to_owned(), dragged, delta))),
+                    Some(&mut |pk, frames: Vec<u32>, _add: bool| {
+                        box_selects.push((pk.to_owned(), frames))
+                    }),
+                    Some(&mut |pk, dragged, delta| {
+                        group_moves.push((pk.to_owned(), dragged, delta))
+                    }),
                     all_kf_frames,
                     Some(&mut |pk| select_all_reqs.push(pk.to_owned())),
                 );
@@ -865,7 +889,9 @@ pub fn draw_expanded_rows(
             }
             _ if crate::ui::graph_editor::is_effect_property(pk) => {
                 use crate::core::effect_params::ParamRefRef;
-                let Some((effect_id, label, _)) = crate::ui::graph_editor::parse_effect_property(pk) else {
+                let Some((effect_id, label, _)) =
+                    crate::ui::graph_editor::parse_effect_property(pk)
+                else {
                     return out;
                 };
                 for eff in &layer.effects {

@@ -89,30 +89,38 @@ pub fn draw_new_comp_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                 .spacing([10.0, 4.0])
                 .show(ui, |ui| {
                     ui.label("Width:");
-                    fields_changed |= ui.add(
-                        egui::DragValue::new(&mut draft.2)
-                            .range(16..=7680)
-                            .suffix(" px"),
-                    ).changed();
+                    fields_changed |= ui
+                        .add(
+                            egui::DragValue::new(&mut draft.2)
+                                .range(16..=7680)
+                                .suffix(" px"),
+                        )
+                        .changed();
                     ui.label("Height:");
-                    fields_changed |= ui.add(
-                        egui::DragValue::new(&mut draft.3)
-                            .range(16..=4320)
-                            .suffix(" px"),
-                    ).changed();
+                    fields_changed |= ui
+                        .add(
+                            egui::DragValue::new(&mut draft.3)
+                                .range(16..=4320)
+                                .suffix(" px"),
+                        )
+                        .changed();
                     ui.end_row();
                     ui.label("Frame Rate:");
-                    fields_changed |= ui.add(
-                        egui::DragValue::new(&mut draft.4)
-                            .range(1..=120)
-                            .suffix(" fps"),
-                    ).changed();
+                    fields_changed |= ui
+                        .add(
+                            egui::DragValue::new(&mut draft.4)
+                                .range(1..=120)
+                                .suffix(" fps"),
+                        )
+                        .changed();
                     ui.label("Duration:");
-                    fields_changed |= ui.add(
-                        egui::DragValue::new(&mut draft.5)
-                            .range(1..=180_000)
-                            .suffix(" fr"),
-                    ).changed();
+                    fields_changed |= ui
+                        .add(
+                            egui::DragValue::new(&mut draft.5)
+                                .range(1..=180_000)
+                                .suffix(" fr"),
+                        )
+                        .changed();
                     ui.end_row();
                 });
             if fields_changed {

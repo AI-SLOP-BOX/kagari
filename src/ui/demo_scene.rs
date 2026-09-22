@@ -3,7 +3,9 @@
 use crate::core::keyframe::{InterpolationType, Keyframe};
 use crate::core::particle_system::ParticleEmitter;
 use crate::core::property::Animatable;
-use crate::core::timeline::{Composition, Effect, EffectType, Expression, LabelColor, Layer, LayerType, ShapeType};
+use crate::core::timeline::{
+    Composition, Effect, EffectType, Expression, LabelColor, Layer, LayerType, ShapeType,
+};
 
 fn kf(frame: u32, v: f32) -> Keyframe<f32> {
     Keyframe::new(frame, v, InterpolationType::Linear)
@@ -185,7 +187,9 @@ pub fn build(app: &mut crate::KagariApp) {
     let mut city = Layer::new(
         "demo_city".into(),
         "Footage".into(),
-        LayerType::Solid { color: [0.0, 0.0, 0.0, 0.0] },
+        LayerType::Solid {
+            color: [0.0, 0.0, 0.0, 0.0],
+        },
         comp.duration_frames,
     );
     sub.label = LabelColor::Lavender;
@@ -205,42 +209,61 @@ pub fn build(app: &mut crate::KagariApp) {
     let footage_folder = crate::core::timeline::ProjectItem::new(
         footage_folder_id,
         "Footage",
-        crate::core::timeline::ProjectItemType::Folder { name: "Footage".into() },
+        crate::core::timeline::ProjectItemType::Folder {
+            name: "Footage".into(),
+        },
     );
     let audio_folder = crate::core::timeline::ProjectItem::new(
         audio_folder_id,
         "Audio",
-        crate::core::timeline::ProjectItemType::Folder { name: "Audio".into() },
+        crate::core::timeline::ProjectItemType::Folder {
+            name: "Audio".into(),
+        },
     );
     let mut city_asset = crate::core::timeline::ProjectItem::new(
         "item_demo_city",
         "city_01.mp4",
-        crate::core::timeline::ProjectItemType::Video { path: "assets/studio/studio_city_reference.webp".into(), duration_sec: 5.0 },
+        crate::core::timeline::ProjectItemType::Video {
+            path: "assets/studio/studio_city_reference.webp".into(),
+            duration_sec: 5.0,
+        },
     );
     city_asset.parent_folder = Some(footage_folder_id.into());
     let mut mountain_asset = crate::core::timeline::ProjectItem::new(
         "item_demo_mountain",
         "mountain.exr",
-        crate::core::timeline::ProjectItemType::Image { path: "assets/studio/assets_mountain.webp".into(), width: 3840, height: 2160 },
+        crate::core::timeline::ProjectItemType::Image {
+            path: "assets/studio/assets_mountain.webp".into(),
+            width: 3840,
+            height: 2160,
+        },
     );
     mountain_asset.parent_folder = Some(footage_folder_id.into());
     let mut particles_asset = crate::core::timeline::ProjectItem::new(
         "item_demo_particles",
         "particles.mp4",
-        crate::core::timeline::ProjectItemType::Video { path: "assets/studio/assets_particles.webp".into(), duration_sec: 5.0 },
+        crate::core::timeline::ProjectItemType::Video {
+            path: "assets/studio/assets_particles.webp".into(),
+            duration_sec: 5.0,
+        },
     );
     particles_asset.parent_folder = Some(footage_folder_id.into());
     let mut audio_asset = crate::core::timeline::ProjectItem::new(
         "item_demo_audio",
         "ambient.wav",
-        crate::core::timeline::ProjectItemType::Audio { path: "assets/studio/assets_city.webp".into(), duration_sec: 5.0 },
+        crate::core::timeline::ProjectItemType::Audio {
+            path: "assets/studio/assets_city.webp".into(),
+            duration_sec: 5.0,
+        },
     );
     audio_asset.parent_folder = Some(audio_folder_id.into());
     proj.assets.extend([
         crate::core::timeline::ProjectItem::new(
             "item_demo_comp",
             "main_comp",
-            crate::core::timeline::ProjectItemType::Composition { comp_idx: demo_comp_idx },
+            crate::core::timeline::ProjectItemType::Composition {
+                comp_idx: demo_comp_idx,
+            },
         ),
         footage_folder,
         city_asset,
@@ -264,26 +287,32 @@ mod tests {
         let comp = app.history.current().active_composition().clone();
         assert_eq!(comp.layers.len(), 7);
         assert_eq!(comp.layers[1].name, "Main Title");
-        assert!(app.history.current().assets.iter().any(|item| item.name == "city_01.mp4"));
-        assert!(app.history.current().assets.iter().any(|item| item.name == "Footage"));
-        let pixels = crate::core::software_renderer::render_frame_to_pixels(
-            &comp, 75, 320, 180, 0.0, 0,
-        );
+        assert!(app
+            .history
+            .current()
+            .assets
+            .iter()
+            .any(|item| item.name == "city_01.mp4"));
+        assert!(app
+            .history
+            .current()
+            .assets
+            .iter()
+            .any(|item| item.name == "Footage"));
+        let pixels =
+            crate::core::software_renderer::render_frame_to_pixels(&comp, 75, 320, 180, 0.0, 0);
         assert_eq!(pixels.len(), 320 * 180 * 4);
         // Must be more than a flat background: orb, ring, particles, text.
-        let distinct: std::collections::HashSet<[u8; 3]> = pixels
-            .chunks_exact(4)
-            .map(|p| [p[0], p[1], p[2]])
-            .collect();
+        let distinct: std::collections::HashSet<[u8; 3]> =
+            pixels.chunks_exact(4).map(|p| [p[0], p[1], p[2]]).collect();
         assert!(
             distinct.len() > 16,
             "demo frame looks flat: {} colors",
             distinct.len()
         );
         // Deterministic: same input renders byte-identical pixels.
-        let again = crate::core::software_renderer::render_frame_to_pixels(
-            &comp, 75, 320, 180, 0.0, 0,
-        );
+        let again =
+            crate::core::software_renderer::render_frame_to_pixels(&comp, 75, 320, 180, 0.0, 0);
         assert_eq!(pixels, again);
     }
 }

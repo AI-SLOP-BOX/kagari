@@ -709,9 +709,7 @@ impl KagariApp {
         }
     }
 
-    pub fn audio_correction_settings(
-        &self,
-    ) -> crate::core::audio_types::AudioCorrectionSettings {
+    pub fn audio_correction_settings(&self) -> crate::core::audio_types::AudioCorrectionSettings {
         crate::core::audio_types::AudioCorrectionSettings {
             enabled: self.master_dsp_enabled,
             auto_gain: self.master_auto_gain,
@@ -909,9 +907,8 @@ impl KagariApp {
             return;
         }
 
-        let progress = crate::ui::panel_animation::PanelAnimation::ease(
-            self.startup_animation.progress,
-        );
+        let progress =
+            crate::ui::panel_animation::PanelAnimation::ease(self.startup_animation.progress);
         let screen = ctx.screen_rect();
         let painter = ctx.layer_painter(eframe::egui::LayerId::new(
             eframe::egui::Order::Foreground,
@@ -1335,219 +1332,225 @@ impl KagariApp {
                             12.0
                         };
                         ui.label(
-                            egui::RichText::new(format!(
-                                "{:.0}ms",
-                                render_ms
-                            ))
-                            .small()
-                            .color(crate::ui::theme::colors::TEXT_MUTED),
+                            egui::RichText::new(format!("{:.0}ms", render_ms))
+                                .small()
+                                .color(crate::ui::theme::colors::TEXT_MUTED),
                         );
                     } else {
-                    let status_width = ctx.screen_rect().width();
-                    ui.style_mut().spacing.item_spacing.x = 6.0;
-                    if status_width >= 950.0 {
-                        let (gpu_label, gpu_color) = if self.gpu_rendered {
-                            (
-                                "● Metal GPU Render Engine",
-                                crate::ui::theme::colors::TEXT_MUTED,
-                            )
-                        } else {
-                            (
-                                "○ CPU Software Renderer",
-                                crate::ui::theme::colors::ACCENT_ORANGE,
-                            )
-                        };
-                        ui.label(egui::RichText::new(gpu_label).small().color(gpu_color));
-                        ui.separator();
-                    }
-                    // Timecode
-                    let fps = self.history.current().active_composition().fps.max(1);
-                    let cf = self.playback.current_frame;
-                    ui.label(
-                        egui::RichText::new(format!(
-                            "TC: {:02}:{:02}:{:02}:{:02}",
-                            cf / (fps * 3600),
-                            (cf / fps) / 60 % 60,
-                            (cf / fps) % 60,
-                            cf % fps
-                        ))
-                        .monospace()
-                        .small()
-                        .color(crate::ui::theme::colors::ACCENT_YELLOW),
-                    );
-                    ui.separator();
-                    ui.label(
-                        egui::RichText::new(format!("Frame: {} / {}", cf, total_frames))
-                            .small()
-                            .color(crate::ui::theme::colors::TEXT_SECONDARY),
-                    );
-                    if status_width >= 950.0 {
-                        ui.separator();
-                        let bpc_label =
-                            self.history.current().active_composition().bit_depth.short_label();
-                        let cs_label = match self.color_space_idx {
-                            0 => "Rec.709 sRGB",
-                            1 => "Rec.2020",
-                            2 => "P3 D65",
-                            _ => "Rec.709 sRGB",
-                        };
-                        ui.label(
-                            egui::RichText::new(format!("{} | {}", bpc_label, cs_label))
-                                .small()
-                                .color(crate::ui::theme::colors::TEXT_MUTED),
-                        );
-                        ui.separator();
-                        let cached_cnt = self.frame_cache.cached_count();
-                        ui.label(
-                            egui::RichText::new(format!("RAM {}/{}", cached_cnt, total_frames))
-                                .small()
-                                .color(crate::ui::theme::colors::TEXT_MUTED),
-                        );
-                        ui.separator();
-                        let render_ms = self.playback.preview_render_ema_ms;
-                        let frame_budget_ms =
-                            1000.0 / self.history.current().active_composition().fps.max(1) as f32;
-                        let ms_color = if render_ms > frame_budget_ms {
-                            crate::ui::theme::colors::ACCENT_ORANGE
-                        } else {
-                            crate::ui::theme::colors::TEXT_MUTED
-                        };
-                        ui.label(
-                            egui::RichText::new(format!("Render: {:.1} ms", render_ms))
-                                .small()
-                                .color(ms_color),
-                        );
-                        ui.separator();
-                        // Selection summary: layers + keyframes
-                        let kf_count = self.selected_keyframes.len();
-                        let layer_count = self.selection.selected_layers.len();
-                        if kf_count > 0 {
-                            ui.label(
-                                egui::RichText::new(format!(
-                                    "{} keyframes selected (, . move | Del delete | Cmd+C/V)",
-                                    kf_count
-                                ))
-                                .small()
-                                .color(crate::ui::theme::colors::ACCENT_ORANGE),
-                            );
-                        } else if layer_count > 0 {
-                            ui.label(
-                                egui::RichText::new(format!(
-                                    "{} layer{} selected",
-                                    layer_count,
-                                    if layer_count > 1 { "s" } else { "" }
-                                ))
-                                .small()
-                                .color(crate::ui::theme::colors::ACCENT_BLUE),
-                            );
+                        let status_width = ctx.screen_rect().width();
+                        ui.style_mut().spacing.item_spacing.x = 6.0;
+                        if status_width >= 950.0 {
+                            let (gpu_label, gpu_color) = if self.gpu_rendered {
+                                (
+                                    "● Metal GPU Render Engine",
+                                    crate::ui::theme::colors::TEXT_MUTED,
+                                )
+                            } else {
+                                (
+                                    "○ CPU Software Renderer",
+                                    crate::ui::theme::colors::ACCENT_ORANGE,
+                                )
+                            };
+                            ui.label(egui::RichText::new(gpu_label).small().color(gpu_color));
+                            ui.separator();
                         }
-                    }
-                    if status_width >= 1150.0 {
-                        let pointer_pos = ctx.pointer_hover_pos().unwrap_or(egui::pos2(960.0, 540.0));
-                        ui.separator();
+                        // Timecode
+                        let fps = self.history.current().active_composition().fps.max(1);
+                        let cf = self.playback.current_frame;
                         ui.label(
                             egui::RichText::new(format!(
-                                "X: {:.0} Y: {:.0} px",
-                                pointer_pos.x, pointer_pos.y
+                                "TC: {:02}:{:02}:{:02}:{:02}",
+                                cf / (fps * 3600),
+                                (cf / fps) / 60 % 60,
+                                (cf / fps) % 60,
+                                cf % fps
                             ))
+                            .monospace()
                             .small()
-                            .color(egui::Color32::from_rgb(0, 180, 255)),
+                            .color(crate::ui::theme::colors::ACCENT_YELLOW),
                         );
                         ui.separator();
-                        let pixel_rgba = {
-                        let comp = self.history.current().active_composition();
-                        let px = pointer_pos.x as i32;
-                        let py = pointer_pos.y as i32;
-                        if px >= 0
-                            && py >= 0
-                            && (px as u32) < comp.width
-                            && (py as u32) < comp.height
-                        {
-                            let layer_indices: Vec<usize> = comp
-                                .layers
-                                .iter()
-                                .enumerate()
-                                .filter(|(_, l)| l.is_active(self.playback.current_frame))
-                                .map(|(i, _)| i)
-                                .collect();
-                            if let Some(entry) = self
-                                .frame_cache
-                                .get_with_layers(self.playback.current_frame, &layer_indices)
-                            {
-                                let idx = ((py as u32 * comp.width + px as u32) * 4) as usize;
-                                if idx + 3 < entry.pixels.len() {
-                                    Some([
-                                        entry.pixels[idx],
-                                        entry.pixels[idx + 1],
-                                        entry.pixels[idx + 2],
-                                        entry.pixels[idx + 3],
-                                    ])
+                        ui.label(
+                            egui::RichText::new(format!("Frame: {} / {}", cf, total_frames))
+                                .small()
+                                .color(crate::ui::theme::colors::TEXT_SECONDARY),
+                        );
+                        if status_width >= 950.0 {
+                            ui.separator();
+                            let bpc_label = self
+                                .history
+                                .current()
+                                .active_composition()
+                                .bit_depth
+                                .short_label();
+                            let cs_label = match self.color_space_idx {
+                                0 => "Rec.709 sRGB",
+                                1 => "Rec.2020",
+                                2 => "P3 D65",
+                                _ => "Rec.709 sRGB",
+                            };
+                            ui.label(
+                                egui::RichText::new(format!("{} | {}", bpc_label, cs_label))
+                                    .small()
+                                    .color(crate::ui::theme::colors::TEXT_MUTED),
+                            );
+                            ui.separator();
+                            let cached_cnt = self.frame_cache.cached_count();
+                            ui.label(
+                                egui::RichText::new(format!("RAM {}/{}", cached_cnt, total_frames))
+                                    .small()
+                                    .color(crate::ui::theme::colors::TEXT_MUTED),
+                            );
+                            ui.separator();
+                            let render_ms = self.playback.preview_render_ema_ms;
+                            let frame_budget_ms = 1000.0
+                                / self.history.current().active_composition().fps.max(1) as f32;
+                            let ms_color = if render_ms > frame_budget_ms {
+                                crate::ui::theme::colors::ACCENT_ORANGE
+                            } else {
+                                crate::ui::theme::colors::TEXT_MUTED
+                            };
+                            ui.label(
+                                egui::RichText::new(format!("Render: {:.1} ms", render_ms))
+                                    .small()
+                                    .color(ms_color),
+                            );
+                            ui.separator();
+                            // Selection summary: layers + keyframes
+                            let kf_count = self.selected_keyframes.len();
+                            let layer_count = self.selection.selected_layers.len();
+                            if kf_count > 0 {
+                                ui.label(
+                                    egui::RichText::new(format!(
+                                        "{} keyframes selected (, . move | Del delete | Cmd+C/V)",
+                                        kf_count
+                                    ))
+                                    .small()
+                                    .color(crate::ui::theme::colors::ACCENT_ORANGE),
+                                );
+                            } else if layer_count > 0 {
+                                ui.label(
+                                    egui::RichText::new(format!(
+                                        "{} layer{} selected",
+                                        layer_count,
+                                        if layer_count > 1 { "s" } else { "" }
+                                    ))
+                                    .small()
+                                    .color(crate::ui::theme::colors::ACCENT_BLUE),
+                                );
+                            }
+                        }
+                        if status_width >= 1150.0 {
+                            let pointer_pos =
+                                ctx.pointer_hover_pos().unwrap_or(egui::pos2(960.0, 540.0));
+                            ui.separator();
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "X: {:.0} Y: {:.0} px",
+                                    pointer_pos.x, pointer_pos.y
+                                ))
+                                .small()
+                                .color(egui::Color32::from_rgb(0, 180, 255)),
+                            );
+                            ui.separator();
+                            let pixel_rgba = {
+                                let comp = self.history.current().active_composition();
+                                let px = pointer_pos.x as i32;
+                                let py = pointer_pos.y as i32;
+                                if px >= 0
+                                    && py >= 0
+                                    && (px as u32) < comp.width
+                                    && (py as u32) < comp.height
+                                {
+                                    let layer_indices: Vec<usize> = comp
+                                        .layers
+                                        .iter()
+                                        .enumerate()
+                                        .filter(|(_, l)| l.is_active(self.playback.current_frame))
+                                        .map(|(i, _)| i)
+                                        .collect();
+                                    if let Some(entry) = self.frame_cache.get_with_layers(
+                                        self.playback.current_frame,
+                                        &layer_indices,
+                                    ) {
+                                        let idx =
+                                            ((py as u32 * comp.width + px as u32) * 4) as usize;
+                                        if idx + 3 < entry.pixels.len() {
+                                            Some([
+                                                entry.pixels[idx],
+                                                entry.pixels[idx + 1],
+                                                entry.pixels[idx + 2],
+                                                entry.pixels[idx + 3],
+                                            ])
+                                        } else {
+                                            None
+                                        }
+                                    } else {
+                                        None
+                                    }
                                 } else {
                                     None
                                 }
+                            };
+                            if let Some([r, g, b, a]) = pixel_rgba {
+                                ui.label(
+                                    egui::RichText::new(format!(
+                                        "R: {} G: {} B: {} A: {}",
+                                        r, g, b, a
+                                    ))
+                                    .small()
+                                    .color(egui::Color32::from_rgb(255, 200, 100)),
+                                );
                             } else {
-                                None
+                                ui.label(
+                                    egui::RichText::new("R: – G: – B: – A: –")
+                                        .small()
+                                        .color(egui::Color32::from_rgb(255, 200, 100)),
+                                );
                             }
-                        } else {
-                            None
                         }
-                        };
-                        if let Some([r, g, b, a]) = pixel_rgba {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             ui.label(
-                                egui::RichText::new(format!("R: {} G: {} B: {} A: {}", r, g, b, a))
-                                    .small()
-                                    .color(egui::Color32::from_rgb(255, 200, 100)),
+                                egui::RichText::new(format!(
+                                    "Kagari VFX v{}",
+                                    env!("CARGO_PKG_VERSION")
+                                ))
+                                .small()
+                                .color(egui::Color32::from_gray(120)),
                             );
-                        } else {
-                            ui.label(
-                                egui::RichText::new("R: – G: – B: – A: –")
-                                    .small()
-                                    .color(egui::Color32::from_rgb(255, 200, 100)),
-                            );
-                        }
-                    }
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.label(
-                            egui::RichText::new(format!(
-                                "Kagari VFX v{}",
-                                env!("CARGO_PKG_VERSION")
-                            ))
-                            .small()
-                            .color(egui::Color32::from_gray(120)),
-                        );
-                        if status_width >= 1150.0 {
-                            ui.separator();
-                            ui.label(
-                                egui::RichText::new("Tool: Selection (V)")
-                                    .small()
-                                    .color(egui::Color32::from_rgb(255, 230, 0)),
-                            );
-                            ui.separator();
-                            let dl_status = if cfg!(feature = "gui") {
-                                "Available"
-                            } else {
-                                "N/A"
-                            };
-                            ui.label(
-                                egui::RichText::new(format!("Dynamic Link: {}", dl_status))
-                                    .small()
-                                    .color(egui::Color32::from_rgb(100, 180, 255)),
-                            );
-                            ui.separator();
-                            let mem_usage = {
-                                let comp = self.history.current().active_composition();
-                                let layer_count = comp.layers.len();
-                                let _total_frames = comp.duration_frames;
-                                let cached = self.frame_cache.cached_count();
-                                format!("{} layers | {} frames cached", layer_count, cached)
-                            };
-                            ui.label(
-                                egui::RichText::new(format!("RAM: {}", mem_usage))
-                                    .small()
-                                    .color(egui::Color32::from_gray(160)),
-                            );
-                        }
-                    });
+                            if status_width >= 1150.0 {
+                                ui.separator();
+                                ui.label(
+                                    egui::RichText::new("Tool: Selection (V)")
+                                        .small()
+                                        .color(egui::Color32::from_rgb(255, 230, 0)),
+                                );
+                                ui.separator();
+                                let dl_status = if cfg!(feature = "gui") {
+                                    "Available"
+                                } else {
+                                    "N/A"
+                                };
+                                ui.label(
+                                    egui::RichText::new(format!("Dynamic Link: {}", dl_status))
+                                        .small()
+                                        .color(egui::Color32::from_rgb(100, 180, 255)),
+                                );
+                                ui.separator();
+                                let mem_usage = {
+                                    let comp = self.history.current().active_composition();
+                                    let layer_count = comp.layers.len();
+                                    let _total_frames = comp.duration_frames;
+                                    let cached = self.frame_cache.cached_count();
+                                    format!("{} layers | {} frames cached", layer_count, cached)
+                                };
+                                ui.label(
+                                    egui::RichText::new(format!("RAM: {}", mem_usage))
+                                        .small()
+                                        .color(egui::Color32::from_gray(160)),
+                                );
+                            }
+                        });
                     }
                 });
             });
@@ -1671,10 +1674,7 @@ mod tests {
         let start = anchor_rect.center();
         let target = start + eframe::egui::vec2(70.0, -12.0);
 
-        run_frame(
-            &mut app,
-            vec![Event::PointerMoved(start)],
-        );
+        run_frame(&mut app, vec![Event::PointerMoved(start)]);
         run_frame(
             &mut app,
             vec![Event::PointerButton {
@@ -1704,13 +1704,25 @@ mod tests {
             .keyframes()
             .expect("position remains animated");
         assert!(
-            keyframes.iter().any(|key| key.frame != 30 && (key.value[0] - 300.0).abs() > 0.1),
+            keyframes
+                .iter()
+                .any(|key| key.frame != 30 && (key.value[0] - 300.0).abs() > 0.1),
             "pointer drag must change the selected keyframe's frame or value: {keyframes:?}"
         );
-        assert_eq!(app.history.len(), 2, "one pointer gesture must create one undo step");
-        assert!(!app.drag_active(), "pointer release must close the graph edit transaction");
+        assert_eq!(
+            app.history.len(),
+            2,
+            "one pointer gesture must create one undo step"
+        );
+        assert!(
+            !app.drag_active(),
+            "pointer release must close the graph edit transaction"
+        );
 
-        assert!(app.history.undo().is_some(), "the graph edit must be undoable");
+        assert!(
+            app.history.undo().is_some(),
+            "the graph edit must be undoable"
+        );
         let restored = app.history.current().active_composition().layers[1]
             .transform
             .position
@@ -1794,7 +1806,10 @@ mod tests {
                 app.update_panels(ctx);
             },
         );
-        assert!(app.show_command_palette, "Cmd+K must open the command palette");
+        assert!(
+            app.show_command_palette,
+            "Cmd+K must open the command palette"
+        );
         assert!(app.command_palette_search.is_empty());
 
         let _ = ctx.run(
@@ -1809,7 +1824,10 @@ mod tests {
                 app.update_panels(ctx);
             },
         );
-        assert!(!app.show_command_palette, "Cmd+K must close the command palette");
+        assert!(
+            !app.show_command_palette,
+            "Cmd+K must close the command palette"
+        );
     }
 
     #[test]
@@ -1869,7 +1887,10 @@ mod tests {
             },
         );
 
-        assert!(!app.show_command_palette, "Enter must close after executing a command");
+        assert!(
+            !app.show_command_palette,
+            "Enter must close after executing a command"
+        );
         assert_eq!(
             app.history.current().active_composition().layers.len(),
             initial_layer_count + 1,
@@ -1884,7 +1905,10 @@ mod tests {
             app.show_home = false;
             app.show_welcome = false;
             drive_frames_at_size(&mut app, 2, width, height);
-            assert_eq!(app.playback.current_frame, 0, "playhead must not drift at {width}px");
+            assert_eq!(
+                app.playback.current_frame, 0,
+                "playhead must not drift at {width}px"
+            );
         }
     }
 

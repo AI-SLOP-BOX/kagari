@@ -23,11 +23,7 @@ fn hash_u32(mut x: u32) -> u32 {
 /// Deterministic pseudo-random value in [0, 1) from three u32 lanes.
 #[inline]
 fn hash01(a: u32, b: u32, c: u32) -> f32 {
-    hash_u32(
-        a ^ b.wrapping_mul(0x9E37_79B1)
-            ^ c.wrapping_mul(0x85EB_CA6B),
-    ) as f32
-        / u32::MAX as f32
+    hash_u32(a ^ b.wrapping_mul(0x9E37_79B1) ^ c.wrapping_mul(0x85EB_CA6B)) as f32 / u32::MAX as f32
 }
 
 // ──────────────────────────── RGB Split ─────────────────────────────
@@ -87,14 +83,7 @@ pub fn apply_rgb_split(
 /// `floor(frame * speed / fps)`. At full `amount` a pulse can drop the
 /// frame to black (signal dropout). RGB only — alpha untouched.
 /// Zero amount (or non-positive speed) is a byte-identical no-op.
-pub fn apply_flicker(
-    pixels: &mut [u8],
-    amount: f32,
-    speed: f32,
-    seed: u32,
-    frame: u32,
-    fps: u32,
-) {
+pub fn apply_flicker(pixels: &mut [u8], amount: f32, speed: f32, seed: u32, frame: u32, fps: u32) {
     let depth = amount.clamp(0.0, 1.0);
     if depth <= 0.001 || !speed.is_finite() || speed <= 0.0 {
         return;
@@ -152,10 +141,8 @@ pub fn apply_block_glitch(
             if hash01(seed, frame, lane) >= density {
                 continue;
             }
-            let dx =
-                ((hash01(seed ^ 0x51AB, frame, lane) - 0.5) * 2.0 * jump).round() as i32;
-            let dy =
-                ((hash01(seed ^ 0xBEEF, frame, lane) - 0.5) * jump).round() as i32;
+            let dx = ((hash01(seed ^ 0x51AB, frame, lane) - 0.5) * 2.0 * jump).round() as i32;
+            let dy = ((hash01(seed ^ 0xBEEF, frame, lane) - 0.5) * jump).round() as i32;
             let scramble = hash01(seed ^ 0x5C9A, frame, lane) < corr;
             let x0 = bx * bs;
             let y0 = by * bs;
@@ -223,10 +210,10 @@ pub fn apply_slice_tear(
     let across = if vertical { height } else { width };
     for i in 0..n {
         let p0 = (hash01(seed, frame, i.wrapping_mul(2)) * span as f32) as u32;
-        let thick = 1 + (hash01(seed, frame, i.wrapping_mul(2).wrapping_add(1))
-            * (span as f32 / 16.0)) as u32;
-        let off = ((hash01(seed ^ 0x71EA, frame, i) - 0.5) * 2.0 * max_offset).round()
-            as i32;
+        let thick = 1
+            + (hash01(seed, frame, i.wrapping_mul(2).wrapping_add(1)) * (span as f32 / 16.0))
+                as u32;
+        let off = ((hash01(seed ^ 0x71EA, frame, i) - 0.5) * 2.0 * max_offset).round() as i32;
         if off == 0 {
             continue;
         }

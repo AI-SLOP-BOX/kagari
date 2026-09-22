@@ -138,7 +138,9 @@ impl LoadedOcioConfig {
             candidates.push(if lut_path.is_absolute() {
                 lut_path.to_path_buf()
             } else {
-                path.parent().unwrap_or_else(|| Path::new(".")).join(lut_path)
+                path.parent()
+                    .unwrap_or_else(|| Path::new("."))
+                    .join(lut_path)
             });
         }
 

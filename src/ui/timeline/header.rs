@@ -39,22 +39,35 @@ fn draw_transport_icon_button(
     response.on_hover_text(tooltip)
 }
 
-fn draw_view_mode(ui: &mut egui::Ui, label: &'static str, selected: bool, tooltip: &'static str) -> egui::Response {
+fn draw_view_mode(
+    ui: &mut egui::Ui,
+    label: &'static str,
+    selected: bool,
+    tooltip: &'static str,
+) -> egui::Response {
     let width = if label == "Timeline" { 62.0 } else { 52.0 };
     let (rect, response) = ui.allocate_exact_size(egui::vec2(width, 24.0), egui::Sense::click());
     if response.hovered() && !selected {
-        ui.painter().rect_filled(rect, 3.0, colors::BG_HOVER.linear_multiply(0.5));
+        ui.painter()
+            .rect_filled(rect, 3.0, colors::BG_HOVER.linear_multiply(0.5));
     }
     ui.painter().text(
         rect.center(),
         egui::Align2::CENTER_CENTER,
         label,
         egui::FontId::proportional(12.0),
-        if selected { colors::TEXT_PRIMARY } else { colors::TEXT_MUTED },
+        if selected {
+            colors::TEXT_PRIMARY
+        } else {
+            colors::TEXT_MUTED
+        },
     );
     if selected {
         ui.painter().line_segment(
-            [egui::pos2(rect.left() + 8.0, rect.bottom() - 1.0), egui::pos2(rect.right() - 8.0, rect.bottom() - 1.0)],
+            [
+                egui::pos2(rect.left() + 8.0, rect.bottom() - 1.0),
+                egui::pos2(rect.right() - 8.0, rect.bottom() - 1.0),
+            ],
             egui::Stroke::new(2.0_f32, colors::ACCENT_ORANGE),
         );
     }
@@ -179,7 +192,6 @@ pub fn draw_timeline_header(
         {
             *current_frame = total_frames;
         }
-
     });
 
     ui.separator();

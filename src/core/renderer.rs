@@ -74,9 +74,9 @@ fn gpu_layer_draw_order(comp: &Composition, layers: &[&Layer], frame: u32) -> Ve
     }
     order.sort_by(|&a, &b| {
         let depth = |index: usize| {
-                let layer = layers[index];
-                if layer.is_3d {
-                    layer.transform_3d.position.evaluate(frame)[2]
+            let layer = layers[index];
+            if layer.is_3d {
+                layer.transform_3d.position.evaluate(frame)[2]
             } else {
                 0.0
             }
@@ -2203,22 +2203,21 @@ impl WgpuRenderer {
                         Some(pt) if pt.enabled => effective_frame as f32,
                         _ => layer.remap_frame_f32(frame),
                     };
-                    let seq_frame = (source_frame * speed.max(0.0))
-                        .floor()
-                        .max(0.0) as u32;
+                    let seq_frame = (source_frame * speed.max(0.0)).floor().max(0.0) as u32;
                     let seq_frame = seq_frame.min(frame_count.saturating_sub(1));
                     let version = crate::core::frame_cache::current_version();
-                    let texture = if let Some(proxy_path) =
-                        self.preview_proxy_path(layer, seq_frame)
-                    {
-                        self.get_or_create_image_texture(
-                            &format!("proxy:{}", layer.id),
-                            &proxy_path,
-                            version,
-                        )
-                    } else {
-                        self.get_or_create_video_frame_texture(&layer.id, frames_dir, seq_frame, version)
-                    };
+                    let texture =
+                        if let Some(proxy_path) = self.preview_proxy_path(layer, seq_frame) {
+                            self.get_or_create_image_texture(
+                                &format!("proxy:{}", layer.id),
+                                &proxy_path,
+                                version,
+                            )
+                        } else {
+                            self.get_or_create_video_frame_texture(
+                                &layer.id, frames_dir, seq_frame, version,
+                            )
+                        };
                     if let Some((tw, th, bg)) = texture {
                         layer_w = tw as f32;
                         layer_h = th as f32;
@@ -2258,15 +2257,20 @@ impl WgpuRenderer {
                         .unwrap_or_else(|| font_family.clone());
                     let effective_tracking = formatting.map(|tf| tf.tracking).unwrap_or(*tracking);
                     let effective_leading = formatting.map(|tf| tf.leading).unwrap_or(*leading);
-                    let effective_align = formatting
-                        .map(|tf| tf.alignment as usize)
-                        .unwrap_or(*align);
+                    let effective_align =
+                        formatting.map(|tf| tf.alignment as usize).unwrap_or(*align);
                     let effective_box_width = formatting.map(|tf| tf.box_width).unwrap_or(0.0);
                     let effective_stroke_color = formatting
                         .map(|tf| tf.stroke_color.unwrap_or([0.0, 0.0, 0.0, 0.0]))
                         .unwrap_or(*stroke_color);
                     let effective_stroke_width = formatting
-                        .map(|tf| if tf.stroke_color.is_some() { tf.stroke_width } else { 0.0 })
+                        .map(|tf| {
+                            if tf.stroke_color.is_some() {
+                                tf.stroke_width
+                            } else {
+                                0.0
+                            }
+                        })
                         .unwrap_or(*stroke_width);
                     let faux_style = formatting
                         .map(|tf| crate::core::font_rasterizer::FauxTextStyle {
@@ -2694,8 +2698,7 @@ impl WgpuRenderer {
                         .trim_paths
                         .as_ref()
                         .map(|t| {
-                            t.offset.evaluate(effective_frame).to_radians()
-                                / std::f32::consts::TAU
+                            t.offset.evaluate(effective_frame).to_radians() / std::f32::consts::TAU
                         })
                         .unwrap_or(0.0),
                     _pad_trim: 0.0,
@@ -2912,21 +2915,22 @@ impl WgpuRenderer {
             // iterating the project array directly makes remapped layers draw
             // in the wrong front-to-back order.
             let order = gpu_layer_draw_order(comp, &active_layers, frame);
-            if order.iter().enumerate().any(|(index, &value)| index != value) {
+            if order
+                .iter()
+                .enumerate()
+                .any(|(index, &value)| index != value)
+            {
                 let old_active_layers = active_layers;
                 let old_comp_indices = comp_indices;
                 let old_uniforms = uniforms;
                 let old_layer_mask_plans = layer_mask_plans;
                 let old_layer_textures = layer_textures;
-                active_layers = order.iter().map(|&index| old_active_layers[index]).collect();
-                comp_indices = order
+                active_layers = order
                     .iter()
-                    .map(|&index| old_comp_indices[index])
+                    .map(|&index| old_active_layers[index])
                     .collect();
-                uniforms = order
-                    .iter()
-                    .map(|&index| old_uniforms[index])
-                    .collect();
+                comp_indices = order.iter().map(|&index| old_comp_indices[index]).collect();
+                uniforms = order.iter().map(|&index| old_uniforms[index]).collect();
                 layer_mask_plans = order
                     .iter()
                     .map(|&index| old_layer_mask_plans[index].clone())
@@ -3661,8 +3665,7 @@ impl WgpuRenderer {
         let pixels = crate::core::software_renderer::render_precomp_layers(
             comp, sub_comp, frame_idx, width, height,
         );
-        if pixels.len()
-            != crate::core::software_renderer::rgba_buffer_size(width, height)? as usize
+        if pixels.len() != crate::core::software_renderer::rgba_buffer_size(width, height)? as usize
         {
             return None;
         }
@@ -3717,7 +3720,12 @@ impl WgpuRenderer {
             let mut cache = self.video_frame_cache.borrow_mut();
             cache.insert(
                 key,
-                (std::sync::Arc::new(texture), bind_group.clone(), width, height),
+                (
+                    std::sync::Arc::new(texture),
+                    bind_group.clone(),
+                    width,
+                    height,
+                ),
             );
             while cache.len() > MAX_VIDEO_FRAME_TEXTURES {
                 if let Some(oldest) = cache.keys().next().cloned() {
@@ -3946,9 +3954,8 @@ mod tests {
             30,
         );
         near.is_3d = true;
-        near.transform_3d.position = crate::core::property::Animatable::new_constant([
-            32.0, 32.0, 50.0,
-        ]);
+        near.transform_3d.position =
+            crate::core::property::Animatable::new_constant([32.0, 32.0, 50.0]);
 
         comp.layers.push(far);
         comp.layers.push(near);

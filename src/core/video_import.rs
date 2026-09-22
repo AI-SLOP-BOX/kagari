@@ -203,7 +203,14 @@ pub fn import_video(src_path: &str, dest_dir: &Path, fps: f32) -> Result<VideoAs
             "-vf",
             &format!("fps={},scale=trunc(iw/2)*2:trunc(ih/2)*2", fps),
         ])
-        .args(["-c:v", "libwebp", "-lossless", "1", "-compression_level", "4"])
+        .args([
+            "-c:v",
+            "libwebp",
+            "-lossless",
+            "1",
+            "-compression_level",
+            "4",
+        ])
         .args(["-start_number", "0"])
         .arg("--")
         .arg(&webp_pattern)
@@ -311,7 +318,10 @@ pub fn import_image_sequence(
         .and_then(|value| value.to_str())
         .map(str::to_ascii_lowercase)
         .ok_or_else(|| "image sequence source has no extension".to_string())?;
-    if !matches!(extension.as_str(), "png" | "jpg" | "jpeg" | "bmp" | "tga" | "webp") {
+    if !matches!(
+        extension.as_str(),
+        "png" | "jpg" | "jpeg" | "bmp" | "tga" | "webp"
+    ) {
         return Err(format!("unsupported image sequence format: .{extension}"));
     }
     let stem = src_path
@@ -370,11 +380,7 @@ pub fn import_image_sequence(
     }
     let (width, height) = image::image_dimensions(&frames[0].1)
         .map_err(|error| format!("could not read image sequence dimensions: {error}"))?;
-    if width == 0
-        || height == 0
-        || width > MAX_IMPORT_DIMENSION
-        || height > MAX_IMPORT_DIMENSION
-    {
+    if width == 0 || height == 0 || width > MAX_IMPORT_DIMENSION || height > MAX_IMPORT_DIMENSION {
         return Err(format!(
             "image sequence dimensions must be within {}x{}",
             MAX_IMPORT_DIMENSION, MAX_IMPORT_DIMENSION
@@ -492,7 +498,8 @@ fn refresh_missing_video_caches_in_comp(
                     }
                 })
                 .collect();
-            let destination = destination_root.join(format!("{}_{}fps", safe_stem, comp.fps.max(1)));
+            let destination =
+                destination_root.join(format!("{}_{}fps", safe_stem, comp.fps.max(1)));
             match import_video(&source, &destination, comp.fps.max(1) as f32) {
                 Ok(asset) => {
                     cache.insert(key.clone(), asset.clone());
@@ -625,11 +632,7 @@ mod tests {
         ));
         std::fs::create_dir_all(&root).expect("test root should be created");
         for frame in [1u32, 2, 4] {
-            let image = image::RgbaImage::from_pixel(
-                8,
-                4,
-                image::Rgba([frame as u8, 20, 40, 255]),
-            );
+            let image = image::RgbaImage::from_pixel(8, 4, image::Rgba([frame as u8, 20, 40, 255]));
             image
                 .save(root.join(format!("shot_{frame:04}.png")))
                 .expect("source frame should be writable");
@@ -641,7 +644,10 @@ mod tests {
         assert_eq!(asset.frame_count, 3);
         assert!(frame_path(&asset, 0).ends_with("frame_00000.webp"));
         assert!(frame_path(&asset, 2).is_file());
-        assert_eq!(image::image_dimensions(frame_path(&asset, 1)).unwrap(), (8, 4));
+        assert_eq!(
+            image::image_dimensions(frame_path(&asset, 1)).unwrap(),
+            (8, 4)
+        );
 
         std::fs::remove_dir_all(root).expect("test root should be removable");
     }
@@ -686,18 +692,20 @@ mod tests {
         }
 
         let mut project = crate::core::timeline::Project::default();
-        project.compositions[0].layers.push(crate::core::timeline::Layer::new(
-            "video".into(),
-            "Clip".into(),
-            crate::core::timeline::LayerType::Video {
-                source: source.to_string_lossy().into_owned(),
-                frames_dir: root.join("missing").to_string_lossy().into_owned(),
-                frame_count: 0,
-                audio_wav: None,
-                speed: 1.0,
-            },
-            30,
-        ));
+        project.compositions[0]
+            .layers
+            .push(crate::core::timeline::Layer::new(
+                "video".into(),
+                "Clip".into(),
+                crate::core::timeline::LayerType::Video {
+                    source: source.to_string_lossy().into_owned(),
+                    frames_dir: root.join("missing").to_string_lossy().into_owned(),
+                    frame_count: 0,
+                    audio_wav: None,
+                    speed: 1.0,
+                },
+                30,
+            ));
 
         let cache_root = root.join("cache");
         let (refreshed, errors) = refresh_missing_video_caches(&mut project, &cache_root);

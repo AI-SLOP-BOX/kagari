@@ -32,8 +32,7 @@ fn append_log(sink: &Arc<Mutex<LogSink>>, message: &str) {
     if sink.truncated {
         return;
     }
-    if sink.lines.len() >= MAX_LOG_LINES
-        || sink.bytes.saturating_add(message.len()) > MAX_LOG_BYTES
+    if sink.lines.len() >= MAX_LOG_LINES || sink.bytes.saturating_add(message.len()) > MAX_LOG_BYTES
     {
         sink.lines.push("[automation log truncated]".to_string());
         sink.truncated = true;

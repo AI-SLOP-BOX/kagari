@@ -606,10 +606,7 @@ mod memory_bound_tests {
         assert!(history.jump_to(1));
         assert_eq!(history.current_index(), 1);
         assert_eq!(history.current_action_name(), "one");
-        assert_eq!(
-            history.current().compositions[0].layers[0].name,
-            "M0"
-        );
+        assert_eq!(history.current().compositions[0].layers[0].name, "M0");
         assert!(history.generation() > gen);
 
         // Undo/redo stay coherent after a jump: redo walks forward again.

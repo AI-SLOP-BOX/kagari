@@ -613,7 +613,11 @@ fn apply_one_ctx(
                 let index = source_idx as usize;
                 (index < composition.layers.len() && Some(index) != layer_idx).then(|| {
                     crate::core::software_renderer::render_single_layer_pixels(
-                        composition, index, frame, width, height,
+                        composition,
+                        index,
+                        frame,
+                        width,
+                        height,
                     )
                 })
             });
@@ -621,7 +625,8 @@ fn apply_one_ctx(
                 let options = crate::core::displacement_map::DisplacementMapOptions {
                     max_horizontal_displacement: max_horizontal.evaluate(frame),
                     max_vertical_displacement: max_vertical.evaluate(frame),
-                    horizontal_channel: crate::core::displacement_map::DisplacementChannel::Luminance,
+                    horizontal_channel:
+                        crate::core::displacement_map::DisplacementChannel::Luminance,
                     vertical_channel: crate::core::displacement_map::DisplacementChannel::Luminance,
                     wrap_pixels: false,
                 };
@@ -647,7 +652,11 @@ fn apply_one_ctx(
                 let index = source_idx as usize;
                 (index < composition.layers.len() && Some(index) != layer_idx).then(|| {
                     crate::core::software_renderer::render_single_layer_pixels(
-                        composition, index, frame, width, height,
+                        composition,
+                        index,
+                        frame,
+                        width,
+                        height,
                     )
                 })
             });
@@ -1048,7 +1057,8 @@ fn apply_one_ctx(
         }
         EffectType::GlitchDisplacement { seed, amount } => {
             let s = seed.evaluate(frame).round().clamp(0.0, 99999.0) as f32;
-            let a = amount.evaluate(frame);            if !crate::core::compute_pipeline::try_gpu_glitch_displacement(
+            let a = amount.evaluate(frame);
+            if !crate::core::compute_pipeline::try_gpu_glitch_displacement(
                 pixels, width, height, a, s,
             ) {
                 use crate::core::ae_effects_pack_v13::apply_glitch_displacement;
@@ -2123,10 +2133,8 @@ mod tests {
             },
             30,
         );
-        source.transform.position = Animatable::new_constant([
-            width as f32 * 0.25,
-            height as f32 * 0.5,
-        ]);
+        source.transform.position =
+            Animatable::new_constant([width as f32 * 0.25, height as f32 * 0.5]);
         comp.layers.push(source);
         comp.layers.push(crate::core::timeline::Layer::new(
             "target".into(),
@@ -2163,7 +2171,10 @@ mod tests {
             0,
             30,
         );
-        assert_ne!(rendered, original, "resolved source map must affect target pixels");
+        assert_ne!(
+            rendered, original,
+            "resolved source map must affect target pixels"
+        );
         assert!(rendered.chunks_exact(4).all(|pixel| pixel[3] == 255));
     }
 
@@ -2190,7 +2201,10 @@ mod tests {
             0,
             30,
         );
-        assert_ne!(rendered, original, "resolved blur map must affect target pixels");
+        assert_ne!(
+            rendered, original,
+            "resolved blur map must affect target pixels"
+        );
         assert!(rendered.chunks_exact(4).all(|pixel| pixel[3] == 255));
     }
 

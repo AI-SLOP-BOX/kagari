@@ -270,25 +270,59 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
             ui.collapsing("📷 3D Camera Tracker (Scene Reconstruction)", |ui| {
                 ui.horizontal(|ui| {
                     ui.label("Shot Type:");
-                    let mut shot_type = ui.ctx().data(|d| d.get_temp::<i32>(egui::Id::new("3d_cam_shot_type")).unwrap_or(0));
+                    let mut shot_type = ui.ctx().data(|d| {
+                        d.get_temp::<i32>(egui::Id::new("3d_cam_shot_type"))
+                            .unwrap_or(0)
+                    });
                     egui::ComboBox::from_id_salt("3d_cam_shot_combo")
-                        .selected_text(if shot_type == 0 { "Fixed Angle of View" } else { "Variable Zoom" })
+                        .selected_text(if shot_type == 0 {
+                            "Fixed Angle of View"
+                        } else {
+                            "Variable Zoom"
+                        })
                         .show_ui(ui, |ui| {
-                            if ui.selectable_value(&mut shot_type, 0, "Fixed Angle of View").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("3d_cam_shot_type"), 0)); }
-                            if ui.selectable_value(&mut shot_type, 1, "Variable Zoom").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("3d_cam_shot_type"), 1)); }
+                            if ui
+                                .selectable_value(&mut shot_type, 0, "Fixed Angle of View")
+                                .clicked()
+                            {
+                                ui.ctx().data_mut(|d| {
+                                    d.insert_temp(egui::Id::new("3d_cam_shot_type"), 0)
+                                });
+                            }
+                            if ui
+                                .selectable_value(&mut shot_type, 1, "Variable Zoom")
+                                .clicked()
+                            {
+                                ui.ctx().data_mut(|d| {
+                                    d.insert_temp(egui::Id::new("3d_cam_shot_type"), 1)
+                                });
+                            }
                         });
                 });
 
-                let mut track_pts = ui.ctx().data(|d| d.get_temp::<u32>(egui::Id::new("3d_cam_track_pts")).unwrap_or(250));
+                let mut track_pts = ui.ctx().data(|d| {
+                    d.get_temp::<u32>(egui::Id::new("3d_cam_track_pts"))
+                        .unwrap_or(250)
+                });
                 ui.horizontal(|ui| {
                     ui.label("Track Points:");
-                    if ui.add(egui::Slider::new(&mut track_pts, 50..=1000).suffix(" pts")).changed() {
-                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("3d_cam_track_pts"), track_pts));
+                    if ui
+                        .add(egui::Slider::new(&mut track_pts, 50..=1000).suffix(" pts"))
+                        .changed()
+                    {
+                        ui.ctx().data_mut(|d| {
+                            d.insert_temp(egui::Id::new("3d_cam_track_pts"), track_pts)
+                        });
                     }
                 });
 
                 ui.horizontal(|ui| {
-                    if custom_widgets::ae_button_accent(ui, "🎯 Track & Solve 3D Camera").on_hover_text("Analyze 3D optical flow and solve virtual 3D camera trajectory").clicked() {
+                    if custom_widgets::ae_button_accent(ui, "🎯 Track & Solve 3D Camera")
+                        .on_hover_text(
+                            "Analyze 3D optical flow and solve virtual 3D camera trajectory",
+                        )
+                        .clicked()
+                    {
                         let mut temp_proj = app.history.current().clone();
                         let comp_mut = temp_proj.active_composition_mut();
                         let features: Vec<crate::core::camera_track::CameraTrackFeaturePoint> =
@@ -305,8 +339,14 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                                     }
                                     Some(crate::core::camera_track::CameraTrackFeaturePoint {
                                         id: format!("tracker_{feature_id}"),
-                                        frames: keyframes.iter().map(|keyframe| keyframe.frame).collect(),
-                                        coords_2d: keyframes.iter().map(|keyframe| keyframe.value).collect(),
+                                        frames: keyframes
+                                            .iter()
+                                            .map(|keyframe| keyframe.frame)
+                                            .collect(),
+                                        coords_2d: keyframes
+                                            .iter()
+                                            .map(|keyframe| keyframe.value)
+                                            .collect(),
                                         world_3d: [0.0; 3],
                                         confidence: 1.0,
                                     })
@@ -325,28 +365,34 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                                 camera.name = "3D Tracked Camera 1".to_string();
                                 camera.active = true;
                                 camera.fov_degrees = fov;
-                                camera.transform.position = crate::core::property::Animatable::new_animated(
-                                    solution
-                                        .camera_frames
-                                        .iter()
-                                        .map(|frame| crate::core::keyframe::Keyframe::new(
+                                camera.transform.position =
+                                    crate::core::property::Animatable::new_animated(
+                                        solution
+                                            .camera_frames
+                                            .iter()
+                                            .map(|frame| {
+                                                crate::core::keyframe::Keyframe::new(
                                             frame.frame,
                                             frame.pos.map(|value| value as f32),
                                             crate::core::keyframe::InterpolationType::Linear,
-                                        ))
-                                        .collect(),
-                                );
-                                camera.transform.rotation = crate::core::property::Animatable::new_animated(
-                                    solution
-                                        .camera_frames
-                                        .iter()
-                                        .map(|frame| crate::core::keyframe::Keyframe::new(
+                                        )
+                                            })
+                                            .collect(),
+                                    );
+                                camera.transform.rotation =
+                                    crate::core::property::Animatable::new_animated(
+                                        solution
+                                            .camera_frames
+                                            .iter()
+                                            .map(|frame| {
+                                                crate::core::keyframe::Keyframe::new(
                                             frame.frame,
                                             frame.rot_deg.map(|value| value as f32),
                                             crate::core::keyframe::InterpolationType::Linear,
-                                        ))
-                                        .collect(),
-                                );
+                                        )
+                                            })
+                                            .collect(),
+                                    );
                                 let camera_id = camera.id.clone();
                                 let camera_name = camera.name.clone();
                                 let camera_transform = camera.transform.clone();
@@ -375,7 +421,9 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                                     solution.average_reprojection_error
                                 ));
                             }
-                            Err(error) => app.toasts.error(format!("3D camera solve failed: {error}")),
+                            Err(error) => {
+                                app.toasts.error(format!("3D camera solve failed: {error}"))
+                            }
                         }
                     }
                 });
@@ -843,7 +891,12 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                         );
                         comp.add_layer(null_layer);
                         crate::core::tracker_engine::TrackerEngine::apply_tracker_to_target(
-                            comp, idx, active_tk_idx, null_idx, true, false,
+                            comp,
+                            idx,
+                            active_tk_idx,
+                            null_idx,
+                            true,
+                            false,
                         );
                     });
                     app.toasts

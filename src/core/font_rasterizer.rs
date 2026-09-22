@@ -411,11 +411,7 @@ impl FontRasterizer {
         if !font_size.is_finite() || !(0.1..=8192.0).contains(&font_size) {
             return None;
         }
-        let key = (
-            family_name.to_string(),
-            ch,
-            font_size.to_bits(),
-        );
+        let key = (family_name.to_string(), ch, font_size.to_bits());
         if let Some(hit) = self.glyph_cache.borrow().get(&key) {
             return Some(hit.clone());
         }
@@ -598,7 +594,9 @@ impl FontRasterizer {
             })
             .fold(0.0f32, f32::max);
 
-        let buf_w = (actual_width.ceil() as u32).max(layout.total_width.ceil() as u32).max(1);
+        let buf_w = (actual_width.ceil() as u32)
+            .max(layout.total_width.ceil() as u32)
+            .max(1);
         let line_height = font_size * leading;
         let buf_h = (layout.total_height.ceil() as u32)
             .max(line_height.ceil() as u32)
@@ -628,8 +626,7 @@ impl FontRasterizer {
                         for gy in 0..rg.height {
                             for gx in 0..rg.width {
                                 let dest_x = cursor_x as i32 + rg.left + gx as i32;
-                                let dest_y =
-                                    cursor_y as i32 + max_top as i32 + rg.top + gy as i32;
+                                let dest_y = cursor_y as i32 + max_top as i32 + rg.top + gy as i32;
                                 if dest_x >= 0
                                     && dest_y >= 0
                                     && (dest_x as u32) < buf_w

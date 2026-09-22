@@ -152,7 +152,10 @@ pub fn ae_button_accent(ui: &mut egui::Ui, label: &str) -> egui::Response {
 
     let button = egui::Button::new(text)
         .fill(egui::Color32::from_rgb(32, 92, 168))
-        .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(48, 120, 200)))
+        .stroke(egui::Stroke::new(
+            1.0_f32,
+            egui::Color32::from_rgb(48, 120, 200),
+        ))
         .rounding(egui::Rounding::same(2.0))
         .min_size(egui::vec2(60.0, 22.0));
 
@@ -160,11 +163,8 @@ pub fn ae_button_accent(ui: &mut egui::Ui, label: &str) -> egui::Response {
 
     if response.hovered() {
         let rect = response.rect;
-        ui.painter().rect_filled(
-            rect,
-            2.0,
-            egui::Color32::from_rgb(40, 108, 190),
-        );
+        ui.painter()
+            .rect_filled(rect, 2.0, egui::Color32::from_rgb(40, 108, 190));
     }
 
     response
@@ -220,7 +220,10 @@ pub fn ae_text_toggle(
     );
     if active {
         ui.painter().line_segment(
-            [egui::pos2(rect.left() + 5.0, rect.bottom() - 2.0), egui::pos2(rect.right() - 5.0, rect.bottom() - 2.0)],
+            [
+                egui::pos2(rect.left() + 5.0, rect.bottom() - 2.0),
+                egui::pos2(rect.right() - 5.0, rect.bottom() - 2.0),
+            ],
             egui::Stroke::new(1.0_f32, colors::ACCENT_ORANGE),
         );
     }

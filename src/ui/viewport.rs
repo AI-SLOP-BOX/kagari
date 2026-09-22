@@ -1,8 +1,7 @@
 use crate::core::property::Animatable;
 use crate::core::roto_assist::trace_contour_to_polygon;
 use crate::core::roto_brush_engine::{
-    generate_rotobrush_matte, RotoBrushSettings, RotoStroke as EngineRotoStroke,
-    RotoStrokeType,
+    generate_rotobrush_matte, RotoBrushSettings, RotoStroke as EngineRotoStroke, RotoStrokeType,
 };
 use crate::core::timeline::Layer;
 use crate::ui::theme::colors;
@@ -10,20 +9,39 @@ use crate::KagariApp;
 use crate::ViewportMode;
 use eframe::egui;
 
-fn pen_path(points: Vec<[f32; 2]>, tangents: Vec<([f32; 2], [f32; 2])>) -> crate::core::mask::MaskPath {
+fn pen_path(
+    points: Vec<[f32; 2]>,
+    tangents: Vec<([f32; 2], [f32; 2])>,
+) -> crate::core::mask::MaskPath {
     let mut path = crate::core::mask::MaskPath::new_closed(points);
-    if tangents.iter().any(|(out, incoming)| *out != [0.0; 2] || *incoming != [0.0; 2]) {
-        let mut tangents: Vec<_> = tangents.into_iter().map(|(out, incoming)| (incoming, out)).collect();
+    if tangents
+        .iter()
+        .any(|(out, incoming)| *out != [0.0; 2] || *incoming != [0.0; 2])
+    {
+        let mut tangents: Vec<_> = tangents
+            .into_iter()
+            .map(|(out, incoming)| (incoming, out))
+            .collect();
         tangents.resize(path.vertices_at_frame(0).len(), ([0.0; 2], [0.0; 2]));
         path.tangents = Some(tangents);
     }
     path
 }
 
-fn handle_pen_pointer(app: &mut KagariApp, response: &egui::Response, origin: [f32; 2], scale: [f32; 2]) {
-    let Some(pointer) = response.interact_pointer_pos() else { return };
+fn handle_pen_pointer(
+    app: &mut KagariApp,
+    response: &egui::Response,
+    origin: [f32; 2],
+    scale: [f32; 2],
+) {
+    let Some(pointer) = response.interact_pointer_pos() else {
+        return;
+    };
     if response.drag_started() {
-        let start = response.ctx.input(|i| i.pointer.press_origin()).unwrap_or(pointer);
+        let start = response
+            .ctx
+            .input(|i| i.pointer.press_origin())
+            .unwrap_or(pointer);
         app.pen_bezier_drag = Some((start, pointer));
     }
     if let Some(drag) = app.pen_bezier_drag.as_mut() {
@@ -32,29 +50,61 @@ fn handle_pen_pointer(app: &mut KagariApp, response: &egui::Response, origin: [f
     if response.drag_stopped() {
         if let Some((start, end)) = app.pen_bezier_drag.take() {
             let tangent = [(end.x - start.x) * scale[0], (end.y - start.y) * scale[1]];
-            app.pen_points.push([(start.x - origin[0]) * scale[0], (start.y - origin[1]) * scale[1]]);
+            app.pen_points.push([
+                (start.x - origin[0]) * scale[0],
+                (start.y - origin[1]) * scale[1],
+            ]);
             app.pen_tangents.push((tangent, [-tangent[0], -tangent[1]]));
         }
     } else if response.clicked() {
         app.pen_bezier_drag = None;
-        app.pen_points.push([(pointer.x - origin[0]) * scale[0], (pointer.y - origin[1]) * scale[1]]);
+        app.pen_points.push([
+            (pointer.x - origin[0]) * scale[0],
+            (pointer.y - origin[1]) * scale[1],
+        ]);
         app.pen_tangents.push(([0.0, 0.0], [0.0, 0.0]));
     }
 }
 
-fn move_mask_vertices(path: &mut crate::core::mask::MaskPath, frame: u32, starts: &[(usize, [f32; 2])], delta: [f32; 2]) {
+fn move_mask_vertices(
+    path: &mut crate::core::mask::MaskPath,
+    frame: u32,
+    starts: &[(usize, [f32; 2])],
+    delta: [f32; 2],
+) {
     for &(index, start) in starts {
         path.set_vertex_at_frame(frame, index, [start[0] + delta[0], start[1] + delta[1]]);
     }
 }
 
-fn move_mask_tangent(path: &mut crate::core::mask::MaskPath, index: usize, outgoing: bool, handle: [f32; 2], linked: bool) {
-    let (old_in, old_out) = path.tangents.as_ref().and_then(|t| t.get(index)).copied().unwrap_or_default();
+fn move_mask_tangent(
+    path: &mut crate::core::mask::MaskPath,
+    index: usize,
+    outgoing: bool,
+    handle: [f32; 2],
+    linked: bool,
+) {
+    let (old_in, old_out) = path
+        .tangents
+        .as_ref()
+        .and_then(|t| t.get(index))
+        .copied()
+        .unwrap_or_default();
     let opposite = [-handle[0], -handle[1]];
     if outgoing {
-        path.set_tangents_at_vertex(index, if linked { opposite } else { old_in }, handle, linked);
+        path.set_tangents_at_vertex(
+            index,
+            if linked { opposite } else { old_in },
+            handle,
+            linked,
+        );
     } else {
-        path.set_tangents_at_vertex(index, handle, if linked { opposite } else { old_out }, linked);
+        path.set_tangents_at_vertex(
+            index,
+            handle,
+            if linked { opposite } else { old_out },
+            linked,
+        );
     }
 }
 
@@ -63,10 +113,15 @@ fn demo_reference_texture(ctx: &egui::Context) -> Option<egui::TextureHandle> {
     if let Some(texture) = ctx.data_mut(|d| d.get_temp::<egui::TextureHandle>(id)) {
         return Some(texture);
     }
-    let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/studio/studio_city_reference.webp");
+    let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("assets/studio/studio_city_reference.webp");
     let image = image::open(path).ok()?.to_rgba8();
     let size = [image.width() as usize, image.height() as usize];
-    let texture = ctx.load_texture("studio-demo-reference-city", egui::ColorImage::from_rgba_unmultiplied(size, image.as_raw()), egui::TextureOptions::LINEAR);
+    let texture = ctx.load_texture(
+        "studio-demo-reference-city",
+        egui::ColorImage::from_rgba_unmultiplied(size, image.as_raw()),
+        egui::TextureOptions::LINEAR,
+    );
     ctx.data_mut(|d| d.insert_temp(id, texture.clone()));
     Some(texture)
 }
@@ -666,7 +721,11 @@ fn draw_view_menu_contents(ui: &mut egui::Ui, app: &mut KagariApp) {
     }
     if ui.ctx().screen_rect().width() < 950.0 {
         ui.separator();
-        ui.label(egui::RichText::new("Viewport").small().color(colors::TEXT_MUTED));
+        ui.label(
+            egui::RichText::new("Viewport")
+                .small()
+                .color(colors::TEXT_MUTED),
+        );
         egui::ComboBox::from_id_salt("compact_cam_view_menu")
             .selected_text(match app.viewport_cam_view {
                 0 => "Active Camera",
@@ -676,18 +735,30 @@ fn draw_view_menu_contents(ui: &mut egui::Ui, app: &mut KagariApp) {
                 _ => "Custom View",
             })
             .show_ui(ui, |ui| {
-                if ui.selectable_value(&mut app.viewport_cam_view, 0, "Active Camera").clicked() {
+                if ui
+                    .selectable_value(&mut app.viewport_cam_view, 0, "Active Camera")
+                    .clicked()
+                {
                     app.viewport_mode = ViewportMode::Comp2D;
                 }
-                if ui.selectable_value(&mut app.viewport_cam_view, 1, "Front").clicked() {
+                if ui
+                    .selectable_value(&mut app.viewport_cam_view, 1, "Front")
+                    .clicked()
+                {
                     app.viewport_mode = ViewportMode::Camera3D;
                     app.camera_orbit = (0.0, 0.0, 1000.0);
                 }
-                if ui.selectable_value(&mut app.viewport_cam_view, 2, "Left").clicked() {
+                if ui
+                    .selectable_value(&mut app.viewport_cam_view, 2, "Left")
+                    .clicked()
+                {
                     app.viewport_mode = ViewportMode::Camera3D;
                     app.camera_orbit = (-90.0, 0.0, 1000.0);
                 }
-                if ui.selectable_value(&mut app.viewport_cam_view, 3, "Top").clicked() {
+                if ui
+                    .selectable_value(&mut app.viewport_cam_view, 3, "Top")
+                    .clicked()
+                {
                     app.viewport_mode = ViewportMode::Camera3D;
                     app.camera_orbit = (0.0, -89.0, 1000.0);
                 }
@@ -736,7 +807,8 @@ fn draw_view_menu_contents(ui: &mut egui::Ui, app: &mut KagariApp) {
         if ui.button("Take Snapshot").clicked() {
             let frame = app.playback.current_frame;
             crate::ui::viewport_state::set_snap_frame(ui.ctx(), frame);
-            app.toasts.info(format!("Snapshot saved at frame {}", frame));
+            app.toasts
+                .info(format!("Snapshot saved at frame {}", frame));
             ui.close_menu();
         }
         let comparing = crate::ui::viewport_state::is_comparing(ui.ctx());
@@ -3625,18 +3697,37 @@ fn draw_target_viewport(app: &mut KagariApp, ctx: &egui::Context) {
             let rect = ui.max_rect();
             let painter = ui.painter();
             let border = egui::Color32::from_rgb(39, 52, 61);
-            painter.text(egui::pos2(rect.left() + 14.0, rect.top() + 28.0), egui::Align2::LEFT_CENTER, "Viewer", egui::FontId::proportional(16.0), colors::TEXT_PRIMARY);
+            painter.text(
+                egui::pos2(rect.left() + 14.0, rect.top() + 28.0),
+                egui::Align2::LEFT_CENTER,
+                "Viewer",
+                egui::FontId::proportional(16.0),
+                colors::TEXT_PRIMARY,
+            );
             for (index, glyph) in ["↖", "✋", "⌕", "□", "✎"].into_iter().enumerate() {
                 painter.text(
                     egui::pos2(rect.left() + 104.0 + index as f32 * 25.0, rect.top() + 28.0),
                     egui::Align2::CENTER_CENTER,
                     glyph,
                     egui::FontId::proportional(14.0),
-                    if index == 0 { colors::ACCENT_ORANGE } else { colors::TEXT_SECONDARY },
+                    if index == 0 {
+                        colors::ACCENT_ORANGE
+                    } else {
+                        colors::TEXT_SECONDARY
+                    },
                 );
             }
-            painter.text(egui::pos2(rect.right() - 90.0, rect.top() + 28.0), egui::Align2::RIGHT_CENTER, "1080p  ·  50%", egui::FontId::proportional(11.0), colors::TEXT_SECONDARY);
-            let image_area = egui::vec2((rect.width() - 30.0).max(80.0), (rect.height() - 135.0).max(80.0));
+            painter.text(
+                egui::pos2(rect.right() - 90.0, rect.top() + 28.0),
+                egui::Align2::RIGHT_CENTER,
+                "1080p  ·  50%",
+                egui::FontId::proportional(11.0),
+                colors::TEXT_SECONDARY,
+            );
+            let image_area = egui::vec2(
+                (rect.width() - 30.0).max(80.0),
+                (rect.height() - 135.0).max(80.0),
+            );
             let image_width = image_area.x.min(image_area.y * 1.7778);
             let image_height = (image_width / 1.7778).min(image_area.y);
             let image_rect = egui::Rect::from_center_size(
@@ -3644,34 +3735,85 @@ fn draw_target_viewport(app: &mut KagariApp, ctx: &egui::Context) {
                 egui::vec2(image_width, image_height),
             );
             if let Some(texture) = demo_reference_texture(ctx) {
-                painter.image(texture.id(), image_rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
+                painter.image(
+                    texture.id(),
+                    image_rect,
+                    egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                    egui::Color32::WHITE,
+                );
             } else {
                 painter.rect_filled(image_rect, 0.0, egui::Color32::from_rgb(22, 34, 44));
             }
             painter.rect_stroke(image_rect, 0.0, egui::Stroke::new(1.0, border));
             let control_y = (image_rect.bottom() + 34.0).min(rect.bottom() - 48.0);
-            painter.text(egui::pos2(rect.left() + 23.0, control_y), egui::Align2::LEFT_CENTER, "00:00:04:12", egui::FontId::proportional(17.0), egui::Color32::from_rgb(255, 107, 22));
+            painter.text(
+                egui::pos2(rect.left() + 23.0, control_y),
+                egui::Align2::LEFT_CENTER,
+                "00:00:04:12",
+                egui::FontId::proportional(17.0),
+                egui::Color32::from_rgb(255, 107, 22),
+            );
             let compact = rect.width() < 600.0;
-            let control_x = if compact { rect.left() + 133.0 } else { rect.left() + (rect.width() * 0.5).max(160.0) - 80.0 };
+            let control_x = if compact {
+                rect.left() + 133.0
+            } else {
+                rect.left() + (rect.width() * 0.5).max(160.0) - 80.0
+            };
             let control_step = if compact { 22.0 } else { 42.0 };
             for (index, glyph) in ["|◀", "◀", "▶", "▶|"].into_iter().enumerate() {
-                painter.text(egui::pos2(control_x + index as f32 * control_step, control_y), egui::Align2::CENTER_CENTER, glyph, egui::FontId::proportional(if index == 2 { 19.0 } else { 16.0 }), colors::TEXT_PRIMARY);
+                painter.text(
+                    egui::pos2(control_x + index as f32 * control_step, control_y),
+                    egui::Align2::CENTER_CENTER,
+                    glyph,
+                    egui::FontId::proportional(if index == 2 { 19.0 } else { 16.0 }),
+                    colors::TEXT_PRIMARY,
+                );
             }
             let quality_rect = if compact {
-                egui::Rect::from_min_size(egui::pos2(rect.right() - 150.0, control_y - 17.0), egui::vec2(100.0, 34.0))
+                egui::Rect::from_min_size(
+                    egui::pos2(rect.right() - 150.0, control_y - 17.0),
+                    egui::vec2(100.0, 34.0),
+                )
             } else {
-                egui::Rect::from_min_size(egui::pos2(rect.right() - 257.0, control_y - 17.0), egui::vec2(101.0, 34.0))
+                egui::Rect::from_min_size(
+                    egui::pos2(rect.right() - 257.0, control_y - 17.0),
+                    egui::vec2(101.0, 34.0),
+                )
             };
             painter.rect_stroke(quality_rect, 5.0, egui::Stroke::new(1.0, border));
-            painter.text(quality_rect.center(), egui::Align2::CENTER_CENTER, "Full Quality ⌄", egui::FontId::proportional(12.0), colors::TEXT_PRIMARY);
+            painter.text(
+                quality_rect.center(),
+                egui::Align2::CENTER_CENTER,
+                "Full Quality ⌄",
+                egui::FontId::proportional(12.0),
+                colors::TEXT_PRIMARY,
+            );
             if compact {
-                painter.text(egui::pos2(rect.right() - 22.0, control_y), egui::Align2::CENTER_CENTER, "⛶", egui::FontId::proportional(18.0), colors::TEXT_PRIMARY);
+                painter.text(
+                    egui::pos2(rect.right() - 22.0, control_y),
+                    egui::Align2::CENTER_CENTER,
+                    "⛶",
+                    egui::FontId::proportional(18.0),
+                    colors::TEXT_PRIMARY,
+                );
             } else {
                 for (index, glyph) in ["□", "◎", "⛶"].into_iter().enumerate() {
-                    painter.text(egui::pos2(rect.right() - 150.0 + index as f32 * 43.0, control_y), egui::Align2::CENTER_CENTER, glyph, egui::FontId::proportional(21.0), colors::TEXT_PRIMARY);
+                    painter.text(
+                        egui::pos2(rect.right() - 150.0 + index as f32 * 43.0, control_y),
+                        egui::Align2::CENTER_CENTER,
+                        glyph,
+                        egui::FontId::proportional(21.0),
+                        colors::TEXT_PRIMARY,
+                    );
                 }
             }
-            painter.line_segment([egui::pos2(rect.left() + 15.0, control_y + 27.0), egui::pos2(rect.right() - 15.0, control_y + 27.0)], egui::Stroke::new(1.0, border));
+            painter.line_segment(
+                [
+                    egui::pos2(rect.left() + 15.0, control_y + 27.0),
+                    egui::pos2(rect.right() - 15.0, control_y + 27.0),
+                ],
+                egui::Stroke::new(1.0, border),
+            );
             let _ = app;
         });
 }
@@ -3894,11 +4036,20 @@ mod review_regression_tests {
         let mut path = crate::core::mask::MaskPath::new_rect(100.0, 200.0, 50.0, 60.0);
         path.set_tangents_at_vertex(0, [-10.0, -5.0], [20.0, 15.0], false);
         move_mask_tangent(&mut path, 0, true, [25.0, 20.0], false);
-        assert_eq!(path.tangents.as_ref().unwrap()[0], ([-10.0, -5.0], [25.0, 20.0]));
+        assert_eq!(
+            path.tangents.as_ref().unwrap()[0],
+            ([-10.0, -5.0], [25.0, 20.0])
+        );
         move_mask_tangent(&mut path, 0, false, [-15.0, -7.0], false);
-        assert_eq!(path.tangents.as_ref().unwrap()[0], ([-15.0, -7.0], [25.0, 20.0]));
+        assert_eq!(
+            path.tangents.as_ref().unwrap()[0],
+            ([-15.0, -7.0], [25.0, 20.0])
+        );
         move_mask_tangent(&mut path, 0, true, [30.0, 40.0], true);
-        assert_eq!(path.tangents.as_ref().unwrap()[0], ([-30.0, -40.0], [30.0, 40.0]));
+        assert_eq!(
+            path.tangents.as_ref().unwrap()[0],
+            ([-30.0, -40.0], [30.0, 40.0])
+        );
     }
 
     #[test]
@@ -3908,7 +4059,10 @@ mod review_regression_tests {
         let start = egui::pos2(100.0, 100.0);
         let end = egui::pos2(130.0, 120.0);
         let button = |pos, pressed| egui::Event::PointerButton {
-            pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE,
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
         };
         for events in [
             vec![],
@@ -3916,17 +4070,29 @@ mod review_regression_tests {
             vec![egui::Event::PointerMoved(end)],
             vec![button(end, false)],
         ] {
-            let _ = ctx.run(egui::RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 400.0))),
-                events, ..Default::default()
-            }, |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    let response = ui.interact(
-                        egui::Rect::from_min_max(egui::pos2(20.0, 20.0), egui::pos2(300.0, 300.0)),
-                        egui::Id::new("pen_test"), egui::Sense::click_and_drag());
-                    handle_pen_pointer(&mut app, &response, [20.0, 20.0], [2.0, 2.0]);
-                });
-            });
+            let _ = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(400.0, 400.0),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let response = ui.interact(
+                            egui::Rect::from_min_max(
+                                egui::pos2(20.0, 20.0),
+                                egui::pos2(300.0, 300.0),
+                            ),
+                            egui::Id::new("pen_test"),
+                            egui::Sense::click_and_drag(),
+                        );
+                        handle_pen_pointer(&mut app, &response, [20.0, 20.0], [2.0, 2.0]);
+                    });
+                },
+            );
         }
         assert_eq!(app.pen_points, vec![[160.0, 160.0]]);
         assert!(app.pen_bezier_drag.is_none());

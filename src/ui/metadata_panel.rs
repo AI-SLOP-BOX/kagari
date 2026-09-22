@@ -205,12 +205,7 @@ pub fn draw_metadata_panel(app: &KagariApp, ui: &mut egui::Ui) {
                     .small()
                     .color(colors::TEXT_SECONDARY),
             );
-            let depth_name = app
-                .history
-                .current()
-                .active_composition()
-                .bit_depth
-                .label();
+            let depth_name = app.history.current().active_composition().bit_depth.label();
             ui.label(
                 egui::RichText::new(depth_name)
                     .small()

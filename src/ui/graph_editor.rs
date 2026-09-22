@@ -170,8 +170,8 @@ fn rove_keyframes<T: Clone>(
     }
     let mut cumulative = vec![0.0_f32; keys.len()];
     for index in 1..keys.len() {
-        cumulative[index] = cumulative[index - 1]
-            + distance(&keys[index - 1].value, &keys[index].value).max(0.0);
+        cumulative[index] =
+            cumulative[index - 1] + distance(&keys[index - 1].value, &keys[index].value).max(0.0);
     }
     let total_distance = *cumulative.last().unwrap_or(&0.0);
     if total_distance <= f32::EPSILON {
@@ -185,8 +185,7 @@ fn rove_keyframes<T: Clone>(
         let minimum = previous_frame.saturating_add(1);
         let remaining = (last_index - index) as u32;
         let maximum = last_frame.saturating_sub(remaining);
-        let proposed = first_frame as f32
-            + span as f32 * cumulative[index] / total_distance;
+        let proposed = first_frame as f32 + span as f32 * cumulative[index] / total_distance;
         let next_frame = (proposed.round() as u32).clamp(minimum, maximum);
         changed |= key.frame != next_frame;
         key.frame = next_frame;
@@ -226,7 +225,11 @@ fn reverse_effect_property(layer: &mut Layer, property: &str) -> bool {
     let Some((effect_id, parameter, _)) = parse_effect_property(property) else {
         return false;
     };
-    let Some(effect) = layer.effects.iter_mut().find(|effect| effect.id == effect_id) else {
+    let Some(effect) = layer
+        .effects
+        .iter_mut()
+        .find(|effect| effect.id == effect_id)
+    else {
         return false;
     };
     effect
@@ -352,7 +355,9 @@ fn map_layer_interpolation(
     }
 
     match property {
-        "Position X" | "Position Y" => apply(&mut layer.transform.position, selected_frame, &mut map),
+        "Position X" | "Position Y" => {
+            apply(&mut layer.transform.position, selected_frame, &mut map)
+        }
         "Scale X" | "Scale Y" => apply(&mut layer.transform.scale, selected_frame, &mut map),
         "Rotation" => apply(&mut layer.transform.rotation, selected_frame, &mut map),
         "Opacity" => apply(&mut layer.transform.opacity, selected_frame, &mut map),
@@ -372,7 +377,11 @@ fn map_layer_interpolation(
             let Some((effect_id, parameter_name, _)) = parse_effect_property(p) else {
                 return false;
             };
-            let Some(effect) = layer.effects.iter_mut().find(|effect| effect.id == effect_id) else {
+            let Some(effect) = layer
+                .effects
+                .iter_mut()
+                .find(|effect| effect.id == effect_id)
+            else {
                 return false;
             };
             effect
@@ -1217,32 +1226,60 @@ pub fn draw_graph_editor(
     let graph_height = 120.0f32;
 
     ui.group(|ui| {
-        let graph_prop = selected_property.clone().unwrap_or_else(|| "Position X".to_string());
+        let graph_prop = selected_property
+            .clone()
+            .unwrap_or_else(|| "Position X".to_string());
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("Graph Editor").strong());
-            let prop_name = selected_property.clone().unwrap_or_else(|| "Position X".to_string());
+            let prop_name = selected_property
+                .clone()
+                .unwrap_or_else(|| "Position X".to_string());
             egui::ComboBox::from_id_salt("graph_prop_select_module")
                 .selected_text(&prop_name)
                 .show_ui(ui, |ui| {
                     let mut props: Vec<(String, String)> = [
-                        ("Position X", "Position X"), ("Position Y", "Position Y"),
-                        ("Scale X", "Scale X"), ("Scale Y", "Scale Y"),
-                        ("Rotation", "Rotation"), ("Opacity", "Opacity"),
-                        ("3D Position X", "3D Position X"), ("3D Position Y", "3D Position Y"), ("3D Position Z", "3D Position Z"),
-                        ("3D Rotation X", "3D Rotation X"), ("3D Rotation Y", "3D Rotation Y"), ("3D Rotation Z", "3D Rotation Z"),
-                        ("3D Scale X", "3D Scale X"), ("3D Scale Y", "3D Scale Y"), ("3D Scale Z", "3D Scale Z"),
-                    ].iter().map(|(a,b)|(a.to_string(),b.to_string())).collect();
+                        ("Position X", "Position X"),
+                        ("Position Y", "Position Y"),
+                        ("Scale X", "Scale X"),
+                        ("Scale Y", "Scale Y"),
+                        ("Rotation", "Rotation"),
+                        ("Opacity", "Opacity"),
+                        ("3D Position X", "3D Position X"),
+                        ("3D Position Y", "3D Position Y"),
+                        ("3D Position Z", "3D Position Z"),
+                        ("3D Rotation X", "3D Rotation X"),
+                        ("3D Rotation Y", "3D Rotation Y"),
+                        ("3D Rotation Z", "3D Rotation Z"),
+                        ("3D Scale X", "3D Scale X"),
+                        ("3D Scale Y", "3D Scale Y"),
+                        ("3D Scale Z", "3D Scale Z"),
+                    ]
+                    .iter()
+                    .map(|(a, b)| (a.to_string(), b.to_string()))
+                    .collect();
                     for pin in &layer.puppet_pins {
-                        props.push((format!("PinX:{}", pin.id), format!("\u{1f9f7} {} X", pin.name)));
-                        props.push((format!("PinY:{}", pin.id), format!("\u{1f9f7} {} Y", pin.name)));
+                        props.push((
+                            format!("PinX:{}", pin.id),
+                            format!("\u{1f9f7} {} X", pin.name),
+                        ));
+                        props.push((
+                            format!("PinY:{}", pin.id),
+                            format!("\u{1f9f7} {} Y", pin.name),
+                        ));
                     }
                     for effect in &layer.effects {
                         for (label, parameter) in effect.effect_type.animatable_params_ref() {
                             let channels: &[(&str, usize)] = match parameter {
                                 crate::core::effect_params::ParamRefRef::Scalar(_) => &[("", 0)],
-                                crate::core::effect_params::ParamRefRef::Vec2(_) => &[ (" X", 0), (" Y", 1) ],
-                                crate::core::effect_params::ParamRefRef::Vec3(_) => &[ (" X", 0), (" Y", 1), (" Z", 2) ],
-                                crate::core::effect_params::ParamRefRef::Vec4Color(_) => &[ (" R", 0), (" G", 1), (" B", 2), (" A", 3) ],
+                                crate::core::effect_params::ParamRefRef::Vec2(_) => {
+                                    &[(" X", 0), (" Y", 1)]
+                                }
+                                crate::core::effect_params::ParamRefRef::Vec3(_) => {
+                                    &[(" X", 0), (" Y", 1), (" Z", 2)]
+                                }
+                                crate::core::effect_params::ParamRefRef::Vec4Color(_) => {
+                                    &[(" R", 0), (" G", 1), (" B", 2), (" A", 3)]
+                                }
                             };
                             for (suffix, channel) in channels {
                                 let key = if suffix.is_empty() {
@@ -1250,12 +1287,19 @@ pub fn draw_graph_editor(
                                 } else {
                                     format!("fxid:{}::{}|{}", effect.id, label, channel)
                                 };
-                                props.push((key, format!("⚙ {} / {}{}", effect.name, label, suffix)));
+                                props.push((
+                                    key,
+                                    format!("⚙ {} / {}{}", effect.name, label, suffix),
+                                ));
                             }
                         }
                     }
                     let label_of = |key: &str| -> String {
-                        props.iter().find(|(k, _)| k == key).map(|(_, l)| l.clone()).unwrap_or_else(|| key.to_string())
+                        props
+                            .iter()
+                            .find(|(k, _)| k == key)
+                            .map(|(_, l)| l.clone())
+                            .unwrap_or_else(|| key.to_string())
                     };
                     let sel_label = label_of(&prop_name);
                     ui.label(egui::RichText::new(&sel_label).weak());
@@ -1276,17 +1320,27 @@ pub fn draw_graph_editor(
                 preset: crate::core::keyframe::EasePreset,
                 selected_frame: Option<u32>,
             ) {
-                use crate::core::property::Animatable;
                 use crate::core::keyframe::{BezierControlPoint, InterpolationType};
+                use crate::core::property::Animatable;
                 let pts = preset.control_points();
-                fn apply<T>(kfs: &mut [crate::core::keyframe::Keyframe<T>], pts: [f32; 4], selected_frame: Option<u32>) {
+                fn apply<T>(
+                    kfs: &mut [crate::core::keyframe::Keyframe<T>],
+                    pts: [f32; 4],
+                    selected_frame: Option<u32>,
+                ) {
                     for kf in kfs.iter_mut() {
                         if selected_frame.is_some_and(|frame| frame != kf.frame) {
                             continue;
                         }
                         kf.interpolation = InterpolationType::Bezier {
-                            outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
-                            incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
+                            outgoing: BezierControlPoint {
+                                influence: 0.333,
+                                speed: 0.0,
+                            },
+                            incoming: BezierControlPoint {
+                                influence: 0.333,
+                                speed: 0.0,
+                            },
                             custom_bezier: Some(pts),
                         };
                     }
@@ -1294,20 +1348,40 @@ pub fn draw_graph_editor(
 
                 match prop {
                     "Position X" | "Position Y" => {
-                        if let Animatable::Animated(ref mut kfs) = layer.transform.position { apply(kfs, pts, selected_frame); }
+                        if let Animatable::Animated(ref mut kfs) = layer.transform.position {
+                            apply(kfs, pts, selected_frame);
+                        }
                     }
                     "Scale X" | "Scale Y" => {
-                        if let Animatable::Animated(ref mut kfs) = layer.transform.scale { apply(kfs, pts, selected_frame); }
+                        if let Animatable::Animated(ref mut kfs) = layer.transform.scale {
+                            apply(kfs, pts, selected_frame);
+                        }
                     }
                     "Rotation" => {
-                        if let Animatable::Animated(ref mut kfs) = layer.transform.rotation { apply(kfs, pts, selected_frame); }
+                        if let Animatable::Animated(ref mut kfs) = layer.transform.rotation {
+                            apply(kfs, pts, selected_frame);
+                        }
                     }
                     "Opacity" => {
-                        if let Animatable::Animated(ref mut kfs) = layer.transform.opacity { apply(kfs, pts, selected_frame); }
+                        if let Animatable::Animated(ref mut kfs) = layer.transform.opacity {
+                            apply(kfs, pts, selected_frame);
+                        }
                     }
-                    p if p.starts_with("3D Position") => { if let Animatable::Animated(ref mut kfs) = layer.transform_3d.position { apply(kfs, pts, selected_frame); } }
-                    p if p.starts_with("3D Rotation") => { if let Animatable::Animated(ref mut kfs) = layer.transform_3d.rotation { apply(kfs, pts, selected_frame); } }
-                    p if p.starts_with("3D Scale") => { if let Animatable::Animated(ref mut kfs) = layer.transform_3d.scale { apply(kfs, pts, selected_frame); } }
+                    p if p.starts_with("3D Position") => {
+                        if let Animatable::Animated(ref mut kfs) = layer.transform_3d.position {
+                            apply(kfs, pts, selected_frame);
+                        }
+                    }
+                    p if p.starts_with("3D Rotation") => {
+                        if let Animatable::Animated(ref mut kfs) = layer.transform_3d.rotation {
+                            apply(kfs, pts, selected_frame);
+                        }
+                    }
+                    p if p.starts_with("3D Scale") => {
+                        if let Animatable::Animated(ref mut kfs) = layer.transform_3d.scale {
+                            apply(kfs, pts, selected_frame);
+                        }
+                    }
                     p if p.starts_with("Pin") => {
                         if let Some(Animatable::Animated(ref mut kfs)) = pin_anim_mut(layer, p) {
                             apply(kfs, pts, selected_frame);
@@ -1315,16 +1389,35 @@ pub fn draw_graph_editor(
                     }
                     p if is_effect_property(p) => {
                         if let Some((effect_id, parameter_name, _)) = parse_effect_property(p) {
-                            if let Some(effect) = layer.effects.iter_mut().find(|effect| effect.id == effect_id) {
+                            if let Some(effect) = layer
+                                .effects
+                                .iter_mut()
+                                .find(|effect| effect.id == effect_id)
+                            {
                                 let interpolation = InterpolationType::Bezier {
-                                    outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
-                                    incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
+                                    outgoing: BezierControlPoint {
+                                        influence: 0.333,
+                                        speed: 0.0,
+                                    },
+                                    incoming: BezierControlPoint {
+                                        influence: 0.333,
+                                        speed: 0.0,
+                                    },
                                     custom_bezier: Some(pts),
                                 };
                                 if let Some(frame) = selected_frame {
-                                    effect.effect_type.set_parameter_keyframe_interpolation_at_frame(parameter_name, frame, interpolation);
+                                    effect
+                                        .effect_type
+                                        .set_parameter_keyframe_interpolation_at_frame(
+                                            parameter_name,
+                                            frame,
+                                            interpolation,
+                                        );
                                 } else {
-                                    effect.effect_type.set_parameter_keyframe_interpolation(Some(parameter_name), interpolation);
+                                    effect.effect_type.set_parameter_keyframe_interpolation(
+                                        Some(parameter_name),
+                                        interpolation,
+                                    );
                                 }
                             }
                         }
@@ -1333,15 +1426,24 @@ pub fn draw_graph_editor(
                 }
             }
 
-            let active_prop = selected_property.clone().unwrap_or_else(|| "Position X".to_string());
+            let active_prop = selected_property
+                .clone()
+                .unwrap_or_else(|| "Position X".to_string());
             let ease_scope_id = egui::Id::new(("graph_ease_scope", &layer.id, &active_prop));
             let mut apply_all_keys = ui.ctx().data(|d| d.get_temp(ease_scope_id).unwrap_or(true));
             ui.horizontal(|ui| {
                 ui.checkbox(&mut apply_all_keys, "All keys");
                 ui.label(egui::RichText::new("off = hovered key only").small().weak());
             });
-            ui.ctx().data_mut(|d| d.insert_temp(ease_scope_id, apply_all_keys));
-            let hovered_index: Option<usize> = ui.ctx().data(|d| d.get_temp(egui::Id::new(("ae_graph_hovered_kf", &layer.id, &active_prop))));
+            ui.ctx()
+                .data_mut(|d| d.insert_temp(ease_scope_id, apply_all_keys));
+            let hovered_index: Option<usize> = ui.ctx().data(|d| {
+                d.get_temp(egui::Id::new((
+                    "ae_graph_hovered_kf",
+                    &layer.id,
+                    &active_prop,
+                )))
+            });
             let ease_target_frame = if apply_all_keys {
                 None
             } else {
@@ -1350,19 +1452,62 @@ pub fn draw_graph_editor(
 
             ui.horizontal_wrapped(|ui| {
                 for (lbl, short, preset, tip) in [
-                    ("⚡ Easy Ease (F9)", "Easy Ease", crate::core::keyframe::EasePreset::Standard, "Standard symmetric ease [0.25, 0.1, 0.25, 1.0]"),
-                    ("↗ In", "In", crate::core::keyframe::EasePreset::EaseIn, "Ease In (slow start, fast end)"),
-                    ("↘ Out", "Out", crate::core::keyframe::EasePreset::EaseOut, "Ease Out (fast start, slow end)"),
-                    ("🌊 Sine", "Sine", crate::core::keyframe::EasePreset::Sine, "Ultra smooth Sine ease"),
-                    ("🚀 Fast Out", "Fast Out", crate::core::keyframe::EasePreset::FastOut, "Quick initial burst then smooth decelerate"),
-                    ("🎯 Overshoot", "Overshoot", crate::core::keyframe::EasePreset::Overshoot, "Spring overshoot past target value"),
-                    ("🏀 Bounce", "Bounce", crate::core::keyframe::EasePreset::Bounce, "Physical single bounce easing"),
-                    ("🪀 Elastic", "Elastic", crate::core::keyframe::EasePreset::Elastic, "Elastic spring recoil easing"),
+                    (
+                        "⚡ Easy Ease (F9)",
+                        "Easy Ease",
+                        crate::core::keyframe::EasePreset::Standard,
+                        "Standard symmetric ease [0.25, 0.1, 0.25, 1.0]",
+                    ),
+                    (
+                        "↗ In",
+                        "In",
+                        crate::core::keyframe::EasePreset::EaseIn,
+                        "Ease In (slow start, fast end)",
+                    ),
+                    (
+                        "↘ Out",
+                        "Out",
+                        crate::core::keyframe::EasePreset::EaseOut,
+                        "Ease Out (fast start, slow end)",
+                    ),
+                    (
+                        "🌊 Sine",
+                        "Sine",
+                        crate::core::keyframe::EasePreset::Sine,
+                        "Ultra smooth Sine ease",
+                    ),
+                    (
+                        "🚀 Fast Out",
+                        "Fast Out",
+                        crate::core::keyframe::EasePreset::FastOut,
+                        "Quick initial burst then smooth decelerate",
+                    ),
+                    (
+                        "🎯 Overshoot",
+                        "Overshoot",
+                        crate::core::keyframe::EasePreset::Overshoot,
+                        "Spring overshoot past target value",
+                    ),
+                    (
+                        "🏀 Bounce",
+                        "Bounce",
+                        crate::core::keyframe::EasePreset::Bounce,
+                        "Physical single bounce easing",
+                    ),
+                    (
+                        "🪀 Elastic",
+                        "Elastic",
+                        crate::core::keyframe::EasePreset::Elastic,
+                        "Elastic spring recoil easing",
+                    ),
                 ] {
                     ui.vertical(|ui| {
                         ui.set_min_width(52.0);
-                        let thumb = draw_ease_thumbnail(ui, preset).on_hover_text(format!("{lbl}\n{tip}"));
-                        let label = ui.small_button(short).on_hover_text(format!("{lbl}\n{tip}"));
+                        let thumb =
+                            draw_ease_thumbnail(ui, preset).on_hover_text(format!("{lbl}\n{tip}"));
+                        let label = ui
+                            .small_button(short)
+                            .on_hover_text(format!("{lbl}\n{tip}"));
                         if thumb.clicked() || label.clicked() {
                             apply_preset_to_layer(layer, &active_prop, preset, ease_target_frame);
                             *project_changed = true;
@@ -1372,10 +1517,8 @@ pub fn draw_graph_editor(
             });
 
             ui.add_space(4.0);
-            let rove_supported = matches!(
-                active_prop.as_str(),
-                "Position X" | "Position Y"
-            ) || active_prop.starts_with("3D Position")
+            let rove_supported = matches!(active_prop.as_str(), "Position X" | "Position Y")
+                || active_prop.starts_with("3D Position")
                 || active_prop.starts_with("PinX:")
                 || active_prop.starts_with("PinY:");
             if ui
@@ -1390,16 +1533,32 @@ pub fn draw_graph_editor(
                 *project_changed |= rove_across_time(layer, &active_prop);
             }
 
-            if ui.button("⇄ Reverse Keys").on_hover_text("Reverse keyframe order in time (values stay, timing flips)").clicked() {
-                let changed = match selected_property.clone().unwrap_or_else(|| "Position X".to_string()).as_str() {
+            if ui
+                .button("⇄ Reverse Keys")
+                .on_hover_text("Reverse keyframe order in time (values stay, timing flips)")
+                .clicked()
+            {
+                let changed = match selected_property
+                    .clone()
+                    .unwrap_or_else(|| "Position X".to_string())
+                    .as_str()
+                {
                     "Position X" | "Position Y" => reverse_keyframes(&mut layer.transform.position),
                     "Scale X" | "Scale Y" => reverse_keyframes(&mut layer.transform.scale),
                     "Rotation" => reverse_keyframes(&mut layer.transform.rotation),
                     "Opacity" => reverse_keyframes(&mut layer.transform.opacity),
-                    p if p.starts_with("3D Position") => reverse_keyframes(&mut layer.transform_3d.position),
-                    p if p.starts_with("3D Rotation") => reverse_keyframes(&mut layer.transform_3d.rotation),
-                    p if p.starts_with("3D Scale") => reverse_keyframes(&mut layer.transform_3d.scale),
-                    p if p.starts_with("Pin") => pin_anim_mut(layer, p).is_some_and(reverse_keyframes),
+                    p if p.starts_with("3D Position") => {
+                        reverse_keyframes(&mut layer.transform_3d.position)
+                    }
+                    p if p.starts_with("3D Rotation") => {
+                        reverse_keyframes(&mut layer.transform_3d.rotation)
+                    }
+                    p if p.starts_with("3D Scale") => {
+                        reverse_keyframes(&mut layer.transform_3d.scale)
+                    }
+                    p if p.starts_with("Pin") => {
+                        pin_anim_mut(layer, p).is_some_and(reverse_keyframes)
+                    }
                     p if is_effect_property(p) => reverse_effect_property(layer, p),
                     _ => false,
                 };
@@ -1407,11 +1566,19 @@ pub fn draw_graph_editor(
             }
 
             ui.add_space(4.0);
-            if ui.button("⚡ Mirror Ease").on_hover_text("Symmetrically mirror Ease In / Ease Out handles").clicked() {
+            if ui
+                .button("⚡ Mirror Ease")
+                .on_hover_text("Symmetrically mirror Ease In / Ease Out handles")
+                .clicked()
+            {
                 use crate::core::keyframe::InterpolationType;
 
                 let mut mirror_custom_bezier = |interpolation: &mut InterpolationType| {
-                    if let InterpolationType::Bezier { custom_bezier: Some(ref mut pts), .. } = interpolation {
+                    if let InterpolationType::Bezier {
+                        custom_bezier: Some(ref mut pts),
+                        ..
+                    } = interpolation
+                    {
                         let mirrored = [1.0 - pts[2], 1.0 - pts[3], 1.0 - pts[0], 1.0 - pts[1]];
                         *pts = mirrored;
                     }
@@ -1425,10 +1592,20 @@ pub fn draw_graph_editor(
             }
 
             ui.add_space(4.0);
-            if ui.button("↘ Ease In").on_hover_text("Flatten incoming tangent — keyframe eases into its value").clicked() {
+            if ui
+                .button("↘ Ease In")
+                .on_hover_text("Flatten incoming tangent — keyframe eases into its value")
+                .clicked()
+            {
                 use crate::core::keyframe::InterpolationType;
                 let mut ease_in = |interpolation: &mut InterpolationType| {
-                    if let InterpolationType::Bezier { ref mut outgoing, ref mut incoming, ref mut custom_bezier, .. } = *interpolation {
+                    if let InterpolationType::Bezier {
+                        ref mut outgoing,
+                        ref mut incoming,
+                        ref mut custom_bezier,
+                        ..
+                    } = *interpolation
+                    {
                         outgoing.influence = 0.0;
                         outgoing.speed = 0.0;
                         incoming.influence = 0.333;
@@ -1436,12 +1613,23 @@ pub fn draw_graph_editor(
                         *custom_bezier = Some([0.0, 0.0, 0.33, 1.0]);
                     }
                 };
-                *project_changed |= map_layer_interpolation(layer, &active_prop, ease_target_frame, &mut ease_in);
+                *project_changed |=
+                    map_layer_interpolation(layer, &active_prop, ease_target_frame, &mut ease_in);
             }
-            if ui.button("↗ Ease Out").on_hover_text("Flatten outgoing tangent — keyframe eases out of its value").clicked() {
+            if ui
+                .button("↗ Ease Out")
+                .on_hover_text("Flatten outgoing tangent — keyframe eases out of its value")
+                .clicked()
+            {
                 use crate::core::keyframe::InterpolationType;
                 let mut ease_out = |interpolation: &mut InterpolationType| {
-                    if let InterpolationType::Bezier { ref mut outgoing, ref mut incoming, ref mut custom_bezier, .. } = *interpolation {
+                    if let InterpolationType::Bezier {
+                        ref mut outgoing,
+                        ref mut incoming,
+                        ref mut custom_bezier,
+                        ..
+                    } = *interpolation
+                    {
                         outgoing.influence = 0.333;
                         outgoing.speed = 0.0;
                         incoming.influence = 0.0;
@@ -1449,7 +1637,8 @@ pub fn draw_graph_editor(
                         *custom_bezier = Some([0.67, 0.0, 1.0, 1.0]);
                     }
                 };
-                *project_changed |= map_layer_interpolation(layer, &active_prop, ease_target_frame, &mut ease_out);
+                *project_changed |=
+                    map_layer_interpolation(layer, &active_prop, ease_target_frame, &mut ease_out);
             }
 
             ui.add_space(8.0);
@@ -1457,12 +1646,22 @@ pub fn draw_graph_editor(
             let mode_id = egui::Id::new("ae_graph_mode_select");
             let mut current_mode = ui.ctx().data(|d| d.get_temp::<i32>(mode_id).unwrap_or(0));
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("Mode:").small().color(colors::TEXT_SECONDARY));
-                if ui.selectable_label(current_mode == 0, "⚡ Speed Graph").clicked() {
+                ui.label(
+                    egui::RichText::new("Mode:")
+                        .small()
+                        .color(colors::TEXT_SECONDARY),
+                );
+                if ui
+                    .selectable_label(current_mode == 0, "⚡ Speed Graph")
+                    .clicked()
+                {
                     current_mode = 0;
                     ui.ctx().data_mut(|d| d.insert_temp(mode_id, 0));
                 }
-                if ui.selectable_label(current_mode == 1, "📈 Value Graph").clicked() {
+                if ui
+                    .selectable_label(current_mode == 1, "📈 Value Graph")
+                    .clicked()
+                {
                     current_mode = 1;
                     ui.ctx().data_mut(|d| d.insert_temp(mode_id, 1));
                 }
@@ -1472,22 +1671,54 @@ pub fn draw_graph_editor(
                 let prop = selected_property.as_deref().unwrap_or("Position X");
                 let target_id = egui::Id::new(("ae_graph_hovered_kf", &layer.id, prop));
                 let index: Option<usize> = ui.ctx().data(|d| d.get_temp(target_id));
-                if let Some((index, mut values)) = index.and_then(|index|
-                    layer_velocity(layer, prop, index, fps as f32, None).map(|values| (index, values)))
-                {
+                if let Some((index, mut values)) = index.and_then(|index| {
+                    layer_velocity(layer, prop, index, fps as f32, None)
+                        .map(|values| (index, values))
+                }) {
                     let mut changed = false;
                     ui.horizontal(|ui| {
                         ui.label("Incoming:");
-                        changed |= ui.add(egui::DragValue::new(&mut values[0]).range(0.1..=100.0).speed(0.5).prefix("Inf: ").suffix("%")).changed();
-                        changed |= ui.add(egui::DragValue::new(&mut values[2]).speed(1.0).prefix("Spd: ").suffix(" units/s")).changed();
+                        changed |= ui
+                            .add(
+                                egui::DragValue::new(&mut values[0])
+                                    .range(0.1..=100.0)
+                                    .speed(0.5)
+                                    .prefix("Inf: ")
+                                    .suffix("%"),
+                            )
+                            .changed();
+                        changed |= ui
+                            .add(
+                                egui::DragValue::new(&mut values[2])
+                                    .speed(1.0)
+                                    .prefix("Spd: ")
+                                    .suffix(" units/s"),
+                            )
+                            .changed();
                     });
                     ui.horizontal(|ui| {
                         ui.label("Outgoing:");
-                        changed |= ui.add(egui::DragValue::new(&mut values[1]).range(0.1..=100.0).speed(0.5).prefix("Inf: ").suffix("%")).changed();
-                        changed |= ui.add(egui::DragValue::new(&mut values[3]).speed(1.0).prefix("Spd: ").suffix(" units/s")).changed();
+                        changed |= ui
+                            .add(
+                                egui::DragValue::new(&mut values[1])
+                                    .range(0.1..=100.0)
+                                    .speed(0.5)
+                                    .prefix("Inf: ")
+                                    .suffix("%"),
+                            )
+                            .changed();
+                        changed |= ui
+                            .add(
+                                egui::DragValue::new(&mut values[3])
+                                    .speed(1.0)
+                                    .prefix("Spd: ")
+                                    .suffix(" units/s"),
+                            )
+                            .changed();
                     });
                     if changed {
-                        *project_changed |= layer_velocity(layer, prop, index, fps as f32, Some(values)).is_some();
+                        *project_changed |=
+                            layer_velocity(layer, prop, index, fps as f32, Some(values)).is_some();
                     }
                 } else {
                     ui.label("Hover a keyframe with a following segment to edit velocity.");
@@ -1495,14 +1726,22 @@ pub fn draw_graph_editor(
 
                 ui.separator();
                 ui.horizontal(|ui| {
-                    if ui.small_button("📐 Linear").on_hover_text("Convert keyframes to linear interpolation").clicked() {
+                    if ui
+                        .small_button("📐 Linear")
+                        .on_hover_text("Convert keyframes to linear interpolation")
+                        .clicked()
+                    {
                         *project_changed |= set_layer_interpolation(
                             layer,
                             selected_property.as_deref().unwrap_or("Position X"),
                             crate::core::keyframe::InterpolationType::Linear,
                         );
                     }
-                    if ui.small_button("🌊 Auto Bezier").on_hover_text("Smooth keyframe tangents automatically").clicked() {
+                    if ui
+                        .small_button("🌊 Auto Bezier")
+                        .on_hover_text("Smooth keyframe tangents automatically")
+                        .clicked()
+                    {
                         *project_changed |= set_layer_interpolation(
                             layer,
                             selected_property.as_deref().unwrap_or("Position X"),
@@ -1513,7 +1752,11 @@ pub fn draw_graph_editor(
                             },
                         );
                     }
-                    if ui.small_button("🛑 Hold").on_hover_text("Hold keyframe value until next keyframe").clicked() {
+                    if ui
+                        .small_button("🛑 Hold")
+                        .on_hover_text("Hold keyframe value until next keyframe")
+                        .clicked()
+                    {
                         *project_changed |= set_layer_interpolation(
                             layer,
                             selected_property.as_deref().unwrap_or("Position X"),
@@ -1522,13 +1765,15 @@ pub fn draw_graph_editor(
                     }
                 });
             });
-
         });
 
         let total_f = duration_frames.max(1);
 
         // Detect speed graph vs value graph mode (0 = speed graph, 1 = value graph)
-        let speed_graph_mode = ui.ctx().data(|d| d.get_temp::<i32>(egui::Id::new("ae_graph_mode_select")).unwrap_or(0)) == 0;
+        let speed_graph_mode = ui.ctx().data(|d| {
+            d.get_temp::<i32>(egui::Id::new("ae_graph_mode_select"))
+                .unwrap_or(0)
+        }) == 0;
 
         // Sample values along timeline duration for drawing curve (screen-adaptive step)
         let max_samples = 2000usize;
@@ -1543,13 +1788,20 @@ pub fn draw_graph_editor(
                 "Scale Y" => layer.transform.scale.evaluate(f)[1],
                 "Rotation" => layer.transform.rotation.evaluate(f),
                 "Opacity" => layer.transform.opacity.evaluate(f),
-                p if p.starts_with("3D Position") => layer.transform_3d.position.evaluate(f)[axis_3d(p)],
-                p if p.starts_with("3D Rotation") => layer.transform_3d.rotation.evaluate(f)[axis_3d(p)],
+                p if p.starts_with("3D Position") => {
+                    layer.transform_3d.position.evaluate(f)[axis_3d(p)]
+                }
+                p if p.starts_with("3D Rotation") => {
+                    layer.transform_3d.rotation.evaluate(f)[axis_3d(p)]
+                }
                 p if p.starts_with("3D Scale") => layer.transform_3d.scale.evaluate(f)[axis_3d(p)],
                 p if p.starts_with("PinX:") || p.starts_with("PinY:") => {
                     let ci = usize::from(p.starts_with("PinY:"));
                     let pid = p.split(':').nth(1).unwrap_or("");
-                    layer.puppet_pins.iter().find(|pp| pp.id == pid)
+                    layer
+                        .puppet_pins
+                        .iter()
+                        .find(|pp| pp.id == pid)
                         .map(|pp| pp.position.evaluate(f)[ci])
                         .unwrap_or(0.0)
                 }
@@ -1567,34 +1819,79 @@ pub fn draw_graph_editor(
 
         // Compute per-keyframe velocity when in speed graph mode
         let keyframes_ref: Vec<(u32, f32)> = match graph_prop.as_str() {
-            "Position X" => layer.transform.position.keyframes()
+            "Position X" => layer
+                .transform
+                .position
+                .keyframes()
                 .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value[0])).collect())
                 .unwrap_or_default(),
-            "Position Y" => layer.transform.position.keyframes()
+            "Position Y" => layer
+                .transform
+                .position
+                .keyframes()
                 .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value[1])).collect())
                 .unwrap_or_default(),
-            "Scale X" => layer.transform.scale.keyframes()
+            "Scale X" => layer
+                .transform
+                .scale
+                .keyframes()
                 .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value[0])).collect())
                 .unwrap_or_default(),
-            "Scale Y" => layer.transform.scale.keyframes()
+            "Scale Y" => layer
+                .transform
+                .scale
+                .keyframes()
                 .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value[1])).collect())
                 .unwrap_or_default(),
-            "Rotation" => layer.transform.rotation.keyframes()
+            "Rotation" => layer
+                .transform
+                .rotation
+                .keyframes()
                 .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value)).collect())
                 .unwrap_or_default(),
-            "Opacity" => layer.transform.opacity.keyframes()
+            "Opacity" => layer
+                .transform
+                .opacity
+                .keyframes()
                 .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value)).collect())
                 .unwrap_or_default(),
-            p if p.starts_with("3D Position") => layer.transform_3d.position.keyframes()
-                .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value[axis_3d(p)])).collect()).unwrap_or_default(),
-            p if p.starts_with("3D Rotation") => layer.transform_3d.rotation.keyframes()
-                .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value[axis_3d(p)])).collect()).unwrap_or_default(),
-            p if p.starts_with("3D Scale") => layer.transform_3d.scale.keyframes()
-                .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value[axis_3d(p)])).collect()).unwrap_or_default(),
+            p if p.starts_with("3D Position") => layer
+                .transform_3d
+                .position
+                .keyframes()
+                .map(|kfs| {
+                    kfs.iter()
+                        .map(|kf| (kf.frame, kf.value[axis_3d(p)]))
+                        .collect()
+                })
+                .unwrap_or_default(),
+            p if p.starts_with("3D Rotation") => layer
+                .transform_3d
+                .rotation
+                .keyframes()
+                .map(|kfs| {
+                    kfs.iter()
+                        .map(|kf| (kf.frame, kf.value[axis_3d(p)]))
+                        .collect()
+                })
+                .unwrap_or_default(),
+            p if p.starts_with("3D Scale") => layer
+                .transform_3d
+                .scale
+                .keyframes()
+                .map(|kfs| {
+                    kfs.iter()
+                        .map(|kf| (kf.frame, kf.value[axis_3d(p)]))
+                        .collect()
+                })
+                .unwrap_or_default(),
             p if p.starts_with("PinX:") || p.starts_with("PinY:") => {
                 let ci = usize::from(p.starts_with("PinY:"));
                 let pid = p.split(':').nth(1).unwrap_or("");
-                layer.puppet_pins.iter().find(|pp| pp.id == pid)
+                layer
+                    .puppet_pins
+                    .iter()
+                    .find(|pp| pp.id == pid)
                     .and_then(|pp| pp.position.keyframes())
                     .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value[ci])).collect())
                     .unwrap_or_default()
@@ -1615,11 +1912,22 @@ pub fn draw_graph_editor(
                 rect,
             );
         });
-        ui.painter().rect_filled(rect, 4.0, egui::Color32::from_gray(25));
-        ui.painter().rect_stroke(rect, 4.0, egui::Stroke::new(1.0_f32, egui::Color32::from_gray(50)));
+        ui.painter()
+            .rect_filled(rect, 4.0, egui::Color32::from_gray(25));
+        ui.painter().rect_stroke(
+            rect,
+            4.0,
+            egui::Stroke::new(1.0_f32, egui::Color32::from_gray(50)),
+        );
 
-        let min_val = samples.iter().map(|(_, v)| *v).fold(f32::INFINITY, f32::min);
-        let max_val = samples.iter().map(|(_, v)| *v).fold(f32::NEG_INFINITY, f32::max);
+        let min_val = samples
+            .iter()
+            .map(|(_, v)| *v)
+            .fold(f32::INFINITY, f32::min);
+        let max_val = samples
+            .iter()
+            .map(|(_, v)| *v)
+            .fold(f32::NEG_INFINITY, f32::max);
         let val_range = (max_val - min_val).max(0.001);
 
         // Min/max value readouts on the right edge (curve readability)
@@ -1646,8 +1954,14 @@ pub fn draw_graph_editor(
         let points: Vec<egui::Pos2> = if speed_graph_mode {
             // Speed Graph: compute velocity curve and map to screen
             let vel_curve = compute_velocity_curve(&keyframes_ref, display_fps);
-            let vel_min = vel_curve.iter().map(|(_, v)| *v).fold(f32::INFINITY, f32::min);
-            let vel_max = vel_curve.iter().map(|(_, v)| *v).fold(f32::NEG_INFINITY, f32::max);
+            let vel_min = vel_curve
+                .iter()
+                .map(|(_, v)| *v)
+                .fold(f32::INFINITY, f32::min);
+            let vel_max = vel_curve
+                .iter()
+                .map(|(_, v)| *v)
+                .fold(f32::NEG_INFINITY, f32::max);
             let vel_range = (vel_max - vel_min).abs().max(0.001);
 
             // Update readout labels for velocity range
@@ -1669,18 +1983,26 @@ pub fn draw_graph_editor(
                 );
             }
 
-            vel_curve.iter().map(|&(frame, vel)| {
-                let x = rect.left() + (frame / total_f as f32) * rect.width();
-                let y = rect.bottom() - 4.0 - ((vel - vel_min) / vel_range) * (rect.height() - 8.0);
-                egui::pos2(x, y)
-            }).collect()
+            vel_curve
+                .iter()
+                .map(|&(frame, vel)| {
+                    let x = rect.left() + (frame / total_f as f32) * rect.width();
+                    let y =
+                        rect.bottom() - 4.0 - ((vel - vel_min) / vel_range) * (rect.height() - 8.0);
+                    egui::pos2(x, y)
+                })
+                .collect()
         } else {
             // Value Graph: original value curve
-            samples.iter().map(|&(f, v)| {
-                let x = rect.left() + (f as f32 / total_f as f32) * rect.width();
-                let y = rect.bottom() - 4.0 - ((v - min_val) / val_range) * (rect.height() - 8.0);
-                egui::pos2(x, y)
-            }).collect()
+            samples
+                .iter()
+                .map(|&(f, v)| {
+                    let x = rect.left() + (f as f32 / total_f as f32) * rect.width();
+                    let y =
+                        rect.bottom() - 4.0 - ((v - min_val) / val_range) * (rect.height() - 8.0);
+                    egui::pos2(x, y)
+                })
+                .collect()
         };
 
         // Draw graph spline segments (Value Curve)
@@ -1696,18 +2018,26 @@ pub fn draw_graph_editor(
             use crate::core::keyframe::{InterpolationType as GInterp, Keyframe as GKeyframe};
 
             let x_of = |f: u32| rect.left() + (f as f32 / total_f as f32) * rect.width();
-            let y_of = |v: f32| rect.bottom() - 4.0 - ((v - min_val) / val_range) * (rect.height() - 8.0);
+            let y_of =
+                |v: f32| rect.bottom() - 4.0 - ((v - min_val) / val_range) * (rect.height() - 8.0);
 
             if graph_response.clicked() {
                 if let Some(pos) = graph_response.interact_pointer_pos() {
                     if rect.contains(pos) {
                         // Existing anchor proximity guard: clicks on anchors belong to the anchor drag
-                        let chan_kfs = |p: &crate::core::property::Animatable<[f32; 2]>, ci: usize| -> Vec<(u32, f32)> {
-                            p.keyframes().map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value[ci])).collect()).unwrap_or_default()
+                        let chan_kfs = |p: &crate::core::property::Animatable<[f32; 2]>,
+                                        ci: usize|
+                         -> Vec<(u32, f32)> {
+                            p.keyframes()
+                                .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value[ci])).collect())
+                                .unwrap_or_default()
                         };
-                        let scalar_kfs = |p: &crate::core::property::Animatable<f32>| -> Vec<(u32, f32)> {
-                            p.keyframes().map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value)).collect()).unwrap_or_default()
-                        };
+                        let scalar_kfs =
+                            |p: &crate::core::property::Animatable<f32>| -> Vec<(u32, f32)> {
+                                p.keyframes()
+                                    .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value)).collect())
+                                    .unwrap_or_default()
+                            };
                         let anchor_pts: Vec<(u32, f32)> = match graph_prop.as_str() {
                             "Position X" => chan_kfs(&layer.transform.position, 0),
                             "Position Y" => chan_kfs(&layer.transform.position, 1),
@@ -1715,13 +2045,43 @@ pub fn draw_graph_editor(
                             "Scale Y" => chan_kfs(&layer.transform.scale, 1),
                             "Rotation" => scalar_kfs(&layer.transform.rotation),
                             "Opacity" => scalar_kfs(&layer.transform.opacity),
-                            p if p.starts_with("3D Position") => layer.transform_3d.position.keyframes().map(|k| k.iter().map(|kf| (kf.frame, kf.value[axis_3d(p)])).collect()).unwrap_or_default(),
-                            p if p.starts_with("3D Rotation") => layer.transform_3d.rotation.keyframes().map(|k| k.iter().map(|kf| (kf.frame, kf.value[axis_3d(p)])).collect()).unwrap_or_default(),
-                            p if p.starts_with("3D Scale") => layer.transform_3d.scale.keyframes().map(|k| k.iter().map(|kf| (kf.frame, kf.value[axis_3d(p)])).collect()).unwrap_or_default(),
+                            p if p.starts_with("3D Position") => layer
+                                .transform_3d
+                                .position
+                                .keyframes()
+                                .map(|k| {
+                                    k.iter()
+                                        .map(|kf| (kf.frame, kf.value[axis_3d(p)]))
+                                        .collect()
+                                })
+                                .unwrap_or_default(),
+                            p if p.starts_with("3D Rotation") => layer
+                                .transform_3d
+                                .rotation
+                                .keyframes()
+                                .map(|k| {
+                                    k.iter()
+                                        .map(|kf| (kf.frame, kf.value[axis_3d(p)]))
+                                        .collect()
+                                })
+                                .unwrap_or_default(),
+                            p if p.starts_with("3D Scale") => layer
+                                .transform_3d
+                                .scale
+                                .keyframes()
+                                .map(|k| {
+                                    k.iter()
+                                        .map(|kf| (kf.frame, kf.value[axis_3d(p)]))
+                                        .collect()
+                                })
+                                .unwrap_or_default(),
                             p if p.starts_with("PinX:") || p.starts_with("PinY:") => {
                                 let ci = usize::from(p.starts_with("PinY:"));
                                 let pid = p.split(':').nth(1).unwrap_or("");
-                                layer.puppet_pins.iter().find(|pp| pp.id == pid)
+                                layer
+                                    .puppet_pins
+                                    .iter()
+                                    .find(|pp| pp.id == pid)
                                     .map(|pp| chan_kfs(&pp.position, ci))
                                     .unwrap_or_default()
                             }
@@ -1730,74 +2090,132 @@ pub fn draw_graph_editor(
                             }
                             _ => vec![],
                         };
-                        let near_anchor = anchor_pts.iter().any(|&(f, v)| {
-                            egui::pos2(x_of(f), y_of(v)).distance(pos) < 8.0
-                        });
+                        let near_anchor = anchor_pts
+                            .iter()
+                            .any(|&(f, v)| egui::pos2(x_of(f), y_of(v)).distance(pos) < 8.0);
 
                         if !near_anchor {
-                            let new_frame = (((pos.x - rect.left()) / rect.width()) * total_f as f32)
-                                .round().clamp(0.0, total_f as f32) as u32;
+                            let new_frame = (((pos.x - rect.left()) / rect.width())
+                                * total_f as f32)
+                                .round()
+                                .clamp(0.0, total_f as f32)
+                                as u32;
                             let new_val = min_val
-                                + ((rect.bottom() - 4.0 - pos.y) / (rect.height() - 8.0)) * val_range;
+                                + ((rect.bottom() - 4.0 - pos.y) / (rect.height() - 8.0))
+                                    * val_range;
                             match graph_prop.as_str() {
                                 "Position X" => {
                                     let mut v = layer.transform.position.evaluate(new_frame);
                                     v[0] = new_val;
-                                    layer.transform.position.add_keyframe(GKeyframe::new(new_frame, v, GInterp::Linear));
+                                    layer.transform.position.add_keyframe(GKeyframe::new(
+                                        new_frame,
+                                        v,
+                                        GInterp::Linear,
+                                    ));
                                 }
                                 "Position Y" => {
                                     let mut v = layer.transform.position.evaluate(new_frame);
                                     v[1] = new_val;
-                                    layer.transform.position.add_keyframe(GKeyframe::new(new_frame, v, GInterp::Linear));
+                                    layer.transform.position.add_keyframe(GKeyframe::new(
+                                        new_frame,
+                                        v,
+                                        GInterp::Linear,
+                                    ));
                                 }
                                 "Scale X" => {
                                     let mut v = layer.transform.scale.evaluate(new_frame);
                                     v[0] = new_val;
-                                    layer.transform.scale.add_keyframe(GKeyframe::new(new_frame, v, GInterp::Linear));
+                                    layer.transform.scale.add_keyframe(GKeyframe::new(
+                                        new_frame,
+                                        v,
+                                        GInterp::Linear,
+                                    ));
                                 }
                                 "Scale Y" => {
                                     let mut v = layer.transform.scale.evaluate(new_frame);
                                     v[1] = new_val;
-                                    layer.transform.scale.add_keyframe(GKeyframe::new(new_frame, v, GInterp::Linear));
+                                    layer.transform.scale.add_keyframe(GKeyframe::new(
+                                        new_frame,
+                                        v,
+                                        GInterp::Linear,
+                                    ));
                                 }
                                 "Rotation" => {
-                                    layer.transform.rotation.add_keyframe(GKeyframe::new(new_frame, new_val, GInterp::Linear));
+                                    layer.transform.rotation.add_keyframe(GKeyframe::new(
+                                        new_frame,
+                                        new_val,
+                                        GInterp::Linear,
+                                    ));
                                 }
                                 "Opacity" => {
-                                    layer.transform.opacity.add_keyframe(GKeyframe::new(new_frame, new_val.clamp(0.0, 100.0), GInterp::Linear));
+                                    layer.transform.opacity.add_keyframe(GKeyframe::new(
+                                        new_frame,
+                                        new_val.clamp(0.0, 100.0),
+                                        GInterp::Linear,
+                                    ));
                                 }
                                 p if p.starts_with("3D Position") => {
-                                    let mut v = layer.transform_3d.position.evaluate(new_frame); v[axis_3d(p)] = new_val;
-                                    layer.transform_3d.position.add_keyframe(GKeyframe::new(new_frame, v, GInterp::Linear));
+                                    let mut v = layer.transform_3d.position.evaluate(new_frame);
+                                    v[axis_3d(p)] = new_val;
+                                    layer.transform_3d.position.add_keyframe(GKeyframe::new(
+                                        new_frame,
+                                        v,
+                                        GInterp::Linear,
+                                    ));
                                 }
                                 p if p.starts_with("3D Rotation") => {
-                                    let mut v = layer.transform_3d.rotation.evaluate(new_frame); v[axis_3d(p)] = new_val;
-                                    layer.transform_3d.rotation.add_keyframe(GKeyframe::new(new_frame, v, GInterp::Linear));
+                                    let mut v = layer.transform_3d.rotation.evaluate(new_frame);
+                                    v[axis_3d(p)] = new_val;
+                                    layer.transform_3d.rotation.add_keyframe(GKeyframe::new(
+                                        new_frame,
+                                        v,
+                                        GInterp::Linear,
+                                    ));
                                 }
                                 p if p.starts_with("3D Scale") => {
-                                    let mut v = layer.transform_3d.scale.evaluate(new_frame); v[axis_3d(p)] = new_val;
-                                    layer.transform_3d.scale.add_keyframe(GKeyframe::new(new_frame, v, GInterp::Linear));
+                                    let mut v = layer.transform_3d.scale.evaluate(new_frame);
+                                    v[axis_3d(p)] = new_val;
+                                    layer.transform_3d.scale.add_keyframe(GKeyframe::new(
+                                        new_frame,
+                                        v,
+                                        GInterp::Linear,
+                                    ));
                                 }
                                 p if p.starts_with("PinX:") || p.starts_with("PinY:") => {
                                     if let Some(pin) = pin_anim_mut(layer, p) {
                                         let ci = usize::from(p.starts_with("PinY:"));
                                         let mut v = pin.evaluate(new_frame);
                                         v[ci] = new_val;
-                                        pin.add_keyframe(GKeyframe::new(new_frame, v, GInterp::Linear));
+                                        pin.add_keyframe(GKeyframe::new(
+                                            new_frame,
+                                            v,
+                                            GInterp::Linear,
+                                        ));
                                     }
                                 }
                                 p if is_effect_property(p) => {
-                                    let Some((effect_id, parameter_name, component)) = parse_effect_property(p) else {
+                                    let Some((effect_id, parameter_name, component)) =
+                                        parse_effect_property(p)
+                                    else {
                                         return;
                                     };
-                                    if let Some(effect) = layer.effects.iter_mut().find(|effect| effect.id == effect_id) {
+                                    if let Some(effect) = layer
+                                        .effects
+                                        .iter_mut()
+                                        .find(|effect| effect.id == effect_id)
+                                    {
                                         if let Some(component) = component {
                                             effect.effect_type.set_parameter_component_keyframe(
-                                                parameter_name, component, new_frame, new_val,
+                                                parameter_name,
+                                                component,
+                                                new_frame,
+                                                new_val,
                                             );
                                         } else {
                                             effect.effect_type.set_scalar_parameter_keyframe(
-                                                parameter_name, new_frame, new_val,
+                                                parameter_name,
+                                                new_frame,
+                                                new_val,
                                             );
                                         }
                                     }
@@ -1814,49 +2232,56 @@ pub fn draw_graph_editor(
         // Draw Speed Graph Velocity Line (First Derivative v(t) = dy/dt)
         // Skip overlay when in speed graph mode (main curve already shows velocity)
         if !speed_graph_mode {
-        let mut max_speed = 0.0f32;
-        let mut speed_pts = Vec::with_capacity(points.len());
-        for win in samples.windows(2) {
-            let dt = (win[1].0 as f32 - win[0].0 as f32).max(1.0);
-            let speed = ((win[1].1 - win[0].1) / dt).abs();
-            max_speed = max_speed.max(speed);
-            speed_pts.push(speed);
-        }
-
-        if max_speed > 0.001 {
-            for i in 0..speed_pts.len() {
-                let sx = rect.left() + (i as f32 / total_f as f32) * rect.width();
-                let sy = rect.bottom() - 4.0 - (speed_pts[i] / max_speed) * (rect.height() - 16.0);
-                let p1 = egui::pos2(sx, sy);
-
-                let next_i = (i + 1).min(speed_pts.len() - 1);
-                let nsx = rect.left() + (next_i as f32 / total_f as f32) * rect.width();
-                let nsy = rect.bottom() - 4.0 - (speed_pts[next_i] / max_speed) * (rect.height() - 16.0);
-                let p2 = egui::pos2(nsx, nsy);
-
-                ui.painter().line_segment([p1, p2], egui::Stroke::new(1.2_f32, colors::MOTION_PATH));
+            let mut max_speed = 0.0f32;
+            let mut speed_pts = Vec::with_capacity(points.len());
+            for win in samples.windows(2) {
+                let dt = (win[1].0 as f32 - win[0].0 as f32).max(1.0);
+                let speed = ((win[1].1 - win[0].1) / dt).abs();
+                max_speed = max_speed.max(speed);
+                speed_pts.push(speed);
             }
 
-            // Peak Speed Badge HUD
-            let speed_badge_pos = egui::pos2(rect.right() - 110.0, rect.top() + 6.0);
-            ui.painter().text(
-                speed_badge_pos,
-                egui::Align2::LEFT_TOP,
-                format!("⚡ Peak: {:.0} px/s", max_speed * display_fps as f32),
-                egui::FontId::monospace(10.0),
-                colors::MOTION_PATH,
-            );
-        }
+            if max_speed > 0.001 {
+                for i in 0..speed_pts.len() {
+                    let sx = rect.left() + (i as f32 / total_f as f32) * rect.width();
+                    let sy =
+                        rect.bottom() - 4.0 - (speed_pts[i] / max_speed) * (rect.height() - 16.0);
+                    let p1 = egui::pos2(sx, sy);
+
+                    let next_i = (i + 1).min(speed_pts.len() - 1);
+                    let nsx = rect.left() + (next_i as f32 / total_f as f32) * rect.width();
+                    let nsy = rect.bottom()
+                        - 4.0
+                        - (speed_pts[next_i] / max_speed) * (rect.height() - 16.0);
+                    let p2 = egui::pos2(nsx, nsy);
+
+                    ui.painter()
+                        .line_segment([p1, p2], egui::Stroke::new(1.2_f32, colors::MOTION_PATH));
+                }
+
+                // Peak Speed Badge HUD
+                let speed_badge_pos = egui::pos2(rect.right() - 110.0, rect.top() + 6.0);
+                ui.painter().text(
+                    speed_badge_pos,
+                    egui::Align2::LEFT_TOP,
+                    format!("⚡ Peak: {:.0} px/s", max_speed * display_fps as f32),
+                    egui::FontId::monospace(10.0),
+                    colors::MOTION_PATH,
+                );
+            }
         }
 
         // Render interactive keyframe anchor points & tangent handles (real editing)
         // Anchors are drawn at actual keyframe positions and can be dragged in time;
         // tangent handles edit the keyframe's custom bezier control points.
         {
-            use crate::core::keyframe::{InterpolationType, BezierControlPoint};
+            use crate::core::keyframe::{BezierControlPoint, InterpolationType};
 
             // Mutable access to Vec2-typed keyframe tracks (Position / Scale)
-            fn keyframes_of_vec2<'a>(layer: &'a mut Layer, prop: &str) -> Option<&'a mut Vec<crate::core::keyframe::Keyframe<[f32; 2]>>> {
+            fn keyframes_of_vec2<'a>(
+                layer: &'a mut Layer,
+                prop: &str,
+            ) -> Option<&'a mut Vec<crate::core::keyframe::Keyframe<[f32; 2]>>> {
                 use crate::core::property::Animatable;
                 let animated = |a: &'a mut Animatable<[f32; 2]>| match a {
                     Animatable::Animated(kfs) => Some(kfs),
@@ -1870,7 +2295,10 @@ pub fn draw_graph_editor(
             }
 
             // Mutable access to scalar keyframe tracks (Rotation / Opacity)
-            fn keyframes_of_f32<'a>(layer: &'a mut Layer, prop: &str) -> Option<&'a mut Vec<crate::core::keyframe::Keyframe<f32>>> {
+            fn keyframes_of_f32<'a>(
+                layer: &'a mut Layer,
+                prop: &str,
+            ) -> Option<&'a mut Vec<crate::core::keyframe::Keyframe<f32>>> {
                 use crate::core::property::Animatable;
                 let animated = |a: &'a mut Animatable<f32>| match a {
                     Animatable::Animated(kfs) => Some(kfs),
@@ -1891,7 +2319,10 @@ pub fn draw_graph_editor(
                 if component.is_some() {
                     return None;
                 }
-                let effect = layer.effects.iter_mut().find(|effect| effect.id == effect_id)?;
+                let effect = layer
+                    .effects
+                    .iter_mut()
+                    .find(|effect| effect.id == effect_id)?;
                 for (name, parameter) in effect.effect_type.animatable_params() {
                     if name == label {
                         if let crate::core::effect_params::ParamRef::Scalar(track) = parameter {
@@ -1902,9 +2333,15 @@ pub fn draw_graph_editor(
                 None
             }
 
-            fn keyframes_of_vec3<'a>(layer: &'a mut Layer, prop: &str) -> Option<&'a mut Vec<crate::core::keyframe::Keyframe<[f32; 3]>>> {
+            fn keyframes_of_vec3<'a>(
+                layer: &'a mut Layer,
+                prop: &str,
+            ) -> Option<&'a mut Vec<crate::core::keyframe::Keyframe<[f32; 3]>>> {
                 use crate::core::property::Animatable;
-                let animated = |a: &'a mut Animatable<[f32; 3]>| match a { Animatable::Animated(kfs) => Some(kfs), _ => None };
+                let animated = |a: &'a mut Animatable<[f32; 3]>| match a {
+                    Animatable::Animated(kfs) => Some(kfs),
+                    _ => None,
+                };
                 match prop {
                     p if p.starts_with("3D Position") => animated(&mut layer.transform_3d.position),
                     p if p.starts_with("3D Rotation") => animated(&mut layer.transform_3d.rotation),
@@ -1917,47 +2354,102 @@ pub fn draw_graph_editor(
                 ($layer:expr, $prop:expr, $kfs:ident => $body:expr) => {{
                     let prop: String = $prop.clone();
                     if prop.starts_with("3D ") {
-                        if let Some($kfs) = keyframes_of_vec3($layer, &prop) { Some({ $body }) } else { None }
-                    } else if matches!(prop.as_str(), "Position X" | "Position Y" | "Scale X" | "Scale Y") {
-                        if let Some($kfs) = keyframes_of_vec2($layer, &prop) { Some({ $body }) } else { None }
+                        if let Some($kfs) = keyframes_of_vec3($layer, &prop) {
+                            Some({ $body })
+                        } else {
+                            None
+                        }
+                    } else if matches!(
+                        prop.as_str(),
+                        "Position X" | "Position Y" | "Scale X" | "Scale Y"
+                    ) {
+                        if let Some($kfs) = keyframes_of_vec2($layer, &prop) {
+                            Some({ $body })
+                        } else {
+                            None
+                        }
                     } else if is_effect_property(&prop) {
-                        if let Some($kfs) = effect_keyframes_of_f32($layer, &prop) { Some({ $body }) } else { None }
+                        if let Some($kfs) = effect_keyframes_of_f32($layer, &prop) {
+                            Some({ $body })
+                        } else {
+                            None
+                        }
                     } else {
-                        if let Some($kfs) = keyframes_of_f32($layer, &prop) { Some({ $body }) } else { None }
+                        if let Some($kfs) = keyframes_of_f32($layer, &prop) {
+                            Some({ $body })
+                        } else {
+                            None
+                        }
                     }
                 }};
             }
 
             let frame_to_x = |f: u32| rect.left() + (f as f32 / total_f as f32) * rect.width();
-            let val_to_y = |v: f32| rect.bottom() - 4.0 - ((v - min_val) / val_range) * (rect.height() - 8.0);
+            let val_to_y =
+                |v: f32| rect.bottom() - 4.0 - ((v - min_val) / val_range) * (rect.height() - 8.0);
 
             // Snapshot keyframe positions first (immutable), then edit mutably on drag
             let kf_positions: Vec<(usize, u32, f32)> = if graph_prop.starts_with("3D ") {
                 let ci = axis_3d(&graph_prop);
-                keyframes_of_vec3(layer, &graph_prop).map(|kfs| kfs.iter().enumerate().map(|(i, kf)| (i, kf.frame, kf.value[ci])).collect()).unwrap_or_default()
-            } else if matches!(graph_prop.as_str(), "Position X" | "Position Y" | "Scale X" | "Scale Y") {
-                let comp_idx = if graph_prop.ends_with('Y') { 1usize } else { 0usize };
-                keyframes_of_vec2(layer, &graph_prop).map(|kfs| {
-                    kfs.iter().enumerate().map(|(i, kf)| (i, kf.frame, kf.value[comp_idx])).collect::<Vec<_>>()
-                }).unwrap_or_default()
+                keyframes_of_vec3(layer, &graph_prop)
+                    .map(|kfs| {
+                        kfs.iter()
+                            .enumerate()
+                            .map(|(i, kf)| (i, kf.frame, kf.value[ci]))
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            } else if matches!(
+                graph_prop.as_str(),
+                "Position X" | "Position Y" | "Scale X" | "Scale Y"
+            ) {
+                let comp_idx = if graph_prop.ends_with('Y') {
+                    1usize
+                } else {
+                    0usize
+                };
+                keyframes_of_vec2(layer, &graph_prop)
+                    .map(|kfs| {
+                        kfs.iter()
+                            .enumerate()
+                            .map(|(i, kf)| (i, kf.frame, kf.value[comp_idx]))
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default()
             } else if is_effect_property(&graph_prop) {
                 effect_keyframes_of_f32(layer, &graph_prop)
-                    .map(|kfs| kfs.iter().enumerate().map(|(i, kf)| (i, kf.frame, kf.value)).collect::<Vec<_>>())
+                    .map(|kfs| {
+                        kfs.iter()
+                            .enumerate()
+                            .map(|(i, kf)| (i, kf.frame, kf.value))
+                            .collect::<Vec<_>>()
+                    })
                     .unwrap_or_default()
             } else {
-                keyframes_of_f32(layer, &graph_prop).map(|kfs| {
-                    kfs.iter().enumerate().map(|(i, kf)| (i, kf.frame, kf.value)).collect::<Vec<_>>()
-                }).unwrap_or_default()
+                keyframes_of_f32(layer, &graph_prop)
+                    .map(|kfs| {
+                        kfs.iter()
+                            .enumerate()
+                            .map(|(i, kf)| (i, kf.frame, kf.value))
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default()
             };
 
             if is_effect_property(&graph_prop) && graph_prop.contains('|') {
                 let channel_keys = effect_parameter_channel_keyframes(layer, &graph_prop);
-                let channel_drag_id = egui::Id::new(("effect_channel_drag", &layer.id, &graph_prop));
-                let active_channel_drag: Option<GraphKeyframeDrag> = ui.ctx().data(|d| d.get_temp(channel_drag_id));
-                for (index, (frame, value)) in channel_keys.iter().enumerate() {
-                    let drag_display = active_channel_drag.filter(|drag| drag.anchor_id == index);
-                    let display_frame = drag_display.map(|drag| drag.current_frame).unwrap_or(*frame);
-                    let display_value = drag_display.map(|drag| drag.current_value).unwrap_or(*value);
+                let channel_drag_id =
+                    egui::Id::new(("effect_channel_drag", &layer.id, &graph_prop));
+                let active_channel_drag: Option<GraphKeyframeDrag> =
+                    ui.ctx().data(|d| d.get_temp(channel_drag_id));
+                for (frame, value) in &channel_keys {
+                    let drag_display = active_channel_drag.filter(|drag| drag.current_frame == *frame);
+                    let display_frame = drag_display
+                        .map(|drag| drag.current_frame)
+                        .unwrap_or(*frame);
+                    let display_value = drag_display
+                        .map(|drag| drag.current_value)
+                        .unwrap_or(*value);
                     // Use the frame identity for egui IDs. An array index is
                     // not stable after a retime sorts the keyframes and can
                     // make the drag state attach to a neighbouring key.
@@ -1971,53 +2463,102 @@ pub fn draw_graph_editor(
                         egui::Id::new(("effect_channel_key", &layer.id, &graph_prop, key_token)),
                         egui::Sense::click_and_drag(),
                     );
-                    ui.painter().circle_filled(key_pos, 4.0, colors::TIMELINE_KEYFRAME);
-                    if let Some(points) = effect_channel_bezier_points(layer, &graph_prop, display_frame) {
-                        let out = egui::pos2(key_pos.x + points[2] * 44.0, key_pos.y - points[3] * 24.0);
-                        let incoming = egui::pos2(key_pos.x - points[0] * 44.0, key_pos.y + points[1] * 24.0);
-                        let out_drag_id = egui::Id::new(("effect_bezier_drag_out", &layer.id, &graph_prop, key_token));
-                        let in_drag_id = egui::Id::new(("effect_bezier_drag_in", &layer.id, &graph_prop, key_token));
-                        let out_resp = ui.interact(egui::Rect::from_center_size(out, egui::vec2(14.0, 14.0)), egui::Id::new(("effect_bezier_out", &layer.id, &graph_prop, key_token)), egui::Sense::drag());
-                        let in_resp = ui.interact(egui::Rect::from_center_size(incoming, egui::vec2(14.0, 14.0)), egui::Id::new(("effect_bezier_in", &layer.id, &graph_prop, key_token)), egui::Sense::drag());
-                        ui.painter().line_segment([key_pos, out], egui::Stroke::new(1.0_f32, colors::MOTION_PATH));
-                        ui.painter().line_segment([key_pos, incoming], egui::Stroke::new(1.0_f32, colors::MOTION_PATH));
+                    ui.painter()
+                        .circle_filled(key_pos, 4.0, colors::TIMELINE_KEYFRAME);
+                    if let Some(points) =
+                        effect_channel_bezier_points(layer, &graph_prop, display_frame)
+                    {
+                        let out =
+                            egui::pos2(key_pos.x + points[2] * 44.0, key_pos.y - points[3] * 24.0);
+                        let incoming =
+                            egui::pos2(key_pos.x - points[0] * 44.0, key_pos.y + points[1] * 24.0);
+                        let out_drag_id = egui::Id::new((
+                            "effect_bezier_drag_out",
+                            &layer.id,
+                            &graph_prop,
+                            key_token,
+                        ));
+                        let in_drag_id = egui::Id::new((
+                            "effect_bezier_drag_in",
+                            &layer.id,
+                            &graph_prop,
+                            key_token,
+                        ));
+                        let out_resp = ui.interact(
+                            egui::Rect::from_center_size(out, egui::vec2(14.0, 14.0)),
+                            egui::Id::new(("effect_bezier_out", &layer.id, &graph_prop, key_token)),
+                            egui::Sense::drag(),
+                        );
+                        let in_resp = ui.interact(
+                            egui::Rect::from_center_size(incoming, egui::vec2(14.0, 14.0)),
+                            egui::Id::new(("effect_bezier_in", &layer.id, &graph_prop, key_token)),
+                            egui::Sense::drag(),
+                        );
+                        ui.painter().line_segment(
+                            [key_pos, out],
+                            egui::Stroke::new(1.0_f32, colors::MOTION_PATH),
+                        );
+                        ui.painter().line_segment(
+                            [key_pos, incoming],
+                            egui::Stroke::new(1.0_f32, colors::MOTION_PATH),
+                        );
                         ui.painter().circle_filled(out, 3.0, colors::HANDLE_NORMAL);
-                        ui.painter().circle_filled(incoming, 3.0, colors::HANDLE_NORMAL);
+                        ui.painter()
+                            .circle_filled(incoming, 3.0, colors::HANDLE_NORMAL);
                         if out_resp.drag_started() {
-                            ui.ctx().data_mut(|data| data.insert_temp(out_drag_id, points));
+                            ui.ctx()
+                                .data_mut(|data| data.insert_temp(out_drag_id, points));
                         }
                         if in_resp.drag_started() {
-                            ui.ctx().data_mut(|data| data.insert_temp(in_drag_id, points));
+                            ui.ctx()
+                                .data_mut(|data| data.insert_temp(in_drag_id, points));
                         }
-                        let out_base = ui.ctx().data(|data| data.get_temp::<[f32; 4]>(out_drag_id)).unwrap_or(points);
-                        let in_base = ui.ctx().data(|data| data.get_temp::<[f32; 4]>(in_drag_id)).unwrap_or(points);
+                        let out_base = ui
+                            .ctx()
+                            .data(|data| data.get_temp::<[f32; 4]>(out_drag_id))
+                            .unwrap_or(points);
+                        let in_base = ui
+                            .ctx()
+                            .data(|data| data.get_temp::<[f32; 4]>(in_drag_id))
+                            .unwrap_or(points);
                         let mut next = points;
                         if out_resp.dragged() {
-                            next[2] = (out_base[2] + out_resp.drag_delta().x / 44.0).clamp(out_base[0] + 0.01, 1.0);
-                            next[3] = (out_base[3] - out_resp.drag_delta().y / 24.0).clamp(-1.5, 2.5);
+                            next[2] = (out_base[2] + out_resp.drag_delta().x / 44.0)
+                                .clamp(out_base[0] + 0.01, 1.0);
+                            next[3] =
+                                (out_base[3] - out_resp.drag_delta().y / 24.0).clamp(-1.5, 2.5);
                         }
                         if in_resp.dragged() {
-                            next[0] = (in_base[0] - in_resp.drag_delta().x / 44.0).clamp(0.0, in_base[2] - 0.01);
+                            next[0] = (in_base[0] - in_resp.drag_delta().x / 44.0)
+                                .clamp(0.0, in_base[2] - 0.01);
                             next[1] = (in_base[1] + in_resp.drag_delta().y / 24.0).clamp(-1.5, 2.5);
                         }
-                        if (out_resp.dragged() || in_resp.dragged()) && set_effect_channel_bezier(layer, &graph_prop, display_frame, next) {
+                        if (out_resp.dragged() || in_resp.dragged())
+                            && set_effect_channel_bezier(layer, &graph_prop, display_frame, next)
+                        {
                             *project_changed = true;
                         }
                         if out_resp.drag_stopped() {
-                            ui.ctx().data_mut(|data| data.remove::<[f32; 4]>(out_drag_id));
+                            ui.ctx()
+                                .data_mut(|data| data.remove::<[f32; 4]>(out_drag_id));
                         }
                         if in_resp.drag_stopped() {
-                            ui.ctx().data_mut(|data| data.remove::<[f32; 4]>(in_drag_id));
+                            ui.ctx()
+                                .data_mut(|data| data.remove::<[f32; 4]>(in_drag_id));
                         }
                     }
                     if key_response.drag_started() {
-                        ui.ctx().data_mut(|d| d.insert_temp(channel_drag_id, GraphKeyframeDrag {
-                            anchor_id: index,
-                            original_frame: *frame,
-                            current_frame: *frame,
-                            original_value: *value,
-                            current_value: *value,
-                        }));
+                        ui.ctx().data_mut(|d| {
+                            d.insert_temp(
+                                channel_drag_id,
+                                GraphKeyframeDrag {
+                                    original_frame: *frame,
+                                    current_frame: *frame,
+                                    original_value: *value,
+                                    current_value: *value,
+                                },
+                            )
+                        });
                     }
                     if key_response.secondary_clicked() {
                         if remove_effect_channel_at_frame(layer, &graph_prop, display_frame) {
@@ -2036,28 +2577,43 @@ pub fn draw_graph_editor(
                                 current_value: *value,
                             });
                         let next_frame = (state.original_frame as i32
-                            + (key_response.drag_delta().x / rect.width() * total_f as f32).round() as i32)
-                            .clamp(0, total_f as i32) as u32;
+                            + (key_response.drag_delta().x / rect.width() * total_f as f32).round()
+                                as i32)
+                            .clamp(0, total_f as i32)
+                            as u32;
                         let next_value = state.original_value
                             - key_response.drag_delta().y / (rect.height() - 8.0) * val_range;
                         let moved = next_frame != state.current_frame
-                            && move_effect_channel_keyframe(layer, &graph_prop, state.current_frame, next_frame);
-                        let value_changed = set_effect_channel_at_frame(layer, &graph_prop, next_frame, next_value);
+                            && move_effect_channel_keyframe(
+                                layer,
+                                &graph_prop,
+                                state.current_frame,
+                                next_frame,
+                            );
+                        let value_changed =
+                            set_effect_channel_at_frame(layer, &graph_prop, next_frame, next_value);
                         *project_changed |= moved || value_changed;
-                        ui.ctx().data_mut(|d| d.insert_temp(channel_drag_id, GraphKeyframeDrag {
-                            current_frame: next_frame,
-                            current_value: next_value,
-                            ..state
-                        }));
+                        ui.ctx().data_mut(|d| {
+                            d.insert_temp(
+                                channel_drag_id,
+                                GraphKeyframeDrag {
+                                    current_frame: next_frame,
+                                    current_value: next_value,
+                                    ..state
+                                },
+                            )
+                        });
                     }
                     if key_response.drag_stopped() {
-                        ui.ctx().data_mut(|d| d.remove::<GraphKeyframeDrag>(channel_drag_id));
+                        ui.ctx()
+                            .data_mut(|d| d.remove::<GraphKeyframeDrag>(channel_drag_id));
                     }
                 }
             }
 
             let drag_state_id = egui::Id::new(("graph_keyframe_drag", &layer.id, &graph_prop));
-            let active_drag: Option<GraphKeyframeDrag> = ui.ctx().data(|d| d.get_temp(drag_state_id));
+            let active_drag: Option<GraphKeyframeDrag> =
+                ui.ctx().data(|d| d.get_temp(drag_state_id));
 
             for (kf_idx, kf_frame, kf_val) in &kf_positions {
                 let drag_display = active_drag.filter(|drag| drag.current_frame == *kf_frame);
@@ -2087,7 +2643,12 @@ pub fn draw_graph_editor(
                     egui::Sense::click_and_drag(),
                 );
                 if anchor_resp.hovered() {
-                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(("ae_graph_hovered_kf", &layer.id, &graph_prop)), *kf_idx));
+                    ui.ctx().data_mut(|d| {
+                        d.insert_temp(
+                            egui::Id::new(("ae_graph_hovered_kf", &layer.id, &graph_prop)),
+                            *kf_idx,
+                        )
+                    });
                 }
                 if anchor_resp.secondary_clicked() {
                     with_keyframes!(layer, graph_prop, kfs => {
@@ -2123,30 +2684,90 @@ pub fn draw_graph_editor(
                         .clamp(0, total_f as i32) as u32;
                     let delta_val = -anchor_resp.drag_delta().y / (rect.height() - 8.0) * val_range;
                     let new_value = state.original_value + delta_val;
-                    let axis = if graph_prop.starts_with("3D ") { axis_3d(&graph_prop) } else { usize::from(graph_prop.ends_with('Y')) };
+                    let axis = if graph_prop.starts_with("3D ") {
+                        axis_3d(&graph_prop)
+                    } else {
+                        usize::from(graph_prop.ends_with('Y'))
+                    };
 
                     let changed = if is_effect_property(&graph_prop) && !graph_prop.contains('|') {
                         let moved = state.current_frame != new_frame
-                            && move_effect_scalar_keyframe(layer, &graph_prop, state.current_frame, new_frame);
-                        let updated = set_effect_channel_at_frame(layer, &graph_prop, new_frame, new_value);
+                            && move_effect_scalar_keyframe(
+                                layer,
+                                &graph_prop,
+                                state.current_frame,
+                                new_frame,
+                            );
+                        let updated =
+                            set_effect_channel_at_frame(layer, &graph_prop, new_frame, new_value);
                         moved || updated
                     } else if graph_prop == "Rotation" {
-                        move_and_set_channel(&mut layer.transform.rotation, state.current_frame, new_frame, 0, new_value)
+                        move_and_set_channel(
+                            &mut layer.transform.rotation,
+                            state.current_frame,
+                            new_frame,
+                            0,
+                            new_value,
+                        )
                     } else if graph_prop == "Opacity" {
-                        move_and_set_channel(&mut layer.transform.opacity, state.current_frame, new_frame, 0, new_value.clamp(0.0, 100.0))
+                        move_and_set_channel(
+                            &mut layer.transform.opacity,
+                            state.current_frame,
+                            new_frame,
+                            0,
+                            new_value.clamp(0.0, 100.0),
+                        )
                     } else if graph_prop.starts_with("3D Position") {
-                        move_and_set_channel(&mut layer.transform_3d.position, state.current_frame, new_frame, axis, new_value)
+                        move_and_set_channel(
+                            &mut layer.transform_3d.position,
+                            state.current_frame,
+                            new_frame,
+                            axis,
+                            new_value,
+                        )
                     } else if graph_prop.starts_with("3D Rotation") {
-                        move_and_set_channel(&mut layer.transform_3d.rotation, state.current_frame, new_frame, axis, new_value)
+                        move_and_set_channel(
+                            &mut layer.transform_3d.rotation,
+                            state.current_frame,
+                            new_frame,
+                            axis,
+                            new_value,
+                        )
                     } else if graph_prop.starts_with("3D Scale") {
-                        move_and_set_channel(&mut layer.transform_3d.scale, state.current_frame, new_frame, axis, new_value)
+                        move_and_set_channel(
+                            &mut layer.transform_3d.scale,
+                            state.current_frame,
+                            new_frame,
+                            axis,
+                            new_value,
+                        )
                     } else if graph_prop.starts_with("Position") {
-                        move_and_set_channel(&mut layer.transform.position, state.current_frame, new_frame, axis, new_value)
+                        move_and_set_channel(
+                            &mut layer.transform.position,
+                            state.current_frame,
+                            new_frame,
+                            axis,
+                            new_value,
+                        )
                     } else if graph_prop.starts_with("Scale") {
-                        move_and_set_channel(&mut layer.transform.scale, state.current_frame, new_frame, axis, new_value)
+                        move_and_set_channel(
+                            &mut layer.transform.scale,
+                            state.current_frame,
+                            new_frame,
+                            axis,
+                            new_value,
+                        )
                     } else if graph_prop.starts_with("PinX:") || graph_prop.starts_with("PinY:") {
                         pin_anim_mut(layer, &graph_prop)
-                            .map(|pin| move_and_set_channel(pin, state.current_frame, new_frame, axis, new_value))
+                            .map(|pin| {
+                                move_and_set_channel(
+                                    pin,
+                                    state.current_frame,
+                                    new_frame,
+                                    axis,
+                                    new_value,
+                                )
+                            })
                             .unwrap_or(false)
                     } else {
                         false
@@ -2154,14 +2775,20 @@ pub fn draw_graph_editor(
                     if changed {
                         *project_changed = true;
                     }
-                    ui.ctx().data_mut(|d| d.insert_temp(drag_state_id, GraphKeyframeDrag {
-                        current_frame: new_frame,
-                        current_value: new_value,
-                        ..state
-                    }));
+                    ui.ctx().data_mut(|d| {
+                        d.insert_temp(
+                            drag_state_id,
+                            GraphKeyframeDrag {
+                                current_frame: new_frame,
+                                current_value: new_value,
+                                ..state
+                            },
+                        )
+                    });
                 }
                 if anchor_resp.drag_stopped() {
-                    ui.ctx().data_mut(|d| d.remove::<GraphKeyframeDrag>(drag_state_id));
+                    ui.ctx()
+                        .data_mut(|d| d.remove::<GraphKeyframeDrag>(drag_state_id));
                 }
                 let anchor_color = if anchor_resp.dragged() {
                     colors::HANDLE_NORMAL
@@ -2173,19 +2800,33 @@ pub fn draw_graph_editor(
                 ui.painter().circle_filled(pt, 4.0, anchor_color);
 
                 // ── Double-click anchor → numeric value popup ──
-                let dbl_id = ui.make_persistent_id(("graph_kf_popup", &layer.id, &graph_prop, anchor_token));
-                let mut show_popup: bool = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(dbl_id, || false));
+                let dbl_id =
+                    ui.make_persistent_id(("graph_kf_popup", &layer.id, &graph_prop, anchor_token));
+                let mut show_popup: bool = ui
+                    .ctx()
+                    .data_mut(|d| *d.get_temp_mut_or_insert_with(dbl_id, || false));
                 if anchor_resp.double_clicked() {
                     show_popup = true;
-                    let frame_edit_id = egui::Id::new(("graph_kf_frame_text", &layer.id, &graph_prop, anchor_token));
-                    let value_edit_id = egui::Id::new(("graph_kf_value_text", &layer.id, &graph_prop, anchor_token));
+                    let frame_edit_id = egui::Id::new((
+                        "graph_kf_frame_text",
+                        &layer.id,
+                        &graph_prop,
+                        anchor_token,
+                    ));
+                    let value_edit_id = egui::Id::new((
+                        "graph_kf_value_text",
+                        &layer.id,
+                        &graph_prop,
+                        anchor_token,
+                    ));
                     ui.ctx().data_mut(|data| {
                         data.insert_temp(frame_edit_id, kf_frame.to_string());
                         data.insert_temp(value_edit_id, format!("{:.2}", kf_val));
                     });
                 }
                 if show_popup {
-                    let popup_id = egui::Id::new(("graph_kf_val_popup", &layer.id, &graph_prop, anchor_token));
+                    let popup_id =
+                        egui::Id::new(("graph_kf_val_popup", &layer.id, &graph_prop, anchor_token));
                     let resp = egui::Area::new(popup_id)
                         .fixed_pos(pt + egui::vec2(12.0, -20.0))
                         .order(egui::Order::Foreground)
@@ -2194,88 +2835,230 @@ pub fn draw_graph_editor(
                                 ui.set_min_width(140.0);
                                 ui.horizontal(|ui| {
                                     ui.label(egui::RichText::new("Frame:").small());
-                                    let frame_edit_id = egui::Id::new(("graph_kf_frame_text", &layer.id, &graph_prop, anchor_token));
+                                    let frame_edit_id = egui::Id::new((
+                                        "graph_kf_frame_text",
+                                        &layer.id,
+                                        &graph_prop,
+                                        anchor_token,
+                                    ));
                                     let mut frame_str = ui.ctx().data(|data| {
-                                        data.get_temp::<String>(frame_edit_id).unwrap_or_else(|| kf_frame.to_string())
+                                        data.get_temp::<String>(frame_edit_id)
+                                            .unwrap_or_else(|| kf_frame.to_string())
                                     });
-                                    let frame_response = ui.add(egui::TextEdit::singleline(&mut frame_str).desired_width(50.0));
+                                    let frame_response = ui.add(
+                                        egui::TextEdit::singleline(&mut frame_str)
+                                            .desired_width(50.0),
+                                    );
                                     if frame_response.changed() {
-                                        ui.ctx().data_mut(|data| data.insert_temp(frame_edit_id, frame_str.clone()));
+                                        ui.ctx().data_mut(|data| {
+                                            data.insert_temp(frame_edit_id, frame_str.clone())
+                                        });
                                     }
-                                    if frame_response.lost_focus() || ui.input(|input| input.key_pressed(egui::Key::Enter)) {
+                                    if frame_response.lost_focus()
+                                        || ui.input(|input| input.key_pressed(egui::Key::Enter))
+                                    {
                                         if let Ok(f) = frame_str.parse::<u32>() {
                                             let new_f = f.min(total_f);
-                                            let handled_effect_move = if is_effect_property(&graph_prop) && new_f != *kf_frame {
-                                                if graph_prop.contains('|') {
-                                                    move_effect_channel_keyframe(layer, &graph_prop, *kf_frame, new_f)
+                                            let handled_effect_move =
+                                                if is_effect_property(&graph_prop)
+                                                    && new_f != *kf_frame
+                                                {
+                                                    if graph_prop.contains('|') {
+                                                        move_effect_channel_keyframe(
+                                                            layer,
+                                                            &graph_prop,
+                                                            *kf_frame,
+                                                            new_f,
+                                                        )
+                                                    } else {
+                                                        move_effect_scalar_keyframe(
+                                                            layer,
+                                                            &graph_prop,
+                                                            *kf_frame,
+                                                            new_f,
+                                                        )
+                                                    }
+                                                } else if graph_prop == "Rotation"
+                                                    && new_f != *kf_frame
+                                                {
+                                                    layer
+                                                        .transform
+                                                        .rotation
+                                                        .move_keyframe(*kf_frame, new_f)
+                                                } else if graph_prop == "Opacity"
+                                                    && new_f != *kf_frame
+                                                {
+                                                    layer
+                                                        .transform
+                                                        .opacity
+                                                        .move_keyframe(*kf_frame, new_f)
+                                                } else if graph_prop == "Position X"
+                                                    || graph_prop == "Position Y"
+                                                {
+                                                    layer
+                                                        .transform
+                                                        .position
+                                                        .move_keyframe(*kf_frame, new_f)
+                                                } else if graph_prop == "Scale X"
+                                                    || graph_prop == "Scale Y"
+                                                {
+                                                    layer
+                                                        .transform
+                                                        .scale
+                                                        .move_keyframe(*kf_frame, new_f)
+                                                } else if graph_prop.starts_with("3D Position") {
+                                                    layer
+                                                        .transform_3d
+                                                        .position
+                                                        .move_keyframe(*kf_frame, new_f)
+                                                } else if graph_prop.starts_with("3D Rotation") {
+                                                    layer
+                                                        .transform_3d
+                                                        .rotation
+                                                        .move_keyframe(*kf_frame, new_f)
+                                                } else if graph_prop.starts_with("3D Scale") {
+                                                    layer
+                                                        .transform_3d
+                                                        .scale
+                                                        .move_keyframe(*kf_frame, new_f)
+                                                } else if graph_prop.starts_with("PinX:")
+                                                    || graph_prop.starts_with("PinY:")
+                                                {
+                                                    pin_anim_mut(layer, &graph_prop).is_some_and(
+                                                        |pin| pin.move_keyframe(*kf_frame, new_f),
+                                                    )
                                                 } else {
-                                                    move_effect_scalar_keyframe(layer, &graph_prop, *kf_frame, new_f)
-                                                }
-                                            } else if graph_prop == "Rotation" && new_f != *kf_frame {
-                                                layer.transform.rotation.move_keyframe(*kf_frame, new_f)
-                                            } else if graph_prop == "Opacity" && new_f != *kf_frame {
-                                                layer.transform.opacity.move_keyframe(*kf_frame, new_f)
-                                            } else if graph_prop == "Position X" || graph_prop == "Position Y" {
-                                                layer.transform.position.move_keyframe(*kf_frame, new_f)
-                                            } else if graph_prop == "Scale X" || graph_prop == "Scale Y" {
-                                                layer.transform.scale.move_keyframe(*kf_frame, new_f)
-                                            } else if graph_prop.starts_with("3D Position") {
-                                                layer.transform_3d.position.move_keyframe(*kf_frame, new_f)
-                                            } else if graph_prop.starts_with("3D Rotation") {
-                                                layer.transform_3d.rotation.move_keyframe(*kf_frame, new_f)
-                                            } else if graph_prop.starts_with("3D Scale") {
-                                                layer.transform_3d.scale.move_keyframe(*kf_frame, new_f)
-                                            } else if graph_prop.starts_with("PinX:") || graph_prop.starts_with("PinY:") {
-                                                pin_anim_mut(layer, &graph_prop)
-                                                    .is_some_and(|pin| pin.move_keyframe(*kf_frame, new_f))
-                                            } else {
-                                                false
-                                            };
+                                                    false
+                                                };
                                             if handled_effect_move {
                                                 *project_changed = true;
                                             }
-                                            ui.ctx().data_mut(|data| data.insert_temp(frame_edit_id, new_f.to_string()));
+                                            ui.ctx().data_mut(|data| {
+                                                data.insert_temp(frame_edit_id, new_f.to_string())
+                                            });
                                         }
                                     }
                                 });
                                 ui.horizontal(|ui| {
                                     ui.label(egui::RichText::new("Value:").small());
-                                    let value_edit_id = egui::Id::new(("graph_kf_value_text", &layer.id, &graph_prop, anchor_token));
+                                    let value_edit_id = egui::Id::new((
+                                        "graph_kf_value_text",
+                                        &layer.id,
+                                        &graph_prop,
+                                        anchor_token,
+                                    ));
                                     let mut val_str = ui.ctx().data(|data| {
-                                        data.get_temp::<String>(value_edit_id).unwrap_or_else(|| format!("{:.2}", kf_val))
+                                        data.get_temp::<String>(value_edit_id)
+                                            .unwrap_or_else(|| format!("{:.2}", kf_val))
                                     });
-                                    let value_response = ui.add(egui::TextEdit::singleline(&mut val_str).desired_width(70.0));
+                                    let value_response = ui.add(
+                                        egui::TextEdit::singleline(&mut val_str)
+                                            .desired_width(70.0),
+                                    );
                                     if value_response.changed() {
-                                        ui.ctx().data_mut(|data| data.insert_temp(value_edit_id, val_str.clone()));
+                                        ui.ctx().data_mut(|data| {
+                                            data.insert_temp(value_edit_id, val_str.clone())
+                                        });
                                     }
-                                    if value_response.lost_focus() || ui.input(|input| input.key_pressed(egui::Key::Enter)) {
+                                    if value_response.lost_focus()
+                                        || ui.input(|input| input.key_pressed(egui::Key::Enter))
+                                    {
                                         if let Ok(v) = val_str.parse::<f32>() {
                                             if graph_prop.starts_with("Position") {
-                                                let ci = if graph_prop.ends_with('Y') { 1 } else { 0 };
-                                                if let Some(kfs) = layer.transform.position.keyframes_mut() {
-                                                    if let Some(kf) = kfs.iter_mut().find(|kf| kf.frame == *kf_frame) { kf.value[ci] = v; *project_changed = true; }
+                                                let ci =
+                                                    if graph_prop.ends_with('Y') { 1 } else { 0 };
+                                                if let Some(kfs) =
+                                                    layer.transform.position.keyframes_mut()
+                                                {
+                                                    if let Some(kf) = kfs
+                                                        .iter_mut()
+                                                        .find(|kf| kf.frame == *kf_frame)
+                                                    {
+                                                        kf.value[ci] = v;
+                                                        *project_changed = true;
+                                                    }
                                                 }
                                             } else if graph_prop.starts_with("Scale") {
-                                                let ci = if graph_prop.ends_with('Y') { 1 } else { 0 };
-                                                if let Some(kfs) = layer.transform.scale.keyframes_mut() {
-                                                    if let Some(kf) = kfs.iter_mut().find(|kf| kf.frame == *kf_frame) { kf.value[ci] = v; *project_changed = true; }
+                                                let ci =
+                                                    if graph_prop.ends_with('Y') { 1 } else { 0 };
+                                                if let Some(kfs) =
+                                                    layer.transform.scale.keyframes_mut()
+                                                {
+                                                    if let Some(kf) = kfs
+                                                        .iter_mut()
+                                                        .find(|kf| kf.frame == *kf_frame)
+                                                    {
+                                                        kf.value[ci] = v;
+                                                        *project_changed = true;
+                                                    }
                                                 }
                                             } else if graph_prop == "Rotation" {
-                                                if let Some(kfs) = layer.transform.rotation.keyframes_mut() {
-                                                    if let Some(kf) = kfs.iter_mut().find(|kf| kf.frame == *kf_frame) { kf.value = v; *project_changed = true; }
+                                                if let Some(kfs) =
+                                                    layer.transform.rotation.keyframes_mut()
+                                                {
+                                                    if let Some(kf) = kfs
+                                                        .iter_mut()
+                                                        .find(|kf| kf.frame == *kf_frame)
+                                                    {
+                                                        kf.value = v;
+                                                        *project_changed = true;
+                                                    }
                                                 }
                                             } else if graph_prop == "Opacity" {
-                                                if let Some(kfs) = layer.transform.opacity.keyframes_mut() {
-                                                    if let Some(kf) = kfs.iter_mut().find(|kf| kf.frame == *kf_frame) { kf.value = v.clamp(0.0, 100.0); *project_changed = true; }
+                                                if let Some(kfs) =
+                                                    layer.transform.opacity.keyframes_mut()
+                                                {
+                                                    if let Some(kf) = kfs
+                                                        .iter_mut()
+                                                        .find(|kf| kf.frame == *kf_frame)
+                                                    {
+                                                        kf.value = v.clamp(0.0, 100.0);
+                                                        *project_changed = true;
+                                                    }
                                                 }
                                             } else if graph_prop.starts_with("3D Position") {
-                                                if let Some(kfs) = layer.transform_3d.position.keyframes_mut() { if let Some(kf) = kfs.iter_mut().find(|kf| kf.frame == *kf_frame) { kf.value[axis_3d(&graph_prop)] = v; *project_changed = true; } }
+                                                if let Some(kfs) =
+                                                    layer.transform_3d.position.keyframes_mut()
+                                                {
+                                                    if let Some(kf) = kfs
+                                                        .iter_mut()
+                                                        .find(|kf| kf.frame == *kf_frame)
+                                                    {
+                                                        kf.value[axis_3d(&graph_prop)] = v;
+                                                        *project_changed = true;
+                                                    }
+                                                }
                                             } else if graph_prop.starts_with("3D Rotation") {
-                                                if let Some(kfs) = layer.transform_3d.rotation.keyframes_mut() { if let Some(kf) = kfs.iter_mut().find(|kf| kf.frame == *kf_frame) { kf.value[axis_3d(&graph_prop)] = v; *project_changed = true; } }
+                                                if let Some(kfs) =
+                                                    layer.transform_3d.rotation.keyframes_mut()
+                                                {
+                                                    if let Some(kf) = kfs
+                                                        .iter_mut()
+                                                        .find(|kf| kf.frame == *kf_frame)
+                                                    {
+                                                        kf.value[axis_3d(&graph_prop)] = v;
+                                                        *project_changed = true;
+                                                    }
+                                                }
                                             } else if graph_prop.starts_with("3D Scale") {
-                                                if let Some(kfs) = layer.transform_3d.scale.keyframes_mut() { if let Some(kf) = kfs.iter_mut().find(|kf| kf.frame == *kf_frame) { kf.value[axis_3d(&graph_prop)] = v; *project_changed = true; } }
+                                                if let Some(kfs) =
+                                                    layer.transform_3d.scale.keyframes_mut()
+                                                {
+                                                    if let Some(kf) = kfs
+                                                        .iter_mut()
+                                                        .find(|kf| kf.frame == *kf_frame)
+                                                    {
+                                                        kf.value[axis_3d(&graph_prop)] = v;
+                                                        *project_changed = true;
+                                                    }
+                                                }
                                             } else if is_effect_property(&graph_prop) {
-                                                if set_effect_channel_at_frame(layer, &graph_prop, *kf_frame, v) {
+                                                if set_effect_channel_at_frame(
+                                                    layer,
+                                                    &graph_prop,
+                                                    *kf_frame,
+                                                    v,
+                                                ) {
                                                     *project_changed = true;
                                                 }
                                             }
@@ -2297,23 +3080,32 @@ pub fn draw_graph_editor(
                 }
                 ui.ctx().data_mut(|d| d.insert_temp(dbl_id, show_popup));
                 if anchor_resp.hovered() {
-                    ui.painter().circle_stroke(pt, 7.0, egui::Stroke::new(1.0_f32, colors::TIMELINE_KEYFRAME));
+                    ui.painter().circle_stroke(
+                        pt,
+                        7.0,
+                        egui::Stroke::new(1.0_f32, colors::TIMELINE_KEYFRAME),
+                    );
                 }
 
                 // --- Tangent handles: drag to edit custom bezier control points ---
                 // Extract current bezier points (default Easy Ease if linear/hold)
                 fn bezier_pts<T>(kf: &crate::core::keyframe::Keyframe<T>) -> (f32, f32, f32, f32) {
                     match &kf.interpolation {
-                        InterpolationType::Bezier { custom_bezier: Some(pts), .. } => (pts[0], pts[1], pts[2], pts[3]),
+                        InterpolationType::Bezier {
+                            custom_bezier: Some(pts),
+                            ..
+                        } => (pts[0], pts[1], pts[2], pts[3]),
                         _ => (0.33, 0.0, 0.67, 1.0),
                     }
                 }
-                let (bx1, by1, bx2, by2): (f32, f32, f32, f32) = with_keyframes!(layer, graph_prop, kfs => {
-                    kfs.iter()
-                        .find(|key| key.frame == display_frame)
-                        .map(bezier_pts)
-                        .unwrap_or((0.33, 0.0, 0.67, 1.0))
-                }).unwrap_or((0.33, 0.0, 0.67, 1.0));
+                let (bx1, by1, bx2, by2): (f32, f32, f32, f32) =
+                    with_keyframes!(layer, graph_prop, kfs => {
+                        kfs.iter()
+                            .find(|key| key.frame == display_frame)
+                            .map(bezier_pts)
+                            .unwrap_or((0.33, 0.0, 0.67, 1.0))
+                    })
+                    .unwrap_or((0.33, 0.0, 0.67, 1.0));
 
                 let h_out = egui::pos2(pt.x + bx2 * 44.0, pt.y - by2 * 24.0);
                 let h_in = egui::pos2(pt.x - bx1 * 44.0, pt.y + by1 * 24.0);
@@ -2322,20 +3114,34 @@ pub fn draw_graph_editor(
                 let h_in_rect = egui::Rect::from_center_size(h_in, egui::vec2(14.0, 14.0));
                 let h_out_id = egui::Id::new(("graph_h_out", &layer.id, &graph_prop, anchor_token));
                 let h_in_id = egui::Id::new(("graph_h_in", &layer.id, &graph_prop, anchor_token));
-                let h_out_drag_id = egui::Id::new(("graph_bezier_drag_out", &layer.id, &graph_prop, anchor_token));
-                let h_in_drag_id = egui::Id::new(("graph_bezier_drag_in", &layer.id, &graph_prop, anchor_token));
+                let h_out_drag_id = egui::Id::new((
+                    "graph_bezier_drag_out",
+                    &layer.id,
+                    &graph_prop,
+                    anchor_token,
+                ));
+                let h_in_drag_id =
+                    egui::Id::new(("graph_bezier_drag_in", &layer.id, &graph_prop, anchor_token));
                 let h_out_resp = ui.interact(h_out_rect, h_out_id, egui::Sense::drag());
                 let h_in_resp = ui.interact(h_in_rect, h_in_id, egui::Sense::drag());
 
                 let mut new_pts: Option<[f32; 4]> = None;
                 if h_out_resp.drag_started() {
-                    ui.ctx().data_mut(|data| data.insert_temp(h_out_drag_id, [bx1, by1, bx2, by2]));
+                    ui.ctx()
+                        .data_mut(|data| data.insert_temp(h_out_drag_id, [bx1, by1, bx2, by2]));
                 }
                 if h_in_resp.drag_started() {
-                    ui.ctx().data_mut(|data| data.insert_temp(h_in_drag_id, [bx1, by1, bx2, by2]));
+                    ui.ctx()
+                        .data_mut(|data| data.insert_temp(h_in_drag_id, [bx1, by1, bx2, by2]));
                 }
-                let out_base = ui.ctx().data(|data| data.get_temp::<[f32; 4]>(h_out_drag_id)).unwrap_or([bx1, by1, bx2, by2]);
-                let in_base = ui.ctx().data(|data| data.get_temp::<[f32; 4]>(h_in_drag_id)).unwrap_or([bx1, by1, bx2, by2]);
+                let out_base = ui
+                    .ctx()
+                    .data(|data| data.get_temp::<[f32; 4]>(h_out_drag_id))
+                    .unwrap_or([bx1, by1, bx2, by2]);
+                let in_base = ui
+                    .ctx()
+                    .data(|data| data.get_temp::<[f32; 4]>(h_in_drag_id))
+                    .unwrap_or([bx1, by1, bx2, by2]);
                 if h_out_resp.dragged() {
                     let d = h_out_resp.drag_delta();
                     let nx2 = (out_base[2] + d.x / 44.0).clamp(out_base[0] + 0.01, 1.0);
@@ -2371,23 +3177,38 @@ pub fn draw_graph_editor(
                     });
                 }
                 if h_out_resp.drag_stopped() {
-                    ui.ctx().data_mut(|data| data.remove::<[f32; 4]>(h_out_drag_id));
+                    ui.ctx()
+                        .data_mut(|data| data.remove::<[f32; 4]>(h_out_drag_id));
                 }
                 if h_in_resp.drag_stopped() {
-                    ui.ctx().data_mut(|data| data.remove::<[f32; 4]>(h_in_drag_id));
+                    ui.ctx()
+                        .data_mut(|data| data.remove::<[f32; 4]>(h_in_drag_id));
                 }
 
-                let any_hover = h_out_resp.hovered() || h_in_resp.dragged() || h_in_resp.hovered() || h_out_resp.dragged();
+                let any_hover = h_out_resp.hovered()
+                    || h_in_resp.dragged()
+                    || h_in_resp.hovered()
+                    || h_out_resp.dragged();
                 let stroke_color = if any_hover {
                     colors::ACCENT_ORANGE
                 } else {
                     colors::MOTION_PATH
                 };
-                ui.painter().line_segment([pt, h_out], egui::Stroke::new(1.2_f32, stroke_color));
-                ui.painter().line_segment([pt, h_in], egui::Stroke::new(1.2_f32, stroke_color));
+                ui.painter()
+                    .line_segment([pt, h_out], egui::Stroke::new(1.2_f32, stroke_color));
+                ui.painter()
+                    .line_segment([pt, h_in], egui::Stroke::new(1.2_f32, stroke_color));
 
-                let h_out_color = if h_out_resp.hovered() || h_out_resp.dragged() { colors::HANDLE_NORMAL } else { colors::MOTION_PATH };
-                let h_in_color = if h_in_resp.hovered() || h_in_resp.dragged() { colors::HANDLE_NORMAL } else { colors::MOTION_PATH };
+                let h_out_color = if h_out_resp.hovered() || h_out_resp.dragged() {
+                    colors::HANDLE_NORMAL
+                } else {
+                    colors::MOTION_PATH
+                };
+                let h_in_color = if h_in_resp.hovered() || h_in_resp.dragged() {
+                    colors::HANDLE_NORMAL
+                } else {
+                    colors::MOTION_PATH
+                };
                 ui.painter().circle_filled(h_out, 4.0, h_out_color);
                 ui.painter().circle_filled(h_in, 4.0, h_in_color);
             }
@@ -2733,7 +3554,9 @@ pub fn draw_camera_lens_graph(
     }
     if response.dragged() {
         if let Some(pointer) = response.interact_pointer_pos() {
-            let drag = ui.ctx().data(|data| data.get_temp::<GraphKeyframeDrag>(drag_id));
+            let drag = ui
+                .ctx()
+                .data(|data| data.get_temp::<GraphKeyframeDrag>(drag_id));
             if let Some(state) = drag {
                 let frame = ((pointer.x - rect.left()) / rect.width() * end as f32)
                     .round()
@@ -2751,11 +3574,16 @@ pub fn draw_camera_lens_graph(
                     before != value
                 });
                 *project_changed |= moved || updated;
-                ui.ctx().data_mut(|data| data.insert_temp(drag_id, GraphKeyframeDrag {
-                    current_frame: frame,
-                    current_value: value,
-                    ..state
-                }));
+                ui.ctx().data_mut(|data| {
+                    data.insert_temp(
+                        drag_id,
+                        GraphKeyframeDrag {
+                            current_frame: frame,
+                            current_value: value,
+                            ..state
+                        },
+                    )
+                });
             }
         }
     }
@@ -3059,7 +3887,10 @@ mod tests {
             Keyframe::new(20, [900.0_f32, 0.0], InterpolationType::Linear),
         ];
         assert!(rove_keyframes(&mut keys, |a, b| (b[0] - a[0]).abs()));
-        assert_eq!(keys.iter().map(|key| key.frame).collect::<Vec<_>>(), vec![0, 2, 20]);
+        assert_eq!(
+            keys.iter().map(|key| key.frame).collect::<Vec<_>>(),
+            vec![0, 2, 20]
+        );
     }
 
     #[test]

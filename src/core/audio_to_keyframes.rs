@@ -196,7 +196,11 @@ pub fn convert_selected_band_to_keyframes(
 
     let layer_name = format!("Audio {label} Amplitude");
     let mut amp_layer = Layer::new_null(
-        format!("audio_{}_{}", label.to_ascii_lowercase(), comp.layers.len() + 1),
+        format!(
+            "audio_{}_{}",
+            label.to_ascii_lowercase(),
+            comp.layers.len() + 1
+        ),
         layer_name.clone(),
         comp.duration_frames,
     );
@@ -341,10 +345,8 @@ mod tests {
         assert!(res.is_err());
 
         // Valid tone WAV produces an Audio Amplitude layer with 3 sliders.
-        let path = std::env::temp_dir().join(format!(
-            "kagari_slider_test_{}.wav",
-            std::process::id()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("kagari_slider_test_{}.wav", std::process::id()));
         write_tone_wav(&path);
         let before = comp.layers.len();
         let name = convert_audio_to_keyframes(&mut comp, &path.to_string_lossy())

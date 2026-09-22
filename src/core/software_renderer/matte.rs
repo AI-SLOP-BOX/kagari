@@ -95,8 +95,7 @@ pub(crate) fn render_matte_buffer(
                                                     m_buf[lidx] = text_pixels[tidx];
                                                     m_buf[lidx + 1] = text_pixels[tidx + 1];
                                                     m_buf[lidx + 2] = text_pixels[tidx + 2];
-                                                    m_buf[lidx + 3] = (text_pixels[tidx + 3]
-                                                        as f32
+                                                    m_buf[lidx + 3] = (text_pixels[tidx + 3] as f32
                                                         * m_opacity)
                                                         as u8;
                                                 }
@@ -162,48 +161,47 @@ pub(crate) fn render_matte_buffer(
                         }
                         LayerType::Image { .. } | LayerType::Video { .. } => {
                             use crate::core::image_cache::with_image_cache;
-                            let (image_path, next_image_path, blend_t) =
-                                match &matte_layer.layer_type {
-                                    LayerType::Image { path } => (path.clone(), None, 0.0),
-                                    LayerType::Video {
-                                        frames_dir,
-                                        frame_count,
-                                        speed,
-                                        ..
-                                    } => {
-                                        let source_position = (match &matte_layer.posterize_time {
-                                            Some(settings) if settings.enabled => {
-                                                source_frame as f32
-                                            }
-                                            _ => matte_layer.remap_frame_f32(frame),
-                                        } * speed.max(0.0))
-                                                .max(0.0);
-                                        let first = (source_position.floor() as u32)
-                                            .min(frame_count.saturating_sub(1));
-                                        let second = (first + 1).min(frame_count.saturating_sub(1));
-                                        let blend_t = if matte_layer.frame_blending {
-                                            (source_position - first as f32).clamp(0.0, 1.0)
-                                        } else {
-                                            0.0
-                                        };
-                                        (
+                            let (image_path, next_image_path, blend_t) = match &matte_layer
+                                .layer_type
+                            {
+                                LayerType::Image { path } => (path.clone(), None, 0.0),
+                                LayerType::Video {
+                                    frames_dir,
+                                    frame_count,
+                                    speed,
+                                    ..
+                                } => {
+                                    let source_position = (match &matte_layer.posterize_time {
+                                        Some(settings) if settings.enabled => source_frame as f32,
+                                        _ => matte_layer.remap_frame_f32(frame),
+                                    } * speed.max(0.0))
+                                    .max(0.0);
+                                    let first = (source_position.floor() as u32)
+                                        .min(frame_count.saturating_sub(1));
+                                    let second = (first + 1).min(frame_count.saturating_sub(1));
+                                    let blend_t = if matte_layer.frame_blending {
+                                        (source_position - first as f32).clamp(0.0, 1.0)
+                                    } else {
+                                        0.0
+                                    };
+                                    (
+                                        crate::core::video_import::frame_path_in_dir(
+                                            frames_dir, first,
+                                        )
+                                        .to_string_lossy()
+                                        .into_owned(),
+                                        Some(
                                             crate::core::video_import::frame_path_in_dir(
-                                                frames_dir, first,
+                                                frames_dir, second,
                                             )
                                             .to_string_lossy()
                                             .into_owned(),
-                                            Some(
-                                                crate::core::video_import::frame_path_in_dir(
-                                                    frames_dir, second,
-                                                )
-                                                .to_string_lossy()
-                                                .into_owned(),
-                                            ),
-                                            blend_t,
-                                        )
-                                    }
-                                    _ => unreachable!(),
-                                };
+                                        ),
+                                        blend_t,
+                                    )
+                                }
+                                _ => unreachable!(),
+                            };
                             with_image_cache(|cache| {
                                 if let Some(image) = cache.load_image(&image_path).cloned() {
                                     let next_image = next_image_path
@@ -231,8 +229,7 @@ pub(crate) fn render_matte_buffer(
                                             let ly = -dx * sin_r + dy * cos_r;
                                             let u = lx / (half_w * 2.0) + 0.5;
                                             let v = ly / (half_h * 2.0) + 0.5;
-                                            if !(0.0..1.0).contains(&u)
-                                                || !(0.0..1.0).contains(&v)
+                                            if !(0.0..1.0).contains(&u) || !(0.0..1.0).contains(&v)
                                             {
                                                 continue;
                                             }
@@ -248,10 +245,12 @@ pub(crate) fn render_matte_buffer(
                                                     let b = next_image
                                                         .as_ref()
                                                         .and_then(|next| {
-                                                            let next_idx =
-                                                                ((sy * next.width + sx) * 4)
-                                                                    as usize;
-                                                            next.pixels.get(next_idx + channel).copied()
+                                                            let next_idx = ((sy * next.width + sx)
+                                                                * 4)
+                                                                as usize;
+                                                            next.pixels
+                                                                .get(next_idx + channel)
+                                                                .copied()
                                                         })
                                                         .map(f32::from)
                                                         .unwrap_or(a);
@@ -286,8 +285,7 @@ pub(crate) fn render_matte_buffer(
                                         m_buf[i] = sub_buf[i];
                                         m_buf[i + 1] = sub_buf[i + 1];
                                         m_buf[i + 2] = sub_buf[i + 2];
-                                        m_buf[i + 3] =
-                                            (sub_buf[i + 3] as f32 * m_opacity) as u8;
+                                        m_buf[i + 3] = (sub_buf[i + 3] as f32 * m_opacity) as u8;
                                     }
                                 }
                             } else {
@@ -310,14 +308,8 @@ pub(crate) fn render_matte_buffer(
                             let mut matte_source = matte_layer.clone();
                             matte_source.track_matte = TrackMatteMode::None;
                             matte_comp.layers = vec![matte_source];
-                            let particle_pixels = render_frame_to_pixels(
-                                &matte_comp,
-                                frame,
-                                m_bw,
-                                m_bh,
-                                0.0,
-                                0,
-                            );
+                            let particle_pixels =
+                                render_frame_to_pixels(&matte_comp, frame, m_bw, m_bh, 0.0, 0);
                             let copy_len = m_buf.len().min(particle_pixels.len());
                             m_buf[..copy_len].copy_from_slice(&particle_pixels[..copy_len]);
                             for alpha in m_buf[3..].iter_mut().step_by(4) {
@@ -352,5 +344,5 @@ pub(crate) fn render_matte_buffer(
         }
     } else {
         None
-        }
+    }
 }

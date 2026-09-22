@@ -180,7 +180,13 @@ fn build_glitch() -> Composition {
         } else {
             120.0 + bf(k, 3) * 400.0
         };
-        let hline = if hero { 5.0 } else if bf(k, 4) > 0.6 { 3.0 } else { 2.0 };
+        let hline = if hero {
+            5.0
+        } else if bf(k, 4) > 0.6 {
+            3.0
+        } else {
+            2.0
+        };
         let col = line_cols[(bf(k, 5) * 3.0) as usize % 3];
         let id = format!("sig{k}");
         comp.add_layer(Layer::new(
@@ -365,13 +371,7 @@ fn build_glitch() -> Composition {
             };
             let mask_path_keys: Vec<Keyframe<Vec<[f32; 2]>>> = pos_keys
                 .iter()
-                .map(|k| {
-                    Keyframe::new(
-                        k.frame,
-                        slit(k.value[0], k.value[1]),
-                        k.interpolation,
-                    )
-                })
+                .map(|k| Keyframe::new(k.frame, slit(k.value[0], k.value[1]), k.interpolation))
                 .collect();
             l.transform.position = a2(pos_keys);
             // fragment flicker -> solid

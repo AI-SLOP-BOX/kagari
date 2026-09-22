@@ -189,7 +189,7 @@ pub fn draw_prop_row_ext(
                 ) {
                     (KeyframeTickResult::Clicked { shift, cmd }, _resp) => {
                         requested_frame = Some(kf_frame);
-                    pending_select = Some((prop_key.to_owned(), kf_frame, shift, cmd));
+                        pending_select = Some((prop_key.to_owned(), kf_frame, shift, cmd));
                     }
                     (KeyframeTickResult::RightClicked, resp) => {
                         pending_menu = Some((prop_key.to_owned(), kf_frame, resp));

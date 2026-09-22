@@ -358,10 +358,7 @@ pub fn draw_clone_stroke_with_brush(
         stamp(target_points[0], source_points[0]);
         return;
     }
-    for (target_seg, source_seg) in target_points
-        .windows(2)
-        .zip(source_points.windows(2))
-    {
+    for (target_seg, source_seg) in target_points.windows(2).zip(source_points.windows(2)) {
         let target_a = target_seg[0];
         let target_b = target_seg[1];
         let source_a = source_seg[0];

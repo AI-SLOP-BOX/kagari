@@ -372,11 +372,8 @@ pub(crate) fn apply_post_fx(ctx: PostFxCtx<'_>) {
                 if lidx + 3 >= layer_buf.len() || layer_buf[lidx + 3] == 0 {
                     continue;
                 }
-                let cov = compute_combined_mask_coverage(
-                    (min_x + lx) as f32,
-                    (min_y + ly) as f32,
-                    masks,
-                );
+                let cov =
+                    compute_combined_mask_coverage((min_x + lx) as f32, (min_y + ly) as f32, masks);
                 if cov < 0.999 {
                     layer_buf[lidx + 3] = (layer_buf[lidx + 3] as f32 * cov) as u8;
                 }

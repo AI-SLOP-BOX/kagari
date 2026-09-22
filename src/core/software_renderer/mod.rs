@@ -1,7 +1,5 @@
 use crate::core::mask::MaskMode;
-use crate::core::timeline::{
-    BlendMode, Composition, Layer, LayerType, TrackMatteMode,
-};
+use crate::core::timeline::{BlendMode, Composition, Layer, LayerType, TrackMatteMode};
 use rayon::prelude::*;
 
 mod composite;
@@ -15,19 +13,15 @@ mod shadow;
 mod shape_raster;
 mod text_raster;
 
-pub(crate) use mask::{
-    CpuMaskEntry, compute_combined_mask_coverage, offset_polygon_vertices,
-};
+pub(crate) use mask::{compute_combined_mask_coverage, offset_polygon_vertices, CpuMaskEntry};
 
 pub use shadow::{build_shadow_map, light_attenuation, spot_cone_factor};
 
-use composite::{CompositeCtx, composite_layer_buffer};
+use composite::{composite_layer_buffer, CompositeCtx};
 use matte::render_matte_buffer;
 
-pub use precomp::{render_precomp_layers, MAX_PRECOMP_DEPTH};
 pub(crate) use precomp::render_single_layer_pixels;
-
-
+pub use precomp::{render_precomp_layers, MAX_PRECOMP_DEPTH};
 
 #[allow(clippy::too_many_arguments)]
 /// Expand every collapsed (`is_collapsed`) PreComp layer into its children,
@@ -275,7 +269,6 @@ fn perspective_project_layer(
     Some(result)
 }
 
-
 /// Safe buffer size calculation: returns None on overflow or zero dimensions.
 pub fn rgba_buffer_size(width: u32, height: u32) -> Option<usize> {
     if width == 0 || height == 0 {
@@ -399,13 +392,11 @@ pub(crate) fn preview_proxy_active() -> bool {
 fn source_media_dimensions(layer: &Layer) -> Option<(f32, f32)> {
     let path = match &layer.layer_type {
         LayerType::Image { path } => preview_proxy_path(layer, 0).unwrap_or_else(|| path.clone()),
-        LayerType::Video { frames_dir, .. } => {
-            preview_proxy_path(layer, 0).unwrap_or_else(|| {
-                crate::core::video_import::frame_path_in_dir(frames_dir, 0)
-                    .to_string_lossy()
-                    .to_string()
-            })
-        }
+        LayerType::Video { frames_dir, .. } => preview_proxy_path(layer, 0).unwrap_or_else(|| {
+            crate::core::video_import::frame_path_in_dir(frames_dir, 0)
+                .to_string_lossy()
+                .to_string()
+        }),
         _ => return None,
     };
 
@@ -456,9 +447,9 @@ pub(crate) fn render_frame_to_pixels_filtered(
     let owned;
     let comp = if only_layer_idx.is_none()
         && comp
-        .layers
-        .iter()
-        .any(|l| l.is_collapsed && matches!(l.layer_type, LayerType::PreComp { .. }))
+            .layers
+            .iter()
+            .any(|l| l.is_collapsed && matches!(l.layer_type, LayerType::PreComp { .. }))
     {
         owned = flatten_collapsed(comp, frame);
         &owned
@@ -537,8 +528,8 @@ pub(crate) fn render_frame_to_pixels_filtered(
         );
     }
 
-    let has_solo = only_layer_idx.is_none()
-        && comp.layers.iter().any(|l| l.is_active(frame) && l.solo);
+    let has_solo =
+        only_layer_idx.is_none() && comp.layers.iter().any(|l| l.is_active(frame) && l.solo);
 
     // ── Phase 1: Parallel layer data preparation ──
     // Multi-frame rendering support: parallel render queue initialized for MFR pipeline.
@@ -850,7 +841,8 @@ pub(crate) fn render_frame_to_pixels_filtered(
                     if pc_bx > 0.0 && pc_by > 0.0 && lo_x <= hi_x && lo_y <= hi_y {
                         let precomp_width = hi_x - lo_x + 1;
                         let precomp_height = hi_y - lo_y + 1;
-                        let mut precomp_buf = vec![0u8; (precomp_width * precomp_height * 4) as usize];
+                        let mut precomp_buf =
+                            vec![0u8; (precomp_width * precomp_height * 4) as usize];
 
                         for py in lo_y..=hi_y {
                             for px in lo_x..=hi_x {
@@ -882,14 +874,16 @@ pub(crate) fn render_frame_to_pixels_filtered(
                                 if src_idx + 3 >= sub_pixels.len() {
                                     continue;
                                 }
-                                let dst_idx = (((py - lo_y) * precomp_width + (px - lo_x)) * 4) as usize;
+                                let dst_idx =
+                                    (((py - lo_y) * precomp_width + (px - lo_x)) * 4) as usize;
                                 precomp_buf[dst_idx] = sub_pixels[src_idx];
                                 precomp_buf[dst_idx + 1] = sub_pixels[src_idx + 1];
                                 precomp_buf[dst_idx + 2] = sub_pixels[src_idx + 2];
                                 precomp_buf[dst_idx + 3] = (sub_pixels[src_idx + 3] as f32
                                     * mask_alpha)
                                     .round()
-                                    .clamp(0.0, 255.0) as u8;
+                                    .clamp(0.0, 255.0)
+                                    as u8;
                             }
                         }
 
@@ -1003,13 +997,7 @@ pub(crate) fn render_frame_to_pixels_filtered(
                     cos_rz: rad.cos(),
                     sin_rz: rad.sin(),
                 };
-                ps.render_projected(
-                    &mut buffer,
-                    width,
-                    height,
-                    frame as f32 * dt,
-                    Some(&proj),
-                );
+                ps.render_projected(&mut buffer, width, height, frame as f32 * dt, Some(&proj));
             } else {
                 ps.render(&mut buffer, width, height, frame as f32 * dt);
             }
@@ -1034,17 +1022,16 @@ pub(crate) fn render_frame_to_pixels_filtered(
             LayerType::Solid { .. } | LayerType::PreComp { .. } => {
                 (comp.width as f32, comp.height as f32)
             }
-            LayerType::Text { .. } => {
-                (comp.width as f32, comp.height as f32)
-            }
+            LayerType::Text { .. } => (comp.width as f32, comp.height as f32),
             LayerType::Shape { .. } => {
                 // Shape units are uniform (composition-width referenced) so
                 // circles stay circular on non-square compositions.
                 (comp.width as f32, comp.width as f32)
             }
             LayerType::Model3D { .. } => (comp.width as f32, comp.height as f32),
-            LayerType::Image { .. } | LayerType::Video { .. } => source_media_dimensions(layer)
-                .unwrap_or((comp.width as f32, comp.height as f32)),
+            LayerType::Image { .. } | LayerType::Video { .. } => {
+                source_media_dimensions(layer).unwrap_or((comp.width as f32, comp.height as f32))
+            }
             _ => continue, // Null or audio layers don't output visual pixels
         };
 
@@ -1170,7 +1157,6 @@ pub(crate) fn render_frame_to_pixels_filtered(
             layer_buf: &mut layer_buf[..],
         });
 
-
         postfx::apply_post_fx(postfx::PostFxCtx {
             comp,
             layer,
@@ -1191,11 +1177,9 @@ pub(crate) fn render_frame_to_pixels_filtered(
             dof_blur: ld.dof_blur,
         });
 
-
         // Phase 3: composite the (effect-processed) buffer over the frame.
         // First, check if this layer uses a track matte from the layer below.
         let matte_pixels = render_matte_buffer(comp, layer, frame, width, height);
-
 
         composite_layer_buffer(
             &mut buffer[..],
@@ -1384,8 +1368,6 @@ fn wiggle_polygon(
     }
 }
 
-
-
 /// Renders a frame with a hard deadline. If rendering exceeds `deadline`, the
 /// cooperative cancel flag trips and the function returns early with
 /// `timed_out = true` and whatever was composited so far.
@@ -1511,10 +1493,8 @@ mod tests {
 
     #[test]
     fn preview_uses_layer_proxy_media_but_final_render_does_not() {
-        let dir = std::env::temp_dir().join(format!(
-            "kagari_layer_proxy_test_{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("kagari_layer_proxy_test_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let frames = dir.join("frames");
@@ -1644,7 +1624,10 @@ mod tests {
         // still resolve against index 0 in the original composition.
         let pixels = render_frame_to_pixels_filtered(&comp, 0, 16, 16, 0.0, 0, Some(1));
         let center = ((8 * 16 + 8) * 4) as usize;
-        assert!(pixels[center] > 200, "target color should survive the matte");
+        assert!(
+            pixels[center] > 200,
+            "target color should survive the matte"
+        );
         assert!(
             (60..=68).contains(&pixels[center + 3]),
             "source alpha should drive target alpha, got {}",
@@ -1942,14 +1925,7 @@ mod tests {
 
     #[test]
     fn test_precomp_essential_property_override_reaches_nested_render() {
-        let mut sub = Composition::new(
-            "essential_sub".into(),
-            "Essential Sub".into(),
-            16,
-            16,
-            30,
-            30,
-        );
+        let mut sub = Composition::new("essential_sub".into(), "Essential Sub".into(), 16, 16, 30, 30);
         sub.background_color = [0.0, 0.0, 0.0, 0.0];
         let mut solid = Layer::new(
             "solid".into(),
@@ -1962,14 +1938,7 @@ mod tests {
         solid.transform.position = Animatable::new_constant([8.0, 8.0]);
         sub.layers.push(solid);
 
-        let mut comp = Composition::new(
-            "essential_main".into(),
-            "Essential Main".into(),
-            16,
-            16,
-            30,
-            30,
-        );
+        let mut comp = Composition::new("essential_main".into(), "Essential Main".into(), 16, 16, 30, 30);
         comp.background_color = [0.0, 0.0, 0.0, 0.0];
         comp.sub_compositions.push(sub);
         let mut precomp = Layer::new(
@@ -2104,10 +2073,8 @@ mod tests {
 
     #[test]
     fn test_precomp_video_uses_sequence_and_frame_blending() {
-        let dir = std::env::temp_dir().join(format!(
-            "kagari_precomp_video_test_{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("kagari_precomp_video_test_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         write_gray_webp(&dir.join("frame_00000.webp"), 0);
@@ -2207,10 +2174,8 @@ mod tests {
 
     #[test]
     fn test_video_frame_blending_works_for_luma_matte() {
-        let dir = std::env::temp_dir().join(format!(
-            "kagari_video_matte_test_{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("kagari_video_matte_test_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         write_gray_webp(&dir.join("frame_00000.webp"), 0);
@@ -3105,8 +3070,14 @@ mod shadow_tests {
 
     #[test]
     fn collapsed_precomp_uses_parent_time_remap_for_child_frame() {
-        let mut comp =
-            Composition::new("collapse-remap".into(), "Collapse remap".into(), 64, 64, 30, 30);
+        let mut comp = Composition::new(
+            "collapse-remap".into(),
+            "Collapse remap".into(),
+            64,
+            64,
+            30,
+            30,
+        );
         let mut sub = Composition::new("sub-remap".into(), "Sub".into(), 64, 64, 30, 30);
         let mut child = Layer::new(
             "child".into(),
@@ -3152,8 +3123,7 @@ mod shadow_tests {
 
     #[test]
     fn nested_collapsed_precomp_inherits_parent_source_frame() {
-        let mut inner =
-            Composition::new("inner-remap".into(), "Inner".into(), 64, 64, 30, 30);
+        let mut inner = Composition::new("inner-remap".into(), "Inner".into(), 64, 64, 30, 30);
         let mut child = Layer::new(
             "nested-child".into(),
             "Nested child".into(),
@@ -3166,8 +3136,7 @@ mod shadow_tests {
         child.out_frame = 30;
         inner.layers.push(child);
 
-        let mut middle =
-            Composition::new("middle-remap".into(), "Middle".into(), 64, 64, 30, 30);
+        let mut middle = Composition::new("middle-remap".into(), "Middle".into(), 64, 64, 30, 30);
         middle.sub_compositions.push(inner);
         let mut nested = Layer::new(
             "nested-precomp".into(),
@@ -3310,7 +3279,11 @@ mod shadow_tests {
         comp.layers[1].effects_enabled = false;
         let px = render_frame_to_pixels(&comp, 0, 32, 32, 0.0, 0);
         let i = ((8 * 32 + 8) * 4) as usize;
-        assert!(px[i] > 235, "disabled adjustment effects must preserve white, R={}", px[i]);
+        assert!(
+            px[i] > 235,
+            "disabled adjustment effects must preserve white, R={}",
+            px[i]
+        );
     }
 
     #[test]
@@ -3469,10 +3442,7 @@ mod shadow_tests {
         // 100 units at scale 100 => 96px span on a 192-wide comp.
         let row = (50..=142u32).filter(|&x| bright(x, 54)).count();
         let col = (6..=102u32).filter(|&y| bright(96, y)).count();
-        assert!(
-            row >= 88 && row <= 100,
-            "circle width unexpected: {row}px",
-        );
+        assert!(row >= 88 && row <= 100, "circle width unexpected: {row}px",);
         assert!(
             (row as i32 - col as i32).abs() <= 4,
             "circle distorted on wide comp: w={row} h={col}",
@@ -3532,8 +3502,7 @@ mod shadow_tests {
                 },
                 30,
             );
-            bg.transform.position =
-                Animatable::new_constant([w as f32 * 0.5, h as f32 * 0.5]);
+            bg.transform.position = Animatable::new_constant([w as f32 * 0.5, h as f32 * 0.5]);
             comp.layers.push(bg);
             comp
         }
@@ -3582,10 +3551,7 @@ mod shadow_tests {
             };
             let full = mean_r(&mk(100.0));
             let half = mean_r(&mk(50.0));
-            assert!(
-                full > 20.0,
-                "noise must lift the frame, got {full}"
-            );
+            assert!(full > 20.0, "noise must lift the frame, got {full}");
             let ratio = half / full.max(1.0);
             assert!(
                 (0.3..0.7).contains(&ratio),
@@ -3780,21 +3746,20 @@ mod shadow_tests {
                 },
                 30,
             );
-            bg.transform.position =
-                Animatable::new_constant([w as f32 * 0.5, h as f32 * 0.5]);
+            bg.transform.position = Animatable::new_constant([w as f32 * 0.5, h as f32 * 0.5]);
             comp.layers.push(bg);
             comp
         }
 
-        fn rect_mask(id: &str, x: f32, y: f32, w: f32, h: f32, feather: f32) -> crate::core::mask::Mask {
-            let mut m = crate::core::mask::Mask::new_rect(
-                id.into(),
-                id.into(),
-                x,
-                y,
-                w,
-                h,
-            );
+        fn rect_mask(
+            id: &str,
+            x: f32,
+            y: f32,
+            w: f32,
+            h: f32,
+            feather: f32,
+        ) -> crate::core::mask::Mask {
+            let mut m = crate::core::mask::Mask::new_rect(id.into(), id.into(), x, y, w, h);
             m.feather = Animatable::new_constant(feather);
             m
         }
@@ -4041,8 +4006,7 @@ mod shadow_tests {
                 }
             }
             let mean = vals.iter().sum::<f32>() / vals.len() as f32;
-            let var =
-                vals.iter().map(|v| (v - mean) * (v - mean)).sum::<f32>() / vals.len() as f32;
+            let var = vals.iter().map(|v| (v - mean) * (v - mean)).sum::<f32>() / vals.len() as f32;
             assert!(
                 mean > 10.0 && var > 5.0,
                 "inner effect result must show inside mask (mean={mean}, var={var})"

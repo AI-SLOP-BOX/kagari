@@ -1,53 +1,80 @@
-use kagari_vfx::core::timeline::*;
 use kagari_vfx::core::keyframe::*;
-use kagari_vfx::core::property::*;
 use kagari_vfx::core::project_migration::save_project_atomic;
+use kagari_vfx::core::property::*;
+use kagari_vfx::core::timeline::*;
 
 fn bez_in(inf: f32) -> InterpolationType {
     InterpolationType::Bezier {
-        outgoing: BezierControlPoint { influence: 0.0, speed: 0.0 },
-        incoming: BezierControlPoint { influence: inf, speed: 0.0 },
+        outgoing: BezierControlPoint {
+            influence: 0.0,
+            speed: 0.0,
+        },
+        incoming: BezierControlPoint {
+            influence: inf,
+            speed: 0.0,
+        },
         custom_bezier: None,
     }
 }
 fn bez_out(inf: f32) -> InterpolationType {
     InterpolationType::Bezier {
-        outgoing: BezierControlPoint { influence: inf, speed: 0.0 },
-        incoming: BezierControlPoint { influence: 0.0, speed: 0.0 },
+        outgoing: BezierControlPoint {
+            influence: inf,
+            speed: 0.0,
+        },
+        incoming: BezierControlPoint {
+            influence: 0.0,
+            speed: 0.0,
+        },
         custom_bezier: None,
     }
 }
 fn bez_both(a: f32, b: f32) -> InterpolationType {
     InterpolationType::Bezier {
-        outgoing: BezierControlPoint { influence: a, speed: 0.0 },
-        incoming: BezierControlPoint { influence: b, speed: 0.0 },
+        outgoing: BezierControlPoint {
+            influence: a,
+            speed: 0.0,
+        },
+        incoming: BezierControlPoint {
+            influence: b,
+            speed: 0.0,
+        },
         custom_bezier: None,
     }
 }
 
-fn dot_layer(
-    comp: &mut Composition, name: &str, color: [f32; 4], size: f32,
-) {
+fn dot_layer(comp: &mut Composition, name: &str, color: [f32; 4], size: f32) {
     comp.add_layer(Layer::new(
-        name.into(), name.into(),
+        name.into(),
+        name.into(),
         LayerType::Shape {
             shape_type: ShapeType::Ellipse {
                 width: Animatable::new_constant(size),
                 height: Animatable::new_constant(size),
             },
             color,
-            stroke_color: [0.0; 4], stroke_width: 0.0,
+            stroke_color: [0.0; 4],
+            stroke_width: 0.0,
             fill_type: ShapeFillType::Solid,
-            extrusion_depth: 0.0, bevel_depth: 0.0,
-        }, 150,
+            extrusion_depth: 0.0,
+            bevel_depth: 0.0,
+        },
+        150,
     ));
 }
 
 /// Google式: 4つの残り火ドットが楕円軌道を回りながら中心へ吸い込まれる
 #[allow(clippy::too_many_arguments)]
 fn add_orbit_dot(
-    comp: &mut Composition, name: &str, color: [f32; 4], size: f32,
-    phase_deg: f32, r0: f32, r1: f32, f0: u32, f1: u32,
+    comp: &mut Composition,
+    name: &str,
+    color: [f32; 4],
+    size: f32,
+    phase_deg: f32,
+    r0: f32,
+    r1: f32,
+    f0: u32,
+    f1: u32,
 ) {
     dot_layer(comp, name, color, size);
     let l = comp.layers.last_mut().unwrap();
@@ -59,7 +86,11 @@ fn add_orbit_dot(
         let r = r0 + (r1 - r0) * k * k;
         let x = 960.0 + ang.cos() * r;
         let y = 480.0 + ang.sin() * r * 0.62;
-        let interp = if t == f1 { bez_in(0.6) } else { InterpolationType::Linear };
+        let interp = if t == f1 {
+            bez_in(0.6)
+        } else {
+            InterpolationType::Linear
+        };
         pos_kf.push(Keyframe::new(t, [x, y], interp));
         t += 4;
     }
@@ -82,7 +113,8 @@ fn add_orbit_dot(
 /// Netflix式の縦光柱
 fn add_pillar(comp: &mut Composition, appear: u32, peak: u32, fade: u32) {
     comp.add_layer(Layer::new(
-        "pillar".into(), "Light Pillar".into(),
+        "pillar".into(),
+        "Light Pillar".into(),
         LayerType::Shape {
             shape_type: ShapeType::FreeformBezier {
                 points: vec![[-10.0, 10.0], [10.0, 10.0], [5.0, -760.0], [-5.0, -760.0]],
@@ -90,10 +122,13 @@ fn add_pillar(comp: &mut Composition, appear: u32, peak: u32, fade: u32) {
                 closed: true,
             },
             color: [1.0, 0.85, 0.45, 0.85],
-            stroke_color: [0.0; 4], stroke_width: 0.0,
+            stroke_color: [0.0; 4],
+            stroke_width: 0.0,
             fill_type: ShapeFillType::Solid,
-            extrusion_depth: 0.0, bevel_depth: 0.0,
-        }, 150,
+            extrusion_depth: 0.0,
+            bevel_depth: 0.0,
+        },
+        150,
     ));
     let l = comp.layers.last_mut().unwrap();
     l.transform.position = Animatable::new_constant([960.0, 480.0]);
@@ -111,21 +146,23 @@ fn add_pillar(comp: &mut Composition, appear: u32, peak: u32, fade: u32) {
 }
 
 /// Netflix式: ロゴの縁から光の筋が左右へ分解していく
-fn add_edge_streak(
-    comp: &mut Composition, name: &str, dir: f32, appear: u32, len: f32,
-) {
+fn add_edge_streak(comp: &mut Composition, name: &str, dir: f32, appear: u32, len: f32) {
     comp.add_layer(Layer::new(
-        name.into(), name.into(),
+        name.into(),
+        name.into(),
         LayerType::Shape {
             shape_type: ShapeType::Ellipse {
                 width: Animatable::new_constant(len),
                 height: Animatable::new_constant(3.0),
             },
             color: [1.0, 0.8, 0.35, 0.8],
-            stroke_color: [0.0; 4], stroke_width: 0.0,
+            stroke_color: [0.0; 4],
+            stroke_width: 0.0,
             fill_type: ShapeFillType::Solid,
-            extrusion_depth: 0.0, bevel_depth: 0.0,
-        }, 150,
+            extrusion_depth: 0.0,
+            bevel_depth: 0.0,
+        },
+        150,
     ));
     let l = comp.layers.last_mut().unwrap();
     let ex = 960.0 + dir * 420.0;
@@ -149,26 +186,38 @@ fn add_edge_streak(
 
 fn main() {
     let mut comp = Composition::new(
-        "splash".into(), "Kagari VFX Splash".into(),
-        1920, 1080, 30, 150,
+        "splash".into(),
+        "Kagari VFX Splash".into(),
+        1920,
+        1080,
+        30,
+        150,
     );
 
-    comp.add_layer(Layer::new("bg".into(), "BG".into(),
-        LayerType::Solid { color: [0.0; 4] }, 150));
-    comp.layers.last_mut().unwrap().transform.position =
-        Animatable::new_constant([960.0, 540.0]);
+    comp.add_layer(Layer::new(
+        "bg".into(),
+        "BG".into(),
+        LayerType::Solid { color: [0.0; 4] },
+        150,
+    ));
+    comp.layers.last_mut().unwrap().transform.position = Animatable::new_constant([960.0, 540.0]);
 
-    comp.add_layer(Layer::new("ambient".into(), "Ambient".into(),
+    comp.add_layer(Layer::new(
+        "ambient".into(),
+        "Ambient".into(),
         LayerType::Shape {
             shape_type: ShapeType::Ellipse {
                 width: Animatable::new_constant(900.0),
                 height: Animatable::new_constant(900.0),
             },
             color: [0.10, 0.05, 0.01, 1.0],
-            stroke_color: [0.0; 4], stroke_width: 0.0,
+            stroke_color: [0.0; 4],
+            stroke_width: 0.0,
             fill_type: ShapeFillType::Solid,
-            extrusion_depth: 0.0, bevel_depth: 0.0,
-        }, 150,
+            extrusion_depth: 0.0,
+            bevel_depth: 0.0,
+        },
+        150,
     ));
     {
         let a = comp.layers.last_mut().unwrap();
@@ -182,23 +231,68 @@ fn main() {
     }
 
     // === Google式: 4つの残り火が渦を巻いて合体 ===
-    add_orbit_dot(&mut comp, "ember_w", [1.0, 0.95, 0.85, 1.0], 10.0, 0.0, 320.0, 15.0, 5, 40);
-    add_orbit_dot(&mut comp, "ember_y", [1.0, 0.75, 0.2, 1.0], 12.0, 90.0, 300.0, 15.0, 8, 41);
-    add_orbit_dot(&mut comp, "ember_o", [1.0, 0.45, 0.08, 1.0], 13.0, 180.0, 310.0, 15.0, 11, 42);
-    add_orbit_dot(&mut comp, "ember_r", [0.85, 0.15, 0.03, 1.0], 12.0, 270.0, 290.0, 15.0, 14, 43);
+    add_orbit_dot(
+        &mut comp,
+        "ember_w",
+        [1.0, 0.95, 0.85, 1.0],
+        10.0,
+        0.0,
+        320.0,
+        15.0,
+        5,
+        40,
+    );
+    add_orbit_dot(
+        &mut comp,
+        "ember_y",
+        [1.0, 0.75, 0.2, 1.0],
+        12.0,
+        90.0,
+        300.0,
+        15.0,
+        8,
+        41,
+    );
+    add_orbit_dot(
+        &mut comp,
+        "ember_o",
+        [1.0, 0.45, 0.08, 1.0],
+        13.0,
+        180.0,
+        310.0,
+        15.0,
+        11,
+        42,
+    );
+    add_orbit_dot(
+        &mut comp,
+        "ember_r",
+        [0.85, 0.15, 0.03, 1.0],
+        12.0,
+        270.0,
+        290.0,
+        15.0,
+        14,
+        43,
+    );
 
     // 合体フラッシュ
-    comp.add_layer(Layer::new("flash".into(), "Flash".into(),
+    comp.add_layer(Layer::new(
+        "flash".into(),
+        "Flash".into(),
         LayerType::Shape {
             shape_type: ShapeType::Ellipse {
                 width: Animatable::new_constant(260.0),
                 height: Animatable::new_constant(260.0),
             },
             color: [1.0, 0.97, 0.85, 1.0],
-            stroke_color: [0.0; 4], stroke_width: 0.0,
+            stroke_color: [0.0; 4],
+            stroke_width: 0.0,
             fill_type: ShapeFillType::Solid,
-            extrusion_depth: 0.0, bevel_depth: 0.0,
-        }, 150,
+            extrusion_depth: 0.0,
+            bevel_depth: 0.0,
+        },
+        150,
     ));
     {
         let f = comp.layers.last_mut().unwrap();
@@ -222,8 +316,14 @@ fn main() {
     // === Netflix式: 光柱 + 奥から手前へのドリー ===
     add_pillar(&mut comp, 40, 48, 75);
 
-    comp.add_layer(Layer::new("logo".into(), "Logo".into(),
-        LayerType::Image { path: "assets/kagari_logo.webp".into() }, 150));
+    comp.add_layer(Layer::new(
+        "logo".into(),
+        "Logo".into(),
+        LayerType::Image {
+            path: "assets/kagari_logo.webp".into(),
+        },
+        150,
+    ));
     {
         let logo = comp.layers.last_mut().unwrap();
         logo.transform.position = Animatable::new_animated(vec![
@@ -260,20 +360,27 @@ fn main() {
         (420.0, 5.0, 0.9, 44, 56, 72),
         (950.0, 3.0, 0.6, 47, 62, 78),
         (1500.0, 2.0, 0.35, 50, 68, 84),
-    ].into_iter().enumerate() {
+    ]
+    .into_iter()
+    .enumerate()
+    {
         let color = [1.0, 0.55, 0.12, alpha];
         comp.add_layer(Layer::new(
-            format!("ring{}", i), format!("Ring {}", i),
+            format!("ring{}", i),
+            format!("Ring {}", i),
             LayerType::Shape {
                 shape_type: ShapeType::Ellipse {
                     width: Animatable::new_constant(size),
                     height: Animatable::new_constant(size),
                 },
                 color: [color[0], color[1], color[2], 0.0],
-                stroke_color: color, stroke_width: thick,
+                stroke_color: color,
+                stroke_width: thick,
                 fill_type: ShapeFillType::Solid,
-                extrusion_depth: 0.0, bevel_depth: 0.0,
-            }, 150,
+                extrusion_depth: 0.0,
+                bevel_depth: 0.0,
+            },
+            150,
         ));
         let l = comp.layers.last_mut().unwrap();
         l.transform.position = Animatable::new_constant([960.0, 480.0]);
@@ -294,8 +401,10 @@ fn main() {
 
     // === 火の粉 ===
     let pc = [
-        [1.0, 0.7, 0.1, 1.0], [1.0, 0.5, 0.0, 1.0],
-        [0.9, 0.3, 0.0, 1.0], [1.0, 0.85, 0.3, 1.0],
+        [1.0, 0.7, 0.1, 1.0],
+        [1.0, 0.5, 0.0, 1.0],
+        [0.9, 0.3, 0.0, 1.0],
+        [1.0, 0.85, 0.3, 1.0],
     ];
     for i in 0..8 {
         let ang = (i as f32) * 45.0 + 12.0;
@@ -305,17 +414,21 @@ fn main() {
         let ey = 480.0 + rad.sin() * dist * 10.0;
         let sz = 2.5 + (i as f32 * 0.6) % 3.0;
         comp.add_layer(Layer::new(
-            format!("pt{}", i), format!("Particle {}", i),
+            format!("pt{}", i),
+            format!("Particle {}", i),
             LayerType::Shape {
                 shape_type: ShapeType::Ellipse {
                     width: Animatable::new_constant(sz),
                     height: Animatable::new_constant(sz * 2.5),
                 },
                 color: pc[i % pc.len()],
-                stroke_color: [0.0; 4], stroke_width: 0.0,
+                stroke_color: [0.0; 4],
+                stroke_width: 0.0,
                 fill_type: ShapeFillType::Solid,
-                extrusion_depth: 0.0, bevel_depth: 0.0,
-            }, 150,
+                extrusion_depth: 0.0,
+                bevel_depth: 0.0,
+            },
+            150,
         ));
         let l = comp.layers.last_mut().unwrap();
         l.transform.position = Animatable::new_animated(vec![
@@ -334,13 +447,23 @@ fn main() {
     }
 
     // === タイトル ===
-    comp.add_layer(Layer::new("title".into(), "Title".into(),
+    comp.add_layer(Layer::new(
+        "title".into(),
+        "Title".into(),
         LayerType::Text {
-            text: "KAGARI".into(), font_size: 80,
-            color: [1.0; 4], font_family: "SF Pro Display".into(),
-            tracking: 20.0, leading: 1.2, align: 1,
-            stroke_color: [0.0; 4], stroke_width: 0.0, text_on_path: false,
-        }, 150));
+            text: "KAGARI".into(),
+            font_size: 80,
+            color: [1.0; 4],
+            font_family: "SF Pro Display".into(),
+            tracking: 20.0,
+            leading: 1.2,
+            align: 1,
+            stroke_color: [0.0; 4],
+            stroke_width: 0.0,
+            text_on_path: false,
+        },
+        150,
+    ));
     {
         let t = comp.layers.last_mut().unwrap();
         t.transform.position = Animatable::new_animated(vec![
@@ -355,13 +478,23 @@ fn main() {
         ]);
     }
 
-    comp.add_layer(Layer::new("vfx".into(), "VFX".into(),
+    comp.add_layer(Layer::new(
+        "vfx".into(),
+        "VFX".into(),
         LayerType::Text {
-            text: "VFX".into(), font_size: 80,
-            color: [0.9, 0.6, 0.1, 1.0], font_family: "SF Pro Display".into(),
-            tracking: 20.0, leading: 1.2, align: 1,
-            stroke_color: [0.0; 4], stroke_width: 0.0, text_on_path: false,
-        }, 150));
+            text: "VFX".into(),
+            font_size: 80,
+            color: [0.9, 0.6, 0.1, 1.0],
+            font_family: "SF Pro Display".into(),
+            tracking: 20.0,
+            leading: 1.2,
+            align: 1,
+            stroke_color: [0.0; 4],
+            stroke_width: 0.0,
+            text_on_path: false,
+        },
+        150,
+    ));
     {
         let v = comp.layers.last_mut().unwrap();
         v.transform.position = Animatable::new_animated(vec![
@@ -376,17 +509,22 @@ fn main() {
         ]);
     }
 
-    comp.add_layer(Layer::new("line".into(), "Line".into(),
+    comp.add_layer(Layer::new(
+        "line".into(),
+        "Line".into(),
         LayerType::Shape {
             shape_type: ShapeType::Ellipse {
                 width: Animatable::new_constant(600.0),
                 height: Animatable::new_constant(2.0),
             },
             color: [0.9, 0.6, 0.1, 1.0],
-            stroke_color: [0.0; 4], stroke_width: 0.0,
+            stroke_color: [0.0; 4],
+            stroke_width: 0.0,
             fill_type: ShapeFillType::Solid,
-            extrusion_depth: 0.0, bevel_depth: 0.0,
-        }, 150,
+            extrusion_depth: 0.0,
+            bevel_depth: 0.0,
+        },
+        150,
     ));
     {
         let ln = comp.layers.last_mut().unwrap();
@@ -399,13 +537,23 @@ fn main() {
         ]);
     }
 
-    comp.add_layer(Layer::new("tag".into(), "Tagline".into(),
+    comp.add_layer(Layer::new(
+        "tag".into(),
+        "Tagline".into(),
         LayerType::Text {
-            text: "Motion Graphics & Compositing".into(), font_size: 24,
-            color: [0.6; 4], font_family: "SF Pro Display".into(),
-            tracking: 3.0, leading: 1.2, align: 1,
-            stroke_color: [0.0; 4], stroke_width: 0.0, text_on_path: false,
-        }, 150));
+            text: "Motion Graphics & Compositing".into(),
+            font_size: 24,
+            color: [0.6; 4],
+            font_family: "SF Pro Display".into(),
+            tracking: 3.0,
+            leading: 1.2,
+            align: 1,
+            stroke_color: [0.0; 4],
+            stroke_width: 0.0,
+            text_on_path: false,
+        },
+        150,
+    ));
     {
         let tg = comp.layers.last_mut().unwrap();
         tg.transform.position = Animatable::new_constant([960.0, 630.0]);
@@ -417,7 +565,10 @@ fn main() {
         ]);
     }
 
-    let project = Project { compositions: vec![comp], ..Default::default() };
+    let project = Project {
+        compositions: vec![comp],
+        ..Default::default()
+    };
     save_project_atomic(&project, "splash_project.json").unwrap();
     println!("Wrote splash_project.json");
 }

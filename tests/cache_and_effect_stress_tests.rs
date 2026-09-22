@@ -90,7 +90,11 @@ fn frame_cache_replacing_a_frame_updates_bytes_and_pixels_atomically() {
     let replacement = vec![222u8; 8 * 8 * 4];
     cache.insert(7, 8, 8, replacement);
     assert_eq!(cache.current_memory_bytes, 8 * 8 * 4);
-    assert_eq!(cache.cached_count(), 1, "replacement must not duplicate a key");
+    assert_eq!(
+        cache.cached_count(),
+        1,
+        "replacement must not duplicate a key"
+    );
 
     let entry = cache.get(7).expect("replacement must remain readable");
     assert_eq!((entry.width, entry.height), (8, 8));
@@ -922,7 +926,10 @@ fn blur_and_vignette_preserve_effect_specific_pixel_relationships() {
         0,
         30,
     );
-    assert!(impulse[neighbor] > 0, "blur must spread energy to a neighbor");
+    assert!(
+        impulse[neighbor] > 0,
+        "blur must spread energy to a neighbor"
+    );
     assert!(impulse[center] < 255, "blur must reduce the impulse peak");
     assert!(impulse[center + 3] > 0, "blur must retain alpha coverage");
     assert!(impulse[center + 3] < 255, "blur must soften alpha coverage");
@@ -994,9 +1001,7 @@ fn effect_endpoint_contracts_match_pixel_semantics() {
         "100% wipe must make every pixel transparent"
     );
 
-    let mut shifted = vec![
-        10, 0, 0, 255, 20, 0, 0, 255, 30, 0, 0, 255, 40, 0, 0, 255,
-    ];
+    let mut shifted = vec![10, 0, 0, 255, 20, 0, 0, 255, 30, 0, 0, 255, 40, 0, 0, 255];
     kagari_vfx::core::cpu_effects::apply_layer_effects(
         None,
         None,
@@ -1011,7 +1016,10 @@ fn effect_endpoint_contracts_match_pixel_semantics() {
         30,
     );
     assert_eq!(
-        shifted.chunks_exact(4).map(|pixel| pixel[0]).collect::<Vec<_>>(),
+        shifted
+            .chunks_exact(4)
+            .map(|pixel| pixel[0])
+            .collect::<Vec<_>>(),
         vec![40, 10, 20, 30],
         "offset must wrap source pixels in the documented direction"
     );

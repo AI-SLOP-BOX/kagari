@@ -747,10 +747,7 @@ impl ProductionDocument {
         for channel in &self.audio.channels {
             channel.validate().map_err(str::to_owned)?;
         }
-        self.audio
-            .correction
-            .validate()
-            .map_err(str::to_owned)?;
+        self.audio.correction.validate().map_err(str::to_owned)?;
         self.tempo.validate().map_err(str::to_owned)?;
         self.validate_bindings()?;
         Ok(())

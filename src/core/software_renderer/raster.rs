@@ -57,7 +57,7 @@ pub(crate) fn rasterize_layer_content(ctx: RasterCtx<'_>) {
 
 /// Rasterize image/video layers (texture-mapped, masked).
 fn rasterize_image_layer(ctx: RasterCtx<'_>) {
-        let RasterCtx {
+    let RasterCtx {
         layer,
         effective_frame: _,
         source_frame,
@@ -77,121 +77,121 @@ fn rasterize_image_layer(ctx: RasterCtx<'_>) {
         layer_buf,
         ..
     } = ctx;
-        // Image layers load directly; Video layers resolve their frame PNG first.
-        use crate::core::image_cache::with_image_cache;
+    // Image layers load directly; Video layers resolve their frame PNG first.
+    use crate::core::image_cache::with_image_cache;
 
-        let (img_path, next_img_path, blend_t) = match &layer.layer_type {
-            LayerType::Video {
-                frames_dir,
-                frame_count,
-                speed,
-                ..
-            } => {
-                let source_position = (source_frame * speed.max(0.0)).max(0.0);
-                let first = (source_position.floor() as u32).min(frame_count.saturating_sub(1));
-                let second = (first + 1).min(frame_count.saturating_sub(1));
-                let t = if layer.frame_blending {
-                    (source_position - first as f32).clamp(0.0, 1.0)
-                } else {
-                    0.0
-                };
-                let first_path = super::preview_proxy_path(layer, first).unwrap_or_else(|| {
-                    crate::core::video_import::frame_path_in_dir(frames_dir, first)
-                        .to_string_lossy()
-                        .to_string()
-                });
-                let second_path = crate::core::video_import::frame_path_in_dir(frames_dir, second)
-                    .to_string_lossy()
-                    .to_string();
-                (
-                    first_path,
-                    second_path,
-                    if super::preview_proxy_path(layer, first).is_some() {
-                        0.0
-                    } else {
-                        t
-                    },
-                )
-            }
-            LayerType::Image { path } => (
-                super::preview_proxy_path(layer, 0).unwrap_or_else(|| path.clone()),
-                path.clone(),
-                0.0,
-            ),
-            _ => unreachable!(),
-        };
-        with_image_cache(|cache| {
-            let Some(img) = cache.load_image(&img_path).cloned() else {
-                return;
-            };
-            let next_img = if blend_t > 0.0 && next_img_path != img_path {
-                cache.load_image(&next_img_path).cloned()
+    let (img_path, next_img_path, blend_t) = match &layer.layer_type {
+        LayerType::Video {
+            frames_dir,
+            frame_count,
+            speed,
+            ..
+        } => {
+            let source_position = (source_frame * speed.max(0.0)).max(0.0);
+            let first = (source_position.floor() as u32).min(frame_count.saturating_sub(1));
+            let second = (first + 1).min(frame_count.saturating_sub(1));
+            let t = if layer.frame_blending {
+                (source_position - first as f32).clamp(0.0, 1.0)
             } else {
-                None
+                0.0
             };
-            {
-                let img_w = img.width as f32;
-                let img_h = img.height as f32;
+            let first_path = super::preview_proxy_path(layer, first).unwrap_or_else(|| {
+                crate::core::video_import::frame_path_in_dir(frames_dir, first)
+                    .to_string_lossy()
+                    .to_string()
+            });
+            let second_path = crate::core::video_import::frame_path_in_dir(frames_dir, second)
+                .to_string_lossy()
+                .to_string();
+            (
+                first_path,
+                second_path,
+                if super::preview_proxy_path(layer, first).is_some() {
+                    0.0
+                } else {
+                    t
+                },
+            )
+        }
+        LayerType::Image { path } => (
+            super::preview_proxy_path(layer, 0).unwrap_or_else(|| path.clone()),
+            path.clone(),
+            0.0,
+        ),
+        _ => unreachable!(),
+    };
+    with_image_cache(|cache| {
+        let Some(img) = cache.load_image(&img_path).cloned() else {
+            return;
+        };
+        let next_img = if blend_t > 0.0 && next_img_path != img_path {
+            cache.load_image(&next_img_path).cloned()
+        } else {
+            None
+        };
+        {
+            let img_w = img.width as f32;
+            let img_h = img.height as f32;
 
-                for py in min_y..max_y {
-                    for px in min_x..max_x {
-                        // Vector mask check
-                        let mut mask_alpha = 1.0;
-                        if !masks.is_empty() {
-                            mask_alpha =
-                                compute_combined_mask_coverage(px as f32, py as f32, masks);
-                        }
-                        if mask_alpha <= 0.001 {
-                            continue;
-                        }
+            for py in min_y..max_y {
+                for px in min_x..max_x {
+                    // Vector mask check
+                    let mut mask_alpha = 1.0;
+                    if !masks.is_empty() {
+                        mask_alpha = compute_combined_mask_coverage(px as f32, py as f32, masks);
+                    }
+                    if mask_alpha <= 0.001 {
+                        continue;
+                    }
 
-                        // Map pixel to image texture coordinates [0, 1]
-                        let dx = px as f32 - cx;
-                        let dy = py as f32 - cy;
-                        let lx = dx * cos_r + dy * sin_r;
-                        let ly = -dx * sin_r + dy * cos_r;
-                        let u = (lx / bounds_x + 1.0) * 0.5;
-                        let v = (ly / bounds_y + 1.0) * 0.5;
+                    // Map pixel to image texture coordinates [0, 1]
+                    let dx = px as f32 - cx;
+                    let dy = py as f32 - cy;
+                    let lx = dx * cos_r + dy * sin_r;
+                    let ly = -dx * sin_r + dy * cos_r;
+                    let u = (lx / bounds_x + 1.0) * 0.5;
+                    let v = (ly / bounds_y + 1.0) * 0.5;
 
-                        if (0.0..=1.0).contains(&u) && (0.0..=1.0).contains(&v) {
-                            let tex_x =
-                                ((u * (img_w - 1.0)).round() as u32).min(img_w as u32 - 1);
-                            let tex_y =
-                                ((v * (img_h - 1.0)).round() as u32).min(img_h as u32 - 1);
-                            let tidx = ((tex_y * img.width + tex_x) * 4) as usize;
-                            if tidx + 3 < img.pixels.len() {
-                                let lidx = (((py - min_y) * bw + (px - min_x)) * 4) as usize;
-                                if lidx + 3 < layer_buf.len() {
-                                    let sample = |channel: usize| -> u8 {
-                                        let a = img.pixels[tidx + channel] as f32;
-                                        let b = next_img
-                                            .as_ref()
-                                            .filter(|next| next.width == img.width && next.height == img.height)
-                                            .and_then(|next| {
-                                                let next_idx = ((tex_y * next.width + tex_x) * 4) as usize;
-                                                next.pixels.get(next_idx + channel).copied()
-                                            })
-                                            .map(f32::from)
-                                            .unwrap_or(a);
-                                        (a + (b - a) * blend_t).round().clamp(0.0, 255.0) as u8
-                                    };
-                                    let src_a = (f32::from(sample(3)) / 255.0) * mask_alpha;
-                                    layer_buf[lidx] = sample(0);
-                                    layer_buf[lidx + 1] = sample(1);
-                                    layer_buf[lidx + 2] = sample(2);
-                                    layer_buf[lidx + 3] = (src_a * 255.0) as u8;
-                                }
+                    if (0.0..=1.0).contains(&u) && (0.0..=1.0).contains(&v) {
+                        let tex_x = ((u * (img_w - 1.0)).round() as u32).min(img_w as u32 - 1);
+                        let tex_y = ((v * (img_h - 1.0)).round() as u32).min(img_h as u32 - 1);
+                        let tidx = ((tex_y * img.width + tex_x) * 4) as usize;
+                        if tidx + 3 < img.pixels.len() {
+                            let lidx = (((py - min_y) * bw + (px - min_x)) * 4) as usize;
+                            if lidx + 3 < layer_buf.len() {
+                                let sample = |channel: usize| -> u8 {
+                                    let a = img.pixels[tidx + channel] as f32;
+                                    let b = next_img
+                                        .as_ref()
+                                        .filter(|next| {
+                                            next.width == img.width && next.height == img.height
+                                        })
+                                        .and_then(|next| {
+                                            let next_idx =
+                                                ((tex_y * next.width + tex_x) * 4) as usize;
+                                            next.pixels.get(next_idx + channel).copied()
+                                        })
+                                        .map(f32::from)
+                                        .unwrap_or(a);
+                                    (a + (b - a) * blend_t).round().clamp(0.0, 255.0) as u8
+                                };
+                                let src_a = (f32::from(sample(3)) / 255.0) * mask_alpha;
+                                layer_buf[lidx] = sample(0);
+                                layer_buf[lidx + 1] = sample(1);
+                                layer_buf[lidx + 2] = sample(2);
+                                layer_buf[lidx + 3] = (src_a * 255.0) as u8;
                             }
                         }
                     }
                 }
             }
-        });
+        }
+    });
 }
 
 /// Flat rasterization for solid (and other non-shape) layers.
 fn rasterize_flat_layer(ctx: RasterCtx<'_>) {
-        let RasterCtx {
+    let RasterCtx {
         masks,
         min_x,
         min_y,
@@ -209,36 +209,36 @@ fn rasterize_flat_layer(ctx: RasterCtx<'_>) {
         layer_buf,
         ..
     } = ctx;
-        // Other non-shape layers: flat rasterization with mask support
-        for py in min_y..max_y {
-            for px in min_x..max_x {
-                // Vector mask check with feathering support
-                let mut mask_alpha = 1.0;
-                if !masks.is_empty() {
-                    mask_alpha = compute_combined_mask_coverage(px as f32, py as f32, masks);
-                }
+    // Other non-shape layers: flat rasterization with mask support
+    for py in min_y..max_y {
+        for px in min_x..max_x {
+            // Vector mask check with feathering support
+            let mut mask_alpha = 1.0;
+            if !masks.is_empty() {
+                mask_alpha = compute_combined_mask_coverage(px as f32, py as f32, masks);
+            }
 
-                if mask_alpha <= 0.001 {
-                    continue; // fully masked out pixel
-                }
+            if mask_alpha <= 0.001 {
+                continue; // fully masked out pixel
+            }
 
-                // Inverse rotation & scale transform to local space
-                let dx = px as f32 - cx;
-                let dy = py as f32 - cy;
-                let lx = dx * cos_r + dy * sin_r;
-                let ly = -dx * sin_r + dy * cos_r;
+            // Inverse rotation & scale transform to local space
+            let dx = px as f32 - cx;
+            let dy = py as f32 - cy;
+            let lx = dx * cos_r + dy * sin_r;
+            let ly = -dx * sin_r + dy * cos_r;
 
-                if lx >= -bounds_x && lx <= bounds_x && ly >= -bounds_y && ly <= bounds_y {
-                    let lidx = (((py - min_y) * bw + (px - min_x)) * 4) as usize;
-                    if lidx + 3 >= layer_buf.len() {
-                        continue;
-                    }
-                    let src_a = base_color[3] * mask_alpha;
-                    layer_buf[lidx] = (base_color[0] * 255.0) as u8;
-                    layer_buf[lidx + 1] = (base_color[1] * 255.0) as u8;
-                    layer_buf[lidx + 2] = (base_color[2] * 255.0) as u8;
-                    layer_buf[lidx + 3] = (src_a * 255.0) as u8;
+            if lx >= -bounds_x && lx <= bounds_x && ly >= -bounds_y && ly <= bounds_y {
+                let lidx = (((py - min_y) * bw + (px - min_x)) * 4) as usize;
+                if lidx + 3 >= layer_buf.len() {
+                    continue;
                 }
+                let src_a = base_color[3] * mask_alpha;
+                layer_buf[lidx] = (base_color[0] * 255.0) as u8;
+                layer_buf[lidx + 1] = (base_color[1] * 255.0) as u8;
+                layer_buf[lidx + 2] = (base_color[2] * 255.0) as u8;
+                layer_buf[lidx + 3] = (src_a * 255.0) as u8;
             }
         }
+    }
 }

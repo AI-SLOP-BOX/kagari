@@ -325,9 +325,9 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
                 match crate::core::ocio_color::LoadedOcioConfig::load(&path) {
                     Ok(config) => {
                         let lut_size = config.lut.size;
-                        crate::core::ocio_color::set_active_lut(Some(
-                            std::sync::Arc::new(config.lut),
-                        ));
+                        crate::core::ocio_color::set_active_lut(Some(std::sync::Arc::new(
+                            config.lut,
+                        )));
                         ui.ctx().data_mut(|d| {
                             d.insert_temp(egui::Id::new("ae_colorspace_lut"), 3usize);
                             d.insert_temp(
@@ -345,7 +345,9 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
                             lut_size, lut_size, lut_size
                         ));
                     }
-                    Err(error) => app.toasts.error(format!("Could not load OCIO config: {error}")),
+                    Err(error) => app
+                        .toasts
+                        .error(format!("Could not load OCIO config: {error}")),
                 }
             }
             if let Some(path) = ui

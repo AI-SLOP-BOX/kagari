@@ -97,7 +97,9 @@ pub fn draw_render_queue_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
         }
 
         if custom_widgets::ae_button(ui, "📡 Export Farm Job Manifest")
-            .on_hover_text("Write the current render queue as a Deadline/OpenCue-compatible JSON job")
+            .on_hover_text(
+                "Write the current render queue as a Deadline/OpenCue-compatible JSON job",
+            )
             .clicked()
         {
             let default_name = format!("{}_farm_job.json", comp_name.replace(['/', '\\'], "_"));
@@ -135,10 +137,8 @@ pub fn draw_render_queue_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                 {
                     Ok(()) => {
                         crate::ui::project_io::reveal_in_file_manager(&path);
-                        app.toasts.info(format!(
-                            "Farm job manifest exported: {}",
-                            path.display()
-                        ));
+                        app.toasts
+                            .info(format!("Farm job manifest exported: {}", path.display()));
                     }
                     Err(error) => app
                         .toasts
@@ -152,22 +152,24 @@ pub fn draw_render_queue_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
 
     // Queue Items List Display
     if !app.render_queue_items.is_empty() {
-        let (done, rendering, failed) = app.render_queue_items.iter().fold(
-            (0, 0, 0),
-            |(done, rendering, failed), name| {
-                match app
-                    .render_item_status
-                    .get(name)
-                    .copied()
-                    .unwrap_or(crate::app_state::QueueItemStatus::Queued)
-                {
-                    crate::app_state::QueueItemStatus::Done => (done + 1, rendering, failed),
-                    crate::app_state::QueueItemStatus::Rendering => (done, rendering + 1, failed),
-                    crate::app_state::QueueItemStatus::Failed => (done, rendering, failed + 1),
-                    crate::app_state::QueueItemStatus::Queued => (done, rendering, failed),
-                }
-            },
-        );
+        let (done, rendering, failed) =
+            app.render_queue_items
+                .iter()
+                .fold((0, 0, 0), |(done, rendering, failed), name| {
+                    match app
+                        .render_item_status
+                        .get(name)
+                        .copied()
+                        .unwrap_or(crate::app_state::QueueItemStatus::Queued)
+                    {
+                        crate::app_state::QueueItemStatus::Done => (done + 1, rendering, failed),
+                        crate::app_state::QueueItemStatus::Rendering => {
+                            (done, rendering + 1, failed)
+                        }
+                        crate::app_state::QueueItemStatus::Failed => (done, rendering, failed + 1),
+                        crate::app_state::QueueItemStatus::Queued => (done, rendering, failed),
+                    }
+                });
         let queued = app.render_queue_items.len() - done - rendering - failed;
         ui.label(
             egui::RichText::new(format!(
@@ -196,18 +198,12 @@ pub fn draw_render_queue_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                         .copied()
                         .unwrap_or(crate::app_state::QueueItemStatus::Queued)
                     {
-                        crate::app_state::QueueItemStatus::Queued => {
-                            ("Queued", colors::TEXT_MUTED)
-                        }
+                        crate::app_state::QueueItemStatus::Queued => ("Queued", colors::TEXT_MUTED),
                         crate::app_state::QueueItemStatus::Rendering => {
                             ("Rendering", colors::ACCENT_GREEN)
                         }
-                        crate::app_state::QueueItemStatus::Done => {
-                            ("Done", colors::ACCENT_CYAN)
-                        }
-                        crate::app_state::QueueItemStatus::Failed => {
-                            ("Failed", colors::ACCENT_RED)
-                        }
+                        crate::app_state::QueueItemStatus::Done => ("Done", colors::ACCENT_CYAN),
+                        crate::app_state::QueueItemStatus::Failed => ("Failed", colors::ACCENT_RED),
                     };
                     ui.horizontal(|ui| {
                         let text = format!("{}. {}", idx + 1, q_name);
@@ -485,10 +481,8 @@ mod tests {
         app.render_queue_items = vec![comp_name.clone(), "Missing Comp".into()];
         app.render_item_status
             .insert(comp_name, QueueItemStatus::Rendering);
-        app.render_item_status.insert(
-            "Missing Comp".into(),
-            QueueItemStatus::Failed,
-        );
+        app.render_item_status
+            .insert("Missing Comp".into(), QueueItemStatus::Failed);
 
         let ctx = egui::Context::default();
         let _ = ctx.run(

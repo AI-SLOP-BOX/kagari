@@ -317,8 +317,7 @@ fn generated_safe_expression_trees_match_their_oracle() {
                     "clamp({}, -100.0, 100.0) + clamp({}, -100.0, 100.0)",
                     left.source, right.source
                 ),
-                expected: left.expected.clamp(-100.0, 100.0)
-                    + right.expected.clamp(-100.0, 100.0),
+                expected: left.expected.clamp(-100.0, 100.0) + right.expected.clamp(-100.0, 100.0),
             },
         }
     }
@@ -457,7 +456,10 @@ fn invalid_effect_buffer_shape_is_a_safe_no_op() {
             0,
             24,
         );
-        assert_eq!(pixels, before, "invalid {width}x{height}/{length} buffer mutated");
+        assert_eq!(
+            pixels, before,
+            "invalid {width}x{height}/{length} buffer mutated"
+        );
     }
 }
 
@@ -658,7 +660,11 @@ fn mfr_cancellation_keeps_frame_identity_and_accounting_consistent() {
         })
     });
 
-    assert_eq!(result, Ok(()), "cooperative cancellation is not a render error");
+    assert_eq!(
+        result,
+        Ok(()),
+        "cooperative cancellation is not a render error"
+    );
     assert!(queue.is_cancelled(), "workers must publish cancellation");
     let seen = seen.lock().unwrap_or_else(|error| error.into_inner());
     let unique: HashSet<_> = seen.iter().cloned().collect();

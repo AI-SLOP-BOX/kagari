@@ -64,7 +64,8 @@ impl AudioCorrectionSettings {
         if !self.presence_gain_db.is_finite() || !(-24.0..=24.0).contains(&self.presence_gain_db) {
             return Err("audio correction presence gain is invalid");
         }
-        if !self.presence_freq_hz.is_finite() || !(60.0..=18_000.0).contains(&self.presence_freq_hz) {
+        if !self.presence_freq_hz.is_finite() || !(60.0..=18_000.0).contains(&self.presence_freq_hz)
+        {
             return Err("audio correction presence frequency is invalid");
         }
         if !self.compressor_threshold_db.is_finite()
@@ -75,16 +76,23 @@ impl AudioCorrectionSettings {
         if !self.compressor_ratio.is_finite() || !(1.0..=20.0).contains(&self.compressor_ratio) {
             return Err("audio correction compressor ratio is invalid");
         }
-        if !self.compressor_attack_ms.is_finite() || !(0.1..=200.0).contains(&self.compressor_attack_ms) {
+        if !self.compressor_attack_ms.is_finite()
+            || !(0.1..=200.0).contains(&self.compressor_attack_ms)
+        {
             return Err("audio correction compressor attack is invalid");
         }
-        if !self.compressor_release_ms.is_finite() || !(1.0..=2_000.0).contains(&self.compressor_release_ms) {
+        if !self.compressor_release_ms.is_finite()
+            || !(1.0..=2_000.0).contains(&self.compressor_release_ms)
+        {
             return Err("audio correction compressor release is invalid");
         }
-        if !self.compressor_makeup_db.is_finite() || !(-24.0..=24.0).contains(&self.compressor_makeup_db) {
+        if !self.compressor_makeup_db.is_finite()
+            || !(-24.0..=24.0).contains(&self.compressor_makeup_db)
+        {
             return Err("audio correction compressor makeup is invalid");
         }
-        if !self.limiter_ceiling_db.is_finite() || !(-12.0..=0.0).contains(&self.limiter_ceiling_db) {
+        if !self.limiter_ceiling_db.is_finite() || !(-12.0..=0.0).contains(&self.limiter_ceiling_db)
+        {
             return Err("audio correction limiter ceiling is invalid");
         }
         if !self.wet_dry.is_finite() || !(0.0..=1.0).contains(&self.wet_dry) {

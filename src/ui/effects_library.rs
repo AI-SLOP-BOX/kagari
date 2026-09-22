@@ -15,7 +15,8 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
             .layers
             .iter()
             .any(|layer| layer.id == "demo_bg");
-    let compact_right_dock = ctx.screen_rect().width() >= 950.0 && ctx.screen_rect().width() < 1200.0;
+    let compact_right_dock =
+        ctx.screen_rect().width() >= 950.0 && ctx.screen_rect().width() < 1200.0;
     let narrow_right_dock = ctx.screen_rect().width() < 950.0;
     let compact_inspector_drawer = ctx
         .data(|data| data.get_temp::<bool>(egui::Id::new("compact_inspector_drawer")))
@@ -45,22 +46,43 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
     egui::SidePanel::right("right_panel")
         .resizable(true)
         .default_width(right_width)
-        .min_width(if reference_demo { 300.0 } else if compact_right_dock { 350.0 } else if narrow_right_dock { 250.0 } else { 230.0 })
-        .max_width(if reference_demo { 430.0 } else if compact_right_dock { 350.0 } else if narrow_right_dock { 300.0 } else { max_width.max(320.0) })
+        .min_width(if reference_demo {
+            300.0
+        } else if compact_right_dock {
+            350.0
+        } else if narrow_right_dock {
+            250.0
+        } else {
+            230.0
+        })
+        .max_width(if reference_demo {
+            430.0
+        } else if compact_right_dock {
+            350.0
+        } else if narrow_right_dock {
+            300.0
+        } else {
+            max_width.max(320.0)
+        })
         .frame(if reference_demo {
             egui::Frame::none()
                 .fill(egui::Color32::from_rgb(13, 22, 29))
                 .inner_margin(egui::Margin::symmetric(21.0, 0.0))
         } else {
-            egui::Frame::default()
-                .inner_margin(egui::Margin::symmetric(8.0, 0.0))
+            egui::Frame::default().inner_margin(egui::Margin::symmetric(8.0, 0.0))
         })
         .show(ctx, |ui| {
             ui.add_space(7.0);
             ui.horizontal(|ui| {
                 let labels = [(30, "Properties"), (0, "Effect Controls"), (2, "Info")];
                 for (index, label) in labels {
-                    if crate::ui::theme::draw_custom_tab(ui, app.ui_tabs.right_tab_idx == index, label).clicked() {
+                    if crate::ui::theme::draw_custom_tab(
+                        ui,
+                        app.ui_tabs.right_tab_idx == index,
+                        label,
+                    )
+                    .clicked()
+                    {
                         app.ui_tabs.right_tab_idx = index;
                     }
                 }
@@ -68,220 +90,236 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
             ui.add_space(7.0);
             ui.separator();
 
-            egui::ScrollArea::vertical().id_salt("panel_content").show(ui, |ui| {
-            let mut next_frame = None;
-            let mut current_frame_reset = None;
-            let pre_edit_snapshot = if !app.drag_active() {
-                Some(app.history.current().clone())
-            } else {
-                None
-            };
-            let history_generation_before = app.history.generation();
+            egui::ScrollArea::vertical()
+                .id_salt("panel_content")
+                .show(ui, |ui| {
+                    let mut next_frame = None;
+                    let mut current_frame_reset = None;
+                    let pre_edit_snapshot = if !app.drag_active() {
+                        Some(app.history.current().clone())
+                    } else {
+                        None
+                    };
+                    let history_generation_before = app.history.generation();
 
-            // Track whether a continuous interaction (slider drag) occurred.
-            // Discrete actions are committed immediately via EditorSession.
-            let mut slider_changed = false;
+                    // Track whether a continuous interaction (slider drag) occurred.
+                    // Discrete actions are committed immediately via EditorSession.
+                    let mut slider_changed = false;
 
-            if app.ui_tabs.right_tab_idx == 3 {
-                crate::ui::tracker_panel::draw_tracker_panel(app, ui, *current_frame);
-            } else if app.ui_tabs.right_tab_idx == 4 {
-                let total_frames = app.history.current().active_composition().duration_frames;
-                crate::ui::transport_panel::draw_transport_panel(
-                    app,
-                    ui,
-                    current_frame,
-                    total_frames,
-                );
-            } else if app.ui_tabs.right_tab_idx == 30 {
-                draw_effect_controls(
-                    app,
-                    ui,
-                    *current_frame,
-                    &mut next_frame,
-                    &mut slider_changed,
-                );
-            } else if app.ui_tabs.right_tab_idx == 5 {
-                crate::ui::paint_panel::draw_paint_panel(app, ui);
-            } else if app.ui_tabs.right_tab_idx == 6 {
-                crate::ui::marker_panel::draw_marker_panel(app, ui, *current_frame);
-            } else if app.ui_tabs.right_tab_idx == 7 {
-                crate::ui::audio_meter::draw_content(app, ui);
-                ui.add_space(8.0);
-                crate::ui::audio_panel::draw_audio_panel(app, ui);
-            } else if app.ui_tabs.right_tab_idx == 8 {
-                crate::ui::time_remap_panel::draw_time_remap_panel(app, ui);
-            } else if app.ui_tabs.right_tab_idx == 9 {
-                crate::ui::mask_panel::draw_mask_panel(app, ui);
-            } else if app.ui_tabs.right_tab_idx == 10 {
-                crate::ui::expression_panel::draw_expression_panel(app, ui);
-            } else if app.ui_tabs.right_tab_idx == 11 {
-                crate::ui::essential_graphics::draw_essential_graphics(app, ui);
-            } else if app.ui_tabs.right_tab_idx == 12 {
-                crate::ui::content_aware_fill::draw_content_aware_fill(app, ui);
-            } else if app.ui_tabs.right_tab_idx == 13 {
-                crate::ui::metadata_panel::draw_metadata_panel(app, ui);
-            } else if app.ui_tabs.right_tab_idx == 14 {
-                crate::ui::scripting_console::draw_scripting_console(app, ui);
-            } else if app.ui_tabs.right_tab_idx == 15 {
-                crate::ui::workspace_manager::draw_workspace_manager(app, ui);
-            } else if app.ui_tabs.right_tab_idx == 16 {
-                crate::ui::color_management::draw_color_management(app, ui);
-            } else if app.ui_tabs.right_tab_idx == 17 {
-                crate::ui::flowchart_inspector::draw_flowchart_inspector(app, ui);
-            } else if app.ui_tabs.right_tab_idx == 18 {
-                crate::ui::camera_views::draw_camera_views(app, ui);
-            } else if app.ui_tabs.right_tab_idx == 19 {
-                crate::ui::lumetri_color::draw_lumetri_color(app, ui);
-            } else if app.ui_tabs.right_tab_idx == 20 {
-                crate::ui::cc_libraries::draw_cc_libraries(app, ui);
-            } else if app.ui_tabs.right_tab_idx == 21 {
-                crate::ui::font_picker::draw_font_picker(app, ui);
-            } else if app.ui_tabs.right_tab_idx == 22 {
-                crate::ui::render_presets::draw_render_presets(app, ui);
-            } else if app.ui_tabs.right_tab_idx == 23 {
-                crate::ui::audio_mixer::draw_audio_mixer(app, ui);
-            } else if app.ui_tabs.right_tab_idx == 24 {
-                let cf = app.playback.current_frame;
-                crate::ui::speed_graph_options::draw_speed_graph_options(app, ui, cf);
-            } else if app.ui_tabs.right_tab_idx == 25 {
-                crate::ui::camera_light_options::draw_camera_light_options(app, ui);
-            } else if app.ui_tabs.right_tab_idx == 26 {
-                crate::ui::layer_styles::draw_layer_styles(app, ui);
-            } else if app.ui_tabs.right_tab_idx == 27 {
-                draw_character_tab(app, ui, *current_frame);
-            } else if app.ui_tabs.right_tab_idx == 28 {
-                crate::ui::paragraph_panel::draw_paragraph_panel(app, ui);
-            } else if app.ui_tabs.right_tab_idx == 1 {
-                crate::ui::align_panel::draw_align_panel(app, ui);
-            } else if app.ui_tabs.right_tab_idx == 2 {
-                ui.heading("Info");
-                ui.separator();
-                if let Some(idx) = app.selection.selected_layer_idx {
-                    let comp = app.history.current().active_composition();
-                    if idx < comp.layers.len() {
-                        let layer = &comp.layers[idx];
-                        ui.label(format!("Layer: {}", layer.name));
-                        ui.label(format!("ID: {}", layer.id));
-                        let pos = layer.transform.position.evaluate(*current_frame);
-                        let scale = layer.transform.scale.evaluate(*current_frame);
-                        let rot = layer.transform.rotation.evaluate(*current_frame);
-                        let op = layer.transform.opacity.evaluate(*current_frame);
-                        ui.weak(format!("Position: ({:.1}, {:.1})", pos[0], pos[1]));
-                        ui.weak(format!("Scale: ({:.1}%, {:.1}%)", scale[0], scale[1]));
-                        ui.weak(format!("Rotation: {:.1}°", rot));
-                        ui.weak(format!("Opacity: {:.1}%", op));
-                    }
-                } else {
-                    ui.weak("No layer selected.");
-                }
-            } else {
-                draw_effects_presets_tab(
-                    app,
-                    ui,
-                    *current_frame,
-                    &mut next_frame,
-                    &mut slider_changed,
-                );
-            }
-
-            ui.separator();
-            ui.collapsing("External editor link", |ui| {
-            ui.add_space(4.0);
-
-            if let Some(app_name) = &app.connected_app {
-                ui.horizontal(|ui| {
-                    ui.label("Status:");
-                    ui.colored_label(
-                        colors::ACCENT_GREEN,
-                        format!("[ONLINE] Connected to {}", app_name),
-                    );
-                });
-            } else {
-                ui.horizontal(|ui| {
-                    ui.label("Status:");
-                    ui.colored_label(colors::ACCENT_RED, "[OFFLINE] Listening on 127.0.0.1:9000");
-                });
-            }
-            ui.add_space(8.0);
-
-            ui.label("OTIO File Path:");
-            ui.horizontal(|ui| {
-                ui.text_edit_singleline(&mut app.otio_path);
-            });
-
-            ui.horizontal(|ui| {
-                if ui.button("Import OTIO").clicked() {
-                    if let Ok(json_str) = crate::core::project_migration::read_bounded_text_file(
-                        std::path::Path::new(&app.otio_path),
-                        crate::core::project_migration::MAX_PROJECT_JSON_BYTES,
-                    ) {
-                        if let Ok(otio_timeline) =
-                            crate::core::integration::OtioTimeline::from_json(&json_str)
-                        {
-                            let new_comp = otio_timeline.to_composition();
-                            let mut session = EditorSession::new(&mut app.history, "Import OTIO");
-                            let comp = session.current_mut().active_composition_mut();
-                            comp.name = new_comp.name;
-                            comp.width = new_comp.width;
-                            comp.height = new_comp.height;
-                            comp.fps = new_comp.fps;
-                            comp.duration_frames = new_comp.duration_frames;
-                            comp.layers = new_comp.layers;
-                            session.commit();
-                            current_frame_reset = Some(0);
-                            log::info!("Successfully imported OTIO composition");
+                    if app.ui_tabs.right_tab_idx == 3 {
+                        crate::ui::tracker_panel::draw_tracker_panel(app, ui, *current_frame);
+                    } else if app.ui_tabs.right_tab_idx == 4 {
+                        let total_frames =
+                            app.history.current().active_composition().duration_frames;
+                        crate::ui::transport_panel::draw_transport_panel(
+                            app,
+                            ui,
+                            current_frame,
+                            total_frames,
+                        );
+                    } else if app.ui_tabs.right_tab_idx == 30 {
+                        draw_effect_controls(
+                            app,
+                            ui,
+                            *current_frame,
+                            &mut next_frame,
+                            &mut slider_changed,
+                        );
+                    } else if app.ui_tabs.right_tab_idx == 5 {
+                        crate::ui::paint_panel::draw_paint_panel(app, ui);
+                    } else if app.ui_tabs.right_tab_idx == 6 {
+                        crate::ui::marker_panel::draw_marker_panel(app, ui, *current_frame);
+                    } else if app.ui_tabs.right_tab_idx == 7 {
+                        crate::ui::audio_meter::draw_content(app, ui);
+                        ui.add_space(8.0);
+                        crate::ui::audio_panel::draw_audio_panel(app, ui);
+                    } else if app.ui_tabs.right_tab_idx == 8 {
+                        crate::ui::time_remap_panel::draw_time_remap_panel(app, ui);
+                    } else if app.ui_tabs.right_tab_idx == 9 {
+                        crate::ui::mask_panel::draw_mask_panel(app, ui);
+                    } else if app.ui_tabs.right_tab_idx == 10 {
+                        crate::ui::expression_panel::draw_expression_panel(app, ui);
+                    } else if app.ui_tabs.right_tab_idx == 11 {
+                        crate::ui::essential_graphics::draw_essential_graphics(app, ui);
+                    } else if app.ui_tabs.right_tab_idx == 12 {
+                        crate::ui::content_aware_fill::draw_content_aware_fill(app, ui);
+                    } else if app.ui_tabs.right_tab_idx == 13 {
+                        crate::ui::metadata_panel::draw_metadata_panel(app, ui);
+                    } else if app.ui_tabs.right_tab_idx == 14 {
+                        crate::ui::scripting_console::draw_scripting_console(app, ui);
+                    } else if app.ui_tabs.right_tab_idx == 15 {
+                        crate::ui::workspace_manager::draw_workspace_manager(app, ui);
+                    } else if app.ui_tabs.right_tab_idx == 16 {
+                        crate::ui::color_management::draw_color_management(app, ui);
+                    } else if app.ui_tabs.right_tab_idx == 17 {
+                        crate::ui::flowchart_inspector::draw_flowchart_inspector(app, ui);
+                    } else if app.ui_tabs.right_tab_idx == 18 {
+                        crate::ui::camera_views::draw_camera_views(app, ui);
+                    } else if app.ui_tabs.right_tab_idx == 19 {
+                        crate::ui::lumetri_color::draw_lumetri_color(app, ui);
+                    } else if app.ui_tabs.right_tab_idx == 20 {
+                        crate::ui::cc_libraries::draw_cc_libraries(app, ui);
+                    } else if app.ui_tabs.right_tab_idx == 21 {
+                        crate::ui::font_picker::draw_font_picker(app, ui);
+                    } else if app.ui_tabs.right_tab_idx == 22 {
+                        crate::ui::render_presets::draw_render_presets(app, ui);
+                    } else if app.ui_tabs.right_tab_idx == 23 {
+                        crate::ui::audio_mixer::draw_audio_mixer(app, ui);
+                    } else if app.ui_tabs.right_tab_idx == 24 {
+                        let cf = app.playback.current_frame;
+                        crate::ui::speed_graph_options::draw_speed_graph_options(app, ui, cf);
+                    } else if app.ui_tabs.right_tab_idx == 25 {
+                        crate::ui::camera_light_options::draw_camera_light_options(app, ui);
+                    } else if app.ui_tabs.right_tab_idx == 26 {
+                        crate::ui::layer_styles::draw_layer_styles(app, ui);
+                    } else if app.ui_tabs.right_tab_idx == 27 {
+                        draw_character_tab(app, ui, *current_frame);
+                    } else if app.ui_tabs.right_tab_idx == 28 {
+                        crate::ui::paragraph_panel::draw_paragraph_panel(app, ui);
+                    } else if app.ui_tabs.right_tab_idx == 1 {
+                        crate::ui::align_panel::draw_align_panel(app, ui);
+                    } else if app.ui_tabs.right_tab_idx == 2 {
+                        ui.heading("Info");
+                        ui.separator();
+                        if let Some(idx) = app.selection.selected_layer_idx {
+                            let comp = app.history.current().active_composition();
+                            if idx < comp.layers.len() {
+                                let layer = &comp.layers[idx];
+                                ui.label(format!("Layer: {}", layer.name));
+                                ui.label(format!("ID: {}", layer.id));
+                                let pos = layer.transform.position.evaluate(*current_frame);
+                                let scale = layer.transform.scale.evaluate(*current_frame);
+                                let rot = layer.transform.rotation.evaluate(*current_frame);
+                                let op = layer.transform.opacity.evaluate(*current_frame);
+                                ui.weak(format!("Position: ({:.1}, {:.1})", pos[0], pos[1]));
+                                ui.weak(format!("Scale: ({:.1}%, {:.1}%)", scale[0], scale[1]));
+                                ui.weak(format!("Rotation: {:.1}°", rot));
+                                ui.weak(format!("Opacity: {:.1}%", op));
+                            }
                         } else {
-                            log::error!("Failed to parse OTIO JSON");
+                            ui.weak("No layer selected.");
                         }
                     } else {
-                        log::error!("Failed to read OTIO file from path: {}", app.otio_path);
+                        draw_effects_presets_tab(
+                            app,
+                            ui,
+                            *current_frame,
+                            &mut next_frame,
+                            &mut slider_changed,
+                        );
                     }
-                }
-                if ui.button("Export OTIO").clicked() {
-                    let active_comp = app.history.current().active_composition();
-                    let otio_timeline =
-                        crate::core::integration::OtioTimeline::from_composition(active_comp);
-                    if let Ok(json_str) = otio_timeline.to_json() {
-                        if std::fs::write(&app.otio_path, json_str).is_ok() {
-                            log::info!(
-                                "Successfully exported OTIO composition to: {}",
-                                app.otio_path
-                            );
+
+                    ui.separator();
+                    ui.collapsing("External editor link", |ui| {
+                        ui.add_space(4.0);
+
+                        if let Some(app_name) = &app.connected_app {
+                            ui.horizontal(|ui| {
+                                ui.label("Status:");
+                                ui.colored_label(
+                                    colors::ACCENT_GREEN,
+                                    format!("[ONLINE] Connected to {}", app_name),
+                                );
+                            });
                         } else {
-                            log::error!("Failed to write OTIO file to path: {}", app.otio_path);
+                            ui.horizontal(|ui| {
+                                ui.label("Status:");
+                                ui.colored_label(
+                                    colors::ACCENT_RED,
+                                    "[OFFLINE] Listening on 127.0.0.1:9000",
+                                );
+                            });
+                        }
+                        ui.add_space(8.0);
+
+                        ui.label("OTIO File Path:");
+                        ui.horizontal(|ui| {
+                            ui.text_edit_singleline(&mut app.otio_path);
+                        });
+
+                        ui.horizontal(|ui| {
+                            if ui.button("Import OTIO").clicked() {
+                                if let Ok(json_str) =
+                                    crate::core::project_migration::read_bounded_text_file(
+                                        std::path::Path::new(&app.otio_path),
+                                        crate::core::project_migration::MAX_PROJECT_JSON_BYTES,
+                                    )
+                                {
+                                    if let Ok(otio_timeline) =
+                                        crate::core::integration::OtioTimeline::from_json(&json_str)
+                                    {
+                                        let new_comp = otio_timeline.to_composition();
+                                        let mut session =
+                                            EditorSession::new(&mut app.history, "Import OTIO");
+                                        let comp = session.current_mut().active_composition_mut();
+                                        comp.name = new_comp.name;
+                                        comp.width = new_comp.width;
+                                        comp.height = new_comp.height;
+                                        comp.fps = new_comp.fps;
+                                        comp.duration_frames = new_comp.duration_frames;
+                                        comp.layers = new_comp.layers;
+                                        session.commit();
+                                        current_frame_reset = Some(0);
+                                        log::info!("Successfully imported OTIO composition");
+                                    } else {
+                                        log::error!("Failed to parse OTIO JSON");
+                                    }
+                                } else {
+                                    log::error!(
+                                        "Failed to read OTIO file from path: {}",
+                                        app.otio_path
+                                    );
+                                }
+                            }
+                            if ui.button("Export OTIO").clicked() {
+                                let active_comp = app.history.current().active_composition();
+                                let otio_timeline =
+                                    crate::core::integration::OtioTimeline::from_composition(
+                                        active_comp,
+                                    );
+                                if let Ok(json_str) = otio_timeline.to_json() {
+                                    if std::fs::write(&app.otio_path, json_str).is_ok() {
+                                        log::info!(
+                                            "Successfully exported OTIO composition to: {}",
+                                            app.otio_path
+                                        );
+                                    } else {
+                                        log::error!(
+                                            "Failed to write OTIO file to path: {}",
+                                            app.otio_path
+                                        );
+                                    }
+                                }
+                            }
+                        });
+                    });
+
+                    // Continuous interaction commit: slider drags and other live parameter
+                    // edits go through the drag transaction API (begin on drag start,
+                    // commit on drag end). This produces exactly one undo entry per drag
+                    // regardless of how many intermediate value updates occur.
+                    if slider_changed && app.history.generation() == history_generation_before {
+                        let is_pointer_down = ui.input(|i| i.pointer.any_down());
+                        if is_pointer_down {
+                            if !app.drag_active() {
+                                if let Some(snapshot) = pre_edit_snapshot {
+                                    app.begin_drag_with_snapshot(snapshot, "Effect Parameter Edit");
+                                }
+                            }
+                        } else if app.drag_active() {
+                            app.commit_drag();
                         }
                     }
-                }
-            });
-
-            });
-
-            // Continuous interaction commit: slider drags and other live parameter
-            // edits go through the drag transaction API (begin on drag start,
-            // commit on drag end). This produces exactly one undo entry per drag
-            // regardless of how many intermediate value updates occur.
-            if slider_changed && app.history.generation() == history_generation_before {
-                let is_pointer_down = ui.input(|i| i.pointer.any_down());
-                if is_pointer_down {
-                    if !app.drag_active() {
-                        if let Some(snapshot) = pre_edit_snapshot {
-                            app.begin_drag_with_snapshot(snapshot, "Effect Parameter Edit");
-                        }
+                    if let Some(nf) = next_frame {
+                        *current_frame = nf;
                     }
-                } else if app.drag_active() {
-                    app.commit_drag();
-                }
-            }
-            if let Some(nf) = next_frame {
-                *current_frame = nf;
-            }
-            if let Some(cf) = current_frame_reset {
-                app.playback.current_frame = cf;
-                *current_frame = cf;
-            }
+                    if let Some(cf) = current_frame_reset {
+                        app.playback.current_frame = cf;
+                        *current_frame = cf;
+                    }
 
-            crate::ui::effects_controls::draw_particle_emitter_controls(app, ui);
-            });
+                    crate::ui::effects_controls::draw_particle_emitter_controls(app, ui);
+                });
         });
 }
 
@@ -365,22 +403,27 @@ fn draw_effect_controls(
     egui::CollapsingHeader::new("Color")
         .default_open(false)
         .show(ui, |ui| {
-        for (label, initial, range) in [
-            ("Exposure", 0.0_f32, -2.0..=2.0),
-            ("Contrast", 0.10_f32, -1.0..=1.0),
-            ("Highlights", -0.20_f32, -1.0..=1.0),
-            ("Shadows", 0.30_f32, -1.0..=1.0),
-            ("Saturation", 1.0_f32, 0.0..=2.0),
-        ] {
-            let mut value = initial;
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(label).color(colors::TEXT_SECONDARY));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(egui::RichText::new(format!("{value:.2}")).color(colors::ACCENT_BLUE));
-                    ui.add_sized([110.0, 16.0], egui::Slider::new(&mut value, range).show_value(false));
+            for (label, initial, range) in [
+                ("Exposure", 0.0_f32, -2.0..=2.0),
+                ("Contrast", 0.10_f32, -1.0..=1.0),
+                ("Highlights", -0.20_f32, -1.0..=1.0),
+                ("Shadows", 0.30_f32, -1.0..=1.0),
+                ("Saturation", 1.0_f32, 0.0..=2.0),
+            ] {
+                let mut value = initial;
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(label).color(colors::TEXT_SECONDARY));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(
+                            egui::RichText::new(format!("{value:.2}")).color(colors::ACCENT_BLUE),
+                        );
+                        ui.add_sized(
+                            [110.0, 16.0],
+                            egui::Slider::new(&mut value, range).show_value(false),
+                        );
+                    });
                 });
-            });
-        }
+            }
         });
     ui.add_space(4.0);
     ui.heading("Effects");
@@ -627,8 +670,7 @@ fn draw_effect_controls(
             let mut missing_name: Option<String> = None;
             if idx < comp.layers.len() && i < comp.layers[idx].effects.len() {
                 let fx = &mut comp.layers[idx].effects[i];
-                match crate::ui::effects_controls::presets::fresh_default_for(&fx.effect_type)
-                {
+                match crate::ui::effects_controls::presets::fresh_default_for(&fx.effect_type) {
                     Some(fresh) => {
                         fx.effect_type = fresh;
                         reset_name = Some(fx.name.clone());
@@ -895,75 +937,88 @@ fn draw_effects_presets_tab(
     egui::Frame::none()
         .inner_margin(egui::Margin::symmetric(0.0, 4.0))
         .show(ui, |ui| {
-        ui.label(
-            egui::RichText::new("Motion VFX Presets")
-                .strong()
-                .color(colors::ACCENT_CYAN),
-        );
-        ui.small("Quick-add effect presets:");
-        ui.horizontal(|ui| {
-            ui.add(
-                egui::TextEdit::singleline(&mut app.ui_tabs.effects_search_query)
-                    .hint_text("e.g. Cyberpunk Neon Glow"),
+            ui.label(
+                egui::RichText::new("Motion VFX Presets")
+                    .strong()
+                    .color(colors::ACCENT_CYAN),
             );
-        });
-        ui.horizontal(|ui| {
-            if ui.button("Cyberpunk").clicked() {
-                if let Some(idx) = layer_idx {
-                    let mut session = EditorSession::new(&mut app.history, "Add Cyberpunk Neon");
-                    let comp = session.current_mut().active_composition_mut();
-                    if idx < comp.layers.len() {
-                        let len = comp.layers[idx].effects.len();
-                        comp.layers[idx]
-                            .effects
-                            .push(crate::core::timeline::Effect {
-                                id: format!("ai_glow_{}", len),
-                                name: "Cyberpunk Neon".to_string(),
-                                effect_type: crate::core::timeline::EffectType::Glow {
-                                    threshold: crate::core::property::Animatable::new_constant(0.2),
-                                    radius: crate::core::property::Animatable::new_constant(30.0),
-                                    intensity: crate::core::property::Animatable::new_constant(3.0),
-                                    color: crate::core::property::Animatable::new_constant([
-                                        0.0, 0.9, 1.0, 1.0,
-                                    ]),
-                                },
-                                enabled: true,
-                            });
-                        session.commit();
+            ui.small("Quick-add effect presets:");
+            ui.horizontal(|ui| {
+                ui.add(
+                    egui::TextEdit::singleline(&mut app.ui_tabs.effects_search_query)
+                        .hint_text("e.g. Cyberpunk Neon Glow"),
+                );
+            });
+            ui.horizontal(|ui| {
+                if ui.button("Cyberpunk").clicked() {
+                    if let Some(idx) = layer_idx {
+                        let mut session =
+                            EditorSession::new(&mut app.history, "Add Cyberpunk Neon");
+                        let comp = session.current_mut().active_composition_mut();
+                        if idx < comp.layers.len() {
+                            let len = comp.layers[idx].effects.len();
+                            comp.layers[idx]
+                                .effects
+                                .push(crate::core::timeline::Effect {
+                                    id: format!("ai_glow_{}", len),
+                                    name: "Cyberpunk Neon".to_string(),
+                                    effect_type: crate::core::timeline::EffectType::Glow {
+                                        threshold: crate::core::property::Animatable::new_constant(
+                                            0.2,
+                                        ),
+                                        radius: crate::core::property::Animatable::new_constant(
+                                            30.0,
+                                        ),
+                                        intensity: crate::core::property::Animatable::new_constant(
+                                            3.0,
+                                        ),
+                                        color: crate::core::property::Animatable::new_constant([
+                                            0.0, 0.9, 1.0, 1.0,
+                                        ]),
+                                    },
+                                    enabled: true,
+                                });
+                            session.commit();
+                        }
+                    } else {
+                        app.toasts.info("Select a layer first");
                     }
-                } else {
-                    app.toasts.info("Select a layer first");
                 }
-            }
-            if ui.button("Motion Burn").clicked() {
-                if let Some(idx) = layer_idx {
-                    let mut session = EditorSession::new(&mut app.history, "Add Motion Burn");
-                    let comp = session.current_mut().active_composition_mut();
-                    if idx < comp.layers.len() {
-                        let len = comp.layers[idx].effects.len();
-                        comp.layers[idx]
-                            .effects
-                            .push(crate::core::timeline::Effect {
-                                id: format!("ai_burn_{}", len),
-                                name: "Motion Burn".to_string(),
-                                effect_type: crate::core::timeline::EffectType::Glow {
-                                    threshold: crate::core::property::Animatable::new_constant(0.1),
-                                    radius: crate::core::property::Animatable::new_constant(45.0),
-                                    intensity: crate::core::property::Animatable::new_constant(4.0),
-                                    color: crate::core::property::Animatable::new_constant([
-                                        1.0, 0.3, 0.0, 1.0,
-                                    ]),
-                                },
-                                enabled: true,
-                            });
-                        session.commit();
+                if ui.button("Motion Burn").clicked() {
+                    if let Some(idx) = layer_idx {
+                        let mut session = EditorSession::new(&mut app.history, "Add Motion Burn");
+                        let comp = session.current_mut().active_composition_mut();
+                        if idx < comp.layers.len() {
+                            let len = comp.layers[idx].effects.len();
+                            comp.layers[idx]
+                                .effects
+                                .push(crate::core::timeline::Effect {
+                                    id: format!("ai_burn_{}", len),
+                                    name: "Motion Burn".to_string(),
+                                    effect_type: crate::core::timeline::EffectType::Glow {
+                                        threshold: crate::core::property::Animatable::new_constant(
+                                            0.1,
+                                        ),
+                                        radius: crate::core::property::Animatable::new_constant(
+                                            45.0,
+                                        ),
+                                        intensity: crate::core::property::Animatable::new_constant(
+                                            4.0,
+                                        ),
+                                        color: crate::core::property::Animatable::new_constant([
+                                            1.0, 0.3, 0.0, 1.0,
+                                        ]),
+                                    },
+                                    enabled: true,
+                                });
+                            session.commit();
+                        }
+                    } else {
+                        app.toasts.info("Select a layer first");
                     }
-                } else {
-                    app.toasts.info("Select a layer first");
                 }
-            }
+            });
         });
-    });
     ui.add_space(4.0);
 
     // Applied effects list

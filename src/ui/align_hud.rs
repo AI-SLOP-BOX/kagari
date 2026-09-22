@@ -172,6 +172,5 @@ pub fn draw_alignment_hud(app: &mut KagariApp, ui: &mut egui::Ui) {
                 app.commit_project(temp_proj);
             }
         }
-
     });
 }

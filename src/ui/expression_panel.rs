@@ -1,7 +1,7 @@
+use crate::core::editor::EditorSession;
 use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
-use crate::core::editor::EditorSession;
 
 pub fn draw_expression_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     let layer_idx = match app.selection.selected_layer_idx {

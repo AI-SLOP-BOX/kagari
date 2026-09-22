@@ -8,7 +8,11 @@
 use crate::core::timeline::Composition;
 
 fn blend_mode_from_label(label: &str) -> Option<crate::core::timeline::BlendMode> {
-    match label.to_ascii_lowercase().replace([' ', '_', '-'], "").as_str() {
+    match label
+        .to_ascii_lowercase()
+        .replace([' ', '_', '-'], "")
+        .as_str()
+    {
         "normal" => Some(crate::core::timeline::BlendMode::Normal),
         "multiply" => Some(crate::core::timeline::BlendMode::Multiply),
         "screen" => Some(crate::core::timeline::BlendMode::Screen),
@@ -265,10 +269,10 @@ mod tests {
                 comment: None,
                 target_layer_id: "l_title".into(),
                 target_property_path: "blend_mode".into(),
-                    property_type: EssentialPropertyType::Dropdown {
-                        options: vec!["Normal".into(), "Screen".into()],
+                property_type: EssentialPropertyType::Dropdown {
+                    options: vec!["Normal".into(), "Screen".into()],
                     selected_index: 1,
-                    },
+                },
             },
         ];
 

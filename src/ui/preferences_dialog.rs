@@ -49,9 +49,7 @@ pub(crate) fn save(p: &Prefs) {
     }
 }
 
-pub(crate) fn save_workspaces(
-    workspaces: &[crate::ui::workspace_manager::SavedWorkspace],
-) {
+pub(crate) fn save_workspaces(workspaces: &[crate::ui::workspace_manager::SavedWorkspace]) {
     let mut prefs = load();
     prefs.custom_workspaces = workspaces.to_vec();
     save(&prefs);
@@ -113,7 +111,11 @@ pub fn draw_preferences_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                     .inner_margin(egui::Margin::same(8.0))
                     .show(ui, |ui| {
                         ui.set_width(154.0);
-                        ui.label(egui::RichText::new("SETTINGS").small().color(colors::TEXT_MUTED));
+                        ui.label(
+                            egui::RichText::new("SETTINGS")
+                                .small()
+                                .color(colors::TEXT_MUTED),
+                        );
                         ui.add_space(6.0);
                         for (index, label) in [
                             "General",
@@ -132,12 +134,18 @@ pub fn draw_preferences_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                             let selected = category == index;
                             let response = ui.add_sized(
                                 [138.0, 28.0],
-                                egui::Button::new(
-                                    egui::RichText::new(label)
-                                        .size(12.0)
-                                        .color(if selected { colors::TEXT_PRIMARY } else { colors::TEXT_SECONDARY }),
-                                )
-                                .fill(if selected { colors::BG_ACTIVE } else { egui::Color32::TRANSPARENT })
+                                egui::Button::new(egui::RichText::new(label).size(12.0).color(
+                                    if selected {
+                                        colors::TEXT_PRIMARY
+                                    } else {
+                                        colors::TEXT_SECONDARY
+                                    },
+                                ))
+                                .fill(if selected {
+                                    colors::BG_ACTIVE
+                                } else {
+                                    egui::Color32::TRANSPARENT
+                                })
                                 .rounding(4.0),
                             );
                             if response.clicked() {
@@ -149,130 +157,150 @@ pub fn draw_preferences_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                 ui.vertical(|ui| {
                     ui.set_min_width((ui.available_width() - 8.0).max(360.0));
                     ui.add_space(2.0);
-                    ui.label(egui::RichText::new(["General", "Performance", "Cache", "CPU", "Color Management", "Auto-save", "UI Appearance", "Keyboard Shortcuts", "Plugins"][category]).size(16.0));
+                    ui.label(
+                        egui::RichText::new(
+                            [
+                                "General",
+                                "Performance",
+                                "Cache",
+                                "CPU",
+                                "Color Management",
+                                "Auto-save",
+                                "UI Appearance",
+                                "Keyboard Shortcuts",
+                                "Plugins",
+                            ][category],
+                        )
+                        .size(16.0),
+                    );
                     ui.add_space(8.0);
 
-            // ── Performance ──
-            ui.label(
-                egui::RichText::new("PERFORMANCE")
-                    .small()
-                    .strong()
-                    .color(colors::ACCENT_CYAN),
-            );
-            ui.horizontal(|ui| {
-                ui.label("Frame cache budget:");
-                ui.add(
-                    egui::Slider::new(&mut p.cache_mb, 128..=2048)
-                        .step_by(64.0)
-                        .suffix(" MB"),
-                );
-            });
-            ui.checkbox(
-                &mut p.adaptive_preview,
-                "Adaptive preview quality (auto-reduce while playing)",
-            )
-            .on_hover_text("When off, preview always renders at full resolution");
-
-            ui.add_space(6.0);
-
-            // ── History ──
-            ui.label(
-                egui::RichText::new("HISTORY")
-                    .small()
-                    .strong()
-                    .color(colors::ACCENT_CYAN),
-            );
-            ui.horizontal(|ui| {
-                ui.label("Undo steps:");
-                ui.add(egui::Slider::new(&mut p.undo_steps, 10..=500).logarithmic(true));
-            });
-            ui.label(
-                egui::RichText::new(format!(
-                    "Approx RAM ceiling: {} MB",
-                    app.history.approx_bytes() / 1024 / 1024
-                ))
-                .small()
-                .color(colors::TEXT_MUTED),
-            );
-
-            ui.add_space(6.0);
-
-            // ── Autosave ──
-            ui.label(
-                egui::RichText::new("AUTOSAVE")
-                    .small()
-                    .strong()
-                    .color(colors::ACCENT_CYAN),
-            );
-            ui.horizontal(|ui| {
-                ui.label("Interval:");
-                ui.add(egui::Slider::new(&mut p.autosave_secs, 5..=600).suffix(" s"));
-            });
-
-            ui.add_space(6.0);
-
-            // ── Audio ──
-            ui.label(
-                egui::RichText::new("AUDIO")
-                    .small()
-                    .strong()
-                    .color(colors::ACCENT_CYAN),
-            );
-            ui.checkbox(&mut p.audio_preview, "Preview audio during playback");
-
-            ui.add_space(6.0);
-
-            // ── Media & Disk Cache ──
-            ui.label(
-                egui::RichText::new("MEDIA & DISK CACHE")
-                    .small()
-                    .strong()
-                    .color(colors::ACCENT_YELLOW),
-            );
-            ui.horizontal(|ui| {
-                ui.label("Maximum Disk Cache Size:");
-                ui.add(egui::Slider::new(&mut p.disk_cache_gb, 10..=500).suffix(" GB"));
-            });
-            ui.horizontal(|ui| {
-                if ui
-                    .button("📂 Choose Cache Folder...")
-                    .on_hover_text("Select NVMe / SSD drive location for high-speed frame caching")
-                    .clicked()
-                {
-                    app.toasts
-                        .info("High-speed disk cache directory set to default scratch path");
-                }
-                if ui
-                    .button("🗑 Empty Disk Cache...")
-                    .on_hover_text("Purge all rendered cache files from disk")
-                    .clicked()
-                {
-                    crate::core::frame_cache::disk_cache::clear_all();
-                    crate::core::frame_cache::bump_version();
-                    app.toasts.info("Disk Cache emptied (0 bytes)");
-                }
-            });
-
-            ui.add_space(8.0);
-            ui.separator();
-            ui.horizontal(|ui| {
-                if ui.button("💾 Save").clicked() {
-                    apply(app, &p);
-                    save(&p);
-                    app.toasts.info("Preferences saved");
-                    keep_open = false;
-                }
-                if ui.button("Cancel").clicked() {
-                    keep_open = false;
-                }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    // ── Performance ──
                     ui.label(
-                        egui::RichText::new(crate::ui::project_io::prefs_path().display().to_string())
+                        egui::RichText::new("PERFORMANCE")
                             .small()
-                            .color(colors::TEXT_MUTED),
+                            .strong()
+                            .color(colors::ACCENT_CYAN),
                     );
-                });
-            });
+                    ui.horizontal(|ui| {
+                        ui.label("Frame cache budget:");
+                        ui.add(
+                            egui::Slider::new(&mut p.cache_mb, 128..=2048)
+                                .step_by(64.0)
+                                .suffix(" MB"),
+                        );
+                    });
+                    ui.checkbox(
+                        &mut p.adaptive_preview,
+                        "Adaptive preview quality (auto-reduce while playing)",
+                    )
+                    .on_hover_text("When off, preview always renders at full resolution");
+
+                    ui.add_space(6.0);
+
+                    // ── History ──
+                    ui.label(
+                        egui::RichText::new("HISTORY")
+                            .small()
+                            .strong()
+                            .color(colors::ACCENT_CYAN),
+                    );
+                    ui.horizontal(|ui| {
+                        ui.label("Undo steps:");
+                        ui.add(egui::Slider::new(&mut p.undo_steps, 10..=500).logarithmic(true));
+                    });
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "Approx RAM ceiling: {} MB",
+                            app.history.approx_bytes() / 1024 / 1024
+                        ))
+                        .small()
+                        .color(colors::TEXT_MUTED),
+                    );
+
+                    ui.add_space(6.0);
+
+                    // ── Autosave ──
+                    ui.label(
+                        egui::RichText::new("AUTOSAVE")
+                            .small()
+                            .strong()
+                            .color(colors::ACCENT_CYAN),
+                    );
+                    ui.horizontal(|ui| {
+                        ui.label("Interval:");
+                        ui.add(egui::Slider::new(&mut p.autosave_secs, 5..=600).suffix(" s"));
+                    });
+
+                    ui.add_space(6.0);
+
+                    // ── Audio ──
+                    ui.label(
+                        egui::RichText::new("AUDIO")
+                            .small()
+                            .strong()
+                            .color(colors::ACCENT_CYAN),
+                    );
+                    ui.checkbox(&mut p.audio_preview, "Preview audio during playback");
+
+                    ui.add_space(6.0);
+
+                    // ── Media & Disk Cache ──
+                    ui.label(
+                        egui::RichText::new("MEDIA & DISK CACHE")
+                            .small()
+                            .strong()
+                            .color(colors::ACCENT_YELLOW),
+                    );
+                    ui.horizontal(|ui| {
+                        ui.label("Maximum Disk Cache Size:");
+                        ui.add(egui::Slider::new(&mut p.disk_cache_gb, 10..=500).suffix(" GB"));
+                    });
+                    ui.horizontal(|ui| {
+                        if ui
+                            .button("📂 Choose Cache Folder...")
+                            .on_hover_text(
+                                "Select NVMe / SSD drive location for high-speed frame caching",
+                            )
+                            .clicked()
+                        {
+                            app.toasts.info(
+                                "High-speed disk cache directory set to default scratch path",
+                            );
+                        }
+                        if ui
+                            .button("🗑 Empty Disk Cache...")
+                            .on_hover_text("Purge all rendered cache files from disk")
+                            .clicked()
+                        {
+                            crate::core::frame_cache::disk_cache::clear_all();
+                            crate::core::frame_cache::bump_version();
+                            app.toasts.info("Disk Cache emptied (0 bytes)");
+                        }
+                    });
+
+                    ui.add_space(8.0);
+                    ui.separator();
+                    ui.horizontal(|ui| {
+                        if ui.button("💾 Save").clicked() {
+                            apply(app, &p);
+                            save(&p);
+                            app.toasts.info("Preferences saved");
+                            keep_open = false;
+                        }
+                        if ui.button("Cancel").clicked() {
+                            keep_open = false;
+                        }
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.label(
+                                egui::RichText::new(
+                                    crate::ui::project_io::prefs_path().display().to_string(),
+                                )
+                                .small()
+                                .color(colors::TEXT_MUTED),
+                            );
+                        });
+                    });
                 });
             });
 

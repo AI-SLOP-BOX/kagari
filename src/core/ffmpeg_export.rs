@@ -177,9 +177,8 @@ where
     F: Fn(u32) -> Vec<u8>,
 {
     crate::core::software_renderer::set_render_cancel_flag(Some(cancel_flag.clone()));
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        render_frame_fn(frame_idx)
-    }));
+    let result =
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| render_frame_fn(frame_idx)));
     crate::core::software_renderer::set_render_cancel_flag(None);
     result.map_err(|_| ())
 }
@@ -862,10 +861,10 @@ pub fn start_parallel_export(
                 ));
             });
 
-            let render_result = queue.render_all_with_external_cancel_checked(
-                &cancel_flag,
-                |comp_name, frame| render_frame_fn(comp_name, frame),
-            );
+            let render_result = queue
+                .render_all_with_external_cancel_checked(&cancel_flag, |comp_name, frame| {
+                    render_frame_fn(comp_name, frame)
+                });
 
             if let Err(failure) = render_result {
                 let _ = tx.send(ExportEvent::Error(format!(
@@ -921,18 +920,17 @@ pub fn start_png_sequence_export<F>(
                 let _ = tx.send(ExportEvent::Error("Export canceled".to_string()));
                 return;
             }
-            let pixels = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                render_frame(f)
-            })) {
-                Ok(pixels) => pixels,
-                Err(_) => {
-                    let _ = tx.send(ExportEvent::Error(format!(
-                        "Render callback failed at frame {}",
-                        f
-                    )));
-                    return;
-                }
-            };
+            let pixels =
+                match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| render_frame(f))) {
+                    Ok(pixels) => pixels,
+                    Err(_) => {
+                        let _ = tx.send(ExportEvent::Error(format!(
+                            "Render callback failed at frame {}",
+                            f
+                        )));
+                        return;
+                    }
+                };
             let path = dir.join(format!("{}_{:04}.png", stem, f));
             if let Err(e) =
                 image::save_buffer(&path, &pixels, width, height, image::ColorType::Rgba8)
@@ -1029,10 +1027,8 @@ mod tests {
 
     #[test]
     fn png_sequence_reports_render_callback_failure_to_caller() {
-        let dir = std::env::temp_dir().join(format!(
-            "kagari-png-panic-test-{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("kagari-png-panic-test-{}", std::process::id()));
         let (tx, rx) = std::sync::mpsc::channel();
         start_png_sequence_export(
             dir.clone(),

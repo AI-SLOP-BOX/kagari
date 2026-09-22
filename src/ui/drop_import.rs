@@ -37,7 +37,7 @@ pub fn handle_dropped_files(app: &mut KagariApp, ctx: &egui::Context) {
                     };
                     let fit = ((comp_w / asset.width.max(1) as f32)
                         .min(comp_h / asset.height.max(1) as f32))
-                        .min(1.0)
+                    .min(1.0)
                         * 100.0;
                     let mut layer = crate::core::timeline::Layer::new(
                         app.history
@@ -54,11 +54,10 @@ pub fn handle_dropped_files(app: &mut KagariApp, ctx: &egui::Context) {
                         },
                         dur,
                     );
-                    layer.transform.position =
-                        crate::core::property::Animatable::new_constant([
-                            comp_w * 0.5,
-                            comp_h * 0.5,
-                        ]);
+                    layer.transform.position = crate::core::property::Animatable::new_constant([
+                        comp_w * 0.5,
+                        comp_h * 0.5,
+                    ]);
                     layer.transform.scale =
                         crate::core::property::Animatable::new_constant([fit, fit]);
                     insert_layer(app, layer, &format!("video '{}'", name));
@@ -139,8 +138,8 @@ pub fn handle_dropped_files(app: &mut KagariApp, ctx: &egui::Context) {
                 layer.out_frame = app.history.current().active_composition().duration_frames;
                 insert_layer(app, layer, &format!("audio '{}'", name));
             }
-            "mp4" | "mov" | "mkv" | "avi" | "webm" | "m4v" | "mpeg" | "mpg" | "ts"
-            | "m2ts" | "av1" | "ivf" => {
+            "mp4" | "mov" | "mkv" | "avi" | "webm" | "m4v" | "mpeg" | "mpg" | "ts" | "m2ts"
+            | "av1" | "ivf" => {
                 if !crate::core::video_import::ffmpeg_available() {
                     app.toasts.error("Video import needs ffmpeg on PATH");
                     continue;

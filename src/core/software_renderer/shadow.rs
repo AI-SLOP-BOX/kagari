@@ -4,9 +4,7 @@
 //! models, and spot cone factors.
 
 use crate::core::mask::point_in_polygon;
-use crate::core::timeline::{
-    Composition, Layer, LayerType, Light3D, LightType, ShapeType,
-};
+use crate::core::timeline::{Composition, Layer, LayerType, Light3D, LightType, ShapeType};
 
 /// Project a world point through a light onto the z=0 receiver plane.
 /// Returns None when the ray is parallel to the plane or points away.
@@ -248,12 +246,7 @@ pub fn build_shadow_map(comp: &Composition, frame: u32, width: u32, height: u32)
             if projected.len() == local_pts.len() {
                 // Apply distance attenuation per shadow-casting pixel region
 
-                let atten = light_attenuation(
-                    light,
-                    lpos,
-                    [lpos[0], lpos[1], 0.0],
-                    frame,
-                );
+                let atten = light_attenuation(light, lpos, [lpos[0], lpos[1], 0.0], frame);
                 accumulate_polygon_density(
                     &mut density,
                     width,

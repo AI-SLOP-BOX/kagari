@@ -20,7 +20,8 @@ impl TestWorkspace {
             .duration_since(UNIX_EPOCH)
             .expect("system clock should be after unix epoch")
             .as_nanos();
-        let path = std::env::temp_dir().join(format!("kagari_{label}_{}_{}", std::process::id(), nonce));
+        let path =
+            std::env::temp_dir().join(format!("kagari_{label}_{}_{}", std::process::id(), nonce));
         std::fs::create_dir_all(&path).expect("workflow test workspace should be writable");
         Self(path)
     }
@@ -66,7 +67,9 @@ fn footage_workflow_import_proxy_track_preview_and_export_stays_connected() {
         .expect("numbered image sequence should enter WebP footage cache");
     assert_eq!(asset.frame_count, 3);
     assert_eq!(asset.fps, 24.0);
-    assert!(Path::new(&asset.frames_dir).join("frame_00000.webp").is_file());
+    assert!(Path::new(&asset.frames_dir)
+        .join("frame_00000.webp")
+        .is_file());
 
     let mut layer = Layer::new(
         "plate".into(),
@@ -81,21 +84,19 @@ fn footage_workflow_import_proxy_track_preview_and_export_stays_connected() {
         3,
     );
     layer.transform.position = kagari_vfx::core::property::Animatable::new_constant([12.0, 8.0]);
-    layer
-        .trackers
-        .push(TrackerPoint::new("plate-point".into(), "Plate point".into(), [7.0, 8.0]));
+    layer.trackers.push(TrackerPoint::new(
+        "plate-point".into(),
+        "Plate point".into(),
+        [7.0, 8.0],
+    ));
 
     let tracked = TrackerEngine::track_next_frame(&layer, 24, 0, 0)
         .expect("tracker should read the imported WebP frame sequence");
     assert!(tracked.iter().all(|value| value.is_finite()));
     assert!(tracked[0] > 7.0, "tracking should follow the moving plate");
 
-    let proxy_path = generate_preview_proxy_for_layer(
-        &layer,
-        ProxyResolution::Half,
-        &proxy_dir,
-    )
-    .expect("video footage should generate a WebP proxy sequence");
+    let proxy_path = generate_preview_proxy_for_layer(&layer, ProxyResolution::Half, &proxy_dir)
+        .expect("video footage should generate a WebP proxy sequence");
     layer.proxy.enabled = true;
     layer.proxy.resolution = ProxyResolution::Half;
     layer.proxy.proxy_path = Some(proxy_path.clone());
@@ -150,7 +151,11 @@ fn footage_workflow_import_proxy_track_preview_and_export_stays_connected() {
     assert!(finished);
     for frame in 0..3 {
         let output = export_dir.join(format!("plate_{frame:04}.png"));
-        assert!(output.is_file(), "missing exported frame {}", output.display());
+        assert!(
+            output.is_file(),
+            "missing exported frame {}",
+            output.display()
+        );
         assert_eq!(image::image_dimensions(output).unwrap(), (24, 16));
     }
 }

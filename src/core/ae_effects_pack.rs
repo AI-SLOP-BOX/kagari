@@ -563,8 +563,7 @@ pub fn apply_linear_wipe(
         0.0,
         width.saturating_sub(1) as f32 * dir[0],
         height.saturating_sub(1) as f32 * dir[1],
-        width.saturating_sub(1) as f32 * dir[0]
-            + height.saturating_sub(1) as f32 * dir[1],
+        width.saturating_sub(1) as f32 * dir[0] + height.saturating_sub(1) as f32 * dir[1],
     ];
     let min_proj = corners.iter().copied().fold(f32::INFINITY, f32::min);
     let max_proj = corners.iter().copied().fold(f32::NEG_INFINITY, f32::max);

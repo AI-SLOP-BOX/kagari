@@ -174,9 +174,7 @@ mod tests {
         let mut entropy = 0x9e37_79b9_u32;
 
         for frame in 0..20_000 {
-            entropy = entropy
-                .wrapping_mul(1_664_525)
-                .wrapping_add(1_013_904_223);
+            entropy = entropy.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
             if frame % 113 == 0 {
                 animation.set_open(entropy & 1 == 0);
             }

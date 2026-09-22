@@ -295,7 +295,6 @@ impl Default for MasterDspParams {
             wet_dry: 1.0,
         }
     }
-
 }
 
 impl MasterDspParams {
@@ -513,7 +512,8 @@ impl AudioBuffer {
         if audio_data.is_none() {
             return Err("WAV has no data chunk".into());
         }
-        if channels == 0 || channels > 32 || sample_rate == 0 || sample_rate > 384_000 || bits == 0 {
+        if channels == 0 || channels > 32 || sample_rate == 0 || sample_rate > 384_000 || bits == 0
+        {
             return Err("WAV has invalid fmt chunk".into());
         }
         if format_tag != 1 {
@@ -584,8 +584,8 @@ impl AudioBuffer {
         use symphonia::core::meta::MetadataOptions;
         use symphonia::core::probe::Hint;
 
-        let file = std::fs::File::open(path)
-            .map_err(|e| format!("cannot open audio file: {}", e))?;
+        let file =
+            std::fs::File::open(path).map_err(|e| format!("cannot open audio file: {}", e))?;
         let mss = MediaSourceStream::new(Box::new(file), Default::default());
         let mut hint = Hint::new();
         if let Some(ext) = path.extension().and_then(|ext| ext.to_str()) {
@@ -619,7 +619,10 @@ impl AudioBuffer {
                 Ok(packet) => packet,
                 Err(SymphoniaError::ResetRequired) => break,
                 Err(SymphoniaError::IoError(error))
-                    if error.kind() == std::io::ErrorKind::UnexpectedEof => break,
+                    if error.kind() == std::io::ErrorKind::UnexpectedEof =>
+                {
+                    break
+                }
                 Err(error) => return Err(format!("cannot read audio packet: {}", error)),
             };
             if packet.track_id() != track_id {
@@ -1484,15 +1487,8 @@ mod multitrack_tests {
             .map(|_| {
                 let comp = comp.clone();
                 std::thread::spawn(move || {
-                    mix_composition_to_wav(
-                        &comp,
-                        0,
-                        2,
-                        48_000,
-                        None,
-                        &MasterDspParams::bypass(),
-                    )
-                    .expect("concurrent mix must produce a WAV")
+                    mix_composition_to_wav(&comp, 0, 2, 48_000, None, &MasterDspParams::bypass())
+                        .expect("concurrent mix must produce a WAV")
                 })
             })
             .collect();
@@ -1529,14 +1525,8 @@ mod multitrack_tests {
         layer.out_frame = 30;
         comp.layers.push(layer);
 
-        let (mix, _) = mix_audio_sources_for_frame(
-            &comp,
-            0,
-            48_000,
-            1_600,
-            None,
-            &MasterDspParams::bypass(),
-        );
+        let (mix, _) =
+            mix_audio_sources_for_frame(&comp, 0, 48_000, 1_600, None, &MasterDspParams::bypass());
         assert!((mix[0] - 0.4).abs() < 0.01, "mix[0] = {}", mix[0]);
         let _ = std::fs::remove_dir_all(&dir);
     }

@@ -34,26 +34,34 @@ pub fn draw_proxy_controls(app: &mut KagariApp, ui: &mut egui::Ui) {
 
         if btn(ui, "Full", ProxyResolution::Full).clicked() {
             app.modify_project(|project| {
-                project.active_composition_mut().comp_proxy.global_resolution =
-                    ProxyResolution::Full;
+                project
+                    .active_composition_mut()
+                    .comp_proxy
+                    .global_resolution = ProxyResolution::Full;
             });
         }
         if btn(ui, "Half", ProxyResolution::Half).clicked() {
             app.modify_project(|project| {
-                project.active_composition_mut().comp_proxy.global_resolution =
-                    ProxyResolution::Half;
+                project
+                    .active_composition_mut()
+                    .comp_proxy
+                    .global_resolution = ProxyResolution::Half;
             });
         }
         if btn(ui, "¼", ProxyResolution::Quarter).clicked() {
             app.modify_project(|project| {
-                project.active_composition_mut().comp_proxy.global_resolution =
-                    ProxyResolution::Quarter;
+                project
+                    .active_composition_mut()
+                    .comp_proxy
+                    .global_resolution = ProxyResolution::Quarter;
             });
         }
         if btn(ui, "⅛", ProxyResolution::Eighth).clicked() {
             app.modify_project(|project| {
-                project.active_composition_mut().comp_proxy.global_resolution =
-                    ProxyResolution::Eighth;
+                project
+                    .active_composition_mut()
+                    .comp_proxy
+                    .global_resolution = ProxyResolution::Eighth;
             });
         }
 
@@ -77,8 +85,10 @@ pub fn draw_proxy_controls(app: &mut KagariApp, ui: &mut egui::Ui) {
             .clicked()
         {
             app.modify_project(|project| {
-                project.active_composition_mut().comp_proxy.active_in_preview =
-                    !active_in_preview;
+                project
+                    .active_composition_mut()
+                    .comp_proxy
+                    .active_in_preview = !active_in_preview;
             });
         }
 
@@ -129,11 +139,7 @@ pub fn draw_layer_proxy(app: &mut KagariApp, ui: &mut egui::Ui, layer_idx: usize
         let mut next_enabled = enabled;
         if ui.checkbox(&mut next_enabled, "").changed() {
             app.modify_project(|project| {
-                if let Some(layer) = project
-                    .active_composition_mut()
-                    .layers
-                    .get_mut(layer_idx)
-                {
+                if let Some(layer) = project.active_composition_mut().layers.get_mut(layer_idx) {
                     layer.proxy.enabled = next_enabled;
                 }
             });
@@ -145,10 +151,7 @@ pub fn draw_layer_proxy(app: &mut KagariApp, ui: &mut egui::Ui, layer_idx: usize
             };
             if btn(ui, "½", ProxyResolution::Half).clicked() {
                 app.modify_project(|project| {
-                    if let Some(layer) = project
-                        .active_composition_mut()
-                        .layers
-                        .get_mut(layer_idx)
+                    if let Some(layer) = project.active_composition_mut().layers.get_mut(layer_idx)
                     {
                         layer.proxy.resolution = ProxyResolution::Half;
                     }
@@ -156,10 +159,7 @@ pub fn draw_layer_proxy(app: &mut KagariApp, ui: &mut egui::Ui, layer_idx: usize
             }
             if btn(ui, "¼", ProxyResolution::Quarter).clicked() {
                 app.modify_project(|project| {
-                    if let Some(layer) = project
-                        .active_composition_mut()
-                        .layers
-                        .get_mut(layer_idx)
+                    if let Some(layer) = project.active_composition_mut().layers.get_mut(layer_idx)
                     {
                         layer.proxy.resolution = ProxyResolution::Quarter;
                     }
@@ -167,10 +167,7 @@ pub fn draw_layer_proxy(app: &mut KagariApp, ui: &mut egui::Ui, layer_idx: usize
             }
             if btn(ui, "⅛", ProxyResolution::Eighth).clicked() {
                 app.modify_project(|project| {
-                    if let Some(layer) = project
-                        .active_composition_mut()
-                        .layers
-                        .get_mut(layer_idx)
+                    if let Some(layer) = project.active_composition_mut().layers.get_mut(layer_idx)
                     {
                         layer.proxy.resolution = ProxyResolution::Eighth;
                     }

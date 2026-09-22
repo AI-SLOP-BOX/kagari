@@ -241,7 +241,10 @@ fn draw_presets(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect) {
         colors::TEXT_PRIMARY,
     );
     let search = egui::Rect::from_min_size(
-        egui::pos2(rect.left() + 17.0, rect.top() + if compact { 48.0 } else { 51.0 }),
+        egui::pos2(
+            rect.left() + 17.0,
+            rect.top() + if compact { 48.0 } else { 51.0 },
+        ),
         egui::vec2(rect.width() - 30.0, if compact { 32.0 } else { 36.0 }),
     );
     ui.painter().rect(
@@ -272,7 +275,8 @@ fn draw_presets(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect) {
     .into_iter()
     .enumerate()
     {
-        let y = rect.top() + if compact { 82.0 } else { 92.0 }
+        let y = rect.top()
+            + if compact { 82.0 } else { 92.0 }
             + i as f32 * if compact { 21.0 } else { 28.0 };
         if i == 0 {
             ui.painter().rect_filled(
@@ -444,7 +448,10 @@ fn draw_preview(
             icon,
             egui::vec2(16.0, 16.0),
             colors::TEXT_PRIMARY,
-            egui::pos2(rect.center().x - 84.0 + i as f32 * 42.0, timeline_top - 34.0),
+            egui::pos2(
+                rect.center().x - 84.0 + i as f32 * 42.0,
+                timeline_top - 34.0,
+            ),
         );
     }
 }

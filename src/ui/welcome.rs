@@ -4,9 +4,8 @@ use eframe::egui;
 
 fn ensure_composition(app: &mut KagariApp) {
     if app.history.current().compositions.is_empty() {
-        app.history = crate::core::history::ProjectHistory::new(
-            crate::core::timeline::Project::default(),
-        );
+        app.history =
+            crate::core::history::ProjectHistory::new(crate::core::timeline::Project::default());
     }
 }
 
@@ -28,11 +27,12 @@ fn import_media_dialog(app: &mut KagariApp) {
         .add_filter(
             "Media",
             &[
-                "png", "jpg", "jpeg", "bmp", "tga", "webp", "mp4", "mov", "mkv", "avi",
-                "webm", "av1", "wav",
+                "png", "jpg", "jpeg", "bmp", "tga", "webp", "mp4", "mov", "mkv", "avi", "webm",
+                "av1", "wav",
             ],
         )
-        .pick_file() else {
+        .pick_file()
+    else {
         return;
     };
     ensure_composition(app);

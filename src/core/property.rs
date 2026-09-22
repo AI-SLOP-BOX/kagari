@@ -374,8 +374,14 @@ mod tests {
                 0,
                 0.0,
                 InterpolationType::Bezier {
-                    outgoing: BezierControlPoint { influence: 0.2, speed: 1.0 },
-                    incoming: BezierControlPoint { influence: 0.8, speed: 2.0 },
+                    outgoing: BezierControlPoint {
+                        influence: 0.2,
+                        speed: 1.0,
+                    },
+                    incoming: BezierControlPoint {
+                        influence: 0.8,
+                        speed: 2.0,
+                    },
                     custom_bezier: Some([0.1, 0.2, 0.7, 0.9]),
                 },
             ),
@@ -384,7 +390,10 @@ mod tests {
 
         assert!(anim.reverse_keyframes());
         let keys = anim.keyframes().unwrap();
-        assert_eq!(keys.iter().map(|key| key.frame).collect::<Vec<_>>(), vec![0, 10]);
+        assert_eq!(
+            keys.iter().map(|key| key.frame).collect::<Vec<_>>(),
+            vec![0, 10]
+        );
         assert_eq!(keys[1].value, 0.0);
         let InterpolationType::Bezier {
             outgoing,

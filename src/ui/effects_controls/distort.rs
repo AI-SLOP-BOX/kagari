@@ -578,7 +578,8 @@ pub fn draw(
                 },
             );
         }
-        EffectType::GlitchDisplacement { seed, amount } => {            draw_prop(
+        EffectType::GlitchDisplacement { seed, amount } => {
+            draw_prop(
                 ui,
                 current_frame,
                 project_changed,
@@ -612,26 +613,14 @@ pub fn draw(
                 ("Blue Offset", blue_offset),
             ] {
                 let before = track.clone();
-                if let Some(nf) = draw_property_ui(
-                    current_frame,
-                    ui,
-                    label,
-                    track,
-                    |ui, val: &mut [f32; 2]| {
+                if let Some(nf) =
+                    draw_property_ui(current_frame, ui, label, track, |ui, val: &mut [f32; 2]| {
                         ui.horizontal(|ui| {
-                            ui.add(
-                                egui::DragValue::new(&mut val[0])
-                                    .speed(0.5)
-                                    .prefix("X: "),
-                            );
-                            ui.add(
-                                egui::DragValue::new(&mut val[1])
-                                    .speed(0.5)
-                                    .prefix("Y: "),
-                            );
+                            ui.add(egui::DragValue::new(&mut val[0]).speed(0.5).prefix("X: "));
+                            ui.add(egui::DragValue::new(&mut val[1]).speed(0.5).prefix("Y: "));
                         });
-                    },
-                ) {
+                    })
+                {
                     *next_frame = Some(nf);
                 }
                 if before != *track {

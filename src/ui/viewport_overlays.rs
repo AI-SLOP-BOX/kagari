@@ -274,85 +274,85 @@ pub fn draw_viewport_overlays(
     }
 
     if app.viewport_show_stats && draw_w >= 520.0 {
-    // ── HUD Overlay Badges ──
-    let backend_text = if rendered_gpu {
-        "[GPU] WGPU Acceleration"
-    } else {
-        "[CPU] Software Canvas"
-    };
-    let backend_color = if rendered_gpu {
-        colors::ACCENT_GREEN
-    } else {
-        colors::ACCENT_ORANGE
-    };
+        // ── HUD Overlay Badges ──
+        let backend_text = if rendered_gpu {
+            "[GPU] WGPU Acceleration"
+        } else {
+            "[CPU] Software Canvas"
+        };
+        let backend_color = if rendered_gpu {
+            colors::ACCENT_GREEN
+        } else {
+            colors::ACCENT_ORANGE
+        };
 
-    // Top Left Performance & FPS HUD Overlay
-    let dt = ctx.input(|i| i.stable_dt.max(0.001));
-    let real_fps = (1.0 / dt).clamp(1.0, 240.0);
-    let render_ms = dt * 1000.0;
-    let cached_frames = app.frame_cache.cached_count();
-    let total_comp_frames = app
-        .history
-        .current()
-        .active_composition()
-        .duration_frames
-        .max(1);
-    let _cache_pct = (cached_frames as f32 / total_comp_frames as f32 * 100.0).clamp(0.0, 100.0);
+        // Top Left Performance & FPS HUD Overlay
+        let dt = ctx.input(|i| i.stable_dt.max(0.001));
+        let real_fps = (1.0 / dt).clamp(1.0, 240.0);
+        let render_ms = dt * 1000.0;
+        let cached_frames = app.frame_cache.cached_count();
+        let total_comp_frames = app
+            .history
+            .current()
+            .active_composition()
+            .duration_frames
+            .max(1);
+        let _cache_pct =
+            (cached_frames as f32 / total_comp_frames as f32 * 100.0).clamp(0.0, 100.0);
 
-    // Adaptive quality indicator
-    let quality_pct = (app.playback.adaptive_preview_factor * 100.0).round();
-    let quality_label = if app.playback.adaptive_preview_factor >= 1.0 {
-        "FULL"
-    } else if app.playback.adaptive_preview_factor >= 0.5 {
-        "½"
-    } else {
-        "¼"
-    };
+        // Adaptive quality indicator
+        let quality_pct = (app.playback.adaptive_preview_factor * 100.0).round();
+        let quality_label = if app.playback.adaptive_preview_factor >= 1.0 {
+            "FULL"
+        } else if app.playback.adaptive_preview_factor >= 0.5 {
+            "½"
+        } else {
+            "¼"
+        };
 
-    let fps_text = format!(
-        "⚡ {:.1}ms ({:.0} FPS) | Q:{}% ({}) | RAM:{}/{}",
-        render_ms, real_fps, quality_pct, quality_label, cached_frames, total_comp_frames
-    );
-    let fps_rect = egui::Rect::from_min_size(
-        egui::pos2(origin_x + 10.0, origin_y + 10.0),
-        egui::vec2(320.0, 24.0),
-    );
-    ui.painter().rect_filled(fps_rect, 4.0, colors::HUD_BG);
-    let stroke_c = if render_ms > 33.3 {
-        colors::FPS_BAD
-    } else {
-        colors::FPS_GOOD
-    };
-    ui.painter()
-        .rect_stroke(fps_rect, 4.0, egui::Stroke::new(1.0_f32, stroke_c));
-    ui.painter().text(
-        fps_rect.center(),
-        egui::Align2::CENTER_CENTER,
-        fps_text,
-        egui::FontId::monospace(10.5),
-        colors::HUD_TEXT,
-    );
+        let fps_text = format!(
+            "⚡ {:.1}ms ({:.0} FPS) | Q:{}% ({}) | RAM:{}/{}",
+            render_ms, real_fps, quality_pct, quality_label, cached_frames, total_comp_frames
+        );
+        let fps_rect = egui::Rect::from_min_size(
+            egui::pos2(origin_x + 10.0, origin_y + 10.0),
+            egui::vec2(320.0, 24.0),
+        );
+        ui.painter().rect_filled(fps_rect, 4.0, colors::HUD_BG);
+        let stroke_c = if render_ms > 33.3 {
+            colors::FPS_BAD
+        } else {
+            colors::FPS_GOOD
+        };
+        ui.painter()
+            .rect_stroke(fps_rect, 4.0, egui::Stroke::new(1.0_f32, stroke_c));
+        ui.painter().text(
+            fps_rect.center(),
+            egui::Align2::CENTER_CENTER,
+            fps_text,
+            egui::FontId::monospace(10.5),
+            colors::HUD_TEXT,
+        );
 
-    // Top Right Engine Badge
-    let badge_rect = egui::Rect::from_min_size(
-        egui::pos2(origin_x + draw_w - 180.0, origin_y + 10.0),
-        egui::vec2(170.0, 24.0),
-    );
-    ui.painter().rect_filled(
-        badge_rect,
-        4.0,
-        egui::Color32::from_rgba_unmultiplied(20, 20, 20, 210),
-    );
-    ui.painter()
-        .rect_stroke(badge_rect, 4.0, egui::Stroke::new(1.0_f32, backend_color));
-    ui.painter().text(
-        badge_rect.center(),
-        egui::Align2::CENTER_CENTER,
-        backend_text,
-        egui::FontId::proportional(11.0),
-        backend_color,
-    );
-
+        // Top Right Engine Badge
+        let badge_rect = egui::Rect::from_min_size(
+            egui::pos2(origin_x + draw_w - 180.0, origin_y + 10.0),
+            egui::vec2(170.0, 24.0),
+        );
+        ui.painter().rect_filled(
+            badge_rect,
+            4.0,
+            egui::Color32::from_rgba_unmultiplied(20, 20, 20, 210),
+        );
+        ui.painter()
+            .rect_stroke(badge_rect, 4.0, egui::Stroke::new(1.0_f32, backend_color));
+        ui.painter().text(
+            badge_rect.center(),
+            egui::Align2::CENTER_CENTER,
+            backend_text,
+            egui::FontId::proportional(11.0),
+            backend_color,
+        );
     }
 
     // ── CPU-only Feature Notice ──
@@ -449,44 +449,43 @@ pub fn draw_viewport_overlays(
 
     // Bottom Left Selection HUD Status
     if app.viewport_drag_state.is_some() {
-    if let Some(s_idx) = app.selection.selected_layer_idx {
-        let comp = app.history.current().active_composition();
-        if s_idx < comp.layers.len() {
-            let s_layer = &comp.layers[s_idx];
-            let pos = s_layer.transform.position.evaluate(current_frame);
-            let scale = s_layer.transform.scale.evaluate(current_frame);
-            let rot = s_layer.transform.rotation.evaluate(current_frame);
+        if let Some(s_idx) = app.selection.selected_layer_idx {
+            let comp = app.history.current().active_composition();
+            if s_idx < comp.layers.len() {
+                let s_layer = &comp.layers[s_idx];
+                let pos = s_layer.transform.position.evaluate(current_frame);
+                let scale = s_layer.transform.scale.evaluate(current_frame);
+                let rot = s_layer.transform.rotation.evaluate(current_frame);
 
-            let status_str = format!(
-                "SELECTED: Layer {} ({}) | Pos: ({:.0}, {:.0}) | Scale: {:.0}% | Rot: {:.1}°",
-                s_idx + 1,
-                s_layer.name,
-                pos[0],
-                pos[1],
-                scale[0],
-                rot
-            );
+                let status_str = format!(
+                    "SELECTED: Layer {} ({}) | Pos: ({:.0}, {:.0}) | Scale: {:.0}% | Rot: {:.1}°",
+                    s_idx + 1,
+                    s_layer.name,
+                    pos[0],
+                    pos[1],
+                    scale[0],
+                    rot
+                );
 
-            let status_rect = egui::Rect::from_min_size(
-                egui::pos2(origin_x + 10.0, origin_y + draw_h - 34.0),
-                egui::vec2(status_str.len() as f32 * 6.8 + 20.0, 24.0),
-            );
-            ui.painter().rect_filled(status_rect, 4.0, colors::HUD_BG);
-            ui.painter().rect_stroke(
-                status_rect,
-                4.0,
-                egui::Stroke::new(1.0_f32, colors::BORDER_ACTIVE),
-            );
-            ui.painter().text(
-                status_rect.center(),
-                egui::Align2::CENTER_CENTER,
-                status_str,
-                egui::FontId::proportional(11.0),
-                colors::HUD_STATUS_TEXT,
-            );
+                let status_rect = egui::Rect::from_min_size(
+                    egui::pos2(origin_x + 10.0, origin_y + draw_h - 34.0),
+                    egui::vec2(status_str.len() as f32 * 6.8 + 20.0, 24.0),
+                );
+                ui.painter().rect_filled(status_rect, 4.0, colors::HUD_BG);
+                ui.painter().rect_stroke(
+                    status_rect,
+                    4.0,
+                    egui::Stroke::new(1.0_f32, colors::BORDER_ACTIVE),
+                );
+                ui.painter().text(
+                    status_rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    status_str,
+                    egui::FontId::proportional(11.0),
+                    colors::HUD_STATUS_TEXT,
+                );
+            }
         }
-    }
-
     }
 
     // ── 3D Axis Transform Gizmo Overlay ──

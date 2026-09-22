@@ -981,14 +981,16 @@ fn draw_effect_browser(ui: &mut egui::Ui) {
 
     let search_id = ui.make_persistent_id("left_effect_search");
     let mut search = ui.ctx().data_mut(|d| {
-        d.get_temp_mut_or_insert_with(search_id, String::new).clone()
+        d.get_temp_mut_or_insert_with(search_id, String::new)
+            .clone()
     });
     let response = ui.add_sized(
         [ui.available_width(), 28.0],
         egui::TextEdit::singleline(&mut search).hint_text("Search effects"),
     );
     if response.changed() {
-        ui.ctx().data_mut(|d| d.insert_temp(search_id, search.clone()));
+        ui.ctx()
+            .data_mut(|d| d.insert_temp(search_id, search.clone()));
     }
     ui.add_space(10.0);
 
@@ -1017,17 +1019,19 @@ fn draw_effect_browser(ui: &mut egui::Ui) {
                             &icon_id,
                             icon,
                             egui::vec2(15.0, 15.0),
-                            if active { colors::ACCENT_BLUE } else { colors::TEXT_SECONDARY },
+                            if active {
+                                colors::ACCENT_BLUE
+                            } else {
+                                colors::TEXT_SECONDARY
+                            },
                         );
                         let _ = ui.selectable_label(
                             active,
-                            egui::RichText::new(*category)
-                                .size(12.0)
-                                .color(if active {
-                                    colors::TEXT_PRIMARY
-                                } else {
-                                    colors::TEXT_SECONDARY
-                                }),
+                            egui::RichText::new(*category).size(12.0).color(if active {
+                                colors::TEXT_PRIMARY
+                            } else {
+                                colors::TEXT_SECONDARY
+                            }),
                         );
                     });
                 });
@@ -1106,20 +1110,26 @@ fn draw_reference_studio_nav(app: &mut KagariApp, ui: &mut egui::Ui) {
                 egui::vec2(rect.width() - 4.0, 34.0),
             );
             if index == 1 {
-                ui.painter().rect_filled(row, 4.0, egui::Color32::from_rgb(28, 35, 43));
+                ui.painter()
+                    .rect_filled(row, 4.0, egui::Color32::from_rgb(28, 35, 43));
                 ui.painter().rect_filled(
                     egui::Rect::from_min_size(row.left_top(), egui::vec2(3.0, row.height())),
                     2.0,
                     egui::Color32::from_rgb(255, 107, 22),
                 );
             }
-            let icon_rect = egui::Rect::from_center_size(row.center(), egui::vec2(icon_size, icon_size));
+            let icon_rect =
+                egui::Rect::from_center_size(row.center(), egui::vec2(icon_size, icon_size));
             crate::ui::icons::render_svg_at(
                 ui,
                 format!("reference-nav-icon-{index}"),
                 icon,
                 icon_rect.size(),
-                if index == 1 { egui::Color32::from_rgb(255, 107, 22) } else { muted },
+                if index == 1 {
+                    egui::Color32::from_rgb(255, 107, 22)
+                } else {
+                    muted
+                },
                 icon_rect.min,
             );
         }
@@ -1157,29 +1167,84 @@ fn draw_reference_studio_nav(app: &mut KagariApp, ui: &mut egui::Ui) {
             egui::pos2(rect.right(), y + row_height),
         );
         if active {
-            ui.painter().rect_filled(row, 4.0, egui::Color32::from_rgb(28, 35, 43));
+            ui.painter()
+                .rect_filled(row, 4.0, egui::Color32::from_rgb(28, 35, 43));
             ui.painter().rect_filled(
-                egui::Rect::from_min_max(egui::pos2(row.left(), row.top()), egui::pos2(row.left() + 4.0, row.bottom())),
+                egui::Rect::from_min_max(
+                    egui::pos2(row.left(), row.top()),
+                    egui::pos2(row.left() + 4.0, row.bottom()),
+                ),
                 2.0,
                 egui::Color32::from_rgb(255, 107, 22),
             );
         }
         let icon_size = if compact { 18.0 } else { 22.0 };
         let icon_rect = egui::Rect::from_min_size(
-            egui::pos2(rect.left() + if compact { 18.0 } else { 24.0 }, y + (row_height - icon_size) * 0.5),
+            egui::pos2(
+                rect.left() + if compact { 18.0 } else { 24.0 },
+                y + (row_height - icon_size) * 0.5,
+            ),
             egui::vec2(icon_size, icon_size),
         );
-        crate::ui::icons::render_svg_at(ui, format!("reference-nav-icon-{index}"), icon, icon_rect.size(), if active { egui::Color32::from_rgb(255, 107, 22) } else { muted }, icon_rect.min);
-        ui.painter().text(egui::pos2(rect.left() + if compact { 50.0 } else { 63.0 }, y + row_height * 0.5), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(if compact { 12.0 } else { 14.0 }), row_text);
+        crate::ui::icons::render_svg_at(
+            ui,
+            format!("reference-nav-icon-{index}"),
+            icon,
+            icon_rect.size(),
+            if active {
+                egui::Color32::from_rgb(255, 107, 22)
+            } else {
+                muted
+            },
+            icon_rect.min,
+        );
+        ui.painter().text(
+            egui::pos2(
+                rect.left() + if compact { 50.0 } else { 63.0 },
+                y + row_height * 0.5,
+            ),
+            egui::Align2::LEFT_CENTER,
+            label,
+            egui::FontId::proportional(if compact { 12.0 } else { 14.0 }),
+            row_text,
+        );
     }
     ui.painter().line_segment(
-        [egui::pos2(rect.left() + if compact { 24.0 } else { 38.0 }, top + rows.len() as f32 * row_step - 4.0), egui::pos2(rect.right() - if compact { 12.0 } else { 20.0 }, top + rows.len() as f32 * row_step - 4.0)],
+        [
+            egui::pos2(
+                rect.left() + if compact { 24.0 } else { 38.0 },
+                top + rows.len() as f32 * row_step - 4.0,
+            ),
+            egui::pos2(
+                rect.right() - if compact { 12.0 } else { 20.0 },
+                top + rows.len() as f32 * row_step - 4.0,
+            ),
+        ],
         egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
     );
     let settings_size = if compact { 18.0 } else { 22.0 };
     let settings_y = rect.bottom() - if compact { 32.0 } else { 72.0 };
-    let settings_rect = egui::Rect::from_min_size(egui::pos2(rect.left() + if compact { 18.0 } else { 24.0 }, settings_y), egui::vec2(settings_size, settings_size));
-    crate::ui::icons::render_svg_at(ui, "reference-nav-settings".to_string(), crate::ui::icons::SVG_SETTINGS, settings_rect.size(), colors::TEXT_MUTED, settings_rect.min);
-    ui.painter().text(egui::pos2(rect.left() + if compact { 50.0 } else { 63.0 }, settings_y + settings_size * 0.5), egui::Align2::LEFT_CENTER, "Settings", egui::FontId::proportional(if compact { 12.0 } else { 14.0 }), colors::TEXT_MUTED);
+    let settings_rect = egui::Rect::from_min_size(
+        egui::pos2(rect.left() + if compact { 18.0 } else { 24.0 }, settings_y),
+        egui::vec2(settings_size, settings_size),
+    );
+    crate::ui::icons::render_svg_at(
+        ui,
+        "reference-nav-settings".to_string(),
+        crate::ui::icons::SVG_SETTINGS,
+        settings_rect.size(),
+        colors::TEXT_MUTED,
+        settings_rect.min,
+    );
+    ui.painter().text(
+        egui::pos2(
+            rect.left() + if compact { 50.0 } else { 63.0 },
+            settings_y + settings_size * 0.5,
+        ),
+        egui::Align2::LEFT_CENTER,
+        "Settings",
+        egui::FontId::proportional(if compact { 12.0 } else { 14.0 }),
+        colors::TEXT_MUTED,
+    );
     let _ = app;
 }

@@ -61,7 +61,10 @@ pub fn draw_software_canvas(
         );
         ui.put(
             draw_rect,
-            egui::Image::new(egui::load::SizedTexture::new(texture.id(), draw_rect.size())),
+            egui::Image::new(egui::load::SizedTexture::new(
+                texture.id(),
+                draw_rect.size(),
+            )),
         );
         ui.set_clip_rect(prev_clip);
         return;

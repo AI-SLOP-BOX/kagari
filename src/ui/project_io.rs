@@ -68,7 +68,8 @@ fn read_prefs() -> RecentsFile {
 
 pub(crate) fn load_prefs_value() -> Option<serde_json::Value> {
     let path = prefs_path();
-    let text = crate::core::project_migration::read_bounded_text_file(&path, MAX_PREFS_BYTES).ok()?;
+    let text =
+        crate::core::project_migration::read_bounded_text_file(&path, MAX_PREFS_BYTES).ok()?;
     match serde_json::from_str(&text) {
         Ok(serde_json::Value::Object(object)) => Some(serde_json::Value::Object(object)),
         Ok(_) | Err(_) => {
@@ -131,7 +132,11 @@ pub(crate) fn path_key(path: &std::path::Path) -> String {
     normalized.to_string_lossy().into_owned()
 }
 
-fn path_list(root: &serde_json::Map<String, serde_json::Value>, key: &str, limit: usize) -> Vec<String> {
+fn path_list(
+    root: &serde_json::Map<String, serde_json::Value>,
+    key: &str,
+    limit: usize,
+) -> Vec<String> {
     root.get(key)
         .cloned()
         .and_then(|value| serde_json::from_value(value).ok())
@@ -139,7 +144,11 @@ fn path_list(root: &serde_json::Map<String, serde_json::Value>, key: &str, limit
         .unwrap_or_default()
 }
 
-fn set_path_list(root: &mut serde_json::Map<String, serde_json::Value>, key: &str, paths: &[String]) {
+fn set_path_list(
+    root: &mut serde_json::Map<String, serde_json::Value>,
+    key: &str,
+    paths: &[String],
+) {
     root.insert(key.to_string(), serde_json::json!(paths));
 }
 
@@ -171,7 +180,10 @@ pub fn welcome_on_startup() -> bool {
 /// Persist the welcome-on-startup preference ("Don't show again" writes false).
 pub fn set_welcome_on_startup(show: bool) {
     update_prefs(|root| {
-        root.insert("show_welcome_on_startup".into(), serde_json::Value::Bool(show));
+        root.insert(
+            "show_welcome_on_startup".into(),
+            serde_json::Value::Bool(show),
+        );
     });
 }
 
@@ -299,7 +311,8 @@ pub fn save_project_to_path(app: &mut KagariApp, path: &std::path::Path) -> Resu
             .save_atomic(path)
             .map_err(|e| format!("Failed to save production document: {}", e))?;
     } else {
-        let mut document = crate::core::production_document::ProductionDocument::new(project_snapshot.clone());
+        let mut document =
+            crate::core::production_document::ProductionDocument::new(project_snapshot.clone());
         document.audio.correction = audio_correction;
         document.audio.channels = audio_channels;
         document.audio.master_gain = master_gain;

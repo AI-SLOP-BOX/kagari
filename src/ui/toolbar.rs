@@ -58,7 +58,10 @@ pub fn draw_viewer_tool_strip(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
         ui.painter().rect_filled(rect, 3.0, fill);
         if selected {
             ui.painter().line_segment(
-                [egui::pos2(rect.left() + 4.0, rect.bottom() - 1.0), egui::pos2(rect.right() - 4.0, rect.bottom() - 1.0)],
+                [
+                    egui::pos2(rect.left() + 4.0, rect.bottom() - 1.0),
+                    egui::pos2(rect.right() - 4.0, rect.bottom() - 1.0),
+                ],
                 egui::Stroke::new(2.0_f32, colors::ACCENT_ORANGE),
             );
         }
@@ -67,7 +70,11 @@ pub fn draw_viewer_tool_strip(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
             format!("viewer_tool_{tool:?}"),
             svg,
             rect.shrink(4.0).size(),
-            if selected { colors::ACCENT_ORANGE } else { colors::TEXT_SECONDARY },
+            if selected {
+                colors::ACCENT_ORANGE
+            } else {
+                colors::TEXT_SECONDARY
+            },
             rect.shrink(4.0).min,
         );
         if response.clicked() {
@@ -79,7 +86,10 @@ pub fn draw_viewer_tool_strip(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
     if compact {
         ui.menu_button("...", |ui| {
             for (tool, _svg, tooltip) in tools.into_iter().skip(3) {
-                if ui.selectable_label(app.active_tool == tool, tooltip).clicked() {
+                if ui
+                    .selectable_label(app.active_tool == tool, tooltip)
+                    .clicked()
+                {
                     app.active_tool = tool;
                     ui.close_menu();
                 }
@@ -193,7 +203,10 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                 });
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if custom_widgets::ae_button_accent(ui, "Export").on_hover_text("Export composition (Cmd+M)").clicked() {
+                    if custom_widgets::ae_button_accent(ui, "Export")
+                        .on_hover_text("Export composition (Cmd+M)")
+                        .clicked()
+                    {
                         app.export.show_export_dialog = true;
                     }
                     ui.add_space(8.0);

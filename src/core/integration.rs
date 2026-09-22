@@ -136,12 +136,10 @@ impl OtioTimeline {
         for track in &self.tracks {
             for item in &track.items {
                 let layer_type = match (&track.kind[..], &item.media_reference) {
-                    ("audio", Some(ref_str)) if ref_str.starts_with("audio:") => {
-                        LayerType::Audio {
-                            path: ref_str["audio:".len()..].to_string(),
-                            volume: crate::core::property::Animatable::new_constant(1.0),
-                        }
-                    }
+                    ("audio", Some(ref_str)) if ref_str.starts_with("audio:") => LayerType::Audio {
+                        path: ref_str["audio:".len()..].to_string(),
+                        volume: crate::core::property::Animatable::new_constant(1.0),
+                    },
                     (_, Some(ref_str)) if ref_str.starts_with("video:") => {
                         let mut parts = ref_str.splitn(5, ':');
                         let _ = parts.next();
@@ -171,11 +169,9 @@ impl OtioTimeline {
                     (_, Some(ref_str)) if ref_str.starts_with("text:") => {
                         LayerType::new_text(&ref_str["text:".len()..], 48, [1.0, 1.0, 1.0, 1.0])
                     }
-                    (_, Some(ref_str)) if ref_str.starts_with("precomp:") => {
-                        LayerType::PreComp {
-                            comp_id: ref_str["precomp:".len()..].to_string(),
-                        }
-                    }
+                    (_, Some(ref_str)) if ref_str.starts_with("precomp:") => LayerType::PreComp {
+                        comp_id: ref_str["precomp:".len()..].to_string(),
+                    },
                     (_, Some(ref_str)) if ref_str == "color_solid" => LayerType::Solid {
                         color: [0.2, 0.5, 0.8, 1.0],
                     },
@@ -195,11 +191,9 @@ impl OtioTimeline {
                     (_, Some(ref_str)) if ref_str == "adjustment_layer" => {
                         LayerType::AdjustmentLayer
                     }
-                    (_, Some(ref_str)) if ref_str == "particle_emitter" => {
-                        LayerType::Particle {
-                            emitter: crate::core::particle_system::ParticleEmitter::default(),
-                        }
-                    }
+                    (_, Some(ref_str)) if ref_str == "particle_emitter" => LayerType::Particle {
+                        emitter: crate::core::particle_system::ParticleEmitter::default(),
+                    },
                     (_, Some(path)) => LayerType::Image { path: path.clone() },
                     (_, None) => LayerType::Null,
                 };

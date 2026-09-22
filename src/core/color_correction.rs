@@ -523,7 +523,8 @@ mod tests {
         // blue to 0, then luminosity preservation lifts it back to ~18.
         // A missing intermediate clamp (or dropped preserve step) yields 0.
         assert!(
-            buf.chunks_exact(4).all(|px| px[0] == 255 && px[1] == 255 && px[3] == 255),
+            buf.chunks_exact(4)
+                .all(|px| px[0] == 255 && px[1] == 255 && px[3] == 255),
             "red/green/alpha must survive extreme balance, got {:?}",
             &buf[..4]
         );

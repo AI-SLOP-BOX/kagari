@@ -381,7 +381,10 @@ impl EffectType {
                 push!("Blue Offset", blue_offset, Vec2);
             }
             EffectType::Flicker {
-                amount, speed, seed, ..
+                amount,
+                speed,
+                seed,
+                ..
             } => {
                 push!("Amount", amount, Scalar);
                 push!("Speed", speed, Scalar);
@@ -1491,7 +1494,10 @@ impl EffectType {
                 push!("Blue Offset", blue_offset, Vec2);
             }
             EffectType::Flicker {
-                amount, speed, seed, ..
+                amount,
+                speed,
+                seed,
+                ..
             } => {
                 push!("Amount", amount, Scalar);
                 push!("Speed", speed, Scalar);

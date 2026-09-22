@@ -410,7 +410,12 @@ pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
     });
     ui.horizontal(|ui| {
         ui.vertical(|ui| {
-            ui.label(egui::RichText::new("Basic").small().strong().color(colors::ACCENT_BLUE));
+            ui.label(
+                egui::RichText::new("Basic")
+                    .small()
+                    .strong()
+                    .color(colors::ACCENT_BLUE),
+            );
             ui.checkbox(&mut app.master_auto_gain, "Auto level");
             ui.add(
                 egui::Slider::new(&mut app.master_target_level_db, -30.0..=-6.0)
@@ -425,7 +430,12 @@ pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
         });
         ui.separator();
         ui.vertical(|ui| {
-            ui.label(egui::RichText::new("Safety").small().strong().color(colors::ACCENT_BLUE));
+            ui.label(
+                egui::RichText::new("Safety")
+                    .small()
+                    .strong()
+                    .color(colors::ACCENT_BLUE),
+            );
             ui.checkbox(&mut app.master_limiter_enabled, "Limiter");
             ui.add(
                 egui::Slider::new(&mut app.master_limiter_ceiling_db, -6.0..=-0.1)
@@ -437,7 +447,12 @@ pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.collapsing("Detailed voice shaping", |ui| {
         ui.horizontal(|ui| {
             ui.vertical(|ui| {
-                ui.label(egui::RichText::new("Clarity EQ").small().strong().color(colors::ACCENT_BLUE));
+                ui.label(
+                    egui::RichText::new("Clarity EQ")
+                        .small()
+                        .strong()
+                        .color(colors::ACCENT_BLUE),
+                );
                 ui.add(
                     egui::Slider::new(&mut app.master_eq_highpass, 20.0..=500.0)
                         .text("Low cut Hz")
@@ -448,7 +463,10 @@ pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
                         .text("High cut Hz")
                         .logarithmic(true),
                 );
-                ui.add(egui::Slider::new(&mut app.master_eq_mid_gain, -12.0..=12.0).text("Presence dB"));
+                ui.add(
+                    egui::Slider::new(&mut app.master_eq_mid_gain, -12.0..=12.0)
+                        .text("Presence dB"),
+                );
                 ui.add(
                     egui::Slider::new(&mut app.master_eq_mid_freq, 200.0..=8_000.0)
                         .text("Presence Hz")
@@ -457,12 +475,27 @@ pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
             });
             ui.separator();
             ui.vertical(|ui| {
-                ui.label(egui::RichText::new("Dynamics").small().strong().color(colors::ACCENT_BLUE));
-                ui.add(egui::Slider::new(&mut app.master_comp_threshold, -40.0..=0.0).text("Threshold dB"));
+                ui.label(
+                    egui::RichText::new("Dynamics")
+                        .small()
+                        .strong()
+                        .color(colors::ACCENT_BLUE),
+                );
+                ui.add(
+                    egui::Slider::new(&mut app.master_comp_threshold, -40.0..=0.0)
+                        .text("Threshold dB"),
+                );
                 ui.add(egui::Slider::new(&mut app.master_comp_ratio, 1.0..=20.0).text("Ratio"));
-                ui.add(egui::Slider::new(&mut app.master_comp_attack, 0.1..=50.0).text("Attack ms"));
-                ui.add(egui::Slider::new(&mut app.master_comp_release, 10.0..=500.0).text("Release ms"));
-                ui.add(egui::Slider::new(&mut app.master_comp_makeup, 0.0..=24.0).text("Makeup dB"));
+                ui.add(
+                    egui::Slider::new(&mut app.master_comp_attack, 0.1..=50.0).text("Attack ms"),
+                );
+                ui.add(
+                    egui::Slider::new(&mut app.master_comp_release, 10.0..=500.0)
+                        .text("Release ms"),
+                );
+                ui.add(
+                    egui::Slider::new(&mut app.master_comp_makeup, 0.0..=24.0).text("Makeup dB"),
+                );
             });
         });
     });
@@ -474,16 +507,18 @@ pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
                 .small()
                 .color(colors::TEXT_MUTED),
         );
-        let mut band_sel = ui
-            .ctx()
-            .data(|d| d.get_temp::<i32>(egui::Id::new("audio_crossover_band")).unwrap_or(0));
+        let mut band_sel = ui.ctx().data(|d| {
+            d.get_temp::<i32>(egui::Id::new("audio_crossover_band"))
+                .unwrap_or(0)
+        });
         ui.horizontal(|ui| {
             ui.selectable_value(&mut band_sel, 0, "All");
             ui.selectable_value(&mut band_sel, 1, "Bass");
             ui.selectable_value(&mut band_sel, 2, "Mid");
             ui.selectable_value(&mut band_sel, 3, "High");
         });
-        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("audio_crossover_band"), band_sel));
+        ui.ctx()
+            .data_mut(|d| d.insert_temp(egui::Id::new("audio_crossover_band"), band_sel));
         if ui.button("Bake Audio to Null Controller").clicked() {
             let source = app
                 .history
@@ -494,12 +529,14 @@ pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
                 .find_map(|layer| match &layer.layer_type {
                     crate::core::timeline::LayerType::Audio { path, .. } => Some(path.clone()),
                     crate::core::timeline::LayerType::Video {
-                        audio_wav: Some(path), ..
+                        audio_wav: Some(path),
+                        ..
                     } => Some(path.clone()),
                     _ => None,
                 });
             let Some(source) = source else {
-                app.toasts.error("Add an Audio or Video-with-Audio layer first");
+                app.toasts
+                    .error("Add an Audio or Video-with-Audio layer first");
                 return;
             };
             let band = match band_sel {
@@ -516,7 +553,9 @@ pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
             ) {
                 Ok(name) => {
                     app.commit_project(project);
-                    app.toasts.info(format!("Created '{name}' with animated Slider Control keyframes"));
+                    app.toasts.info(format!(
+                        "Created '{name}' with animated Slider Control keyframes"
+                    ));
                 }
                 Err(error) => app.toasts.error(error),
             }

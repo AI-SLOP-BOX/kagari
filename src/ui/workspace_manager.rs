@@ -203,8 +203,12 @@ impl SavedWorkspace {
         app.ui_tabs.viewport_mag_ratio = self.viewport_mag_ratio;
         app.ui_tabs.show_switches_pane = self.show_switches_pane;
         app.ui_tabs.global_shy_active = self.global_shy_active;
-        app.ui_tabs.layer_filter_text.clone_from(&self.layer_filter_text);
-        app.ui_tabs.effects_search_query.clone_from(&self.effects_search_query);
+        app.ui_tabs
+            .layer_filter_text
+            .clone_from(&self.layer_filter_text);
+        app.ui_tabs
+            .effects_search_query
+            .clone_from(&self.effects_search_query);
         app.viewer_maximized = self.viewer_maximized;
         app.show_graph_editor = self.show_graph_editor;
         app.timeline_zoom = self.timeline_zoom;
@@ -257,12 +261,7 @@ fn panel_width(ctx: &egui::Context, id: &str, horizontal: bool) -> f32 {
         .unwrap_or(0.0)
 }
 
-fn restore_panel_size(
-    ctx: &egui::Context,
-    id: &str,
-    size: f32,
-    horizontal: bool,
-) {
+fn restore_panel_size(ctx: &egui::Context, id: &str, size: f32, horizontal: bool) {
     if !size.is_finite() || size <= 0.0 {
         return;
     }

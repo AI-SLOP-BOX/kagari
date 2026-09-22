@@ -42,30 +42,22 @@ pub fn draw_font_picker(app: &mut KagariApp, ui: &mut egui::Ui) {
         .selected_layer_idx
         .and_then(|idx| {
             let comp = app.history.current().active_composition();
-            comp.layers
-                .get(idx)
-                .and_then(|l| {
-                    l.text_formatting
-                        .as_ref()
-                        .map(|tf| tf.font_family.clone())
-                        .or_else(|| match &l.layer_type {
-                            crate::core::timeline::LayerType::Text { font_family, .. } => {
-                                Some(font_family.clone())
-                            }
-                            _ => None,
-                        })
-                })
+            comp.layers.get(idx).and_then(|l| {
+                l.text_formatting
+                    .as_ref()
+                    .map(|tf| tf.font_family.clone())
+                    .or_else(|| match &l.layer_type {
+                        crate::core::timeline::LayerType::Text { font_family, .. } => {
+                            Some(font_family.clone())
+                        }
+                        _ => None,
+                    })
+            })
         })
         .unwrap_or_else(|| families[0].clone());
 
     if let Some(idx) = app.selection.selected_layer_idx {
-        if let Some(layer) = app
-            .history
-            .current()
-            .active_composition()
-            .layers
-            .get(idx)
-        {
+        if let Some(layer) = app.history.current().active_composition().layers.get(idx) {
             if let Some(tf) = layer.text_formatting.as_ref() {
                 app.faux_font_switches = (tf.faux_bold, tf.faux_italic, tf.all_caps, tf.small_caps);
             }

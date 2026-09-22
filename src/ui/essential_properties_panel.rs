@@ -39,8 +39,7 @@ pub fn draw_essential_properties(app: &mut KagariApp, ui: &mut egui::Ui) {
                 comp.layers[sel_idx].essential_properties.push(
                     crate::core::essential_properties::EssentialProperty {
                         name: format!("Property {}", count + 1),
-                        prop_type:
-                            crate::core::essential_properties::EssentialPropertyType::Slider,
+                        prop_type: crate::core::essential_properties::EssentialPropertyType::Slider,
                         value: crate::core::essential_properties::EssentialValue::Float(50.0),
                         overridden: false,
                         min_value: 0.0,
@@ -93,27 +92,21 @@ pub fn draw_essential_properties(app: &mut KagariApp, ui: &mut egui::Ui) {
 
     if let Some(idx) = remove_idx {
         app.modify_project(|project| {
-            project
-                .active_composition_mut()
-                .layers[sel_idx]
+            project.active_composition_mut().layers[sel_idx]
                 .essential_properties
                 .remove(idx);
         });
     }
     if let Some(idx) = move_up {
         app.modify_project(|project| {
-            project
-                .active_composition_mut()
-                .layers[sel_idx]
+            project.active_composition_mut().layers[sel_idx]
                 .essential_properties
                 .swap(idx, idx - 1);
         });
     }
     if let Some(idx) = move_down {
         app.modify_project(|project| {
-            project
-                .active_composition_mut()
-                .layers[sel_idx]
+            project.active_composition_mut().layers[sel_idx]
                 .essential_properties
                 .swap(idx, idx + 1);
         });

@@ -13,7 +13,18 @@ fn classify_imported_media(path: &std::path::Path) -> ProjectItemType {
         .unwrap_or_default();
     if matches!(
         extension.as_str(),
-        "mp4" | "mov" | "mkv" | "webm" | "avi" | "m4v" | "mpeg" | "mpg" | "ts" | "m2ts" | "av1" | "ivf"
+        "mp4"
+            | "mov"
+            | "mkv"
+            | "webm"
+            | "avi"
+            | "m4v"
+            | "mpeg"
+            | "mpg"
+            | "ts"
+            | "m2ts"
+            | "av1"
+            | "ivf"
     ) {
         ProjectItemType::Video {
             path: file_path,
@@ -136,8 +147,11 @@ fn project_icon_action(
 
 pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
     // ── Asset Search Filter ──
-    ui.add_sized([ui.available_width(), 26.0],
-        egui::TextEdit::singleline(&mut app.project_search_query).hint_text("Search project assets"));
+    ui.add_sized(
+        [ui.available_width(), 26.0],
+        egui::TextEdit::singleline(&mut app.project_search_query)
+            .hint_text("Search project assets"),
+    );
 
     let query = app.project_search_query.to_lowercase();
 
@@ -223,7 +237,8 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
             crate::ui::icons::SVG_FILE_PLUS,
             "Create New Composition",
         )
-        .clicked() {
+        .clicked()
+        {
             add_comp_requested = true;
         }
 
@@ -233,14 +248,15 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
             crate::ui::icons::SVG_IMPORT,
             "Import footage or audio",
         )
-        .clicked() {
+        .clicked()
+        {
             if let Some(path) = rfd::FileDialog::new()
                 .add_filter(
                     "Media Footage",
                     &[
-                        "png", "jpg", "jpeg", "webp", "avif", "wav", "mp3", "m4a", "flac",
-                        "ogg", "aiff", "mp4", "mov", "mkv", "webm", "avi", "m4v", "mpeg", "mpg",
-                        "ts", "m2ts", "av1", "ivf",
+                        "png", "jpg", "jpeg", "webp", "avif", "wav", "mp3", "m4a", "flac", "ogg",
+                        "aiff", "mp4", "mov", "mkv", "webm", "avi", "m4v", "mpeg", "mpg", "ts",
+                        "m2ts", "av1", "ivf",
                     ],
                 )
                 .pick_file()
@@ -250,23 +266,25 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
         }
 
         ui.menu_button("...", |ui| {
-        if ui.button("New folder").clicked() {
-            add_folder_requested = true;
-        }
+            if ui.button("New folder").clicked() {
+                add_folder_requested = true;
+            }
 
-        if ui.button("Remove unused")
-            .on_hover_text("Remove unused footage and assets from project")
-            .clicked()
-        {
-            remove_unused_requested = true;
-        }
+            if ui
+                .button("Remove unused")
+                .on_hover_text("Remove unused footage and assets from project")
+                .clicked()
+            {
+                remove_unused_requested = true;
+            }
 
-        if ui.button("Reduce project")
-            .on_hover_text("Keep only the active composition and its dependencies")
-            .clicked()
-        {
-            reduce_project_requested = true;
-        }
+            if ui
+                .button("Reduce project")
+                .on_hover_text("Keep only the active composition and its dependencies")
+                .clicked()
+            {
+                reduce_project_requested = true;
+            }
         });
     });
 
@@ -338,35 +356,35 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
                     .collect();
 
                 egui::CollapsingHeader::new(format!("{} ({})", fname, children.len()))
-                .default_open(!query.is_empty())
-                .show(ui, |ui| {
-                    if children.is_empty() {
-                        ui.small("empty bin");
-                    }
-                    for (ci, child) in children {
-                        let is_sel = selected_asset_idx == Some(ci);
-                        draw_asset_row(
-                            ui,
-                            ci,
-                            child,
-                            is_sel,
-                            &mut selected_idx_update,
-                            &mut add_to_timeline_item,
-                            &mut move_to_folder,
-                            &folders,
-                        );
-                    }
-                    // Un-bin shortcut on the folder itself
-                    if ui.small_button("⤴ Move selection out").clicked() {
-                        if let Some(sel) = selected_asset_idx {
-                            if let Some(it) = current_project.assets.get(sel) {
-                                if it.parent_folder.as_deref() == Some(fname.as_str()) {
-                                    move_to_folder = Some((sel, None));
+                    .default_open(!query.is_empty())
+                    .show(ui, |ui| {
+                        if children.is_empty() {
+                            ui.small("empty bin");
+                        }
+                        for (ci, child) in children {
+                            let is_sel = selected_asset_idx == Some(ci);
+                            draw_asset_row(
+                                ui,
+                                ci,
+                                child,
+                                is_sel,
+                                &mut selected_idx_update,
+                                &mut add_to_timeline_item,
+                                &mut move_to_folder,
+                                &folders,
+                            );
+                        }
+                        // Un-bin shortcut on the folder itself
+                        if ui.small_button("⤴ Move selection out").clicked() {
+                            if let Some(sel) = selected_asset_idx {
+                                if let Some(it) = current_project.assets.get(sel) {
+                                    if it.parent_folder.as_deref() == Some(fname.as_str()) {
+                                        move_to_folder = Some((sel, None));
+                                    }
                                 }
                             }
                         }
-                    }
-                });
+                    });
             }
         });
 
@@ -396,53 +414,53 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
             egui::Frame::none()
                 .inner_margin(egui::Margin::symmetric(0.0, 4.0))
                 .show(ui, |ui| {
-                ui.label(egui::RichText::new(&item.name).strong());
-                match &item.item_type {
-                    ProjectItemType::Composition { comp_idx } => {
-                        if let Some(c) = current_project.compositions.get(*comp_idx) {
-                            ui.small(format!("Resolution: {} x {} px", c.width, c.height));
-                            ui.small(format!("Frame Rate: {} fps", c.fps));
-                            ui.small(format!("Duration: {} frames", c.duration_frames));
+                    ui.label(egui::RichText::new(&item.name).strong());
+                    match &item.item_type {
+                        ProjectItemType::Composition { comp_idx } => {
+                            if let Some(c) = current_project.compositions.get(*comp_idx) {
+                                ui.small(format!("Resolution: {} x {} px", c.width, c.height));
+                                ui.small(format!("Frame Rate: {} fps", c.fps));
+                                ui.small(format!("Duration: {} frames", c.duration_frames));
+                            }
+                        }
+                        ProjectItemType::Image {
+                            path,
+                            width,
+                            height,
+                        } => {
+                            ui.small(format!("File: {}", path));
+                            ui.small(format!("Dimensions: {} x {} px", width, height));
+                        }
+                        ProjectItemType::Model3D { path } => {
+                            ui.small(format!("File: {}", path));
+                            ui.small("Format: Wavefront OBJ");
+                        }
+                        ProjectItemType::Video { path, duration_sec } => {
+                            ui.small(format!("File: {}", path));
+                            ui.small(format!("Duration: {:.1}s", duration_sec));
+                        }
+                        ProjectItemType::Audio { path, duration_sec } => {
+                            ui.small(format!("File: {}", path));
+                            ui.small(format!("Length: {:.2} seconds", duration_sec));
+                        }
+                        ProjectItemType::Solid { color } => {
+                            ui.small(format!(
+                                "Color: R:{:.0} G:{:.0} B:{:.0}",
+                                color[0] * 255.0,
+                                color[1] * 255.0,
+                                color[2] * 255.0
+                            ));
+                        }
+                        ProjectItemType::Folder { .. } => {
+                            ui.small("Project Bin Directory");
                         }
                     }
-                    ProjectItemType::Image {
-                        path,
-                        width,
-                        height,
-                    } => {
-                        ui.small(format!("File: {}", path));
-                        ui.small(format!("Dimensions: {} x {} px", width, height));
-                    }
-                    ProjectItemType::Model3D { path } => {
-                        ui.small(format!("File: {}", path));
-                        ui.small("Format: Wavefront OBJ");
-                    }
-                    ProjectItemType::Video { path, duration_sec } => {
-                        ui.small(format!("File: {}", path));
-                        ui.small(format!("Duration: {:.1}s", duration_sec));
-                    }
-                    ProjectItemType::Audio { path, duration_sec } => {
-                        ui.small(format!("File: {}", path));
-                        ui.small(format!("Length: {:.2} seconds", duration_sec));
-                    }
-                    ProjectItemType::Solid { color } => {
-                        ui.small(format!(
-                            "Color: R:{:.0} G:{:.0} B:{:.0}",
-                            color[0] * 255.0,
-                            color[1] * 255.0,
-                            color[2] * 255.0
-                        ));
-                    }
-                    ProjectItemType::Folder { .. } => {
-                        ui.small("Project Bin Directory");
-                    }
-                }
 
-                ui.add_space(4.0);
-                if custom_widgets::ae_button(ui, "Add to Active Comp").clicked() {
-                    add_to_timeline_item = Some(item.clone());
-                }
-            });
+                    ui.add_space(4.0);
+                    if custom_widgets::ae_button(ui, "Add to Active Comp").clicked() {
+                        add_to_timeline_item = Some(item.clone());
+                    }
+                });
         }
     }
 
@@ -706,7 +724,13 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
                         .unwrap_or_else(|| std::borrow::Cow::Borrowed("video"));
                     let safe_stem: String = stem
                         .chars()
-                        .map(|ch| if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_') { ch } else { '_' })
+                        .map(|ch| {
+                            if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_') {
+                                ch
+                            } else {
+                                '_'
+                            }
+                        })
                         .collect();
                     let destination = std::env::temp_dir()
                         .join("kagari_media")
@@ -729,9 +753,13 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
             }
 
             if let Some(error) = import_error {
-                app.toasts.error(format!("Could not replace video footage: {error}"));
+                app.toasts
+                    .error(format!("Could not replace video footage: {error}"));
             } else {
-                let asset = temp_project.assets.get_mut(asset_idx).expect("asset index checked above");
+                let asset = temp_project
+                    .assets
+                    .get_mut(asset_idx)
+                    .expect("asset index checked above");
                 asset.name = new_name.clone();
                 match &mut asset.item_type {
                     ProjectItemType::Image { path, .. }
@@ -904,19 +932,25 @@ fn draw_asset_row(
         let row_width = ui.available_width();
         let compact_row = row_width < 260.0;
         let tag_width = if compact_row { 72.0 } else { 92.0 };
-        let action_width = if !folders.is_empty() && show_row_actions { 34.0 } else { 0.0 };
+        let action_width = if !folders.is_empty() && show_row_actions {
+            34.0
+        } else {
+            0.0
+        };
         let name_width = (row_width - 16.0 - 4.0 - tag_width - 4.0 - action_width).max(48.0);
         crate::ui::icons::render_svg_bytes(
             ui,
             &format!("project-asset-icon-{i}"),
             icon_svg,
             egui::vec2(16.0, 16.0),
-            if is_selected { colors::TEXT_PRIMARY } else { colors::TEXT_SECONDARY },
+            if is_selected {
+                colors::TEXT_PRIMARY
+            } else {
+                colors::TEXT_SECONDARY
+            },
         );
-        let (name_rect, response) = ui.allocate_exact_size(
-            egui::vec2(name_width, 20.0),
-            egui::Sense::click(),
-        );
+        let (name_rect, response) =
+            ui.allocate_exact_size(egui::vec2(name_width, 20.0), egui::Sense::click());
         if is_selected || response.hovered() {
             ui.painter().rect_filled(
                 name_rect,
@@ -930,11 +964,13 @@ fn draw_asset_row(
         }
         ui.allocate_new_ui(egui::UiBuilder::new().max_rect(name_rect), |name_ui| {
             name_ui.add(
-                egui::Label::new(
-                    egui::RichText::new(&item.name)
-                        .size(12.0)
-                        .color(if is_selected { colors::TEXT_PRIMARY } else { colors::TEXT_SECONDARY }),
-                )
+                egui::Label::new(egui::RichText::new(&item.name).size(12.0).color(
+                    if is_selected {
+                        colors::TEXT_PRIMARY
+                    } else {
+                        colors::TEXT_SECONDARY
+                    },
+                ))
                 .truncate(),
             );
         });
@@ -955,8 +991,8 @@ fn draw_asset_row(
                         "Media Footage",
                         &[
                             "png", "jpg", "jpeg", "webp", "avif", "wav", "mp3", "m4a", "flac",
-                            "ogg", "aiff", "mp4", "mov", "mkv", "webm", "avi", "m4v", "mpeg", "mpg",
-                            "ts", "m2ts", "av1", "ivf",
+                            "ogg", "aiff", "mp4", "mov", "mkv", "webm", "avi", "m4v", "mpeg",
+                            "mpg", "ts", "m2ts", "av1", "ivf",
                         ],
                     )
                     .pick_file()

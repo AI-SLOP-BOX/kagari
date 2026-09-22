@@ -206,7 +206,9 @@ pub const SVG_EFFECTS: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBo
 pub fn draw_logo(ui: &mut egui::Ui, size: f32) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
     let texture_id = egui::Id::new("kagari-logo-mark");
-    let texture = ui.ctx().data_mut(|data| data.get_temp::<egui::TextureHandle>(texture_id));
+    let texture = ui
+        .ctx()
+        .data_mut(|data| data.get_temp::<egui::TextureHandle>(texture_id));
     let texture = texture.unwrap_or_else(|| {
         let image = image::load_from_memory(include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -220,7 +222,8 @@ pub fn draw_logo(ui: &mut egui::Ui, size: f32) -> egui::Response {
             egui::ColorImage::from_rgba_unmultiplied(size, image.as_raw()),
             egui::TextureOptions::LINEAR,
         );
-        ui.ctx().data_mut(|data| data.insert_temp(texture_id, handle.clone()));
+        ui.ctx()
+            .data_mut(|data| data.insert_temp(texture_id, handle.clone()));
         handle
     });
     ui.painter().image(

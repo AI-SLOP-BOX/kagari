@@ -342,20 +342,14 @@ impl TrackerEngine {
                 let seq_b = (frame + 1).min(frame_count.saturating_sub(1));
                 (
                     Some(
-                        crate::core::video_import::frame_path_in_dir(
-                            frames_dir,
-                            seq_a,
-                        )
-                        .to_string_lossy()
-                        .into_owned(),
+                        crate::core::video_import::frame_path_in_dir(frames_dir, seq_a)
+                            .to_string_lossy()
+                            .into_owned(),
                     ),
                     Some(
-                        crate::core::video_import::frame_path_in_dir(
-                            frames_dir,
-                            seq_b,
-                        )
-                        .to_string_lossy()
-                        .into_owned(),
+                        crate::core::video_import::frame_path_in_dir(frames_dir, seq_b)
+                            .to_string_lossy()
+                            .into_owned(),
                     ),
                 )
             }
@@ -794,11 +788,8 @@ mod tests {
             Keyframe::new(10, [200.0, 150.0], InterpolationType::Linear),
         ]);
         src_layer.trackers.push(tp);
-        let mut second_tp = TrackerPoint::new(
-            "tp_2".to_string(),
-            "Point2".to_string(),
-            [10.0, 20.0],
-        );
+        let mut second_tp =
+            TrackerPoint::new("tp_2".to_string(), "Point2".to_string(), [10.0, 20.0]);
         second_tp.position = Animatable::Animated(vec![
             Keyframe::new(0, [10.0, 20.0], InterpolationType::Linear),
             Keyframe::new(10, [40.0, 80.0], InterpolationType::Linear),
@@ -825,14 +816,8 @@ mod tests {
         );
 
         TrackerEngine::apply_tracker_to_target(&mut comp, 0, 1, 1, true, false);
-        assert_eq!(
-            comp.layers[1].transform.position.evaluate(0),
-            [10.0, 20.0]
-        );
-        assert_eq!(
-            comp.layers[1].transform.position.evaluate(10),
-            [40.0, 80.0]
-        );
+        assert_eq!(comp.layers[1].transform.position.evaluate(0), [10.0, 20.0]);
+        assert_eq!(comp.layers[1].transform.position.evaluate(10), [40.0, 80.0]);
     }
 
     #[test]
@@ -851,11 +836,8 @@ mod tests {
             LayerType::Null,
             100,
         );
-        let mut tracker = TrackerPoint::new(
-            "track".to_string(),
-            "Track".to_string(),
-            [100.0, 100.0],
-        );
+        let mut tracker =
+            TrackerPoint::new("track".to_string(), "Track".to_string(), [100.0, 100.0]);
         tracker.position = Animatable::Animated(vec![
             Keyframe::new(0, [100.0, 100.0], InterpolationType::Linear),
             Keyframe::new(10, [160.0, 140.0], InterpolationType::Linear),

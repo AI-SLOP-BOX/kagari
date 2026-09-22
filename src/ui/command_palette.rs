@@ -22,20 +22,23 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                         let comp = project.active_composition_mut();
                         if idx < comp.layers.len() {
                             let len = comp.layers[idx].effects.len();
-                            comp.layers[idx].effects.push(crate::core::timeline::Effect {
-                                id: format!("blur_{}", len),
-                                name: "Gaussian Blur".to_string(),
-                                effect_type: crate::core::timeline::EffectType::GaussianBlur {
-                                    blur_radius: crate::core::property::Animatable::new_constant(
-                                        10.0,
-                                    ),
-                                },
-                                enabled: true,
-                            });
+                            comp.layers[idx]
+                                .effects
+                                .push(crate::core::timeline::Effect {
+                                    id: format!("blur_{}", len),
+                                    name: "Gaussian Blur".to_string(),
+                                    effect_type: crate::core::timeline::EffectType::GaussianBlur {
+                                        blur_radius:
+                                            crate::core::property::Animatable::new_constant(10.0),
+                                    },
+                                    enabled: true,
+                                });
                             added = true;
                         }
                     });
-                    if added { app.toasts.info("Added Gaussian Blur"); }
+                    if added {
+                        app.toasts.info("Added Gaussian Blur");
+                    }
                 }
             }),
         },
@@ -437,7 +440,7 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                         &path,
                         32 * 1024 * 1024,
                     )
-                        .and_then(|s| crate::core::camera_track::BlenderCamTrack::parse(&s))
+                    .and_then(|s| crate::core::camera_track::BlenderCamTrack::parse(&s))
                     {
                         Ok(track) => {
                             let mut baked = 0usize;
@@ -465,12 +468,12 @@ pub fn get_all_commands() -> Vec<PaletteCommand> {
                         &path,
                         8 * 1024 * 1024,
                     )
-                        .map(|s| {
-                            crate::core::subtitles::parse_srt(
-                                &s,
-                                app.history.current().active_composition().fps,
-                            )
-                        }) {
+                    .map(|s| {
+                        crate::core::subtitles::parse_srt(
+                            &s,
+                            app.history.current().active_composition().fps,
+                        )
+                    }) {
                         Ok(cues) if !cues.is_empty() => {
                             let (cw, ch) = {
                                 let cc = app.history.current().active_composition();
@@ -1110,13 +1113,11 @@ pub fn draw_command_palette(app: &mut KagariApp, ctx: &egui::Context) {
                     // entry for commands that already committed.
                     if app.history.generation() == generation_before {
                         let current = app.history.current().clone();
-                        let changed = match (
-                            serde_json::to_vec(&snapshot),
-                            serde_json::to_vec(&current),
-                        ) {
-                            (Ok(before), Ok(after)) => before != after,
-                            _ => false,
-                        };
+                        let changed =
+                            match (serde_json::to_vec(&snapshot), serde_json::to_vec(&current)) {
+                                (Ok(before), Ok(after)) => before != after,
+                                _ => false,
+                            };
                         if changed {
                             app.begin_drag_with_snapshot(snapshot, command_name);
                             app.commit_drag();
