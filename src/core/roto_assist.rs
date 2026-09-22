@@ -16,21 +16,27 @@ pub fn bake_tracked_mask(
     start_frame: u32,
     end_frame: u32,
 ) -> Result<Animatable<Vec<[f32; 2]>>, String> {
+    if end_frame < start_frame {
+        return Err("end frame must not precede start frame".into());
+    }
     let base_poly = base_mask.path.to_polygon(start_frame.max(1), 16);
     if base_poly.is_empty() {
         return Err("base mask has no vertices".into());
     }
     let origin = tracker.position.evaluate(start_frame);
     let mut kfs: Vec<Keyframe<Vec<[f32; 2]>>> = Vec::new();
-    let step = ((end_frame - start_frame) / 60).max(1); // ≤ ~60 samples
+    let step = (end_frame.saturating_sub(start_frame) / 60).max(1); // ≤ ~61 samples
     let mut f = start_frame;
-    while f <= end_frame {
+    loop {
         let cur = tracker.position.evaluate(f);
         let dx = cur[0] - origin[0];
         let dy = cur[1] - origin[1];
         let moved: Vec<[f32; 2]> = base_poly.iter().map(|p| [p[0] + dx, p[1] + dy]).collect();
         kfs.push(Keyframe::new(f, moved, InterpolationType::Linear));
-        f += step;
+        if f >= end_frame {
+            break;
+        }
+        f = f.saturating_add(step).min(end_frame);
     }
     if kfs.is_empty() {
         return Err("no frames to bake".into());
@@ -404,6 +410,25 @@ mod tests {
         m.path.vertices = Animatable::Animated(vec![]); // no vertices at all
         let t = moving_tracker();
         assert!(bake_tracked_mask(&m, &t, 0, 10).is_err());
+    }
+
+    #[test]
+    fn test_bake_rejects_reversed_frame_range() {
+        let m = square_mask();
+        let t = moving_tracker();
+        let error = bake_tracked_mask(&m, &t, 10, 9).expect_err("reversed range is invalid");
+        assert!(error.contains("end frame"));
+    }
+
+    #[test]
+    fn test_bake_includes_end_frame_without_u32_overflow() {
+        let m = square_mask();
+        let t = TrackerPoint::new("t".into(), "T".into(), [5.0, 5.0]);
+        let baked = bake_tracked_mask(&m, &t, u32::MAX - 1, u32::MAX).expect("bakes safely");
+        let Animatable::Animated(kfs) = baked else {
+            panic!("expected animated mask")
+        };
+        assert_eq!(kfs.iter().map(|kf| kf.frame).collect::<Vec<_>>(), [u32::MAX - 1, u32::MAX]);
     }
 
     #[test]

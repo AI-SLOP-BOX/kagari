@@ -1749,7 +1749,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                                 mask,
                                 &tracker,
                                 layer.in_frame,
-                                layer.out_frame.max(layer.in_frame + 1),
+                                layer.out_frame.max(layer.in_frame.saturating_add(1)),
                             )
                             .ok()?;
                             mask.path.vertices = baked;
