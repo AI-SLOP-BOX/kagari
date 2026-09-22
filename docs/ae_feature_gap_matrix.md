@@ -87,11 +87,13 @@ is intentionally tracked separately from the core workflow.
    typography fidelity, path editing, and modifier interaction are behind AE.
 7. **Workspace persistence** — saved workspaces must restore panel geometry,
    timeline height, graph mode, and viewer state, not only tab indices.
-8. **Roto/paint temporal behavior** — a user can now apply geometry smoothing,
-   feather, and expansion to the actual stored matte with Undo, and can choose
-   which tracker drives its translation. This is not temporal segmentation:
-   optical-flow propagation, propagation review, correction caching, and
-   real-footage quality remain substantially behind AE.
+8. **Roto/paint temporal behavior** — a user can apply geometry smoothing,
+   feather, and expansion to the stored matte with Undo, choose which tracker
+   drives translation, and propagate a roto matte by warping foreground and
+   background strokes, applying frame-specific corrections, and re-segmenting
+   each frame. Synthetic occlusion behavior is covered; real-footage quality,
+   propagation review, correction caching, and paint/clone remain substantially
+   behind AE.
 9. **Audio correction and interchange** — production audio formats and the
    correction workflow need a complete non-ML baseline before model support.
 
@@ -103,7 +105,7 @@ losing its meaning.
 
 | Priority | AE workflow to match | Kagari gap to close | Acceptance evidence |
 |---:|---|---|---|
-| 1 | Roto Brush / paint a subject over time | Brush input, per-frame matte propagation, edge refinement, correction/review, cache invalidation, and undo are not yet one reliable workflow | Import a short real clip, create and propagate foreground/background strokes across a frame range, correct a later frame, save/reopen, and compare preview/export mattes at several frames |
+| 1 | Roto Brush / paint a subject over time | Core propagation re-segments from warped and frame-specific strokes, but real-footage validation, propagation review, correction caching, and preview/export parity are not yet one reliable workflow | Import a short real clip, create and propagate foreground/background strokes across a frame range, correct a later frame, save/reopen, and compare preview/export mattes at several frames |
 | 2 | Consistent composition preview and final render | GPU preview is intentionally restricted to an allowlist; supported paths still need measured pixel contracts and unsupported paths must visibly use software fallback | For every allowlisted effect and representative alpha/blend/scale cases, compare GPU preview to the software reference within a documented tolerance; assert unsupported stacks take the fallback path |
 | 3 | 3D camera, lights, and imported models in a composition | OBJ/software coverage exists, but authored scenes, material controls, broader model interchange, and GPU parity are incomplete | Build a scene with a model, camera, and light using UI controls; animate it; save/reopen; render nested and top-level compositions; compare against reference frames |
 | 4 | Content-Aware Fill over a footage range | The mask-driven path exists, but temporal coherence and failure/review UX are not established | Run on representative static-camera and moving-camera clips; measure fill-region temporal flicker and boundary error, support manual replacement frames, and persist the result |
@@ -120,8 +122,9 @@ The first import/audio round-trip and graph-keyframe drag paths have already
 been exercised; do not repeat them as the next pass. Continue by user-visible
 leverage, and update the acceptance evidence above only after each slice closes:
 
-1. Complete the Roto/paint real-footage journey and fix the first measured
-   propagation, correction, cache, or undo failure.
+1. Complete the Roto/paint real-footage journey; measure edge quality and
+   preview/export agreement, then fix the first measured propagation,
+   correction, cache, or undo failure.
 2. Audit the GPU allowlist against the software renderer, add representative
    pixel-contract tests, and remove any unproven effect from the allowlist.
 3. Complete one UI-authored 3D model/camera/light project through save/reopen
