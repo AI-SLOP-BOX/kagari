@@ -4,7 +4,6 @@ use eframe::egui;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct GraphKeyframeDrag {
-    anchor_id: usize,
     original_frame: u32,
     current_frame: u32,
     original_value: f32,
@@ -2027,13 +2026,15 @@ pub fn draw_graph_editor(
                         continue;
                     }
                     if key_response.dragged() {
-                        let state = ui.ctx().data(|d| d.get_temp::<GraphKeyframeDrag>(channel_drag_id)).unwrap_or(GraphKeyframeDrag {
-                            anchor_id: index,
-                            original_frame: *frame,
-                            current_frame: *frame,
-                            original_value: *value,
-                            current_value: *value,
-                        });
+                        let state = ui
+                            .ctx()
+                            .data(|d| d.get_temp::<GraphKeyframeDrag>(channel_drag_id))
+                            .unwrap_or(GraphKeyframeDrag {
+                                original_frame: *frame,
+                                current_frame: *frame,
+                                original_value: *value,
+                                current_value: *value,
+                            });
                         let next_frame = (state.original_frame as i32
                             + (key_response.drag_delta().x / rect.width() * total_f as f32).round() as i32)
                             .clamp(0, total_f as i32) as u32;
@@ -2059,9 +2060,13 @@ pub fn draw_graph_editor(
             let active_drag: Option<GraphKeyframeDrag> = ui.ctx().data(|d| d.get_temp(drag_state_id));
 
             for (kf_idx, kf_frame, kf_val) in &kf_positions {
-                let drag_display = active_drag.filter(|drag| drag.anchor_id == *kf_idx);
-                let display_frame = drag_display.map(|drag| drag.current_frame).unwrap_or(*kf_frame);
-                let display_value = drag_display.map(|drag| drag.current_value).unwrap_or(*kf_val);
+                let drag_display = active_drag.filter(|drag| drag.current_frame == *kf_frame);
+                let display_frame = drag_display
+                    .map(|drag| drag.current_frame)
+                    .unwrap_or(*kf_frame);
+                let display_value = drag_display
+                    .map(|drag| drag.current_value)
+                    .unwrap_or(*kf_val);
                 let pt = egui::pos2(frame_to_x(display_frame), val_to_y(display_value));
 
                 // --- Anchor point: drag horizontally to retime, vertically to change value ---
@@ -2073,10 +2078,9 @@ pub fn draw_graph_editor(
                         anchor_rect,
                     );
                 });
-                let anchor_token = active_drag
-                    .filter(|drag| drag.anchor_id == *kf_idx)
+                let anchor_token = drag_display
                     .map(|drag| drag.original_frame as usize)
-                    .unwrap_or(*kf_idx);
+                    .unwrap_or(*kf_frame as usize);
                 let anchor_resp = ui.interact(
                     anchor_rect,
                     egui::Id::new(("graph_anchor", &layer.id, &graph_prop, anchor_token)),
@@ -2096,7 +2100,6 @@ pub fn draw_graph_editor(
                 }
                 if anchor_resp.drag_started() {
                     let state = GraphKeyframeDrag {
-                        anchor_id: *kf_idx,
                         original_frame: *kf_frame,
                         current_frame: *kf_frame,
                         original_value: *kf_val,
@@ -2105,15 +2108,19 @@ pub fn draw_graph_editor(
                     ui.ctx().data_mut(|d| d.insert_temp(drag_state_id, state));
                 }
                 if anchor_resp.dragged() {
-                    let state = ui.ctx().data(|d| d.get_temp::<GraphKeyframeDrag>(drag_state_id)).unwrap_or(GraphKeyframeDrag {
-                        anchor_id: *kf_idx,
-                        original_frame: *kf_frame,
-                        current_frame: *kf_frame,
-                        original_value: *kf_val,
-                        current_value: *kf_val,
-                    });
-                    let delta_frames = (anchor_resp.drag_delta().x / rect.width() * total_f as f32).round() as i32;
-                    let new_frame = (state.original_frame as i32 + delta_frames).clamp(0, total_f as i32) as u32;
+                    let state = ui
+                        .ctx()
+                        .data(|d| d.get_temp::<GraphKeyframeDrag>(drag_state_id))
+                        .unwrap_or(GraphKeyframeDrag {
+                            original_frame: *kf_frame,
+                            current_frame: *kf_frame,
+                            original_value: *kf_val,
+                            current_value: *kf_val,
+                        });
+                    let delta_frames =
+                        (anchor_resp.drag_delta().x / rect.width() * total_f as f32).round() as i32;
+                    let new_frame = (state.original_frame as i32 + delta_frames)
+                        .clamp(0, total_f as i32) as u32;
                     let delta_val = -anchor_resp.drag_delta().y / (rect.height() - 8.0) * val_range;
                     let new_value = state.original_value + delta_val;
                     let axis = if graph_prop.starts_with("3D ") { axis_3d(&graph_prop) } else { usize::from(graph_prop.ends_with('Y')) };
@@ -2713,9 +2720,8 @@ pub fn draw_camera_lens_graph(
                 })
                 .filter(|(_, key)| point(key.frame, key.value).distance(pointer) <= 12.0)
                 .map(|(index, _)| index);
-            let drag = nearest.and_then(|index| {
-                keys.get(index).map(|key| GraphKeyframeDrag {
-                    anchor_id: index,
+                let drag = nearest.and_then(|index| {
+                    keys.get(index).map(|key| GraphKeyframeDrag {
                     original_frame: key.frame,
                     current_frame: key.frame,
                     original_value: key.value,
@@ -2879,12 +2885,88 @@ fn compute_velocity_curve(keyframes: &[(u32, f32)], fps: u32) -> Vec<(f32, f32)>
 #[cfg(test)]
 mod tests {
     use super::{
-        axis_3d, map_layer_interpolation, move_and_set_channel, parse_effect_property,
-        remove_camera_key, rove_keyframes, set_camera_key_ease, set_camera_key_interpolation,
+        axis_3d, draw_graph_editor, map_layer_interpolation, move_and_set_channel,
+        parse_effect_property, remove_camera_key, rove_keyframes, set_camera_key_ease,
+        set_camera_key_interpolation, GraphKeyframeDrag,
     };
     use crate::core::keyframe::{InterpolationType, Keyframe};
     use crate::core::property::Animatable;
     use crate::core::timeline::{Layer, LayerType};
+
+    #[test]
+    fn active_drag_visual_follows_keyframe_after_sorting() {
+        let mut layer = Layer::new(
+            "layer".into(),
+            "Layer".into(),
+            LayerType::Solid {
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
+            120,
+        );
+        layer.transform.position = Animatable::new_animated(vec![
+            Keyframe::new(0, [100.0, 540.0], InterpolationType::Linear),
+            Keyframe::new(60, [600.0, 540.0], InterpolationType::Linear),
+            Keyframe::new(90, [350.0, 540.0], InterpolationType::Linear),
+        ]);
+        let drag_id = eframe::egui::Id::new(("graph_keyframe_drag", &layer.id, "Position X"));
+        let context = eframe::egui::Context::default();
+        context.data_mut(|data| {
+            data.insert_temp(
+                drag_id,
+                GraphKeyframeDrag {
+                    original_frame: 30,
+                    current_frame: 90,
+                    original_value: 300.0,
+                    current_value: 350.0,
+                },
+            )
+        });
+        let mut selected_property = Some("Position X".to_owned());
+        let mut changed = false;
+        let mut linked_tangent = true;
+        let screen_rect = eframe::egui::Rect::from_min_size(
+            eframe::egui::Pos2::ZERO,
+            eframe::egui::vec2(900.0, 600.0),
+        );
+        let _ = context.run(
+            eframe::egui::RawInput {
+                screen_rect: Some(screen_rect),
+                ..Default::default()
+            },
+            |context| {
+                eframe::egui::CentralPanel::default().show(context, |ui| {
+                    draw_graph_editor(
+                        &mut selected_property,
+                        ui,
+                        120,
+                        30,
+                        &mut layer,
+                        &mut changed,
+                        &mut linked_tangent,
+                    );
+                });
+            },
+        );
+
+        let rect_at = |frame| {
+            context
+                .data(|data| {
+                    data.get_temp::<eframe::egui::Rect>(eframe::egui::Id::new((
+                        "ae_graph_anchor_rect",
+                        &layer.id,
+                        "Position X",
+                        frame,
+                    )))
+                })
+                .expect("each visible keyframe has a rendered graph anchor")
+        };
+        let frame_60 = rect_at(60);
+        let frame_90 = rect_at(90);
+        assert!(
+            frame_90.center().x - frame_60.center().x > 10.0,
+            "the drag state must stay attached to its retimed key, not the key now at its old index"
+        );
+    }
 
     #[test]
     fn interpolation_commands_respect_selected_key_scope() {
