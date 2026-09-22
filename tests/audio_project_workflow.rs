@@ -113,3 +113,137 @@ fn compressed_audio_asset_survives_project_reload_and_mixes() {
     assert!(mix.iter().any(|sample| sample.abs() > 0.01));
     assert!(meter.peak_db_left > -40.0, "MP3 was not present in the mix");
 }
+
+#[cfg(feature = "gui")]
+#[test]
+fn project_bin_add_button_inserts_audio_layer_from_pointer_input() {
+    use eframe::egui::{self, CentralPanel, Event, PointerButton, RawInput, Shape};
+    use kagari_vfx::core::history::ProjectHistory;
+    use kagari_vfx::KagariApp;
+
+    let workspace = TestWorkspace::new();
+    let audio_path = workspace.path().join("tone.mp3");
+    std::fs::write(
+        &audio_path,
+        include_bytes!("fixtures/kagari_audio_tone.mp3"),
+    )
+    .expect("copy MP3 fixture into project workspace");
+
+    let composition = Composition::new("main".into(), "Main".into(), 64, 64, 30, 30);
+    let project = Project {
+        compositions: vec![composition],
+        active_composition_idx: 0,
+        assets: vec![ProjectItem::new(
+            "asset_tone",
+            "Tone.mp3",
+            ProjectItemType::Audio {
+                path: audio_path.to_string_lossy().into_owned(),
+                duration_sec: 0.2,
+            },
+        )],
+        use_gpu_compute: false,
+    };
+    let mut app = KagariApp::default();
+    app.history = ProjectHistory::new(project);
+    let ctx = egui::Context::default();
+    ctx.data_mut(|data| data.insert_temp(egui::Id::new("selected_project_asset"), 0usize));
+    let screen_rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 800.0));
+
+    let output = ctx.run(
+        RawInput {
+            screen_rect: Some(screen_rect),
+            ..Default::default()
+        },
+        |ctx| {
+            CentralPanel::default().show(ctx, |ui| {
+                kagari_vfx::ui::project_panel::draw(&mut app, ui);
+            });
+        },
+    );
+    let click_pos = output
+        .shapes
+        .iter()
+        .find_map(|clipped| match &clipped.shape {
+            Shape::Text(text) if text.galley.text() == "Add to Active Comp" => {
+                Some(text.visual_bounding_rect().center())
+            }
+            _ => None,
+        })
+        .expect("project bin should render its add-to-composition button label");
+
+    let click_input = |pressed| RawInput {
+        screen_rect: Some(screen_rect),
+        events: vec![
+            Event::PointerMoved(click_pos),
+            Event::PointerButton {
+                pos: click_pos,
+                button: PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            },
+        ],
+        ..Default::default()
+    };
+    let _ = ctx.run(click_input(true), |ctx| {
+        CentralPanel::default().show(ctx, |ui| {
+            kagari_vfx::ui::project_panel::draw(&mut app, ui);
+        });
+    });
+    let _ = ctx.run(click_input(false), |ctx| {
+        CentralPanel::default().show(ctx, |ui| {
+            kagari_vfx::ui::project_panel::draw(&mut app, ui);
+        });
+    });
+
+    let layers = &app.history.current().active_composition().layers;
+    assert_eq!(
+        layers.len(),
+        1,
+        "button click should create exactly one layer"
+    );
+    match &layers[0].layer_type {
+        LayerType::Audio { path, .. } => {
+            assert_eq!(path.as_str(), audio_path.to_string_lossy().as_ref());
+        }
+        other => panic!("project-bin click inserted the wrong layer type: {other:?}"),
+    }
+    assert!(app.history.can_undo(), "the UI action should be undoable");
+    assert_eq!(
+        app.history
+            .undo()
+            .expect("undo the UI insertion")
+            .active_composition()
+            .layers
+            .len(),
+        0
+    );
+    assert_eq!(
+        app.history
+            .redo()
+            .expect("redo the UI insertion")
+            .active_composition()
+            .layers
+            .len(),
+        1
+    );
+
+    let project_path = workspace.path().join("audio_ui.kagari");
+    ProductionDocument::new(app.history.current().clone())
+        .save_atomic(&project_path)
+        .expect("save the project-bin insertion");
+    let reopened = ProductionDocument::load(&project_path).expect("reload the UI-created layer");
+    let reopened_composition = &reopened.project().compositions[0];
+    assert!(matches!(
+        reopened.project().assets[0].item_type,
+        ProjectItemType::Audio { .. }
+    ));
+    let (mix, meter) = mix_audio_for_frame(
+        reopened_composition,
+        3,
+        48_000,
+        1_024,
+        &MasterDspParams::bypass(),
+    );
+    assert!(mix.iter().any(|sample| sample.abs() > 0.01));
+    assert!(meter.peak_db_left > -40.0, "UI-added MP3 was not mixed");
+}
