@@ -52,10 +52,12 @@ fn mat4_identity() -> [[f32; 4]; 4] {
 #[allow(dead_code)]
 fn mat4_mul(a: [[f32; 4]; 4], b: [[f32; 4]; 4]) -> [[f32; 4]; 4] {
     let mut out = [[0.0; 4]; 4];
-    for r in 0..4 {
-        for c in 0..4 {
-            out[r][c] =
-                a[r][0] * b[0][c] + a[r][1] * b[1][c] + a[r][2] * b[2][c] + a[r][3] * b[3][c];
+    for column in 0..4 {
+        for row in 0..4 {
+            out[column][row] = a[0][row] * b[column][0]
+                + a[1][row] * b[column][1]
+                + a[2][row] * b[column][2]
+                + a[3][row] * b[column][3];
         }
     }
     out
@@ -1974,7 +1976,8 @@ impl WgpuRenderer {
             format: wgpu::TextureFormat::Rgba16Float,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::TEXTURE_BINDING
-                | wgpu::TextureUsages::COPY_DST,
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
         });
 
@@ -1989,7 +1992,8 @@ impl WgpuRenderer {
             format: wgpu::TextureFormat::Rgba16Float,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::TEXTURE_BINDING
-                | wgpu::TextureUsages::COPY_DST,
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
         });
         let snap_view = snap_texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -2151,7 +2155,7 @@ impl WgpuRenderer {
 
                 // Default layer dimensions (solid size or fallback)
                 let (mut layer_w, mut layer_h) = match &layer.layer_type {
-                    LayerType::Solid { .. } => (1.0, 1.0),
+                    LayerType::Solid { .. } => (comp.width as f32, comp.height as f32),
                     LayerType::Image { .. } => (1.0, 1.0),
                     LayerType::Model3D { .. } => (comp.width as f32, comp.height as f32),
                     LayerType::Video { .. } => (1.0, 1.0),
@@ -3823,6 +3827,28 @@ pub fn align_uniform_buffer_offset(offset: u64, alignment: u32) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn column_major_matrix_multiplication_preserves_transform_order() {
+        let scale = [
+            [2.0, 0.0, 0.0, 0.0],
+            [0.0, 3.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ];
+        let translate = [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [5.0, 7.0, 0.0, 1.0],
+        ];
+
+        let combined = mat4_mul(translate, scale);
+        assert_eq!(combined[0][0], 2.0);
+        assert_eq!(combined[1][1], 3.0);
+        assert_eq!(combined[3][0], 5.0);
+        assert_eq!(combined[3][1], 7.0);
+    }
 
     #[test]
     fn test_layer_uniform_memory_alignment() {
