@@ -135,7 +135,7 @@ fn gpu_rgba16f_pixels(
 }
 
 #[test]
-fn allowlisted_gpu_effects_match_the_software_reference_at_representative_pixels() {
+fn allowlisted_gpu_effects_match_the_software_reference_across_the_full_frame() {
     let Some((device, queue)) = request_gpu() else {
         eprintln!("skipping GPU preview parity test: no adapter available");
         return;
@@ -187,19 +187,25 @@ fn allowlisted_gpu_effects_match_the_software_reference_at_representative_pixels
         let comp = composition_with_effect(name, effect_type);
         let cpu = render_frame_to_pixels(&comp, 0, WIDTH, HEIGHT, 0.0, 0);
         let gpu = gpu_rgba16f_pixels(&device, &queue, &mut renderer, &comp);
-        let sample_coords = [(10, 10), (20, 20), (30, 25)];
         let mut max_error = 0.0f32;
-        for (x, y) in sample_coords {
-            let index = (y * WIDTH + x) as usize;
+        let mut worst_pixel = (0usize, 0usize, 0usize);
+        for (index, actual_pixel) in gpu.iter().enumerate() {
             for channel in 0..4 {
                 let expected = cpu[index * 4 + channel] as f32;
-                let actual = gpu[index][channel] * 255.0;
-                max_error = max_error.max((expected - actual).abs());
+                let actual = actual_pixel[channel] * 255.0;
+                let error = (expected - actual).abs();
+                if error > max_error {
+                    max_error = error;
+                    worst_pixel = (index % WIDTH as usize, index / WIDTH as usize, channel);
+                }
             }
         }
         assert!(
             max_error <= 2.0,
-            "{name} GPU/software mismatch: max sampled error {max_error:.3} 8-bit values"
+            "{name} GPU/software mismatch at pixel ({}, {}), channel {}: max full-frame error {max_error:.3} 8-bit values",
+            worst_pixel.0,
+            worst_pixel.1,
+            worst_pixel.2
         );
     }
 }
