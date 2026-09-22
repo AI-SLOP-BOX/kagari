@@ -793,9 +793,9 @@ pub fn gpu_preview_effect_supported(effect: &EffectType) -> bool {
         // The following additional GPU paths also diverge: Gaussian Blur is
         // one-axis on GPU vs. a 2D CPU kernel; Drop Shadow uses a small tap
         // approximation; chromatic falloff differs; Vignette is applied twice;
-        // Levels is applied twice; Mesh Warp uses different coordinate
-        // semantics; Posterize quantizes differently; CRT scanlines use
-        // different patterns; and Twirl/Bulge use resolution-scaled radii.
+        // Mesh Warp uses different coordinate semantics; Posterize quantizes
+        // differently; CRT scanlines use different patterns; and Twirl/Bulge
+        // use resolution-scaled radii.
         EffectType::MotionBlur { .. }
         | EffectType::FilmGrain { .. }
         | EffectType::FractalNoise { .. }
@@ -811,7 +811,6 @@ pub fn gpu_preview_effect_supported(effect: &EffectType) -> bool {
         | EffectType::DropShadow { .. }
         | EffectType::ChromaticAberration { .. }
         | EffectType::Vignette { .. }
-        | EffectType::Levels { .. }
         | EffectType::MeshWarp { .. }
         | EffectType::Posterize { .. }
         | EffectType::CrtScanlines { .. }
@@ -821,8 +820,11 @@ pub fn gpu_preview_effect_supported(effect: &EffectType) -> bool {
         _ => matches!(
             effect,
             EffectType::ColorTint { .. }
-            | EffectType::LensFlare { .. }
-            | EffectType::Invert { invert_alpha: false }
+                | EffectType::Levels { .. }
+                | EffectType::LensFlare { .. }
+                | EffectType::Invert {
+                    invert_alpha: false
+                }
         ),
     }
 }
@@ -1073,13 +1075,6 @@ mod tests {
                 feather: constant(50.0),
                 color: constant([0.0, 0.0, 0.0, 1.0]),
             },
-            EffectType::Levels {
-                input_black: constant(0.0),
-                input_white: constant(1.0),
-                gamma: constant(1.0),
-                output_black: constant(0.0),
-                output_white: constant(1.0),
-            },
             EffectType::MeshWarp {
                 top_left: constant([0.0, 0.0]),
                 top_right: constant([1.0, 0.0]),
@@ -1126,10 +1121,19 @@ mod tests {
             EffectType::Invert { invert_alpha: true },
         ];
 
-        assert!(unsupported.iter().all(|effect| !gpu_preview_effect_supported(effect)));
+        assert!(unsupported
+            .iter()
+            .all(|effect| !gpu_preview_effect_supported(effect)));
         assert!(gpu_preview_effect_supported(&EffectType::ColorTint {
             color: constant([0.2, 0.4, 0.8, 1.0]),
             intensity: constant(50.0),
+        }));
+        assert!(gpu_preview_effect_supported(&EffectType::Levels {
+            input_black: constant(0.1),
+            input_white: constant(0.9),
+            gamma: constant(1.2),
+            output_black: constant(0.05),
+            output_white: constant(0.95),
         }));
         assert!(gpu_preview_effect_supported(&EffectType::LensFlare {
             enabled: constant(1.0),

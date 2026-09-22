@@ -27,3 +27,10 @@ fn shader_wgsl_parses_and_validates() {
     assert!(ep_names.contains(&"fs_main"), "fs_main entry point missing");
     let _ = info;
 }
+
+#[test]
+fn levels_adjustment_is_applied_once_with_export_matching_guards() {
+    assert_eq!(SHADER.matches("if (layer.levels_enabled == 1u)").count(), 1);
+    assert!(SHADER.contains("if (layer.levels_gamma > 0.0)"));
+    assert!(SHADER.contains("vec3<f32>(0.0),\n                vec3<f32>(1.0)"));
+}
