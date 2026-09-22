@@ -466,6 +466,7 @@ fn start_roto_flow_bake(
         .map_err(|error| format!("Could not snapshot roto matte: {error}"))?;
     let source_layer_snapshot = serde_json::to_vec(layer)
         .map_err(|error| format!("Could not snapshot roto source layer: {error}"))?;
+    let source_strokes = layer.roto_brush_strokes.clone();
     let layer_id = layer.id.clone();
     let composition_id = composition.id.clone();
     let composition_width = composition.width;
@@ -475,6 +476,17 @@ fn start_roto_flow_bake(
         return Err("Selected source layer is unavailable".into());
     };
     let mask = mask.clone();
+    let settings = crate::core::roto_brush_engine::RotoBrushSettings {
+        feather_radius: ctx.data(|data| {
+            data.get_temp::<f32>(egui::Id::new("roto_feather_radius"))
+                .unwrap_or(3.0)
+        }),
+        contrast: ctx.data(|data| {
+            data.get_temp::<f32>(egui::Id::new("roto_contrast"))
+                .unwrap_or(1.0)
+        }),
+        ..Default::default()
+    };
     let width = source_comp.width;
     let height = source_comp.height;
     let cancelled = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -490,8 +502,10 @@ fn start_roto_flow_bake(
         .name("kagari-roto-flow".into())
         .spawn(move || {
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                crate::core::roto_assist::bake_optical_flow_mask(
+                crate::core::roto_assist::bake_optical_flow_roto_matte(
                     &mask,
+                    &source_strokes,
+                    &settings,
                     anchor_frame,
                     start_frame,
                     end_frame,

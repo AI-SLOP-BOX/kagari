@@ -70,6 +70,33 @@ pub fn bake_optical_flow_mask<F>(
     end_frame: u32,
     width: u32,
     height: u32,
+    frame_provider: F,
+) -> Result<Animatable<Vec<[f32; 2]>>, String>
+where
+    F: FnMut(u32) -> Option<Vec<u8>>,
+{
+    bake_optical_flow_roto_matte(
+        base_mask,
+        &[],
+        &crate::core::roto_brush_engine::RotoBrushSettings::default(),
+        anchor_frame,
+        start_frame,
+        end_frame,
+        width,
+        height,
+        frame_provider,
+    )
+}
+
+pub fn bake_optical_flow_roto_matte<F>(
+    base_mask: &Mask,
+    source_strokes: &[crate::core::roto_brush_engine::RotoStroke],
+    settings: &crate::core::roto_brush_engine::RotoBrushSettings,
+    anchor_frame: u32,
+    start_frame: u32,
+    end_frame: u32,
+    width: u32,
+    height: u32,
     mut frame_provider: F,
 ) -> Result<Animatable<Vec<[f32; 2]>>, String>
 where
@@ -103,11 +130,16 @@ where
         boundary.clone(),
         InterpolationType::Linear,
     )];
+    let anchor_strokes = crate::core::roto_brush_engine::strokes_for_frame(
+        source_strokes,
+        anchor_frame,
+    );
 
     for direction in [-1i64, 1i64] {
         let mut previous_frame = anchor_frame;
         let mut previous_small = anchor_small.clone();
         boundary = base_mask.path.to_polygon(anchor_frame, 16);
+        let mut propagated_strokes = anchor_strokes.clone();
         loop {
             let next_frame = previous_frame as i64 + direction;
             if next_frame < start_frame as i64 || next_frame > end_frame as i64 {
@@ -143,6 +175,33 @@ where
                 width,
                 height,
             );
+            propagated_strokes = warp_roto_strokes(
+                &propagated_strokes,
+                &flow,
+                &reverse_flow,
+                width,
+                height,
+            );
+            propagated_strokes.extend(
+                source_strokes
+                    .iter()
+                    .filter(|stroke| stroke.frame == Some(next_frame))
+                    .cloned()
+                    .map(|mut stroke| {
+                        stroke.frame = None;
+                        stroke
+                    }),
+            );
+            if let Some(refined_boundary) = resegment_propagated_boundary(
+                &pixels,
+                width,
+                height,
+                &boundary,
+                &propagated_strokes,
+                settings,
+            ) {
+                boundary = refined_boundary;
+            }
             keyframes.push(Keyframe::new(
                 next_frame,
                 boundary.clone(),
@@ -155,6 +214,150 @@ where
 
     keyframes.sort_by_key(|keyframe| keyframe.frame);
     Ok(Animatable::Animated(keyframes))
+}
+
+fn warp_roto_strokes(
+    strokes: &[crate::core::roto_brush_engine::RotoStroke],
+    flow: &crate::core::optical_flow_timewarp::DenseFlowField,
+    reverse_flow: &crate::core::optical_flow_timewarp::DenseFlowField,
+    width: u32,
+    height: u32,
+) -> Vec<crate::core::roto_brush_engine::RotoStroke> {
+    strokes
+        .iter()
+        .cloned()
+        .map(|mut stroke| {
+            stroke.points = warp_roto_boundary_with_flow(
+                &stroke.points,
+                flow,
+                reverse_flow,
+                width,
+                height,
+            );
+            stroke.frame = None;
+            stroke
+        })
+        .collect()
+}
+
+fn resegment_propagated_boundary(
+    pixels: &[u8],
+    width: u32,
+    height: u32,
+    previous_boundary: &[[f32; 2]],
+    strokes: &[crate::core::roto_brush_engine::RotoStroke],
+    settings: &crate::core::roto_brush_engine::RotoBrushSettings,
+) -> Option<Vec<[f32; 2]>> {
+    let mut geometry_settings = settings.clone();
+    geometry_settings.feather_radius = 0.0;
+    let foreground_seed = strokes
+        .iter()
+        .find(|stroke| {
+            stroke.stroke_type == crate::core::roto_brush_engine::RotoStrokeType::Foreground
+        })?
+        .points
+        .first()
+        .copied()?;
+    let alpha = crate::core::roto_brush_engine::generate_rotobrush_matte(
+        pixels,
+        width,
+        height,
+        strokes,
+        &geometry_settings,
+    );
+    let mut binary = alpha
+        .into_iter()
+        .map(|value| if value >= 128 { 255 } else { 0 })
+        .collect::<Vec<_>>();
+    retain_component_at_seed(&mut binary, width, height, foreground_seed)?;
+    let polygon = trace_contour_to_polygon(&binary, width, height, 1.5);
+    if polygon.len() < 3 {
+        return None;
+    }
+    Some(resample_closed_polygon(&polygon, previous_boundary.len().max(3)))
+}
+
+fn retain_component_at_seed(
+    binary: &mut [u8],
+    width: u32,
+    height: u32,
+    seed: [f32; 2],
+) -> Option<()> {
+    if width == 0 || height == 0 || binary.len() != width as usize * height as usize {
+        return None;
+    }
+    let sx = seed[0].round().clamp(0.0, width.saturating_sub(1) as f32) as u32;
+    let sy = seed[1].round().clamp(0.0, height.saturating_sub(1) as f32) as u32;
+    let start = (sy * width + sx) as usize;
+    if binary[start] != 255 {
+        return None;
+    }
+
+    let mut visited = vec![false; binary.len()];
+    let mut queue = std::collections::VecDeque::from([start]);
+    visited[start] = true;
+    while let Some(index) = queue.pop_front() {
+        let x = (index % width as usize) as i32;
+        let y = (index / width as usize) as i32;
+        for dy in -1..=1 {
+            for dx in -1..=1 {
+                if dx == 0 && dy == 0 {
+                    continue;
+                }
+                let nx = x + dx;
+                let ny = y + dy;
+                if nx < 0 || ny < 0 || nx >= width as i32 || ny >= height as i32 {
+                    continue;
+                }
+                let next = ny as usize * width as usize + nx as usize;
+                if binary[next] == 255 && !visited[next] {
+                    visited[next] = true;
+                    queue.push_back(next);
+                }
+            }
+        }
+    }
+    for (value, keep) in binary.iter_mut().zip(visited) {
+        if !keep {
+            *value = 0;
+        }
+    }
+    Some(())
+}
+
+fn resample_closed_polygon(points: &[[f32; 2]], count: usize) -> Vec<[f32; 2]> {
+    if points.len() < 3 || count < 3 {
+        return points.to_vec();
+    }
+    let lengths: Vec<f32> = (0..points.len())
+        .map(|index| {
+            let next = points[(index + 1) % points.len()];
+            (next[0] - points[index][0]).hypot(next[1] - points[index][1])
+        })
+        .collect();
+    let perimeter: f32 = lengths.iter().sum();
+    if !perimeter.is_finite() || perimeter <= f32::EPSILON {
+        return points[..count.min(points.len())].to_vec();
+    }
+    let mut output = Vec::with_capacity(count);
+    let mut edge = 0;
+    let mut edge_start = 0.0;
+    for sample in 0..count {
+        let distance = perimeter * sample as f32 / count as f32;
+        while edge + 1 < lengths.len() && edge_start + lengths[edge] < distance {
+            edge_start += lengths[edge];
+            edge += 1;
+        }
+        let length = lengths[edge].max(f32::EPSILON);
+        let amount = ((distance - edge_start) / length).clamp(0.0, 1.0);
+        let a = points[edge];
+        let b = points[(edge + 1) % points.len()];
+        output.push([
+            a[0] + (b[0] - a[0]) * amount,
+            a[1] + (b[1] - a[1]) * amount,
+        ]);
+    }
+    output
 }
 
 fn downsample_rgba(source: &[u8], width: u32, height: u32, out_w: u32, out_h: u32) -> Vec<u8> {
@@ -804,6 +1007,107 @@ mod tests {
         );
         assert!((left_point[1] - anchor_point[1]).abs() <= 1.0);
         assert!((right_point[1] - anchor_point[1]).abs() <= 1.0);
+    }
+
+    #[test]
+    fn optical_flow_propagation_resegments_user_corrections_on_occluded_frames() {
+        fn frame(with_occluder: bool) -> Vec<u8> {
+            let (width, height) = (128usize, 96usize);
+            let mut pixels = vec![0u8; width * height * 4];
+            for y in 0..height {
+                for x in 0..width {
+                    let index = (y * width + x) * 4;
+                    let subject = (40..=84).contains(&x) && (28..=68).contains(&y);
+                    let occluder = with_occluder && (60..=68).contains(&x) && (20..=76).contains(&y);
+                    let color = if occluder {
+                        [20, 220, 20, 255]
+                    } else if subject {
+                        [220, 20, 20, 255]
+                    } else {
+                        [20, 40, 220, 255]
+                    };
+                    pixels[index..index + 4].copy_from_slice(&color);
+                }
+            }
+            pixels
+        }
+
+        fn contains(polygon: &[[f32; 2]], point: [f32; 2]) -> bool {
+            let mut inside = false;
+            let mut previous = polygon.len() - 1;
+            for current in 0..polygon.len() {
+                let a = polygon[current];
+                let b = polygon[previous];
+                if (a[1] > point[1]) != (b[1] > point[1])
+                    && point[0]
+                        < (b[0] - a[0]) * (point[1] - a[1]) / (b[1] - a[1]) + a[0]
+                {
+                    inside = !inside;
+                }
+                previous = current;
+            }
+            inside
+        }
+
+        let anchor = frame(false);
+        let occluded = frame(true);
+        let mask = Mask::new_rect("roto".into(), "Roto".into(), 36.0, 24.0, 52.0, 48.0);
+        let strokes = vec![
+            crate::core::roto_brush_engine::RotoStroke {
+                stroke_type: crate::core::roto_brush_engine::RotoStrokeType::Foreground,
+                points: vec![[48.0, 48.0], [52.0, 48.0]],
+                radius: 4.0,
+                frame: Some(1),
+            },
+            crate::core::roto_brush_engine::RotoStroke {
+                stroke_type: crate::core::roto_brush_engine::RotoStrokeType::Background,
+                points: vec![[30.0, 48.0]],
+                radius: 4.0,
+                frame: Some(1),
+            },
+            crate::core::roto_brush_engine::RotoStroke {
+                stroke_type: crate::core::roto_brush_engine::RotoStrokeType::Background,
+                points: vec![[92.0, 48.0]],
+                radius: 4.0,
+                frame: Some(1),
+            },
+            crate::core::roto_brush_engine::RotoStroke {
+                stroke_type: crate::core::roto_brush_engine::RotoStrokeType::Background,
+                points: vec![[64.0, 48.0]],
+                radius: 6.0,
+                frame: Some(2),
+            },
+        ];
+        let baked = bake_optical_flow_roto_matte(
+            &mask,
+            &strokes,
+            &crate::core::roto_brush_engine::RotoBrushSettings {
+                feather_radius: 0.0,
+                contrast: 1.0,
+                ..Default::default()
+            },
+            1,
+            1,
+            2,
+            128,
+            96,
+            |frame| Some(if frame == 1 { anchor.clone() } else { occluded.clone() }),
+        )
+        .expect("corrected roto should propagate through the occlusion");
+        let Animatable::Animated(keyframes) = baked else {
+            panic!("expected per-frame roto keys");
+        };
+        let vertex_count = keyframes[0].value.len();
+        assert!(keyframes
+            .iter()
+            .all(|keyframe| keyframe.value.len() == vertex_count));
+        let corrected = &keyframes
+            .iter()
+            .find(|keyframe| keyframe.frame == 2)
+            .expect("corrected frame must have a key")
+            .value;
+        assert!(contains(corrected, [50.0, 48.0]), "visible subject was lost");
+        assert!(!contains(corrected, [64.0, 48.0]), "occluder correction was ignored");
     }
 
     #[test]
