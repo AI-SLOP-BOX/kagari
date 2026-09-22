@@ -80,11 +80,13 @@ fn software_preview_required(comp: &crate::core::timeline::Composition, frame: u
         .any(|layer| {
             // The GPU mask collector currently evaluates path/feather/opacity
             // but does not apply geometric expansion or Wiggle Paths.
-            layer.masks.iter().any(|mask| {
-                mask.enabled
-                    && mask.mode != crate::core::mask::MaskMode::None
-                    && (mask.expansion.evaluate(frame).abs() > 0.01 || mask.wiggle.is_some())
-            }) || matches!(
+            !layer.puppet_pins.is_empty()
+                || layer.masks.iter().any(|mask| {
+                    mask.enabled
+                        && mask.mode != crate::core::mask::MaskMode::None
+                        && (mask.expansion.evaluate(frame).abs() > 0.01
+                            || mask.wiggle.is_some())
+                }) || matches!(
                 layer.layer_type,
                 crate::core::timeline::LayerType::AdjustmentLayer
                     | crate::core::timeline::LayerType::Particle { .. }
@@ -3955,6 +3957,34 @@ mod review_regression_tests {
             },
             enabled: true,
         });
+        assert!(software_preview_required(&comp, 0));
+    }
+
+    #[test]
+    fn puppet_deformation_uses_software_preview_until_gpu_warp_is_supported() {
+        let mut comp = crate::core::timeline::Composition::new(
+            "comp".to_string(),
+            "Comp".to_string(),
+            320,
+            180,
+            30,
+            30,
+        );
+        let mut layer = crate::core::timeline::Layer::new(
+            "layer".to_string(),
+            "Layer".to_string(),
+            crate::core::timeline::LayerType::Solid {
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
+            30,
+        );
+        layer.puppet_pins.push(crate::core::timeline::PuppetPin::new(
+            "pin".to_string(),
+            "Pin 1".to_string(),
+            [160.0, 90.0],
+        ));
+        comp.layers.push(layer);
+
         assert!(software_preview_required(&comp, 0));
     }
 
