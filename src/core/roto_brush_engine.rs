@@ -65,7 +65,10 @@ pub fn generate_rotobrush_matte(
     let mut fg_points = Vec::new();
     let mut bg_points = Vec::new();
 
-    // Collect color samples and point coordinates from brush strokes
+    // Keep the color model bounded even when a brush is dragged across a large
+    // source frame. Spatial influence is computed from a distance field below.
+    const MAX_COLOR_SAMPLES_PER_CLASS: usize = 512;
+    // Collect bounded color samples and point coordinates from brush strokes.
     for stroke in strokes {
         if !stroke.radius.is_finite() || stroke.radius < 0.0 {
             continue;
@@ -85,13 +88,14 @@ pub fn generate_rotobrush_matte(
             let px = pt[0] as i32;
             let py = pt[1] as i32;
             let rad = radius.ceil() as i32;
+            let sample_step = (rad / 8).max(1);
 
-            for dy in -rad..=rad {
+            for dy in (-rad..=rad).step_by(sample_step as usize) {
                 let y = py + dy;
                 if y < 0 || y >= height as i32 {
                     continue;
                 }
-                for dx in -rad..=rad {
+                for dx in (-rad..=rad).step_by(sample_step as usize) {
                     let x = px + dx;
                     if x < 0 || x >= width as i32 {
                         continue;
@@ -103,9 +107,13 @@ pub fn generate_rotobrush_matte(
                             src_pixels[idx + 1] as f32,
                             src_pixels[idx + 2] as f32,
                         ];
-                        if stroke.stroke_type == RotoStrokeType::Foreground {
+                        if stroke.stroke_type == RotoStrokeType::Foreground
+                            && fg_samples.len() < MAX_COLOR_SAMPLES_PER_CLASS
+                        {
                             fg_samples.push(color);
-                        } else {
+                        } else if stroke.stroke_type == RotoStrokeType::Background
+                            && bg_samples.len() < MAX_COLOR_SAMPLES_PER_CLASS
+                        {
                             bg_samples.push(color);
                         }
                     }
@@ -116,6 +124,8 @@ pub fn generate_rotobrush_matte(
 
     let fg_mean = compute_mean_color(&fg_samples).unwrap_or([255.0, 255.0, 255.0]);
     let bg_mean = compute_mean_color(&bg_samples).unwrap_or([0.0, 0.0, 0.0]);
+    let fg_distance = distance_field_from_points(width, height, &fg_points);
+    let bg_distance = distance_field_from_points(width, height, &bg_points);
 
     let mut alpha_matte = vec![0u8; size];
     let spatial_sigma_sq = (width.max(height) as f32 * 0.35).powi(2).max(1.0);
@@ -133,24 +143,8 @@ pub fn generate_rotobrush_matte(
             let d_bg_color = color_dist_sq([r, g, b], bg_mean);
 
             // Spatial distance to nearest FG/BG strokes
-            let p_curr = [x as f32, y as f32];
-            let min_d_fg_pos = fg_points
-                .iter()
-                .map(|&p| {
-                    let dx = p[0] - p_curr[0];
-                    let dy = p[1] - p_curr[1];
-                    dx * dx + dy * dy
-                })
-                .fold(f32::INFINITY, f32::min);
-
-            let min_d_bg_pos = bg_points
-                .iter()
-                .map(|&p| {
-                    let dx = p[0] - p_curr[0];
-                    let dy = p[1] - p_curr[1];
-                    dx * dx + dy * dy
-                })
-                .fold(f32::INFINITY, f32::min);
+            let min_d_fg_pos = fg_distance[i].powi(2);
+            let min_d_bg_pos = bg_distance[i].powi(2);
 
             let spatial_fg_weight = if !fg_points.is_empty() {
                 (-min_d_fg_pos / (2.0 * spatial_sigma_sq)).exp()
@@ -234,6 +228,68 @@ fn compute_mean_color(samples: &[[f32; 3]]) -> Option<[f32; 3]> {
     }
     let len = samples.len() as f32;
     Some([sum[0] / len, sum[1] / len, sum[2] / len])
+}
+
+fn distance_field_from_points(width: u32, height: u32, points: &[[f32; 2]]) -> Vec<f32> {
+    let Some(len) = (width as usize).checked_mul(height as usize) else {
+        return Vec::new();
+    };
+    let mut distance = vec![f32::INFINITY; len];
+    if width == 0 || height == 0 || points.is_empty() {
+        return distance;
+    }
+
+    let w = width as usize;
+    let h = height as usize;
+    for point in points {
+        if !point[0].is_finite() || !point[1].is_finite() {
+            continue;
+        }
+        let x = (point[0].round() as i64).clamp(0, width as i64 - 1) as usize;
+        let y = (point[1].round() as i64).clamp(0, height as i64 - 1) as usize;
+        distance[y * w + x] = 0.0;
+    }
+
+    let diagonal = std::f32::consts::SQRT_2;
+    for y in 0..h {
+        for x in 0..w {
+            let i = y * w + x;
+            let mut best = distance[i];
+            if x > 0 {
+                best = best.min(distance[i - 1] + 1.0);
+            }
+            if y > 0 {
+                best = best.min(distance[i - w] + 1.0);
+                if x > 0 {
+                    best = best.min(distance[i - w - 1] + diagonal);
+                }
+                if x + 1 < w {
+                    best = best.min(distance[i - w + 1] + diagonal);
+                }
+            }
+            distance[i] = best;
+        }
+    }
+    for y in (0..h).rev() {
+        for x in (0..w).rev() {
+            let i = y * w + x;
+            let mut best = distance[i];
+            if x + 1 < w {
+                best = best.min(distance[i + 1] + 1.0);
+            }
+            if y + 1 < h {
+                best = best.min(distance[i + w] + 1.0);
+                if x > 0 {
+                    best = best.min(distance[i + w - 1] + diagonal);
+                }
+                if x + 1 < w {
+                    best = best.min(distance[i + w + 1] + diagonal);
+                }
+            }
+            distance[i] = best;
+        }
+    }
+    distance
 }
 
 fn color_dist_sq(c1: [f32; 3], c2: [f32; 3]) -> f32 {
@@ -346,5 +402,14 @@ mod tests {
             .enumerate()
             .filter(|(i, _)| *i != 4)
             .all(|(_, a)| *a < 200));
+    }
+
+    #[test]
+    fn distance_field_tracks_nearest_stroke_in_linear_passes() {
+        let distances = distance_field_from_points(5, 5, &[[1.0, 1.0], [3.0, 3.0]]);
+        assert_eq!(distances[1 * 5 + 1], 0.0);
+        assert!((distances[1 * 5 + 2] - 1.0).abs() < 1e-6);
+        assert!((distances[0] - std::f32::consts::SQRT_2).abs() < 1e-6);
+        assert!((distances[4 * 5 + 4] - std::f32::consts::SQRT_2).abs() < 1e-6);
     }
 }
