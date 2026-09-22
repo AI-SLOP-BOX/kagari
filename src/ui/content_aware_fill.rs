@@ -1,5 +1,47 @@
 use crate::KagariApp;
 use eframe::egui;
+use std::path::{Path, PathBuf};
+
+fn render_caf_source_frame(
+    comp: &crate::core::timeline::Composition,
+    layer_index: usize,
+    mask_index: usize,
+    frame: u32,
+) -> Vec<u8> {
+    let mut source = comp.clone();
+    source.background_color = [0.0; 4];
+    for layer in &mut source.layers {
+        layer.track_matte = crate::core::timeline::TrackMatteMode::None;
+    }
+    let Some(layer) = source.layers.get_mut(layer_index) else {
+        return Vec::new();
+    };
+    if mask_index >= layer.masks.len() {
+        return Vec::new();
+    }
+    layer.masks.remove(mask_index);
+    crate::core::software_renderer::render_frame_to_pixels_filtered(
+        &source,
+        frame,
+        source.width,
+        source.height,
+        0.0,
+        0,
+        Some(layer_index),
+    )
+}
+
+fn caf_asset_directory(project_path: &str) -> Result<PathBuf, String> {
+    let project = Path::new(project_path);
+    let parent = project
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let directory = parent.join("Assets").join("KagariGenerated");
+    std::fs::create_dir_all(&directory)
+        .map_err(|error| format!("Could not create generated asset folder: {error}"))?;
+    Ok(directory)
+}
 
 pub fn draw_content_aware_fill(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.heading("Content-Aware Fill");
@@ -93,17 +135,20 @@ pub fn draw_content_aware_fill(app: &mut KagariApp, ui: &mut egui::Ui) {
         let Some(layer) = comp.layers.get(layer_idx) else {
             return;
         };
-        let Some(mask) = layer.masks.first() else {
+        let Some(mask_idx) = layer.masks.iter().position(|mask| mask.enabled) else {
             app.toasts
                 .error("Selected layer has no mask — draw a mask around the object to remove");
             return;
         };
+        let mask = &layer.masks[mask_idx];
 
-        // Render the frame, then synthesize a fill over the mask polygon
         let (w, h) = (comp.width, comp.height);
         let frame_idx = app.playback.current_frame;
-        let mut pixels =
-            crate::core::software_renderer::render_frame_to_pixels(comp, frame_idx, w, h, 0.0, 0);
+        let mut pixels = render_caf_source_frame(comp, layer_idx, mask_idx, frame_idx);
+        if pixels.len() != (w as usize).saturating_mul(h as usize).saturating_mul(4) {
+            app.toasts.error("Could not render the selected layer for Content-Aware Fill");
+            return;
+        }
         let polygon = mask.path.to_polygon(frame_idx, 12);
         let method = match method_idx {
             1 => crate::core::content_aware_engine::FillMethod::Surface,
@@ -115,28 +160,68 @@ pub fn draw_content_aware_fill(app: &mut KagariApp, ui: &mut egui::Ui) {
         );
         pixels = filled;
 
-        // Write the synthesized frame as a PNG via the image crate
-        let out_path = std::env::temp_dir().join(format!("caf_frame_{}.png", frame_idx));
-        match image::save_buffer(&out_path, &pixels, w, h, image::ColorType::Rgba8) {
+        let expansion = mask.expansion.evaluate(frame_idx) + alpha_exp;
+        let fill_region =
+            crate::core::software_renderer::offset_polygon_vertices(&polygon, expansion);
+        for y in 0..h {
+            for x in 0..w {
+                if !crate::core::mask::point_in_polygon(x as f32, y as f32, &fill_region) {
+                    let alpha = ((y * w + x) * 4 + 3) as usize;
+                    pixels[alpha] = 0;
+                }
+            }
+        }
+
+        let directory = match caf_asset_directory(&app.project_path) {
+            Ok(directory) => directory,
+            Err(error) => {
+                app.toasts.error(error);
+                return;
+            }
+        };
+        static NEXT_CAF_ASSET: std::sync::atomic::AtomicU64 =
+            std::sync::atomic::AtomicU64::new(1);
+        let asset_id = NEXT_CAF_ASSET.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let out_path = directory.join(format!(
+            "caf-{}-{}-{}.webp",
+            std::process::id(),
+            frame_idx,
+            asset_id
+        ));
+        let temp_path = out_path.with_extension("webp.tmp");
+        let save_result = image::save_buffer_with_format(
+            &temp_path,
+            &pixels,
+            w,
+            h,
+            image::ColorType::Rgba8,
+            image::ImageFormat::WebP,
+        )
+        .map_err(|error| error.to_string())
+        .and_then(|()| std::fs::rename(&temp_path, &out_path).map_err(|error| error.to_string()));
+        match save_result {
             Ok(_) => {
                 let mut temp_proj = app.history.current().clone();
                 let comp_mut = temp_proj.active_composition_mut();
                 let new_layer = crate::core::timeline::Layer::new(
-                    format!("fill_layer_{}", frame_idx),
-                    format!("Fill Layer [CAF] (Frame {})", frame_idx),
+                    format!("caf_fill_{}_{}", frame_idx, asset_id),
+                    format!("Fill Layer [CAF] (Frame {})", frame_idx + 1),
                     crate::core::timeline::LayerType::Image {
                         path: out_path.to_string_lossy().to_string(),
                     },
                     comp_mut.duration_frames,
                 );
-                comp_mut.layers.insert(layer_idx, new_layer);
+                let mut new_layer = new_layer;
+                new_layer.in_frame = frame_idx;
+                new_layer.out_frame = frame_idx;
+                comp_mut.layers.insert(layer_idx + 1, new_layer);
                 app.commit_project(temp_proj);
                 app.toasts.info(format!(
-                    "Synthesized & inserted Fill Layer for frame {}",
-                    frame_idx
+                    "Generated a frame-specific fill patch for frame {}",
+                    frame_idx + 1
                 ));
             }
-            Err(e) => app.toasts.error(format!("Failed to write fill: {}", e)),
+            Err(error) => app.toasts.error(format!("Failed to write fill asset: {error}")),
         }
     }
 
@@ -162,5 +247,49 @@ pub fn draw_content_aware_fill(app: &mut KagariApp, ui: &mut egui::Ui) {
             app.toasts
                 .info(format!("Exported Reference Frame: {}", out_path.display()));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::mask::Mask;
+    use crate::core::timeline::{Composition, Layer, LayerType};
+
+    #[test]
+    fn fill_source_isolated_to_selected_layer_and_ignores_the_selection_mask() {
+        let mut comp = Composition::new("comp".into(), "Comp".into(), 16, 16, 30, 30);
+        let mut selected = Layer::new(
+            "selected".into(),
+            "Selected".into(),
+            LayerType::Solid {
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
+            30,
+        );
+        selected.transform.position = crate::core::property::Animatable::new_constant([8.0, 8.0]);
+        selected.masks.push(Mask::new_rect(
+            "selection".into(),
+            "Selection".into(),
+            0.0,
+            0.0,
+            8.0,
+            16.0,
+        ));
+        comp.layers.push(selected);
+        comp.layers.push(Layer::new(
+            "unrelated".into(),
+            "Unrelated".into(),
+            LayerType::Solid {
+                color: [0.0, 0.0, 1.0, 1.0],
+            },
+            30,
+        ));
+
+        let pixels = render_caf_source_frame(&comp, 0, 0, 0);
+        let left = ((4 * 16 + 2) * 4) as usize;
+        let right = ((4 * 16 + 12) * 4) as usize;
+        assert_eq!(&pixels[left..left + 4], &[255, 0, 0, 255]);
+        assert_eq!(&pixels[right..right + 4], &[255, 0, 0, 255]);
     }
 }

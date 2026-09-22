@@ -23,7 +23,7 @@ pub fn generate_content_aware_fill_frame(
     height: u32,
     mask_polygon: &[[f32; 2]],
     alpha_expansion: f32,
-    _method: FillMethod,
+    method: FillMethod,
 ) -> Vec<u8> {
     let size = crate::core::software_renderer::rgba_buffer_size(width, height).unwrap_or(0);
     let mut out_buffer = if src_pixels.len() == size {
@@ -103,6 +103,8 @@ pub fn generate_content_aware_fill_frame(
     // Step 3: Fast Marching BFS Wavefront Inpainting (O(N) Complexity)
     let mut resolved = vec![false; (w * h) as usize];
     let mut queue = VecDeque::new();
+    let mut boundary_color_sum = [0u64; 4];
+    let mut boundary_pixel_count = 0u64;
 
     // Mark unmasked pixels as resolved and enqueue boundary pixels
     for y in 0..h {
@@ -135,6 +137,11 @@ pub fn generate_content_aware_fill_frame(
 
                 if touches_masked {
                     queue.push_back((x, y));
+                    let pixel = idx * 4;
+                    for channel in 0..4 {
+                        boundary_color_sum[channel] += out_buffer[pixel + channel] as u64;
+                    }
+                    boundary_pixel_count += 1;
                 }
             }
         }
@@ -177,6 +184,62 @@ pub fn generate_content_aware_fill_frame(
                     queue.push_back((nx, ny));
                 }
             }
+        }
+    }
+
+    match method {
+        FillMethod::Object => {}
+        FillMethod::Surface if boundary_pixel_count > 0 => {
+            let surface = boundary_color_sum.map(|sum| {
+                (sum as f64 / boundary_pixel_count as f64).round() as u8
+            });
+            for (index, masked) in is_masked.iter().copied().enumerate() {
+                if masked {
+                    out_buffer[index * 4..index * 4 + 4].copy_from_slice(&surface);
+                }
+            }
+        }
+        FillMethod::Surface => {}
+        FillMethod::EdgeBlend => {
+            let mut softened = out_buffer.clone();
+            for _ in 0..3 {
+                let source = softened.clone();
+                for y in 0..h {
+                    for x in 0..w {
+                        let pixel_index = (y * w + x) as usize;
+                        if !is_masked[pixel_index] {
+                            continue;
+                        }
+                        let mut weighted = [0u32; 4];
+                        let mut weight_sum = 0u32;
+                        for dy in -1..=1 {
+                            for dx in -1..=1 {
+                                let nx = x + dx;
+                                let ny = y + dy;
+                                if nx < 0 || nx >= w || ny < 0 || ny >= h {
+                                    continue;
+                                }
+                                let weight = if dx == 0 && dy == 0 { 4 } else { 1 };
+                                let neighbor = ((ny * w + nx) as usize) * 4;
+                                for channel in 0..4 {
+                                    weighted[channel] +=
+                                        source[neighbor + channel] as u32 * weight;
+                                }
+                                weight_sum += weight;
+                            }
+                        }
+                        let pixel = pixel_index * 4;
+                        for channel in 0..4 {
+                            let local_average = weighted[channel] as f32 / weight_sum as f32;
+                            softened[pixel + channel] =
+                                (source[pixel + channel] as f32 * 0.35 + local_average * 0.65)
+                                    .round()
+                                    .clamp(0.0, 255.0) as u8;
+                        }
+                    }
+                }
+            }
+            out_buffer = softened;
         }
     }
 
@@ -226,5 +289,33 @@ mod tests {
             FillMethod::Object,
         );
         assert_eq!(filled.len(), pixels.len());
+    }
+
+    #[test]
+    fn fill_methods_have_distinct_masked_results_and_preserve_unmasked_pixels() {
+        let (width, height) = (12u32, 12u32);
+        let mut pixels = vec![0u8; width as usize * height as usize * 4];
+        for y in 0..height {
+            for x in 0..width {
+                let i = ((y * width + x) * 4) as usize;
+                pixels[i] = (x * 17) as u8;
+                pixels[i + 1] = (y * 13) as u8;
+                pixels[i + 2] = ((x * 7 + y * 11) % 256) as u8;
+                pixels[i + 3] = 255;
+            }
+        }
+        let polygon = [[3.0, 3.0], [9.0, 3.0], [9.0, 9.0], [3.0, 9.0]];
+        let render = |method| {
+            generate_content_aware_fill_frame(&pixels, width, height, &polygon, 0.0, method)
+        };
+        let object = render(FillMethod::Object);
+        let surface = render(FillMethod::Surface);
+        let edge_blend = render(FillMethod::EdgeBlend);
+        let center = ((6 * width + 6) * 4) as usize;
+        assert_ne!(&object[center..center + 3], &surface[center..center + 3]);
+        assert_ne!(&object[center..center + 3], &edge_blend[center..center + 3]);
+        assert_eq!(&object[0..4], &pixels[0..4]);
+        assert_eq!(&surface[0..4], &pixels[0..4]);
+        assert_eq!(&edge_blend[0..4], &pixels[0..4]);
     }
 }
