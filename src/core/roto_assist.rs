@@ -7,6 +7,9 @@ use crate::core::mask::Mask;
 use crate::core::property::Animatable;
 use crate::core::timeline::TrackerPoint;
 
+const ROTO_FLOW_MAX_DIMENSION: f32 = 160.0;
+const ROTO_FLOW_SEARCH_RADIUS: i32 = 8;
+
 /// Bake per-vertex keyframes: each polygon vertex follows the tracker's
 /// sampled offset curve (position(t) − position(frame0)), preserving shape.
 /// Returns a NEW animated mask path; caller assigns to `mask.path`.
@@ -91,7 +94,7 @@ where
         return Err(format!("Source frame {anchor_frame} has invalid dimensions"));
     }
 
-    let flow_scale = (320.0 / width.max(height) as f32).min(1.0);
+    let flow_scale = (ROTO_FLOW_MAX_DIMENSION / width.max(height) as f32).min(1.0);
     let flow_width = ((width as f32 * flow_scale).round() as u32).max(1);
     let flow_height = ((height as f32 * flow_scale).round() as u32).max(1);
     let anchor_small = downsample_rgba(&anchor_pixels, width, height, flow_width, flow_height);
@@ -123,7 +126,7 @@ where
                 flow_width,
                 flow_height,
                 1,
-                4,
+                ROTO_FLOW_SEARCH_RADIUS,
             );
             let reverse_flow = crate::core::optical_flow_timewarp::compute_dense_optical_flow(
                 &current_small,
@@ -131,7 +134,7 @@ where
                 flow_width,
                 flow_height,
                 1,
-                4,
+                ROTO_FLOW_SEARCH_RADIUS,
             );
             boundary = warp_roto_boundary_with_flow(
                 &boundary,
@@ -764,11 +767,11 @@ mod tests {
             rgba
         }
 
-        let mask = Mask::new_rect("roto".into(), "Roto".into(), 8.0, 8.0, 16.0, 16.0);
-        let left = textured_frame(64, 48, -2);
-        let source = textured_frame(64, 48, 0);
-        let right = textured_frame(64, 48, 2);
-        let baked = bake_optical_flow_mask(&mask, 1, 0, 2, 64, 48, |frame| {
+        let mask = Mask::new_rect("roto".into(), "Roto".into(), 40.0, 30.0, 16.0, 16.0);
+        let left = textured_frame(128, 96, -6);
+        let source = textured_frame(128, 96, 0);
+        let right = textured_frame(128, 96, 6);
+        let baked = bake_optical_flow_mask(&mask, 1, 0, 2, 128, 96, |frame| {
             Some(match frame {
                 0 => left.clone(),
                 1 => source.clone(),
@@ -787,8 +790,18 @@ mod tests {
         let left_point = keyframes[0].value[0];
         let anchor_point = keyframes[1].value[0];
         let right_point = keyframes[2].value[0];
-        assert!((left_point[0] - anchor_point[0] + 2.0).abs() <= 1.0);
-        assert!((right_point[0] - anchor_point[0] - 2.0).abs() <= 1.0);
+        assert!(
+            (left_point[0] - anchor_point[0] + 6.0).abs() <= 1.0,
+            "left flow was {:?} from anchor {:?}",
+            left_point,
+            anchor_point
+        );
+        assert!(
+            (right_point[0] - anchor_point[0] - 6.0).abs() <= 1.0,
+            "right flow was {:?} from anchor {:?}",
+            right_point,
+            anchor_point
+        );
         assert!((left_point[1] - anchor_point[1]).abs() <= 1.0);
         assert!((right_point[1] - anchor_point[1]).abs() <= 1.0);
     }
