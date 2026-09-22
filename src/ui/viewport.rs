@@ -192,8 +192,12 @@ fn render_roto_brush_source_frame(
 
 type RotoFlowCompletion = (
     String,
+    u32,
+    u32,
+    u32,
     String,
     String,
+    Vec<u8>,
     Vec<u8>,
     Result<crate::core::property::Animatable<Vec<[f32; 2]>>, String>,
 );
@@ -458,8 +462,13 @@ fn start_roto_flow_bake(
     let mask_id = mask.id.clone();
     let original_path = serde_json::to_vec(&mask.path.vertices)
         .map_err(|error| format!("Could not snapshot roto matte: {error}"))?;
+    let source_layer_snapshot = serde_json::to_vec(layer)
+        .map_err(|error| format!("Could not snapshot roto source layer: {error}"))?;
     let layer_id = layer.id.clone();
     let composition_id = composition.id.clone();
+    let composition_width = composition.width;
+    let composition_height = composition.height;
+    let composition_fps = composition.fps;
     let Some(source_comp) = prepare_roto_brush_source(&composition, layer_index) else {
         return Err("Selected source layer is unavailable".into());
     };
@@ -512,9 +521,13 @@ fn start_roto_flow_bake(
             };
             let _ = sender.send((
                 composition_id,
+                composition_width,
+                composition_height,
+                composition_fps,
                 layer_id,
                 mask_id,
                 original_path,
+                source_layer_snapshot,
                 result,
             ));
             worker_ctx.request_repaint();
@@ -544,7 +557,17 @@ fn poll_roto_flow_bake(app: &mut KagariApp, ctx: &egui::Context) {
         }
     };
     ctx.data_mut(|data| data.remove::<std::sync::Arc<RotoFlowJob>>(job_id));
-    let (composition_id, layer_id, mask_id, original_path, result) = completion;
+    let (
+        composition_id,
+        composition_width,
+        composition_height,
+        composition_fps,
+        layer_id,
+        mask_id,
+        original_path,
+        source_layer_snapshot,
+        result,
+    ) = completion;
     let baked = match result {
         Ok(baked) => baked,
         Err(error) => {
@@ -554,14 +577,23 @@ fn poll_roto_flow_bake(app: &mut KagariApp, ctx: &egui::Context) {
     };
     let mut project = app.history.current().clone();
     let comp = project.active_composition_mut();
-    if comp.id != composition_id {
-        app.toasts.error("Active composition changed; propagated matte was discarded");
+    if comp.id != composition_id
+        || comp.width != composition_width
+        || comp.height != composition_height
+        || comp.fps != composition_fps
+    {
+        app.toasts.error("Composition changed; propagated matte was discarded");
         return;
     }
     let Some(layer) = comp.layers.iter_mut().find(|layer| layer.id == layer_id) else {
         app.toasts.error("Source layer changed; propagated matte was discarded");
         return;
     };
+    if serde_json::to_vec(layer).ok().as_deref() != Some(source_layer_snapshot.as_slice()) {
+        app.toasts
+            .error("Source layer changed during propagation; result was discarded");
+        return;
+    }
     let Some(mask) = layer.masks.iter_mut().find(|mask| mask.id == mask_id) else {
         app.toasts.error("Roto Brush Matte was removed; propagated result was discarded");
         return;
@@ -4153,6 +4185,65 @@ mod review_regression_tests {
             .masks
             .iter()
             .any(|mask| mask.name == "Roto Brush Matte"));
+    }
+
+    #[test]
+    fn roto_flow_discards_bake_when_source_layer_changes() {
+        let mut app = KagariApp::default();
+        let mut project = app.history.current().clone();
+        let comp = project.active_composition_mut();
+        comp.width = 32;
+        comp.height = 32;
+        comp.duration_frames = 3;
+        comp.layers.clear();
+        let mut layer = crate::core::timeline::Layer::new(
+            "roto-target".into(),
+            "Roto target".into(),
+            crate::core::timeline::LayerType::Solid {
+                color: [0.8, 0.7, 0.6, 1.0],
+            },
+            3,
+        );
+        layer.masks.push(crate::core::mask::Mask::new_rect(
+            "roto_brush_matte".into(),
+            "Roto Brush Matte".into(),
+            8.0,
+            8.0,
+            16.0,
+            16.0,
+        ));
+        comp.layers.push(layer);
+        app.commit_project(project);
+
+        let ctx = egui::Context::default();
+        start_roto_flow_bake(&app, &ctx, 0, 1).unwrap();
+
+        let mut changed_project = app.history.current().clone();
+        changed_project.active_composition_mut().layers[0].layer_type =
+            crate::core::timeline::LayerType::Solid {
+                color: [0.1, 0.2, 0.9, 1.0],
+            };
+        app.commit_project(changed_project);
+
+        let started = std::time::Instant::now();
+        loop {
+            poll_roto_flow_bake(&mut app, &ctx);
+            if ctx
+                .data(|data| {
+                    data.get_temp::<std::sync::Arc<RotoFlowJob>>(egui::Id::new(
+                        "roto_flow_bake_job",
+                    ))
+                })
+                .is_none()
+            {
+                break;
+            }
+            assert!(started.elapsed() < std::time::Duration::from_secs(5));
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+
+        let mask = &app.history.current().active_composition().layers[0].masks[0];
+        assert!(matches!(mask.path.vertices, Animatable::Constant(_)));
     }
 
     #[test]
