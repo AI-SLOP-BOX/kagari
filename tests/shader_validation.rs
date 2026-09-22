@@ -34,3 +34,18 @@ fn levels_adjustment_is_applied_once_with_export_matching_guards() {
     assert!(SHADER.contains("if (layer.levels_gamma > 0.0)"));
     assert!(SHADER.contains("vec3<f32>(0.0),\n                vec3<f32>(1.0)"));
 }
+
+#[test]
+fn color_tint_shader_matches_rgba8_color_and_amount_ranges() {
+    let color_tint = SHADER
+        .split("// --- Color Tint ---")
+        .nth(1)
+        .expect("Color Tint shader block should exist")
+        .split("// --- Drop Shadow ---")
+        .next()
+        .expect("Color Tint block should end before Drop Shadow");
+
+    assert!(color_tint.contains("round("));
+    assert!(color_tint.contains("* 255.0"));
+    assert!(color_tint.contains("clamp(layer.effect_tint_intensity, 0.0, 1.0)"));
+}

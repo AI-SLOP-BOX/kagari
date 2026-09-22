@@ -773,8 +773,15 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     // --- Color Tint ---
     if (layer.effect_tint_enabled == 1u) {
-        let tint_color = vec3<f32>(layer.effect_tint_color_r, layer.effect_tint_color_g, layer.effect_tint_color_b);
-        let tinted_rgb = mix(final_color.rgb, tint_color, layer.effect_tint_intensity);
+        let tint_color = round(
+            clamp(
+                vec3<f32>(layer.effect_tint_color_r, layer.effect_tint_color_g, layer.effect_tint_color_b),
+                vec3<f32>(0.0),
+                vec3<f32>(1.0)
+            ) * 255.0
+        ) / 255.0;
+        let tint_amount = clamp(layer.effect_tint_intensity, 0.0, 1.0);
+        let tinted_rgb = mix(final_color.rgb, tint_color, tint_amount);
         final_color = vec4<f32>(tinted_rgb, final_color.a);
     }
 
