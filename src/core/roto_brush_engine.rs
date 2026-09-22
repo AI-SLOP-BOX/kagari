@@ -324,26 +324,58 @@ fn color_dist_sq(c1: [f32; 3], c2: [f32; 3]) -> f32 {
 }
 
 fn refine_edge_matte(matte: &mut [u8], width: u32, height: u32, feather: f32) {
-    let w = width as i32;
-    let h = height as i32;
-    let r = feather.round() as i32;
-    let orig = matte.to_vec();
+    let Some(len) = (width as usize).checked_mul(height as usize) else {
+        return;
+    };
+    if width == 0 || height == 0 || matte.len() != len {
+        return;
+    }
+    let feather = if feather.is_finite() {
+        feather.clamp(0.0, 64.0)
+    } else {
+        0.0
+    };
+    let radius = feather.round() as usize;
+    if radius == 0 {
+        return;
+    }
+
+    let w = width as usize;
+    let h = height as usize;
+    let kernel_size = (radius * 2 + 1) as f32;
+    let source: Vec<f32> = matte.iter().map(|&value| value as f32).collect();
+    let mut horizontal = vec![0.0f32; len];
 
     for y in 0..h {
+        let row = y * w;
+        let mut sum = 0.0f32;
+        for offset in -(radius as isize)..=radius as isize {
+            let x = offset.clamp(0, w as isize - 1) as usize;
+            sum += source[row + x];
+        }
         for x in 0..w {
-            let mut sum = 0.0f32;
-            let mut count = 0.0f32;
-
-            for dy in -r..=r {
-                let ny = (y + dy).clamp(0, h - 1);
-                for dx in -r..=r {
-                    let nx = (x + dx).clamp(0, w - 1);
-                    sum += orig[(ny * w + nx) as usize] as f32;
-                    count += 1.0;
-                }
+            if x > 0 {
+                let outgoing = (x as isize - radius as isize - 1).clamp(0, w as isize - 1) as usize;
+                let incoming = (x + radius).min(w - 1);
+                sum += source[row + incoming] - source[row + outgoing];
             }
+            horizontal[row + x] = sum / kernel_size;
+        }
+    }
 
-            matte[(y * w + x) as usize] = (sum / count.max(1.0)).round() as u8;
+    for x in 0..w {
+        let mut sum = 0.0f32;
+        for offset in -(radius as isize)..=radius as isize {
+            let y = offset.clamp(0, h as isize - 1) as usize;
+            sum += horizontal[y * w + x];
+        }
+        for y in 0..h {
+            if y > 0 {
+                let outgoing = (y as isize - radius as isize - 1).clamp(0, h as isize - 1) as usize;
+                let incoming = (y + radius).min(h - 1);
+                sum += horizontal[incoming * w + x] - horizontal[outgoing * w + x];
+            }
+            matte[y * w + x] = (sum / kernel_size).round().clamp(0.0, 255.0) as u8;
         }
     }
 }
@@ -441,5 +473,29 @@ mod tests {
                 assert!((distances[y * 5 + x] - expected).abs() < 1e-5);
             }
         }
+    }
+
+    #[test]
+    fn separable_feather_matches_clamped_square_box_filter() {
+        let input = [0u8, 40, 100, 160, 220, 255];
+        let mut actual = input;
+        refine_edge_matte(&mut actual, 3, 2, 1.0);
+        let expected: Vec<u8> = (0..2)
+            .flat_map(|y| {
+                (0..3).map(move |x| {
+                    let sum: u32 = (-1..=1)
+                        .flat_map(|dy| {
+                            (-1..=1).map(move |dx| {
+                                let sx = (x + dx).clamp(0, 2) as usize;
+                                let sy = (y + dy).clamp(0, 1) as usize;
+                                input[sy * 3 + sx] as u32
+                            })
+                        })
+                        .sum();
+                    (sum as f32 / 9.0).round() as u8
+                })
+            })
+            .collect();
+        assert_eq!(actual.as_slice(), expected);
     }
 }
