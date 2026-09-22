@@ -11,6 +11,7 @@ pub(crate) struct CpuMaskEntry {
     /// layer render, never per pixel).
     pub(crate) vertices: Vec<[f32; 2]>,
     pub(crate) feather: f32,
+    pub(crate) opacity: f32,
     pub(crate) inverted: bool,
     pub(crate) mode: MaskMode,
 }
@@ -107,18 +108,16 @@ pub(crate) fn compute_combined_mask_coverage(px: f32, py: f32, masks: &[CpuMaskE
             continue;
         }
         let inside = point_in_polygon(px, py, &mask.vertices);
-        let mut cov = if mask.feather > 0.1 {
+        let mut cov = if mask.feather >= 0.5 {
             let dist = distance_to_polygon(px, py, &mask.vertices);
-            if inside {
-                (dist / mask.feather).clamp(0.0, 1.0)
-            } else {
-                (1.0 - dist / mask.feather).clamp(0.0, 1.0)
-            }
+            let signed = if inside { dist } else { -dist };
+            (0.5 + signed / (2.0 * mask.feather.max(0.5))).clamp(0.0, 1.0)
         } else if inside {
             1.0
         } else {
             0.0
         };
+        cov *= mask.opacity.clamp(0.0, 1.0);
         if mask.inverted {
             cov = 1.0 - cov;
         }
@@ -135,4 +134,40 @@ pub(crate) fn compute_combined_mask_coverage(px: f32, py: f32, masks: &[CpuMaskE
         first = false;
     }
     acc
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rect_mask(feather: f32, opacity: f32, inverted: bool) -> CpuMaskEntry {
+        CpuMaskEntry {
+            vertices: vec![[2.0, 2.0], [8.0, 2.0], [8.0, 8.0], [2.0, 8.0]],
+            feather,
+            opacity,
+            inverted,
+            mode: MaskMode::Add,
+        }
+    }
+
+    #[test]
+    fn feather_is_centered_on_the_mask_boundary() {
+        let mask = rect_mask(2.0, 1.0, false);
+        let inside = compute_combined_mask_coverage(2.5, 5.0, &[mask]);
+        let boundary = compute_combined_mask_coverage(2.0, 5.0, &[rect_mask(2.0, 1.0, false)]);
+        let outside = compute_combined_mask_coverage(1.5, 5.0, &[rect_mask(2.0, 1.0, false)]);
+
+        assert!(inside > boundary, "inside={inside}, boundary={boundary}");
+        assert!(boundary > outside, "boundary={boundary}, outside={outside}");
+        assert!((boundary - 0.5).abs() < 0.01, "boundary={boundary}");
+    }
+
+    #[test]
+    fn opacity_is_applied_before_inversion() {
+        let normal = compute_combined_mask_coverage(5.0, 5.0, &[rect_mask(0.0, 0.25, false)]);
+        let inverted = compute_combined_mask_coverage(5.0, 5.0, &[rect_mask(0.0, 0.25, true)]);
+
+        assert!((normal - 0.25).abs() < f32::EPSILON);
+        assert!((inverted - 0.75).abs() < f32::EPSILON);
+    }
 }

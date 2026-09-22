@@ -608,6 +608,7 @@ pub(crate) fn render_frame_to_pixels_filtered(
                             masks.push(CpuMaskEntry {
                                 vertices: offset_polygon_vertices(&vertices, expansion),
                                 feather: mask.feather.evaluate(frame),
+                                opacity: (mask.opacity.evaluate(frame) / 100.0).clamp(0.0, 1.0),
                                 inverted: mask.inverted,
                                 mode: mask.mode,
                             });
