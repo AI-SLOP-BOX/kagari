@@ -796,6 +796,8 @@ pub fn gpu_preview_effect_supported(effect: &EffectType) -> bool {
         // Mesh Warp uses different coordinate semantics; Posterize quantizes
         // differently; CRT scanlines use different patterns; and Twirl/Bulge
         // use resolution-scaled radii.
+        // A flare linked to a scene light also needs CPU-resolved world-to-
+        // screen position; the GPU shader only receives the authored UV.
         EffectType::MotionBlur { .. }
         | EffectType::FilmGrain { .. }
         | EffectType::FractalNoise { .. }
@@ -816,12 +818,19 @@ pub fn gpu_preview_effect_supported(effect: &EffectType) -> bool {
         | EffectType::CrtScanlines { .. }
         | EffectType::Twirl { .. }
         | EffectType::Bulge { .. }
+        | EffectType::LensFlare {
+            link_to_light: Some(_),
+            ..
+        }
         | EffectType::Invert { invert_alpha: true } => false,
         _ => matches!(
             effect,
             EffectType::ColorTint { .. }
                 | EffectType::Levels { .. }
-                | EffectType::LensFlare { .. }
+                | EffectType::LensFlare {
+                    link_to_light: None,
+                    ..
+                }
                 | EffectType::Invert {
                     invert_alpha: false
                 }
@@ -1143,6 +1152,15 @@ mod tests {
             threshold: constant(1.0),
             color: constant([1.0, 1.0, 1.0, 1.0]),
             link_to_light: None,
+        }));
+        assert!(!gpu_preview_effect_supported(&EffectType::LensFlare {
+            enabled: constant(1.0),
+            position_x: constant(0.5),
+            position_y: constant(0.5),
+            intensity: constant(1.0),
+            threshold: constant(1.0),
+            color: constant([1.0, 1.0, 1.0, 1.0]),
+            link_to_light: Some("key-light".into()),
         }));
         assert!(gpu_preview_effect_supported(&EffectType::Invert {
             invert_alpha: false,
