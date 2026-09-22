@@ -637,35 +637,37 @@ fn sample_layer_color(local_pos_in: vec2<f32>, tc_in: vec2<f32>, blur_extend: f3
     }
 
     // ── Lens Flare ──
-    if (layer.flare_enabled == 1u) {
-        let flare_center = vec2<f32>(layer.flare_pos_x, layer.flare_pos_y);
-        let vp = max(globals.viewport_size, vec2<f32>(1.0, 1.0));
-        let texel = vec2<f32>(1.0) / vp;
-
-        let d = distance(tc_in, flare_center);
-        let d_norm = d * 2.0;
+    if (layer.flare_enabled == 1u && layer.flare_intensity > 0.0) {
+        let flare_center = clamp(
+            vec2<f32>(layer.flare_pos_x, layer.flare_pos_y),
+            vec2<f32>(0.0),
+            vec2<f32>(1.0)
+        );
+        let d_norm = distance(tc_in, flare_center) * 2.0;
 
         let core_radius = 0.02;
         let core = exp(-d_norm * d_norm / (core_radius * core_radius)) * layer.flare_intensity;
-
         let ring_phase = d_norm * 12.0;
         let ring = sin(ring_phase) * 0.3 + 0.5;
         let ring_mask = exp(-d_norm * 3.0);
-        let ring_contribution = ring * ring_mask * layer.flare_intensity * 0.3;
-
+        let rings = ring * ring_mask * layer.flare_intensity * 0.3;
         let to_center = tc_in - flare_center;
         let streak_h = exp(-abs(to_center.y) * 80.0) * exp(-abs(to_center.x) * 8.0);
         let streak_v = exp(-abs(to_center.x) * 80.0) * exp(-abs(to_center.y) * 8.0);
         let streaks = (streak_h + streak_v) * layer.flare_intensity * 0.4;
+        let flare_total = min((core + rings + streaks) * layer.flare_threshold, 4.0);
 
-        let flare_total = (core + ring_contribution + streaks) * layer.flare_threshold;
-        let fc = vec3<f32>(layer.flare_color_r, layer.flare_color_g, layer.flare_color_b);
-        c = vec4<f32>(
-            clamp(c.r + fc.r * flare_total, 0.0, 1.0),
-            clamp(c.g + fc.g * flare_total, 0.0, 1.0),
-            clamp(c.b + fc.b * flare_total, 0.0, 1.0),
-            c.a
-        );
+        if (flare_total >= 0.002) {
+            let flare_color = floor(
+                clamp(
+                    vec3<f32>(layer.flare_color_r, layer.flare_color_g, layer.flare_color_b),
+                    vec3<f32>(0.0),
+                    vec3<f32>(1.0)
+                ) * 255.0
+            );
+            let flare_pixels = floor(clamp(c.rgb * 255.0 + flare_color * flare_total, vec3<f32>(0.0), vec3<f32>(255.0)));
+            c = vec4<f32>(flare_pixels / 255.0, c.a);
+        }
     }
 
     return c;

@@ -49,3 +49,20 @@ fn color_tint_shader_matches_rgba8_color_and_amount_ranges() {
     assert!(color_tint.contains("* 255.0"));
     assert!(color_tint.contains("clamp(layer.effect_tint_intensity, 0.0, 1.0)"));
 }
+
+#[test]
+fn lens_flare_shader_matches_cpu_bounds_and_rgba8_writeback() {
+    let lens_flare = SHADER
+        .split("// ── Lens Flare ──")
+        .nth(1)
+        .expect("Lens Flare shader block should exist")
+        .split("// ──")
+        .next()
+        .expect("Lens Flare block should have a following effect");
+
+    assert!(lens_flare.contains("layer.flare_intensity > 0.0"));
+    assert!(lens_flare.contains("vec2<f32>(0.0)"));
+    assert!(lens_flare.contains("flare_total >= 0.002"));
+    assert!(lens_flare.contains("* 255.0"));
+    assert!(lens_flare.contains("flare_pixels / 255.0"));
+}
