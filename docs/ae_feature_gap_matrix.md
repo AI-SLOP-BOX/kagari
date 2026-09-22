@@ -36,7 +36,7 @@ is intentionally tracked separately from the core workflow.
 | Expressions | Property expressions, time/value helpers, wiggle and loops | 🟡 | Rhai engine is connected; transaction/timeout/error UX needs more hardening |
 | Parenting | Parent chains and transform propagation | ✅ | `core/parenting_engine.rs`, timeline pick-whip path |
 | Pre-composition | Move/leave attributes, nested render, open/return navigation | ✅ | `Composition::precompose_layers`, `core/software_renderer/precomp.rs` |
-| Masks | Bezier paths, vertices, tangents, feather/expansion, animated masks | 🟡 | Core and viewport editing exist; mask-tracker workflow and complex path UX need deeper E2E coverage |
+| Masks | Bezier paths, vertices, tangents, feather/expansion, animated masks | 🟡 | Core and viewport editing exist; CPU feather now ramps symmetrically across the boundary and mask opacity is applied in final renders. GPU preview falls back to software for enabled masks with expansion or Wiggle Paths because those geometries are not implemented in the GPU collector; mask-tracker workflow and complex path UX still need deeper E2E coverage |
 | Mattes | Alpha/luma track mattes, set-matte style operations | ✅ | `core/software_renderer/matte.rs`, `core/set_matte.rs` |
 | Blend/composite | Layer blending, opacity, alpha, linear-light option | ✅ | software/GPU composite paths |
 | 2D transforms | Position, scale, rotation, anchor, opacity, direct manipulation | ✅ | viewport + inspector + timeline |
