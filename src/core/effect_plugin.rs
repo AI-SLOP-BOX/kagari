@@ -790,6 +790,12 @@ pub fn gpu_preview_effect_supported(effect: &EffectType) -> bool {
         // variants omit authored parameters, Heat Distortion uses a different
         // time scale, Hue/Saturation drops hue shift, GPU Glow does not match
         // the CPU blur kernel, and invert-alpha is not implemented by shader.
+        // The following additional GPU paths also diverge: Gaussian Blur is
+        // one-axis on GPU vs. a 2D CPU kernel; Drop Shadow uses a small tap
+        // approximation; chromatic falloff differs; Vignette is applied twice;
+        // Levels is applied twice; Mesh Warp uses different coordinate
+        // semantics; Posterize quantizes differently; CRT scanlines use
+        // different patterns; and Twirl/Bulge use resolution-scaled radii.
         EffectType::MotionBlur { .. }
         | EffectType::FilmGrain { .. }
         | EffectType::FractalNoise { .. }
@@ -801,22 +807,22 @@ pub fn gpu_preview_effect_supported(effect: &EffectType) -> bool {
         | EffectType::WaveWarp { .. }
         | EffectType::Spherize { .. }
         | EffectType::HeatDistortion { .. }
+        | EffectType::GaussianBlur { .. }
+        | EffectType::DropShadow { .. }
+        | EffectType::ChromaticAberration { .. }
+        | EffectType::Vignette { .. }
+        | EffectType::Levels { .. }
+        | EffectType::MeshWarp { .. }
+        | EffectType::Posterize { .. }
+        | EffectType::CrtScanlines { .. }
+        | EffectType::Twirl { .. }
+        | EffectType::Bulge { .. }
         | EffectType::Invert { invert_alpha: true } => false,
         _ => matches!(
             effect,
-            EffectType::GaussianBlur { .. }
-            | EffectType::ColorTint { .. }
-            | EffectType::DropShadow { .. }
-            | EffectType::ChromaticAberration { .. }
-            | EffectType::Vignette { .. }
-            | EffectType::Levels { .. }
-            | EffectType::MeshWarp { .. }
+            EffectType::ColorTint { .. }
             | EffectType::LensFlare { .. }
             | EffectType::Invert { invert_alpha: false }
-            | EffectType::Posterize { .. }
-            | EffectType::CrtScanlines { .. }
-            | EffectType::Twirl { .. }
-            | EffectType::Bulge { .. }
         ),
     }
 }
@@ -1045,6 +1051,56 @@ mod tests {
                 saturation: constant(20.0),
                 lightness: constant(0.0),
             },
+            EffectType::GaussianBlur {
+                blur_radius: constant(8.0),
+            },
+            EffectType::DropShadow {
+                color: constant([0.0, 0.0, 0.0, 1.0]),
+                opacity: constant(75.0),
+                direction: constant(135.0),
+                distance: constant(8.0),
+                softness: constant(10.0),
+            },
+            EffectType::ChromaticAberration {
+                shift_r: constant(4.0),
+                shift_b: constant(4.0),
+                edge_falloff: constant(1.0),
+                iris_linked: false,
+            },
+            EffectType::Vignette {
+                intensity: constant(50.0),
+                roundness: constant(0.5),
+                feather: constant(50.0),
+                color: constant([0.0, 0.0, 0.0, 1.0]),
+            },
+            EffectType::Levels {
+                input_black: constant(0.0),
+                input_white: constant(1.0),
+                gamma: constant(1.0),
+                output_black: constant(0.0),
+                output_white: constant(1.0),
+            },
+            EffectType::MeshWarp {
+                top_left: constant([0.0, 0.0]),
+                top_right: constant([1.0, 0.0]),
+                bottom_left: constant([0.0, 1.0]),
+                bottom_right: constant([1.0, 1.0]),
+            },
+            EffectType::Posterize {
+                levels: constant(8.0),
+            },
+            EffectType::CrtScanlines {
+                line_spacing: constant(4.0),
+                intensity: constant(0.5),
+            },
+            EffectType::Twirl {
+                angle: constant(45.0),
+                radius: constant(100.0),
+            },
+            EffectType::Bulge {
+                amount: constant(0.5),
+                radius: constant(100.0),
+            },
             EffectType::TurbulentDisplace {
                 amount: constant(10.0),
                 size: constant(5.0),
@@ -1071,6 +1127,19 @@ mod tests {
         ];
 
         assert!(unsupported.iter().all(|effect| !gpu_preview_effect_supported(effect)));
+        assert!(gpu_preview_effect_supported(&EffectType::ColorTint {
+            color: constant([0.2, 0.4, 0.8, 1.0]),
+            intensity: constant(50.0),
+        }));
+        assert!(gpu_preview_effect_supported(&EffectType::LensFlare {
+            enabled: constant(1.0),
+            position_x: constant(0.5),
+            position_y: constant(0.5),
+            intensity: constant(1.0),
+            threshold: constant(1.0),
+            color: constant([1.0, 1.0, 1.0, 1.0]),
+            link_to_light: None,
+        }));
         assert!(gpu_preview_effect_supported(&EffectType::Invert {
             invert_alpha: false,
         }));
