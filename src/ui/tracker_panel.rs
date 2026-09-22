@@ -915,6 +915,7 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
             });
 
             // ── Roto Brush & Refine Edge (Matte Cleanup) ──
+            let mut apply_roto_refinement = false;
             ui.collapsing("✂ Roto Brush & Refine Edge", |ui| {
                 let mut refine_smooth = ui.ctx().data(|d| {
                     d.get_temp::<f32>(egui::Id::new("roto_smooth"))
@@ -924,17 +925,9 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                     d.get_temp::<f32>(egui::Id::new("roto_feather"))
                         .unwrap_or(5.0)
                 });
-                let mut refine_contrast = ui.ctx().data(|d| {
-                    d.get_temp::<f32>(egui::Id::new("roto_contrast"))
-                        .unwrap_or(80.0)
-                });
                 let mut shift_edge = ui.ctx().data(|d| {
                     d.get_temp::<f32>(egui::Id::new("roto_shift_edge"))
                         .unwrap_or(0.0)
-                });
-                let mut decontaminate = ui.ctx().data(|d| {
-                    d.get_temp::<bool>(egui::Id::new("roto_decontaminate"))
-                        .unwrap_or(true)
                 });
 
                 ui.horizontal(|ui| {
@@ -960,20 +953,9 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                     }
                 });
                 ui.horizontal(|ui| {
-                    ui.label("Contrast:");
-                    if ui
-                        .add(egui::Slider::new(&mut refine_contrast, 0.0..=100.0).suffix(" %"))
-                        .changed()
-                    {
-                        ui.ctx().data_mut(|d| {
-                            d.insert_temp(egui::Id::new("roto_contrast"), refine_contrast)
-                        });
-                    }
-                });
-                ui.horizontal(|ui| {
                     ui.label("Shift Edge:");
                     if ui
-                        .add(egui::Slider::new(&mut shift_edge, -100.0..=100.0).suffix(" %"))
+                        .add(egui::Slider::new(&mut shift_edge, -100.0..=100.0).suffix(" px"))
                         .changed()
                     {
                         ui.ctx().data_mut(|d| {
@@ -981,21 +963,48 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                         });
                     }
                 });
-                ui.checkbox(
-                    &mut decontaminate,
-                    "Decontaminate Edge Colors (Fringe Removal)",
-                );
-                if decontaminate
-                    != ui.ctx().data(|d| {
-                        d.get_temp::<bool>(egui::Id::new("roto_decontaminate"))
-                            .unwrap_or(true)
-                    })
-                {
-                    ui.ctx().data_mut(|d| {
-                        d.insert_temp(egui::Id::new("roto_decontaminate"), decontaminate)
-                    });
-                }
+                apply_roto_refinement = custom_widgets::ae_button_accent(ui, "Apply to Roto Matte")
+                    .on_hover_text("Smooth the closed matte and apply feather/edge expansion as an undoable project edit")
+                    .clicked();
             });
+            if apply_roto_refinement {
+                let smoothness = ui.ctx().data(|d| {
+                    d.get_temp::<f32>(egui::Id::new("roto_smooth"))
+                        .unwrap_or(2.0)
+                });
+                let feather = ui.ctx().data(|d| {
+                    d.get_temp::<f32>(egui::Id::new("roto_feather"))
+                        .unwrap_or(5.0)
+                });
+                let edge_shift = ui.ctx().data(|d| {
+                    d.get_temp::<f32>(egui::Id::new("roto_shift_edge"))
+                        .unwrap_or(0.0)
+                });
+                let mut project = app.history.current().clone();
+                let applied = project
+                    .active_composition_mut()
+                    .layers
+                    .get_mut(idx)
+                    .and_then(|layer| {
+                        let mask = layer
+                            .masks
+                            .iter_mut()
+                            .find(|mask| mask.name == "Roto Brush Matte")?;
+                        crate::core::roto_assist::apply_roto_refinement(
+                            mask, smoothness, feather, edge_shift,
+                        )
+                        .then_some(())
+                    })
+                    .is_some();
+                if applied {
+                    app.commit_project(project);
+                    app.toasts
+                        .info("Roto matte refinement applied; Undo restores the previous matte");
+                } else {
+                    app.toasts
+                        .info("Create a Roto Brush Matte before applying refinement");
+                }
+            }
 
             ui.horizontal(|ui| {
                 if custom_widgets::ae_button_accent(ui, "🎯 Auto-Generate Mask")

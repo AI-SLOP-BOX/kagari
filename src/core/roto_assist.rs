@@ -44,6 +44,88 @@ pub fn bake_tracked_mask(
     Ok(Animatable::Animated(kfs))
 }
 
+/// Applies roto cleanup settings to the stored mask geometry. Smoothing keeps
+/// the keyframe vertex count stable; feather and edge shift use native mask
+/// properties so preview and export share the same result.
+pub fn apply_roto_refinement(
+    mask: &mut Mask,
+    smoothness: f32,
+    feather_px: f32,
+    edge_shift_px: f32,
+) -> bool {
+    let smoothness = if smoothness.is_finite() {
+        smoothness.clamp(0.0, 10.0)
+    } else {
+        0.0
+    };
+    if smoothness > 0.0 && mask.path.is_closed {
+        let changed = match &mut mask.path.vertices {
+            Animatable::Constant(vertices) => {
+                if vertices.len() >= 3 {
+                    *vertices = smooth_closed(vertices, smoothness / 10.0);
+                    true
+                } else {
+                    false
+                }
+            }
+            Animatable::Animated(keyframes) => {
+                for keyframe in keyframes.iter_mut() {
+                    if keyframe.value.len() >= 3 {
+                        keyframe.value = smooth_closed(&keyframe.value, smoothness / 10.0);
+                    }
+                }
+                keyframes.iter().any(|keyframe| keyframe.value.len() >= 3)
+            }
+        };
+        if changed {
+            mask.path.tangents = None;
+        }
+    }
+
+    let feather = if feather_px.is_finite() {
+        feather_px.clamp(0.0, 500.0)
+    } else {
+        0.0
+    };
+    let edge_shift = if edge_shift_px.is_finite() {
+        edge_shift_px.clamp(-500.0, 500.0)
+    } else {
+        0.0
+    };
+    mask.feather = Animatable::new_constant(feather);
+    mask.expansion = Animatable::new_constant(edge_shift);
+    true
+}
+
+fn smooth_closed(vertices: &[[f32; 2]], amount: f32) -> Vec<[f32; 2]> {
+    if vertices.len() < 3 {
+        return vertices.to_vec();
+    }
+    let amount = amount.clamp(0.0, 1.0);
+    (0..vertices.len())
+        .map(|index| {
+            let previous = vertices[(index + vertices.len() - 1) % vertices.len()];
+            let current = vertices[index];
+            let next = vertices[(index + 1) % vertices.len()];
+            if current.iter().all(|value| value.is_finite())
+                && previous.iter().all(|value| value.is_finite())
+                && next.iter().all(|value| value.is_finite())
+            {
+                let target = [
+                    (previous[0] + current[0] * 2.0 + next[0]) * 0.25,
+                    (previous[1] + current[1] * 2.0 + next[1]) * 0.25,
+                ];
+                [
+                    current[0] + (target[0] - current[0]) * amount,
+                    current[1] + (target[1] - current[1]) * amount,
+                ]
+            } else {
+                current
+            }
+        })
+        .collect()
+}
+
 // ──────────────── Roto Brush & Refine Edge Engine ────────────────
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -497,5 +579,39 @@ mod tests {
         let refined = refine_edge_guided_filter(&img, &rough_mask, width, height, 2, 0.01);
         assert_eq!(refined.len(), (width * height) as usize);
         assert!(refined[8 * 16 + 2] > 200);
+    }
+
+    #[test]
+    fn roto_refinement_changes_geometry_and_mask_render_settings() {
+        let mut mask = square_mask();
+        let original = mask.path.vertices.evaluate(0);
+
+        assert!(apply_roto_refinement(&mut mask, 4.0, 6.0, -2.5));
+
+        let refined = mask.path.vertices.evaluate(0);
+        assert_eq!(refined.len(), original.len());
+        assert_ne!(refined, original);
+        assert_eq!(mask.feather.evaluate(0), 6.0);
+        assert_eq!(mask.expansion.evaluate(0), -2.5);
+    }
+
+    #[test]
+    fn roto_refinement_preserves_animated_vertex_tracks_and_bounds_growth() {
+        let mut mask = square_mask();
+        let vertices = mask.path.vertices.evaluate(0);
+        mask.path.vertices = Animatable::new_animated(vec![
+            Keyframe::new(0, vertices.clone(), InterpolationType::Linear),
+            Keyframe::new(10, vertices, InterpolationType::Linear),
+        ]);
+
+        apply_roto_refinement(&mut mask, 10.0, 3.0, 1.0);
+
+        let Animatable::Animated(keyframes) = &mask.path.vertices else {
+            panic!("refinement must preserve animation")
+        };
+        assert_eq!(keyframes.len(), 2);
+        assert!(keyframes.iter().all(|keyframe| keyframe.value.len() == 4));
+        assert_eq!(mask.feather.evaluate(10), 3.0);
+        assert_eq!(mask.expansion.evaluate(10), 1.0);
     }
 }

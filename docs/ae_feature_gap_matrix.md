@@ -45,7 +45,7 @@ is intentionally tracked separately from the core workflow.
 | 3D layers | 3D transforms, cameras, lights, depth, shadows, DOF | 🟡 | `advanced_3d_engine.rs`, camera/light UI, and software-rasterized OBJ layers with nested PreComp coverage; model materials, scene authoring, GPU mesh rendering, and broader interchange remain narrower than AE |
 | Scene cameras/lights | Camera and light layers in the timeline, animated scene objects, active-camera switching | 🟡 | Creation from the timeline, settings, menu, and 3D camera solve now creates linked scene rows; deletion and pre-compose preserve/remove the linked objects, and animated row transforms drive software-render camera/light values; richer first-class layer controls and GPU parity remain |
 | Motion tracking | Point tracking, planar tracking, camera solve, stabilization | 🟡 | Point/quad tracking, animated Corner Pin, target-aware stabilization, and 3D camera solving are connected to the tracker panel; real-footage workflow coverage, planar confidence UX, and production-quality solve accuracy still need work |
-| Roto / paint | Roto Brush, paint, clone, eraser, puppet | 🟡 | Roto Brush source strokes persist and remain isolated by layer identity; tracker propagation is range-safe and segmentation is bounded/linear-time, but temporal propagation quality, edge refinement, cache/revision workflow, and paint/clone/puppet parity remain well below AE |
+| Roto / paint | Roto Brush, paint, clone, eraser, puppet | 🟡 | Roto Brush source strokes persist and remain isolated by layer identity; tracker propagation is range-safe, segmentation is bounded/linear-time, and the Tracker panel now applies bounded closed-path smoothing plus actual mask feather/expansion as an undoable edit. Optical-flow propagation, matte-quality review/cache workflow, color decontamination, and paint/clone/puppet parity remain well below AE |
 | Content-Aware Fill | Remove an object across a sequence with generated replacement frames | 🟡 | `core/content_aware_engine.rs` and `ui/content_aware_fill.rs` provide a mask-driven fill workflow, but temporal consistency, difficult backgrounds, and quality/performance acceptance against real footage are not established |
 | Motion blur | Per-layer and comp motion blur with shutter controls | 🟡 | Layer/comp switches and shutter controls exist; temporal sampling quality, GPU/export parity, and representative fast-motion image tests remain incomplete |
 | Keying | Chroma/linear key, matte cleanup, spill-like workflows | 🟡 | Keying modules and controls exist; production-grade edge handling still needs validation |
@@ -87,24 +87,48 @@ is intentionally tracked separately from the core workflow.
    typography fidelity, path editing, and modifier interaction are behind AE.
 7. **Workspace persistence** — saved workspaces must restore panel geometry,
    timeline height, graph mode, and viewer state, not only tab indices.
-8. **Roto/paint temporal behavior** — source strokes now persist and tracker
-   propagation is range-safe, but per-frame segmentation, edge refinement,
-   propagation review/correction, caching, and real-footage quality remain
-   substantially behind AE.
+8. **Roto/paint temporal behavior** — a user can now apply geometry smoothing,
+   feather, and expansion to the actual stored matte with Undo, but this is not
+   temporal segmentation: optical-flow propagation, propagation review,
+   correction caching, and real-footage quality remain substantially behind AE.
 9. **Audio correction and interchange** — production audio formats and the
    correction workflow need a complete non-ML baseline before model support.
 
+## Next implementation slices and acceptance criteria
+
+These are user workflows, not module checkboxes. A slice remains partial until
+the authored project can be saved, reopened, previewed, and rendered without
+losing its meaning.
+
+| Priority | AE workflow to match | Kagari gap to close | Acceptance evidence |
+|---:|---|---|---|
+| 1 | Roto Brush / paint a subject over time | Brush input, per-frame matte propagation, edge refinement, correction/review, cache invalidation, and undo are not yet one reliable workflow | Import a short real clip, create and propagate foreground/background strokes across a frame range, correct a later frame, save/reopen, and compare preview/export mattes at several frames |
+| 2 | Consistent composition preview and final render | GPU preview is intentionally restricted to an allowlist; supported paths still need measured pixel contracts and unsupported paths must visibly use software fallback | For every allowlisted effect and representative alpha/blend/scale cases, compare GPU preview to the software reference within a documented tolerance; assert unsupported stacks take the fallback path |
+| 3 | 3D camera, lights, and imported models in a composition | OBJ/software coverage exists, but authored scenes, material controls, broader model interchange, and GPU parity are incomplete | Build a scene with a model, camera, and light using UI controls; animate it; save/reopen; render nested and top-level compositions; compare against reference frames |
+| 4 | Content-Aware Fill over a footage range | The mask-driven path exists, but temporal coherence and failure/review UX are not established | Run on representative static-camera and moving-camera clips; measure fill-region temporal flicker and boundary error, support manual replacement frames, and persist the result |
+| 5 | Motion tracking and stabilization on production footage | Point/quad/camera-solve controls exist, but confidence review, correction, and full footage journeys remain thin | Track a supplied clip, inspect/reject low-confidence frames, adjust a track, apply it to a layer, save/reopen, and validate overlay drift against annotated points |
+| 6 | Text and shape motion-graphics authoring | Engines and data models exceed the depth of direct manipulation and typography/geometry feedback | Create/edit text and shape paths in the viewer, animate them, reopen the project, and assert matching preview/export frames |
+| 7 | Reliable project interchange and reusable graphics | MOGRT/OTIO/MLT and plugin paths have narrower host compatibility than AE | Maintain fixture projects from supported external tools, round-trip supported fields, and report unsupported fields instead of silently dropping them |
+
+Do not count “the panel opens”, “the enum exists”, “does not panic”, or “the
+buffer dimensions are unchanged” as acceptance evidence for these workflows.
+
 ## Implementation order
 
-The next work should follow user-visible leverage and verification cost:
+The first import/audio round-trip and graph-keyframe drag paths have already
+been exercised; do not repeat them as the next pass. Continue by user-visible
+leverage, and update the acceptance evidence above only after each slice closes:
 
-1. Expand real-footage workflow tests to cover import → relink/proxy → tracking
-   → render/export as one journey, including compressed audio from the project bin.
-2. Close the GPU preview/export semantic differences with pixel-contract tests.
-3. Expand 3D model/camera/light authoring and its render fixtures.
-4. Strengthen roto/paint propagation and Content-Aware Fill against real
-   footage; improve audio correction and long-session sync without requiring
-   an ML model.
+1. Complete the Roto/paint real-footage journey and fix the first measured
+   propagation, correction, cache, or undo failure.
+2. Audit the GPU allowlist against the software renderer, add representative
+   pixel-contract tests, and remove any unproven effect from the allowlist.
+3. Complete one UI-authored 3D model/camera/light project through save/reopen
+   and top-level plus nested rendering.
+4. Measure Content-Aware Fill on real clips, then address temporal flicker and
+   correction/review before expanding model-backed approaches.
+5. Close tracking/stabilization review and correction UX, followed by direct
+   text/shape authoring and interchange fixture coverage.
 
 ## Adobe reference pages
 
