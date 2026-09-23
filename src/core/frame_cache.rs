@@ -434,24 +434,48 @@ impl FrameCache {
 pub mod disk_cache {
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
-    use std::sync::OnceLock;
+    use std::sync::{OnceLock, RwLock};
 
     static MAX_DISK_BYTES: AtomicU64 = AtomicU64::new(50 * 1024 * 1024 * 1024); // 50 GB default
     static WRITE_COUNTER: AtomicU64 = AtomicU64::new(0);
+    static CACHE_DIRECTORY: OnceLock<RwLock<Option<PathBuf>>> = OnceLock::new();
 
     /// Set the maximum disk cache size in bytes. Called from Preferences.
     pub fn set_max_disk_bytes(bytes: u64) {
         MAX_DISK_BYTES.store(bytes, Ordering::Relaxed);
     }
 
+    pub fn cache_directory() -> PathBuf {
+        CACHE_DIRECTORY
+            .get_or_init(|| RwLock::new(None))
+            .read()
+            .map(|dir| dir.clone().unwrap_or_else(default_cache_dir))
+            .unwrap_or_else(|_| default_cache_dir())
+    }
+
+    pub fn set_cache_directory(path: Option<PathBuf>) -> Result<(), String> {
+        if let Some(dir) = path.as_ref() {
+            std::fs::create_dir_all(dir).map_err(|error| error.to_string())?;
+            let probe = dir.join(format!(".kagari-cache-write-{}", std::process::id()));
+            std::fs::write(&probe, []).map_err(|error| error.to_string())?;
+            let _ = std::fs::remove_file(probe);
+        }
+        let mut configured = CACHE_DIRECTORY
+            .get_or_init(|| RwLock::new(None))
+            .write()
+            .map_err(|error| error.to_string())?;
+        *configured = path;
+        Ok(())
+    }
+
+    fn default_cache_dir() -> PathBuf {
+        std::env::temp_dir().join("kagari_frame_cache")
+    }
+
     fn cache_dir() -> PathBuf {
-        static DIR: OnceLock<PathBuf> = OnceLock::new();
-        DIR.get_or_init(|| {
-            let dir = std::env::temp_dir().join("kagari_frame_cache");
-            let _ = std::fs::create_dir_all(&dir);
-            dir
-        })
-        .clone()
+        let dir = cache_directory();
+        let _ = std::fs::create_dir_all(&dir);
+        dir
     }
 
     fn frame_path(key: &(u32, u64)) -> PathBuf {

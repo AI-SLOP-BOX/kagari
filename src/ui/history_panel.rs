@@ -10,7 +10,7 @@ pub fn draw_history_panel(app: &mut KagariApp, ctx: &egui::Context) {
     }
 
     let mut open = app.show_history_panel;
-    egui::Window::new("🕘 Undo History")
+    crate::ui::modal::window("Undo History")
         .open(&mut open)
         .default_width(260.0)
         .default_height(320.0)

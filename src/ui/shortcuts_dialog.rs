@@ -8,7 +8,7 @@ pub fn draw_shortcuts_dialog(app: &mut KagariApp, ctx: &egui::Context) {
         return;
     }
 
-    egui::Window::new("⌨ Keyboard Shortcuts")
+    crate::ui::modal::window("Keyboard Shortcuts")
         .open(&mut show)
         .resizable(true)
         .default_size(egui::vec2(520.0, 420.0))

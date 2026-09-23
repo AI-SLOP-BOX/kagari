@@ -330,6 +330,66 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
 ///
 /// Continuous interactions (slider drag via `draw_effect_type_ui`) use the drag
 /// transaction API for end-of-frame commit.
+fn color_control_value(layer: &crate::core::timeline::Layer, key: &str, frame: u32) -> f32 {
+    let Some(effect) = layer.effects.iter().find(|effect| effect.id == format!("ui_color_{key}")) else {
+        return match key { "contrast" => 0.10, "highlights" => -0.20, "shadows" => 0.30, "saturation" => 1.0, _ => 0.0 };
+    };
+    match (&effect.effect_type, key) {
+        (crate::core::timeline::EffectType::Levels { gamma, .. }, "exposure") => gamma.evaluate(frame).max(0.0001).log2(),
+        (crate::core::timeline::EffectType::Levels { input_black, .. }, "contrast") => input_black.evaluate(frame) * 4.0,
+        (crate::core::timeline::EffectType::ColorBalance { highlights, .. }, "highlights") => highlights[0] / 100.0,
+        (crate::core::timeline::EffectType::ColorBalance { shadows, .. }, "shadows") => shadows[0] / 100.0,
+        (crate::core::timeline::EffectType::HueSaturation { saturation, .. }, "saturation") => saturation.evaluate(frame) + 1.0,
+        _ => 0.0,
+    }
+}
+
+fn set_color_control(layer: &mut crate::core::timeline::Layer, key: &str, frame: u32, value: f32) {
+    use crate::core::property::Animatable;
+    use crate::core::timeline::{Effect, EffectType};
+
+    let id = format!("ui_color_{key}");
+    if !layer.effects.iter().any(|effect| effect.id == id) {
+        let effect_type = match key {
+            "exposure" | "contrast" => EffectType::Levels {
+                input_black: Animatable::new_constant(0.0),
+                input_white: Animatable::new_constant(1.0),
+                gamma: Animatable::new_constant(1.0),
+                output_black: Animatable::new_constant(0.0),
+                output_white: Animatable::new_constant(1.0),
+            },
+            "highlights" | "shadows" => EffectType::ColorBalance {
+                shadows: [0.0; 3], midtones: [0.0; 3], highlights: [0.0; 3], preserve_luminosity: false,
+            },
+            _ => EffectType::HueSaturation {
+                hue_shift: Animatable::new_constant(0.0),
+                saturation: Animatable::new_constant(0.0),
+                lightness: Animatable::new_constant(0.0),
+            },
+        };
+        layer.effects.push(Effect {
+            id: id.clone(),
+            name: format!("Color: {}", key),
+            effect_type,
+            enabled: true,
+        });
+    }
+    let Some(effect) = layer.effects.iter_mut().find(|effect| effect.id == id) else { return };
+    match (&mut effect.effect_type, key) {
+        (EffectType::Levels { gamma, .. }, "exposure") => gamma.set_value_at_frame(frame, 2.0_f32.powf(value)),
+        (EffectType::Levels { input_black, input_white, .. }, "contrast") => {
+            let black = value * 0.25;
+            let white = 1.0 - value * 0.25;
+            input_black.set_value_at_frame(frame, black);
+            input_white.set_value_at_frame(frame, white);
+        }
+        (EffectType::ColorBalance { highlights, .. }, "highlights") => *highlights = [value * 100.0; 3],
+        (EffectType::ColorBalance { shadows, .. }, "shadows") => *shadows = [value * 100.0; 3],
+        (EffectType::HueSaturation { saturation, .. }, "saturation") => saturation.set_value_at_frame(frame, value - 1.0),
+        _ => {}
+    }
+}
+
 fn draw_effect_controls(
     app: &mut KagariApp,
     ui: &mut egui::Ui,
@@ -403,26 +463,36 @@ fn draw_effect_controls(
     egui::CollapsingHeader::new("Color")
         .default_open(false)
         .show(ui, |ui| {
-            for (label, initial, range) in [
-                ("Exposure", 0.0_f32, -2.0..=2.0),
-                ("Contrast", 0.10_f32, -1.0..=1.0),
-                ("Highlights", -0.20_f32, -1.0..=1.0),
-                ("Shadows", 0.30_f32, -1.0..=1.0),
-                ("Saturation", 1.0_f32, 0.0..=2.0),
+            for (key, label, range) in [
+                ("exposure", "Exposure", -2.0_f32..=2.0),
+                ("contrast", "Contrast", -1.0_f32..=1.0),
+                ("highlights", "Highlights", -1.0_f32..=1.0),
+                ("shadows", "Shadows", -1.0_f32..=1.0),
+                ("saturation", "Saturation", 0.0_f32..=2.0),
             ] {
-                let mut value = initial;
+                let Some(mut value) = app.history.current().active_composition().layers
+                    .get(idx).map(|layer| color_control_value(layer, key, current_frame)) else {
+                    continue;
+                };
+                let mut changed = false;
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new(label).color(colors::TEXT_SECONDARY));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.label(
                             egui::RichText::new(format!("{value:.2}")).color(colors::ACCENT_BLUE),
                         );
-                        ui.add_sized(
+                        changed = ui.add_sized(
                             [110.0, 16.0],
                             egui::Slider::new(&mut value, range).show_value(false),
-                        );
+                        ).changed();
                     });
                 });
+                if changed {
+                    if let Some(layer) = app.history.current_mut().active_composition_mut().layers.get_mut(idx) {
+                        set_color_control(layer, key, current_frame, value);
+                    }
+                    *slider_changed = true;
+                }
             }
         });
     ui.add_space(4.0);
@@ -1248,5 +1318,23 @@ mod tests {
                 .len(),
             1
         );
+    }
+
+    #[test]
+    fn color_controls_write_renderable_effect_parameters() {
+        let mut layer = crate::core::timeline::Layer::new(
+            "layer_1".to_string(),
+            "Layer 1".to_string(),
+            crate::core::timeline::LayerType::Null,
+            30,
+        );
+        set_color_control(&mut layer, "exposure", 4, 1.0);
+        set_color_control(&mut layer, "saturation", 4, 1.5);
+        assert_eq!(color_control_value(&layer, "exposure", 4), 1.0);
+        assert_eq!(color_control_value(&layer, "saturation", 4), 1.5);
+        assert!(matches!(
+            layer.effects.iter().find(|effect| effect.id == "ui_color_exposure").map(|effect| &effect.effect_type),
+            Some(crate::core::timeline::EffectType::Levels { gamma, .. }) if (gamma.evaluate(4) - 2.0).abs() < 1e-6
+        ));
     }
 }

@@ -15,7 +15,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
     egui::TopBottomPanel::top("effects_workspace_bar")
         .exact_height(if mobile { 52.0 } else { 60.0 })
         .frame(egui::Frame::none().fill(egui::Color32::from_rgb(14, 23, 30)))
-        .show(ctx, |ui| draw_topbar(ui, width, mobile));
+        .show(ctx, |ui| draw_topbar(ui, width, mobile, app, ctx));
     egui::TopBottomPanel::bottom("effects_workspace_footer")
         .exact_height(if mobile { 34.0 } else { 50.0 })
         .frame(egui::Frame::none().fill(egui::Color32::from_rgb(9, 16, 22)))
@@ -47,7 +47,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
         });
 }
 
-fn draw_topbar(ui: &mut egui::Ui, width: f32, mobile: bool) {
+fn draw_topbar(ui: &mut egui::Ui, width: f32, mobile: bool, app: &mut KagariApp, ctx: &egui::Context) {
     let p = ui.painter().clone();
     for (x, c) in [
         (23.0, (255, 82, 78)),
@@ -79,7 +79,7 @@ fn draw_topbar(ui: &mut egui::Ui, width: f32, mobile: bool) {
             egui::FontId::proportional(14.0),
             colors::TEXT_PRIMARY,
         );
-        let right = width - 18.0;
+        let right = width - 42.0;
         let settings =
             egui::Rect::from_min_max(egui::pos2(right - 72.0, 5.0), egui::pos2(right, 55.0));
         let new_project = egui::Rect::from_min_max(
@@ -96,6 +96,8 @@ fn draw_topbar(ui: &mut egui::Ui, width: f32, mobile: bool) {
             icons::SVG_FOLDER,
             "プロジェクトを開く",
             "effects-open-project",
+            app,
+            ctx,
         );
         effects_header_action(
             ui,
@@ -103,6 +105,8 @@ fn draw_topbar(ui: &mut egui::Ui, width: f32, mobile: bool) {
             icons::SVG_FILE_PLUS,
             "新規プロジェクト",
             "effects-new-project",
+            app,
+            ctx,
         );
         effects_header_action(
             ui,
@@ -110,14 +114,14 @@ fn draw_topbar(ui: &mut egui::Ui, width: f32, mobile: bool) {
             icons::SVG_SETTINGS,
             "設定",
             "effects-settings",
+            app,
+            ctx,
         );
-        p.text(
-            egui::pos2(width - 18.0, 23.0),
-            egui::Align2::RIGHT_CENTER,
-            "×",
-            egui::FontId::proportional(18.0),
-            colors::TEXT_MUTED,
-        );
+        let close = egui::Rect::from_center_size(egui::pos2(width - 18.0, 23.0), egui::vec2(28.0, 32.0));
+        if ui.interact(close, egui::Id::new("effects-window-close"), egui::Sense::click()).clicked() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+        p.text(close.center(), egui::Align2::CENTER_CENTER, "×", egui::FontId::proportional(18.0), colors::TEXT_MUTED);
     }
 }
 
@@ -127,8 +131,19 @@ fn effects_header_action(
     icon: &'static str,
     label: &str,
     id: &str,
+    app: &mut KagariApp,
+    ctx: &egui::Context,
 ) {
     let response = ui.interact(rect, egui::Id::new(id), egui::Sense::click());
+    if response.clicked() {
+        match id {
+            "effects-open-project" => crate::ui::home_screen::open_project_dialog(app),
+            "effects-new-project" => crate::ui::home_screen::new_project_from_header(app),
+            "effects-settings" => app.show_preferences = true,
+            _ => {}
+        }
+        ctx.request_repaint();
+    }
     if response.hovered() {
         ui.painter().rect_filled(
             rect,
@@ -945,7 +960,7 @@ fn texture(ctx: &egui::Context, path: &str, key: &str) -> Option<egui::TextureId
     if let Some(t) = ctx.data_mut(|d| d.get_temp::<egui::TextureHandle>(id)) {
         return Some(t.id());
     }
-    let img = image::open(std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(path))
+    let img = crate::ui::embedded_assets::open_image(std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(path))
         .ok()?
         .to_rgba8();
     let size = [img.width() as usize, img.height() as usize];

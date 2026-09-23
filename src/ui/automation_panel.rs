@@ -20,7 +20,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
         app.history.current().active_composition().fps.max(1),
         1,
     );
-    egui::Window::new("🎚 Automation Bindings")
+    crate::ui::modal::window("Automation Bindings")
         .open(&mut open)
         .default_width(430.0)
         .default_height(300.0)

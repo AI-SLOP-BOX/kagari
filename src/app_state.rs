@@ -374,7 +374,10 @@ pub struct KagariApp {
     /// Video codec selection shared by Export dialog + Render presets (0=H264,1=ProRes422,2=ProRes4444)
     pub export_codec_idx: usize,
     pub export_resolution_scale: usize,
-    pub import_rx: Option<std::sync::mpsc::Receiver<crate::ui::drop_import::ImportResult>>,
+    pub import_rx: Vec<std::sync::mpsc::Receiver<crate::ui::drop_import::ImportResult>>,
+    pub viewer_draw_rect: Option<eframe::egui::Rect>,
+    pub camera_solve_rx: Option<std::sync::mpsc::Receiver<Result<crate::core::camera_track::CameraSolveResult, String>>>,
+    pub camera_solve_target: Option<(String, u32, u32, f32, usize)>,
     /// Path of the most recent export (for the "Reveal in Finder" button).
     #[cfg_attr(not(feature = "gui"), allow(dead_code))]
     pub last_export_path: Option<String>,
@@ -662,7 +665,10 @@ impl Default for KagariApp {
             show_preferences: false,
             audio_preview_enabled: true,
             ui_ctx: None,
-            import_rx: None,
+            import_rx: Vec::new(),
+            viewer_draw_rect: None,
+            camera_solve_rx: None,
+            camera_solve_target: None,
             last_export_path: None,
             command_palette_search: String::new(),
             command_palette_selected_idx: 0,
@@ -883,6 +889,7 @@ impl eframe::App for KagariApp {
         // Re-assert the dark AE theme every frame (cheap, and guards against
         // eframe's system-theme following resetting visuals)
         crate::ui::theme::configure_ae_theme(ctx);
+        crate::ui::tracker_panel::poll_camera_solve(self, ctx);
 
         self.update_panels(ctx);
     }
@@ -1328,17 +1335,15 @@ impl KagariApp {
                                     .small()
                                     .color(crate::ui::theme::colors::TEXT_MUTED),
                             );
-                            let render_ms = if self.playback.preview_render_ema_ms > 0.0 {
-                                self.playback.preview_render_ema_ms
-                            } else {
-                                12.0
-                            };
-                            ui.label(
-                                egui::RichText::new(format!("{:.0}ms", render_ms))
-                                    .small()
-                                    .color(crate::ui::theme::colors::TEXT_MUTED),
-                            );
-                            ui.separator();
+                            let render_ms = self.playback.preview_render_ema_ms;
+                            if render_ms > 0.0 {
+                                ui.label(
+                                    egui::RichText::new(format!("{:.0}ms", render_ms))
+                                        .small()
+                                        .color(crate::ui::theme::colors::TEXT_MUTED),
+                                );
+                                ui.separator();
+                            }
                         }
                         if status_width >= 950.0 {
                             let (gpu_label, gpu_color) = if self.gpu_rendered {
@@ -1396,9 +1401,13 @@ impl KagariApp {
                                     .color(crate::ui::theme::colors::TEXT_MUTED),
                             );
                             ui.separator();
-                            let cached_cnt = self.frame_cache.cached_count();
                             ui.label(
-                                egui::RichText::new(format!("RAM {}/{}", cached_cnt, total_frames))
+                                egui::RichText::new(format!(
+                                    "Frame cache {:.0}/{:.0} MB · {} frames",
+                                    self.frame_cache.current_memory_bytes as f32 / (1024.0 * 1024.0),
+                                    self.frame_cache.max_memory_bytes as f32 / (1024.0 * 1024.0),
+                                    self.frame_cache.cached_count(),
+                                ))
                                     .small()
                                     .color(crate::ui::theme::colors::TEXT_MUTED),
                             );
@@ -1411,12 +1420,14 @@ impl KagariApp {
                             } else {
                                 crate::ui::theme::colors::TEXT_MUTED
                             };
-                            ui.label(
-                                egui::RichText::new(format!("Render: {:.1} ms", render_ms))
-                                    .small()
-                                    .color(ms_color),
-                            );
-                            ui.separator();
+                                if render_ms > 0.0 {
+                                    ui.label(
+                                        egui::RichText::new(format!("Render: {:.1} ms", render_ms))
+                                            .small()
+                                            .color(ms_color),
+                                    );
+                                    ui.separator();
+                                }
                             // Selection summary: layers + keyframes
                             let kf_count = self.selected_keyframes.len();
                             let layer_count = self.selection.selected_layers.len();
@@ -1442,27 +1453,28 @@ impl KagariApp {
                             }
                         }
                         if status_width >= 1150.0 {
-                            let pointer_pos =
-                                ctx.pointer_hover_pos().unwrap_or(egui::pos2(960.0, 540.0));
+                            let comp_pixel = ctx.pointer_hover_pos().and_then(|pointer_pos| {
+                                let rect = self.viewer_draw_rect?;
+                                if !rect.contains(pointer_pos) || rect.width() <= 0.0 || rect.height() <= 0.0 {
+                                    return None;
+                                }
+                                let comp = self.history.current().active_composition();
+                                let x = ((pointer_pos.x - rect.left()) / rect.width() * comp.width as f32).floor() as u32;
+                                let y = ((pointer_pos.y - rect.top()) / rect.height() * comp.height as f32).floor() as u32;
+                                (x < comp.width && y < comp.height).then_some((x, y))
+                            });
                             ui.separator();
-                            ui.label(
-                                egui::RichText::new(format!(
-                                    "X: {:.0} Y: {:.0} px",
-                                    pointer_pos.x, pointer_pos.y
-                                ))
-                                .small()
-                                .color(egui::Color32::from_rgb(0, 180, 255)),
-                            );
+                            if let Some((x, y)) = comp_pixel {
+                                ui.label(
+                                    egui::RichText::new(format!("X: {x} Y: {y} px"))
+                                        .small()
+                                        .color(egui::Color32::from_rgb(0, 180, 255)),
+                                );
+                            }
                             ui.separator();
                             let pixel_rgba = {
                                 let comp = self.history.current().active_composition();
-                                let px = pointer_pos.x as i32;
-                                let py = pointer_pos.y as i32;
-                                if px >= 0
-                                    && py >= 0
-                                    && (px as u32) < comp.width
-                                    && (py as u32) < comp.height
-                                {
+                                if let Some((px, py)) = comp_pixel {
                                     let layer_indices: Vec<usize> = comp
                                         .layers
                                         .iter()
@@ -1474,8 +1486,7 @@ impl KagariApp {
                                         self.playback.current_frame,
                                         &layer_indices,
                                     ) {
-                                        let idx =
-                                            ((py as u32 * comp.width + px as u32) * 4) as usize;
+                                        let idx = ((py * comp.width + px) * 4) as usize;
                                         if idx + 3 < entry.pixels.len() {
                                             Some([
                                                 entry.pixels[idx],
@@ -1521,35 +1532,39 @@ impl KagariApp {
                             );
                             if status_width >= 1150.0 {
                                 ui.separator();
+                                let active_tool_label = match self.active_tool {
+                                    crate::ui::toolbar::ActiveTool::Selection => "Selection",
+                                    crate::ui::toolbar::ActiveTool::Hand => "Hand",
+                                    crate::ui::toolbar::ActiveTool::Zoom => "Zoom",
+                                    crate::ui::toolbar::ActiveTool::Camera3D => "Camera 3D",
+                                    crate::ui::toolbar::ActiveTool::Rotation => "Rotation",
+                                    crate::ui::toolbar::ActiveTool::AnchorPoint => "Anchor Point",
+                                    crate::ui::toolbar::ActiveTool::Rectangle => "Rectangle",
+                                    crate::ui::toolbar::ActiveTool::Pen => "Pen",
+                                    crate::ui::toolbar::ActiveTool::Text => "Text",
+                                    crate::ui::toolbar::ActiveTool::Brush => "Brush",
+                                    crate::ui::toolbar::ActiveTool::CloneStamp => "Clone Stamp",
+                                    crate::ui::toolbar::ActiveTool::Eraser => "Eraser",
+                                    crate::ui::toolbar::ActiveTool::RotoBrush => "Roto Brush",
+                                    crate::ui::toolbar::ActiveTool::PuppetPin => "Puppet Pin",
+                                };
                                 ui.label(
-                                    egui::RichText::new("Tool: Selection (V)")
+                                    egui::RichText::new(format!("Tool: {active_tool_label}"))
                                         .small()
                                         .color(egui::Color32::from_rgb(255, 230, 0)),
                                 );
                                 ui.separator();
-                                let dl_status = if cfg!(feature = "gui") {
-                                    "Available"
+                                let dl_status = if let Some(client) = &self.connected_app {
+                                    format!("Connected to {client}")
                                 } else {
-                                    "N/A"
+                                    "Not connected".to_string()
                                 };
                                 ui.label(
-                                    egui::RichText::new(format!("Dynamic Link: {}", dl_status))
+                                    egui::RichText::new(format!("Dynamic Link: {dl_status}"))
                                         .small()
                                         .color(egui::Color32::from_rgb(100, 180, 255)),
                                 );
                                 ui.separator();
-                                let mem_usage = {
-                                    let comp = self.history.current().active_composition();
-                                    let layer_count = comp.layers.len();
-                                    let _total_frames = comp.duration_frames;
-                                    let cached = self.frame_cache.cached_count();
-                                    format!("{} layers | {} frames cached", layer_count, cached)
-                                };
-                                ui.label(
-                                    egui::RichText::new(format!("RAM: {}", mem_usage))
-                                        .small()
-                                        .color(egui::Color32::from_gray(160)),
-                                );
                             }
                         });
                 });

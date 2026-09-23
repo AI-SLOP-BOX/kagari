@@ -10,6 +10,31 @@ pub enum ImportResult {
     Err(String),
 }
 
+pub fn start_video_import(
+    app: &mut KagariApp,
+    ctx: &egui::Context,
+    path: std::path::PathBuf,
+    name: String,
+) {
+    if !crate::core::video_import::ffmpeg_available() {
+        app.toasts.error("Video import needs ffmpeg on PATH");
+        return;
+    }
+    let fps = app.history.current().active_composition().fps as f32;
+    let dest = std::env::temp_dir().join("kagari_media").join(&name);
+    let source = path.to_string_lossy().into_owned();
+    let (tx, rx) = std::sync::mpsc::channel();
+    app.import_rx.push(rx);
+    app.toasts.info(format!("Extracting frames from '{}'…", name));
+    ctx.request_repaint();
+    std::thread::spawn(move || {
+        let result = crate::core::video_import::import_video(&source, &dest, fps)
+            .map(|asset| ImportResult::Video(asset, name))
+            .unwrap_or_else(|error| ImportResult::Err(error.to_string()));
+        let _ = tx.send(result);
+    });
+}
+
 fn insert_layer(app: &mut KagariApp, layer: crate::core::timeline::Layer, label: &str) {
     let comp_dur = app.history.current().active_composition().duration_frames;
     let insert_at = app.selection.selected_layer_idx.map(|i| i + 1).unwrap_or(0);
@@ -25,9 +50,24 @@ fn insert_layer(app: &mut KagariApp, layer: crate::core::timeline::Layer, label:
 }
 
 pub fn handle_dropped_files(app: &mut KagariApp, ctx: &egui::Context) {
-    // 1) Drain finished video imports first.
-    if let Some(rx) = app.import_rx.take() {
-        while let Ok(res) = rx.try_recv() {
+    // Drain completed workers before processing new drops; each import owns a
+    // channel so concurrent imports cannot overwrite one another.
+    let receivers = std::mem::take(&mut app.import_rx);
+    for rx in receivers {
+        let mut disconnected = false;
+        let mut received_result = false;
+        loop {
+            let res = match rx.try_recv() {
+                Ok(result) => {
+                    received_result = true;
+                    result
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    disconnected = true;
+                    break;
+                }
+            };
             match res {
                 ImportResult::Video(asset, name) => {
                     let dur = asset.frame_count.max(1);
@@ -67,8 +107,15 @@ pub fn handle_dropped_files(app: &mut KagariApp, ctx: &egui::Context) {
                 }
             }
         }
-        app.import_rx = Some(rx); // keep listening for more files
-        let _ = ctx; // silence unused in some feature combos
+        if disconnected && !received_result {
+            app.toasts.error("Video import worker stopped unexpectedly.");
+        }
+        if !disconnected {
+            app.import_rx.push(rx);
+        }
+    }
+    if !app.import_rx.is_empty() {
+        ctx.request_repaint_after(std::time::Duration::from_millis(100));
     }
 
     // 2) Pick up newly dropped files.
@@ -140,26 +187,7 @@ pub fn handle_dropped_files(app: &mut KagariApp, ctx: &egui::Context) {
             }
             "mp4" | "mov" | "mkv" | "avi" | "webm" | "m4v" | "mpeg" | "mpg" | "ts" | "m2ts"
             | "av1" | "ivf" => {
-                if !crate::core::video_import::ffmpeg_available() {
-                    app.toasts.error("Video import needs ffmpeg on PATH");
-                    continue;
-                }
-                app.toasts
-                    .info(format!("Extracting frames from '{}'…", name));
-                let (tx, rx) = std::sync::mpsc::channel();
-                app.import_rx = Some(rx);
-                let fps = app.history.current().active_composition().fps as f32;
-                let dest = std::path::PathBuf::from("media").join(&name);
-                std::thread::spawn(move || {
-                    match crate::core::video_import::import_video(&path_str, &dest, fps) {
-                        Ok(a) => {
-                            let _ = tx.send(ImportResult::Video(a, name));
-                        }
-                        Err(e) => {
-                            let _ = tx.send(ImportResult::Err(e));
-                        }
-                    }
-                });
+                start_video_import(app, ctx, path, name);
             }
             other => {
                 app.toasts

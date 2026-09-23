@@ -69,7 +69,7 @@ pub fn draw_vectorscope_window(app: &mut KagariApp, ctx: &egui::Context) {
     let mut mode: u8 =
         ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new(MODE_ID), || 0u8));
 
-    egui::Window::new("📊 Vectorscope / RGB Parade")
+    crate::ui::modal::window("Vectorscope / RGB Parade")
         .open(&mut app.show_vectorscope)
         .default_width(260.0)
         .show(ctx, |ui| {

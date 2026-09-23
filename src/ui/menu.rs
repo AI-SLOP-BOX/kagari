@@ -190,7 +190,7 @@ fn draw_reference_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context)
                 |ui| {
                     ui.add_space(17.0);
                     if app.home_banner.is_none() {
-                        if let Ok(img) = image::open(
+                        if let Ok(img) = crate::ui::embedded_assets::open_image(
                             std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                                 .join("assets/kagari_logo.webp"),
                         ) {
@@ -312,7 +312,7 @@ fn draw_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context) {
                 egui::Layout::left_to_right(egui::Align::Center),
                 |ui| {
                     if app.home_banner.is_none() {
-                        if let Ok(img) = image::open(
+                        if let Ok(img) = crate::ui::embedded_assets::open_image(
                             std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                                 .join("assets/kagari_logo.webp"),
                         ) {
@@ -664,61 +664,9 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         .add_filter("Video Files", &["mp4", "mov", "avi", "mkv", "webm", "av1"])
                         .pick_file()
                     {
-                        // Extract at the active composition's fps so 1 seq frame == 1 comp frame
-                        let comp = app.history.current().active_composition();
-                        let fps = comp.fps as f32;
                         let name = path.file_stem().map(|s| s.to_string_lossy().to_string())
                             .unwrap_or_else(|| "video".to_string());
-                        let dest = std::env::temp_dir().join("kagari_media").join(&name);
-                        let src = path.to_string_lossy().to_string();
-                        app.toasts.info(format!("Extracting video frames for '{}' via FFmpeg...", name));
-                        ui.ctx().request_repaint();
-
-                        match crate::core::video_import::import_video(
-                            &src, &dest, fps,
-                        ) {
-                            Ok(asset) => {
-                                let (comp_w, comp_h, comp_duration) = {
-                                    let comp = app.history.current().active_composition();
-                                    (comp.width as f32, comp.height as f32, comp.duration_frames)
-                                };
-                                let fit = ((comp_w / asset.width.max(1) as f32)
-                                    .min(comp_h / asset.height.max(1) as f32))
-                                    .min(1.0)
-                                    * 100.0;
-                                app.modify_project(|p| {
-                                    let comp = p.active_composition_mut();
-                                    let layer_id = comp.next_layer_id("video");
-                                    let mut layer = crate::core::timeline::Layer::new(
-                                        layer_id,
-                                        name.clone(),
-                                        crate::core::timeline::LayerType::Video {
-                                            source: src.clone(),
-                                            frames_dir: asset.frames_dir.clone(),
-                                            frame_count: asset.frame_count,
-                                            audio_wav: asset.audio_wav.clone(),
-                                            speed: 1.0,
-                                        },
-                                        comp_duration,
-                                    );
-                                    layer.transform.position =
-                                        crate::core::property::Animatable::new_constant([
-                                            comp_w * 0.5,
-                                            comp_h * 0.5,
-                                        ]);
-                                    layer.transform.scale =
-                                        crate::core::property::Animatable::new_constant([fit, fit]);
-                                    comp.layers.push(layer);
-                                });
-                                app.toasts.info(format!(
-                                    "Imported video: {} ({} frames)",
-                                    name, asset.frame_count
-                                ));
-                            }
-                            Err(err) => {
-                                app.toasts.error(format!("Video import failed: {}", err));
-                            }
-                        }
+                        crate::ui::drop_import::start_video_import(app, ui.ctx(), path, name);
                     }
                     ui.close_menu();
                 }
@@ -2073,7 +2021,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
     let mut show_tutorial = app.show_guided_tutorial;
     if show_tutorial {
         let mut finish_tutorial = false;
-        egui::Window::new("🎓 Kagari VFX — Quickstart Guided Tour")
+        crate::ui::modal::window("Kagari VFX — Quickstart Guided Tour")
             .open(&mut show_tutorial)
             .resizable(false)
             .show(ctx, |ui| {
@@ -2126,7 +2074,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
     let about_id = egui::Id::new("show_about_modal");
     let mut show_about = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(about_id, || false));
     if show_about {
-        egui::Window::new("About Kagari Studio")
+        crate::ui::modal::window("About Kagari Studio")
             .open(&mut show_about)
             .resizable(false)
             .show(ctx, |ui| {
@@ -2147,7 +2095,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
     let help_id = egui::Id::new("show_shortcuts_modal");
     let mut show_help = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(help_id, || false));
     if show_help {
-        egui::Window::new("Keyboard Shortcuts Reference")
+        crate::ui::modal::window("Keyboard Shortcuts Reference")
             .open(&mut show_help)
             .resizable(false)
             .show(ctx, |ui| {
@@ -2237,7 +2185,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
 
     if app.show_the_smoother {
         let mut open = app.show_the_smoother;
-        egui::Window::new("🌊 The Smoother")
+        crate::ui::modal::window("The Smoother")
             .open(&mut open)
             .resizable(false)
             .default_width(280.0)
@@ -2249,7 +2197,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
 
     if app.show_the_wiggler {
         let mut open = app.show_the_wiggler;
-        egui::Window::new("🎲 The Wiggler")
+        crate::ui::modal::window("The Wiggler")
             .open(&mut open)
             .resizable(false)
             .default_width(280.0)
@@ -2261,7 +2209,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
 
     if app.show_motion_sketch {
         let mut open = app.show_motion_sketch;
-        egui::Window::new("✏️ Motion Sketch")
+        crate::ui::modal::window("Motion Sketch")
             .open(&mut open)
             .resizable(false)
             .default_width(280.0)
@@ -2273,7 +2221,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
 
     if app.show_physics {
         let mut open = app.show_physics;
-        egui::Window::new("⚛ Physics & Dynamics")
+        crate::ui::modal::window("Physics & Dynamics")
             .open(&mut open)
             .resizable(false)
             .default_width(300.0)
@@ -2285,10 +2233,14 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
 }
 
 fn apply_effect_by_name(app: &mut crate::KagariApp, effect_name: &str) {
-    if let Some(idx) = app.selection.selected_layer_idx {
-        let effect_name = effect_name.to_string();
-        let mut added = false;
-        app.modify_project(|project| {
+    let Some(idx) = app.selection.selected_layer_idx else {
+        app.toasts.error("Select a layer before adding an effect.");
+        return;
+    };
+    let effect_name = effect_name.to_string();
+    let mut added = false;
+    let mut unsupported = false;
+    app.modify_project(|project| {
             let comp = project.active_composition_mut();
             if idx < comp.layers.len() {
                 let layer = &mut comp.layers[idx];
@@ -2812,15 +2764,21 @@ fn apply_effect_by_name(app: &mut crate::KagariApp, effect_name: &str) {
                         },
                         enabled: true,
                     },
-                    _ => return,
+                    _ => {
+                        unsupported = true;
+                        return;
+                    }
                 };
                 layer.effects.push(effect);
                 added = true;
             }
-        });
-        if added {
-            crate::core::frame_cache::bump_version();
-            app.toasts.info(format!("Added '{}' effect", effect_name));
-        }
+    });
+    if added {
+        crate::core::frame_cache::bump_version();
+        app.toasts.info(format!("Added '{}' effect", effect_name));
+    } else if unsupported {
+        app.toasts.error(format!("'{}' is not available in the effect menu yet.", effect_name));
+    } else {
+        app.toasts.error("Could not add the effect because the selected layer is no longer available.");
     }
 }

@@ -158,7 +158,7 @@ fn thumb_for(
     if app.home_thumbs.len() > 96 {
         app.home_thumbs.clear();
     }
-    let img = image::open(path).ok()?;
+    let img = crate::ui::embedded_assets::open_image(path).ok()?;
     let name = format!("thumb:{}", path.display());
     // Reference artwork is already small and is displayed at roughly its native
     // width; keeping the source detail avoids blur when cards grow responsively.
@@ -520,6 +520,10 @@ fn enter_studio_new_project(app: &mut KagariApp) {
     app.show_home = false;
 }
 
+pub(crate) fn new_project_from_header(app: &mut KagariApp) {
+    enter_studio_new_project(app);
+}
+
 fn enter_studio_open_dialog(app: &mut KagariApp) {
     if let Some(path) = rfd::FileDialog::new()
         .add_filter("Kagari VFX Project", &["json"])
@@ -527,6 +531,10 @@ fn enter_studio_open_dialog(app: &mut KagariApp) {
     {
         open_project_path(app, &path);
     }
+}
+
+pub(crate) fn open_project_dialog(app: &mut KagariApp) {
+    enter_studio_open_dialog(app);
 }
 
 fn open_project_path(app: &mut KagariApp, path: &std::path::Path) {
@@ -689,7 +697,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
     if matches!(home_nav(ctx), HomeNav::Render) {
         if ctx.screen_rect().width() < 500.0 {
             egui::CentralPanel::default()
-                .frame(egui::Frame::none().fill(egui::Color32::from_rgb(11, 19, 26)))
+                .frame(egui::Frame::none().fill(crate::ui::theme::colors::BG_PANEL_DEEP))
                 .show(ctx, |ui| draw_reference_render_page(app, ui, ctx));
         } else {
             draw_export_target(app, ctx);
@@ -752,7 +760,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
     }
 
     egui::CentralPanel::default()
-        .frame(egui::Frame::none().fill(egui::Color32::from_rgb(11, 19, 26)))
+        .frame(egui::Frame::none().fill(crate::ui::theme::colors::BG_PANEL_DEEP))
         .show(ctx, |ui| {
             sync_selected_preview(app, ctx);
             match home_nav(ctx) {
@@ -835,7 +843,7 @@ fn draw_settings_target(app: &mut KagariApp, ctx: &egui::Context) {
             );
 
             if app.home_banner.is_none() {
-                if let Ok(img) = image::open(
+                if let Ok(img) = crate::ui::embedded_assets::open_image(
                     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                         .join("assets/kagari_logo.webp"),
                 ) {
@@ -887,14 +895,14 @@ fn draw_settings_target(app: &mut KagariApp, ctx: &egui::Context) {
                 );
                 if active {
                     ui.painter()
-                        .rect_filled(nav_rect, 0.0, egui::Color32::from_rgb(27, 35, 42));
+                        .rect_filled(nav_rect, 0.0, crate::ui::theme::colors::BG_PANEL_DARK);
                     ui.painter().rect_filled(
                         egui::Rect::from_min_size(
                             egui::pos2(17.0, r.top() + y - 5.0),
                             egui::vec2(4.0, 52.0),
                         ),
                         0.0,
-                        egui::Color32::from_rgb(255, 111, 28),
+                        crate::ui::theme::colors::ACCENT_BRAND,
                     );
                 }
                 crate::ui::icons::render_svg_at(
@@ -903,9 +911,9 @@ fn draw_settings_target(app: &mut KagariApp, ctx: &egui::Context) {
                     icon,
                     egui::vec2(28.0, 28.0),
                     if active {
-                        egui::Color32::from_rgb(255, 145, 50)
+                        crate::ui::theme::colors::ACCENT_BRAND_HOVER
                     } else {
-                        egui::Color32::from_rgb(193, 205, 218)
+                        crate::ui::theme::colors::TEXT_SECONDARY_BRIGHT
                     },
                     egui::pos2(40.0, r.top() + y + 5.0),
                 );
@@ -917,7 +925,7 @@ fn draw_settings_target(app: &mut KagariApp, ctx: &egui::Context) {
                     if active {
                         colors::TEXT_PRIMARY
                     } else {
-                        egui::Color32::from_rgb(193, 205, 218)
+                        crate::ui::theme::colors::TEXT_SECONDARY_BRIGHT
                     },
                 );
                 interact_target_nav(ui, ctx, nav_rect, label, "settings-target-nav");
@@ -968,14 +976,14 @@ fn draw_settings_target(app: &mut KagariApp, ctx: &egui::Context) {
                 );
                 if active {
                     ui.painter()
-                        .rect_filled(row_rect, 0.0, egui::Color32::from_rgb(27, 35, 42));
+                        .rect_filled(row_rect, 0.0, crate::ui::theme::colors::BG_PANEL_DARK);
                     ui.painter().rect_filled(
                         egui::Rect::from_min_size(
                             egui::pos2(category.left() + 17.0, y),
                             egui::vec2(4.0, 53.0),
                         ),
                         0.0,
-                        egui::Color32::from_rgb(255, 111, 28),
+                        crate::ui::theme::colors::ACCENT_BRAND,
                     );
                 }
                 crate::ui::icons::render_svg_at(
@@ -1072,7 +1080,7 @@ fn draw_settings_target_responsive(app: &mut KagariApp, ctx: &egui::Context) {
             );
             let logo_size = if narrow { 42.0 } else { 62.0 };
             if app.home_banner.is_none() {
-                if let Ok(img) = image::open(
+                if let Ok(img) = crate::ui::embedded_assets::open_image(
                     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                         .join("assets/kagari_logo.webp"),
                 ) {
@@ -1116,11 +1124,11 @@ fn draw_settings_target_responsive(app: &mut KagariApp, ctx: &egui::Context) {
                 );
                 if active {
                     ui.painter()
-                        .rect_filled(nav_rect, 0.0, egui::Color32::from_rgb(27, 35, 42));
+                        .rect_filled(nav_rect, 0.0, crate::ui::theme::colors::BG_PANEL_DARK);
                     ui.painter().rect_filled(
                         egui::Rect::from_min_size(egui::pos2(0.0, y - 6.0), egui::vec2(4.0, 49.0)),
                         0.0,
-                        egui::Color32::from_rgb(255, 111, 28),
+                        crate::ui::theme::colors::ACCENT_BRAND,
                     );
                 }
                 let icon_x = if narrow {
@@ -1134,9 +1142,9 @@ fn draw_settings_target_responsive(app: &mut KagariApp, ctx: &egui::Context) {
                     icon,
                     egui::vec2(24.0, 24.0),
                     if active {
-                        egui::Color32::from_rgb(255, 145, 50)
+                        crate::ui::theme::colors::ACCENT_BRAND_HOVER
                     } else {
-                        egui::Color32::from_rgb(193, 205, 218)
+                        crate::ui::theme::colors::TEXT_SECONDARY_BRIGHT
                     },
                     egui::pos2(icon_x, y + 5.0),
                 );
@@ -1149,7 +1157,7 @@ fn draw_settings_target_responsive(app: &mut KagariApp, ctx: &egui::Context) {
                         if active {
                             colors::TEXT_PRIMARY
                         } else {
-                            egui::Color32::from_rgb(193, 205, 218)
+                            crate::ui::theme::colors::TEXT_SECONDARY_BRIGHT
                         },
                     );
                 }
@@ -1199,14 +1207,14 @@ fn draw_settings_target_responsive(app: &mut KagariApp, ctx: &egui::Context) {
                 );
                 if active {
                     ui.painter()
-                        .rect_filled(row_rect, 0.0, egui::Color32::from_rgb(27, 35, 42));
+                        .rect_filled(row_rect, 0.0, crate::ui::theme::colors::BG_PANEL_DARK);
                     ui.painter().rect_filled(
                         egui::Rect::from_min_size(
                             egui::pos2(category.left(), y),
                             egui::vec2(3.0, 46.0),
                         ),
                         0.0,
-                        egui::Color32::from_rgb(255, 111, 28),
+                        crate::ui::theme::colors::ACCENT_BRAND,
                     );
                 }
                 crate::ui::icons::render_svg_at(
@@ -1345,7 +1353,7 @@ fn draw_settings_responsive_narrow_content(ui: &mut egui::Ui, content: egui::Rec
                 ];
                 for (title, rows) in cards {
                     egui::Frame::none()
-                        .fill(egui::Color32::from_rgb(15, 26, 33))
+                        .fill(crate::ui::theme::colors::BG_PANEL_BASE)
                         .stroke(egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE))
                         .rounding(7.0)
                         .inner_margin(egui::Margin::same(12.0))
@@ -1382,7 +1390,7 @@ fn draw_settings_responsive_narrow_content(ui: &mut egui::Ui, content: egui::Rec
                     ui.add_space(8.0);
                 }
                 egui::Frame::none()
-                    .fill(egui::Color32::from_rgb(15, 26, 33))
+                    .fill(crate::ui::theme::colors::BG_PANEL_BASE)
                     .stroke(egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE))
                     .rounding(6.0)
                     .inner_margin(egui::Margin::same(10.0))
@@ -1453,7 +1461,7 @@ fn draw_export_target(app: &mut KagariApp, ctx: &egui::Context) {
                 egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
             );
             if app.home_banner.is_none() {
-                if let Ok(img) = image::open(
+                if let Ok(img) = crate::ui::embedded_assets::open_image(
                     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                         .join("assets/kagari_logo.webp"),
                 ) {
@@ -1529,11 +1537,11 @@ fn draw_export_target(app: &mut KagariApp, ctx: &egui::Context) {
                 );
                 if active {
                     ui.painter()
-                        .rect_filled(nav_rect, 0.0, egui::Color32::from_rgb(27, 35, 42));
+                        .rect_filled(nav_rect, 0.0, crate::ui::theme::colors::BG_PANEL_DARK);
                     ui.painter().rect_filled(
                         egui::Rect::from_min_size(egui::pos2(10.0, y - 5.0), egui::vec2(4.0, 42.0)),
                         0.0,
-                        egui::Color32::from_rgb(255, 111, 28),
+                        crate::ui::theme::colors::ACCENT_BRAND,
                     );
                 }
                 let ix = if narrow {
@@ -1547,9 +1555,9 @@ fn draw_export_target(app: &mut KagariApp, ctx: &egui::Context) {
                     icon,
                     egui::vec2(22.0, 22.0),
                     if active {
-                        egui::Color32::from_rgb(255, 145, 50)
+                        crate::ui::theme::colors::ACCENT_BRAND_HOVER
                     } else {
-                        egui::Color32::from_rgb(193, 205, 218)
+                        crate::ui::theme::colors::TEXT_SECONDARY_BRIGHT
                     },
                     egui::pos2(ix, y + 5.0),
                 );
@@ -1562,7 +1570,7 @@ fn draw_export_target(app: &mut KagariApp, ctx: &egui::Context) {
                         if active {
                             colors::TEXT_PRIMARY
                         } else {
-                            egui::Color32::from_rgb(193, 205, 218)
+                            crate::ui::theme::colors::TEXT_SECONDARY_BRIGHT
                         },
                     );
                 }
@@ -1621,7 +1629,7 @@ fn draw_export_target(app: &mut KagariApp, ctx: &egui::Context) {
                 ),
                 egui::vec2(settings_w, if width >= 1200.0 { 482.0 } else { 400.0 }),
             );
-            let fill = egui::Color32::from_rgb(15, 26, 33);
+            let fill = crate::ui::theme::colors::BG_PANEL_BASE;
             let stroke = egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE);
             ui.painter().rect(preview, 8.0, fill, stroke);
             ui.painter().rect(settings, 8.0, fill, stroke);
@@ -1646,14 +1654,14 @@ fn draw_export_target(app: &mut KagariApp, ctx: &egui::Context) {
                 egui::Align2::LEFT_CENTER,
                 "00:00:04:12",
                 egui::FontId::proportional(16.0),
-                egui::Color32::from_rgb(255, 107, 22),
+                crate::ui::theme::colors::ACCENT_BRAND,
             );
             ui.painter().line_segment(
                 [
                     egui::pos2(preview.left() + 135.0, preview.bottom() - 56.0),
                     egui::pos2(preview.right() - 115.0, preview.bottom() - 56.0),
                 ],
-                egui::Stroke::new(3.0_f32, egui::Color32::from_rgb(255, 107, 22)),
+                egui::Stroke::new(3.0_f32, crate::ui::theme::colors::ACCENT_BRAND),
             );
             for (i, icon) in [
                 crate::ui::icons::SVG_JUMP_BACK,
@@ -1688,7 +1696,7 @@ fn draw_export_target(app: &mut KagariApp, ctx: &egui::Context) {
                     egui::pos2(settings.left() + 30.0, settings.top() + 42.0),
                     egui::pos2(settings.left() + 127.0, settings.top() + 42.0),
                 ],
-                egui::Stroke::new(2.0_f32, egui::Color32::from_rgb(255, 107, 22)),
+                egui::Stroke::new(2.0_f32, crate::ui::theme::colors::ACCENT_BRAND),
             );
             let rows = [
                 ("形式", "MP4 (H.264)"),
@@ -1738,7 +1746,7 @@ fn draw_export_target(app: &mut KagariApp, ctx: &egui::Context) {
                     box_rect,
                     3.0,
                     if checked {
-                        egui::Color32::from_rgb(255, 103, 24)
+                        crate::ui::theme::colors::ACCENT_BRAND
                     } else {
                         egui::Color32::TRANSPARENT
                     },
@@ -1813,7 +1821,7 @@ fn draw_export_target(app: &mut KagariApp, ctx: &egui::Context) {
             ui.painter().rect(
                 export_action,
                 6.0,
-                egui::Color32::from_rgb(255, 103, 24),
+                crate::ui::theme::colors::ACCENT_BRAND,
                 egui::Stroke::NONE,
             );
             crate::ui::icons::render_svg_at(
@@ -2152,7 +2160,7 @@ fn draw_settings_responsive_content(ui: &mut egui::Ui, content: egui::Rect, narr
         p.rect(
             rect,
             7.0,
-            egui::Color32::from_rgb(15, 26, 33),
+            crate::ui::theme::colors::BG_PANEL_BASE,
             egui::Stroke::new(1.0_f32, border),
         );
         p.text(
@@ -2197,7 +2205,7 @@ fn draw_settings_responsive_content(ui: &mut egui::Ui, content: egui::Rect, narr
     p.rect(
         system,
         6.0,
-        egui::Color32::from_rgb(15, 26, 33),
+        crate::ui::theme::colors::BG_PANEL_BASE,
         egui::Stroke::new(1.0_f32, border),
     );
     p.text(
@@ -2215,8 +2223,8 @@ fn draw_settings_responsive_content(ui: &mut egui::Ui, content: egui::Rect, narr
 
 fn draw_settings_target_content(ui: &mut egui::Ui, content: egui::Rect) {
     let p = ui.painter();
-    let border = egui::Color32::from_rgb(43, 60, 76);
-    let card_fill = egui::Color32::from_rgb(15, 26, 33);
+    let border = crate::ui::theme::colors::BG_ELEVATED;
+    let card_fill = crate::ui::theme::colors::BG_PANEL_BASE;
     let white = colors::TEXT_PRIMARY;
     let muted = colors::TEXT_SECONDARY;
     p.text(
@@ -2343,7 +2351,7 @@ fn draw_settings_target_content(ui: &mut egui::Ui, content: egui::Rect) {
     );
     label(p, cards[0].0 + 21.0, cards[0].1 + 108.0, "アクセントカラー");
     for (i, color) in [
-        egui::Color32::from_rgb(255, 107, 22),
+        crate::ui::theme::colors::ACCENT_BRAND,
         egui::Color32::from_rgb(61, 156, 236),
         egui::Color32::from_rgb(145, 93, 239),
         egui::Color32::from_rgb(218, 64, 181),
@@ -2449,7 +2457,7 @@ fn draw_settings_target_content(ui: &mut egui::Ui, content: egui::Rect) {
             egui::pos2(cards[2].0 + 190.0, cards[2].1 + 140.0),
             egui::pos2(meter_right - 18.0, cards[2].1 + 140.0),
         ],
-        egui::Stroke::new(5.0_f32, egui::Color32::from_rgb(255, 107, 22)),
+        egui::Stroke::new(5.0_f32, crate::ui::theme::colors::ACCENT_BRAND),
     );
     p.circle_filled(
         egui::pos2(
@@ -2576,7 +2584,7 @@ fn draw_settings_target_content(ui: &mut egui::Ui, content: egui::Rect) {
     p.rect(
         system,
         9.0,
-        egui::Color32::from_rgb(15, 26, 33),
+        crate::ui::theme::colors::BG_PANEL_BASE,
         egui::Stroke::new(1.0_f32, border),
     );
     p.text(
@@ -2624,7 +2632,7 @@ fn sync_selected_preview(app: &mut KagariApp, ctx: &egui::Context) {
         .map(|(cached_path, _)| cached_path != &path)
         .unwrap_or(true);
     if stale {
-        app.home_preview = image::open(&path)
+        app.home_preview = crate::ui::embedded_assets::open_image(&path)
             .ok()
             .and_then(|img| {
                 load_texture(ctx, &format!("preview:{}", path.display()), img, 560, 320)
@@ -2669,7 +2677,7 @@ fn draw_reference_topbar(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui::Con
             };
             let draw_brand = |ui: &mut egui::Ui, app: &mut KagariApp, ctx: &egui::Context| {
                 if app.home_banner.is_none() {
-                    if let Ok(img) = image::open(
+                    if let Ok(img) = crate::ui::embedded_assets::open_image(
                         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                             .join("assets/kagari_logo.webp"),
                     ) {
@@ -2808,8 +2816,8 @@ fn draw_reference_new_project_narrow(app: &mut KagariApp, ui: &mut egui::Ui, ctx
     let left = egui::Rect::from_min_size(top, egui::vec2(100.0, 216.0));
     let right =
         egui::Rect::from_min_size(egui::pos2(top.x + 101.0, top.y), egui::vec2(214.0, 216.0));
-    let fill = egui::Color32::from_rgb(16, 27, 38);
-    let stroke = egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(37, 52, 67));
+    let fill = crate::ui::theme::colors::BG_PANEL_ALT;
+    let stroke = egui::Stroke::new(1.0_f32, crate::ui::theme::colors::BORDER_SUBTLE);
     ui.painter().rect(left, 4.0, fill, stroke);
     ui.painter().rect(right, 4.0, fill, stroke);
     for (index, (icon, label)) in [
@@ -2914,7 +2922,7 @@ fn draw_reference_new_project_narrow(app: &mut KagariApp, ui: &mut egui::Ui, ctx
             field,
             3.0,
             egui::Color32::from_rgb(18, 31, 43),
-            egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(43, 60, 76)),
+            egui::Stroke::new(1.0_f32, crate::ui::theme::colors::BG_ELEVATED),
         );
         ui.painter().text(
             egui::pos2(field.left() + 6.0, field.center().y),
@@ -2948,7 +2956,7 @@ fn draw_reference_new_project_narrow(app: &mut KagariApp, ui: &mut egui::Ui, ctx
         cancel,
         3.0,
         egui::Color32::from_rgb(19, 31, 42),
-        egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(43, 60, 76)),
+        egui::Stroke::new(1.0_f32, crate::ui::theme::colors::BG_ELEVATED),
     );
     ui.painter().text(
         cancel.center(),
@@ -2983,7 +2991,7 @@ fn draw_reference_new_project_narrow(app: &mut KagariApp, ui: &mut egui::Ui, ctx
 fn draw_reference_new_project_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui::Context) {
     let compact = ui.available_height() < 900.0;
     ui.painter()
-        .rect_filled(ui.max_rect(), 0.0, egui::Color32::from_rgb(11, 19, 26));
+        .rect_filled(ui.max_rect(), 0.0, crate::ui::theme::colors::BG_PANEL_DEEP);
     egui::Frame::none()
         .inner_margin(egui::Margin::symmetric(reference_content_margin(ui), 0.0))
         .show(ui, |ui| {
@@ -3006,10 +3014,10 @@ fn draw_reference_new_project_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: 
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
                 egui::Frame::none()
-                    .fill(egui::Color32::from_rgb(16, 27, 38))
+                    .fill(crate::ui::theme::colors::BG_PANEL_ALT)
                     .stroke(egui::Stroke::new(
                         1.0_f32,
-                        egui::Color32::from_rgb(37, 52, 67),
+                        crate::ui::theme::colors::BORDER_SUBTLE,
                     ))
                     .rounding(4.0)
                     .inner_margin(egui::Margin::same(if narrow { 6.0 } else { 10.0 }))
@@ -3146,10 +3154,10 @@ fn draw_reference_new_project_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: 
                     ui.add_space(if narrow { 4.0 } else { 14.0 });
                 }
                 egui::Frame::none()
-                    .fill(egui::Color32::from_rgb(16, 27, 38))
+                    .fill(crate::ui::theme::colors::BG_PANEL_ALT)
                     .stroke(egui::Stroke::new(
                         1.0_f32,
-                        egui::Color32::from_rgb(37, 52, 67),
+                        crate::ui::theme::colors::BORDER_SUBTLE,
                     ))
                     .rounding(4.0)
                     .inner_margin(egui::Margin::same(if narrow { 8.0 } else { 16.0 }))
@@ -3313,15 +3321,15 @@ fn draw_reference_assets_narrow(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
         egui::pos2(center.right() + 5.0, panel_y),
         egui::vec2(90.0, panel_h),
     );
-    let panel_fill = egui::Color32::from_rgb(16, 27, 38);
-    let panel_stroke = egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(37, 52, 67));
+    let panel_fill = crate::ui::theme::colors::BG_PANEL_ALT;
+    let panel_stroke = egui::Stroke::new(1.0_f32, crate::ui::theme::colors::BORDER_SUBTLE);
     for rect in [left, detail] {
         ui.painter().rect(rect, 4.0, panel_fill, panel_stroke);
     }
     ui.painter().rect(
         center,
         4.0,
-        egui::Color32::from_rgb(11, 19, 26),
+        crate::ui::theme::colors::BG_PANEL_DEEP,
         panel_stroke,
     );
     ui.painter().text(
@@ -3515,8 +3523,8 @@ fn draw_reference_assets_narrow(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
         ui.painter().rect(
             card,
             4.0,
-            egui::Color32::from_rgb(22, 32, 42),
-            egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(43, 60, 76)),
+            crate::ui::theme::colors::BG_PANEL_RAISED,
+            egui::Stroke::new(1.0_f32, crate::ui::theme::colors::BG_ELEVATED),
         );
         if name == "kagari_logo.webp" {
             ui.put(
@@ -3606,7 +3614,7 @@ fn draw_reference_project_browser_page(
     let compact = ui.available_height() < 900.0;
     let narrow = reference_narrow(ui);
     ui.painter()
-        .rect_filled(ui.max_rect(), 0.0, egui::Color32::from_rgb(11, 19, 26));
+        .rect_filled(ui.max_rect(), 0.0, crate::ui::theme::colors::BG_PANEL_DEEP);
     egui::Frame::none()
         .inner_margin(egui::Margin::symmetric(
             if narrow {
@@ -3773,8 +3781,8 @@ fn draw_reference_project_browser_page(
                         let card = fixed_card_with_inset(
                             ui,
                             egui::vec2(card_width, if compact { 154.0 } else { 204.0 }),
-                            egui::Color32::from_rgb(22, 32, 42),
-                            egui::Color32::from_rgb(43, 60, 76),
+                            crate::ui::theme::colors::BG_PANEL_RAISED,
+                            crate::ui::theme::colors::BG_ELEVATED,
                             6.0,
                             0.0,
                             |ui| {
@@ -3846,7 +3854,7 @@ fn draw_reference_project_browser_page(
 
 fn draw_reference_projects_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui::Context) {
     let compact = ui.available_height() < 900.0;
-    let bg = egui::Color32::from_rgb(11, 19, 26);
+    let bg = crate::ui::theme::colors::BG_PANEL_DEEP;
     ui.painter().rect_filled(ui.max_rect(), 0.0, bg);
     egui::Frame::none()
         .inner_margin(egui::Margin::symmetric(reference_content_margin(ui), 0.0))
@@ -3864,8 +3872,8 @@ fn draw_reference_projects_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 0.0;
                     ui.allocate_ui(egui::vec2(77.0, 228.0), |ui| { egui::Frame::none()
-                        .fill(egui::Color32::from_rgb(16, 27, 38))
-                        .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(37, 52, 67)))
+                        .fill(crate::ui::theme::colors::BG_PANEL_ALT)
+                        .stroke(egui::Stroke::new(1.0_f32, crate::ui::theme::colors::BORDER_SUBTLE))
                         .rounding(4.0)
                         .inner_margin(4.0)
                         .show(ui, |ui| {
@@ -3895,7 +3903,7 @@ fn draw_reference_projects_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
                         ui.horizontal_wrapped(|ui| {
                             ui.spacing_mut().item_spacing = egui::vec2(5.0, 5.0);
                             for (asset, name) in assets {
-                                fixed_card_with_inset(ui, egui::vec2(47.0, 49.0), egui::Color32::from_rgb(22, 32, 42), egui::Color32::from_rgb(43, 60, 76), 4.0, 0.0, |ui| {
+                                fixed_card_with_inset(ui, egui::vec2(47.0, 49.0), crate::ui::theme::colors::BG_PANEL_RAISED, crate::ui::theme::colors::BG_ELEVATED, 4.0, 0.0, |ui| {
                                     if let Some(id) = reference_texture(app, ctx, asset) {
                                         reference_cover_image(ui, id, egui::vec2(47.0, 30.0), 1.5);
                                     }
@@ -3906,8 +3914,8 @@ fn draw_reference_projects_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
                     }); });
                     ui.add_space(5.0);
                     ui.allocate_ui(egui::vec2(74.0, 228.0), |ui| { egui::Frame::none()
-                        .fill(egui::Color32::from_rgb(16, 27, 38))
-                        .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(37, 52, 67)))
+                        .fill(crate::ui::theme::colors::BG_PANEL_ALT)
+                        .stroke(egui::Stroke::new(1.0_f32, crate::ui::theme::colors::BORDER_SUBTLE))
                         .rounding(4.0)
                         .inner_margin(4.0)
                         .show(ui, |ui| {
@@ -3930,8 +3938,8 @@ fn draw_reference_projects_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
                 ui.set_min_width(left_panel_width);
                 ui.set_max_width(left_panel_width);
                 egui::Frame::none()
-                    .fill(egui::Color32::from_rgb(16, 27, 38))
-                    .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(37, 52, 67)))
+                    .fill(crate::ui::theme::colors::BG_PANEL_ALT)
+                    .stroke(egui::Stroke::new(1.0_f32, crate::ui::theme::colors::BORDER_SUBTLE))
                     .rounding(4.0)
                         .inner_margin(egui::Margin::same(if narrow { 6.0 } else { 10.0 }))
                     .show(ui, |ui| {
@@ -4030,7 +4038,7 @@ fn draw_reference_projects_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
                                 continue;
                             }
                             rendered_assets += 1;
-                            let response = fixed_card_with_inset(ui, egui::vec2(card_width, if narrow { 60.0 } else if compact { 124.0 } else { 152.0 }), egui::Color32::from_rgb(22, 32, 42), egui::Color32::from_rgb(43, 60, 76), 6.0, if narrow { 0.0 } else { 14.0 }, |ui| {
+                            let response = fixed_card_with_inset(ui, egui::vec2(card_width, if narrow { 60.0 } else if compact { 124.0 } else { 152.0 }), crate::ui::theme::colors::BG_PANEL_RAISED, crate::ui::theme::colors::BG_ELEVATED, 6.0, if narrow { 0.0 } else { 14.0 }, |ui| {
                                 let image_size = egui::vec2(if narrow { card_width } else { (card_width - 28.0).max(12.0) }, if narrow { 34.0 } else if compact { 74.0 } else { 96.0 });
                                 if name == "kagari_logo.webp" {
                                     if let Some(id) = reference_texture(app, ctx, asset) {
@@ -4076,8 +4084,8 @@ fn draw_reference_projects_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
                 ui.set_min_width(detail_panel_width);
                 ui.set_max_width(detail_panel_width);
                 egui::Frame::none()
-                    .fill(egui::Color32::from_rgb(16, 27, 38))
-                    .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(37, 52, 67)))
+                    .fill(crate::ui::theme::colors::BG_PANEL_ALT)
+                    .stroke(egui::Stroke::new(1.0_f32, crate::ui::theme::colors::BORDER_SUBTLE))
                     .rounding(4.0)
                     .inner_margin(egui::Margin::same(if narrow { 4.0 } else { 12.0 }))
                     .show(ui, |ui| {
@@ -4114,7 +4122,7 @@ fn draw_reference_documentation_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx
     let narrow = reference_narrow(ui);
     let compact = ui.available_height() < 820.0;
     ui.painter()
-        .rect_filled(ui.max_rect(), 0.0, egui::Color32::from_rgb(11, 19, 26));
+        .rect_filled(ui.max_rect(), 0.0, crate::ui::theme::colors::BG_PANEL_DEEP);
     egui::Frame::none()
         .inner_margin(egui::Margin::symmetric(
             if narrow {
@@ -4307,8 +4315,8 @@ fn draw_reference_effects_narrow(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &e
         egui::pos2(center.right() + 2.0, top.y),
         egui::vec2(105.0, 248.0),
     );
-    let fill = egui::Color32::from_rgb(16, 27, 38);
-    let stroke = egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(37, 52, 67));
+    let fill = crate::ui::theme::colors::BG_PANEL_ALT;
+    let stroke = egui::Stroke::new(1.0_f32, crate::ui::theme::colors::BORDER_SUBTLE);
     for rect in [left, center, right] {
         ui.painter().rect(rect, 4.0, fill, stroke);
     }
@@ -4427,7 +4435,7 @@ fn draw_reference_effects_narrow(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &e
             button,
             3.0,
             egui::Color32::from_rgb(19, 31, 42),
-            egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(43, 60, 76)),
+            egui::Stroke::new(1.0_f32, crate::ui::theme::colors::BG_ELEVATED),
         );
         ui.painter().text(
             button.center(),
@@ -4565,7 +4573,7 @@ fn draw_reference_effects_narrow(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &e
 fn draw_reference_effects_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui::Context) {
     let compact = ui.available_height() < 900.0;
     ui.painter()
-        .rect_filled(ui.max_rect(), 0.0, egui::Color32::from_rgb(11, 19, 26));
+        .rect_filled(ui.max_rect(), 0.0, crate::ui::theme::colors::BG_PANEL_DEEP);
     egui::Frame::none()
         .inner_margin(egui::Margin::symmetric(reference_content_margin(ui), 0.0))
         .show(ui, |ui| {
@@ -4598,10 +4606,10 @@ fn draw_reference_effects_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egu
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
                 egui::Frame::none()
-                    .fill(egui::Color32::from_rgb(16, 27, 38))
+                    .fill(crate::ui::theme::colors::BG_PANEL_ALT)
                     .stroke(egui::Stroke::new(
                         1.0_f32,
-                        egui::Color32::from_rgb(37, 52, 67),
+                        crate::ui::theme::colors::BORDER_SUBTLE,
                     ))
                     .rounding(4.0)
                     .inner_margin(egui::Margin::same(if narrow { 6.0 } else { 10.0 }))
@@ -4758,10 +4766,10 @@ fn draw_reference_effects_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egu
                     });
                 ui.add_space(if narrow { 4.0 } else { 12.0 });
                 egui::Frame::none()
-                    .fill(egui::Color32::from_rgb(16, 27, 38))
+                    .fill(crate::ui::theme::colors::BG_PANEL_ALT)
                     .stroke(egui::Stroke::new(
                         1.0_f32,
-                        egui::Color32::from_rgb(37, 52, 67),
+                        crate::ui::theme::colors::BORDER_SUBTLE,
                     ))
                     .rounding(4.0)
                     .inner_margin(egui::Margin::same(if narrow { 3.0 } else { 12.0 }))
@@ -4851,10 +4859,10 @@ fn draw_reference_effects_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egu
                     });
                 ui.add_space(if narrow { 4.0 } else { 12.0 });
                 egui::Frame::none()
-                    .fill(egui::Color32::from_rgb(16, 27, 38))
+                    .fill(crate::ui::theme::colors::BG_PANEL_ALT)
                     .stroke(egui::Stroke::new(
                         1.0_f32,
-                        egui::Color32::from_rgb(37, 52, 67),
+                        crate::ui::theme::colors::BORDER_SUBTLE,
                     ))
                     .rounding(4.0)
                     .inner_margin(egui::Margin::same(12.0))
@@ -5008,8 +5016,8 @@ fn draw_reference_render_narrow(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
         egui::pos2(top.x + 167.0, top.y + 147.0),
         egui::vec2(126.0, 108.0),
     );
-    let fill = egui::Color32::from_rgb(16, 27, 38);
-    let stroke = egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(37, 52, 67));
+    let fill = crate::ui::theme::colors::BG_PANEL_ALT;
+    let stroke = egui::Stroke::new(1.0_f32, crate::ui::theme::colors::BORDER_SUBTLE);
     for rect in [queue, settings, progress] {
         ui.painter().rect(rect, 4.0, fill, stroke);
     }
@@ -5028,7 +5036,7 @@ fn draw_reference_render_narrow(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
         add,
         3.0,
         egui::Color32::from_rgb(19, 31, 42),
-        egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(43, 60, 76)),
+        egui::Stroke::new(1.0_f32, crate::ui::theme::colors::BG_ELEVATED),
     );
     ui.painter().text(
         add.center(),
@@ -5269,7 +5277,7 @@ fn start_active_composition_export(app: &mut KagariApp, ctx: &egui::Context) {
 fn draw_reference_render_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui::Context) {
     let compact = ui.available_height() < 900.0;
     ui.painter()
-        .rect_filled(ui.max_rect(), 0.0, egui::Color32::from_rgb(11, 19, 26));
+        .rect_filled(ui.max_rect(), 0.0, crate::ui::theme::colors::BG_PANEL_DEEP);
     egui::Frame::none()
         .inner_margin(egui::Margin::symmetric(reference_content_margin(ui), 0.0))
         .show(ui, |ui| {
@@ -5294,10 +5302,10 @@ fn draw_reference_render_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui
             let started_id = egui::Id::new("reference_render_started");
             let mut started = app.export.is_exporting;
             egui::Frame::none()
-                .fill(egui::Color32::from_rgb(16, 27, 38))
+                .fill(crate::ui::theme::colors::BG_PANEL_ALT)
                 .stroke(egui::Stroke::new(
                     1.0_f32,
-                    egui::Color32::from_rgb(37, 52, 67),
+                    crate::ui::theme::colors::BORDER_SUBTLE,
                 ))
                 .rounding(4.0)
                 .inner_margin(egui::Margin::same(10.0))
@@ -5628,10 +5636,10 @@ fn draw_reference_render_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
                 egui::Frame::none()
-                    .fill(egui::Color32::from_rgb(16, 27, 38))
+                    .fill(crate::ui::theme::colors::BG_PANEL_ALT)
                     .stroke(egui::Stroke::new(
                         1.0_f32,
-                        egui::Color32::from_rgb(37, 52, 67),
+                        crate::ui::theme::colors::BORDER_SUBTLE,
                     ))
                     .rounding(4.0)
                     .inner_margin(egui::Margin::same(if narrow { 6.0 } else { 12.0 }))
@@ -5779,10 +5787,10 @@ fn draw_reference_render_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui
                     });
                 ui.add_space(if narrow { 4.0 } else { 12.0 });
                 egui::Frame::none()
-                    .fill(egui::Color32::from_rgb(16, 27, 38))
+                    .fill(crate::ui::theme::colors::BG_PANEL_ALT)
                     .stroke(egui::Stroke::new(
                         1.0_f32,
-                        egui::Color32::from_rgb(37, 52, 67),
+                        crate::ui::theme::colors::BORDER_SUBTLE,
                     ))
                     .rounding(4.0)
                     .inner_margin(egui::Margin::same(12.0))
@@ -5868,9 +5876,9 @@ fn draw_reference_render_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui
 fn draw_reference_templates_narrow(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui::Context) {
     let top = ui.cursor().min;
     let panel = egui::Rect::from_min_size(top, egui::vec2(314.0, 209.0));
-    let stroke = egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(37, 52, 67));
+    let stroke = egui::Stroke::new(1.0_f32, crate::ui::theme::colors::BORDER_SUBTLE);
     ui.painter()
-        .rect(panel, 4.0, egui::Color32::from_rgb(16, 27, 38), stroke);
+        .rect(panel, 4.0, crate::ui::theme::colors::BG_PANEL_ALT, stroke);
     ui.painter().text(
         egui::pos2(panel.left() + 5.0, panel.top() + 13.0),
         egui::Align2::LEFT_CENTER,
@@ -5950,8 +5958,8 @@ fn draw_reference_templates_narrow(app: &mut KagariApp, ui: &mut egui::Ui, ctx: 
         ui.painter().rect(
             card,
             4.0,
-            egui::Color32::from_rgb(22, 32, 42),
-            egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(43, 60, 76)),
+            crate::ui::theme::colors::BG_PANEL_RAISED,
+            egui::Stroke::new(1.0_f32, crate::ui::theme::colors::BG_ELEVATED),
         );
         if let Some(id) = reference_texture(app, ctx, asset) {
             ui.put(
@@ -5988,7 +5996,7 @@ fn draw_reference_templates_narrow(app: &mut KagariApp, ui: &mut egui::Ui, ctx: 
 fn draw_reference_templates_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui::Context) {
     let compact = ui.available_height() < 900.0;
     ui.painter()
-        .rect_filled(ui.max_rect(), 0.0, egui::Color32::from_rgb(11, 19, 26));
+        .rect_filled(ui.max_rect(), 0.0, crate::ui::theme::colors::BG_PANEL_DEEP);
     egui::Frame::none()
         .inner_margin(egui::Margin::symmetric(reference_content_margin(ui), 0.0))
         .show(ui, |ui| {
@@ -6006,10 +6014,10 @@ fn draw_reference_templates_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &e
                 return;
             }
             egui::Frame::none()
-                .fill(egui::Color32::from_rgb(16, 27, 38))
+                .fill(crate::ui::theme::colors::BG_PANEL_ALT)
                 .stroke(egui::Stroke::new(
                     1.0_f32,
-                    egui::Color32::from_rgb(37, 52, 67),
+                    crate::ui::theme::colors::BORDER_SUBTLE,
                 ))
                 .rounding(4.0)
                 .inner_margin(egui::Margin::same(if narrow { 3.0 } else { 14.0 }))
@@ -6100,8 +6108,8 @@ fn draw_reference_settings_narrow(ui: &mut egui::Ui) {
     let left = egui::Rect::from_min_size(top, egui::vec2(97.0, 219.0));
     let content =
         egui::Rect::from_min_size(egui::pos2(top.x + 101.0, top.y), egui::vec2(193.0, 219.0));
-    let fill = egui::Color32::from_rgb(16, 27, 38);
-    let stroke = egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(37, 52, 67));
+    let fill = crate::ui::theme::colors::BG_PANEL_ALT;
+    let stroke = egui::Stroke::new(1.0_f32, crate::ui::theme::colors::BORDER_SUBTLE);
     ui.painter().rect(left, 4.0, fill, stroke);
     ui.painter().rect(content, 4.0, fill, stroke);
     let nav = [
@@ -6169,7 +6177,7 @@ fn draw_reference_settings_narrow(ui: &mut egui::Ui) {
             rect,
             3.0,
             egui::Color32::from_rgb(18, 31, 43),
-            egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(43, 60, 76)),
+            egui::Stroke::new(1.0_f32, crate::ui::theme::colors::BG_ELEVATED),
         );
         ui.painter().text(
             rect.center(),
@@ -6289,7 +6297,7 @@ fn draw_reference_settings_narrow(ui: &mut egui::Ui) {
         reset,
         3.0,
         egui::Color32::from_rgb(19, 31, 42),
-        egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(43, 60, 76)),
+        egui::Stroke::new(1.0_f32, crate::ui::theme::colors::BG_ELEVATED),
     );
     ui.painter().text(
         reset.center(),
@@ -6316,7 +6324,7 @@ fn draw_reference_settings_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
     });
     let mut prefs = initial_prefs.clone();
     ui.painter()
-        .rect_filled(ui.max_rect(), 0.0, egui::Color32::from_rgb(11, 19, 26));
+        .rect_filled(ui.max_rect(), 0.0, crate::ui::theme::colors::BG_PANEL_DEEP);
     egui::Frame::none()
         .inner_margin(egui::Margin::symmetric(settings_margin, 0.0))
         .show(ui, |ui| {
@@ -6336,10 +6344,10 @@ fn draw_reference_settings_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
                 egui::Frame::none()
-                    .fill(egui::Color32::from_rgb(16, 27, 38))
+                    .fill(crate::ui::theme::colors::BG_PANEL_ALT)
                     .stroke(egui::Stroke::new(
                         1.0_f32,
-                        egui::Color32::from_rgb(37, 52, 67),
+                        crate::ui::theme::colors::BORDER_SUBTLE,
                     ))
                     .rounding(4.0)
                     .inner_margin(egui::Margin::same(if narrow { 2.0 } else { 8.0 }))
@@ -6456,10 +6464,10 @@ fn draw_reference_settings_page(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &eg
                     "Installed extensions and plugin management.",
                 ];
                 egui::Frame::none()
-                    .fill(egui::Color32::from_rgb(16, 27, 38))
+                    .fill(crate::ui::theme::colors::BG_PANEL_ALT)
                     .stroke(egui::Stroke::new(
                         1.0_f32,
-                        egui::Color32::from_rgb(37, 52, 67),
+                        crate::ui::theme::colors::BORDER_SUBTLE,
                     ))
                     .rounding(4.0)
                     .inner_margin(egui::Margin::same(if narrow { 2.0 } else { 16.0 }))
@@ -6823,8 +6831,8 @@ fn draw_reference_template_catalog(
             fixed_card_with_inset(
                 ui,
                 egui::vec2(width, height),
-                egui::Color32::from_rgb(22, 32, 42),
-                egui::Color32::from_rgb(43, 60, 76),
+                crate::ui::theme::colors::BG_PANEL_RAISED,
+                crate::ui::theme::colors::BG_ELEVATED,
                 5.0,
                 if narrow { 2.0 } else { 14.0 },
                 |ui| {
@@ -6881,7 +6889,7 @@ fn draw_reference_nav(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui::Contex
     let compact_brand = ui.available_width() < 130.0;
     ui.add_space(if compact_brand { 22.0 } else { 20.0 });
     if app.home_banner.is_none() {
-        if let Ok(img) = image::open(
+        if let Ok(img) = crate::ui::embedded_assets::open_image(
             std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/kagari_logo.webp"),
         ) {
             app.home_banner = load_logo_texture(ctx, img);
@@ -7052,7 +7060,7 @@ fn reference_texture(
 ) -> Option<egui::TextureId> {
     if name == "kagari_logo.webp" || name == "logo.png" {
         if app.home_banner.is_none() {
-            if let Ok(img) = image::open(
+            if let Ok(img) = crate::ui::embedded_assets::open_image(
                 std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                     .join("assets/kagari_logo.webp"),
             ) {
@@ -7559,7 +7567,7 @@ fn reference_contain_image(
 }
 
 fn draw_reference_home(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui::Context) {
-    let bg = egui::Color32::from_rgb(11, 19, 26);
+    let bg = crate::ui::theme::colors::BG_PANEL_DEEP;
     let compact = ui.available_height() < 900.0;
     let top_space = if compact { 28.0 } else { 40.0 };
     let mobile = ui.available_width() < 520.0;
@@ -7691,8 +7699,8 @@ fn draw_reference_home(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui::Conte
                         fixed_card(
                             ui,
                             egui::vec2(width, first_row_height),
-                            egui::Color32::from_rgb(22, 32, 42),
-                            egui::Color32::from_rgb(43, 60, 76),
+                            crate::ui::theme::colors::BG_PANEL_RAISED,
+                            crate::ui::theme::colors::BG_ELEVATED,
                             8.0,
                             |ui| {
                                 ui.horizontal(|ui| {
@@ -7737,8 +7745,8 @@ fn draw_reference_home(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui::Conte
                         fixed_card(
                             ui,
                             egui::vec2(start_width, start_height),
-                            egui::Color32::from_rgb(22, 32, 42),
-                            egui::Color32::from_rgb(43, 60, 76),
+                            crate::ui::theme::colors::BG_PANEL_RAISED,
+                            crate::ui::theme::colors::BG_ELEVATED,
                             8.0,
                             |ui| {
                                 ui.label(egui::RichText::new("Start New").size(18.0).strong());
@@ -8041,7 +8049,7 @@ fn landing_nav_row(
         let active_rect =
             egui::Rect::from_min_max(egui::pos2(rect.left() + 17.0, rect.top()), rect.max);
         ui.painter()
-            .rect_filled(active_rect, 0.0, egui::Color32::from_rgb(27, 35, 42));
+            .rect_filled(active_rect, 0.0, crate::ui::theme::colors::BG_PANEL_DARK);
         ui.painter().rect_filled(
             egui::Rect::from_min_size(
                 egui::pos2(rect.left() + 17.0, rect.top()),
@@ -8049,7 +8057,7 @@ fn landing_nav_row(
             ),
             0.0,
             if active_orange {
-                egui::Color32::from_rgb(255, 111, 28)
+                crate::ui::theme::colors::ACCENT_BRAND
             } else {
                 egui::Color32::from_rgb(48, 141, 255)
             },
@@ -8062,12 +8070,12 @@ fn landing_nav_row(
         egui::vec2(24.0, 24.0),
         if active {
             if active_orange {
-                egui::Color32::from_rgb(255, 145, 50)
+                crate::ui::theme::colors::ACCENT_BRAND_HOVER
             } else {
                 colors::TEXT_PRIMARY
             }
         } else {
-            egui::Color32::from_rgb(193, 205, 218)
+            crate::ui::theme::colors::TEXT_SECONDARY_BRIGHT
         },
         egui::pos2(rect.left() + 44.0, rect.center().y - 12.0),
     );
@@ -8083,7 +8091,7 @@ fn landing_nav_row(
                     egui::Label::new(egui::RichText::new(label).size(16.0).color(if active {
                         colors::TEXT_PRIMARY
                     } else {
-                        egui::Color32::from_rgb(193, 205, 218)
+                        crate::ui::theme::colors::TEXT_SECONDARY_BRIGHT
                     }))
                     .truncate(),
                 );
@@ -8107,7 +8115,7 @@ fn draw_landing_sidebar(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui::Cont
     ui.horizontal(|ui| {
         ui.add_space(29.0);
         if app.home_banner.is_none() {
-            if let Ok(img) = image::open(
+            if let Ok(img) = crate::ui::embedded_assets::open_image(
                 std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                     .join("assets/kagari_logo.webp"),
             ) {
@@ -8261,7 +8269,7 @@ fn landing_button_rect(
         rect,
         8.0,
         if accent {
-            egui::Color32::from_rgb(255, 103, 24)
+            crate::ui::theme::colors::ACCENT_BRAND
         } else {
             egui::Color32::from_rgb(25, 33, 40)
         },
@@ -8766,8 +8774,8 @@ fn draw_reference_project_row(
             let response = fixed_card_with_inset(
                 ui,
                 egui::vec2(card_width, card_height),
-                egui::Color32::from_rgb(22, 32, 42),
-                egui::Color32::from_rgb(43, 60, 76),
+                crate::ui::theme::colors::BG_PANEL_RAISED,
+                crate::ui::theme::colors::BG_ELEVATED,
                 5.0,
                 0.0,
                 |ui| {
@@ -8908,8 +8916,8 @@ fn draw_reference_templates(ui: &mut egui::Ui, compact: bool, show_header: bool)
             let response = fixed_card_with_inset(
                 ui,
                 egui::vec2(card_width, card_height),
-                egui::Color32::from_rgb(22, 32, 42),
-                egui::Color32::from_rgb(43, 60, 76),
+                crate::ui::theme::colors::BG_PANEL_RAISED,
+                crate::ui::theme::colors::BG_ELEVATED,
                 5.0,
                 if narrow {
                     6.0
@@ -9575,7 +9583,7 @@ fn draw_selection_inspector(app: &mut KagariApp, ui: &mut egui::Ui, ctx: &egui::
             .map(|(p, _)| p != &path)
             .unwrap_or(true);
         if stale {
-            app.home_preview = image::open(&path)
+            app.home_preview = crate::ui::embedded_assets::open_image(&path)
                 .ok()
                 .and_then(|img| {
                     load_texture(ctx, &format!("preview:{}", path.display()), img, 560, 320)

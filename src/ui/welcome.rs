@@ -125,7 +125,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
     let mut action: Option<&str> = None;
     let mut recent_to_open: Option<std::path::PathBuf> = None;
 
-    egui::Window::new("Welcome to Kagari VFX")
+    crate::ui::modal::window("Welcome to Kagari VFX")
         .open(&mut open)
         .collapsible(false)
         .resizable(false)

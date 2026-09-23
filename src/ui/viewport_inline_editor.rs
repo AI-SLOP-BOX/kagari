@@ -52,7 +52,7 @@ pub fn draw_inline_numeric_editor(
             (screen_y - 120.0).max(origin_y + 10.0),
         );
 
-        egui::Window::new(format!("✏ Quick Edit: {}", layer.name))
+        crate::ui::modal::window(format!("Quick Edit: {}", layer.name))
             .fixed_pos(window_pos)
             .fixed_size(egui::vec2(220.0, 140.0))
             .resizable(false)

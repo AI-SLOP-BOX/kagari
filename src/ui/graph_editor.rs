@@ -2244,21 +2244,21 @@ pub fn draw_graph_editor(
                 let dt = (win[1].0 as f32 - win[0].0 as f32).max(1.0);
                 let speed = ((win[1].1 - win[0].1) / dt).abs();
                 max_speed = max_speed.max(speed);
-                speed_pts.push(speed);
+                speed_pts.push(((win[0].0 + win[1].0) as f32 * 0.5, speed));
             }
 
             if max_speed > 0.001 {
                 for i in 0..speed_pts.len() {
-                    let sx = rect.left() + (i as f32 / total_f as f32) * rect.width();
-                    let sy =
-                        rect.bottom() - 4.0 - (speed_pts[i] / max_speed) * (rect.height() - 16.0);
+                    let sx = rect.left() + (speed_pts[i].0 / total_f as f32) * rect.width();
+                    let sy = rect.bottom() - 4.0
+                        - (speed_pts[i].1 / max_speed) * (rect.height() - 16.0);
                     let p1 = egui::pos2(sx, sy);
 
                     let next_i = (i + 1).min(speed_pts.len() - 1);
-                    let nsx = rect.left() + (next_i as f32 / total_f as f32) * rect.width();
+                    let nsx = rect.left() + (speed_pts[next_i].0 / total_f as f32) * rect.width();
                     let nsy = rect.bottom()
                         - 4.0
-                        - (speed_pts[next_i] / max_speed) * (rect.height() - 16.0);
+                        - (speed_pts[next_i].1 / max_speed) * (rect.height() - 16.0);
                     let p2 = egui::pos2(nsx, nsy);
 
                     ui.painter()
@@ -2464,6 +2464,9 @@ pub fn draw_graph_editor(
                         .unwrap_or(*frame as usize);
                     let key_pos = egui::pos2(frame_to_x(display_frame), val_to_y(display_value));
                     let key_rect = egui::Rect::from_center_size(key_pos, egui::vec2(14.0, 14.0));
+                    if !ui.is_rect_visible(key_rect) && drag_display.is_none() {
+                        continue;
+                    }
                     let key_response = ui.interact(
                         key_rect,
                         egui::Id::new(("effect_channel_key", &layer.id, &graph_prop, key_token)),
@@ -2595,21 +2598,25 @@ pub fn draw_graph_editor(
                             as u32;
                         let next_value = state.original_value
                             - key_response.drag_delta().y / (rect.height() - 8.0) * val_range;
-                        let moved = next_frame != state.current_frame
-                            && move_effect_channel_keyframe(
+                        let target_frame = if next_frame == state.current_frame
+                            || move_effect_channel_keyframe(
                                 layer,
                                 &graph_prop,
                                 state.current_frame,
                                 next_frame,
-                            );
+                            ) {
+                            next_frame
+                        } else {
+                            state.current_frame
+                        };
                         let value_changed =
-                            set_effect_channel_at_frame(layer, &graph_prop, next_frame, next_value);
-                        *project_changed |= moved || value_changed;
+                            set_effect_channel_at_frame(layer, &graph_prop, target_frame, next_value);
+                        *project_changed |= target_frame != state.current_frame || value_changed;
                         ui.ctx().data_mut(|d| {
                             d.insert_temp(
                                 channel_drag_id,
                                 GraphKeyframeDrag {
-                                    current_frame: next_frame,
+                                    current_frame: target_frame,
                                     current_value: next_value,
                                     ..state
                                 },
@@ -2646,6 +2653,9 @@ pub fn draw_graph_editor(
                         anchor_rect,
                     );
                 });
+                if !ui.is_rect_visible(anchor_rect) && drag_display.is_none() {
+                    continue;
+                }
                 let anchor_token = drag_display
                     .map(|drag| drag.original_frame as usize)
                     .unwrap_or(*kf_frame as usize);
@@ -3159,7 +3169,7 @@ pub fn draw_graph_editor(
                     let nx2 = clamp_bezier_x(out_base[2] + d.x / 44.0, out_base[0] + 0.01, 1.0);
                     let ny2 = (out_base[3] - d.y / 24.0).clamp(-1.5, 2.5);
                     if *linked_tangent {
-                        let mir_x = (1.0 - nx2).clamp(0.0, nx2 - 0.01);
+                        let mir_x = clamp_bezier_x(1.0 - nx2, 0.0, nx2 - 0.01);
                         new_pts = Some([mir_x, -ny2, nx2, ny2]);
                     } else {
                         new_pts = Some([out_base[0], out_base[1], nx2, ny2]);
@@ -3170,7 +3180,7 @@ pub fn draw_graph_editor(
                     let nx1 = clamp_bezier_x(in_base[0] - d.x / 44.0, 0.0, in_base[2] - 0.01);
                     let ny1 = (in_base[1] + d.y / 24.0).clamp(-1.5, 2.5);
                     if *linked_tangent {
-                        let mir_x = (1.0 - nx1).clamp(nx1 + 0.01, 1.0);
+                        let mir_x = clamp_bezier_x(1.0 - nx1, nx1 + 0.01, 1.0);
                         new_pts = Some([nx1, ny1, mir_x, -ny1]);
                     } else {
                         new_pts = Some([nx1, ny1, in_base[2], in_base[3]]);

@@ -1115,7 +1115,7 @@ fn draw_reference_studio_nav(app: &mut KagariApp, ui: &mut egui::Ui) {
                 ui.painter().rect_filled(
                     egui::Rect::from_min_size(row.left_top(), egui::vec2(3.0, row.height())),
                     2.0,
-                    egui::Color32::from_rgb(255, 107, 22),
+                    crate::ui::theme::colors::ACCENT_BRAND,
                 );
             }
             let icon_rect =
@@ -1126,7 +1126,7 @@ fn draw_reference_studio_nav(app: &mut KagariApp, ui: &mut egui::Ui) {
                 icon,
                 icon_rect.size(),
                 if index == 1 {
-                    egui::Color32::from_rgb(255, 107, 22)
+                    crate::ui::theme::colors::ACCENT_BRAND
                 } else {
                     muted
                 },
@@ -1175,7 +1175,7 @@ fn draw_reference_studio_nav(app: &mut KagariApp, ui: &mut egui::Ui) {
                     egui::pos2(row.left() + 4.0, row.bottom()),
                 ),
                 2.0,
-                egui::Color32::from_rgb(255, 107, 22),
+                crate::ui::theme::colors::ACCENT_BRAND,
             );
         }
         let icon_size = if compact { 18.0 } else { 22.0 };
@@ -1192,7 +1192,7 @@ fn draw_reference_studio_nav(app: &mut KagariApp, ui: &mut egui::Ui) {
             icon,
             icon_rect.size(),
             if active {
-                egui::Color32::from_rgb(255, 107, 22)
+                crate::ui::theme::colors::ACCENT_BRAND
             } else {
                 muted
             },

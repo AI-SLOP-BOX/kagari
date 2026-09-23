@@ -13,7 +13,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
     egui::TopBottomPanel::top("tutorial_window_bar")
         .exact_height(if mobile { 52.0 } else { 60.0 })
         .frame(egui::Frame::none().fill(egui::Color32::from_rgb(15, 23, 30)))
-        .show(ctx, |ui| draw_topbar(ui, width, mobile));
+        .show(ctx, |ui| draw_topbar(ui, width, mobile, app, ctx));
     egui::TopBottomPanel::bottom("tutorial_footer")
         .exact_height(if mobile { 38.0 } else { 68.0 })
         .frame(egui::Frame::none().fill(egui::Color32::from_rgb(9, 16, 22)))
@@ -44,9 +44,9 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
         });
 }
 
-fn draw_topbar(ui: &mut egui::Ui, width: f32, mobile: bool) {
+fn draw_topbar(ui: &mut egui::Ui, width: f32, mobile: bool, app: &mut KagariApp, ctx: &egui::Context) {
     if !mobile && width >= 1100.0 {
-        let right = width - 18.0;
+        let right = width - 42.0;
         let settings =
             egui::Rect::from_min_max(egui::pos2(right - 72.0, 5.0), egui::pos2(right, 55.0));
         let new_project = egui::Rect::from_min_max(
@@ -63,6 +63,8 @@ fn draw_topbar(ui: &mut egui::Ui, width: f32, mobile: bool) {
             icons::SVG_FOLDER,
             "プロジェクトを開く",
             "tutorial-open-project",
+            app,
+            ctx,
         );
         tutorial_header_action(
             ui,
@@ -70,6 +72,8 @@ fn draw_topbar(ui: &mut egui::Ui, width: f32, mobile: bool) {
             icons::SVG_FILE_PLUS,
             "新規プロジェクト",
             "tutorial-new-project",
+            app,
+            ctx,
         );
         tutorial_header_action(
             ui,
@@ -77,6 +81,8 @@ fn draw_topbar(ui: &mut egui::Ui, width: f32, mobile: bool) {
             icons::SVG_SETTINGS,
             "設定",
             "tutorial-settings",
+            app,
+            ctx,
         );
     }
     let p = ui.painter();
@@ -110,13 +116,11 @@ fn draw_topbar(ui: &mut egui::Ui, width: f32, mobile: bool) {
             egui::FontId::proportional(14.0),
             colors::TEXT_PRIMARY,
         );
-        p.text(
-            egui::pos2(width - 18.0, 24.0),
-            egui::Align2::RIGHT_CENTER,
-            "×",
-            egui::FontId::proportional(18.0),
-            colors::TEXT_MUTED,
-        );
+        let close = egui::Rect::from_center_size(egui::pos2(width - 18.0, 24.0), egui::vec2(28.0, 32.0));
+        if ui.interact(close, egui::Id::new("tutorial-window-close"), egui::Sense::click()).clicked() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+        p.text(close.center(), egui::Align2::CENTER_CENTER, "×", egui::FontId::proportional(18.0), colors::TEXT_MUTED);
     }
 }
 
@@ -126,8 +130,19 @@ fn tutorial_header_action(
     icon: &'static str,
     label: &str,
     id: &str,
+    app: &mut KagariApp,
+    ctx: &egui::Context,
 ) {
     let response = ui.interact(rect, egui::Id::new(id), egui::Sense::click());
+    if response.clicked() {
+        match id {
+            "tutorial-open-project" => crate::ui::home_screen::open_project_dialog(app),
+            "tutorial-new-project" => crate::ui::home_screen::new_project_from_header(app),
+            "tutorial-settings" => app.show_preferences = true,
+            _ => {}
+        }
+        ctx.request_repaint();
+    }
     if response.hovered() {
         ui.painter().rect_filled(
             rect,
@@ -750,7 +765,7 @@ fn texture(ctx: &egui::Context, path: &str, key: &str) -> Option<egui::TextureId
     if let Some(handle) = ctx.data_mut(|d| d.get_temp::<egui::TextureHandle>(id)) {
         return Some(handle.id());
     }
-    let image = image::open(std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(path))
+    let image = crate::ui::embedded_assets::open_image(std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(path))
         .ok()?
         .to_rgba8();
     let size = [image.width() as usize, image.height() as usize];

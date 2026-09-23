@@ -21,6 +21,11 @@ pub mod colors {
     pub const BG_SURFACE: Color32 = Color32::from_rgb(35, 51, 66);
     /// Highest elevation - dropdowns, tooltips
     pub const BG_ELEVATED: Color32 = Color32::from_rgb(43, 60, 76);
+    pub const BG_PANEL_ALT: Color32 = Color32::from_rgb(16, 27, 38);
+    pub const BG_PANEL_DEEP: Color32 = Color32::from_rgb(11, 19, 26);
+    pub const BG_PANEL_DARK: Color32 = Color32::from_rgb(27, 35, 42);
+    pub const BG_PANEL_BASE: Color32 = Color32::from_rgb(15, 26, 33);
+    pub const BG_PANEL_RAISED: Color32 = Color32::from_rgb(22, 32, 42);
 
     // ── Interactive States ──
     pub const BG_HOVER: Color32 = Color32::from_rgb(35, 64, 94);
@@ -41,6 +46,8 @@ pub mod colors {
     pub const ACCENT_RED: Color32 = Color32::from_rgb(210, 55, 55);
     /// Orange - warnings only. Never a primary action color.
     pub const ACCENT_ORANGE: Color32 = Color32::from_rgb(245, 155, 0);
+    pub const ACCENT_BRAND: Color32 = Color32::from_rgb(255, 107, 22);
+    pub const ACCENT_BRAND_HOVER: Color32 = Color32::from_rgb(255, 145, 50);
     /// Purple - expressions, advanced.
     pub const ACCENT_PURPLE: Color32 = Color32::from_rgb(155, 110, 230);
 
@@ -53,6 +60,7 @@ pub mod colors {
     // ── Typography Colors ──
     pub const TEXT_PRIMARY: Color32 = Color32::from_rgb(225, 228, 235);
     pub const TEXT_SECONDARY: Color32 = Color32::from_rgb(158, 170, 192);
+    pub const TEXT_SECONDARY_BRIGHT: Color32 = Color32::from_rgb(193, 205, 218);
     pub const TEXT_MUTED: Color32 = Color32::from_rgb(112, 124, 144);
     pub const TEXT_ACCENT: Color32 = Color32::from_rgb(85, 145, 205);
     pub const TEXT_ON_ACCENT: Color32 = Color32::from_rgb(255, 255, 255);
@@ -69,11 +77,11 @@ pub mod colors {
 
     // ── Viewport Overlay Colors (desaturated; overlays must not glow) ──
     pub const GRID_LINE: Color32 = Color32::from_rgba_premultiplied(255, 255, 255, 28);
-    pub const MOTION_PATH: Color32 = Color32::from_rgb(75, 135, 175);
+    pub const MOTION_PATH: Color32 = crate::ui::theme::colors::ACCENT_CYAN;
     pub const KEYFRAME_DOT: Color32 = Color32::from_rgb(205, 170, 95);
-    pub const GUIDE_LINE: Color32 = Color32::from_rgb(75, 135, 175);
+    pub const GUIDE_LINE: Color32 = crate::ui::theme::colors::ACCENT_CYAN;
     pub const HUD_BG: Color32 = Color32::from_rgba_premultiplied(14, 20, 30, 220);
-    pub const HUD_STROKE: Color32 = Color32::from_rgb(75, 135, 175);
+    pub const HUD_STROKE: Color32 = crate::ui::theme::colors::ACCENT_CYAN;
     pub const HUD_TEXT: Color32 = Color32::from_rgb(175, 195, 215);
     pub const HUD_STATUS_TEXT: Color32 = Color32::from_rgb(165, 185, 205);
     pub const FPS_GOOD: Color32 = Color32::from_rgb(75, 155, 115);
@@ -300,12 +308,10 @@ fn configure_fonts(ctx: &egui::Context) {
 
     // Keep the product UI visually consistent even when the host OS does not
     // provide Inter. The bundled variable font contains the requested UI weights.
-    let bundled_inter =
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/fonts/Inter.ttf");
-    if let Ok(data) = std::fs::read(bundled_inter) {
+    if let Some(data) = crate::ui::embedded_assets::bytes("assets/fonts/Inter.ttf") {
         fonts
             .font_data
-            .insert("KagariInter".to_string(), egui::FontData::from_owned(data));
+            .insert("KagariInter".to_string(), egui::FontData::from_owned(data.to_vec()));
         fonts
             .families
             .entry(egui::FontFamily::Proportional)

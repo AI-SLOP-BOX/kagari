@@ -18,7 +18,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
         return;
     }
     let mut open = app.show_quality_check_panel;
-    egui::Window::new("📊 Analyze / Quality Check")
+    crate::ui::modal::window("Analyze / Quality Check")
         .open(&mut open)
         .default_width(380.0)
         .default_height(440.0)

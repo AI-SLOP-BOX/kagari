@@ -5,6 +5,12 @@ use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
 
+#[derive(Clone, Default)]
+struct LibraryTextureCache {
+    clock: u64,
+    entries: std::collections::HashMap<String, (egui::TextureHandle, u64)>,
+}
+
 pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
     let width = ctx.screen_rect().width();
     let narrow = width < 1100.0;
@@ -95,7 +101,7 @@ fn draw_logo(
     narrow: bool,
 ) {
     if app.home_banner.is_none() {
-        if let Ok(img) = image::open(
+        if let Ok(img) = crate::ui::embedded_assets::open_image(
             std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/kagari_logo.webp"),
         ) {
             app.home_banner = crate::ui::home_screen::load_logo_texture(ctx, img);
@@ -163,12 +169,12 @@ fn draw_nav(ui: &mut egui::Ui, left: egui::Rect, r: egui::Rect, narrow: bool) {
                     egui::pos2(left.right(), y + 36.0),
                 ),
                 0.0,
-                egui::Color32::from_rgb(27, 35, 42),
+                crate::ui::theme::colors::BG_PANEL_DARK,
             );
             ui.painter().rect_filled(
                 egui::Rect::from_min_size(egui::pos2(9.0, y - 4.0), egui::vec2(4.0, 40.0)),
                 0.0,
-                egui::Color32::from_rgb(255, 111, 28),
+                crate::ui::theme::colors::ACCENT_BRAND,
             );
         }
         let x = if narrow {
@@ -183,9 +189,9 @@ fn draw_nav(ui: &mut egui::Ui, left: egui::Rect, r: egui::Rect, narrow: bool) {
             icon,
             egui::vec2(22.0, 22.0),
             if active {
-                egui::Color32::from_rgb(255, 145, 50)
+                crate::ui::theme::colors::ACCENT_BRAND_HOVER
             } else {
-                egui::Color32::from_rgb(193, 205, 218)
+                crate::ui::theme::colors::TEXT_SECONDARY_BRIGHT
             },
             egui::pos2(x, center_y - 11.0),
         );
@@ -199,7 +205,7 @@ fn draw_nav(ui: &mut egui::Ui, left: egui::Rect, r: egui::Rect, narrow: bool) {
                 egui::Label::new(egui::RichText::new(label).size(14.0).color(if active {
                     colors::TEXT_PRIMARY
                 } else {
-                    egui::Color32::from_rgb(193, 205, 218)
+                    crate::ui::theme::colors::TEXT_SECONDARY_BRIGHT
                 }))
                 .truncate(),
             );
@@ -219,11 +225,17 @@ fn texture(ctx: &egui::Context, name: &str) -> Option<egui::TextureId> {
             "assets/studio"
         })
         .join(name);
-    let id = egui::Id::new(("asset-library", name));
-    if let Some(t) = ctx.data_mut(|d| d.get_temp::<egui::TextureHandle>(id)) {
-        return Some(t.id());
+    const CACHE_LIMIT: usize = 96;
+    let cache_id = egui::Id::new("asset-library-texture-cache");
+    let mut cache = ctx.data_mut(|data| data.get_temp::<LibraryTextureCache>(cache_id).unwrap_or_default());
+    cache.clock = cache.clock.wrapping_add(1);
+    if let Some((texture, last_used)) = cache.entries.get_mut(name) {
+        *last_used = cache.clock;
+        let texture_id = texture.id();
+        ctx.data_mut(|data| data.insert_temp(cache_id, cache));
+        return Some(texture_id);
     }
-    let img = image::open(path).ok()?.to_rgba8();
+    let img = crate::ui::embedded_assets::open_image(path).ok()?.to_rgba8();
     let size = [img.width() as usize, img.height() as usize];
     let t = ctx.load_texture(
         name,
@@ -231,7 +243,13 @@ fn texture(ctx: &egui::Context, name: &str) -> Option<egui::TextureId> {
         egui::TextureOptions::LINEAR,
     );
     let out = t.id();
-    ctx.data_mut(|d| d.insert_temp(id, t));
+    if cache.entries.len() >= CACHE_LIMIT {
+        if let Some(oldest) = cache.entries.iter().min_by_key(|(_, (_, used))| *used).map(|(key, _)| key.clone()) {
+            cache.entries.remove(&oldest);
+        }
+    }
+    cache.entries.insert(name.to_string(), (t, cache.clock));
+    ctx.data_mut(|data| data.insert_temp(cache_id, cache));
     Some(out)
 }
 
@@ -312,7 +330,7 @@ fn draw_header(
             egui::vec2(167.0, 42.0),
         ),
         7.0,
-        egui::Color32::from_rgb(255, 103, 24),
+        crate::ui::theme::colors::ACCENT_BRAND,
         egui::Stroke::NONE,
     );
     icons::render_svg_at(
@@ -342,7 +360,7 @@ fn draw_header(
                 ),
                 6.0,
                 egui::Color32::TRANSPARENT,
-                egui::Stroke::new(2.0_f32, egui::Color32::from_rgb(255, 107, 22)),
+                egui::Stroke::new(2.0_f32, crate::ui::theme::colors::ACCENT_BRAND),
             );
         }
         p.text(
@@ -351,7 +369,7 @@ fn draw_header(
             t,
             egui::FontId::proportional(12.0),
             if i == 0 {
-                egui::Color32::from_rgb(255, 145, 50)
+                crate::ui::theme::colors::ACCENT_BRAND_HOVER
             } else {
                 colors::TEXT_PRIMARY
             },
@@ -481,7 +499,7 @@ fn draw_folders(ui: &mut egui::Ui, rect: egui::Rect) {
                     egui::vec2(rect.width() - 15.0, if compact { 26.0 } else { 31.0 }),
                 ),
                 3.0,
-                egui::Color32::from_rgb(27, 35, 42),
+                crate::ui::theme::colors::BG_PANEL_DARK,
             );
             p.rect_filled(
                 egui::Rect::from_min_size(
@@ -489,7 +507,7 @@ fn draw_folders(ui: &mut egui::Ui, rect: egui::Rect) {
                     egui::vec2(3.0, if compact { 26.0 } else { 31.0 }),
                 ),
                 0.0,
-                egui::Color32::from_rgb(255, 107, 22),
+                crate::ui::theme::colors::ACCENT_BRAND,
             );
         }
         if disclosure {
@@ -601,11 +619,11 @@ fn draw_grid(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, narrow: b
         p.rect(
             card,
             7.0,
-            egui::Color32::from_rgb(15, 26, 33),
+            crate::ui::theme::colors::BG_PANEL_BASE,
             egui::Stroke::new(
                 if i == selected { 2.0_f32 } else { 1.0_f32 },
                 if i == selected {
-                    egui::Color32::from_rgb(255, 107, 22)
+                    crate::ui::theme::colors::ACCENT_BRAND
                 } else {
                     colors::BORDER_SUBTLE
                 },
@@ -683,7 +701,7 @@ fn draw_grid(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, narrow: b
                 egui::pos2(rect.right() - 14.0, rect.bottom() - 18.0),
             ),
             6.0,
-            egui::Color32::from_rgb(15, 26, 33),
+            crate::ui::theme::colors::BG_PANEL_BASE,
             egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
         );
         for (i, n) in ["Sample Project", "City Overview", "EPIC Trailer"]
@@ -732,7 +750,7 @@ fn draw_detail(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, narrow:
         "asset-detail-star".to_string(),
         icons::SVG_STAR,
         egui::vec2(18.0, 18.0),
-        egui::Color32::from_rgb(255, 145, 50),
+        crate::ui::theme::colors::ACCENT_BRAND_HOVER,
         egui::pos2(rect.right() - 98.0, rect.top() + 17.0),
     );
     icons::render_svg_at(
@@ -832,7 +850,7 @@ fn draw_detail(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, narrow:
                 egui::vec2(rect.width() - 174.0, 30.0),
             ),
             5.0,
-            egui::Color32::from_rgb(255, 103, 24),
+            crate::ui::theme::colors::ACCENT_BRAND,
         );
         p.text(
             egui::pos2(

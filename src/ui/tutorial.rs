@@ -325,7 +325,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
     let mut action: Option<StepAction> = None;
     let mut open_flag = true;
 
-    egui::Window::new(
+    crate::ui::modal::window(
         egui::RichText::new(format!("🎓  {}", step.title))
             .strong()
             .color(colors::TEXT_PRIMARY),
@@ -508,7 +508,7 @@ fn draw_chapter_select(app: &mut KagariApp, ctx: &egui::Context) {
     let mut close = false;
     let mut jump_to: Option<usize> = None;
 
-    egui::Window::new("📋 チュートリアル — 章一覧")
+    crate::ui::modal::window("Tutorial — Chapters")
         .default_width(480.0)
         .anchor(egui::Align2::RIGHT_TOP, [-16.0, 60.0])
         .collapsible(false)

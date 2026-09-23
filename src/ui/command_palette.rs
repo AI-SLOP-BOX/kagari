@@ -974,7 +974,7 @@ pub fn draw_command_palette(app: &mut KagariApp, ctx: &egui::Context) {
     }
 
     let mut open = app.show_command_palette;
-    egui::Window::new("🔍 Command Palette (Cmd+K)")
+    crate::ui::modal::window("Command Palette (Cmd+K)")
         .open(&mut open)
         .resizable(false)
         .collapsible(false)

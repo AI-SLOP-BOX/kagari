@@ -14,6 +14,8 @@ pub struct Prefs {
     #[serde(default = "default_disk_cache_gb")]
     pub disk_cache_gb: usize,
     #[serde(default)]
+    pub disk_cache_directory: String,
+    #[serde(default)]
     pub custom_workspaces: Vec<crate::ui::workspace_manager::SavedWorkspace>,
 }
 
@@ -30,6 +32,7 @@ impl Default for Prefs {
             audio_preview: true,
             adaptive_preview: true,
             disk_cache_gb: 50,
+            disk_cache_directory: String::new(),
             custom_workspaces: Vec::new(),
         }
     }
@@ -66,6 +69,14 @@ pub(crate) fn apply(app: &mut KagariApp, p: &Prefs) {
     crate::core::frame_cache::disk_cache::set_max_disk_bytes(
         p.disk_cache_gb as u64 * 1024 * 1024 * 1024,
     );
+    let cache_path = if p.disk_cache_directory.trim().is_empty() {
+        None
+    } else {
+        Some(std::path::PathBuf::from(&p.disk_cache_directory))
+    };
+    if let Err(error) = crate::core::frame_cache::disk_cache::set_cache_directory(cache_path) {
+        app.toasts.error(format!("Could not set disk cache folder: {error}"));
+    }
     app.history.set_max_history_entries(p.undo_steps);
     app.autosave.set_interval_secs(p.autosave_secs);
     app.audio_preview_enabled = p.audio_preview;
@@ -90,7 +101,7 @@ pub fn draw_preferences_dialog(app: &mut KagariApp, ctx: &egui::Context) {
 
     let mut open = true;
     let mut keep_open = true;
-    egui::Window::new("⚙ Preferences")
+    crate::ui::modal::window("Preferences")
         .open(&mut open)
         .collapsible(false)
         .resizable(true)
@@ -264,10 +275,21 @@ pub fn draw_preferences_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                             )
                             .clicked()
                         {
-                            app.toasts.info(
-                                "High-speed disk cache directory set to default scratch path",
-                            );
+                            let initial = if p.disk_cache_directory.is_empty() {
+                                crate::core::frame_cache::disk_cache::cache_directory()
+                            } else {
+                                std::path::PathBuf::from(&p.disk_cache_directory)
+                            };
+                            if let Some(path) = rfd::FileDialog::new().set_directory(initial).pick_folder() {
+                                p.disk_cache_directory = path.to_string_lossy().into_owned();
+                                app.toasts.info("Disk cache folder selected. Save preferences to apply it.");
+                            }
                         }
+                        ui.label(egui::RichText::new(if p.disk_cache_directory.is_empty() {
+                            crate::core::frame_cache::disk_cache::cache_directory().display().to_string()
+                        } else {
+                            p.disk_cache_directory.clone()
+                        }).small().color(colors::TEXT_MUTED));
                         if ui
                             .button("🗑 Empty Disk Cache...")
                             .on_hover_text("Purge all rendered cache files from disk")

@@ -10,7 +10,7 @@ pub fn draw_recovery_dialog(app: &mut KagariApp, ctx: &egui::Context) {
     }
 
     let mut open = app.show_recovery_dialog;
-    egui::Window::new("💥 クラッシュリカバリ")
+    crate::ui::modal::window("Crash Recovery")
         .open(&mut open)
         .resizable(false)
         .collapsible(false)

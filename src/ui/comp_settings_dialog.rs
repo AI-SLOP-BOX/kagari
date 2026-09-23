@@ -15,7 +15,7 @@ pub fn draw_comp_settings_dialog(app: &mut KagariApp, ctx: &egui::Context) {
         .unwrap_or_else(|| app.history.current().clone());
     let mut committed = false;
     let mut cancelled = false;
-    egui::Window::new(format!(
+    crate::ui::modal::window(format!(
         "⚙ Composition Settings ({})",
         crate::ui::shortcuts::format_shortcut("E", true, true, false)
     ))

@@ -1989,7 +1989,7 @@ fn draw_target_timeline(
                     egui::pos2(rect.left() + 16.0, rect.top() + header_h - 2.0),
                     egui::pos2(rect.left() + 116.0, rect.top() + header_h - 2.0),
                 ],
-                egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 107, 22)),
+                egui::Stroke::new(2.0, crate::ui::theme::colors::ACCENT_BRAND),
             );
             painter.text(
                 egui::pos2(rect.left() + 146.0, rect.top() + header_h * 0.5),
@@ -2011,7 +2011,7 @@ fn draw_target_timeline(
                     glyph,
                     egui::FontId::proportional(if compact { 13.0 } else { 16.0 }),
                     if index == 0 {
-                        egui::Color32::from_rgb(255, 107, 22)
+                        crate::ui::theme::colors::ACCENT_BRAND
                     } else {
                         muted
                     },
@@ -2167,7 +2167,7 @@ fn draw_target_timeline(
                     egui::pos2(play_x, ruler_y - 2.0),
                     egui::pos2(play_x, rect.bottom()),
                 ],
-                egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 107, 22)),
+                egui::Stroke::new(2.0, crate::ui::theme::colors::ACCENT_BRAND),
             );
             painter.rect_filled(
                 egui::Rect::from_min_size(
@@ -2175,7 +2175,7 @@ fn draw_target_timeline(
                     egui::vec2(12.0, 12.0),
                 ),
                 2.0,
-                egui::Color32::from_rgb(255, 107, 22),
+                crate::ui::theme::colors::ACCENT_BRAND,
             );
             *current_frame = (*current_frame).min(total_frames.saturating_sub(1));
             let _ = app;
@@ -2465,7 +2465,7 @@ fn timeline_reference_texture(ctx: &egui::Context, index: usize) -> Option<egui:
         _ => "assets/kagari_logo.webp",
     };
     let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(file);
-    let image = image::open(path).ok()?.to_rgba8();
+    let image = crate::ui::embedded_assets::open_image(path).ok()?.to_rgba8();
     let size = [image.width() as usize, image.height() as usize];
     let texture = ctx.load_texture(
         format!("reference-timeline-thumb-{index}"),

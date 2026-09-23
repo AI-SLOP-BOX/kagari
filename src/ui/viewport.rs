@@ -115,7 +115,7 @@ fn demo_reference_texture(ctx: &egui::Context) -> Option<egui::TextureHandle> {
     }
     let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("assets/studio/studio_city_reference.webp");
-    let image = image::open(path).ok()?.to_rgba8();
+    let image = crate::ui::embedded_assets::open_image(path).ok()?.to_rgba8();
     let size = [image.width() as usize, image.height() as usize];
     let texture = ctx.load_texture(
         "studio-demo-reference-city",
@@ -1219,6 +1219,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             egui::pos2(origin_x, origin_y),
             egui::vec2(draw_w, draw_h),
         );
+        app.viewer_draw_rect = Some(draw_rect);
 
         // ── Checkerboard transparency grid behind comp canvas (Batched single Mesh) ──
         {
@@ -3751,7 +3752,7 @@ fn draw_target_viewport(app: &mut KagariApp, ctx: &egui::Context) {
                 egui::Align2::LEFT_CENTER,
                 "00:00:04:12",
                 egui::FontId::proportional(17.0),
-                egui::Color32::from_rgb(255, 107, 22),
+                crate::ui::theme::colors::ACCENT_BRAND,
             );
             let compact = rect.width() < 600.0;
             let control_x = if compact {

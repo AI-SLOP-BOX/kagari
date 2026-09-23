@@ -10,7 +10,7 @@ pub fn draw_sequence_layers_dialog(app: &mut KagariApp, ctx: &egui::Context) {
     }
 
     let mut open = app.show_sequence_layers;
-    egui::Window::new("🔗 Sequence Layers")
+    crate::ui::modal::window("Sequence Layers")
         .open(&mut open)
         .collapsible(false)
         .resizable(false)

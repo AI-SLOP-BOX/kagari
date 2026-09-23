@@ -1,5 +1,89 @@
 use crate::core::mask::{Mask, MaskMode};
 use crate::KagariApp;
+
+fn set_vertices_at_frame(
+    track: &mut crate::core::property::Animatable<Vec<[f32; 2]>>,
+    frame: u32,
+    vertices: Vec<[f32; 2]>,
+) {
+    track.set_value_at_frame(frame, vertices);
+}
+
+fn add_vertex_to_track(track: &mut crate::core::property::Animatable<Vec<[f32; 2]>>) {
+    let append = |vertices: &mut Vec<[f32; 2]>| {
+        let last = vertices.last().copied().unwrap_or([100.0, 100.0]);
+        vertices.push([last[0] + 20.0, last[1] + 20.0]);
+    };
+    match track {
+        crate::core::property::Animatable::Constant(vertices) => append(vertices),
+        crate::core::property::Animatable::Animated(keyframes) => {
+            for keyframe in keyframes {
+                append(&mut keyframe.value);
+            }
+        }
+    }
+}
+
+fn remove_vertex_from_track(
+    track: &mut crate::core::property::Animatable<Vec<[f32; 2]>>,
+    index: usize,
+) {
+    match track {
+        crate::core::property::Animatable::Constant(vertices) => {
+            if vertices.len() > 3 && index < vertices.len() {
+                vertices.remove(index);
+            }
+        }
+        crate::core::property::Animatable::Animated(keyframes) => {
+            for keyframe in keyframes {
+                if keyframe.value.len() > 3 && index < keyframe.value.len() {
+                    keyframe.value.remove(index);
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::keyframe::{InterpolationType, Keyframe};
+    use crate::core::property::Animatable;
+
+    fn polygon(offset: f32) -> Vec<[f32; 2]> {
+        vec![[offset, 0.0], [offset + 10.0, 0.0], [offset + 10.0, 10.0], [offset, 10.0]]
+    }
+
+    #[test]
+    fn vertex_edit_adds_a_key_without_flattening_the_path() {
+        let mut track = Animatable::new_animated(vec![
+            Keyframe::new(0, polygon(0.0), InterpolationType::Linear),
+            Keyframe::new(10, polygon(100.0), InterpolationType::Linear),
+        ]);
+        let mut edited = track.evaluate(5);
+        edited[0] = [-5.0, 2.0];
+        set_vertices_at_frame(&mut track, 5, edited.clone());
+
+        let keyframes = track.keyframes().expect("animated path remains animated");
+        assert_eq!(keyframes.len(), 3);
+        assert_eq!(keyframes[1].frame, 5);
+        assert_eq!(keyframes[1].value, edited);
+        assert_eq!(track.evaluate(0), polygon(0.0));
+        assert_eq!(track.evaluate(10), polygon(100.0));
+    }
+
+    #[test]
+    fn topology_edits_keep_all_path_keyframes_at_the_same_vertex_count() {
+        let mut track = Animatable::new_animated(vec![
+            Keyframe::new(0, polygon(0.0), InterpolationType::Linear),
+            Keyframe::new(10, polygon(100.0), InterpolationType::Linear),
+        ]);
+        add_vertex_to_track(&mut track);
+        assert!(track.keyframes().unwrap().iter().all(|key| key.value.len() == 5));
+        remove_vertex_from_track(&mut track, 2);
+        assert!(track.keyframes().unwrap().iter().all(|key| key.value.len() == 4));
+    }
+}
 use eframe::egui;
 
 pub fn draw_mask_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
@@ -240,10 +324,7 @@ pub fn draw_mask_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                                                 let last =
                                                     verts.last().copied().unwrap_or([100.0, 100.0]);
                                                 verts.push([last[0] + 20.0, last[1] + 20.0]);
-                                                mask.path.vertices =
-                                                    crate::core::property::Animatable::new_constant(
-                                                        verts.clone(),
-                                                    );
+                                                add_vertex_to_track(&mut mask.path.vertices);
                                                 *project_changed_flag = true;
                                             }
                                             if ui
@@ -256,7 +337,10 @@ pub fn draw_mask_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
 
                                         let mut to_delete = None;
                                         let can_delete = verts.len() > 3;
-                                        for vi in 0..verts.len() {
+                                        egui::ScrollArea::vertical()
+                                            .max_height(160.0)
+                                            .show_rows(ui, 24.0, verts.len(), |ui, rows| {
+                                                for vi in rows {
                                             ui.horizontal(|ui| {
                                                 ui.label(format!("#{}:", vi + 1));
                                                 let mut x = verts[vi][0];
@@ -289,19 +373,18 @@ pub fn draw_mask_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                                                     to_delete = Some(vi);
                                                 }
                                             });
-                                        }
+                                                }
+                                            });
                                         if let Some(d) = to_delete {
                                             verts.remove(d);
-                                            mask.path.vertices =
-                                                crate::core::property::Animatable::new_constant(
-                                                    verts,
-                                                );
+                                            remove_vertex_from_track(&mut mask.path.vertices, d);
                                             *project_changed_flag = true;
                                         } else if path_vertices_changed {
-                                            mask.path.vertices =
-                                                crate::core::property::Animatable::new_constant(
-                                                    verts,
-                                                );
+                                            set_vertices_at_frame(
+                                                &mut mask.path.vertices,
+                                                app.playback.current_frame,
+                                                verts,
+                                            );
                                         }
                                     });
 

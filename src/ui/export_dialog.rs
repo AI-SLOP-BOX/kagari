@@ -344,7 +344,7 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
     }
 
     let mut open = app.export.show_export_dialog;
-    egui::Window::new("Export Composition Video")
+    crate::ui::modal::window("Export Composition Video")
         .open(&mut open)
         .collapsible(false)
         .resizable(false)

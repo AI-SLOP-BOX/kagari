@@ -106,7 +106,7 @@ fn draw_logo(
     narrow: bool,
 ) {
     if app.home_banner.is_none() {
-        if let Ok(img) = image::open(
+        if let Ok(img) = crate::ui::embedded_assets::open_image(
             std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets/kagari_logo.webp"),
         ) {
             app.home_banner = crate::ui::home_screen::load_logo_texture(ctx, img);
@@ -176,12 +176,12 @@ fn draw_nav(ui: &mut egui::Ui, sidebar: egui::Rect, r: egui::Rect, narrow: bool)
                     egui::pos2(sidebar.right(), y + 35.0),
                 ),
                 0.0,
-                egui::Color32::from_rgb(27, 35, 42),
+                crate::ui::theme::colors::BG_PANEL_DARK,
             );
             ui.painter().rect_filled(
                 egui::Rect::from_min_size(egui::pos2(9.0, y - 4.0), egui::vec2(4.0, 39.0)),
                 0.0,
-                egui::Color32::from_rgb(255, 111, 28),
+                crate::ui::theme::colors::ACCENT_BRAND,
             );
         }
         let x = if narrow {
@@ -195,9 +195,9 @@ fn draw_nav(ui: &mut egui::Ui, sidebar: egui::Rect, r: egui::Rect, narrow: bool)
             icon,
             egui::vec2(22.0, 22.0),
             if active {
-                egui::Color32::from_rgb(255, 145, 50)
+                crate::ui::theme::colors::ACCENT_BRAND_HOVER
             } else {
-                egui::Color32::from_rgb(193, 205, 218)
+                crate::ui::theme::colors::TEXT_SECONDARY_BRIGHT
             },
             egui::pos2(x, y + 4.0),
         );
@@ -210,7 +210,7 @@ fn draw_nav(ui: &mut egui::Ui, sidebar: egui::Rect, r: egui::Rect, narrow: bool)
                 if active {
                     colors::TEXT_PRIMARY
                 } else {
-                    egui::Color32::from_rgb(193, 205, 218)
+                    crate::ui::theme::colors::TEXT_SECONDARY_BRIGHT
                 },
             );
         }
@@ -225,7 +225,7 @@ fn asset(ctx: &egui::Context, name: &str) -> Option<egui::TextureId> {
     if let Some(t) = ctx.data_mut(|d| d.get_temp::<egui::TextureHandle>(id)) {
         return Some(t.id());
     }
-    let img = image::open(path).ok()?.to_rgba8();
+    let img = crate::ui::embedded_assets::open_image(path).ok()?.to_rgba8();
     let size = [img.width() as usize, img.height() as usize];
     let t = ctx.load_texture(
         name,
@@ -271,7 +271,7 @@ fn draw_shots(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect) {
                 ),
                 6.0,
                 egui::Color32::from_rgb(20, 32, 41),
-                egui::Stroke::new(2.0_f32, egui::Color32::from_rgb(255, 107, 22)),
+                egui::Stroke::new(2.0_f32, crate::ui::theme::colors::ACCENT_BRAND),
             );
         }
         if let Some(id) = asset(
@@ -368,7 +368,7 @@ fn draw_viewer(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, lower_t
         egui::Align2::LEFT_CENTER,
         "00:00:12:17",
         egui::FontId::proportional(16.0),
-        egui::Color32::from_rgb(255, 107, 22),
+        crate::ui::theme::colors::ACCENT_BRAND,
     );
     for (i, icon) in [
         crate::ui::icons::SVG_JUMP_BACK,
@@ -470,7 +470,7 @@ fn draw_viewer(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect, lower_t
                 ty + if compact { 103.0 } else { 165.0 },
             ),
         ],
-        egui::Stroke::new(2.0_f32, egui::Color32::from_rgb(255, 107, 22)),
+        egui::Stroke::new(2.0_f32, crate::ui::theme::colors::ACCENT_BRAND),
     );
 }
 
@@ -507,7 +507,7 @@ fn draw_color_inspector(app: &mut KagariApp, ui: &mut egui::Ui, rect: egui::Rect
             egui::pos2(rect.left() + 10.0, rect.top() + 45.0),
             egui::pos2(rect.left() + 105.0, rect.top() + 45.0),
         ],
-        egui::Stroke::new(2.0_f32, egui::Color32::from_rgb(255, 107, 22)),
+        egui::Stroke::new(2.0_f32, crate::ui::theme::colors::ACCENT_BRAND),
     );
     p.text(
         egui::pos2(rect.left() + 18.0, rect.top() + 78.0),
@@ -647,7 +647,7 @@ fn draw_color_inspector(app: &mut KagariApp, ui: &mut egui::Ui, rect: egui::Rect
             egui::pos2(rect.left() + 155.0 + (i as f32 * 19.0) % 150.0, y),
             5.0,
             if i == 1 {
-                egui::Color32::from_rgb(255, 107, 22)
+                crate::ui::theme::colors::ACCENT_BRAND
             } else {
                 egui::Color32::from_rgb(210, 220, 230)
             },
@@ -805,7 +805,7 @@ fn draw_lower(ui: &mut egui::Ui, _ctx: &egui::Context, rect: egui::Rect, narrow:
         p.rect(
             b,
             7.0,
-            egui::Color32::from_rgb(15, 26, 33),
+            crate::ui::theme::colors::BG_PANEL_BASE,
             egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
         );
         p.text(
