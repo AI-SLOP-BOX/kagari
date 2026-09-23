@@ -693,6 +693,18 @@ impl Default for KagariApp {
 
 #[cfg(feature = "gui")]
 impl KagariApp {
+    pub fn has_blocking_dialog(&self) -> bool {
+        self.export.show_export_dialog
+            || self.show_recovery_dialog
+            || self.show_comp_settings
+            || self.show_shortcuts_dialog
+            || self.show_precompose_dialog
+            || self.show_command_palette
+            || self.show_welcome
+            || self.show_new_comp_dialog
+            || self.show_preferences
+    }
+
     pub fn master_dsp_params(&self) -> crate::core::audio_engine::MasterDspParams {
         if !self.master_dsp_enabled || self.master_dsp_bypass {
             return crate::core::audio_engine::MasterDspParams::bypass();
@@ -1587,7 +1599,7 @@ impl KagariApp {
                 && !i.modifiers.shift
                 && i.key_pressed(egui::Key::K)
         });
-        if cmd_k_pressed {
+        if cmd_k_pressed && (!self.has_blocking_dialog() || self.show_command_palette) {
             self.show_command_palette = !self.show_command_palette;
             if self.show_command_palette {
                 self.command_palette_search.clear();
@@ -1639,6 +1651,38 @@ mod tests {
         drive_frames(&mut app, 2);
         assert!(!app.drag_active(), "no transaction left open");
         assert_eq!(app.playback.current_frame, 0, "playhead must not drift");
+    }
+
+    #[test]
+    fn blocking_dialog_state_tracks_every_modal_surface() {
+        let mut app = KagariApp::default();
+        app.show_welcome = false;
+        assert!(!app.has_blocking_dialog());
+
+        app.show_preferences = true;
+        assert!(app.has_blocking_dialog());
+        app.show_preferences = false;
+        app.show_command_palette = true;
+        assert!(app.has_blocking_dialog());
+        app.show_command_palette = false;
+        app.export.show_export_dialog = true;
+        assert!(app.has_blocking_dialog());
+        app.export.show_export_dialog = false;
+
+        app.show_recovery_dialog = true;
+        assert!(app.has_blocking_dialog());
+        app.show_recovery_dialog = false;
+        app.show_comp_settings = true;
+        assert!(app.has_blocking_dialog());
+        app.show_comp_settings = false;
+        app.show_shortcuts_dialog = true;
+        assert!(app.has_blocking_dialog());
+        app.show_shortcuts_dialog = false;
+        app.show_precompose_dialog = true;
+        assert!(app.has_blocking_dialog());
+        app.show_precompose_dialog = false;
+        app.show_new_comp_dialog = true;
+        assert!(app.has_blocking_dialog());
     }
 
     #[test]

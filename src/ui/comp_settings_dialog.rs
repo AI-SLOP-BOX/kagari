@@ -15,7 +15,7 @@ pub fn draw_comp_settings_dialog(app: &mut KagariApp, ctx: &egui::Context) {
         .unwrap_or_else(|| app.history.current().clone());
     let mut committed = false;
     let mut cancelled = false;
-    crate::ui::modal::window(format!(
+    crate::ui::modal::dialog(format!(
         "⚙ Composition Settings ({})",
         crate::ui::shortcuts::format_shortcut("E", true, true, false)
     ))
@@ -65,13 +65,13 @@ pub fn draw_comp_settings_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                         comp.fps = 24;
                         ui.ctx().data_mut(|d| d.insert_temp(preset_id, preset_choice));
                     }
-                    if ui.selectable_value(&mut preset_choice, 3, "📱 TikTok / Shorts / Reels (1080 x 1920 9:16)").clicked() {
+                    if ui.selectable_value(&mut preset_choice, 3, "TikTok / Shorts / Reels (1080 x 1920 9:16)").clicked() {
                         comp.width = 1080;
                         comp.height = 1920;
                         comp.fps = 30;
                         ui.ctx().data_mut(|d| d.insert_temp(preset_id, preset_choice));
                     }
-                    if ui.selectable_value(&mut preset_choice, 4, "🔳 Instagram Feed (1080 x 1080 1:1)").clicked() {
+                    if ui.selectable_value(&mut preset_choice, 4, "Instagram Feed (1080 x 1080 1:1)").clicked() {
                         comp.width = 1080;
                         comp.height = 1080;
                         comp.fps = 30;
@@ -81,20 +81,20 @@ pub fn draw_comp_settings_dialog(app: &mut KagariApp, ctx: &egui::Context) {
 
             ui.add_space(6.0);
             ui.group(|ui| {
-                ui.label(egui::RichText::new("📱 One-Tap Smart SNS Reframer").strong().color(colors::ACCENT_CYAN));
+                ui.label(egui::RichText::new("One-Tap Smart SNS Reframer").strong().color(colors::ACCENT_CYAN));
                 ui.small("Auto-remap layer positions to new Aspect Ratio:");
                 ui.horizontal(|ui| {
-                    if custom_widgets::ae_button(ui, "📱 Shorts 9:16").on_hover_text("Vertical (1080 x 1920) for TikTok/Reels/Shorts").clicked() {
+                    if custom_widgets::ae_button(ui, "Shorts 9:16").on_hover_text("Vertical (1080 x 1920) for TikTok/Reels/Shorts").clicked() {
                         let old_w = comp.width;
                         let old_h = comp.height;
                         comp.resize_and_remap(1080, 1920, old_w, old_h);
                     }
-                    if custom_widgets::ae_button(ui, "🔳 Square 1:1").on_hover_text("Square (1080 x 1080) for Instagram Feed").clicked() {
+                    if custom_widgets::ae_button(ui, "Square 1:1").on_hover_text("Square (1080 x 1080) for Instagram Feed").clicked() {
                         let old_w = comp.width;
                         let old_h = comp.height;
                         comp.resize_and_remap(1080, 1080, old_w, old_h);
                     }
-                    if custom_widgets::ae_button(ui, "🎬 Cinema 21:9").on_hover_text("Ultrawide Cinematic (2560 x 1080)").clicked() {
+                    if custom_widgets::ae_button(ui, "Cinema 21:9").on_hover_text("Ultrawide Cinematic (2560 x 1080)").clicked() {
                         let old_w = comp.width;
                         let old_h = comp.height;
                         comp.resize_and_remap(2560, 1080, old_w, old_h);
@@ -139,7 +139,7 @@ pub fn draw_comp_settings_dialog(app: &mut KagariApp, ctx: &egui::Context) {
             });
 
             ui.add_space(4.0);
-            ui.collapsing("🌈 Blending", |ui| {
+            ui.collapsing("Blending", |ui| {
                 let before = comp.blend_linear;
                 ui.checkbox(&mut comp.blend_linear,
                     "Blend colors in linear light (1.0 gamma)")
@@ -154,7 +154,7 @@ pub fn draw_comp_settings_dialog(app: &mut KagariApp, ctx: &egui::Context) {
             });
 
             ui.add_space(4.0);
-            ui.collapsing("🎨 Color Management & Working Space", |ui| {
+            ui.collapsing("Color Management & Working Space", |ui| {
                 let color_space_id = ui.make_persistent_id("ae_color_space_choice");
                 let mut cs_idx: usize = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(color_space_id, || 0));
                 let cs_label = match cs_idx {
@@ -191,16 +191,16 @@ pub fn draw_comp_settings_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                 });
             });
             ui.horizontal(|ui| {
-                ui.label("🌀 Motion Blur Shutter Angle:");
+                ui.label("Motion Blur Shutter Angle:");
                 ui.add(egui::Slider::new(&mut comp.motion_blur_shutter_angle, 0.0..=720.0).suffix("°"));
             });
             ui.horizontal(|ui| {
-                ui.label("🌀 Motion Blur Shutter Phase:");
+                ui.label("Motion Blur Shutter Phase:");
                 ui.add(egui::Slider::new(&mut comp.motion_blur_shutter_phase, -360.0..=360.0).suffix("°"))
                     .on_hover_text("Shifts the shutter window relative to the frame time");
             });
             ui.horizontal(|ui| {
-                ui.label("🎨 Background Color:");
+                ui.label("Background Color:");
                 let c = &mut comp.background_color;
                 let mut col = egui::Color32::from_rgba_premultiplied(
                     (c[0].clamp(0.0, 1.0) * 255.0) as u8,

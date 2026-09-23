@@ -8,7 +8,7 @@ pub fn draw_shortcuts_dialog(app: &mut KagariApp, ctx: &egui::Context) {
         return;
     }
 
-    crate::ui::modal::window("Keyboard Shortcuts")
+    crate::ui::modal::dialog("Keyboard Shortcuts")
         .open(&mut show)
         .resizable(true)
         .default_size(egui::vec2(520.0, 420.0))
@@ -28,7 +28,7 @@ pub fn draw_shortcuts_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                         let shortcuts = [
                             (
                                 "Cmd + K / Ctrl + K",
-                                "✨ Open Command Palette (Fuzzy Search Everything)",
+                                "Open Command Palette (Fuzzy Search Everything)",
                             ),
                             ("Tab / Shift+Tab", "Cycle Selected Layer Down / Up"),
                             ("0 (Numpad)", "RAM Preview (Force Work Area Pre-Render)"),
@@ -38,7 +38,7 @@ pub fn draw_shortcuts_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                             ),
                             (
                                 "Shift + Drag",
-                                "🎯 15° Rotation Snap / Orthogonal Axis Movement",
+                                "15° Rotation Snap / Orthogonal Axis Movement",
                             ),
                             ("Cmd + Y", "Create New Solid Layer"),
                             ("Cmd + Alt + Shift + T", "Create New Text Layer"),

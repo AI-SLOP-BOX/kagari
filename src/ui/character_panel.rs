@@ -135,7 +135,7 @@ pub fn draw_character_panel(
 
                         // Variable Font Axes
                         ui.separator();
-                        ui.collapsing("🧬 Variable Font Axes", |ui| {
+                        ui.collapsing("Variable Font Axes", |ui| {
                             let mut vf_weight = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("vf_weight")).unwrap_or(400.0));
                             let mut vf_width = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("vf_width")).unwrap_or(100.0));
                             let mut vf_slant = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("vf_slant")).unwrap_or(0.0));
@@ -221,7 +221,7 @@ pub fn draw_character_panel(
                     ui.group(|ui| {
                         let has_stack = layer.text_animator_stack.is_some();
                         ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("📚 Animators Stack").strong().color(colors::ACCENT_CYAN));
+                            ui.label(egui::RichText::new("Animators Stack").strong().color(colors::ACCENT_CYAN));
                             if ui.button("+ Add Animator").on_hover_text("Add another layered text animator").clicked() {
                                 if layer.text_animator_stack.is_none() {
                                     layer.text_animator_stack = Some(crate::core::text_animator_advanced::AnimatorStack::default());
@@ -238,8 +238,8 @@ pub fn draw_character_panel(
                         });
 
                         ui.horizontal_wrapped(|ui| {
-                            ui.label(egui::RichText::new("✨ Presets:").small().color(colors::TEXT_SECONDARY));
-                            if ui.small_button("⌨ Typewriter").clicked() {
+                            ui.label(egui::RichText::new("Presets:").small().color(colors::TEXT_SECONDARY));
+                            if ui.small_button("Typewriter").clicked() {
                                 let mut anim = crate::core::text_animator_advanced::TextAnimatorAdvanced::default();
                                 anim.opacity = 0.0;
                                 anim.unit = crate::core::text_animator_advanced::SelectorUnit::Characters;
@@ -247,7 +247,7 @@ pub fn draw_character_panel(
                                 if let Some(ref mut st) = layer.text_animator_stack { st.animators.push(anim); }
                                 project_changed = true;
                             }
-                            if ui.small_button("🌊 Char Wave").clicked() {
+                            if ui.small_button("Char Wave").clicked() {
                                 let mut anim = crate::core::text_animator_advanced::TextAnimatorAdvanced::default();
                                 anim.position = [0.0, -30.0];
                                 anim.unit = crate::core::text_animator_advanced::SelectorUnit::Characters;
@@ -255,7 +255,7 @@ pub fn draw_character_panel(
                                 if let Some(ref mut st) = layer.text_animator_stack { st.animators.push(anim); }
                                 project_changed = true;
                             }
-                            if ui.small_button("🐇 Word Hop").clicked() {
+                            if ui.small_button("Word Hop").clicked() {
                                 let mut anim = crate::core::text_animator_advanced::TextAnimatorAdvanced::default();
                                 anim.position = [0.0, -50.0];
                                 anim.unit = crate::core::text_animator_advanced::SelectorUnit::Words;
@@ -269,9 +269,9 @@ pub fn draw_character_panel(
                             let mut to_remove = None;
                             for (ai, anim) in stack.animators.iter_mut().enumerate() {
                                 ui.push_id(ai, |ui| {
-                                    ui.collapsing(format!("🎛 Animator {}", ai + 1), |ui| {
+                                    ui.collapsing(format!("Animator {}", ai + 1), |ui| {
                                         ui.horizontal(|ui| {
-                                            if ui.checkbox(&mut anim.enabled, "Enabled").clicked() { project_changed = true; }
+                                            if ui.checkbox(&mut anim.enabled, "Enabled").changed() { project_changed = true; }
                                             ui.label("Based On:");
                                             let mut unit_idx = match anim.unit {
                                                 crate::core::text_animator_advanced::SelectorUnit::Characters => 0,
@@ -289,11 +289,11 @@ pub fn draw_character_panel(
                                                     if ui.selectable_value(&mut unit_idx, 1, "Words").clicked() { anim.unit = crate::core::text_animator_advanced::SelectorUnit::Words; project_changed = true; }
                                                     if ui.selectable_value(&mut unit_idx, 2, "Lines").clicked() { anim.unit = crate::core::text_animator_advanced::SelectorUnit::Lines; project_changed = true; }
                                                 });
-                                            if ui.small_button("🗑").clicked() { to_remove = Some(ai); }
+                                            if ui.small_button("×").clicked() { to_remove = Some(ai); }
                                         });
 
                                         // Range Selector
-                                        ui.collapsing("🎯 Range Selector", |ui| {
+                                        ui.collapsing("Range Selector", |ui| {
                                             let sel = &mut anim.selector;
                                             ui.horizontal(|ui| {
                                                 ui.label("Start / End:");
@@ -342,12 +342,12 @@ pub fn draw_character_panel(
                                                     });
                                             });
                                             ui.horizontal(|ui| {
-                                                if ui.checkbox(&mut sel.random_order, "🎲 Randomize Order").clicked() { project_changed = true; }
+                                                if ui.checkbox(&mut sel.random_order, "Randomize Order").changed() { project_changed = true; }
                                             });
                                         });
 
                                         // Property targets
-                                        ui.collapsing("📐 Transform & Advanced Properties", |ui| {
+                                        ui.collapsing("Transform & Advanced Properties", |ui| {
                                             ui.horizontal(|ui| {
                                                 ui.label("Position:");
                                                 if ui.add(egui::DragValue::new(&mut anim.position[0]).prefix("X: ")).changed() { project_changed = true; }
@@ -383,9 +383,9 @@ pub fn draw_character_panel(
 
                     ui.add_space(6.0);
                     ui.group(|ui| {
-                        ui.label(egui::RichText::new("✨ One-Tap Motion Presets").strong().color(colors::ACCENT_CYAN));
+                        ui.label(egui::RichText::new("One-Tap Motion Presets").strong().color(colors::ACCENT_CYAN));
                         ui.horizontal(|ui| {
-                            if custom_widgets::ae_button(ui, "⌨ Typewriter").on_hover_text("Reveal characters one by one").clicked() {
+                            if custom_widgets::ae_button(ui, "Typewriter").on_hover_text("Reveal characters one by one").clicked() {
                                 let mut anim = crate::core::text_animator::TextAnimatorSettings::default();
                                 anim.enabled = true;
                                 anim.opacity = 0.0;
@@ -395,7 +395,7 @@ pub fn draw_character_panel(
                                 layer.text_animator = Some(anim);
                                 project_changed = true;
                             }
-                            if custom_widgets::ae_button(ui, "💥 Word Pop").on_hover_text("Bounce text up character by character").clicked() {
+                            if custom_widgets::ae_button(ui, "Word Pop").on_hover_text("Bounce text up character by character").clicked() {
                                 let mut anim = crate::core::text_animator::TextAnimatorSettings::default();
                                 anim.enabled = true;
                                 anim.position_offset = [0.0, 50.0];
@@ -406,7 +406,7 @@ pub fn draw_character_panel(
                             }
                         });
                         ui.horizontal(|ui| {
-                            if custom_widgets::ae_button(ui, "🌊 Wave Tracking").on_hover_text("Expand text letter-spacing smoothly").clicked() {
+                            if custom_widgets::ae_button(ui, "Wave Tracking").on_hover_text("Expand text letter-spacing smoothly").clicked() {
                                 let mut anim = crate::core::text_animator::TextAnimatorSettings::default();
                                 anim.enabled = true;
                                 anim.tracking = 25.0;
@@ -414,7 +414,7 @@ pub fn draw_character_panel(
                                 layer.text_animator = Some(anim);
                                 project_changed = true;
                             }
-                            if custom_widgets::ae_button(ui, "🌟 Neon Pulse").on_hover_text("Pulsating opacity and tracking wave").clicked() {
+                            if custom_widgets::ae_button(ui, "Neon Pulse").on_hover_text("Pulsating opacity and tracking wave").clicked() {
                                 let mut anim = crate::core::text_animator::TextAnimatorSettings::default();
                                 anim.enabled = true;
                                 anim.opacity = 0.2;

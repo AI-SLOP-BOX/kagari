@@ -21,7 +21,7 @@ pub fn draw_new_comp_dialog(app: &mut KagariApp, ctx: &egui::Context) {
     let mut open = true;
     let mut keep_open = true;
     let draft_id = egui::Id::new("ae_newcomp_draft");
-    crate::ui::modal::window("New Composition")
+    crate::ui::modal::dialog("New Composition")
         .open(&mut open)
         .collapsible(false)
         .resizable(false)

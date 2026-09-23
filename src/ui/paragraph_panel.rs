@@ -203,7 +203,7 @@ pub fn draw_paragraph_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                 .small()
                 .color(colors::TEXT_SECONDARY),
         );
-        if ui.checkbox(&mut stroke_enabled, "").clicked() {
+        if ui.checkbox(&mut stroke_enabled, "").changed() {
             if stroke_enabled {
                 fmt.stroke_color = Some([0.0, 0.0, 0.0, 1.0]);
             } else {

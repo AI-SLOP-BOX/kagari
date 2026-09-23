@@ -29,10 +29,10 @@ pub fn draw_layer_styles(app: &mut KagariApp, ui: &mut egui::Ui) {
 
     egui::ScrollArea::vertical().show(ui, |ui| {
         // ── Drop Shadow ──
-        ui.collapsing("👤 Drop Shadow", |ui| {
+        ui.collapsing("Drop Shadow", |ui| {
             if ui
                 .checkbox(&mut style.drop_shadow.enabled, "Enabled")
-                .clicked()
+                .changed()
             {
                 changed = true;
             }
@@ -166,10 +166,10 @@ pub fn draw_layer_styles(app: &mut KagariApp, ui: &mut egui::Ui) {
         });
 
         // ── Inner Shadow ──
-        ui.collapsing("🕳 Inner Shadow", |ui| {
+        ui.collapsing("Inner Shadow", |ui| {
             if ui
                 .checkbox(&mut style.inner_shadow.enabled, "Enabled")
-                .clicked()
+                .changed()
             {
                 changed = true;
             }
@@ -250,10 +250,10 @@ pub fn draw_layer_styles(app: &mut KagariApp, ui: &mut egui::Ui) {
         });
 
         // ── Outer Glow ──
-        ui.collapsing("🌟 Outer Glow", |ui| {
+        ui.collapsing("Outer Glow", |ui| {
             if ui
                 .checkbox(&mut style.outer_glow.enabled, "Enabled")
-                .clicked()
+                .changed()
             {
                 changed = true;
             }
@@ -323,10 +323,10 @@ pub fn draw_layer_styles(app: &mut KagariApp, ui: &mut egui::Ui) {
         });
 
         // ── Inner Glow ──
-        ui.collapsing("💡 Inner Glow", |ui| {
+        ui.collapsing("Inner Glow", |ui| {
             if ui
                 .checkbox(&mut style.inner_glow.enabled, "Enabled")
-                .clicked()
+                .changed()
             {
                 changed = true;
             }
@@ -384,8 +384,8 @@ pub fn draw_layer_styles(app: &mut KagariApp, ui: &mut egui::Ui) {
         });
 
         // ── Satin ──
-        ui.collapsing("🧵 Satin", |ui| {
-            if ui.checkbox(&mut style.satin.enabled, "Enabled").clicked() {
+        ui.collapsing("Satin", |ui| {
+            if ui.checkbox(&mut style.satin.enabled, "Enabled").changed() {
                 changed = true;
             }
             let s = &mut style.satin;
@@ -465,10 +465,10 @@ pub fn draw_layer_styles(app: &mut KagariApp, ui: &mut egui::Ui) {
         });
 
         // ── Bevel / Emboss ──
-        ui.collapsing("🪨 Bevel / Emboss", |ui| {
+        ui.collapsing("Bevel / Emboss", |ui| {
             if ui
                 .checkbox(&mut style.bevel_emboss.enabled, "Enabled")
-                .clicked()
+                .changed()
             {
                 changed = true;
             }
@@ -566,8 +566,8 @@ pub fn draw_layer_styles(app: &mut KagariApp, ui: &mut egui::Ui) {
         });
 
         // ── Stroke ──
-        ui.collapsing("✏ Stroke", |ui| {
-            if ui.checkbox(&mut style.stroke.enabled, "Enabled").clicked() {
+        ui.collapsing("Stroke", |ui| {
+            if ui.checkbox(&mut style.stroke.enabled, "Enabled").changed() {
                 changed = true;
             }
             ui.horizontal(|ui| {
@@ -644,10 +644,10 @@ pub fn draw_layer_styles(app: &mut KagariApp, ui: &mut egui::Ui) {
         });
 
         // ── Gradient Overlay ──
-        ui.collapsing("🌈 Gradient Overlay", |ui| {
+        ui.collapsing("Gradient Overlay", |ui| {
             if ui
                 .checkbox(&mut style.gradient_overlay.enabled, "Enabled")
-                .clicked()
+                .changed()
             {
                 changed = true;
             }
@@ -719,10 +719,10 @@ pub fn draw_layer_styles(app: &mut KagariApp, ui: &mut egui::Ui) {
         });
 
         // ── Color Overlay ──
-        ui.collapsing("🎨 Color Overlay", |ui| {
+        ui.collapsing("Color Overlay", |ui| {
             if ui
                 .checkbox(&mut style.color_overlay.enabled, "Enabled")
-                .clicked()
+                .changed()
             {
                 changed = true;
             }

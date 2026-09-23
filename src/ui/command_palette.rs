@@ -974,7 +974,10 @@ pub fn draw_command_palette(app: &mut KagariApp, ctx: &egui::Context) {
     }
 
     let mut open = app.show_command_palette;
-    crate::ui::modal::window("Command Palette (Cmd+K)")
+    crate::ui::modal::dialog(format!(
+        "Command Palette ({})",
+        crate::ui::shortcuts::format_shortcut("K", true, false, false)
+    ))
         .open(&mut open)
         .resizable(false)
         .collapsible(false)
@@ -982,7 +985,7 @@ pub fn draw_command_palette(app: &mut KagariApp, ctx: &egui::Context) {
         .fixed_size(egui::vec2(520.0, 340.0))
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("🔍").size(18.0));
+                ui.label(egui::RichText::new("Search").small());
                 let search_resp = ui.add(
                     egui::TextEdit::singleline(&mut app.command_palette_search)
                         .hint_text("Type a command or effect... (e.g. Blur, Text, Export)")
@@ -1090,7 +1093,7 @@ pub fn draw_command_palette(app: &mut KagariApp, ctx: &egui::Context) {
                                         ui.with_layout(
                                             egui::Layout::right_to_left(egui::Align::Center),
                                             |ui| {
-                                                ui.weak(cmd.shortcut_hint);
+                                                ui.weak(crate::ui::shortcuts::format_platform_shortcut_hint(cmd.shortcut_hint));
                                             },
                                         );
                                     }

@@ -8,7 +8,10 @@ pub fn draw_precompose_dialog(app: &mut KagariApp, ctx: &egui::Context) {
     }
 
     let mut open = app.show_precompose_dialog;
-    crate::ui::modal::window("Pre-compose (Cmd+Shift+C)")
+    crate::ui::modal::dialog(format!(
+        "Pre-compose ({})",
+        crate::ui::shortcuts::format_shortcut("C", true, true, false)
+    ))
         .open(&mut open)
         .resizable(false)
         .collapsible(false)

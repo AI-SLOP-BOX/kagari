@@ -66,7 +66,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
         })
         .frame(if reference_demo {
             egui::Frame::none()
-                .fill(egui::Color32::from_rgb(13, 22, 29))
+                .fill(crate::ui::theme::colors::BG_DARKEST)
                 .inner_margin(egui::Margin::symmetric(21.0, 0.0))
         } else {
             egui::Frame::default().inner_margin(egui::Margin::symmetric(8.0, 0.0))
@@ -570,7 +570,7 @@ fn draw_effect_controls(
                 let total_effects = layer.effects.len();
 
                 for (e_idx, fx) in layer.effects.iter_mut().enumerate() {
-                    ui.collapsing(format!("fx {} - {}", e_idx + 1, fx.name), |ui| {
+                    let effect_row = ui.collapsing(format!("fx {} - {}", e_idx + 1, fx.name), |ui| {
                         ui.horizontal(|ui| {
                             let was_enabled = fx.enabled;
                             let mut next_enabled = was_enabled;
@@ -638,6 +638,32 @@ fn draw_effect_controls(
                                     app.toasts.error(format!("Failed to save preset: {}", e));
                                 }
                             }
+                        }
+                    });
+                    effect_row.header_response.context_menu(|ui| {
+                        if ui.button(if fx.enabled { "Disable Effect" } else { "Enable Effect" }).clicked() {
+                            fx_toggle = Some((e_idx, !fx.enabled));
+                            ui.close_menu();
+                        }
+                        if ui.button("Duplicate Effect").clicked() {
+                            fx_dup = Some(e_idx);
+                            ui.close_menu();
+                        }
+                        if e_idx > 0 && ui.button("Move Up").clicked() {
+                            fx_move_up = Some(e_idx);
+                            ui.close_menu();
+                        }
+                        if e_idx + 1 < total_effects && ui.button("Move Down").clicked() {
+                            fx_move_down = Some(e_idx);
+                            ui.close_menu();
+                        }
+                        if ui.button("Reset to Defaults").clicked() {
+                            fx_reset = Some(e_idx);
+                            ui.close_menu();
+                        }
+                        if ui.button("Delete Effect").clicked() {
+                            fx_del = Some(e_idx);
+                            ui.close_menu();
                         }
                     });
 
@@ -770,7 +796,7 @@ fn draw_effect_controls(
         // ── Preset loading (discrete actions) ──
         ui.add_space(4.0);
         ui.separator();
-        if ui.button("📂 Load Preset from File...").clicked() {
+        if ui.button("Load Preset from File...").clicked() {
             if let Some(path) = rfd::FileDialog::new()
                 .add_filter("Effect Preset", &["json", "kagari-preset"])
                 .pick_file()

@@ -426,7 +426,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
 
                 // ── Ruler context menu (AE parity) ──
                 ruler_response.context_menu(|ui| {
-                    if ui.button("📍 Add Composition Marker at Playhead").clicked() {
+                    if ui.button("Add Composition Marker at Playhead").clicked() {
                         comp.markers.push(crate::core::timeline::TimelineMarker {
                             frame: *current_frame,
                             label: format!("Marker {}", comp.markers.len() + 1),
@@ -436,13 +436,19 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
                         app.toasts.info(format!("Comp marker at frame {}", current_frame));
                         ui.close_menu();
                     }
-                    if !comp.markers.is_empty() && ui.button("🧹 Clear All Composition Markers").clicked() {
+                    if !comp.markers.is_empty() && ui.button("Clear All Composition Markers").clicked() {
                         comp.markers.clear();
                         project_changed = true;
                         ui.close_menu();
                     }
+                    if let Some(layer_idx) = app.selection.selected_layer_idx {
+                        if ui.button("Split Selected Layer at Playhead").clicked() {
+                            pending_split_layer = Some(layer_idx);
+                            ui.close_menu();
+                        }
+                    }
                     ui.separator();
-                    if ui.button("🔍 Zoom to Work Area").clicked() {
+                    if ui.button("Zoom to Work Area").clicked() {
                         let w_in = app.playback.work_area_in.unwrap_or(0);
                         let w_out = app.playback.work_area_out.unwrap_or(total_frames).max(w_in + 1);
                         let span = (w_out - w_in).max(10);
@@ -450,7 +456,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
                         app.timeline_view_start = w_in;
                         ui.close_menu();
                     }
-                    if ui.button("⏱ Set Comp Duration to Work Area End").clicked() {
+                    if ui.button("Set Comp Duration to Work Area End").clicked() {
                         let w_out = app.playback.work_area_out.unwrap_or(total_frames);
                         if w_out > 0 && w_out <= total_frames {
                             pending_duration = Some(w_out);
@@ -458,7 +464,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
                         }
                         ui.close_menu();
                     }
-                    if ui.button("✂ Trim Comp to Work Area").on_hover_text("Set comp duration to work area and trim layers beyond it").clicked() {
+                    if ui.button("Trim Comp to Work Area").on_hover_text("Set comp duration to work area and trim layers beyond it").clicked() {
                         let w_in = app.playback.work_area_in.unwrap_or(0);
                         let w_out = app.playback.work_area_out.unwrap_or(total_frames);
                         if w_out > w_in {
@@ -468,7 +474,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
                         }
                         ui.close_menu();
                     }
-                    if ui.button("↺ Reset Work Area to Full Comp").clicked() {
+                    if ui.button("Reset Work Area to Full Comp").clicked() {
                         app.playback.work_area_in = None;
                         app.playback.work_area_out = None;
                         ui.close_menu();
@@ -484,7 +490,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
                     app.playback.work_area_out = Some(*current_frame);
                     app.toasts.info(format!("Set Work Area End at frame {}", current_frame));
                 }
-                // 🔍 Timeline Zoom Shortcuts (= / -), anchored on the playhead so the
+                // Timeline Zoom Shortcuts (= / -), anchored on the playhead so the
                 // frame under it stays visually in place while zooming.
                 {
                     // Returns the new window start that keeps the playhead stationary.
@@ -779,7 +785,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         project_changed = true;
                                     }
 
-                                    // 🎭 Track Matte Mode Selection (AE Standard)
+                                    // Track Matte Mode Selection (AE Standard)
                                     let matte_id = ui.make_persistent_id(format!("tm_combo_{}", i));
                                     let matte_label = match layer.track_matte {
                                         crate::core::timeline::TrackMatteMode::AlphaMatte => "Alpha Matte",
@@ -808,7 +814,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             }
                                         });
 
-                                    // 🎨 Blend Mode Selection (AE Standard)
+                                    // Blend Mode Selection (AE Standard)
                                     let blend_id = ui.make_persistent_id(format!("bm_combo_{}", i));
                                     let blend_label = match layer.blend_mode {
                                         crate::core::timeline::BlendMode::Normal => "Normal",
@@ -1027,12 +1033,12 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         }
                                     }
                                     click_resp.context_menu(|ui| {
-                                        if ui.button("✨ Duplicate Layer (Cmd+D)").clicked() {
+                                        if ui.button("Duplicate Layer (Cmd+D)").clicked() {
                                             pending_dup_layer = Some(i);
                                             app.toasts.info("Duplicated selected layer");
                                             ui.close_menu();
                                         }
-                                        if ui.button("📦 Pre-compose… (Cmd+Shift+C)").on_hover_text("Nest this layer into a new composition").clicked() {
+                                        if ui.button("Pre-compose… (Cmd+Shift+C)").on_hover_text("Nest this layer into a new composition").clicked() {
                                             app.selection.selected_layers.clear();
                                             app.selection.selected_layers.insert(i);
                                             app.selection.selected_layer_idx = Some(i);
@@ -1040,17 +1046,17 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             ui.close_menu();
                                         }
                                         if matches!(layer.layer_type, crate::core::timeline::LayerType::Text { .. }) {
-                                            if ui.button("🔤 Create Shapes from Text").on_hover_text("Decompose this Text layer into animatable vector Bezier Shape paths").clicked() {
+                                            if ui.button("Create Shapes from Text").on_hover_text("Decompose this Text layer into animatable vector Bezier Shape paths").clicked() {
                                                 pending_create_shapes = Some(i);
                                                 ui.close_menu();
                                             }
                                         }
-                                        if ui.button("🧊 Toggle 3D Layer").on_hover_text("Switch this layer between 2D and 3D").clicked() {
+                                        if ui.button("Toggle 3D Layer").on_hover_text("Switch this layer between 2D and 3D").clicked() {
                                             layer.is_3d = !layer.is_3d;
                                             project_changed = true;
                                             ui.close_menu();
                                         }
-                                        if ui.button(if layer.is_guide_layer { "📐 Remove Guide Layer" } else { "📐 Guide Layer" }).on_hover_text("Guide layers appear in composition preview but are excluded from exports and pre-comps").clicked() {
+                                        if ui.button(if layer.is_guide_layer { "Remove Guide Layer" } else { "Guide Layer" }).on_hover_text("Guide layers appear in composition preview but are excluded from exports and pre-comps").clicked() {
                                             layer.is_guide_layer = !layer.is_guide_layer;
                                             project_changed = true;
                                             ui.close_menu();
@@ -1074,7 +1080,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             app.toasts.info("Keyframes time-reversed");
                                             ui.close_menu();
                                         }
-                                        if ui.button("✂ Split Layer at Current Time (Cmd+Shift+D)").clicked() {
+                                        if ui.button("Split Layer at Current Time (Cmd+Shift+D)").clicked() {
                                             pending_split_layer = Some(i);
                                             ui.close_menu();
                                         }
@@ -1096,12 +1102,12 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             ui.close_menu();
                                         }
                                         ui.separator();
-                                        if ui.button("📍 Add Layer Marker at Playhead").clicked() {
+                                        if ui.button("Add Layer Marker at Playhead").clicked() {
                                             pending_layer_marker = Some(i);
                                             ui.close_menu();
                                         }
                                         if !layer.markers.is_empty()
-                                            && ui.button("🧹 Clear Layer Markers").clicked() {
+                                            && ui.button("Clear Layer Markers").clicked() {
                                             pending_clear_markers = Some(i);
                                             ui.close_menu();
                                         }
@@ -1109,12 +1115,12 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             pending_select_all_kfs = Some(i);
                                             ui.close_menu();
                                         }
-                                        if ui.button("🎨 Select Label Group").on_hover_text("Select all layers with the same label color").clicked() {
+                                        if ui.button("Select Label Group").on_hover_text("Select all layers with the same label color").clicked() {
                                             pending_select_label_group = Some(layer.label);
                                             ui.close_menu();
                                         }
-                                        // ── ✨ Animation Presets ──
-                                        ui.menu_button("✨ Animation Presets", |ui| {
+                                        // ── Animation Presets ──
+                                        ui.menu_button("Animation Presets", |ui| {
                                             let cf = *current_frame;
                                             let mut last_cat = "";
                                             for name in crate::core::presets::NAMES {
@@ -1153,7 +1159,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             }
                                         });
                                         if !layer.paint_strokes.is_empty()
-                                            && ui.button("🧹 Clear All Paint Strokes").clicked() {
+                                            && ui.button("Clear All Paint Strokes").clicked() {
                                             layer.paint_strokes.clear();
                                             project_changed = true;
                                             app.toasts.info("All paint strokes cleared");
@@ -1179,7 +1185,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         if matches!(layer.layer_type, crate::core::timeline::LayerType::Audio { .. }) {
                                             ui.separator();
                                             const FADE_F: u32 = 10;
-                                            if ui.button("🔉 Add 10-frame Audio Fade In").clicked() {
+                                            if ui.button("Add 10-frame Audio Fade In").clicked() {
                                                 if let crate::core::timeline::LayerType::Audio { volume, .. } = &mut layer.layer_type {
                                                     let base = volume.evaluate(*current_frame);
                                                     let start_f = layer.in_frame;
@@ -1198,7 +1204,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                                 app.toasts.info("Audio fade-in added");
                                                 ui.close_menu();
                                             }
-                                            if ui.button("🔉 Add 10-frame Audio Fade Out").clicked() {
+                                            if ui.button("Add 10-frame Audio Fade Out").clicked() {
                                                 if let crate::core::timeline::LayerType::Audio { volume, .. } = &mut layer.layer_type {
                                                     let base = volume.evaluate(*current_frame);
                                                     let end_f = layer.out_frame.saturating_sub(1);
@@ -1221,7 +1227,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
 
                                         ui.separator();
                                         let any_disabled = layer.effects.iter().any(|e| !e.enabled);
-                                        let fx_label = if any_disabled { "✅ Enable All Effects" } else { "🚫 Disable All Effects" };
+                                        let fx_label = if any_disabled { "Enable All Effects" } else { "Disable All Effects" };
                                         if ui.button(fx_label).clicked() {
                                             let target = any_disabled;
                                             for fx in layer.effects.iter_mut() {
@@ -1301,7 +1307,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         app.pick_whip_mode = !app.pick_whip_mode;
                                         app.pick_whip_target = None;
                                         if app.pick_whip_mode {
-                                            app.toasts.info("🔗 Pick Whip active: click a layer to set as parent");
+                                            app.toasts.info("Pick Whip active: click a layer to set as parent");
                                         }
                                     }
                                     let parent_name_resolved = layer.parent_id.as_deref().and_then(|pid| {
@@ -1323,11 +1329,11 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                                         let is_cycle = parent_choices_ref.iter().any(|(p_id_check, _)| p_id_check == p_id && layer.parent_id.as_deref() == Some(&layer.id));
 
                                                         if is_cycle {
-                                                            app.toasts.warning(format!("🚫 Cycle prevented! Cannot parent '{}' to '{}'", layer.name, p_name));
+                                                            app.toasts.warning(format!("Cycle prevented! Cannot parent '{}' to '{}'", layer.name, p_name));
                                                         } else {
                                                             layer.parent_id = Some(p_id.clone());
                                                             project_changed = true;
-                                                            app.toasts.info(format!("🌀 Parented '{}' ➔ '{}'", layer.name, p_name));
+                                                            app.toasts.info(format!("Parented '{}' ➔ '{}'", layer.name, p_name));
                                                         }
                                                     }
                                                 }
@@ -1351,7 +1357,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                      ui.painter().text(
                                          egui::pos2(bar_rect.left() + 8.0, bar_rect.top() + 4.0),
                                          egui::Align2::LEFT_TOP,
-                                         "🔗",
+                                         "↔",
                                          egui::FontId::proportional(10.0),
                                          colors::ACCENT_PURPLE,
                                      );
@@ -1893,7 +1899,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                     let child_name = comp_mut.layers[child_idx].name.clone();
                     let parent_name = comp_mut.layers[parent_idx].name.clone();
                     comp_mut.layers[child_idx].parent_id = Some(parent_id);
-                    app.toasts.info(format!("🌀 Parented '{}' → '{}'", child_name, parent_name));
+                    app.toasts.info(format!("Parented '{}' → '{}'", child_name, parent_name));
                     project_changed = true;
                 }
             }
@@ -1909,7 +1915,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                     ) {
                         let name = comp_mut.layers[idx].name.clone();
                         comp_mut.layers.insert(idx, shape_layer);
-                        app.toasts.info(format!("🔤 Created shapes from '{}'", name));
+                        app.toasts.info(format!("Created shapes from '{}'", name));
                         project_changed = true;
                     }
                 }
@@ -1946,11 +1952,11 @@ fn draw_target_timeline(
     egui::TopBottomPanel::bottom("timeline_panel")
         .resizable(false)
         .exact_height(timeline_height)
-        .frame(egui::Frame::none().fill(egui::Color32::from_rgb(13, 21, 27)))
+        .frame(egui::Frame::none().fill(crate::ui::theme::colors::BG_DARKEST))
         .show(ctx, |ui| {
             let rect = ui.max_rect();
             let painter = ui.painter();
-            let border = egui::Color32::from_rgb(39, 52, 61);
+            let border = crate::ui::theme::colors::BORDER_SUBTLE;
             let muted = colors::TEXT_SECONDARY;
             let left_width = 338.0;
             let compact = rect.height() < 360.0;
@@ -1958,7 +1964,7 @@ fn draw_target_timeline(
             let tools_h = if compact { 30.0 } else { 42.0 };
             let ruler_h = if compact { 24.0 } else { 35.0 };
             let row_h = if compact { 28.0 } else { 37.0 };
-            painter.rect_filled(rect, 0.0, egui::Color32::from_rgb(13, 21, 27));
+            painter.rect_filled(rect, 0.0, crate::ui::theme::colors::BG_DARKEST);
             painter.line_segment(
                 [
                     egui::pos2(rect.left(), rect.top() + header_h),
@@ -2243,7 +2249,7 @@ fn draw_reference_timeline(
                 );
                 if selected {
                     ui.painter()
-                        .rect_filled(row, 4.0, egui::Color32::from_rgb(24, 62, 102));
+                        .rect_filled(row, 4.0, crate::ui::theme::colors::BG_ACTIVE);
                 }
                 ui.painter()
                     .rect_stroke(row, 4.0, egui::Stroke::new(1.0_f32, border));

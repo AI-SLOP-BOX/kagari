@@ -35,6 +35,17 @@ pub fn format_shortcut(key: &str, cmd: bool, shift: bool, alt: bool) -> String {
     parts.join("+")
 }
 
+pub fn format_platform_shortcut_hint(hint: &str) -> String {
+    format_platform_shortcut_hint_for(hint, cmd_name(), option_name())
+}
+
+fn format_platform_shortcut_hint_for(hint: &str, command: &str, option: &str) -> String {
+    hint.replace("Cmd", command)
+        .replace("Option", option)
+        .replace("Opt", option)
+        .replace("Alt", option)
+}
+
 #[derive(Clone, Copy)]
 pub enum NewLayerKind {
     Solid,
@@ -120,6 +131,10 @@ pub fn handle_global_shortcuts(
     current_frame: &mut u32,
     total_frames: u32,
 ) {
+    if app.has_blocking_dialog() {
+        return;
+    }
+
     // ── Two-Tier Focus Guard ────────────────────────────────────────────────
     // Tier 1: is a text-edit widget actively focused?
     let text_focused = crate::ui::focus::is_text_input_focused(ctx);
@@ -1436,5 +1451,18 @@ mod tests {
         let sc = format_shortcut("Z", true, true, false);
         assert!(sc.contains("Z"));
         assert!(sc.contains("Shift"));
+    }
+
+    #[test]
+    fn shortcut_hints_localize_command_and_option_modifiers() {
+        assert_eq!(
+            format_platform_shortcut_hint_for("Cmd+Alt+Shift+T", "Ctrl", "Alt"),
+            "Ctrl+Alt+Shift+T"
+        );
+        assert_eq!(
+            format_platform_shortcut_hint_for("Cmd+Opt+H", "Cmd", "Option"),
+            "Cmd+Option+H"
+        );
+        assert_eq!(format_platform_shortcut_hint_for("F9", "Cmd", "Option"), "F9");
     }
 }

@@ -146,7 +146,7 @@ pub fn draw_mask_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                         *project_changed_flag = true;
                     }
                     if ui
-                        .button("⚡ Auto-Trace")
+                        .button("Auto-Trace")
                         .on_hover_text("Auto-detect alpha/luminance edges into vector mask")
                         .clicked()
                     {
@@ -193,11 +193,15 @@ pub fn draw_mask_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                         .max_height(240.0)
                         .show(ui, |ui| {
                             for (m_idx, mask) in layer.masks.iter_mut().enumerate() {
-                                ui.collapsing(format!("🎭 {}", mask.name), |ui| {
+                                ui.collapsing(mask.name.to_string(), |ui| {
                                     let mut path_vertices_changed = false;
                                     ui.horizontal(|ui| {
-                                        ui.checkbox(&mut mask.enabled, "Enabled");
-                                        ui.checkbox(&mut mask.inverted, "Inverted");
+                                        if ui.checkbox(&mut mask.enabled, "Enabled").changed() {
+                                            *project_changed_flag = true;
+                                        }
+                                        if ui.checkbox(&mut mask.inverted, "Inverted").changed() {
+                                            *project_changed_flag = true;
+                                        }
                                     });
 
                                     ui.horizontal(|ui| {
@@ -253,11 +257,11 @@ pub fn draw_mask_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                                             });
                                     });
 
-                                    // 🪶 Mask Feather & Expansion & Opacity controls
+                                    // Mask Feather & Expansion & Opacity controls
                                     let mut feather_val =
                                         mask.feather.evaluate(app.playback.current_frame);
                                     ui.horizontal(|ui| {
-                                        ui.label("🪶 Feather:");
+                                        ui.label("Feather:");
                                         if ui
                                             .add(
                                                 egui::Slider::new(&mut feather_val, 0.0..=500.0)
@@ -265,10 +269,10 @@ pub fn draw_mask_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                                             )
                                             .changed()
                                         {
-                                            mask.feather =
-                                                crate::core::property::Animatable::new_constant(
-                                                    feather_val,
-                                                );
+                                            mask.feather.set_value_at_frame(
+                                                app.playback.current_frame,
+                                                feather_val,
+                                            );
                                             *project_changed_flag = true;
                                         }
                                     });
@@ -287,10 +291,10 @@ pub fn draw_mask_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                                             )
                                             .changed()
                                         {
-                                            mask.expansion =
-                                                crate::core::property::Animatable::new_constant(
-                                                    expansion_val,
-                                                );
+                                            mask.expansion.set_value_at_frame(
+                                                app.playback.current_frame,
+                                                expansion_val,
+                                            );
                                             *project_changed_flag = true;
                                         }
                                     });
@@ -298,7 +302,7 @@ pub fn draw_mask_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                                     let mut opacity_val =
                                         mask.opacity.evaluate(app.playback.current_frame);
                                     ui.horizontal(|ui| {
-                                        ui.label("🌓 Opacity:");
+                                        ui.label("Opacity:");
                                         if ui
                                             .add(
                                                 egui::Slider::new(&mut opacity_val, 0.0..=100.0)
@@ -306,16 +310,16 @@ pub fn draw_mask_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                                             )
                                             .changed()
                                         {
-                                            mask.opacity =
-                                                crate::core::property::Animatable::new_constant(
-                                                    opacity_val,
-                                                );
+                                            mask.opacity.set_value_at_frame(
+                                                app.playback.current_frame,
+                                                opacity_val,
+                                            );
                                             *project_changed_flag = true;
                                         }
                                     });
 
                                     // ── Mask Path & Bezier Vertices ──
-                                    ui.collapsing("📐 Mask Path & Vertices", |ui| {
+                                    ui.collapsing("Mask Path & Vertices", |ui| {
                                         let mut verts =
                                             mask.path.get_vertices(app.playback.current_frame);
                                         ui.horizontal(|ui| {
@@ -329,7 +333,7 @@ pub fn draw_mask_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                                             }
                                             if ui
                                                 .checkbox(&mut mask.path.is_closed, "Closed Path")
-                                                .clicked()
+                                                .changed()
                                             {
                                                 *project_changed_flag = true;
                                             }
@@ -391,7 +395,7 @@ pub fn draw_mask_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                                     // ── Wiggle Paths (AE parity) ──
                                     let mut wiggle_on = mask.wiggle.is_some();
                                     if ui
-                                        .checkbox(&mut wiggle_on, "🌊 Wiggle Paths")
+                                        .checkbox(&mut wiggle_on, "Wiggle Paths")
                                         .on_hover_text(
                                             "Organic noise deformation of the mask outline",
                                         )

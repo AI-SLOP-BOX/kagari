@@ -344,7 +344,7 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
     }
 
     let mut open = app.export.show_export_dialog;
-    crate::ui::modal::window("Export Composition Video")
+    crate::ui::modal::dialog("Export Composition Video")
         .open(&mut open)
         .collapsible(false)
         .resizable(false)
@@ -471,7 +471,7 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
 
             ui.add_space(6.0);
             ui.horizontal(|ui| {
-                if ui.button("💾 Save Current as Preset").clicked() {
+                if ui.button("Save Current as Preset").clicked() {
                     let preset = crate::core::export_presets::ExportPreset {
                         name: format!("Custom {}", { let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs(); format!("{}", t) }),
                         format: match app.export_format_preset {
@@ -516,7 +516,7 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     if !status.contains("Error") {
                         if let Some(lp) = &app.last_export_path {
                             ui.horizontal(|ui| {
-                                if ui.small_button("📂 Show in Folder").clicked() {
+                                if ui.small_button("Show in Folder").clicked() {
                                     crate::ui::project_io::reveal_in_file_manager(&std::path::PathBuf::from(lp));
                                 }
                             });

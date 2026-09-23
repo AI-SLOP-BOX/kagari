@@ -93,7 +93,7 @@ pub fn draw_layer_transforms(
                 let mat = &mut layer.material;
                 if ui
                     .checkbox(&mut mat.cast_shadows, "Casts Shadows")
-                    .clicked()
+                    .changed()
                 {
                     *project_changed = true;
                 }
@@ -391,7 +391,7 @@ pub fn draw_layer_transforms(
             if layer.is_3d {
                 ui.separator();
                 ui.label(
-                    egui::RichText::new("🧊 3D Spatial Transform")
+                    egui::RichText::new("3D Spatial Transform")
                         .small()
                         .strong()
                         .color(colors::ACCENT_CYAN),
@@ -448,7 +448,7 @@ pub fn draw_layer_transforms(
                 // ── 3D Material Options ──
                 ui.separator();
                 ui.label(
-                    egui::RichText::new("🎨 Material Options")
+                    egui::RichText::new("Material Options")
                         .small()
                         .strong()
                         .color(colors::ACCENT_YELLOW),
@@ -565,7 +565,7 @@ pub fn draw_layer_transforms(
 
                 // ── 3D Geometry Options (Extrusion & Bevel) ──
                 ui.separator();
-                ui.collapsing("📐 Geometry Options (Extrusion & Bevel)", |ui| {
+                ui.collapsing("Geometry Options (Extrusion & Bevel)", |ui| {
                     if let LayerType::Shape {
                         extrusion_depth,
                         bevel_depth,
@@ -609,7 +609,7 @@ pub fn draw_layer_transforms(
         }
 
         ui.separator();
-        ui.collapsing("📌 Responsive Constraints (Pinning)", |ui| {
+        ui.collapsing("Responsive Constraints (Pinning)", |ui| {
             use crate::core::layer_constraints::{HorizontalPin, VerticalPin};
             let constraints_before = layer.constraints;
 
@@ -674,8 +674,8 @@ pub fn draw_layer_transforms(
             }
         });
 
-        // 🏷 Label Color picker (AE standard track color)
-        ui.collapsing("🏷 Label Color", |ui| {
+        // Label Color picker (AE standard track color)
+        ui.collapsing("Label Color", |ui| {
             ui.horizontal(|ui| {
                 use crate::core::timeline::LabelColor;
                 for color in [
@@ -716,10 +716,10 @@ pub fn draw_layer_transforms(
             });
         });
 
-        // 🎨 Layer Styles (Drop Shadow & Stroke) UI Controls
-        ui.collapsing("🎨 Layer Styles", |ui| {
+        // Layer Styles (Drop Shadow & Stroke) UI Controls
+        ui.collapsing("Layer Styles", |ui| {
             let ds = &mut layer.style.drop_shadow;
-            ui.collapsing("👥 Drop Shadow", |ui| {
+            ui.collapsing("Drop Shadow", |ui| {
                 if ui.checkbox(&mut ds.enabled, "Enabled").changed() {
                     *project_changed = true;
                 }
@@ -753,7 +753,7 @@ pub fn draw_layer_transforms(
             });
 
             let st = &mut layer.style.stroke;
-            ui.collapsing("✏️ Stroke", |ui| {
+            ui.collapsing("Stroke", |ui| {
                 if ui.checkbox(&mut st.enabled, "Enabled").changed() {
                     *project_changed = true;
                 }
@@ -803,7 +803,7 @@ pub fn draw_layer_type_specs(
                     });
                     if !path.is_empty()
                         && ui
-                            .small("📂 Reveal File")
+                            .small("Reveal File")
                             .on_hover_text("Open the OBJ source file location")
                             .clicked()
                     {
@@ -826,7 +826,7 @@ pub fn draw_layer_type_specs(
                     ui.text_edit_singleline(path);
                     if !path.is_empty()
                         && ui
-                            .small("📂 Reveal File")
+                            .small("Reveal File")
                             .on_hover_text("Open the source file location in file manager")
                             .clicked()
                     {
@@ -838,28 +838,28 @@ pub fn draw_layer_type_specs(
                         *project_changed = true;
                     }
 
-                    // 🧷 Puppet Mesh & Pins Tool
-                    ui.collapsing("🧷 Puppet Tool & Mesh Warp", |ui| {
+                    // Puppet Mesh & Pins Tool
+                    ui.collapsing("Puppet Tool & Mesh Warp", |ui| {
                         ui.horizontal(|ui| {
                             if ui.small_button("+ Position Pin").clicked() {
                                 *project_changed = true;
                             }
                             if ui
-                                .small_button("🧱 + Starch Pin")
+                                .small_button("+ Starch Pin")
                                 .on_hover_text("Adds rigidity to mesh area")
                                 .clicked()
                             {
                                 *project_changed = true;
                             }
                             if ui
-                                .small_button("🔀 + Overlap Pin")
+                                .small_button("+ Overlap Pin")
                                 .on_hover_text("Controls in-front/behind depth ordering")
                                 .clicked()
                             {
                                 *project_changed = true;
                             }
                             if ui
-                                .small_button("🔄 + Advanced Pin")
+                                .small_button("+ Advanced Pin")
                                 .on_hover_text("Controls scale and rotation warp")
                                 .clicked()
                             {
@@ -923,7 +923,7 @@ pub fn draw_layer_type_specs(
                     });
                     if !source.is_empty()
                         && ui
-                            .small("📂 Reveal File")
+                            .small("Reveal File")
                             .on_hover_text("Open the source file location in file manager")
                             .clicked()
                     {
@@ -1369,7 +1369,7 @@ pub fn draw_layer_type_specs(
 
                     // ── Trim Paths (AE Shape Operator) ──
                     ui.add_space(4.0);
-                    ui.collapsing("✂ Trim Paths", |ui| {
+                    ui.collapsing("Trim Paths", |ui| {
                         let has_trim = layer.trim_paths.is_some();
                         ui.horizontal(|ui| {
                             if !has_trim {
@@ -1378,7 +1378,7 @@ pub fn draw_layer_type_specs(
                                         Some(crate::core::timeline::TrimPaths::default());
                                     *project_changed = true;
                                 }
-                            } else if ui.small_button("🗑 Remove").clicked() {
+                            } else if ui.small_button("Remove").clicked() {
                                 layer.trim_paths = None;
                                 *project_changed = true;
                             }
@@ -1427,7 +1427,7 @@ pub fn draw_layer_type_specs(
                     });
 
                     // ── Merge Paths & Offset Paths (AE Vector Operators) ──
-                    ui.collapsing("🔗 Vector Path Operators", |ui| {
+                    ui.collapsing("Vector Path Operators", |ui| {
                         ui.horizontal(|ui| {
                             ui.label("Merge Paths Mode:");
                             let mut merge_mode = ui.ctx().data(|d| {
@@ -1513,7 +1513,7 @@ pub fn draw_layer_type_specs(
                     });
 
                     // ── Repeater (AE Shape Modifier) ──
-                    ui.collapsing("🔁 Repeater", |ui| {
+                    ui.collapsing("Repeater", |ui| {
                         let mut has_rep = ui.ctx().data(|d| {
                             d.get_temp::<bool>(egui::Id::new("has_shape_repeater"))
                                 .unwrap_or(false)
@@ -1573,7 +1573,7 @@ pub fn draw_layer_type_specs(
                                 }
                             });
 
-                            ui.collapsing("📐 Transform: Repeater", |ui| {
+                            ui.collapsing("Transform: Repeater", |ui| {
                                 ui.horizontal(|ui| {
                                     ui.label("Position:");
                                     if ui
@@ -1621,13 +1621,13 @@ pub fn draw_layer_type_specs(
                     });
 
                     // ── Zig Zag & Round Corners (AE Vector Modifiers) ──
-                    ui.collapsing("⚡ Zig Zag & Round Corners", |ui| {
+                    ui.collapsing("Zig Zag & Round Corners", |ui| {
                         let mut has_zigzag = ui.ctx().data(|d| {
                             d.get_temp::<bool>(egui::Id::new("has_shape_zigzag"))
                                 .unwrap_or(false)
                         });
                         ui.horizontal(|ui| {
-                            if ui.checkbox(&mut has_zigzag, "⚡ Enable Zig Zag").changed() {
+                            if ui.checkbox(&mut has_zigzag, "Enable Zig Zag").changed() {
                                 ui.ctx().data_mut(|d| {
                                     d.insert_temp(egui::Id::new("has_shape_zigzag"), has_zigzag)
                                 });
@@ -1698,7 +1698,7 @@ pub fn draw_layer_type_specs(
                                 .unwrap_or(0.0)
                         });
                         ui.horizontal(|ui| {
-                            ui.label("📐 Round Corners:");
+                            ui.label("Round Corners:");
                             if ui
                                 .add(
                                     egui::DragValue::new(&mut round_radius)
@@ -1715,14 +1715,14 @@ pub fn draw_layer_type_specs(
                             }
                         });
 
-                        // ── 🎈 Pucker & Bloat (AE Vector Modifier) ──
+                        // ── Pucker & Bloat (AE Vector Modifier) ──
                         ui.separator();
                         let mut pucker_bloat = ui.ctx().data(|d| {
                             d.get_temp::<f32>(egui::Id::new("shape_pucker_bloat"))
                                 .unwrap_or(0.0)
                         });
                         ui.horizontal(|ui| {
-                            ui.label("🎈 Pucker & Bloat:");
+                            ui.label("Pucker & Bloat:");
                             if ui
                                 .add(
                                     egui::Slider::new(&mut pucker_bloat, -100.0..=100.0)
@@ -1746,7 +1746,7 @@ pub fn draw_layer_type_specs(
                         ui.horizontal(|ui| {
                             if ui
                                 .checkbox(&mut has_wiggle_paths, "〰 Wiggle Paths")
-                                .clicked()
+                                .changed()
                             {
                                 ui.ctx().data_mut(|d| {
                                     d.insert_temp(
@@ -1827,7 +1827,7 @@ pub fn draw_layer_type_specs(
                     ui.label(format!("Audio File ({})", path));
                     if !path.is_empty()
                         && ui
-                            .small("📂 Reveal File")
+                            .small("Reveal File")
                             .on_hover_text("Open the source file location in file manager")
                             .clicked()
                     {
@@ -1892,7 +1892,7 @@ pub fn draw_layer_type_specs(
                             .changed();
                         ui.label("Turbulence");
                     });
-                    ui.collapsing("🌀 Forces", |ui| {
+                    ui.collapsing("Forces", |ui| {
                         ui.horizontal(|ui| {
                             changed |= ui
                                 .add(egui::Slider::new(
@@ -1960,7 +1960,7 @@ pub fn draw_layer_type_specs(
                             });
                         }
                     });
-                    ui.collapsing("✨ Trail", |ui| {
+                    ui.collapsing("Trail", |ui| {
                         ui.horizontal(|ui| {
                             let mut tl = emitter.trail_length as i32;
                             if ui.add(egui::Slider::new(&mut tl, 0..=8)).changed() {
@@ -1976,7 +1976,7 @@ pub fn draw_layer_type_specs(
                             ui.label("Taper");
                         });
                     });
-                    ui.collapsing("🎥 3D Depth", |ui| {
+                    ui.collapsing("3D Depth", |ui| {
                         changed |= ui
                             .checkbox(&mut emitter.depth_enabled, "Project through camera")
                             .changed();
@@ -2040,7 +2040,7 @@ pub fn draw_layer_type_specs(
                     ui.horizontal(|ui| {
                         ui.label("Copies:");
                         if rep.copies_animation.is_none() {
-                            if ui.button("◆ Animate").clicked() {
+                            if ui.button("Animate").clicked() {
                                 rep.copies_animation =
                                     Some(crate::core::property::Animatable::new_constant(
                                         rep.copies as f32,
@@ -2088,7 +2088,7 @@ pub fn draw_layer_type_specs(
                     ui.horizontal(|ui| {
                         ui.label("Position Offset:");
                         if rep.position_offset_animation.is_none() {
-                            if ui.button("◆ Animate").clicked() {
+                            if ui.button("Animate").clicked() {
                                 rep.position_offset_animation =
                                     Some(crate::core::property::Animatable::new_constant(
                                         rep.position_offset,
@@ -2135,7 +2135,7 @@ pub fn draw_layer_type_specs(
                     ui.horizontal(|ui| {
                         ui.label("Scale /copy %:");
                         if rep.scale_offset_animation.is_none() {
-                            if ui.button("◆ Animate").clicked() {
+                            if ui.button("Animate").clicked() {
                                 rep.scale_offset_animation =
                                     Some(crate::core::property::Animatable::new_constant(
                                         rep.scale_offset,
@@ -2190,7 +2190,7 @@ pub fn draw_layer_type_specs(
                     ui.horizontal(|ui| {
                         ui.label("Rotation /copy:");
                         if rep.rotation_offset_animation.is_none() {
-                            if ui.button("◆ Animate").clicked() {
+                            if ui.button("Animate").clicked() {
                                 rep.rotation_offset_animation =
                                     Some(crate::core::property::Animatable::new_constant(
                                         rep.rotation_offset_deg,
@@ -2225,7 +2225,7 @@ pub fn draw_layer_type_specs(
                     ui.horizontal(|ui| {
                         ui.label("Opacity fade:");
                         if rep.opacity_animation.is_none() {
-                            if ui.button("◆ Animate").clicked() {
+                            if ui.button("Animate").clicked() {
                                 rep.opacity_animation =
                                     Some(crate::core::property::Animatable::new_constant([
                                         rep.start_opacity,
@@ -2274,7 +2274,7 @@ pub fn draw_layer_type_specs(
                     {
                         *project_changed = true;
                     }
-                    if ui.button("🗑 Remove Repeater").clicked() {
+                    if ui.button("Remove Repeater").clicked() {
                         layer.shape_repeater = None;
                         *project_changed = true;
                     }
@@ -2283,7 +2283,7 @@ pub fn draw_layer_type_specs(
 
             ui.separator();
             // ── Puppet Pins (deformation mesh handles, AE Puppet Tool parity) ──
-            ui.collapsing("🧷 Puppet Pins & Mesh", |ui| {
+            ui.collapsing("Puppet Pins & Mesh", |ui| {
                 ui.horizontal(|ui| {
                     if ui
                         .button("+ Position Pin")
@@ -2302,7 +2302,7 @@ pub fn draw_layer_type_specs(
                         *project_changed = true;
                     }
                     if ui
-                        .button("🧱 + Starch Pin")
+                        .button("+ Starch Pin")
                         .on_hover_text("Pin to add stiffness and prevent stretching")
                         .clicked()
                     {
@@ -2338,7 +2338,7 @@ pub fn draw_layer_type_specs(
                 let mut remove_idx: Option<usize> = None;
                 for (pi, pin) in layer.puppet_pins.iter_mut().enumerate() {
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new(format!("🧷 {}", pin.name)).small());
+                        ui.label(egui::RichText::new(pin.name.to_string()).small());
                         if let Some(nf) =
                             draw_property_ui(current_frame, ui, "", &mut pin.position, |ui, val| {
                                 ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X "));
@@ -2347,7 +2347,7 @@ pub fn draw_layer_type_specs(
                         {
                             *next_frame = Some(nf);
                         }
-                        if ui.small_button("🗑").on_hover_text("Remove pin").clicked() {
+                        if ui.small_button("×").on_hover_text("Remove pin").clicked() {
                             remove_idx = Some(pi);
                         }
                     });
@@ -2360,7 +2360,7 @@ pub fn draw_layer_type_specs(
 
             ui.separator();
             // ── Paint Strokes ──
-            ui.collapsing("🖌 Paint Strokes", |ui| {
+            ui.collapsing("Paint Strokes", |ui| {
                 let n = layer.paint_strokes.len();
                 if n == 0 {
                     ui.label(
@@ -2420,7 +2420,7 @@ pub fn draw_layer_type_specs(
                             *project_changed = true;
                         }
                         if ui
-                            .small_button("🗑")
+                            .small_button("×")
                             .on_hover_text("Delete stroke")
                             .clicked()
                         {
@@ -2485,11 +2485,11 @@ pub fn draw_layer_type_specs(
 
             ui.separator();
             // ── Layer Styles Inspector Section ──
-            ui.collapsing("🎨 Layer Styles", |ui| {
+            ui.collapsing("Layer Styles", |ui| {
                 let style = &mut layer.style;
 
                 // Stroke
-                ui.collapsing("✏ Stroke", |ui| {
+                ui.collapsing("Stroke", |ui| {
                     if ui.checkbox(&mut style.stroke.enabled, "Enabled").changed() {
                         *project_changed = true;
                     }
@@ -2528,10 +2528,10 @@ pub fn draw_layer_type_specs(
                 });
 
                 // Drop Shadow
-                ui.collapsing("👤 Drop Shadow", |ui| {
+                ui.collapsing("Drop Shadow", |ui| {
                     if ui
                         .checkbox(&mut style.drop_shadow.enabled, "Enabled")
-                        .clicked()
+                        .changed()
                     {
                         *project_changed = true;
                     }
@@ -2580,10 +2580,10 @@ pub fn draw_layer_type_specs(
                 });
 
                 // Color Overlay
-                ui.collapsing("🎨 Color Overlay", |ui| {
+                ui.collapsing("Color Overlay", |ui| {
                     if ui
                         .checkbox(&mut style.color_overlay.enabled, "Enabled")
-                        .clicked()
+                        .changed()
                     {
                         *project_changed = true;
                     }
@@ -2622,10 +2622,10 @@ pub fn draw_layer_type_specs(
                 });
 
                 // Gradient Overlay
-                ui.collapsing("🌈 Gradient Overlay", |ui| {
+                ui.collapsing("Gradient Overlay", |ui| {
                     if ui
                         .checkbox(&mut style.gradient_overlay.enabled, "Enabled")
-                        .clicked()
+                        .changed()
                     {
                         *project_changed = true;
                     }
@@ -2656,10 +2656,10 @@ pub fn draw_layer_type_specs(
                 });
 
                 // Bevel & Emboss
-                ui.collapsing("🪨 Bevel / Emboss", |ui| {
+                ui.collapsing("Bevel / Emboss", |ui| {
                     if ui
                         .checkbox(&mut style.bevel_emboss.enabled, "Enabled")
-                        .clicked()
+                        .changed()
                     {
                         *project_changed = true;
                     }

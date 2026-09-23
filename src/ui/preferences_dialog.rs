@@ -101,7 +101,7 @@ pub fn draw_preferences_dialog(app: &mut KagariApp, ctx: &egui::Context) {
 
     let mut open = true;
     let mut keep_open = true;
-    crate::ui::modal::window("Preferences")
+    crate::ui::modal::dialog("Preferences")
         .open(&mut open)
         .collapsible(false)
         .resizable(true)
@@ -269,7 +269,7 @@ pub fn draw_preferences_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                     });
                     ui.horizontal(|ui| {
                         if ui
-                            .button("📂 Choose Cache Folder...")
+                            .button("Choose Cache Folder...")
                             .on_hover_text(
                                 "Select NVMe / SSD drive location for high-speed frame caching",
                             )
@@ -291,7 +291,7 @@ pub fn draw_preferences_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                             p.disk_cache_directory.clone()
                         }).small().color(colors::TEXT_MUTED));
                         if ui
-                            .button("🗑 Empty Disk Cache...")
+                            .button("Empty Disk Cache...")
                             .on_hover_text("Purge all rendered cache files from disk")
                             .clicked()
                         {
@@ -304,7 +304,7 @@ pub fn draw_preferences_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                     ui.add_space(8.0);
                     ui.separator();
                     ui.horizontal(|ui| {
-                        if ui.button("💾 Save").clicked() {
+                        if ui.button("Save").clicked() {
                             apply(app, &p);
                             save(&p);
                             app.toasts.info("Preferences saved");

@@ -190,7 +190,7 @@ pub fn draw_camera_light_options(app: &mut KagariApp, ui: &mut egui::Ui) {
         crate::ui::custom_widgets::ae_section_header(ui, "Depth of Field", "🎯");
 
         let mut dof_enabled = cam.dof_enabled_at(current_frame);
-        if ui.checkbox(&mut dof_enabled, "Enable DOF").clicked() {
+        if ui.checkbox(&mut dof_enabled, "Enable DOF").changed() {
             cam.set_dof_enabled_at(current_frame, dof_enabled);
             changed = true;
         }
@@ -429,7 +429,7 @@ pub fn draw_camera_light_options(app: &mut KagariApp, ui: &mut egui::Ui) {
 
                     if ui
                         .checkbox(&mut light.casts_shadows, "Casts Shadows")
-                        .clicked()
+                        .changed()
                     {
                         changed = true;
                     }

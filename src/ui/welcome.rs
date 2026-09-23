@@ -66,7 +66,7 @@ fn import_media_dialog(app: &mut KagariApp) {
                 let comp = p.active_composition_mut();
                 let layer = crate::core::timeline::Layer::new(
                     format!("aud_{}", name),
-                    format!("🔊 {}", name),
+                    name.to_string(),
                     crate::core::timeline::LayerType::Audio {
                         path: src.clone(),
                         volume: crate::core::property::Animatable::new_constant(1.0),
@@ -125,7 +125,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
     let mut action: Option<&str> = None;
     let mut recent_to_open: Option<std::path::PathBuf> = None;
 
-    crate::ui::modal::window("Welcome to Kagari VFX")
+    crate::ui::modal::dialog("Welcome to Kagari VFX")
         .open(&mut open)
         .collapsible(false)
         .resizable(false)

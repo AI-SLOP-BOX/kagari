@@ -1056,6 +1056,29 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
 
         let size = ui.available_size();
         let (rect, viewport_response) = ui.allocate_exact_size(size, egui::Sense::click_and_drag());
+        viewport_response.context_menu(|ui| {
+            let layer_count = app.history.current().active_composition().layers.len();
+            if ui.button("Select All Layers").clicked() {
+                app.selection.selected_layers = (0..layer_count).collect();
+                app.selection.selected_layer_idx = (layer_count > 0).then_some(0);
+                ui.close_menu();
+            }
+            if ui.button("Deselect Layers").clicked() {
+                app.selection.selected_layers.clear();
+                app.selection.selected_layer_idx = None;
+                app.mask_selected_vertices = None;
+                ui.close_menu();
+            }
+            ui.separator();
+            if ui.button("Fit Composition to Viewer").clicked() {
+                app.ui_tabs.viewport_mag_ratio = 0.0;
+                app.playback.viewport_pan = egui::Vec2::ZERO;
+                ui.close_menu();
+            }
+            ui.checkbox(&mut app.show_grid, "Show Grid");
+            ui.checkbox(&mut app.show_guides, "Show Guides");
+            ui.checkbox(&mut app.snap_to_keyframes, "Snap to Keyframes");
+        });
 
         // ── Viewport zoom: scroll wheel scales magnification anchored at the pointer ──
         if viewport_response.hovered() {
@@ -1667,13 +1690,13 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                     .anchor(egui::Align2::RIGHT_TOP, [-14.0, 60.0])
                     .show(ctx, |ui| {
                         let hud_frame = egui::Frame::default()
-                            .fill(egui::Color32::from_rgba_premultiplied(18, 22, 30, 225))
+                            .fill(crate::ui::theme::colors::OVERLAY_SURFACE)
                             .stroke(egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM))
                             .inner_margin(8.0);
                         hud_frame.show(ui, |ui: &mut egui::Ui| {
                                 ui.set_min_width(150.0);
                                 let is_erase = app.active_tool == crate::ui::toolbar::ActiveTool::Eraser;
-                                ui.label(egui::RichText::new(if is_erase { "🧽 Eraser Size" } else { "🖌 Brush" }).strong().small());
+                                ui.label(egui::RichText::new(if is_erase { "Eraser Size" } else { "Brush" }).strong().small());
                                 let mut size = ctx.data_mut(|d| {
                                     d.get_temp::<f32>(egui::Id::new("paint_size")).unwrap_or(12.0)
                                 });
@@ -1880,12 +1903,12 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                     .anchor(egui::Align2::RIGHT_TOP, [-14.0, 60.0])
                     .show(ctx, |ui| {
                         let hud_frame = egui::Frame::default()
-                            .fill(egui::Color32::from_rgba_premultiplied(18, 22, 30, 225))
+                            .fill(crate::ui::theme::colors::OVERLAY_SURFACE)
                             .stroke(egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM))
                             .inner_margin(8.0);
                         hud_frame.show(ui, |ui: &mut egui::Ui| {
                             ui.set_min_width(150.0);
-                            ui.label(egui::RichText::new("📋 Clone Stamp").strong().small());
+                            ui.label(egui::RichText::new("Clone Stamp").strong().small());
                             let mut size = ctx.data_mut(|d| {
                                 d.get_temp::<f32>(egui::Id::new("paint_size")).unwrap_or(12.0)
                             });
@@ -2183,7 +2206,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                     .anchor(egui::Align2::RIGHT_TOP, [-14.0, 60.0])
                     .show(ctx, |ui| {
                         let hud_frame = egui::Frame::default()
-                            .fill(egui::Color32::from_rgba_premultiplied(18, 22, 30, 225))
+                            .fill(crate::ui::theme::colors::OVERLAY_SURFACE)
                             .stroke(egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM))
                             .inner_margin(8.0);
                         hud_frame.show(ui, |ui: &mut egui::Ui| {
@@ -2194,11 +2217,11 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                                 fg_mode = false;
                             }
                             ui.horizontal(|ui| {
-                                if ui.selectable_label(fg_mode, "🟢 FG").on_hover_text("Foreground subject mark (Green)").clicked() {
+                                if ui.selectable_label(fg_mode, "FG").on_hover_text("Foreground subject mark (Green)").clicked() {
                                     fg_mode = true;
                                     ctx.data_mut(|d| d.insert_temp(egui::Id::new("roto_fg_mode"), true));
                                 }
-                                if ui.selectable_label(!fg_mode, "🔴 BG").on_hover_text("Background mark (Red / Alt+Drag)").clicked() {
+                                if ui.selectable_label(!fg_mode, "BG").on_hover_text("Background mark (Red / Alt+Drag)").clicked() {
                                     fg_mode = false;
                                     ctx.data_mut(|d| d.insert_temp(egui::Id::new("roto_fg_mode"), false));
                                 }
@@ -3601,16 +3624,36 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
 
             ui.separator();
             // AE Snapshot & Fast Previews
-            if ui.button("📷").on_hover_text("Take Snapshot (Cmd+F5)").clicked() {
+            if crate::ui::custom_widgets::ae_svg_icon_button(
+                ui,
+                "viewport_take_snapshot",
+                crate::ui::icons::SVG_CAMERA,
+                "Take Snapshot (Cmd+F5)",
+                crate::ui::theme::colors::TEXT_SECONDARY,
+            )
+            .clicked()
+            {
                 crate::ui::viewport_state::set_snap_frame(ctx, current_frame);
                 app.toasts.info(format!("Snapshot saved at frame {}", current_frame));
             }
             let comparing = crate::ui::viewport_state::is_comparing(ctx);
-            if ui.selectable_label(comparing, "👁").on_hover_text("Show Snapshot (F5)").clicked() {
+            if crate::ui::custom_widgets::ae_svg_icon_button(
+                ui,
+                "viewport_show_snapshot",
+                crate::ui::icons::SVG_EYE_OPEN,
+                "Show Snapshot (F5)",
+                if comparing {
+                    crate::ui::theme::colors::ACCENT_BLUE
+                } else {
+                    crate::ui::theme::colors::TEXT_SECONDARY
+                },
+            )
+            .clicked()
+            {
                 if crate::ui::viewport_state::snap_frame(ctx).is_some() {
                     crate::ui::viewport_state::toggle_comparing(ctx);
                 } else {
-                    app.toasts.warning("Take a snapshot first (📷)");
+                    app.toasts.warning("Take a snapshot first");
                 }
             }
 
@@ -3697,7 +3740,7 @@ fn draw_target_viewport(app: &mut KagariApp, ctx: &egui::Context) {
         .show(ctx, |ui| {
             let rect = ui.max_rect();
             let painter = ui.painter();
-            let border = egui::Color32::from_rgb(39, 52, 61);
+            let border = crate::ui::theme::colors::BORDER_SUBTLE;
             painter.text(
                 egui::pos2(rect.left() + 14.0, rect.top() + 28.0),
                 egui::Align2::LEFT_CENTER,

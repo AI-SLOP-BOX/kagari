@@ -10,7 +10,7 @@ pub fn draw_recovery_dialog(app: &mut KagariApp, ctx: &egui::Context) {
     }
 
     let mut open = app.show_recovery_dialog;
-    crate::ui::modal::window("Crash Recovery")
+    crate::ui::modal::dialog("Crash Recovery")
         .open(&mut open)
         .resizable(false)
         .collapsible(false)
@@ -38,7 +38,7 @@ pub fn draw_recovery_dialog(app: &mut KagariApp, ctx: &egui::Context) {
 
             ui.add_space(12.0);
             ui.horizontal(|ui| {
-                if custom_widgets::ae_button_accent(ui, "✅ 復元する").clicked() {
+                if custom_widgets::ae_button_accent(ui, "復元する").clicked() {
                     if let Some(project) = app.autosave.load_latest_recovery() {
                         app.history = crate::core::history::ProjectHistory::new(project);
                         app.production_document = app.autosave.load_latest_production();
@@ -48,7 +48,7 @@ pub fn draw_recovery_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                     app.show_recovery_dialog = false;
                     app.autosave.clear_recovery();
                 }
-                if custom_widgets::ae_button(ui, "🗑 破棄して新規開始").clicked() {
+                if custom_widgets::ae_button(ui, "破棄して新規開始").clicked() {
                     app.autosave.clear_recovery();
                     app.show_recovery_dialog = false;
                 }
