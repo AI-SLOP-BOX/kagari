@@ -108,6 +108,8 @@ pub mod colors {
 /// Layout & Spacing Constants for Pro Density
 #[allow(dead_code)]
 pub mod layout {
+    pub const HIT_TARGET_MIN: f32 = 24.0;
+    pub const HIT_TARGET_COMFORT: f32 = 28.0;
     pub const SIDEBAR_DEFAULT_WIDTH: f32 = 280.0;
     pub const TOOLBAR_HEIGHT: f32 = 32.0;
     pub const TIMELINE_LEFT_PANE_WIDTH: f32 = 260.0;
@@ -414,6 +416,8 @@ pub fn configure_ae_theme(ctx: &egui::Context) {
     ctx.style_mut(|style| {
         // Tighter spacing for pro density
         style.spacing.item_spacing = egui::vec2(6.0, 4.0);
+        style.spacing.interact_size =
+            egui::vec2(layout::HIT_TARGET_MIN, layout::HIT_TARGET_MIN);
         style.spacing.button_padding = egui::vec2(10.0, 5.0);
         style.spacing.indent = 12.0;
         style.spacing.scroll.bar_width = 5.0;
@@ -550,7 +554,11 @@ pub fn draw_separator(ui: &mut egui::Ui) {
 /// Helper: Draw a layer label color chip.
 #[allow(dead_code)]
 pub fn draw_label_chip(ui: &mut egui::Ui, color: egui::Color32) -> egui::Response {
-    let (rect, response) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::click());
+    let (hit_rect, response) = ui.allocate_exact_size(
+        egui::vec2(layout::HIT_TARGET_MIN, layout::HIT_TARGET_MIN),
+        egui::Sense::click(),
+    );
+    let rect = egui::Rect::from_center_size(hit_rect.center(), egui::vec2(12.0, 12.0));
     ui.painter().rect_filled(rect, 2.0, color);
     response
 }

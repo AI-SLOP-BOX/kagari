@@ -1519,7 +1519,7 @@ pub fn draw_layer_type_specs(
                                 .unwrap_or(false)
                         });
                         ui.horizontal(|ui| {
-                            if ui.checkbox(&mut has_rep, "Enable Repeater").clicked() {
+                            if ui.checkbox(&mut has_rep, "Enable Repeater").changed() {
                                 ui.ctx().data_mut(|d| {
                                     d.insert_temp(egui::Id::new("has_shape_repeater"), has_rep)
                                 });
@@ -1627,7 +1627,7 @@ pub fn draw_layer_type_specs(
                                 .unwrap_or(false)
                         });
                         ui.horizontal(|ui| {
-                            if ui.checkbox(&mut has_zigzag, "⚡ Enable Zig Zag").clicked() {
+                            if ui.checkbox(&mut has_zigzag, "⚡ Enable Zig Zag").changed() {
                                 ui.ctx().data_mut(|d| {
                                     d.insert_temp(egui::Id::new("has_shape_zigzag"), has_zigzag)
                                 });
@@ -2490,7 +2490,7 @@ pub fn draw_layer_type_specs(
 
                 // Stroke
                 ui.collapsing("✏ Stroke", |ui| {
-                    if ui.checkbox(&mut style.stroke.enabled, "Enabled").clicked() {
+                    if ui.checkbox(&mut style.stroke.enabled, "Enabled").changed() {
                         *project_changed = true;
                     }
                     ui.horizontal(|ui| {

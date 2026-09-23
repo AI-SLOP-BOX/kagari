@@ -200,7 +200,10 @@ pub fn ae_text_toggle(
     label: &str,
     tooltip: &str,
 ) -> egui::Response {
-    let (rect, response) = ui.allocate_exact_size(egui::vec2(27.0, 20.0), egui::Sense::click());
+    let (rect, response) = ui.allocate_exact_size(
+        egui::vec2(27.0, crate::ui::theme::layout::HIT_TARGET_MIN),
+        egui::Sense::click(),
+    );
     if response.hovered() {
         ui.painter().rect_filled(rect, 3.0, colors::BG_HOVER);
     }
@@ -238,7 +241,13 @@ pub fn ae_svg_icon_button(
     tooltip: &str,
     tint: egui::Color32,
 ) -> egui::Response {
-    let (rect, response) = ui.allocate_exact_size(egui::vec2(20.0, 20.0), egui::Sense::click());
+    let (rect, response) = ui.allocate_exact_size(
+        egui::vec2(
+            crate::ui::theme::layout::HIT_TARGET_MIN,
+            crate::ui::theme::layout::HIT_TARGET_MIN,
+        ),
+        egui::Sense::click(),
+    );
     if response.hovered() {
         ui.painter().rect_filled(rect, 2.0, colors::BG_HOVER);
     }
@@ -337,7 +346,11 @@ pub fn ae_svg_button(
 /// AE-style toggle switch
 pub fn ae_toggle(ui: &mut egui::Ui, value: &mut bool, label: &str) -> egui::Response {
     ui.horizontal(|ui| {
-        let (rect, response) = ui.allocate_exact_size(egui::vec2(32.0, 16.0), egui::Sense::click());
+        let (hit_rect, mut response) = ui.allocate_exact_size(
+            egui::vec2(32.0, crate::ui::theme::layout::HIT_TARGET_MIN),
+            egui::Sense::click(),
+        );
+        let rect = egui::Rect::from_center_size(hit_rect.center(), egui::vec2(32.0, 16.0));
 
         // Track
         let track_color = if *value {
@@ -362,8 +375,13 @@ pub fn ae_toggle(ui: &mut egui::Ui, value: &mut bool, label: &str) -> egui::Resp
         ui.painter()
             .rect_filled(thumb_rect, 6.0, egui::Color32::WHITE);
 
-        if response.clicked() {
+        let keyboard_toggle = response.has_focus()
+            && ui.input(|input| {
+                input.key_pressed(egui::Key::Space) || input.key_pressed(egui::Key::Enter)
+            });
+        if response.clicked() || keyboard_toggle {
             *value = !*value;
+            response.mark_changed();
         }
 
         ui.add_space(4.0);

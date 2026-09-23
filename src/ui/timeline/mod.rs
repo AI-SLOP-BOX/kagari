@@ -705,8 +705,18 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         (label_rgb[1] * 255.0) as u8,
                                         (label_rgb[2] * 255.0) as u8,
                                     );
-                                    let (lbl_rect, lbl_resp) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::click());
+                                    let (lbl_rect, _) = ui.allocate_exact_size(
+                                        egui::vec2(12.0, 12.0),
+                                        egui::Sense::hover(),
+                                    );
                                     ui.painter().rect_filled(lbl_rect, 1.0, label_c32);
+                                    let lbl_resp = ui.interact(
+                                        lbl_rect.expand(
+                                            crate::ui::theme::layout::HIT_TARGET_MIN * 0.5 - 6.0,
+                                        ),
+                                        ui.make_persistent_id(("layer_label_chip", layer.id.as_str())),
+                                        egui::Sense::click(),
+                                    );
                                     lbl_resp.context_menu(|ui| {
                                         ui.label("Label Color:");
                                         for label_choice in [
