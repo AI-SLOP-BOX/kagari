@@ -891,7 +891,9 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     ui.close_menu();
                 }
                 ui.separator();
-                if ui.add(egui::Button::new("Duplicate").shortcut_text("Cmd+D")).clicked() {
+                if ui.add(egui::Button::new("Duplicate").shortcut_text(
+                    crate::ui::shortcuts::format_shortcut("D", true, false, false),
+                )).clicked() {
                     if let Some(sel_idx) = app.selection.selected_layer_idx {
                         let mut duplicated = false;
                         app.modify_project(|project| {
@@ -978,7 +980,9 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                 }
             });
             ui.menu_button("Composition", |ui| {
-                if ui.add(egui::Button::new("New Composition...").shortcut_text("Cmd+N")).clicked() {
+                if ui.add(egui::Button::new("New Composition...").shortcut_text(
+                    crate::ui::shortcuts::format_shortcut("N", true, false, false),
+                )).clicked() {
                     app.show_new_comp_dialog = true;
                     ui.close_menu();
                 }
@@ -1253,7 +1257,9 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         }
                     }
                     ui.separator();
-                    if ui.add(egui::Button::new("Auto-Orient...").shortcut_text("Cmd+Alt+O")).on_hover_text("Rotate layer automatically along its motion path direction").clicked() {
+                    if ui.add(egui::Button::new("Auto-Orient...").shortcut_text(
+                        crate::ui::shortcuts::format_shortcut("O", true, false, true),
+                    )).on_hover_text("Rotate layer automatically along its motion path direction").clicked() {
                         if let Some(idx) = app.selection.selected_layer_idx {
                             app.modify_project(move |p| {
                                 if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
@@ -1270,7 +1276,9 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     }
                 });
                 ui.menu_button("Time", |ui| {
-                    if ui.add(egui::Button::new("Enable Time Remapping").shortcut_text("Cmd+Alt+T")).clicked() {
+                    if ui.add(egui::Button::new("Enable Time Remapping").shortcut_text(
+                        crate::ui::shortcuts::format_shortcut("T", true, false, true),
+                    )).clicked() {
                         if let Some(idx) = app.selection.selected_layer_idx {
                             app.modify_project(move |p| {
                                 if let Some(l) = p.active_composition_mut().layers.get_mut(idx) {
@@ -1408,7 +1416,9 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         app.selection.selected_layer_idx = if i < len { Some(len - 1) } else { app.selection.selected_layer_idx };
                         ui.close_menu();
                     }
-                    if ui.add(egui::Button::new("Bring Forward").shortcut_text("Cmd+]")).clicked() {
+                    if ui.add(egui::Button::new("Bring Forward").shortcut_text(
+                        crate::ui::shortcuts::format_shortcut("]", true, false, false),
+                    )).clicked() {
                         if i + 1 < len {
                             app.modify_project(move |p| {
                                 let comp = p.active_composition_mut();
@@ -1420,7 +1430,9 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         }
                         ui.close_menu();
                     }
-                    if ui.add(egui::Button::new("Send Backward").shortcut_text("Cmd+[")).clicked() {
+                    if ui.add(egui::Button::new("Send Backward").shortcut_text(
+                        crate::ui::shortcuts::format_shortcut("[", true, false, false),
+                    )).clicked() {
                         if i > 0 {
                             app.modify_project(move |p| {
                                 let comp = p.active_composition_mut();
@@ -1551,7 +1563,9 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     ui.close_menu();
                 }
                 ui.separator();
-                if ui.add(egui::Button::new("Pre-Compose...").shortcut_text("Cmd+Shift+C")).clicked() {
+                if ui.add(egui::Button::new("Pre-Compose...").shortcut_text(
+                    crate::ui::shortcuts::format_shortcut("C", true, true, false),
+                )).clicked() {
                     ui.close_menu();
                 }
             });
@@ -1978,7 +1992,9 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                 });
             });
             ui.menu_button("Help", |ui| {
-                if ui.add(egui::Button::new("⚙ Preferences…").shortcut_text("Cmd+,")).clicked() {
+                if ui.add(egui::Button::new("⚙ Preferences…").shortcut_text(
+                    crate::ui::shortcuts::format_shortcut(",", true, false, false),
+                )).clicked() {
                     app.show_preferences = true;
                     ui.close_menu();
                 }

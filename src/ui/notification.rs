@@ -34,11 +34,17 @@ pub struct ToastManager {
 }
 
 impl ToastManager {
+    const MAX_VISIBLE_NOTIFICATIONS: usize = 5;
+
     pub fn new() -> Self {
         Self::default()
     }
 
     pub fn show(&mut self, level: ToastLevel, message: impl Into<String>) {
+        if self.notifications.len() >= Self::MAX_VISIBLE_NOTIFICATIONS {
+            let excess = self.notifications.len() + 1 - Self::MAX_VISIBLE_NOTIFICATIONS;
+            self.notifications.drain(..excess);
+        }
         self.next_id += 1;
         self.notifications.push(ToastNotification {
             id: self.next_id,
@@ -69,6 +75,8 @@ impl ToastManager {
         if self.notifications.is_empty() {
             return;
         }
+
+        ctx.request_repaint_after(Duration::from_millis(100));
 
         egui::Area::new(egui::Id::new("toast_notification_area"))
             .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-16.0, -16.0))
@@ -112,5 +120,38 @@ impl ToastManager {
                     }
                 });
             });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ToastLevel, ToastManager};
+
+    #[test]
+    fn toast_manager_keeps_only_the_five_newest_notifications() {
+        let mut manager = ToastManager::new();
+        for index in 0..8 {
+            manager.info(format!("toast {index}"));
+        }
+
+        assert_eq!(manager.notifications.len(), 5);
+        assert_eq!(manager.notifications.first().unwrap().message, "toast 3");
+        assert_eq!(manager.notifications.last().unwrap().message, "toast 7");
+    }
+
+    #[test]
+    fn toast_manager_cap_applies_across_notification_levels() {
+        let mut manager = ToastManager::new();
+        for index in 0..6 {
+            let level = match index % 3 {
+                0 => ToastLevel::Info,
+                1 => ToastLevel::Warning,
+                _ => ToastLevel::Error,
+            };
+            manager.show(level, format!("toast {index}"));
+        }
+
+        assert_eq!(manager.notifications.len(), 5);
+        assert_eq!(manager.notifications.first().unwrap().message, "toast 1");
     }
 }

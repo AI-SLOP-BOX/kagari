@@ -148,9 +148,10 @@ pub fn draw_inline_numeric_editor(
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     if ui.button("Done (Enter)").clicked()
-                        || ui.input(|i| {
-                            i.key_pressed(egui::Key::Enter) || i.key_pressed(egui::Key::Escape)
-                        })
+                        || (!crate::ui::focus::is_text_input_focused(ctx)
+                            && ui.input(|i| {
+                                i.key_pressed(egui::Key::Enter) || i.key_pressed(egui::Key::Escape)
+                            }))
                     {
                         should_close = true;
                     }
