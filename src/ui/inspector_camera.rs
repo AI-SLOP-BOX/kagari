@@ -173,7 +173,7 @@ pub fn draw_camera_settings(
         // ── Depth of Field ──
         ui.separator();
         ui.label(
-            egui::RichText::new("🎯 Depth of Field")
+            egui::RichText::new("Depth of Field")
                 .small()
                 .strong()
                 .color(colors::ACCENT_CYAN),

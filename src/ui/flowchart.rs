@@ -160,7 +160,7 @@ pub fn draw_flowchart_view(app: &mut KagariApp, ui: &mut egui::Ui, comp: &Compos
                 painter.text(
                     egui::pos2(npos.x + 62.0, ny - 14.0),
                     egui::Align2::CENTER_CENTER,
-                    format!("⏱ {}", order),
+                    format!("{}", order),
                     egui::FontId::proportional(9.0),
                     colors::ACCENT_CYAN,
                 );

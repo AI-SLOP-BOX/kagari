@@ -64,7 +64,7 @@ pub fn draw_workspace_manager(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.add_space(2.0);
 
     ui.horizontal(|ui| {
-        if crate::ui::custom_widgets::ae_button(ui, "💾 Save Current").clicked() {
+        if crate::ui::custom_widgets::ae_button(ui, "Save Current").clicked() {
             let ws = SavedWorkspace::capture(
                 format!("Custom {}", app.custom_workspaces.len() + 1),
                 app,
@@ -74,7 +74,7 @@ pub fn draw_workspace_manager(app: &mut KagariApp, ui: &mut egui::Ui) {
             crate::ui::preferences_dialog::save_workspaces(&app.custom_workspaces);
             app.toasts.info("Workspace saved".to_string());
         }
-        if crate::ui::custom_widgets::ae_button(ui, "🔄 Reset").clicked() {
+        if crate::ui::custom_widgets::ae_button(ui, "Reset").clicked() {
             app.ui_tabs.left_tab_idx = 0;
             app.ui_tabs.right_tab_idx = 0;
             app.toasts.info("Workspace reset to default".to_string());

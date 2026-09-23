@@ -1317,7 +1317,7 @@ pub fn draw_graph_editor(
                 });
 
             ui.add_space(8.0);
-            ui.checkbox(linked_tangent, "🔗 Link");
+            ui.checkbox(linked_tangent, "Link");
 
             // ── Visual Ease Presets Palette ──
             fn apply_preset_to_layer(
@@ -1459,49 +1459,49 @@ pub fn draw_graph_editor(
             ui.horizontal_wrapped(|ui| {
                 for (lbl, short, preset, tip) in [
                     (
-                        "⚡ Easy Ease (F9)",
+                        "Easy Ease (F9)",
                         "Easy Ease",
                         crate::core::keyframe::EasePreset::Standard,
                         "Standard symmetric ease [0.25, 0.1, 0.25, 1.0]",
                     ),
                     (
-                        "↗ In",
+                        "In",
                         "In",
                         crate::core::keyframe::EasePreset::EaseIn,
                         "Ease In (slow start, fast end)",
                     ),
                     (
-                        "↘ Out",
+                        "Out",
                         "Out",
                         crate::core::keyframe::EasePreset::EaseOut,
                         "Ease Out (fast start, slow end)",
                     ),
                     (
-                        "🌊 Sine",
+                        "Sine",
                         "Sine",
                         crate::core::keyframe::EasePreset::Sine,
                         "Ultra smooth Sine ease",
                     ),
                     (
-                        "🚀 Fast Out",
+                        "Fast Out",
                         "Fast Out",
                         crate::core::keyframe::EasePreset::FastOut,
                         "Quick initial burst then smooth decelerate",
                     ),
                     (
-                        "🎯 Overshoot",
+                        "Overshoot",
                         "Overshoot",
                         crate::core::keyframe::EasePreset::Overshoot,
                         "Spring overshoot past target value",
                     ),
                     (
-                        "🏀 Bounce",
+                        "Bounce",
                         "Bounce",
                         crate::core::keyframe::EasePreset::Bounce,
                         "Physical single bounce easing",
                     ),
                     (
-                        "🪀 Elastic",
+                        "Elastic",
                         "Elastic",
                         crate::core::keyframe::EasePreset::Elastic,
                         "Elastic spring recoil easing",
@@ -1573,7 +1573,7 @@ pub fn draw_graph_editor(
 
             ui.add_space(4.0);
             if ui
-                .button("⚡ Mirror Ease")
+                .button("Mirror Ease")
                 .on_hover_text("Symmetrically mirror Ease In / Ease Out handles")
                 .clicked()
             {
@@ -1599,7 +1599,7 @@ pub fn draw_graph_editor(
 
             ui.add_space(4.0);
             if ui
-                .button("↘ Ease In")
+                .button("Ease In")
                 .on_hover_text("Flatten incoming tangent — keyframe eases into its value")
                 .clicked()
             {
@@ -1623,7 +1623,7 @@ pub fn draw_graph_editor(
                     map_layer_interpolation(layer, &active_prop, ease_target_frame, &mut ease_in);
             }
             if ui
-                .button("↗ Ease Out")
+                .button("Ease Out")
                 .on_hover_text("Flatten outgoing tangent — keyframe eases out of its value")
                 .clicked()
             {
@@ -1658,14 +1658,14 @@ pub fn draw_graph_editor(
                         .color(colors::TEXT_SECONDARY),
                 );
                 if ui
-                    .selectable_label(current_mode == 0, "⚡ Speed Graph")
+                    .selectable_label(current_mode == 0, "Speed Graph")
                     .clicked()
                 {
                     current_mode = 0;
                     ui.ctx().data_mut(|d| d.insert_temp(mode_id, 0));
                 }
                 if ui
-                    .selectable_label(current_mode == 1, "📈 Value Graph")
+                    .selectable_label(current_mode == 1, "Value Graph")
                     .clicked()
                 {
                     current_mode = 1;
@@ -1673,7 +1673,7 @@ pub fn draw_graph_editor(
                 }
             });
 
-            ui.collapsing("🎯 Keyframe Velocity / Influence", |ui| {
+            ui.collapsing("Keyframe Velocity / Influence", |ui| {
                 let prop = selected_property.as_deref().unwrap_or("Position X");
                 let target_id = egui::Id::new(("ae_graph_hovered_kf", &layer.id, prop));
                 let index: Option<usize> = ui.ctx().data(|d| d.get_temp(target_id));
@@ -1733,7 +1733,7 @@ pub fn draw_graph_editor(
                 ui.separator();
                 ui.horizontal(|ui| {
                     if ui
-                        .small_button("📐 Linear")
+                        .small_button("Linear")
                         .on_hover_text("Convert keyframes to linear interpolation")
                         .clicked()
                     {
@@ -1744,7 +1744,7 @@ pub fn draw_graph_editor(
                         );
                     }
                     if ui
-                        .small_button("🌊 Auto Bezier")
+                        .small_button("Auto Bezier")
                         .on_hover_text("Smooth keyframe tangents automatically")
                         .clicked()
                     {
@@ -1759,7 +1759,7 @@ pub fn draw_graph_editor(
                         );
                     }
                     if ui
-                        .small_button("🛑 Hold")
+                        .small_button("Hold")
                         .on_hover_text("Hold keyframe value until next keyframe")
                         .clicked()
                     {
@@ -2270,7 +2270,7 @@ pub fn draw_graph_editor(
                 ui.painter().text(
                     speed_badge_pos,
                     egui::Align2::LEFT_TOP,
-                    format!("⚡ Peak: {:.0} px/s", max_speed * display_fps as f32),
+                    format!("Peak: {:.0} px/s", max_speed * display_fps as f32),
                     egui::FontId::monospace(10.0),
                     colors::MOTION_PATH,
                 );
@@ -3247,7 +3247,7 @@ pub fn draw_automation_curve(
         return;
     }
     ui.separator();
-    ui.label(egui::RichText::new("🎚 Automation Channel").strong());
+    ui.label(egui::RichText::new("Automation Channel").strong());
     let (rect, response) = ui.allocate_exact_size(
         egui::vec2(ui.available_width(), 100.0),
         egui::Sense::hover(),
@@ -3361,7 +3361,7 @@ pub fn draw_camera_lens_graph(
         .data(|d| d.get_temp::<String>(id))
         .unwrap_or_else(|| "FOV".into());
     ui.horizontal(|ui| {
-        ui.label(egui::RichText::new("📈 Camera Lens Graph").strong());
+        ui.label(egui::RichText::new("Camera Lens Graph").strong());
         egui::ComboBox::from_id_salt(id)
             .selected_text(&property)
             .show_ui(ui, |ui| {
@@ -3474,7 +3474,7 @@ pub fn draw_camera_lens_graph(
         _ => camera.dof_max_blur_animation.as_ref(),
     };
     let Some(track) = track else {
-        ui.label("No keyframes yet — use ◆ in Camera Settings.");
+        ui.label("No keyframes yet — use in Camera Settings.");
         return;
     };
     let Some(keys) = track.keyframes().map(|keys| keys.to_vec()) else {

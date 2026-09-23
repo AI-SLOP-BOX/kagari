@@ -11,12 +11,12 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
     egui::TopBottomPanel::top("text_workspace_window_bar")
         .exact_height(43.0)
         .resizable(false)
-        .frame(egui::Frame::none().fill(egui::Color32::from_rgb(24, 31, 37)))
+        .frame(egui::Frame::none().fill(crate::ui::theme::colors::BG_PANEL_DARK))
         .show(ctx, |ui| {
             for (x, c) in [
-                (23.0, egui::Color32::from_rgb(255, 82, 78)),
-                (46.0, egui::Color32::from_rgb(255, 190, 45)),
-                (69.0, egui::Color32::from_rgb(42, 211, 86)),
+                (23.0, crate::ui::theme::colors::METER_BAD),
+                (46.0, crate::ui::theme::colors::METER_WARNING),
+                (69.0, crate::ui::theme::colors::METER_GOOD),
             ] {
                 ui.painter().circle_filled(egui::pos2(x, 22.0), 7.0, c);
             }
@@ -36,7 +36,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
             );
         });
     egui::CentralPanel::default()
-        .frame(egui::Frame::none().fill(egui::Color32::from_rgb(10, 18, 24)))
+        .frame(egui::Frame::none().fill(crate::ui::theme::colors::BG_DEEPEST))
         .show(ctx, |ui| {
             let r = ui.max_rect();
             let sidebar = egui::Rect::from_min_max(r.min, egui::pos2(left_w, r.bottom()));
@@ -53,7 +53,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
             let timeline_top = r.bottom() - if narrow { 260.0 } else { 316.0 };
             let border = egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE);
             ui.painter()
-                .rect_filled(sidebar, 0.0, egui::Color32::from_rgb(14, 24, 31));
+                .rect_filled(sidebar, 0.0, crate::ui::theme::colors::BG_PANEL_BASE);
             ui.painter().line_segment(
                 [egui::pos2(left_w, 0.0), egui::pos2(left_w, r.bottom())],
                 border,
@@ -128,7 +128,7 @@ fn draw_logo(
                 egui::Align2::LEFT_CENTER,
                 "VFX",
                 egui::FontId::proportional(24.0),
-                egui::Color32::from_rgb(161, 174, 190),
+                crate::ui::theme::colors::TEXT_SECONDARY,
             );
         }
     }
@@ -250,7 +250,7 @@ fn draw_presets(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect) {
     ui.painter().rect(
         search,
         5.0,
-        egui::Color32::from_rgb(16, 29, 38),
+        crate::ui::theme::colors::BG_PANEL_ALT,
         egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
     );
     ui.painter().text(

@@ -30,7 +30,7 @@ pub fn draw_node_graph_panel(
     ui.group(|ui: &mut egui::Ui| {
         ui.horizontal(|ui: &mut egui::Ui| {
             ui.label(
-                egui::RichText::new("🕸 Hybrid Node Graph View")
+                egui::RichText::new("Hybrid Node Graph View")
                     .strong()
                     .color(colors::ACCENT_CYAN),
             );
@@ -234,14 +234,14 @@ pub fn draw_node_graph_panel(
                     let icon = match &layer.layer_type {
                         crate::core::timeline::LayerType::Video { .. } => "Video",
                         LayerType::Solid { .. } => "█",
-                        LayerType::Image { .. } => "🖼",
-                        LayerType::Model3D { .. } => "🧊",
+                        LayerType::Image { .. } => "IMG",
+                        LayerType::Model3D { .. } => "3D",
                         LayerType::Text { .. } => "T",
                         LayerType::Shape { .. } => "⬡",
                         LayerType::Null => "⌖",
-                        LayerType::PreComp { .. } => "🎞",
+                        LayerType::PreComp { .. } => "PRE",
                         LayerType::AdjustmentLayer => "◐",
-                        LayerType::Audio { .. } => "🎵",
+                        LayerType::Audio { .. } => "AUD",
                         LayerType::Particle { .. } => "✦",
                     };
 

@@ -31,7 +31,7 @@ pub fn draw_comp_breadcrumb(app: &mut KagariApp, ui: &mut egui::Ui) {
     let mut back_requested = false;
 
     ui.horizontal(|ui| {
-        ui.label(egui::RichText::new("🧭").small());
+        ui.label(egui::RichText::new("›").small());
 
         for (pos, label) in stack_labels.iter().enumerate() {
             if ui.small_button(label).clicked() {
@@ -42,7 +42,7 @@ pub fn draw_comp_breadcrumb(app: &mut KagariApp, ui: &mut egui::Ui) {
 
         // Current location crumb (non-clickable, highlighted).
         ui.label(
-            egui::RichText::new(format!("📦 {}", current_name))
+            egui::RichText::new(current_name.to_string())
                 .small()
                 .strong()
                 .color(colors::ACCENT_BLUE),

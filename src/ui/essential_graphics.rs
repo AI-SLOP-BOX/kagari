@@ -273,13 +273,13 @@ pub fn draw_essential_graphics(app: &mut KagariApp, ui: &mut egui::Ui) {
 
     ui.horizontal(|ui| {
         if ui
-            .button("📦 Export Motion Graphics Template (.mogrt)")
+            .button("Export Motion Graphics Template (.mogrt)")
             .on_hover_text("Export the current project and exposed properties as a MOGRT package")
             .clicked()
         {
             export_mogrt(app);
         }
-        if ui.button("📥 Import MOGRT...").clicked() {
+        if ui.button("Import MOGRT...").clicked() {
             if let Some(path) = rfd::FileDialog::new()
                 .add_filter("MOGRT Template", &["mogrt", "json"])
                 .pick_file()

@@ -42,7 +42,7 @@ pub fn steps() -> &'static [TutorialStep] {
                 "│  タイムライン (下)   │ エフェクトライブ  │",
                 "└──────────────────────────────────────┘",
                 "まずは画面全体を眺めて、各エリアの位置を把握しましょう。",
-                "右上の「🔰 Mode: Beginner」ボタンで初心者向けシンプルUIと",
+                "右上の「Mode: Beginner」ボタンで初心者向けシンプルUIと",
                 "プロ向けフルUIをいつでも切り替えられます。",
             ],
             hint: "試してみよう: 右上の「Mode」ボタンをクリックして Beginner ↔ Pro を切り替え",
@@ -90,13 +90,13 @@ pub fn steps() -> &'static [TutorialStep] {
             body: &[
                 "レイヤーは素材の積み重ね。上のレイヤーが前面に表示されます。",
                 "追加できるレイヤーの種類:",
-                "  📝 Text      — テキスト (Layer > New > Text)",
+                "  Text      — テキスト (Layer > New > Text)",
                 "  ⬛ Solid     — 無地の背景色 (Layer > New > Solid)",
                 "  ◎ Shape     — ベクター図形 (Layer > New > Shape)",
-                "  📷 Video     — 動画ファイルをドロップ",
-                "  🔊 Audio     — WAV ファイルをドロップ",
-                "  💡 Light     — 3D照明ソース",
-                "  📷 Camera    — 3Dカメラ",
+                "  Video     — 動画ファイルをドロップ",
+                "  Audio     — WAV ファイルをドロップ",
+                "  Light     — 3D照明ソース",
+                "  Camera    — 3Dカメラ",
                 "タイムライン上でドラッグして順番を入れ替えられます。",
             ],
             hint: "試してみよう: Layer > New > Text で「Kagari」と入力してみよう",
@@ -110,8 +110,8 @@ pub fn steps() -> &'static [TutorialStep] {
             title: "5/12 — キーフレームの基本",
             body: &[
                 "アニメーションの仕組み:",
-                "  1️⃣ タイムラインで「フレーム 0」に再生ヘッドを移動",
-                "  2️⃣ インスペクターの「Position」横の ⏱ (ストップウォッチ)をクリック",
+                "  タイムラインで「フレーム 0」に再生ヘッドを移動",
+                "  2️⃣ インスペクターの「Position」横の (ストップウォッチ)をクリック",
                 "     → キーフレーム記録開始",
                 "  3️⃣ 再生ヘッドを「フレーム 60」(2秒後)に移動",
                 "  4️⃣ ビューポートでレイヤーをドラッグ → 自動でキーフレーム追加",
@@ -150,12 +150,12 @@ pub fn steps() -> &'static [TutorialStep] {
                 "右パネルの「Effects Library」タブに全エフェクトが並んでいます。",
                 "",
                 "定番エフェクト:",
-                "  ✨ Glow          — 光り輝くグロー効果",
-                "  💫 Blur (Box)    — なめらかなぼかし",
+                "  Glow          — 光り輝くグロー効果",
+                "  Blur (Box)    — なめらかなぼかし",
                 "  🌈 Lumetri Color — プロ向けカラーグレーディング",
-                "  🔮 Distort       — ゆがみ・ウェーブ系変形",
-                "  📡 Noise & Grain — フィルムグレイン・ノイズ追加",
-                "  💥 Stylize > Glow — ネオン・発光テキスト",
+                "  Distort       — ゆがみ・ウェーブ系変形",
+                "  Noise & Grain — フィルムグレイン・ノイズ追加",
+                "  Stylize > Glow — ネオン・発光テキスト",
                 "",
                 "ダブルクリックまたはレイヤーへドラッグで適用。",
                 "複数エフェクトを重ねた場合、上から順に処理されます。",
@@ -211,7 +211,7 @@ pub fn steps() -> &'static [TutorialStep] {
                 "Cinema 4D スタイルの押し出し (Extrude/Bevel) はレイヤーを",
                 "右クリック > 「3D Extrude Settings」から設定します。",
             ],
-            hint: "試してみよう: テキストレイヤーの 🎲 スイッチをオン → 3D Extrude Settings",
+            hint: "試してみよう: テキストレイヤーの スイッチをオン → 3D Extrude Settings",
             shortcut: "",
             advanced_tip: "カメラを null レイヤーにペアレントして、カメラリグ（クレーンショットやドリーズーム）を簡単に作れます。",
         },
@@ -221,7 +221,7 @@ pub fn steps() -> &'static [TutorialStep] {
             body: &[
                 "パペットツール (Puppet Tool): 画像を骨格で動かす高度な変形機能。",
                 "",
-                "  1️⃣ ツールバーから「🪆 Puppet」ツールを選択",
+                "  ツールバーから「Puppet」ツールを選択",
                 "  2️⃣ レイヤー上にピンをクリックで配置 (3個以上)",
                 "  3️⃣ ピンをドラッグするとメッシュが有機的に変形",
                 "  4️⃣ ピンにキーフレームを打つとキャラクターが動く",
@@ -243,12 +243,12 @@ pub fn steps() -> &'static [TutorialStep] {
             body: &[
                 "File > Export (Cmd+M) から高品質レンダリング:",
                 "",
-                "  🎬 MP4 (H.264)    — Web/SNS 向け汎用フォーマット",
-                "  🎞 ProRes 422     — 編集用高品質マスター",
-                "  🎞 ProRes 4444    — アルファ付き合成素材",
-                "  🎨 Lottie JSON    — Web アニメーション (互換)",
-                "  📽 GIF            — ループアニメーション",
-                "  🎞 MLT XML        — Kdenlive / Shotcut との連携",
+                "  MP4 (H.264)    — Web/SNS 向け汎用フォーマット",
+                "  ProRes 422     — 編集用高品質マスター",
+                "  ProRes 4444    — アルファ付き合成素材",
+                "  Lottie JSON    — Web アニメーション (互換)",
+                "  GIF            — ループアニメーション",
+                "  MLT XML        — Kdenlive / Shotcut との連携",
                 "",
                 "「Render Queue」に複数のコンポを追加して一括書き出しも可能。",
                 "書き出し中も別のコンポの編集を続けられます（非同期レンダリング）。",
@@ -261,23 +261,23 @@ pub fn steps() -> &'static [TutorialStep] {
             chapter: "Chapter 6: 書き出しと公開",
             title: "12/12 — 次のステップ",
             body: &[
-                "🎉 チュートリアル完了です！おめでとうございます！",
+                "チュートリアル完了です！おめでとうございます！",
                 "",
                 "さらに深く学ぶために:",
                 "",
-                "  📖 Help > Keyboard Shortcuts Reference",
+                "  Help > Keyboard Shortcuts Reference",
                 "     → 全キーボードショートカット一覧",
                 "",
-                "  🔬 Window > Graph Editor",
+                "  Window > Graph Editor",
                 "     → 速度曲線の精密コントロール",
                 "",
-                "  🤖 Window > AI Features (オプション)",
+                "  Window > AI Features (オプション)",
                 "     → RTX 等ハイエンド環境でAIロトブラシ・深度推定",
                 "",
-                "  📦 GitHub: github.com/AI-SLOP-BOX/kagarivfx",
+                "  GitHub: github.com/AI-SLOP-BOX/kagarivfx",
                 "     → Issues / Discussions / Pull Requests 大歓迎!",
                 "",
-                "「⚡ Mode: Pro Studio」に切り替えてフル機能を楽しんでください！",
+                "「Mode: Pro Studio」に切り替えてフル機能を楽しんでください！",
             ],
             hint: "右上の「Mode」ボタンで Pro Studio モードに切り替えよう！",
             shortcut: "",
@@ -326,7 +326,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
     let mut open_flag = true;
 
     crate::ui::modal::window(
-        egui::RichText::new(format!("🎓  {}", step.title))
+        egui::RichText::new(step.title.to_string())
             .strong()
             .color(colors::TEXT_PRIMARY),
     )
@@ -336,18 +336,18 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
     .anchor(egui::Align2::RIGHT_TOP, [-16.0, 60.0])
     .collapsible(false)
     .resizable(false)
-    .frame(egui::Frame::window(&ctx.style()).fill(egui::Color32::from_rgb(22, 22, 30)))
+    .frame(egui::Frame::window(&ctx.style()).fill(crate::ui::theme::colors::BG_EXTREME))
     .show(ctx, |ui| {
         // Chapter badge
         ui.horizontal(|ui| {
             ui.label(
                 egui::RichText::new(step.chapter)
                     .small()
-                    .color(egui::Color32::from_rgb(100, 180, 255)),
+                    .color(crate::ui::theme::colors::ACCENT_BLUE_LIGHT),
             );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
-                    .small_button("📋 章一覧")
+                    .small_button("章一覧")
                     .on_hover_text("チュートリアルの章一覧を表示")
                     .clicked()
                 {
@@ -378,7 +378,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
         if !step.shortcut.is_empty() {
             ui.horizontal(|ui| {
                 ui.label(
-                    egui::RichText::new("⌨  ショートカット: ")
+                    egui::RichText::new("ショートカット: ")
                         .small()
                         .color(colors::TEXT_SECONDARY),
                 );
@@ -399,9 +399,9 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
             .inner_margin(egui::Margin::symmetric(8.0, 6.0))
             .show(ui, |ui| {
                 ui.label(
-                    egui::RichText::new(format!("💡  {}", step.hint))
+                    egui::RichText::new(step.hint.to_string())
                         .size(12.5)
-                        .color(egui::Color32::from_rgb(90, 200, 140)),
+                        .color(crate::ui::theme::colors::ACCENT_GREEN),
                 );
             });
 
@@ -409,7 +409,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
         if !step.advanced_tip.is_empty() {
             ui.add_space(4.0);
             ui.collapsing(
-                egui::RichText::new("🔬 上級者向けヒント")
+                egui::RichText::new("上級者向けヒント")
                     .small()
                     .color(egui::Color32::from_rgb(180, 140, 255)),
                 |ui| {
@@ -438,9 +438,9 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
                     if ui
                         .add(
                             egui::Button::new(
-                                egui::RichText::new("完了 🎉")
+                                egui::RichText::new("完了")
                                     .strong()
-                                    .color(egui::Color32::from_rgb(90, 200, 140)),
+                                    .color(crate::ui::theme::colors::ACCENT_GREEN),
                             )
                             .fill(egui::Color32::from_rgb(30, 80, 50)),
                         )
@@ -483,7 +483,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
                 egui::vec2(dot_w, dot_h),
             );
             let color = if i == step_idx {
-                egui::Color32::from_rgb(90, 160, 255)
+                crate::ui::theme::colors::ACCENT_BLUE_LIGHT
             } else if i < step_idx {
                 egui::Color32::from_rgb(60, 120, 200)
             } else {
@@ -513,7 +513,7 @@ fn draw_chapter_select(app: &mut KagariApp, ctx: &egui::Context) {
         .anchor(egui::Align2::RIGHT_TOP, [-16.0, 60.0])
         .collapsible(false)
         .resizable(false)
-        .frame(egui::Frame::window(&ctx.style()).fill(egui::Color32::from_rgb(22, 22, 30)))
+        .frame(egui::Frame::window(&ctx.style()).fill(crate::ui::theme::colors::BG_EXTREME))
         .show(ctx, |ui| {
             ui.label(
                 egui::RichText::new("学びたい章をクリックして直接ジャンプできます。")
@@ -537,7 +537,7 @@ fn draw_chapter_select(app: &mut KagariApp, ctx: &egui::Context) {
                 let done = current >= end;
                 let active = current >= start && current < end;
                 let chapter_color = if active {
-                    egui::Color32::from_rgb(90, 160, 255)
+                    crate::ui::theme::colors::ACCENT_BLUE_LIGHT
                 } else if done {
                     egui::Color32::from_rgb(60, 120, 60)
                 } else {
@@ -642,7 +642,7 @@ fn apply_action(app: &mut KagariApp, action: Option<StepAction>) {
             if let Some(s) = app.tutorial.as_mut() {
                 s.completed = true;
             }
-            app.toasts.info("チュートリアル完了！Have fun animating 🎉");
+            app.toasts.info("チュートリアル完了！Have fun animating");
         }
         Some(StepAction::ShowChapterSelect) => {
             if let Some(s) = app.tutorial.as_mut() {

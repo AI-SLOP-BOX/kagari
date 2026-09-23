@@ -476,7 +476,7 @@ pub fn draw(
             brightness,
             scale,
         } => {
-            ui.label("✨ Optical Flares");
+            ui.label("Optical Flares");
             draw_prop(
                 ui,
                 current_frame,

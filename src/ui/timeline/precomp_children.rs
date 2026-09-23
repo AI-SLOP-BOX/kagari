@@ -15,15 +15,15 @@ pub struct PreCompChild {
 
 fn layer_icon(lt: &LayerType) -> &'static str {
     match lt {
-        LayerType::Video { .. } => "🎬",
-        LayerType::Image { .. } => "🖼",
-        LayerType::Model3D { .. } => "🧊",
-        LayerType::Audio { .. } => "🔊",
+        LayerType::Video { .. } => "VID",
+        LayerType::Image { .. } => "IMG",
+        LayerType::Model3D { .. } => "3D",
+        LayerType::Audio { .. } => "AUD",
         LayerType::Text { .. } => "T",
         LayerType::Shape { .. } => "◆",
         LayerType::Solid { .. } => "■",
         LayerType::Null => "∅",
-        LayerType::PreComp { .. } => "📦",
+        LayerType::PreComp { .. } => "PRE",
         LayerType::AdjustmentLayer => "◐",
         LayerType::Particle { .. } => "✦",
     }
@@ -128,7 +128,7 @@ pub fn draw_children_rows(
     ui.horizontal(|ui| {
         ui.add_space(20.0);
         if ui
-            .small(egui::RichText::new("📂 Open Pre-comp...").color(colors::ACCENT_BLUE))
+            .small(egui::RichText::new("Open Pre-comp...").color(colors::ACCENT_BLUE))
             .clicked()
         {
             open_requested = true;

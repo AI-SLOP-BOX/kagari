@@ -40,7 +40,7 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
 
         ui.add_space(4.0);
         if ui
-            .button("⏱ Enable Time Remapping (Cmd+Alt+T)")
+            .button("Enable Time Remapping (Cmd+Alt+T)")
             .on_hover_text("Adds Time Remap keyframe track for speed control")
             .clicked()
         {
@@ -60,7 +60,7 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
 
         ui.horizontal(|ui| {
             if ui
-                .button("🧊 Freeze Frame at Playhead")
+                .button("Freeze Frame at Playhead")
                 .on_hover_text("Locks layer playback to the current frame")
                 .clicked()
             {
@@ -99,7 +99,7 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
         // ── Loop: bake repeating time-remap keyframes over the layer duration ──
         ui.add_space(6.0);
         ui.label(
-            egui::RichText::new("🔄 Auto Loop (bakes time-remap keys)")
+            egui::RichText::new("Auto Loop (bakes time-remap keys)")
                 .small()
                 .strong()
                 .color(colors::ACCENT_CYAN),
@@ -108,11 +108,11 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             for (label, mode, tip) in [
                 (
-                    "🔁 Loop Cycle",
+                    "Loop Cycle",
                     0usize,
                     "Repeat source forward continuously",
                 ),
-                ("🏓 Loop PingPong", 1usize, "Alternate forward / reverse"),
+                ("Loop PingPong", 1usize, "Alternate forward / reverse"),
             ] {
                 if ui.button(label).on_hover_text(tip).clicked() {
                     let mut temp_proj = app.history.current().clone();
@@ -270,7 +270,7 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
         ui.add_space(6.0);
         ui.separator();
         ui.label(
-            egui::RichText::new("🎵 Audio Time-Stretch & Pitch Correction")
+            egui::RichText::new("Audio Time-Stretch & Pitch Correction")
                 .strong()
                 .color(colors::ACCENT_CYAN),
         );

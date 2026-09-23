@@ -173,7 +173,7 @@ pub fn handle_dropped_files(app: &mut KagariApp, ctx: &egui::Context) {
                 };
                 let mut layer = crate::core::timeline::Layer::new(
                     format!("aud_{}", name),
-                    format!("🔊 {}", name),
+                    name.to_string(),
                     crate::core::timeline::LayerType::Audio {
                         path: path_str.clone(),
                         volume: crate::core::property::Animatable::new_constant(1.0),

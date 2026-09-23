@@ -177,7 +177,7 @@ pub fn draw(
             invert_matte,
             composite_mode,
         } => {
-            ui.label("🎭 Set Matte");
+            ui.label("Set Matte");
             ui.horizontal(|ui| {
                 ui.label("Source Layer Index:");
                 let mut idx_i32 = *source_layer_idx as i32;
@@ -241,7 +241,7 @@ pub fn draw(
             tolerance,
             softness,
         } => {
-            ui.label("🗝️ Linear Color Key");
+            ui.label("Linear Color Key");
             let kc_before = key_color.clone();
             if let Some(nf) =
                 draw_property_ui(current_frame, ui, "Key Color", key_color, |ui, val| {

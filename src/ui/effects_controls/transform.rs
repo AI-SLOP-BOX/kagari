@@ -45,7 +45,7 @@ pub fn draw(
             mirror_edges,
             phase,
         } => {
-            ui.label("🔲 Motion Tile");
+            ui.label("Motion Tile");
             draw_prop(
                 ui,
                 current_frame,
@@ -114,7 +114,7 @@ pub fn draw(
             rotation_deg,
             opacity,
         } => {
-            ui.label("📐 Transform");
+            ui.label("Transform");
             let ap_before = anchor_point.clone();
             if let Some(nf) = draw_property_ui(
                 current_frame,

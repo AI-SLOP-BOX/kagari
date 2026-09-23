@@ -5,7 +5,7 @@ use crate::KagariApp;
 use eframe::egui;
 
 pub fn draw_the_smoother_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
-    ui.heading("🌊 The Smoother");
+    ui.heading("The Smoother");
     ui.label(
         egui::RichText::new("Reduce keyframe density using RDP curve fitting")
             .small()
@@ -59,7 +59,7 @@ pub fn draw_the_smoother_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.add_space(8.0);
     ui.separator();
 
-    if custom_widgets::ae_button(ui, "⚡ Apply Smoother")
+    if custom_widgets::ae_button(ui, "Apply Smoother")
         .on_hover_text("Simplify keyframes on active selected layer")
         .clicked()
     {

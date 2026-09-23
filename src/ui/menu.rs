@@ -172,7 +172,7 @@ fn draw_reference_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context)
     egui::TopBottomPanel::top("studio_header")
         .exact_height(48.0)
         .resizable(false)
-        .frame(egui::Frame::none().fill(egui::Color32::from_rgb(10, 18, 24)))
+        .frame(egui::Frame::none().fill(crate::ui::theme::colors::BG_DEEPEST))
         .show(ctx, |ui| {
             let rect = ui.max_rect();
             ui.painter().line_segment(
@@ -516,21 +516,21 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     }
                     ui.close_menu();
                 }
-                if ui.button("📦 Collect Files...").on_hover_text("Collect all source footage, audio, and asset dependencies into an archive folder").clicked() {
+                if ui.button("Collect Files...").on_hover_text("Collect all source footage, audio, and asset dependencies into an archive folder").clicked() {
                     if let Some(folder) = rfd::FileDialog::new().pick_folder() {
                         let project = app.history.current();
                         let target_json = folder.join("collected_project.json");
                         match crate::core::project_migration::save_project_atomic(project, target_json.to_str().unwrap_or("")) {
                             Ok(_) => {
                                 crate::ui::project_io::reveal_in_file_manager(&folder);
-                                app.toasts.info(format!("📦 Collected project & assets to {}", folder.display()));
+                                app.toasts.info(format!("Collected project & assets to {}", folder.display()));
                             },
                             Err(e) => app.toasts.error(format!("Collect failed: {}", e)),
                         }
                     }
                     ui.close_menu();
                 }
-                if ui.button("🧹 Remove Unused Footage").on_hover_text("Remove unused footage items from project").clicked() {
+                if ui.button("Remove Unused Footage").on_hover_text("Remove unused footage items from project").clicked() {
                     let mut temp_proj = app.history.current().clone();
                     let mut used_names = std::collections::HashSet::new();
                     for c in &temp_proj.compositions {
@@ -555,7 +555,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     app.toasts.info(format!("Removed {} unused footage items", rem));
                     ui.close_menu();
                 }
-                if ui.button("🗜 Reduce Project").on_hover_text("Keep only the active composition and its dependencies").clicked() {
+                if ui.button("Reduce Project").on_hover_text("Keep only the active composition and its dependencies").clicked() {
                     let mut temp_proj = app.history.current().clone();
                     let act = temp_proj.active_composition_idx;
                     if act < temp_proj.compositions.len() {
@@ -863,7 +863,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     app.export.show_export_dialog = true;
                     ui.close_menu();
                 }
-                if ui.button("⚡ Quick Export Active Comp").on_hover_text("Export the active composition to MP4 with current settings (no dialog)").clicked() {
+                if ui.button("Quick Export Active Comp").on_hover_text("Export the active composition to MP4 with current settings (no dialog)").clicked() {
                     let comp_name = app.history.current().active_composition().name.clone();
                     crate::ui::export_dialog::start_comp_export(app, ctx, &comp_name);
                     ui.close_menu();
@@ -886,7 +886,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     app.history.redo();
                     ui.close_menu();
                 }
-                if ui.button("🕘 Undo History…").on_hover_text("Open the named-step history panel and jump to any step").clicked() {
+                if ui.button("Undo History…").on_hover_text("Open the named-step history panel and jump to any step").clicked() {
                     app.show_history_panel = !app.show_history_panel;
                     ui.close_menu();
                 }
@@ -1304,7 +1304,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         }
                         ui.close_menu();
                     }
-                    if ui.add(egui::Button::new("🎯 Stabilize Motion (from Track)")).on_hover_text("Bake counter-movement position keyframes from the layer's first tracker").clicked() {
+                    if ui.add(egui::Button::new("Stabilize Motion (from Track)")).on_hover_text("Bake counter-movement position keyframes from the layer's first tracker").clicked() {
                         if let Some(idx) = app.selection.selected_layer_idx {
                             let mut baked_count = 0usize;
                             app.modify_project(|p| {
@@ -1457,7 +1457,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     }
                 });
                 ui.menu_button("Create", |ui| {
-                    if ui.button("🔤 Create Shapes from Text").on_hover_text("Convert text characters into editable vector shape layer").clicked() {
+                    if ui.button("Create Shapes from Text").on_hover_text("Convert text characters into editable vector shape layer").clicked() {
                         if let Some(idx) = app.selection.selected_layer_idx {
                             let mut temp_proj = app.history.current().clone();
                             let comp = temp_proj.active_composition_mut();
@@ -1496,7 +1496,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         }
                         ui.close_menu();
                     }
-                    if ui.button("🎭 Create Masks from Text").on_hover_text("Convert text outline into vector mask").clicked() {
+                    if ui.button("Create Masks from Text").on_hover_text("Convert text outline into vector mask").clicked() {
                         if let Some(idx) = app.selection.selected_layer_idx {
                             let mut temp_proj = app.history.current().clone();
                             let comp = temp_proj.active_composition_mut();
@@ -1541,7 +1541,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     ui.close_menu();
                 }
                 ui.separator();
-                if ui.button("🔤 Create Shapes from Text").on_hover_text("Decompose selected Text layer into animatable vector Bezier Shape paths").clicked() {
+                if ui.button("Create Shapes from Text").on_hover_text("Decompose selected Text layer into animatable vector Bezier Shape paths").clicked() {
                     let mut created = false;
                     let selected_idx = app.selection.selected_layer_idx;
                     app.modify_project(|p| {
@@ -1556,7 +1556,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         }
                     });
                     if created {
-                        app.toasts.info("🔤 Created Shapes from Text layer");
+                        app.toasts.info("Created Shapes from Text layer");
                     } else {
                         app.toasts.warning("Please select a Text layer first");
                     }
@@ -1748,11 +1748,11 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     }
                 });
                 ui.menu_button("Generate", |ui| {
-                    if ui.button("⚡ Lightning").on_hover_text("Procedural electric lightning arcs with glow").clicked() {
+                    if ui.button("Lightning").on_hover_text("Procedural electric lightning arcs with glow").clicked() {
                         apply_effect_by_name(app, "Lightning");
                         ui.close_menu();
                     }
-                    if ui.button("🔴 Laser Beam").on_hover_text("High-energy projectile laser beam with customizable core and glow").clicked() {
+                    if ui.button("Laser Beam").on_hover_text("High-energy projectile laser beam with customizable core and glow").clicked() {
                         apply_effect_by_name(app, "Laser Beam");
                         ui.close_menu();
                     }
@@ -1760,7 +1760,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
             });
             ui.menu_button("Animation", |ui| {
                 ui.menu_button("Keyframe Assistant", |ui| {
-                    if ui.button("🎵 Convert Audio to Keyframes").on_hover_text("Extract RMS amplitude from audio layer into Slider Controls").clicked() {
+                    if ui.button("Convert Audio to Keyframes").on_hover_text("Extract RMS amplitude from audio layer into Slider Controls").clicked() {
                         let mut audio_source: Option<String> = None;
                         let comp = app.history.current().active_composition();
                         if let Some(idx) = app.selection.selected_layer_idx {
@@ -1786,7 +1786,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         }
                         ui.close_menu();
                     }
-                    if ui.button("🎧 Convert Multi-Band Audio (Bass/Mid/Treble)").on_hover_text("Extract frequency-separated amplitude (Master, Bass, Mid, Treble) into Sliders").clicked() {
+                    if ui.button("Convert Multi-Band Audio (Bass/Mid/Treble)").on_hover_text("Extract frequency-separated amplitude (Master, Bass, Mid, Treble) into Sliders").clicked() {
                         let mut audio_source: Option<String> = None;
                         let comp = app.history.current().active_composition();
                         if let Some(idx) = app.selection.selected_layer_idx {
@@ -1812,7 +1812,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         }
                         ui.close_menu();
                     }
-                    if ui.button("📈 Exponential Scale").on_hover_text("Convert linear scale keyframes into exponential logarithmic zoom").clicked() {
+                    if ui.button("Exponential Scale").on_hover_text("Convert linear scale keyframes into exponential logarithmic zoom").clicked() {
                         if let Some(idx) = app.selection.selected_layer_idx {
                             let mut temp_proj = app.history.current().clone();
                             let comp = temp_proj.active_composition_mut();
@@ -1883,11 +1883,11 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         ui.close_menu();
                     }
                 });
-                if ui.button("🌊 The Smoother...").on_hover_text("Reduce keyframe density with RDP curve simplification").clicked() {
+                if ui.button("The Smoother...").on_hover_text("Reduce keyframe density with RDP curve simplification").clicked() {
                     app.show_the_smoother = true;
                     ui.close_menu();
                 }
-                if ui.button("🎲 The Wiggler...").on_hover_text("Bake procedural noise keyframes into layer properties").clicked() {
+                if ui.button("The Wiggler...").on_hover_text("Bake procedural noise keyframes into layer properties").clicked() {
                     app.show_the_wiggler = true;
                     ui.close_menu();
                 }
@@ -1917,7 +1917,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     }
                 });
                 ui.separator();
-                if ui.button("🎓 Restart Tutorial").clicked() {
+                if ui.button("Restart Tutorial").clicked() {
                     crate::ui::tutorial::restart(app);
                     ui.close_menu();
                 }
@@ -1925,11 +1925,11 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                 ui.checkbox(&mut app.show_grid, "Show Grid");
                 ui.checkbox(&mut app.show_guides, "Show Safe Zones");
                 ui.checkbox(&mut app.show_handles, "Show Handles");
-                if ui.button("📊 Analyze / Quality Check…").clicked() {
+                if ui.button("Analyze / Quality Check…").clicked() {
                     app.show_quality_check_panel = true;
                     ui.close_menu();
                 }
-                if ui.button("🎚 Automation Bindings…").clicked() {
+                if ui.button("Automation Bindings…").clicked() {
                     app.show_automation_panel = true;
                     ui.close_menu();
                 }
@@ -1998,7 +1998,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     app.show_preferences = true;
                     ui.close_menu();
                 }
-                if ui.button("✨ Show Welcome Screen").clicked() {
+                if ui.button("Show Welcome Screen").clicked() {
                     app.show_welcome = true;
                     ui.close_menu();
                 }
@@ -2007,7 +2007,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     ctx.data_mut(|d| d.insert_temp(help_id, true));
                     ui.close_menu();
                 }
-                if ui.button("🎓 Start Guided Tutorial...").clicked() {
+                if ui.button("Start Guided Tutorial...").clicked() {
                     app.show_guided_tutorial = true;
                     app.tutorial_step = 0;
                     ui.close_menu();
@@ -2023,8 +2023,8 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
             // Right-aligned UI Mode Switcher (Beginner vs Pro)
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let (btn_text, next_mode) = match app.skill_level {
-                    crate::app_state::SkillLevel::Beginner => ("🔰 Mode: Beginner (Simple)", crate::app_state::SkillLevel::Pro),
-                    crate::app_state::SkillLevel::Pro => ("⚡ Mode: Pro Studio (Full)", crate::app_state::SkillLevel::Beginner),
+                    crate::app_state::SkillLevel::Beginner => ("Mode: Beginner (Simple)", crate::app_state::SkillLevel::Pro),
+                    crate::app_state::SkillLevel::Pro => ("Mode: Pro Studio (Full)", crate::app_state::SkillLevel::Beginner),
                 };
                 if ui.button(btn_text).on_hover_text("Click to toggle between Simple Beginner UI and Full Pro Studio Layout").clicked() {
                     app.skill_level = next_mode;
@@ -2075,7 +2075,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         if ui.button("Next Step ▶").clicked() {
                             app.tutorial_step += 1;
                         }
-                    } else if ui.button("Finish Tour 🎉").clicked() {
+                    } else if ui.button("Finish Tour").clicked() {
                         finish_tutorial = true;
                     }
                 });
@@ -2194,7 +2194,7 @@ fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
         ctx.data_mut(|d| d.insert_temp(help_id, show_help));
     }
 
-    // 📦 Pre-Compose Dialog (Cmd+Shift+C)
+    // Pre-Compose Dialog (Cmd+Shift+C)
     crate::ui::precompose_dialog::draw_precompose_dialog(app, ctx);
     crate::ui::recovery_dialog::draw_recovery_dialog(app, ctx);
     crate::ui::sequence_layers_dialog::draw_sequence_layers_dialog(app, ctx);

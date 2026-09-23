@@ -216,7 +216,7 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                         app.toasts.error("Nothing to analyze: extend the work area past the playhead");
                     }
                 }
-                if custom_widgets::ae_button_accent(ui, "🌊 Markerless Optical Flow").on_hover_text("Track the selected point with dense forward/backward optical flow and confidence filtering").clicked() {
+                if custom_widgets::ae_button_accent(ui, "Markerless Optical Flow").on_hover_text("Track the selected point with dense forward/backward optical flow and confidence filtering").clicked() {
                     let wa_out = app.playback.work_area_out.unwrap_or_else(|| {
                         app.history.current().active_composition().duration_frames.saturating_sub(1)
                     });
@@ -245,7 +245,7 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                         .color(colors::ACCENT_GREEN),
                 );
             }
-            if custom_widgets::ae_button(ui, "🧍 Estimate Markerless Pose")
+            if custom_widgets::ae_button(ui, "Estimate Markerless Pose")
                 .on_hover_text("Estimate and stabilize a 2D humanoid pose from the work area")
                 .clicked()
             {
@@ -340,7 +340,7 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
             // ── 3D Camera Tracker (Scene Reconstruction) ──
             ui.add_space(8.0);
             ui.separator();
-            ui.collapsing("📷 3D Camera Tracker (Scene Reconstruction)", |ui| {
+            ui.collapsing("3D Camera Tracker (Scene Reconstruction)", |ui| {
                 ui.horizontal(|ui| {
                     ui.label("Shot Type:");
                     let mut shot_type = ui.ctx().data(|d| {
@@ -581,7 +581,7 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                             }
                         }
                     }
-                    if custom_widgets::ae_button(ui, "📐 Align Surface Corners")
+                    if custom_widgets::ae_button(ui, "Align Surface Corners")
                         .on_hover_text("Snap planar surface to layer bounding box")
                         .clicked()
                     {
@@ -884,7 +884,7 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                             app.toasts.error("Could not apply Corner Pin: need four tracked points");
                         }
                     }
-                    if custom_widgets::ae_button(ui, "🎥 Stabilize Motion").on_hover_text("Cancel camera shake by inverting motion onto target anchor/position").clicked() {
+                    if custom_widgets::ae_button(ui, "Stabilize Motion").on_hover_text("Cancel camera shake by inverting motion onto target anchor/position").clicked() {
                         app.modify_project(|p| {
                             let comp = p.active_composition_mut();
                             crate::core::tracker_engine::TrackerEngine::apply_stabilize_tracker_to_target(comp, idx, active_tk_idx, target_idx, true, true);
@@ -895,7 +895,7 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
             }
 
             ui.horizontal(|ui| {
-                if custom_widgets::ae_button_accent(ui, "📦 Apply Motion → New Null")
+                if custom_widgets::ae_button_accent(ui, "Apply Motion → New Null")
                     .on_hover_text(
                         "Create a new Null layer and bind the tracked motion keyframes to it",
                     )
@@ -924,7 +924,7 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                     app.toasts
                         .info("Created new Null layer with tracked motion!");
                 }
-                if custom_widgets::ae_button(ui, "🌊 Smooth Track")
+                if custom_widgets::ae_button(ui, "Smooth Track")
                     .on_hover_text(
                         "Apply Gaussian temporal filter to reduce jitter in tracked keyframes",
                     )
@@ -966,7 +966,7 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
                     .strong()
                     .color(colors::ACCENT_CYAN),
             );
-            ui.collapsing("🔍 Auto-Trace Settings", |ui| {
+            ui.collapsing("Auto-Trace Settings", |ui| {
                 ui.horizontal(|ui| {
                     ui.label("Channel:");
                     let mut chan_idx = 0;
@@ -991,7 +991,7 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
 
             // ── Roto Brush & Refine Edge (Matte Cleanup) ──
             let mut apply_roto_refinement = false;
-            ui.collapsing("✂ Roto Brush & Refine Edge", |ui| {
+            ui.collapsing("Roto Brush & Refine Edge", |ui| {
                 let mut refine_smooth = ui.ctx().data(|d| {
                     d.get_temp::<f32>(egui::Id::new("roto_smooth"))
                         .unwrap_or(2.0)
@@ -1082,7 +1082,7 @@ pub fn draw_tracker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame:
             }
 
             ui.horizontal(|ui| {
-                if custom_widgets::ae_button_accent(ui, "🎯 Auto-Generate Mask")
+                if custom_widgets::ae_button_accent(ui, "Auto-Generate Mask")
                     .on_hover_text("Auto-create Bezier Mask around tracked feature")
                     .clicked()
                 {

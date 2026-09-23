@@ -75,7 +75,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
         egui::SidePanel::left("studio_global_nav")
             .resizable(false)
             .exact_width(54.0)
-            .frame(egui::Frame::none().fill(egui::Color32::from_rgb(12, 20, 27)))
+            .frame(egui::Frame::none().fill(crate::ui::theme::colors::BG_DARKEST))
             .show(ctx, |ui| draw_reference_studio_nav(app, ui));
     }
 
@@ -91,7 +91,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
             .max_width(if reference_demo { 380.0 } else { max_width })
             .frame(if reference_demo {
                 egui::Frame::none()
-                    .fill(egui::Color32::from_rgb(13, 22, 29))
+                    .fill(crate::ui::theme::colors::BG_DARKEST)
                     .inner_margin(egui::Margin::symmetric(17.0, 0.0))
             } else {
                 egui::Frame::default()
@@ -480,9 +480,9 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
 
                             // Pick whip button: click to enter pick mode, then click a layer in timeline
                             let whip_text = if app.pick_whip_mode {
-                                "🔗 Picking..."
+                                "Picking..."
                             } else {
-                                "🔗"
+                                "Link"
                             };
                             if ui
                                 .button(whip_text)
@@ -749,12 +749,12 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
 
                                         // Invert toggle
                                         let inv_before = mask.inverted;
-                                        ui.checkbox(&mut mask.inverted, "Invert 🔄");
+                                        ui.checkbox(&mut mask.inverted, "Invert");
                                         if inv_before != mask.inverted {
                                             project_changed = true;
                                         }
 
-                                        if ui.small_button("🗑").clicked() {
+                                        if ui.small_button("×").clicked() {
                                             mask_to_remove = Some(m_idx);
                                         }
                                     });
@@ -1111,7 +1111,7 @@ fn draw_reference_studio_nav(app: &mut KagariApp, ui: &mut egui::Ui) {
             );
             if index == 1 {
                 ui.painter()
-                    .rect_filled(row, 4.0, egui::Color32::from_rgb(28, 35, 43));
+                    .rect_filled(row, 4.0, crate::ui::theme::colors::BG_PANEL_DARK);
                 ui.painter().rect_filled(
                     egui::Rect::from_min_size(row.left_top(), egui::vec2(3.0, row.height())),
                     2.0,
@@ -1168,7 +1168,7 @@ fn draw_reference_studio_nav(app: &mut KagariApp, ui: &mut egui::Ui) {
         );
         if active {
             ui.painter()
-                .rect_filled(row, 4.0, egui::Color32::from_rgb(28, 35, 43));
+                .rect_filled(row, 4.0, crate::ui::theme::colors::BG_PANEL_DARK);
             ui.painter().rect_filled(
                 egui::Rect::from_min_max(
                     egui::pos2(row.left(), row.top()),

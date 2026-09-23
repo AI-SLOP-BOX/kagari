@@ -69,7 +69,7 @@ pub fn draw_align_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
 
         ui.horizontal(|ui| {
             if ui
-                .button("⇤ Left")
+                .button("Left")
                 .on_hover_text("Align Left Edge")
                 .clicked()
             {
@@ -98,7 +98,7 @@ pub fn draw_align_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                 project_changed = true;
             }
             if ui
-                .button("⇥ Right")
+                .button("Right")
                 .on_hover_text("Align Right Edge")
                 .clicked()
             {

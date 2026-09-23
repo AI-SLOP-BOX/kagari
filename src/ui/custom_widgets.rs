@@ -151,10 +151,10 @@ pub fn ae_button_accent(ui: &mut egui::Ui, label: &str) -> egui::Response {
         .color(colors::TEXT_ON_ACCENT);
 
     let button = egui::Button::new(text)
-        .fill(egui::Color32::from_rgb(32, 92, 168))
+        .fill(colors::ACCENT_ACTION)
         .stroke(egui::Stroke::new(
             1.0_f32,
-            egui::Color32::from_rgb(48, 120, 200),
+            colors::ACCENT_ACTION_STROKE,
         ))
         .rounding(egui::Rounding::same(2.0))
         .min_size(egui::vec2(60.0, 22.0));
@@ -164,7 +164,7 @@ pub fn ae_button_accent(ui: &mut egui::Ui, label: &str) -> egui::Response {
     if response.hovered() {
         let rect = response.rect;
         ui.painter()
-            .rect_filled(rect, 2.0, egui::Color32::from_rgb(40, 108, 190));
+            .rect_filled(rect, 2.0, colors::ACCENT_ACTION_HOVER);
     }
 
     response
@@ -406,9 +406,24 @@ pub fn ae_section_header(ui: &mut egui::Ui, title: &str, icon: &str) {
 
         ui.add_space(4.0);
 
-        // Title
+        if let Some(svg) = crate::ui::icons::svg_for_icon_label(icon) {
+            let (rect, _) =
+                ui.allocate_exact_size(egui::vec2(14.0, 14.0), egui::Sense::hover());
+            crate::ui::icons::render_svg_at(
+                ui,
+                format!("section-icon-{title}"),
+                svg,
+                rect.size(),
+                colors::TEXT_SECONDARY,
+                rect.min,
+            );
+            ui.add_space(3.0);
+        } else if !icon.is_empty() {
+            ui.label(egui::RichText::new(icon).small().color(colors::TEXT_SECONDARY));
+            ui.add_space(3.0);
+        }
         ui.label(
-            egui::RichText::new(format!("{} {}", icon, title))
+            egui::RichText::new(title)
                 .small()
                 .strong()
                 .color(colors::TEXT_PRIMARY),

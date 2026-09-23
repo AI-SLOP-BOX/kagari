@@ -98,7 +98,7 @@ pub fn draw_proxy_controls(app: &mut KagariApp, ui: &mut egui::Ui) {
                 .unwrap_or(true)
         });
         if ui
-            .selectable_label(mfr_enabled, "⚡ MFR")
+            .selectable_label(mfr_enabled, "MFR")
             .on_hover_text("Multi-Frame Rendering (Rayon CPU Parallelism)")
             .clicked()
         {
@@ -108,7 +108,7 @@ pub fn draw_proxy_controls(app: &mut KagariApp, ui: &mut egui::Ui) {
         }
 
         if ui
-            .small_button("🗑 Purge RAM")
+            .small_button("Purge RAM")
             .on_hover_text("Purge all RAM Preview Frame Cache")
             .clicked()
         {

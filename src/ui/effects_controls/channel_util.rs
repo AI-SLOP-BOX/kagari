@@ -14,7 +14,7 @@ pub fn draw(
             to_target,
             invert,
         } => {
-            ui.label("🔀 Channel Combiner");
+            ui.label("Channel Combiner");
             ui.horizontal(|ui| {
                 ui.label("From:");
                 egui::ComboBox::from_id_salt("chan_comb_from")

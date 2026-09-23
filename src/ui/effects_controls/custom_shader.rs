@@ -15,7 +15,7 @@ pub fn draw(
             uniform_values,
         } => {
             ui.label(
-                egui::RichText::new("⚡ Custom WGSL Shader Plugin")
+                egui::RichText::new("Custom WGSL Shader Plugin")
                     .strong()
                     .color(colors::ACCENT_CYAN),
             );
@@ -23,7 +23,7 @@ pub fn draw(
             // Templates dropdown
             ui.horizontal(|ui| {
                 ui.label("Templates:");
-                if ui.small_button("📺 CRT Scanlines").clicked() {
+                if ui.small_button("CRT Scanlines").clicked() {
                     *wgsl_source = r#"// CRT Scanlines Shader
 @group(0) @binding(0) var t_diffuse: texture_2d<f32>;
 @group(0) @binding(1) var s_diffuse: sampler;
@@ -42,7 +42,7 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
                     }
                     *project_changed = true;
                 }
-                if ui.small_button("🌀 Chromatic Twist").clicked() {
+                if ui.small_button("Chromatic Twist").clicked() {
                     *wgsl_source = r#"// Chromatic Twist Shader
 @group(0) @binding(0) var t_diffuse: texture_2d<f32>;
 @group(0) @binding(1) var s_diffuse: sampler;
@@ -63,7 +63,7 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
                     }
                     *project_changed = true;
                 }
-                if ui.small_button("⚡ Neon Edge").clicked() {
+                if ui.small_button("Neon Edge").clicked() {
                     *wgsl_source = r#"// Neon Edge Glow
 @group(0) @binding(0) var t_diffuse: texture_2d<f32>;
 @group(0) @binding(1) var s_diffuse: sampler;
@@ -106,7 +106,7 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
             ui.horizontal(|ui| {
                 if status.is_valid {
                     ui.label(
-                        egui::RichText::new("✅ Naga WGSL Valid")
+                        egui::RichText::new("Naga WGSL Valid")
                             .small()
                             .color(colors::ACCENT_GREEN),
                     );
@@ -142,7 +142,7 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
                 }
 
                 if ui
-                    .small_button("📁 Load .wgsl File")
+                    .small_button("Load .wgsl File")
                     .on_hover_text("Load and hot-reload shader from disk")
                     .clicked()
                 {

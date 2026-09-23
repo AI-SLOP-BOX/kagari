@@ -44,72 +44,72 @@ pub fn draw_easy_ease_button<T: Clone>(
         // Smart Ease Curve Preset Selector Dropdown
         let combo_id = ui.make_persistent_id(("smart_ease_combo", ui.next_auto_id()));
         egui::ComboBox::from_id_salt(combo_id)
-            .selected_text("✨ Smart Presets...")
+            .selected_text("Smart Presets...")
             .show_ui(ui, |ui| {
                 for (preset, label, desc) in [
                     (
                         crate::core::keyframe::EasePreset::Standard,
-                        "🟢 Standard Ease",
+                        "Standard Ease",
                         "Symmetrical Smooth Ease",
                     ),
                     (
                         crate::core::keyframe::EasePreset::FastIn,
-                        "⚡ Fast Acceleration",
+                        "Fast Acceleration",
                         "Sudden Speed Up",
                     ),
                     (
                         crate::core::keyframe::EasePreset::SmoothOut,
-                        "🎯 Smooth Deceleration",
+                        "Smooth Deceleration",
                         "Gentle Slow Down",
                     ),
                     (
                         crate::core::keyframe::EasePreset::Overshoot,
-                        "🏀 Spring Overshoot",
+                        "Spring Overshoot",
                         "Bounce Back Effect",
                     ),
                     (
                         crate::core::keyframe::EasePreset::Sine,
-                        "🌊 Sine Wave",
+                        "Sine Wave",
                         "Ultra Smooth Harmonic Ease",
                     ),
                     (
                         crate::core::keyframe::EasePreset::FastOut,
-                        "🚀 Fast Out",
+                        "Fast Out",
                         "Explosive Start, Quick Settle",
                     ),
                     (
                         crate::core::keyframe::EasePreset::SlowIn,
-                        "🐢 Slow In",
+                        "Slow In",
                         "Gradual Gentle Acceleration",
                     ),
                     (
                         crate::core::keyframe::EasePreset::Elastic,
-                        "🎈 Elastic",
+                        "Elastic",
                         "Rubber Band Elastic Motion",
                     ),
                     (
                         crate::core::keyframe::EasePreset::Bounce,
-                        "⚽ Bounce",
+                        "Bounce",
                         "Ball Bounce Impact",
                     ),
                     (
                         crate::core::keyframe::EasePreset::Cycle,
-                        "🔄 Cycle",
+                        "Cycle",
                         "Looping Rhythmic Ease",
                     ),
                     (
                         crate::core::keyframe::EasePreset::MirrorEase2,
-                        "🪞 Mirror",
+                        "Mirror",
                         "Symmetrical Back and Forth",
                     ),
                     (
                         crate::core::keyframe::EasePreset::EaseIn,
-                        "📈 Quadratic In",
+                        "Quadratic In",
                         "Classic Quadratic Acceleration",
                     ),
                     (
                         crate::core::keyframe::EasePreset::EaseOut,
-                        "📉 Quadratic Out",
+                        "Quadratic Out",
                         "Classic Quadratic Deceleration",
                     ),
                 ] {
@@ -177,7 +177,7 @@ pub fn draw_easy_ease_button<T: Clone>(
             });
 
         // Physics Spring Bounce Auto Generator Button
-        if custom_widgets::ae_button(ui, "⚽ Physics Spring")
+        if custom_widgets::ae_button(ui, "Physics Spring")
             .on_hover_text("Apply Physics-based Overshoot & Spring Dynamics")
             .clicked()
         {
@@ -215,8 +215,8 @@ pub fn draw_easy_ease_button<T: Clone>(
             }
         }
 
-        // 📈 Linear Keyframe Mode Button
-        if custom_widgets::ae_button(ui, "📈 Linear")
+        // Linear Keyframe Mode Button
+        if custom_widgets::ae_button(ui, "Linear")
             .on_hover_text("Linear Keyframe: Values interpolate smoothly at constant speed")
             .clicked()
         {
@@ -400,35 +400,35 @@ pub fn draw_expression_selector(
                 // Expression Language Menu (AE Flyout Triangle)
                 let _lang_menu_id = ui.make_persistent_id(format!("expr_lang_menu_{}", label));
                 ui.menu_button("▶ Language ▾", |ui| {
-                    ui.label(egui::RichText::new("📖 Expression Language Library").strong().color(colors::ACCENT_CYAN));
+                    ui.label(egui::RichText::new("Expression Language Library").strong().color(colors::ACCENT_CYAN));
                     ui.separator();
 
-                    ui.menu_button("🌐 Global & Comp", |ui| {
+                    ui.menu_button("Global & Comp", |ui| {
                         if ui.button("time (seconds)").clicked() { *script = format!("{}\ntime", script); *project_changed = true; ui.close_menu(); }
                         if ui.button("thisComp.duration").clicked() { *script = format!("{}\nthisComp.duration", script); *project_changed = true; ui.close_menu(); }
                         if ui.button("thisLayer.index").clicked() { *script = format!("{}\nthisLayer.index", script); *project_changed = true; ui.close_menu(); }
                         if ui.button("valueAtTime(time - 0.1)").clicked() { *script = format!("{}\nvalueAtTime(time - 0.1)", script); *project_changed = true; ui.close_menu(); }
                     });
 
-                    ui.menu_button("🎲 Random Numbers", |ui| {
+                    ui.menu_button("Random Numbers", |ui| {
                         if ui.button("wiggle(freq, amp)").clicked() { *script = format!("{}\nwiggle(4, 25)", script); *project_changed = true; ui.close_menu(); }
                         if ui.button("random(min, max)").clicked() { *script = format!("{}\nrandom(0.0, 100.0)", script); *project_changed = true; ui.close_menu(); }
                         if ui.button("noise(time)").clicked() { *script = format!("{}\nnoise(time * 2.0)", script); *project_changed = true; ui.close_menu(); }
                     });
 
-                    ui.menu_button("📈 Interpolation", |ui| {
+                    ui.menu_button("Interpolation", |ui| {
                         if ui.button("linear(t, tMin, tMax, val1, val2)").clicked() { *script = format!("{}\nlinear(time, 0.0, 2.0, 0.0, 100.0)", script); *project_changed = true; ui.close_menu(); }
                         if ui.button("ease(t, tMin, tMax, val1, val2)").clicked() { *script = format!("{}\nease(time, 0.0, 1.5, 0.0, 200.0)", script); *project_changed = true; ui.close_menu(); }
                         if ui.button("easeIn(t, 0, 1, 0, 100)").clicked() { *script = format!("{}\neaseIn(time, 0.0, 1.0, 0.0, 100.0)", script); *project_changed = true; ui.close_menu(); }
                     });
 
-                    ui.menu_button("🔁 Looping & PingPong", |ui| {
+                    ui.menu_button("Looping & PingPong", |ui| {
                         if ui.button("loopOut(\"cycle\")").clicked() { *script = format!("{}\nloopOut(\"cycle\")", script); *project_changed = true; ui.close_menu(); }
                         if ui.button("loopOut(\"pingpong\")").clicked() { *script = format!("{}\nloopOut(\"pingpong\")", script); *project_changed = true; ui.close_menu(); }
                         if ui.button("loopIn(\"cycle\")").clicked() { *script = format!("{}\nloopIn(\"cycle\")", script); *project_changed = true; ui.close_menu(); }
                     });
 
-                    ui.menu_button("📐 Vector & Trigonometry Math", |ui| {
+                    ui.menu_button("Vector & Trigonometry Math", |ui| {
                         if ui.button("Math.sin(time * 3.0) * 50.0").clicked() { *script = format!("{}\nMath.sin(time * 3.0) * 50.0", script); *project_changed = true; ui.close_menu(); }
                         if ui.button("Math.atan2(y, x)").clicked() { *script = format!("{}\nMath.atan2(y, x)", script); *project_changed = true; ui.close_menu(); }
                         if ui.button("clamp(val, min, max)").clicked() { *script = format!("{}\nclamp(value, 0.0, 100.0)", script); *project_changed = true; ui.close_menu(); }
@@ -682,11 +682,11 @@ pub fn draw_property_ui<
         // Secondary property actions stay behind a quiet overflow affordance.
         ui.menu_button("...", |ui| {
             ui.label(egui::RichText::new("Advanced property actions").strong());
-            if ui.button("⚡ Easy Ease (F9)").clicked() {
+            if ui.button("Easy Ease (F9)").clicked() {
                 property.easy_ease();
                 ui.close_menu();
             }
-            if ui.button("🌊 Sine Wave Ease").clicked() {
+            if ui.button("Sine Wave Ease").clicked() {
                 if let Animatable::Animated(ref mut kfs) = property {
                     for kf in kfs {
                         kf.interpolation = InterpolationType::Bezier {

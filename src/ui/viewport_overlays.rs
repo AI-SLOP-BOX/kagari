@@ -175,7 +175,7 @@ pub fn draw_viewport_overlays(
         }
     }
 
-    // 🧷 Puppet pin trajectory paths for the selected layer
+    // Puppet pin trajectory paths for the selected layer
     {
         let to_screen = |v: [f32; 2]| {
             egui::pos2(
@@ -311,7 +311,7 @@ pub fn draw_viewport_overlays(
         };
 
         let fps_text = format!(
-            "⚡ {:.1}ms ({:.0} FPS) | Q:{}% ({}) | RAM:{}/{}",
+            "{:.1}ms ({:.0} FPS) | Q:{}% ({}) | RAM:{}/{}",
             render_ms, real_fps, quality_pct, quality_label, cached_frames, total_comp_frames
         );
         let fps_rect = egui::Rect::from_min_size(

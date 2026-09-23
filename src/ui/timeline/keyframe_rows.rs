@@ -56,31 +56,31 @@ pub fn draw_expanded_rows(
             Some(&mut |_pk: &str, f: u32, resp: &egui::Response| {
                 resp.context_menu(|ui| {
                     ui.set_min_width(210.0);
-                    if ui.button("⬤ Linear Interpolation").clicked() {
+                    if ui.button("Linear Interpolation").clicked() {
                         kf_menu_cmds.push((_pk.to_owned(), f, 0));
                         ui.close_menu();
                     }
-                    if ui.button("◆ Easy Ease (F9)").clicked() {
+                    if ui.button("Easy Ease (F9)").clicked() {
                         kf_menu_cmds.push((_pk.to_owned(), f, 1));
                         ui.close_menu();
                     }
-                    if ui.button("↗ Ease In (Shift+F9)").clicked() {
+                    if ui.button("Ease In (Shift+F9)").clicked() {
                         kf_menu_cmds.push((_pk.to_owned(), f, 5));
                         ui.close_menu();
                     }
-                    if ui.button("↘ Ease Out (Ctrl+Shift+F9)").clicked() {
+                    if ui.button("Ease Out (Ctrl+Shift+F9)").clicked() {
                         kf_menu_cmds.push((_pk.to_owned(), f, 6));
                         ui.close_menu();
                     }
-                    if ui.button("🎯 Overshoot / Spring").clicked() {
+                    if ui.button("Overshoot / Spring").clicked() {
                         kf_menu_cmds.push((_pk.to_owned(), f, 7));
                         ui.close_menu();
                     }
-                    if ui.button("🏀 Bounce").clicked() {
+                    if ui.button("Bounce").clicked() {
                         kf_menu_cmds.push((_pk.to_owned(), f, 8));
                         ui.close_menu();
                     }
-                    if ui.button("🪀 Elastic").clicked() {
+                    if ui.button("Elastic").clicked() {
                         kf_menu_cmds.push((_pk.to_owned(), f, 9));
                         ui.close_menu();
                     }
@@ -93,7 +93,7 @@ pub fn draw_expanded_rows(
                         kf_menu_cmds.push((_pk.to_owned(), f, 3));
                         ui.close_menu();
                     }
-                    if ui.button("🗑 Delete Keyframe (Del)").clicked() {
+                    if ui.button("Delete Keyframe (Del)").clicked() {
                         kf_menu_cmds.push((_pk.to_owned(), f, 4));
                         ui.close_menu();
                     }
@@ -236,7 +236,7 @@ pub fn draw_expanded_rows(
             let ap_kfs = get_kfs(&t.anchor_point);
             draw_prop_row(
                 ui,
-                "  ⏱ Anchor Point",
+                "  Anchor Point",
                 &ap_kfs,
                 current_frame,
                 start_frame,
@@ -286,19 +286,19 @@ pub fn draw_expanded_rows(
             }};
         }
         if let Some(copies) = repeater.copies_animation.as_mut() {
-            repeater_row!(copies, "  ⏱ Repeater Copies", "repeater_copies");
+            repeater_row!(copies, "  Repeater Copies", "repeater_copies");
         }
         if let Some(position) = repeater.position_offset_animation.as_mut() {
-            repeater_row!(position, "  ⏱ Repeater Position", "repeater_position");
+            repeater_row!(position, "  Repeater Position", "repeater_position");
         }
         if let Some(scale) = repeater.scale_offset_animation.as_mut() {
-            repeater_row!(scale, "  ⏱ Repeater Scale", "repeater_scale");
+            repeater_row!(scale, "  Repeater Scale", "repeater_scale");
         }
         if let Some(rotation) = repeater.rotation_offset_animation.as_mut() {
-            repeater_row!(rotation, "  ⏱ Repeater Rotation", "repeater_rotation");
+            repeater_row!(rotation, "  Repeater Rotation", "repeater_rotation");
         }
         if let Some(opacity) = repeater.opacity_animation.as_mut() {
-            repeater_row!(opacity, "  ⏱ Repeater Opacity", "repeater_opacity");
+            repeater_row!(opacity, "  Repeater Opacity", "repeater_opacity");
         }
     }
 
@@ -464,7 +464,7 @@ pub fn draw_expanded_rows(
         let kfs = get_kfs(&pin.position);
         draw_prop_row_ext(
             ui,
-            &format!("  🧷 {}", pin.name),
+            &format!("  {}", pin.name),
             &kfs,
             current_frame,
             start_frame,
@@ -980,7 +980,7 @@ pub fn draw_expanded_rows(
         let tr_kfs = get_kfs(remap);
         draw_prop_row(
             ui,
-            "  ⏱ Time Remap",
+            "  Time Remap",
             &tr_kfs,
             current_frame,
             start_frame,
@@ -997,7 +997,7 @@ pub fn draw_expanded_rows(
     for (m_idx, mask) in layer.masks.iter_mut().enumerate() {
         let moved_m: &mut bool = project_changed;
         ui.label(
-            egui::RichText::new(format!("  🎭 {}", mask.name))
+            egui::RichText::new(format!("  {}", mask.name))
                 .small()
                 .strong()
                 .color(colors::TEXT_SECONDARY),

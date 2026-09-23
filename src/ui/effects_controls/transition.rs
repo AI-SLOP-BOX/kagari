@@ -93,7 +93,7 @@ pub fn draw(
             back_opacity,
             back_color: _,
         } => {
-            ui.label("📖 CC Page Turn");
+            ui.label("CC Page Turn");
             draw_prop(
                 ui,
                 current_frame,

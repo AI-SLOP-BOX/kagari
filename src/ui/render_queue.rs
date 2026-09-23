@@ -32,7 +32,7 @@ pub fn draw_render_queue_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     let comp_name = app.history.current().active_composition().name.clone();
 
     ui.horizontal(|ui| {
-        if custom_widgets::ae_button_accent(ui, "⚡ Render All Queue (Cmd+M)")
+        if custom_widgets::ae_button_accent(ui, "Render All Queue (Cmd+M)")
             .on_hover_text("Sequentially export every queued composition to video")
             .clicked()
         {
@@ -96,7 +96,7 @@ pub fn draw_render_queue_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
             }
         }
 
-        if custom_widgets::ae_button(ui, "📡 Export Farm Job Manifest")
+        if custom_widgets::ae_button(ui, "Export Farm Job Manifest")
             .on_hover_text(
                 "Write the current render queue as a Deadline/OpenCue-compatible JSON job",
             )

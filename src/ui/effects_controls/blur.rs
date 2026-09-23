@@ -136,7 +136,7 @@ pub fn draw(
             highlight_gain,
             highlight_threshold,
         } => {
-            ui.label("📷 Camera Lens Blur");
+            ui.label("Camera Lens Blur");
             draw_prop(
                 ui,
                 current_frame,

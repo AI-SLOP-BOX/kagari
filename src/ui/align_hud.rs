@@ -31,7 +31,7 @@ pub fn draw_alignment_hud(app: &mut KagariApp, ui: &mut egui::Ui) {
 
         // 2. Align Horizontal Center
         if ui
-            .button("⇥🔒⇤")
+            .button("↔")
             .on_hover_text("Align Horizontal Center")
             .clicked()
         {
@@ -88,7 +88,7 @@ pub fn draw_alignment_hud(app: &mut KagariApp, ui: &mut egui::Ui) {
 
         // 5. Align Vertical Center
         if ui
-            .button("⇡🔒⇣")
+            .button("↕")
             .on_hover_text("Align Vertical Center")
             .clicked()
         {

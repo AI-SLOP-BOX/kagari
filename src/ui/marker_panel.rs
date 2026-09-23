@@ -8,7 +8,7 @@ pub fn draw_marker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame: 
 
     ui.horizontal(|ui| {
         if ui
-            .button("📍 Add Marker at Current Time (*)")
+            .button("Add Marker at Current Time (*)")
             .on_hover_text("Adds marker at current playhead frame")
             .clicked()
         {
@@ -71,7 +71,7 @@ pub fn draw_marker_panel(app: &mut KagariApp, ui: &mut egui::Ui, current_frame: 
                                 {
                                     app.playback.current_frame = marker.frame;
                                 }
-                                if ui.small_button("🗑").clicked() {
+                                if ui.small_button("×").clicked() {
                                     marker_to_delete = Some(m_idx);
                                 }
                             });

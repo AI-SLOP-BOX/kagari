@@ -4,9 +4,9 @@ use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
 
-const ORANGE: egui::Color32 = egui::Color32::from_rgb(255, 106, 24);
+const ORANGE: egui::Color32 = crate::ui::theme::colors::ACCENT_BRAND;
 const BG: egui::Color32 = egui::Color32::from_rgb(8, 16, 22);
-const PANEL: egui::Color32 = egui::Color32::from_rgb(15, 26, 34);
+const PANEL: egui::Color32 = crate::ui::theme::colors::BG_PANEL_BASE;
 
 pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
     let width = ctx.screen_rect().width();
@@ -18,7 +18,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
         .show(ctx, |ui| draw_topbar(ui, width, mobile, app, ctx));
     egui::TopBottomPanel::bottom("effects_workspace_footer")
         .exact_height(if mobile { 34.0 } else { 50.0 })
-        .frame(egui::Frame::none().fill(egui::Color32::from_rgb(9, 16, 22)))
+        .frame(egui::Frame::none().fill(crate::ui::theme::colors::BG_DEEPEST))
         .show(ctx, |ui| draw_footer(ui, width, mobile));
     egui::CentralPanel::default()
         .frame(egui::Frame::none().fill(BG))
@@ -248,7 +248,7 @@ fn draw_sidebar(
                     egui::vec2(width - 20.0, 40.0),
                 ),
                 6.0,
-                egui::Color32::from_rgb(28, 43, 55),
+                crate::ui::theme::colors::BG_PANEL,
             );
             p.rect_filled(
                 egui::Rect::from_min_size(egui::pos2(side.left() + 10.0, y), egui::vec2(4.0, 40.0)),
@@ -448,7 +448,7 @@ fn draw_center(
     p.rect(
         search,
         6.0,
-        egui::Color32::from_rgb(16, 29, 38),
+        crate::ui::theme::colors::BG_PANEL_ALT,
         egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM),
     );
     p.text(
@@ -474,7 +474,7 @@ fn draw_center(
         p.rect(
             sort_rect,
             6.0,
-            egui::Color32::from_rgb(16, 29, 38),
+            crate::ui::theme::colors::BG_PANEL_ALT,
             egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM),
         );
         p.text(
@@ -499,7 +499,7 @@ fn draw_center(
         p.rect(
             view_rect,
             6.0,
-            egui::Color32::from_rgb(16, 29, 38),
+            crate::ui::theme::colors::BG_PANEL_ALT,
             egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM),
         );
         let grid_rect = egui::Rect::from_min_size(view_rect.min, egui::vec2(46.0, toolbar_h));
@@ -783,7 +783,7 @@ fn draw_detail(
         p.rect(
             tag_rect,
             15.0,
-            egui::Color32::from_rgb(28, 43, 55),
+            crate::ui::theme::colors::BG_PANEL,
             egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
         );
         p.text(

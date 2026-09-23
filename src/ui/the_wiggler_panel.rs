@@ -6,7 +6,7 @@ use crate::KagariApp;
 use eframe::egui;
 
 pub fn draw_the_wiggler_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
-    ui.heading("🎲 The Wiggler");
+    ui.heading("The Wiggler");
     ui.label(
         egui::RichText::new("Inject procedural noise keyframes into layer transforms")
             .small()
@@ -72,14 +72,14 @@ pub fn draw_the_wiggler_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         ui.label("Noise Type:");
         if ui
-            .selectable_value(&mut noise_type_idx, 0, "🌊 Smooth")
+            .selectable_value(&mut noise_type_idx, 0, "Smooth")
             .clicked()
         {
             ui.ctx()
                 .data_mut(|d| d.insert_temp(noise_type_id, noise_type_idx));
         }
         if ui
-            .selectable_value(&mut noise_type_idx, 1, "⚡ Jagged")
+            .selectable_value(&mut noise_type_idx, 1, "Jagged")
             .clicked()
         {
             ui.ctx()
@@ -108,7 +108,7 @@ pub fn draw_the_wiggler_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.add_space(8.0);
     ui.separator();
 
-    if custom_widgets::ae_button(ui, "🎲 Apply Wiggle Keyframes")
+    if custom_widgets::ae_button(ui, "Apply Wiggle Keyframes")
         .on_hover_text("Bake procedural noise into layer keyframes")
         .clicked()
     {

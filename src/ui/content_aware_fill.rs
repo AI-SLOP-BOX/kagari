@@ -480,7 +480,7 @@ pub fn draw_content_aware_fill(app: &mut KagariApp, ui: &mut egui::Ui) {
     }
 
     if ui
-        .button("🖼 Create Reference Frame")
+        .button("Create Reference Frame")
         .on_hover_text("Export current frame as a reference PNG for manual painting/cleanup")
         .clicked()
     {

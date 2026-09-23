@@ -1,5 +1,32 @@
 use eframe::egui;
 
+pub fn svg_for_icon_label(icon: &str) -> Option<&'static str> {
+    match icon.trim() {
+        "📝" | "⌨" => Some(SVG_TOOL_TEXT),
+        "📦" | "📁" | "📂" => Some(SVG_FOLDER),
+        "↔" => Some(SVG_SNAP),
+        "✏" | "✏️" | "🖌" => Some(SVG_TOOL_BRUSH),
+        "🎨" | "🌈" => Some(SVG_PALETTE),
+        "🔢" => Some(SVG_FRAME),
+        "🖥" => Some(SVG_COMP),
+        "🖼" => Some(SVG_DOCUMENT),
+        "💨" => Some(SVG_MOTION_BLUR),
+        "🎬" => Some(SVG_COMPOSITION),
+        "📊" | "📈" => Some(SVG_GRAPH_EDITOR),
+        "💻" | "fx" | "{}" => Some(SVG_EXPRESSION),
+        "⚡" => Some(SVG_EFFECTS),
+        "📐" => Some(SVG_3D_CUBE),
+        "📋" => Some(SVG_DOCUMENT),
+        "⚙" => Some(SVG_SETTINGS),
+        "📤" => Some(SVG_EXPORT),
+        "📷" | "🎥" => Some(SVG_CAMERA),
+        "💡" => Some(SVG_LIGHT),
+        "🎯" | "👁" => Some(SVG_EYE_OPEN),
+        "🎞" | "📽" => Some(SVG_PLAY_CIRCLE),
+        _ => None,
+    }
+}
+
 pub const SVG_HOME: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9 21v-6h6v6"/></svg>"#;
 pub const SVG_FOLDER: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.5h7l2 2h9v10.5H3z"/></svg>"#;
 pub const SVG_LAYERS: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.7" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 16 9 5 9-5"/></svg>"#;

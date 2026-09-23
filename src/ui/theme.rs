@@ -26,11 +26,13 @@ pub mod colors {
     pub const BG_PANEL_DARK: Color32 = Color32::from_rgb(27, 35, 42);
     pub const BG_PANEL_BASE: Color32 = Color32::from_rgb(15, 26, 33);
     pub const BG_PANEL_RAISED: Color32 = Color32::from_rgb(22, 32, 42);
+    pub const BG_EXTREME: Color32 = Color32::from_rgb(10, 10, 12);
 
     // ── Interactive States ──
     pub const BG_HOVER: Color32 = Color32::from_rgb(35, 64, 94);
-    pub const BG_ACTIVE: Color32 = Color32::from_rgb(22, 82, 145); // Muted selection blue
+    pub const BG_ACTIVE: Color32 = Color32::from_rgb(24, 62, 102);
     pub const BG_PRESSED: Color32 = Color32::from_rgb(15, 68, 132);
+    pub const BG_SELECTION: Color32 = Color32::from_rgb(18, 52, 102);
 
     // ── Accent Colors (Restrained Production Palette) ──
     /// Primary accent - muted steel blue. Active tabs, selection, playhead,
@@ -50,6 +52,15 @@ pub mod colors {
     pub const ACCENT_BRAND_HOVER: Color32 = Color32::from_rgb(255, 145, 50);
     /// Purple - expressions, advanced.
     pub const ACCENT_PURPLE: Color32 = Color32::from_rgb(155, 110, 230);
+    pub const ACCENT_BLUE_LIGHT: Color32 = Color32::from_rgb(90, 160, 255);
+    pub const ACCENT_ACTION: Color32 = Color32::from_rgb(32, 92, 168);
+    pub const ACCENT_ACTION_HOVER: Color32 = Color32::from_rgb(40, 108, 190);
+    pub const ACCENT_ACTION_STROKE: Color32 = Color32::from_rgb(48, 120, 200);
+    pub const METER_BAD: Color32 = Color32::from_rgb(255, 82, 78);
+    pub const METER_WARNING: Color32 = Color32::from_rgb(255, 190, 45);
+    pub const METER_GOOD: Color32 = Color32::from_rgb(42, 211, 86);
+    pub const OVERLAY_SURFACE: Color32 =
+        Color32::from_rgba_premultiplied(18, 22, 30, 225);
 
     // ── Borders (crisp 1px) ──
     pub const BORDER_SUBTLE: Color32 = Color32::from_rgb(37, 52, 67);
@@ -361,10 +372,10 @@ pub fn configure_ae_theme(ctx: &egui::Context) {
     visuals.panel_fill = colors::BG_DARKEST;
     visuals.window_fill = colors::BG_DARK;
     visuals.faint_bg_color = colors::BG_DEEPEST;
-    visuals.extreme_bg_color = egui::Color32::from_rgb(10, 10, 12);
+    visuals.extreme_bg_color = colors::BG_EXTREME;
 
     // ── Selection (calm dark blue; bright pills read as toy UI) ──
-    visuals.selection.bg_fill = egui::Color32::from_rgb(18, 52, 102);
+    visuals.selection.bg_fill = colors::BG_SELECTION;
     visuals.selection.stroke = egui::Stroke::new(1.0_f32, colors::ACCENT_BLUE);
 
     // ── Widget states ──
@@ -457,8 +468,24 @@ pub fn draw_section_header(ui: &mut egui::Ui, title: &str, icon: &str) {
         let (rect, _) = ui.allocate_exact_size(egui::vec2(3.0, 16.0), egui::Sense::hover());
         ui.painter().rect_filled(rect, 1.0, colors::ACCENT_BLUE);
         ui.add_space(4.0);
+        if let Some(svg) = crate::ui::icons::svg_for_icon_label(icon) {
+            let (icon_rect, _) =
+                ui.allocate_exact_size(egui::vec2(14.0, 14.0), egui::Sense::hover());
+            crate::ui::icons::render_svg_at(
+                ui,
+                format!("section-icon-{title}"),
+                svg,
+                icon_rect.size(),
+                colors::TEXT_SECONDARY,
+                icon_rect.min,
+            );
+            ui.add_space(3.0);
+        } else if !icon.is_empty() {
+            ui.label(egui::RichText::new(icon).small().color(colors::TEXT_SECONDARY));
+            ui.add_space(3.0);
+        }
         ui.label(
-            egui::RichText::new(format!("{} {}", icon, title))
+            egui::RichText::new(title)
                 .small()
                 .strong()
                 .color(colors::TEXT_PRIMARY),

@@ -101,7 +101,7 @@ pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
                         ui.set_width(76.0);
 
                         // ── Track header: icon + name ──
-                        let type_icon = if *has_audio { "🔊" } else { "🔇" };
+                        let type_icon = if *has_audio { "AUD" } else { "—" };
                         let name_color = if *has_audio {
                             colors::TEXT_PRIMARY
                         } else {

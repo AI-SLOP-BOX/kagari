@@ -985,7 +985,7 @@ fn draw_asset_row(
                 *add_to_timeline_item = Some(item.clone());
                 ui.close_menu();
             }
-            if ui.button("🔄 Replace Footage...").clicked() {
+            if ui.button("Replace Footage...").clicked() {
                 if let Some(path) = rfd::FileDialog::new()
                     .add_filter(
                         "Media Footage",
@@ -1026,7 +1026,7 @@ fn draw_asset_row(
 
         // Move-to-bin dropdown
         if !folders.is_empty() && show_row_actions {
-            let mb = ui.menu_button("📁→", |ui| {
+            let mb = ui.menu_button("Move ▾", |ui| {
                 if ui
                     .selectable_label(item.parent_folder.is_none(), "(project root)")
                     .clicked()

@@ -47,7 +47,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
             );
             ui.horizontal(|ui| {
                 if ui
-                    .button("📈 Open Graph Editor")
+                    .button("Open Graph Editor")
                     .on_hover_text("Open the keyframe Graph Editor for the selected layer")
                     .clicked()
                 {

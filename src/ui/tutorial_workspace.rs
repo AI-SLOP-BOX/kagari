@@ -3,7 +3,7 @@ use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
 
-const ORANGE: egui::Color32 = egui::Color32::from_rgb(255, 106, 24);
+const ORANGE: egui::Color32 = crate::ui::theme::colors::ACCENT_BRAND;
 const PANEL: egui::Color32 = egui::Color32::from_rgb(15, 24, 31);
 
 pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
@@ -16,7 +16,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
         .show(ctx, |ui| draw_topbar(ui, width, mobile, app, ctx));
     egui::TopBottomPanel::bottom("tutorial_footer")
         .exact_height(if mobile { 38.0 } else { 68.0 })
-        .frame(egui::Frame::none().fill(egui::Color32::from_rgb(9, 16, 22)))
+        .frame(egui::Frame::none().fill(crate::ui::theme::colors::BG_DEEPEST))
         .show(ctx, |ui| draw_footer(ui, width, mobile));
     egui::CentralPanel::default()
         .frame(egui::Frame::none().fill(egui::Color32::from_rgb(8, 15, 21)))
@@ -186,7 +186,7 @@ fn draw_chapters(
         p.rect_filled(
             egui::Rect::from_min_max(rect.min, egui::pos2(rect.left() + width, rect.bottom())),
             0.0,
-            egui::Color32::from_rgb(13, 22, 29),
+            crate::ui::theme::colors::BG_DARKEST,
         );
         p.line_segment(
             [

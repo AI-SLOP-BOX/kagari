@@ -1,4 +1,4 @@
-//! 📊 Vectorscope + RGB Parade overlay (Shift+F4)
+//! Vectorscope + RGB Parade overlay (Shift+F4)
 //!
 //! Renders the active composition at a reduced resolution through the CPU
 //! reference path, then plots either a BT.709 Cb/Cr vectorscope cloud or
@@ -98,7 +98,7 @@ pub fn draw_vectorscope_window(app: &mut KagariApp, ctx: &egui::Context) {
             let (rect, _) =
                 ui.allocate_exact_size(egui::vec2(side, side * 0.75), egui::Sense::hover());
             let painter = ui.painter_at(rect);
-            painter.rect_filled(rect, 4.0, egui::Color32::from_rgb(10, 10, 12));
+            painter.rect_filled(rect, 4.0, crate::ui::theme::colors::BG_EXTREME);
             painter.rect_stroke(rect, 4.0, egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM));
 
             if pixels.is_empty() {

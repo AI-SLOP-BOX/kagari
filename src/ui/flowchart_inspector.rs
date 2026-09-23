@@ -16,7 +16,7 @@ pub fn draw_flowchart_inspector(app: &mut KagariApp, ui: &mut egui::Ui) {
     egui::ScrollArea::vertical()
         .max_height(200.0)
         .show(ui, |ui| {
-            ui.monospace("📽 [Comp 1] (Active Root)");
+            ui.monospace("[Comp 1] (Active Root)");
             ui.indent("comp_root_indent", |ui| {
                 for (i, layer) in comp.layers.iter().enumerate() {
                     let icon = match layer.layer_type {
@@ -33,7 +33,7 @@ pub fn draw_flowchart_inspector(app: &mut KagariApp, ui: &mut egui::Ui) {
                         crate::core::timeline::LayerType::Particle { .. } => "Particle",
                     };
                     let parent_info = if let Some(ref p_id) = layer.parent_id {
-                        format!(" 🔗 Parent: {}", p_id)
+                        format!(" Parent: {}", p_id)
                     } else {
                         "".to_string()
                     };

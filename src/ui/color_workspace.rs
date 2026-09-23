@@ -13,12 +13,12 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
     let right_w = if narrow { 300.0 } else { 521.0 };
     egui::TopBottomPanel::top("color_workspace_window_bar")
         .exact_height(43.0)
-        .frame(egui::Frame::none().fill(egui::Color32::from_rgb(24, 31, 37)))
+        .frame(egui::Frame::none().fill(crate::ui::theme::colors::BG_PANEL_DARK))
         .show(ctx, |ui| {
             for (x, c) in [
-                (23.0, egui::Color32::from_rgb(255, 82, 78)),
-                (46.0, egui::Color32::from_rgb(255, 190, 45)),
-                (69.0, egui::Color32::from_rgb(42, 211, 86)),
+                (23.0, crate::ui::theme::colors::METER_BAD),
+                (46.0, crate::ui::theme::colors::METER_WARNING),
+                (69.0, crate::ui::theme::colors::METER_GOOD),
             ] {
                 ui.painter().circle_filled(egui::pos2(x, 22.0), 7.0, c);
             }
@@ -38,7 +38,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
             );
         });
     egui::CentralPanel::default()
-        .frame(egui::Frame::none().fill(egui::Color32::from_rgb(10, 18, 24)))
+        .frame(egui::Frame::none().fill(crate::ui::theme::colors::BG_DEEPEST))
         .show(ctx, |ui| {
             let r = ui.max_rect();
             let sidebar = egui::Rect::from_min_max(r.min, egui::pos2(sidebar_w, r.bottom()));
@@ -60,7 +60,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
             );
             let border = egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE);
             ui.painter()
-                .rect_filled(sidebar, 0.0, egui::Color32::from_rgb(14, 24, 31));
+                .rect_filled(sidebar, 0.0, crate::ui::theme::colors::BG_PANEL_BASE);
             ui.painter().line_segment(
                 [
                     egui::pos2(sidebar.right(), 0.0),
@@ -145,7 +145,7 @@ fn draw_logo(
                 egui::Align2::LEFT_CENTER,
                 "VFX",
                 egui::FontId::proportional(24.0),
-                egui::Color32::from_rgb(161, 174, 190),
+                crate::ui::theme::colors::TEXT_SECONDARY,
             );
         }
     }
@@ -270,7 +270,7 @@ fn draw_shots(ui: &mut egui::Ui, ctx: &egui::Context, rect: egui::Rect) {
                     egui::vec2(rect.width() - 20.0, if compact { 60.0 } else { 68.0 }),
                 ),
                 6.0,
-                egui::Color32::from_rgb(20, 32, 41),
+                crate::ui::theme::colors::BG_DARK,
                 egui::Stroke::new(2.0_f32, crate::ui::theme::colors::ACCENT_BRAND),
             );
         }
@@ -649,7 +649,7 @@ fn draw_color_inspector(app: &mut KagariApp, ui: &mut egui::Ui, rect: egui::Rect
             if i == 1 {
                 crate::ui::theme::colors::ACCENT_BRAND
             } else {
-                egui::Color32::from_rgb(210, 220, 230)
+                crate::ui::theme::colors::TEXT_PRIMARY
             },
         );
         p.rect(
@@ -658,7 +658,7 @@ fn draw_color_inspector(app: &mut KagariApp, ui: &mut egui::Ui, rect: egui::Rect
                 egui::vec2(65.0, 26.0),
             ),
             4.0,
-            egui::Color32::from_rgb(20, 32, 41),
+            crate::ui::theme::colors::BG_DARK,
             egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
         );
         p.text(
@@ -835,7 +835,7 @@ fn draw_lower(ui: &mut egui::Ui, _ctx: &egui::Context, rect: egui::Rect, narrow:
                 p.circle_filled(
                     c,
                     if narrow { 4.0 } else { 5.0 },
-                    egui::Color32::from_rgb(210, 220, 230),
+                    crate::ui::theme::colors::TEXT_PRIMARY,
                 );
                 p.text(
                     egui::pos2(c.x, b.top() + if narrow { 31.0 } else { 57.0 }),

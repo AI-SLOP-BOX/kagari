@@ -19,7 +19,7 @@ pub fn draw_audio_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     };
     ui.small(format!("Master Level: {:.1} dB", db_val));
 
-    // 📊 Live Audio VU Meter (-60dB .. +12dB)
+    // Live Audio VU Meter (-60dB .. +12dB)
     let vu_norm = ((db_val + 60.0) / 72.0).clamp(0.0, 1.0);
     ui.horizontal(|ui| {
         ui.label("L:");
@@ -76,12 +76,12 @@ pub fn draw_audio_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
         ui.add_space(8.0);
         ui.separator();
         ui.label(
-            egui::RichText::new("✨ Audio-to-Motion Reactive Bind")
+            egui::RichText::new("Audio-to-Motion Reactive Bind")
                 .strong()
                 .color(colors::ACCENT_CYAN),
         );
         ui.horizontal(|ui| {
-            if custom_widgets::ae_button_accent(ui, "🎵 Bind to Scale (Kick)")
+            if custom_widgets::ae_button_accent(ui, "Bind to Scale (Kick)")
                 .on_hover_text("Pulse Scale on audio bass peaks")
                 .clicked()
             {
@@ -98,7 +98,7 @@ pub fn draw_audio_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                         .info(format!("Bound Audio Bass to {} Scale", layer_name));
                 }
             }
-            if custom_widgets::ae_button_accent(ui, "🌟 Bind to Glow Pulse")
+            if custom_widgets::ae_button_accent(ui, "Bind to Glow Pulse")
                 .on_hover_text("Pulsate Glow Intensity on audio peaks")
                 .clicked()
             {
@@ -126,7 +126,7 @@ pub fn draw_audio_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                         .info(format!("Bound Audio to {} Glow Pulse", layer_name));
                 }
             }
-            if custom_widgets::ae_button(ui, "📊 Add Audio Spectrum")
+            if custom_widgets::ae_button(ui, "Add Audio Spectrum")
                 .on_hover_text("Generate real-time frequency spectrum wave on this layer")
                 .clicked()
             {
@@ -159,12 +159,12 @@ pub fn draw_audio_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
         ui.add_space(8.0);
         ui.separator();
         ui.label(
-            egui::RichText::new("🎹 Audio Keyframe Assistant")
+            egui::RichText::new("Audio Keyframe Assistant")
                 .strong()
                 .color(colors::ACCENT_YELLOW),
         );
         ui.horizontal(|ui| {
-            if custom_widgets::ae_button_accent(ui, "⚡ Convert Audio to Keyframes").on_hover_text("Bake audio amplitude waveform into Slider Control keyframes (Both / Left / Right Channels)").clicked() {
+            if custom_widgets::ae_button_accent(ui, "Convert Audio to Keyframes").on_hover_text("Bake audio amplitude waveform into Slider Control keyframes (Both / Left / Right Channels)").clicked() {
                 let source = app
                     .history
                     .current()

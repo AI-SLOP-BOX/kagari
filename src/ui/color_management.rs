@@ -312,7 +312,7 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
                     .small()
                     .color(colors::TEXT_SECONDARY),
             );
-            if crate::ui::custom_widgets::ae_button(ui, "📂 Browse config.ocio")
+            if crate::ui::custom_widgets::ae_button(ui, "Browse config.ocio")
                 .on_hover_text("Load OpenColorIO custom config")
                 .clicked()
             {
@@ -367,7 +367,7 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
     crate::ui::custom_widgets::ae_section_header(ui, "3D LUT (.cube)", "📊");
     ui.group(|ui| {
         ui.horizontal(|ui| {
-            if crate::ui::custom_widgets::ae_button(ui, "📂 Load .cube LUT")
+            if crate::ui::custom_widgets::ae_button(ui, "Load .cube LUT")
                 .on_hover_text("Load 3D LUT for film stock emulation")
                 .clicked()
             {
@@ -433,7 +433,7 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
                         .color(colors::TEXT_MUTED),
                 );
             }
-            if crate::ui::custom_widgets::ae_button(ui, "💾 Export Grade as .cube")
+            if crate::ui::custom_widgets::ae_button(ui, "Export Grade as .cube")
                 .on_hover_text("Export active color grade as 33x33x33 3D LUT (.cube)")
                 .clicked()
             {

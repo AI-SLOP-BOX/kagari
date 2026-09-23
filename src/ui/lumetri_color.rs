@@ -376,11 +376,11 @@ pub fn draw_lumetri_color(app: &mut KagariApp, ui: &mut egui::Ui) {
     let histogram = crate::core::color_correction::compute_luma_histogram(&histogram_pixels);
     let histogram_peak = histogram.iter().copied().max().unwrap_or(0).max(1) as f32;
 
-    // ── 📊 Live 256-Bin Luma & RGB Histogram Analyzer HUD ──
+    // ── Live 256-Bin Luma & RGB Histogram Analyzer HUD ──
     ui.group(|ui| {
         ui.horizontal(|ui| {
             ui.label(
-                egui::RichText::new("📊 Live Luma Histogram")
+                egui::RichText::new("Live Luma Histogram")
                     .strong()
                     .color(colors::ACCENT_CYAN),
             );
@@ -438,14 +438,14 @@ pub fn draw_lumetri_color(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.add_space(4.0);
     ui.group(|ui| {
         ui.label(
-            egui::RichText::new("🌈 Master Gradient Ramp Palette")
+            egui::RichText::new("Master Gradient Ramp Palette")
                 .strong()
                 .color(colors::ACCENT_CYAN),
         );
         ui.small("1-Tap Apply Trend Gradient Ramps:");
         let mut picked_ramp: Option<LookPreset> = None;
         ui.horizontal(|ui| {
-            if ui.button("⚡ Cyberpunk Pink/Cyan").clicked() {
+            if ui.button("Cyberpunk Pink/Cyan").clicked() {
                 picked_ramp = Some((
                     "Cyberpunk Pink/Cyan",
                     [-20.0, 8.0, 28.0],
@@ -453,7 +453,7 @@ pub fn draw_lumetri_color(app: &mut KagariApp, ui: &mut egui::Ui) {
                     [30.0, -6.0, 18.0],
                 ));
             }
-            if ui.button("🌅 Sunset Gold").clicked() {
+            if ui.button("Sunset Gold").clicked() {
                 picked_ramp = Some((
                     "Sunset Gold",
                     [28.0, 10.0, -18.0],
@@ -461,7 +461,7 @@ pub fn draw_lumetri_color(app: &mut KagariApp, ui: &mut egui::Ui) {
                     [-6.0, -2.0, 22.0],
                 ));
             }
-            if ui.button("🌊 Deep Ocean").clicked() {
+            if ui.button("Deep Ocean").clicked() {
                 picked_ramp = Some((
                     "Deep Ocean",
                     [-18.0, 2.0, 30.0],
@@ -592,19 +592,19 @@ pub fn draw_lumetri_color(app: &mut KagariApp, ui: &mut egui::Ui) {
             ui.horizontal_wrapped(|ui| {
                 for (name, s, m, h) in [
                     (
-                        "🌅 Sunset Gold",
+                        "Sunset Gold",
                         [25.0, 10.0, -15.0],
                         [10.0, 0.0, -5.0],
                         [-10.0, -5.0, 20.0],
                     ),
                     (
-                        "🌊 Teal & Orange",
+                        "Teal & Orange",
                         [-12.0, 6.0, 16.0],
                         [-5.0, 0.0, 10.0],
                         [15.0, 5.0, -22.0],
                     ),
                     (
-                        "🌑 Faded Film",
+                        "Faded Film",
                         [20.0, 18.0, 24.0],
                         [5.0, 5.0, 5.0],
                         [-8.0, -8.0, -6.0],
@@ -616,7 +616,7 @@ pub fn draw_lumetri_color(app: &mut KagariApp, ui: &mut egui::Ui) {
                         [-5.0, 2.0, 14.0],
                     ),
                     (
-                        "🔥 Ember",
+                        "Ember",
                         [30.0, 8.0, -25.0],
                         [12.0, -2.0, -10.0],
                         [5.0, -5.0, -18.0],
@@ -892,7 +892,7 @@ pub fn draw_lumetri_color(app: &mut KagariApp, ui: &mut egui::Ui) {
         });
 
         // --- 7. HSL Secondary (Key / Refine / Grade) ---
-        ui.collapsing("🎯 HSL Secondary (Keyer & Grade)", |ui| {
+        ui.collapsing("HSL Secondary (Keyer & Grade)", |ui| {
             ui.label(
                 egui::RichText::new("Isolate specific hue/sat/lum ranges for targeted grading.")
                     .small()
@@ -958,7 +958,7 @@ pub fn draw_lumetri_color(app: &mut KagariApp, ui: &mut egui::Ui) {
             });
 
             ui.horizontal(|ui| {
-                if ui.button("✨ Apply Secondary Tint").clicked() {
+                if ui.button("Apply Secondary Tint").clicked() {
                     app.toasts
                         .info("HSL Secondary Key applied to active composite");
                 }

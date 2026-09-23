@@ -61,14 +61,14 @@ pub fn draw_motion_sketch_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     if is_armed {
         ui.colored_label(
             colors::ACCENT_RED,
-            "🔴 ARMED: Click and drag in Viewport to record motion path...",
+            "ARMED: Click and drag in Viewport to record motion path...",
         );
         if custom_widgets::ae_button(ui, "⏹ Stop / Disarm").clicked() {
             ui.ctx().data_mut(|d| d.insert_temp(is_sketching_id, false));
             app.toasts.info("Motion Sketch disarmed");
         }
     } else {
-        if custom_widgets::ae_button(ui, "🔴 Start Capture")
+        if custom_widgets::ae_button(ui, "Start Capture")
             .on_hover_text("Arm motion sketch. Drag in viewport to record.")
             .clicked()
         {

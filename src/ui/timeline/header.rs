@@ -286,7 +286,7 @@ pub fn draw_timeline_header(
         ui.add_space(4.0);
         let depth_badge_color = match comp.bit_depth {
             crate::core::color_science::BitDepth::EightBit => egui::Color32::from_rgb(140, 140, 150),
-            crate::core::color_science::BitDepth::SixteenBit => egui::Color32::from_rgb(100, 180, 255),
+            crate::core::color_science::BitDepth::SixteenBit => crate::ui::theme::colors::ACCENT_BLUE_LIGHT,
             crate::core::color_science::BitDepth::ThirtyTwoBitFloat => egui::Color32::from_rgb(255, 200, 60),
         };
         let depth_btn = ui.add(
@@ -372,7 +372,7 @@ pub fn draw_timeline_header(
         }
         if !comp.markers.is_empty()
             && ui
-                .small_button("📋 YouTube Chapters")
+                .small_button("YouTube Chapters")
                 .on_hover_text("Copy YouTube timestamp chapters formatted from markers")
                 .clicked()
         {

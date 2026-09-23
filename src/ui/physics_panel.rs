@@ -84,7 +84,7 @@ pub fn draw_physics_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         ui.label("Collider Shape:");
         if ui
-            .selectable_value(&mut collider_shape_idx, 0, "📦 Box")
+            .selectable_value(&mut collider_shape_idx, 0, "Box")
             .clicked()
         {
             ui.ctx()
@@ -125,12 +125,12 @@ pub fn draw_physics_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
         );
     } else {
         ui.label(format!(
-            "🎯 {} layer(s) selected for physics simulation",
+            "{} layer(s) selected for physics simulation",
             selected_layer_indices.len()
         ));
 
         ui.add_space(8.0);
-        if custom_widgets::ae_button(ui, "🚀 Simulate & Bake to Keyframes").clicked() {
+        if custom_widgets::ae_button(ui, "Simulate & Bake to Keyframes").clicked() {
             let mut temp_proj = app.history.current().clone();
             let active_comp = temp_proj.active_composition_mut();
 
@@ -201,7 +201,7 @@ pub fn draw_physics_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
 
     ui.separator();
     ui.label(egui::RichText::new("Inertia / Bounce Dynamic Keyframes").strong());
-    if custom_widgets::ae_button(ui, "⚡ Bake Inertial Bounce on Scale").clicked() {
+    if custom_widgets::ae_button(ui, "Bake Inertial Bounce on Scale").clicked() {
         if selected_layer_indices.is_empty() {
             app.toasts.error("Select a layer first");
             return;
