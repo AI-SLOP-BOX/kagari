@@ -45,6 +45,8 @@ pub(crate) fn draw_character_tab(app: &mut KagariApp, ui: &mut egui::Ui, current
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ui::effects_library::color_controls::{color_control_value, set_color_control};
+    use crate::ui::effects_library::effect_controls::draw_effect_controls;
 
     fn draw_properties_panel(app: &mut KagariApp) {
         let ctx = egui::Context::default();

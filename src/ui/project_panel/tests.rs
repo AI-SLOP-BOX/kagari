@@ -1,10 +1,9 @@
-use super::media_replace::*;
-use crate::core::timeline::{Composition, Layer, LayerType, ProjectItemType};
-
 #[cfg(test)]
 #[allow(clippy::items_after_test_module)]
 mod tests {
-    use super::{classify_imported_media, replace_media_in_composition};
+    use crate::ui::project_panel::media_replace::{
+        classify_imported_media, replace_media_in_composition,
+    };
     use crate::core::timeline::{Composition, Layer, LayerType, ProjectItemType};
     use std::collections::HashMap;
     use std::path::Path;
