@@ -1,8 +1,8 @@
-use crate::core::text_animator::{SelectorShape, TextAnimatorSettings};
 use crate::core::timeline::{Layer, LayerType};
 use crate::ui::inspector_property::{
     draw_easy_ease_button, draw_expression_selector, draw_property_ui,
 };
+use crate::ui::kui;
 use crate::ui::theme::colors;
 use eframe::egui;
 
@@ -14,10 +14,11 @@ pub fn draw_layer_transforms(
     project_changed: &mut bool,
     next_frame: &mut Option<u32>,
 ) {
+    let tr = crate::ui::localization::tr;
     egui::Frame::none().show(ui, |ui| {
         if layer.is_3d {
             ui.label(
-                egui::RichText::new("Transform 3D")
+                egui::RichText::new(tr("Transform 3D"))
                     .strong()
                     .color(colors::TEXT_PRIMARY),
             );
@@ -26,14 +27,10 @@ pub fn draw_layer_transforms(
             if let Some(nf) = draw_property_ui(
                 current_frame,
                 ui,
-                "Position (XYZ)",
+                &tr("Position (XYZ)"),
                 &mut layer.transform_3d.position,
                 |ui, val| {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
-                        ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
-                        ui.add(egui::DragValue::new(&mut val[2]).speed(1.0).prefix("Z: "));
-                    });
+                    kui::vector_axes_unbounded(ui, val, 1.0, "", ["X", "Y", "Z"]);
                 },
             ) {
                 *next_frame = Some(nf);
@@ -48,14 +45,10 @@ pub fn draw_layer_transforms(
             if let Some(nf) = draw_property_ui(
                 current_frame,
                 ui,
-                "Rotation (YPR)",
+                &tr("Rotation (YPR)"),
                 &mut layer.transform_3d.rotation,
                 |ui, val| {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).suffix("° P"));
-                        ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).suffix("° Y"));
-                        ui.add(egui::DragValue::new(&mut val[2]).speed(1.0).suffix("° R"));
-                    });
+                    kui::vector_axes_unbounded(ui, val, 1.0, "°", ["P", "Y", "R"]);
                 },
             ) {
                 *next_frame = Some(nf);
@@ -70,14 +63,10 @@ pub fn draw_layer_transforms(
             if let Some(nf) = draw_property_ui(
                 current_frame,
                 ui,
-                "Scale (XYZ)",
+                &tr("Scale (XYZ)"),
                 &mut layer.transform_3d.scale,
                 |ui, val| {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.add(egui::DragValue::new(&mut val[0]).speed(0.1).suffix("% X"));
-                        ui.add(egui::DragValue::new(&mut val[1]).speed(0.1).suffix("% Y"));
-                        ui.add(egui::DragValue::new(&mut val[2]).speed(0.1).suffix("% Z"));
-                    });
+                    kui::vector_axes_unbounded(ui, val, 0.1, "%", ["X", "Y", "Z"]);
                 },
             ) {
                 *next_frame = Some(nf);
@@ -89,87 +78,66 @@ pub fn draw_layer_transforms(
 
             // ── 3D Material Options ──
             ui.add_space(4.0);
-            ui.collapsing("Material Options", |ui| {
+            ui.collapsing(tr("Material Options"), |ui| {
                 let mat = &mut layer.material;
-                if ui
-                    .checkbox(&mut mat.cast_shadows, "Casts Shadows")
-                    .changed()
+                if kui::property(ui, "Casts Shadows", |ui| {
+                    kui::toggle(ui, &mut mat.cast_shadows, "")
+                })
+                .changed()
                 {
                     *project_changed = true;
                 }
-                ui.horizontal(|ui| {
-                    ui.label("Ambient:");
-                    if ui
-                        .add(egui::Slider::new(&mut mat.ambient, 0.0..=1.0))
-                        .changed()
+                *project_changed |= kui::property(ui, "Ambient", |ui| {
+                    kui::slider(ui, &mut mat.ambient, 0.0..=1.0, "")
+                })
+                .changed();
+                *project_changed |= kui::property(ui, "Diffuse", |ui| {
+                    kui::slider(ui, &mut mat.diffuse, 0.0..=1.0, "")
+                })
+                .changed();
+                *project_changed |= kui::property(ui, "Specular", |ui| {
+                    kui::slider(ui, &mut mat.specular, 0.0..=1.0, "")
+                })
+                .changed();
+                *project_changed |= kui::property(ui, "Shininess", |ui| {
+                    kui::slider(ui, &mut mat.specular_exponent, 1.0..=256.0, "")
+                })
+                .changed();
+                *project_changed |= kui::property(ui, "Metalness", |ui| {
+                    kui::slider(ui, &mut mat.metalness, 0.0..=1.0, "")
+                })
+                .changed();
+                *project_changed |= kui::property(ui, "Emission", |ui| {
+                    kui::slider(ui, &mut mat.emission, 0.0..=1.0, "")
+                })
+                .changed();
+            });
+        } else {
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new(tr("Transform 2D"))
+                        .strong()
+                        .color(colors::TEXT_PRIMARY),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if kui::button(ui, "Reset", kui::ButtonKind::Quiet)
+                        .on_hover_text("Reset position, scale, rotation, and anchor point to default values")
+                        .clicked()
                     {
-                        *project_changed = true;
-                    }
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Diffuse:");
-                    if ui
-                        .add(egui::Slider::new(&mut mat.diffuse, 0.0..=1.0))
-                        .changed()
-                    {
-                        *project_changed = true;
-                    }
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Specular:");
-                    if ui
-                        .add(egui::Slider::new(&mut mat.specular, 0.0..=1.0))
-                        .changed()
-                    {
-                        *project_changed = true;
-                    }
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Shininess:");
-                    if ui
-                        .add(egui::Slider::new(&mut mat.specular_exponent, 1.0..=256.0))
-                        .changed()
-                    {
-                        *project_changed = true;
-                    }
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Metalness:");
-                    if ui
-                        .add(egui::Slider::new(&mut mat.metalness, 0.0..=1.0))
-                        .changed()
-                    {
-                        *project_changed = true;
-                    }
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Emission:");
-                    if ui
-                        .add(egui::Slider::new(&mut mat.emission, 0.0..=1.0))
-                        .changed()
-                    {
+                        layer.transform = crate::core::timeline::Transform2D::default();
                         *project_changed = true;
                     }
                 });
             });
-        } else {
-            ui.label(
-                egui::RichText::new("Transform 2D")
-                    .strong()
-                    .color(colors::TEXT_PRIMARY),
-            );
 
             let val_before = layer.transform.anchor_point.clone();
             if let Some(nf) = draw_property_ui(
                 current_frame,
                 ui,
-                "Anchor Point",
+                &tr("Anchor Point"),
                 &mut layer.transform.anchor_point,
                 |ui, val| {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
-                        ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
-                    });
+                    kui::vector_axes_unbounded(ui, val, 1.0, "", ["X", "Y"]);
                 },
             ) {
                 *next_frame = Some(nf);
@@ -183,13 +151,10 @@ pub fn draw_layer_transforms(
             if let Some(nf) = draw_property_ui(
                 current_frame,
                 ui,
-                "Position",
+                &tr("Position"),
                 &mut layer.transform.position,
                 |ui, val| {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
-                        ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
-                    });
+                    kui::vector_axes_unbounded(ui, val, 1.0, "", ["X", "Y"]);
                 },
             ) {
                 *next_frame = Some(nf);
@@ -204,13 +169,10 @@ pub fn draw_layer_transforms(
             if let Some(nf) = draw_property_ui(
                 current_frame,
                 ui,
-                "Scale",
+                &tr("Scale"),
                 &mut layer.transform.scale,
                 |ui, val| {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.add(egui::DragValue::new(&mut val[0]).speed(0.1).suffix("% X"));
-                        ui.add(egui::DragValue::new(&mut val[1]).speed(0.1).suffix("% Y"));
-                    });
+                    kui::vector_axes_unbounded(ui, val, 0.1, "%", ["X", "Y"]);
                 },
             ) {
                 *next_frame = Some(nf);
@@ -225,10 +187,13 @@ pub fn draw_layer_transforms(
             if let Some(nf) = draw_property_ui(
                 current_frame,
                 ui,
-                "Rotation",
+                &tr("Rotation"),
                 &mut layer.transform.rotation,
                 |ui, val| {
-                    ui.add(egui::Slider::new(val, -360.0..=360.0).suffix("°"));
+                    ui.horizontal(|ui| {
+                        crate::ui::custom_widgets::ae_scrubber(ui, val, 1.0, "°", None);
+                        kui::slider(ui, val, -360.0..=360.0, "°");
+                    });
                 },
             ) {
                 *next_frame = Some(nf);
@@ -242,75 +207,39 @@ pub fn draw_layer_transforms(
             {
                 use crate::core::auto_orient::AutoOrientMode;
                 let ao_before = layer.auto_orient;
-                let mode_text = match layer.auto_orient {
-                    AutoOrientMode::Off => "Off",
-                    AutoOrientMode::OrientAlongPath => "Orient Along Path",
-                    AutoOrientMode::OrientTowardsPoint { .. } => "Orient Towards Point",
+                let mut mode_idx = match layer.auto_orient {
+                    AutoOrientMode::Off => 0,
+                    AutoOrientMode::OrientAlongPath => 1,
+                    AutoOrientMode::OrientTowardsPoint { .. } => 2,
                 };
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(
-                        egui::RichText::new("Auto-Orient")
-                            .small()
-                            .color(colors::TEXT_SECONDARY),
-                    );
-                    egui::ComboBox::from_id_salt("insp_auto_orient")
-                        .selected_text(mode_text)
-                        .show_ui(ui, |ui| {
-                            if ui
-                                .selectable_label(layer.auto_orient == AutoOrientMode::Off, "Off")
-                                .clicked()
-                            {
-                                layer.auto_orient = AutoOrientMode::Off;
-                            }
-                            if ui
-                                .selectable_label(
-                                    layer.auto_orient == AutoOrientMode::OrientAlongPath,
-                                    "Orient Along Path",
-                                )
-                                .on_hover_text("Layer rotates to follow its position motion path")
-                                .clicked()
-                            {
-                                layer.auto_orient = AutoOrientMode::OrientAlongPath;
-                            }
-                            let cur_target = match layer.auto_orient {
-                                AutoOrientMode::OrientTowardsPoint { target_point } => target_point,
-                                _ => [960.0, 540.0],
-                            };
-                            if ui
-                                .selectable_label(
-                                    matches!(
-                                        layer.auto_orient,
-                                        AutoOrientMode::OrientTowardsPoint { .. }
-                                    ),
-                                    "Orient Towards Point",
-                                )
-                                .on_hover_text("Layer rotates to face a fixed point")
-                                .clicked()
-                            {
-                                layer.auto_orient = AutoOrientMode::OrientTowardsPoint {
-                                    target_point: cur_target,
-                                };
-                            }
-                        });
+                let orient_options = [
+                    (0, "Off"),
+                    (1, "Orient Along Path"),
+                    (2, "Orient Towards Point"),
+                ];
+                let mode_changed = kui::property(ui, &tr("Auto-Orient"), |ui| {
+                    let translated = orient_options.map(|(value, label)| (value, tr(label)));
+                    let options = translated
+                        .iter()
+                        .map(|(value, label)| (*value, label.as_str()))
+                        .collect::<Vec<_>>();
+                    kui::combo(ui, "insp_auto_orient", &mut mode_idx, &options)
                 });
+                if mode_changed {
+                    let target_point = match layer.auto_orient {
+                        AutoOrientMode::OrientTowardsPoint { target_point } => target_point,
+                        _ => [960.0, 540.0],
+                    };
+                    layer.auto_orient = match mode_idx {
+                        1 => AutoOrientMode::OrientAlongPath,
+                        2 => AutoOrientMode::OrientTowardsPoint { target_point },
+                        _ => AutoOrientMode::Off,
+                    };
+                }
                 if let AutoOrientMode::OrientTowardsPoint { target_point } = &mut layer.auto_orient
                 {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.label(
-                            egui::RichText::new("Target")
-                                .small()
-                                .color(colors::TEXT_SECONDARY),
-                        );
-                        ui.add(
-                            egui::DragValue::new(&mut target_point[0])
-                                .prefix("X: ")
-                                .speed(1.0),
-                        );
-                        ui.add(
-                            egui::DragValue::new(&mut target_point[1])
-                                .prefix("Y: ")
-                                .speed(1.0),
-                        );
+                    kui::property(ui, &tr("Target"), |ui| {
+                        kui::vector_axes_unbounded(ui, target_point, 1.0, "", ["X", "Y"])
                     });
                 }
                 if ao_before != layer.auto_orient {
@@ -323,10 +252,13 @@ pub fn draw_layer_transforms(
             if let Some(nf) = draw_property_ui(
                 current_frame,
                 ui,
-                "Opacity",
+                &tr("Opacity"),
                 &mut layer.transform.opacity,
                 |ui, val| {
-                    ui.add(egui::Slider::new(val, 0.0..=100.0).suffix("%"));
+                    ui.horizontal(|ui| {
+                        crate::ui::custom_widgets::ae_scrubber(ui, val, 1.0, "%", Some(0.0..=100.0));
+                        kui::slider(ui, val, 0.0..=100.0, "%");
+                    });
                 },
             ) {
                 *next_frame = Some(nf);
@@ -337,7 +269,7 @@ pub fn draw_layer_transforms(
                 || layer.transform.scale_expression.is_some()
                 || layer.transform.rotation_expression.is_some()
                 || layer.transform.opacity_expression.is_some();
-            egui::CollapsingHeader::new(egui::RichText::new("Expressions").size(12.0).color(
+            egui::CollapsingHeader::new(egui::RichText::new(tr("Expressions")).size(12.0).color(
                 if has_transform_expression {
                     colors::TEXT_PRIMARY
                 } else {
@@ -398,52 +330,26 @@ pub fn draw_layer_transforms(
                 );
 
                 let mut pos3d = layer.transform_3d.position.evaluate(current_frame);
-                ui.horizontal(|ui| {
-                    ui.label("Position Z (Depth):");
-                    if ui
-                        .add(egui::DragValue::new(&mut pos3d[2]).speed(1.0).suffix(" px"))
-                        .changed()
-                    {
-                        layer.transform_3d.position =
-                            crate::core::property::Animatable::new_constant(pos3d);
-                        *project_changed = true;
-                    }
-                });
+                if kui::property(ui, "Position Z (Depth)", |ui| {
+                    kui::number(ui, &mut pos3d[2], f32::MIN..=f32::MAX, 1.0, " px")
+                })
+                .changed()
+                {
+                    layer.transform_3d.position =
+                        crate::core::property::Animatable::new_constant(pos3d);
+                    *project_changed = true;
+                }
 
                 let mut rot3d = layer.transform_3d.rotation.evaluate(current_frame);
-                ui.horizontal(|ui| {
-                    ui.label("X Rotation:");
-                    if ui
-                        .add(egui::DragValue::new(&mut rot3d[0]).speed(1.0).suffix("°"))
-                        .changed()
-                    {
-                        layer.transform_3d.rotation =
-                            crate::core::property::Animatable::new_constant(rot3d);
-                        *project_changed = true;
-                    }
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Y Rotation:");
-                    if ui
-                        .add(egui::DragValue::new(&mut rot3d[1]).speed(1.0).suffix("°"))
-                        .changed()
-                    {
-                        layer.transform_3d.rotation =
-                            crate::core::property::Animatable::new_constant(rot3d);
-                        *project_changed = true;
-                    }
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Z Rotation:");
-                    if ui
-                        .add(egui::DragValue::new(&mut rot3d[2]).speed(1.0).suffix("°"))
-                        .changed()
-                    {
-                        layer.transform_3d.rotation =
-                            crate::core::property::Animatable::new_constant(rot3d);
-                        *project_changed = true;
-                    }
-                });
+                if kui::property(ui, "Rotation XYZ", |ui| {
+                    kui::vector_axes_unbounded(ui, &mut rot3d, 1.0, "°", ["X", "Y", "Z"])
+                })
+                .changed()
+                {
+                    layer.transform_3d.rotation =
+                        crate::core::property::Animatable::new_constant(rot3d);
+                    *project_changed = true;
+                }
 
                 // ── 3D Material Options ──
                 ui.separator();
@@ -454,114 +360,52 @@ pub fn draw_layer_transforms(
                         .color(colors::ACCENT_YELLOW),
                 );
 
-                ui.horizontal(|ui| {
-                    ui.label("Ambient:");
-                    if ui
-                        .add(
-                            egui::Slider::new(&mut layer.material.ambient, 0.0..=1.0).step_by(0.01),
-                        )
-                        .changed()
-                    {
-                        *project_changed = true;
-                    }
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Diffuse:");
-                    if ui
-                        .add(
-                            egui::Slider::new(&mut layer.material.diffuse, 0.0..=1.0).step_by(0.01),
-                        )
-                        .changed()
-                    {
-                        *project_changed = true;
-                    }
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Specular:");
-                    if ui
-                        .add(
-                            egui::Slider::new(&mut layer.material.specular, 0.0..=1.0)
-                                .step_by(0.01),
-                        )
-                        .changed()
-                    {
-                        *project_changed = true;
-                    }
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Specular Exp:");
-                    if ui
-                        .add(
-                            egui::DragValue::new(&mut layer.material.specular_exponent)
-                                .speed(1.0)
-                                .range(1.0..=256.0),
-                        )
-                        .changed()
-                    {
-                        *project_changed = true;
-                    }
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Emission:");
-                    if ui
-                        .add(
-                            egui::Slider::new(&mut layer.material.emission, 0.0..=1.0)
-                                .step_by(0.01),
-                        )
-                        .changed()
-                    {
-                        *project_changed = true;
-                    }
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Metalness:");
-                    if ui
-                        .add(
-                            egui::Slider::new(&mut layer.material.metalness, 0.0..=1.0)
-                                .step_by(0.01),
-                        )
-                        .changed()
-                    {
-                        *project_changed = true;
-                    }
-                });
-
-                ui.horizontal(|ui| {
-                    if ui
-                        .checkbox(&mut layer.material.cast_shadows, "Casts Shadows")
-                        .changed()
-                    {
-                        *project_changed = true;
-                    }
-                });
-
-                ui.horizontal(|ui| {
-                    if ui
-                        .checkbox(&mut layer.material.accepts_shadows, "Accepts Shadows")
-                        .changed()
-                    {
-                        *project_changed = true;
-                    }
-                    if ui
-                        .checkbox(&mut layer.material.accepts_lights, "Accepts Lights")
-                        .changed()
-                    {
-                        *project_changed = true;
-                    }
-                });
-
-                ui.horizontal(|ui| {
-                    ui.label("Light Transmission:");
-                    if ui
-                        .add(
-                            egui::Slider::new(&mut layer.material.light_transmission, 0.0..=100.0)
-                                .suffix("%"),
-                        )
-                        .changed()
-                    {
-                        *project_changed = true;
-                    }
-                });
+                *project_changed |= kui::property(ui, "Ambient", |ui| {
+                    kui::slider_step(ui, &mut layer.material.ambient, 0.0..=1.0, "", 0.01)
+                })
+                .changed();
+                *project_changed |= kui::property(ui, "Diffuse", |ui| {
+                    kui::slider_step(ui, &mut layer.material.diffuse, 0.0..=1.0, "", 0.01)
+                })
+                .changed();
+                *project_changed |= kui::property(ui, "Specular", |ui| {
+                    kui::slider_step(ui, &mut layer.material.specular, 0.0..=1.0, "", 0.01)
+                })
+                .changed();
+                *project_changed |= kui::property(ui, "Specular Exp", |ui| {
+                    kui::number(
+                        ui,
+                        &mut layer.material.specular_exponent,
+                        1.0..=256.0,
+                        1.0,
+                        "",
+                    )
+                })
+                .changed();
+                *project_changed |= kui::property(ui, "Emission", |ui| {
+                    kui::slider_step(ui, &mut layer.material.emission, 0.0..=1.0, "", 0.01)
+                })
+                .changed();
+                *project_changed |= kui::property(ui, "Metalness", |ui| {
+                    kui::slider_step(ui, &mut layer.material.metalness, 0.0..=1.0, "", 0.01)
+                })
+                .changed();
+                *project_changed |= kui::property(ui, "Casts Shadows", |ui| {
+                    kui::toggle(ui, &mut layer.material.cast_shadows, "")
+                })
+                .changed();
+                *project_changed |= kui::property(ui, "Accepts Shadows", |ui| {
+                    kui::toggle(ui, &mut layer.material.accepts_shadows, "")
+                })
+                .changed();
+                *project_changed |= kui::property(ui, "Accepts Lights", |ui| {
+                    kui::toggle(ui, &mut layer.material.accepts_lights, "")
+                })
+                .changed();
+                *project_changed |= kui::property(ui, "Light Transmission", |ui| {
+                    kui::slider(ui, &mut layer.material.light_transmission, 0.0..=100.0, "%")
+                })
+                .changed();
 
                 // ── 3D Geometry Options (Extrusion & Bevel) ──
                 ui.separator();
@@ -572,35 +416,14 @@ pub fn draw_layer_transforms(
                         ..
                     } = &mut layer.layer_type
                     {
-                        ui.horizontal(|ui| {
-                            ui.label("Extrusion Depth:");
-                            if ui
-                                .add(
-                                    egui::DragValue::new(extrusion_depth)
-                                        .speed(1.0)
-                                        .range(0.0..=500.0)
-                                        .suffix(" px"),
-                                )
-                                .changed()
-                            {
-                                *project_changed = true;
-                            }
-                        });
-
-                        ui.horizontal(|ui| {
-                            ui.label("Bevel Depth:");
-                            if ui
-                                .add(
-                                    egui::DragValue::new(bevel_depth)
-                                        .speed(0.5)
-                                        .range(0.0..=50.0)
-                                        .suffix(" px"),
-                                )
-                                .changed()
-                            {
-                                *project_changed = true;
-                            }
-                        });
+                        *project_changed |= kui::property(ui, "Extrusion Depth", |ui| {
+                            kui::number(ui, extrusion_depth, 0.0..=500.0, 1.0, " px")
+                        })
+                        .changed();
+                        *project_changed |= kui::property(ui, "Bevel Depth", |ui| {
+                            kui::number(ui, bevel_depth, 0.0..=50.0, 0.5, " px")
+                        })
+                        .changed();
                     } else {
                         ui.label("Extrusion is only available for Shape layers.");
                     }
@@ -613,60 +436,34 @@ pub fn draw_layer_transforms(
             use crate::core::layer_constraints::{HorizontalPin, VerticalPin};
             let constraints_before = layer.constraints;
 
-            ui.horizontal(|ui| {
-                ui.label("Horizontal Pin:");
-                egui::ComboBox::from_id_salt(format!("pin_h_{}", layer.id))
-                    .selected_text(format!("{:?}", layer.constraints.horizontal))
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(
-                            &mut layer.constraints.horizontal,
-                            HorizontalPin::Left,
-                            "Left",
-                        );
-                        ui.selectable_value(
-                            &mut layer.constraints.horizontal,
-                            HorizontalPin::Center,
-                            "Center",
-                        );
-                        ui.selectable_value(
-                            &mut layer.constraints.horizontal,
-                            HorizontalPin::Right,
-                            "Right",
-                        );
-                        ui.selectable_value(
-                            &mut layer.constraints.horizontal,
-                            HorizontalPin::Scale,
-                            "Scale",
-                        );
-                    });
+            let horizontal_options = [
+                (HorizontalPin::Left, "Left"),
+                (HorizontalPin::Center, "Center"),
+                (HorizontalPin::Right, "Right"),
+                (HorizontalPin::Scale, "Scale"),
+            ];
+            *project_changed |= kui::property(ui, "Horizontal Pin", |ui| {
+                kui::combo(
+                    ui,
+                    format!("pin_h_{}", layer.id),
+                    &mut layer.constraints.horizontal,
+                    &horizontal_options,
+                )
             });
 
-            ui.horizontal(|ui| {
-                ui.label("Vertical Pin:");
-                egui::ComboBox::from_id_salt(format!("pin_v_{}", layer.id))
-                    .selected_text(format!("{:?}", layer.constraints.vertical))
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(
-                            &mut layer.constraints.vertical,
-                            VerticalPin::Top,
-                            "Top",
-                        );
-                        ui.selectable_value(
-                            &mut layer.constraints.vertical,
-                            VerticalPin::Center,
-                            "Center",
-                        );
-                        ui.selectable_value(
-                            &mut layer.constraints.vertical,
-                            VerticalPin::Bottom,
-                            "Bottom",
-                        );
-                        ui.selectable_value(
-                            &mut layer.constraints.vertical,
-                            VerticalPin::Scale,
-                            "Scale",
-                        );
-                    });
+            let vertical_options = [
+                (VerticalPin::Top, "Top"),
+                (VerticalPin::Center, "Center"),
+                (VerticalPin::Bottom, "Bottom"),
+                (VerticalPin::Scale, "Scale"),
+            ];
+            *project_changed |= kui::property(ui, "Vertical Pin", |ui| {
+                kui::combo(
+                    ui,
+                    format!("pin_v_{}", layer.id),
+                    &mut layer.constraints.vertical,
+                    &vertical_options,
+                )
             });
 
             if constraints_before != layer.constraints {
@@ -696,11 +493,7 @@ pub fn draw_layer_transforms(
                         (rgb[1] * 255.0) as u8,
                         (rgb[2] * 255.0) as u8,
                     );
-                    let btn = ui.add(
-                        egui::Button::new("  ")
-                            .fill(c32)
-                            .min_size(egui::vec2(18.0, 18.0)),
-                    );
+                    let btn = crate::ui::custom_widgets::ae_color_swatch(ui, c32, 18.0);
                     if btn.clicked() && layer.label != color {
                         layer.label = color;
                         *project_changed = true;
@@ -720,54 +513,33 @@ pub fn draw_layer_transforms(
         ui.collapsing("Layer Styles", |ui| {
             let ds = &mut layer.style.drop_shadow;
             ui.collapsing("Drop Shadow", |ui| {
-                if ui.checkbox(&mut ds.enabled, "Enabled").changed() {
-                    *project_changed = true;
-                }
-                ui.horizontal(|ui| {
-                    ui.label("Distance:");
-                    if ui
-                        .add(egui::Slider::new(&mut ds.distance, 0.0..=200.0).suffix(" px"))
-                        .changed()
-                    {
-                        *project_changed = true;
-                    }
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Blur Size:");
-                    if ui
-                        .add(egui::Slider::new(&mut ds.size, 0.0..=100.0).suffix(" px"))
-                        .changed()
-                    {
-                        *project_changed = true;
-                    }
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Opacity:");
-                    if ui
-                        .add(egui::Slider::new(&mut ds.opacity, 0.0..=1.0))
-                        .changed()
-                    {
-                        *project_changed = true;
-                    }
-                });
+                *project_changed |=
+                    kui::property(ui, "Enabled", |ui| kui::toggle(ui, &mut ds.enabled, ""))
+                        .changed();
+                *project_changed |= kui::property(ui, "Distance", |ui| {
+                    kui::slider(ui, &mut ds.distance, 0.0..=200.0, " px")
+                })
+                .changed();
+                *project_changed |= kui::property(ui, "Blur Size", |ui| {
+                    kui::slider(ui, &mut ds.size, 0.0..=100.0, " px")
+                })
+                .changed();
+                *project_changed |= kui::property(ui, "Opacity", |ui| {
+                    kui::slider(ui, &mut ds.opacity, 0.0..=1.0, "")
+                })
+                .changed();
             });
 
             let st = &mut layer.style.stroke;
             ui.collapsing("Stroke", |ui| {
-                if ui.checkbox(&mut st.enabled, "Enabled").changed() {
-                    *project_changed = true;
-                }
-                ui.horizontal(|ui| {
-                    ui.label("Size:");
-                    if ui
-                        .add(egui::Slider::new(&mut st.size, 1.0..=50.0).suffix(" px"))
-                        .changed()
-                    {
-                        *project_changed = true;
-                    }
-                });
+                *project_changed |=
+                    kui::property(ui, "Enabled", |ui| kui::toggle(ui, &mut st.enabled, ""))
+                        .changed();
+                *project_changed |= kui::property(ui, "Size", |ui| {
+                    kui::slider(ui, &mut st.size, 1.0..=50.0, " px")
+                })
+                .changed();
             });
         });
     });
 }
-

@@ -10,7 +10,7 @@ use std::sync::Arc;
 /// Each pixel: 4 channels × 2 bytes (f16) = 8 bytes.
 fn rgba8_to_rgba16f_bytes(pixels: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(pixels.len() * 2);
-    for chunk in pixels.chunks_exact(4) {
+    for chunk in pixels.as_chunks::<4>().0 {
         let r = f16::from_f32(chunk[0] as f32 / 255.0);
         let g = f16::from_f32(chunk[1] as f32 / 255.0);
         let b = f16::from_f32(chunk[2] as f32 / 255.0);
@@ -1113,6 +1113,75 @@ fn composition_cache_key(comp: &Composition) -> u64 {
         })
 }
 
+fn media_file_revision(path: &std::path::Path) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    path.hash(&mut hasher);
+    match std::fs::metadata(path) {
+        Ok(metadata) => {
+            metadata.len().hash(&mut hasher);
+            metadata
+                .modified()
+                .ok()
+                .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|duration| duration.as_nanos())
+                .hash(&mut hasher);
+        }
+        Err(error) => error.kind().hash(&mut hasher),
+    }
+    hasher.finish()
+}
+
+fn composition_media_revision(comp: &Composition, frame: u32) -> u64 {
+    use std::hash::{Hash, Hasher};
+    fn hash_media(
+        comp: &Composition,
+        frame: u32,
+        visited: &mut std::collections::HashSet<String>,
+        hasher: &mut std::collections::hash_map::DefaultHasher,
+    ) {
+        if !visited.insert(comp.id.clone()) {
+            return;
+        }
+        for layer in &comp.layers {
+            match &layer.layer_type {
+                crate::core::timeline::LayerType::Image { path } => {
+                    media_file_revision(std::path::Path::new(path)).hash(hasher);
+                }
+                crate::core::timeline::LayerType::Video { frames_dir, .. } => {
+                    let sequence_frame = frame.saturating_sub(layer.in_frame);
+                    let path =
+                        crate::core::video_import::frame_path_in_dir(frames_dir, sequence_frame);
+                    media_file_revision(&path).hash(hasher);
+                }
+                crate::core::timeline::LayerType::PreComp { comp_id } => {
+                    if let Some(sub_comp) = comp
+                        .sub_compositions
+                        .iter()
+                        .find(|candidate| candidate.id == *comp_id)
+                    {
+                        hash_media(
+                            sub_comp,
+                            frame.saturating_sub(layer.in_frame),
+                            visited,
+                            hasher,
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    hash_media(
+        comp,
+        frame,
+        &mut std::collections::HashSet::new(),
+        &mut hasher,
+    );
+    hasher.finish()
+}
+
 type RenderKey = (u64, u64, u32, u32, u32, (u32, u32));
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct TextTextureKey {
@@ -1137,20 +1206,97 @@ type TextTextureCache = std::collections::HashMap<
     (wgpu::Texture, std::sync::Arc<wgpu::BindGroup>, u32, u32),
 >;
 type VideoFrameKey = (String, String, u32);
-type VideoFrameCache = std::collections::HashMap<
-    VideoFrameKey,
-    (
-        std::sync::Arc<wgpu::Texture>,
-        std::sync::Arc<wgpu::BindGroup>,
-        u32,
-        u32,
-    ),
->;
+struct VideoFrameEntry {
+    _texture: std::sync::Arc<wgpu::Texture>,
+    bind_group: std::sync::Arc<wgpu::BindGroup>,
+    width: u32,
+    height: u32,
+    byte_size: usize,
+    last_used: u64,
+}
 
-/// Maximum cached video frame textures before oldest entries are evicted.
-/// 200 frames at 1080p RGBA is ~830 MB of VRAM; evicted frames re-upload
-/// cheaply on demand, so this only bounds memory, not correctness.
-pub const MAX_VIDEO_FRAME_TEXTURES: usize = 200;
+struct VideoFrameCache {
+    entries: std::collections::HashMap<VideoFrameKey, VideoFrameEntry>,
+    current_bytes: usize,
+    max_bytes: usize,
+    clock: u64,
+}
+
+impl VideoFrameCache {
+    const DEFAULT_MAX_BYTES: usize = 512 * 1024 * 1024;
+
+    fn new() -> Self {
+        Self {
+            entries: std::collections::HashMap::new(),
+            current_bytes: 0,
+            max_bytes: Self::DEFAULT_MAX_BYTES,
+            clock: 0,
+        }
+    }
+
+    fn get(&mut self, key: &VideoFrameKey) -> Option<(std::sync::Arc<wgpu::BindGroup>, u32, u32)> {
+        self.clock = self.clock.wrapping_add(1);
+        let entry = self.entries.get_mut(key)?;
+        entry.last_used = self.clock;
+        Some((entry.bind_group.clone(), entry.width, entry.height))
+    }
+
+    fn insert(
+        &mut self,
+        key: VideoFrameKey,
+        texture: std::sync::Arc<wgpu::Texture>,
+        bind_group: std::sync::Arc<wgpu::BindGroup>,
+        width: u32,
+        height: u32,
+    ) {
+        let Some(byte_size) = (width as usize)
+            .checked_mul(height as usize)
+            .and_then(|pixels| pixels.checked_mul(8))
+        else {
+            return;
+        };
+        if byte_size > self.max_bytes {
+            return;
+        }
+        if let Some(old) = self.entries.remove(&key) {
+            self.current_bytes = self.current_bytes.saturating_sub(old.byte_size);
+        }
+        self.clock = self.clock.wrapping_add(1);
+        self.current_bytes = self.current_bytes.saturating_add(byte_size);
+        self.entries.insert(
+            key,
+            VideoFrameEntry {
+                _texture: texture,
+                bind_group,
+                width,
+                height,
+                byte_size,
+                last_used: self.clock,
+            },
+        );
+        while self.current_bytes > self.max_bytes {
+            let Some(oldest) = self
+                .entries
+                .iter()
+                .min_by_key(|(_, entry)| entry.last_used)
+                .map(|(key, _)| key.clone())
+            else {
+                break;
+            };
+            if let Some(removed) = self.entries.remove(&oldest) {
+                self.current_bytes = self.current_bytes.saturating_sub(removed.byte_size);
+            }
+        }
+    }
+
+    fn clear(&mut self) {
+        self.entries.clear();
+        self.current_bytes = 0;
+    }
+}
+
+/// Approximate byte budget for cached Rgba16Float source textures.
+pub const MAX_VIDEO_FRAME_TEXTURE_CACHE_BYTES: usize = VideoFrameCache::DEFAULT_MAX_BYTES;
 /// FIFO cap for cached text-layer textures: each entry can be large
 /// (font_size × ~10 rows), so long editing sessions must not grow it forever.
 pub const MAX_TEXT_TEXTURES: usize = 64;
@@ -1160,6 +1306,7 @@ pub struct WgpuRenderer {
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
     render_pipeline: wgpu::RenderPipeline,
+    render_pipeline_screen: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
 
@@ -1614,64 +1761,80 @@ impl WgpuRenderer {
                 push_constant_ranges: &[],
             });
 
-        // Pipeline
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            cache: None,
-            label: Some("Render Pipeline"),
-            layout: Some(&render_pipeline_layout),
-            vertex: wgpu::VertexState {
-                compilation_options: Default::default(),
-                module: &shader,
-                entry_point: "vs_main",
-                buffers: &[wgpu::VertexBufferLayout {
-                    array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
-                    step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &[
-                        wgpu::VertexAttribute {
-                            offset: 0,
-                            shader_location: 0,
-                            format: wgpu::VertexFormat::Float32x2,
-                        },
-                        wgpu::VertexAttribute {
-                            offset: std::mem::size_of::<[f32; 2]>() as wgpu::BufferAddress,
-                            shader_location: 1,
-                            format: wgpu::VertexFormat::Float32x2,
-                        },
-                    ],
-                }],
+        let create_pipeline = |label: &'static str, blend: Option<wgpu::BlendState>| {
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                cache: None,
+                label: Some(label),
+                layout: Some(&render_pipeline_layout),
+                vertex: wgpu::VertexState {
+                    compilation_options: Default::default(),
+                    module: &shader,
+                    entry_point: "vs_main",
+                    buffers: &[wgpu::VertexBufferLayout {
+                        array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &[
+                            wgpu::VertexAttribute {
+                                offset: 0,
+                                shader_location: 0,
+                                format: wgpu::VertexFormat::Float32x2,
+                            },
+                            wgpu::VertexAttribute {
+                                offset: std::mem::size_of::<[f32; 2]>() as wgpu::BufferAddress,
+                                shader_location: 1,
+                                format: wgpu::VertexFormat::Float32x2,
+                            },
+                        ],
+                    }],
+                },
+                fragment: Some(wgpu::FragmentState {
+                    compilation_options: Default::default(),
+                    module: &shader,
+                    entry_point: "fs_main",
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: wgpu::TextureFormat::Rgba16Float,
+                        blend,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    strip_index_format: None,
+                    front_face: wgpu::FrontFace::Ccw,
+                    cull_mode: None,
+                    polygon_mode: wgpu::PolygonMode::Fill,
+                    unclipped_depth: false,
+                    conservative: false,
+                },
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState {
+                    count: 1,
+                    mask: !0,
+                    alpha_to_coverage_enabled: false,
+                },
+                multiview: None,
+            })
+        };
+
+        // Pipeline (Normal Source-Over ALPHA_BLENDING)
+        let render_pipeline = create_pipeline("Render Pipeline", Some(wgpu::BlendState::ALPHA_BLENDING));
+
+        // Pipeline (Screen: final = S*Sa + D*(1 - S*Sa))
+        let screen_blend = wgpu::BlendState {
+            color: wgpu::BlendComponent {
+                src_factor: wgpu::BlendFactor::One,
+                dst_factor: wgpu::BlendFactor::OneMinusSrc,
+                operation: wgpu::BlendOperation::Add,
             },
-            fragment: Some(wgpu::FragmentState {
-                compilation_options: Default::default(),
-                module: &shader,
-                entry_point: "fs_main",
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: wgpu::TextureFormat::Rgba16Float,
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: None,
-                polygon_mode: wgpu::PolygonMode::Fill,
-                unclipped_depth: false,
-                conservative: false,
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            multiview: None,
-        });
+            alpha: wgpu::BlendComponent::OVER,
+        };
+        let render_pipeline_screen = create_pipeline("Render Pipeline Screen", Some(screen_blend));
 
         Self {
             device,
             queue,
             render_pipeline,
+            render_pipeline_screen,
             vertex_buffer,
             index_buffer,
             globals_buffer,
@@ -1701,7 +1864,7 @@ impl WgpuRenderer {
             snapshot_texture: None,
             snapshot_view: None,
             text_texture_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
-            video_frame_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
+            video_frame_cache: std::cell::RefCell::new(VideoFrameCache::new()),
             video_cache_version: std::cell::Cell::new(0),
             last_main_key: None,
             last_snapshot_key: None,
@@ -2142,8 +2305,7 @@ impl WgpuRenderer {
                     || layer.transform.opacity_expression.is_some();
                 let (pos, scale, rotation, opacity) =
                     if layer.parent_id.is_some() || layer_has_exprs {
-                        let (p, s, r, o) = comp.resolve_world_transform(layer, frame);
-                        (p, s, r, o / 100.0)
+                        comp.resolve_world_transform(layer, frame)
                     } else {
                         (
                             layer.transform.position.evaluate(frame),
@@ -2980,7 +3142,7 @@ impl WgpuRenderer {
                     }
                     TrackMatteMode::LumaMatte | TrackMatteMode::LumaMatteInverted => {
                         let mut lum = Vec::with_capacity(m_pixels.len());
-                        for chunk in m_pixels.chunks_exact(4) {
+                        for chunk in m_pixels.as_chunks::<4>().0 {
                             let l = (0.2126 * chunk[0] as f32
                                 + 0.7152 * chunk[1] as f32
                                 + 0.0722 * chunk[2] as f32)
@@ -3204,13 +3366,19 @@ impl WgpuRenderer {
                         occlusion_query_set: None,
                     });
 
-                    render_pass.set_pipeline(&self.render_pipeline);
                     render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
                     render_pass
                         .set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
                     render_pass.set_bind_group(0, &self.globals_bind_group, &[]);
 
+                    #[allow(clippy::needless_range_loop)]
                     for i in run.start..run.end {
+                        let pipeline = match active_layers[i].blend_mode {
+                            crate::core::timeline::BlendMode::Screen => &self.render_pipeline_screen,
+                            _ => &self.render_pipeline,
+                        };
+                        render_pass.set_pipeline(pipeline);
+
                         // Bind resources using dynamic uniform offset
                         let dynamic_offset = (i * LAYER_UNIFORM_STRIDE) as u32;
                         render_pass.set_bind_group(1, &self.layer_bind_group, &[dynamic_offset]);
@@ -3446,34 +3614,31 @@ impl WgpuRenderer {
         frame_idx: u32,
         version: u64,
     ) -> Option<(u32, u32, std::sync::Arc<wgpu::BindGroup>)> {
-        let key: VideoFrameKey = (layer_id.to_string(), frames_dir.to_string(), frame_idx);
+        let frame_path = crate::core::video_import::frame_path_in_dir(frames_dir, frame_idx);
+        let source_revision = media_file_revision(&frame_path);
+        let key: VideoFrameKey = (
+            layer_id.to_string(),
+            format!("{frames_dir}:{source_revision}"),
+            frame_idx,
+        );
         // Re-imports write into the same frames_dir; the version check ensures
         // stale pixels from a previous project state are never displayed.
         if self.video_cache_version.get() != version {
             self.video_frame_cache.borrow_mut().clear();
             self.video_cache_version.set(version);
         }
-        if let Some(bg) = self
-            .video_frame_cache
-            .borrow()
-            .get(&key)
-            .map(|(_, bg, _, _)| bg.clone())
-        {
-            let cache = self.video_frame_cache.borrow();
-            let (_, _, tw, th) = cache.get(&key)?;
-            return Some((*tw, *th, bg));
+        if let Some((bg, width, height)) = self.video_frame_cache.borrow_mut().get(&key) {
+            return Some((width, height, bg));
         }
-        let frame_path = crate::core::video_import::frame_path_in_dir(frames_dir, frame_idx)
-            .to_string_lossy()
-            .to_string();
+        let frame_path = frame_path.to_string_lossy().to_string();
         let (tw, th, pixels) = {
             use crate::core::image_cache::with_image_cache;
             with_image_cache(|cache| {
                 cache
                     .load_image(&frame_path)
                     .map(|img| (img.width, img.height, img.pixels.clone()))
-            })?
-        };
+            })
+        }?;
 
         let size = wgpu::Extent3d {
             width: tw,
@@ -3522,20 +3687,13 @@ impl WgpuRenderer {
         });
         let bind_group = std::sync::Arc::new(bind_group);
         {
-            let mut cache = self.video_frame_cache.borrow_mut();
-            cache.insert(
+            self.video_frame_cache.borrow_mut().insert(
                 key,
-                (std::sync::Arc::new(texture), bind_group.clone(), tw, th),
+                std::sync::Arc::new(texture),
+                bind_group.clone(),
+                tw,
+                th,
             );
-            // Simple FIFO eviction: HashMap order is arbitrary but bounded memory
-            // matters more than exact LRU here (frames re-upload cheaply).
-            while cache.len() > MAX_VIDEO_FRAME_TEXTURES {
-                if let Some(oldest) = cache.keys().next().cloned() {
-                    cache.remove(&oldest);
-                } else {
-                    break;
-                }
-            }
         }
         Some((tw, th, bind_group))
     }
@@ -3549,13 +3707,18 @@ impl WgpuRenderer {
         path: &str,
         version: u64,
     ) -> Option<(u32, u32, std::sync::Arc<wgpu::BindGroup>)> {
-        let key: VideoFrameKey = (format!("image:{layer_id}"), path.to_string(), 0);
+        let source_revision = media_file_revision(std::path::Path::new(path));
+        let key: VideoFrameKey = (
+            format!("image:{layer_id}"),
+            format!("{path}:{source_revision}"),
+            0,
+        );
         if self.video_cache_version.get() != version {
             self.video_frame_cache.borrow_mut().clear();
             self.video_cache_version.set(version);
         }
-        if let Some((_, bg, tw, th)) = self.video_frame_cache.borrow().get(&key) {
-            return Some((*tw, *th, bg.clone()));
+        if let Some((bg, width, height)) = self.video_frame_cache.borrow_mut().get(&key) {
+            return Some((width, height, bg));
         }
 
         let (tw, th, pixels) = {
@@ -3612,18 +3775,13 @@ impl WgpuRenderer {
             label: Some("image_layer_bind_group"),
         });
         let bind_group = std::sync::Arc::new(bind_group);
-        let mut cache = self.video_frame_cache.borrow_mut();
-        cache.insert(
+        self.video_frame_cache.borrow_mut().insert(
             key,
-            (std::sync::Arc::new(texture), bind_group.clone(), tw, th),
+            std::sync::Arc::new(texture),
+            bind_group.clone(),
+            tw,
+            th,
         );
-        while cache.len() > MAX_VIDEO_FRAME_TEXTURES {
-            if let Some(oldest) = cache.keys().next().cloned() {
-                cache.remove(&oldest);
-            } else {
-                break;
-            }
-        }
         Some((tw, th, bind_group))
     }
 
@@ -3643,9 +3801,10 @@ impl WgpuRenderer {
     ) -> Option<(u32, u32, std::sync::Arc<wgpu::BindGroup>)> {
         let sub_comp = comp.find_sub_comp(comp_id)?;
         let revision = composition_cache_key(sub_comp);
+        let media_revision = composition_media_revision(sub_comp, frame_idx);
         let key: VideoFrameKey = (
             format!("precomp:{comp_id}"),
-            format!("{revision}:{width}x{height}"),
+            format!("{revision}:{media_revision}:{width}x{height}"),
             frame_idx,
         );
 
@@ -3653,20 +3812,16 @@ impl WgpuRenderer {
             self.video_frame_cache.borrow_mut().clear();
             self.video_cache_version.set(version);
         }
-        if let Some(bg) = self
-            .video_frame_cache
-            .borrow()
-            .get(&key)
-            .map(|(_, bg, _, _)| bg.clone())
+        if let Some((bg, cached_width, cached_height)) =
+            self.video_frame_cache.borrow_mut().get(&key)
         {
-            return Some((width, height, bg));
+            return Some((cached_width, cached_height, bg));
         }
 
         let pixels = crate::core::software_renderer::render_precomp_layers(
             comp, sub_comp, frame_idx, width, height,
         );
-        if pixels.len() != crate::core::software_renderer::rgba_buffer_size(width, height)? as usize
-        {
+        if pixels.len() != crate::core::software_renderer::rgba_buffer_size(width, height)? {
             return None;
         }
 
@@ -3716,25 +3871,13 @@ impl WgpuRenderer {
             label: Some("precomp_frame_bind_group"),
         });
         let bind_group = std::sync::Arc::new(bind_group);
-        {
-            let mut cache = self.video_frame_cache.borrow_mut();
-            cache.insert(
-                key,
-                (
-                    std::sync::Arc::new(texture),
-                    bind_group.clone(),
-                    width,
-                    height,
-                ),
-            );
-            while cache.len() > MAX_VIDEO_FRAME_TEXTURES {
-                if let Some(oldest) = cache.keys().next().cloned() {
-                    cache.remove(&oldest);
-                } else {
-                    break;
-                }
-            }
-        }
+        self.video_frame_cache.borrow_mut().insert(
+            key,
+            std::sync::Arc::new(texture),
+            bind_group.clone(),
+            width,
+            height,
+        );
         Some((width, height, bind_group))
     }
 
@@ -3967,15 +4110,15 @@ mod tests {
 #[cfg(test)]
 mod video_cache_tests {
     #[test]
-    fn test_video_texture_budget_is_sane() {
-        // 600 frames x 1080p RGBA ≈ 1.5GB — must stay under 2GB
-        // (and hold ≥150 frames ≈ 5s at 30fps, enforced by the constant itself).
-        let bytes = crate::core::renderer::MAX_VIDEO_FRAME_TEXTURES as u64 * 1920 * 1080 * 4;
+    fn test_video_texture_byte_budget_is_sane() {
+        let bytes = crate::core::renderer::MAX_VIDEO_FRAME_TEXTURE_CACHE_BYTES as u64;
         assert!(
-            bytes < 2 * 1024 * 1024 * 1024,
+            bytes <= 512 * 1024 * 1024,
             "budget {} bytes too large",
             bytes
         );
+        let frame_bytes = 1920u64 * 1080 * 8;
+        assert!(bytes / frame_bytes >= 30, "1080p residency is too small");
     }
 }
 

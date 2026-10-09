@@ -1,80 +1,90 @@
 use eframe::egui;
 
-/// VFX compositing Professional Dark Theme Palette
-/// Based on actual AE CC 2024 color measurements, refined for professional density.
+/// Neutral editing-tool palette. Accent colors indicate interaction state; layer colors identify content.
 #[allow(dead_code)]
 pub mod colors {
     use eframe::egui::Color32;
 
     // ── Background Layers (darkest → lightest) ──
-    /// Deepest background - timeline/panel base
-    pub const BG_DEEPEST: Color32 = Color32::from_rgb(10, 17, 24);
-    /// Darkest panel background
-    pub const BG_DARKEST: Color32 = Color32::from_rgb(13, 22, 31);
-    /// Standard panel/panel background
-    pub const BG_DARK: Color32 = Color32::from_rgb(18, 29, 40);
-    /// Slightly elevated surfaces (cards, inputs)
-    pub const BG_MID: Color32 = Color32::from_rgb(24, 37, 50);
-    /// Elevated surfaces, dropdowns, popovers
-    pub const BG_PANEL: Color32 = Color32::from_rgb(29, 44, 58);
-    /// Input fields, search boxes
-    pub const BG_SURFACE: Color32 = Color32::from_rgb(35, 51, 66);
-    /// Highest elevation - dropdowns, tooltips
-    pub const BG_ELEVATED: Color32 = Color32::from_rgb(43, 60, 76);
-    pub const BG_PANEL_ALT: Color32 = Color32::from_rgb(16, 27, 38);
-    pub const BG_PANEL_DEEP: Color32 = Color32::from_rgb(11, 19, 26);
-    pub const BG_PANEL_DARK: Color32 = Color32::from_rgb(27, 35, 42);
-    pub const BG_PANEL_BASE: Color32 = Color32::from_rgb(15, 26, 33);
-    pub const BG_PANEL_RAISED: Color32 = Color32::from_rgb(22, 32, 42);
-    pub const BG_EXTREME: Color32 = Color32::from_rgb(10, 10, 12);
+    /// Deep application background (#121418 - ultra-dense studio base).
+    pub const BG_DEEPEST: Color32 = Color32::from_rgb(18, 20, 24);
+    /// Standard panel surface (#1A1D24 - sleek modern panel).
+    pub const BG_DARKEST: Color32 = Color32::from_rgb(26, 29, 36);
+    pub const BG_DARK: Color32 = Color32::from_rgb(26, 29, 36);
+    /// Raised surface for rows and controls (#222731).
+    pub const BG_MID: Color32 = Color32::from_rgb(34, 39, 49);
+    pub const BG_PANEL: Color32 = Color32::from_rgb(34, 39, 49);
+    /// Deep input surface (#161820).
+    pub const BG_SURFACE: Color32 = Color32::from_rgb(22, 24, 32);
+    pub const BG_ELEVATED: Color32 = Color32::from_rgb(40, 46, 58);
+    pub const BG_PANEL_ALT: Color32 = Color32::from_rgb(26, 29, 36);
+    pub const BG_PANEL_DEEP: Color32 = Color32::from_rgb(18, 20, 24);
+    pub const BG_PANEL_DARK: Color32 = Color32::from_rgb(26, 29, 36);
+    pub const BG_PANEL_BASE: Color32 = Color32::from_rgb(26, 29, 36);
+    pub const BG_PANEL_RAISED: Color32 = Color32::from_rgb(34, 39, 49);
+    pub const BG_EXTREME: Color32 = Color32::from_rgb(20, 22, 28);
 
     // ── Interactive States ──
-    pub const BG_HOVER: Color32 = Color32::from_rgb(35, 64, 94);
-    pub const BG_ACTIVE: Color32 = Color32::from_rgb(24, 62, 102);
-    pub const BG_PRESSED: Color32 = Color32::from_rgb(15, 68, 132);
-    pub const BG_SELECTION: Color32 = Color32::from_rgb(18, 52, 102);
+    pub const BG_HOVER: Color32 = Color32::from_rgb(31, 36, 40);
+    pub const BG_ACTIVE: Color32 = Color32::from_rgb(52, 34, 27);
+    pub const BG_PRESSED: Color32 = Color32::from_rgb(66, 40, 29);
+    pub const BG_SELECTION: Color32 = Color32::from_rgb(52, 34, 27);
+    pub const BG_SELECTION_HOVER: Color32 = Color32::from_rgb(66, 44, 35);
 
     // ── Accent Colors (Restrained Production Palette) ──
-    /// Primary accent - muted steel blue. Active tabs, selection, playhead,
-    /// focus states and primary actions. The only saturated hue in the UI.
+    /// Saturated blue retained for domain graphics that specifically encode blue.
     pub const ACCENT_BLUE: Color32 = Color32::from_rgb(14, 120, 220);
-    /// Desaturated cyan - motion paths, guides, secondary indicators.
-    pub const ACCENT_CYAN: Color32 = Color32::from_rgb(75, 135, 175);
+    /// Compatibility token for interface accents, aligned with Kagari's warm brand color.
+    pub const ACCENT_CYAN: Color32 = ACCENT_BRAND;
     /// Muted amber - timecode, warnings, keyframes.
-    pub const ACCENT_YELLOW: Color32 = Color32::from_rgb(215, 175, 75);
+    pub const ACCENT_YELLOW: Color32 = Color32::from_rgb(213, 168, 90);
     /// Muted green - success, solo states.
-    pub const ACCENT_GREEN: Color32 = Color32::from_rgb(75, 155, 105);
+    pub const ACCENT_GREEN: Color32 = Color32::from_rgb(105, 185, 157);
     /// Red - error, mute. Kept readable; errors must pop.
-    pub const ACCENT_RED: Color32 = Color32::from_rgb(210, 55, 55);
-    /// Orange - warnings only. Never a primary action color.
+    pub const ACCENT_RED: Color32 = Color32::from_rgb(214, 107, 107);
+    /// Warning amber. Reserve this token for warning states.
     pub const ACCENT_ORANGE: Color32 = Color32::from_rgb(245, 155, 0);
     pub const ACCENT_BRAND: Color32 = Color32::from_rgb(255, 107, 22);
     pub const ACCENT_BRAND_HOVER: Color32 = Color32::from_rgb(255, 145, 50);
+    pub const ACCENT_SELECTION: Color32 = ACCENT_BRAND;
+    pub const ACCENT_TOGGLE: Color32 = ACCENT_SELECTION;
+    pub const ACCENT_WORKSPACE: Color32 = ACCENT_SELECTION;
+    pub const ACCENT_PRIMARY_ACTION: Color32 = ACCENT_SELECTION;
+    pub const ACCENT_WARNING: Color32 = Color32::from_rgb(213, 168, 90);
+    pub const ACCENT_PROGRESS: Color32 = ACCENT_SELECTION;
+    pub const ACCENT_INFORMATION: Color32 = ACCENT_SELECTION;
+    pub const ACCENT_BEAT_MARKER: Color32 = ACCENT_YELLOW;
     /// Purple - expressions, advanced.
     pub const ACCENT_PURPLE: Color32 = Color32::from_rgb(155, 110, 230);
     pub const ACCENT_BLUE_LIGHT: Color32 = Color32::from_rgb(90, 160, 255);
-    pub const ACCENT_ACTION: Color32 = Color32::from_rgb(32, 92, 168);
-    pub const ACCENT_ACTION_HOVER: Color32 = Color32::from_rgb(40, 108, 190);
-    pub const ACCENT_ACTION_STROKE: Color32 = Color32::from_rgb(48, 120, 200);
+    pub const ACCENT_ACTION: Color32 = ACCENT_PRIMARY_ACTION;
+    pub const ACCENT_ACTION_HOVER: Color32 = ACCENT_BRAND_HOVER;
+    pub const ACCENT_ACTION_STROKE: Color32 = ACCENT_SELECTION;
     pub const METER_BAD: Color32 = Color32::from_rgb(255, 82, 78);
     pub const METER_WARNING: Color32 = Color32::from_rgb(255, 190, 45);
     pub const METER_GOOD: Color32 = Color32::from_rgb(42, 211, 86);
-    pub const OVERLAY_SURFACE: Color32 =
-        Color32::from_rgba_premultiplied(18, 22, 30, 225);
+    pub const OVERLAY_SURFACE: Color32 = Color32::from_rgba_premultiplied(18, 22, 30, 225);
+    /// Dark glassmorphism background tint with subtle translucency.
+    pub const GLASS_SURFACE: Color32 = Color32::from_rgba_premultiplied(22, 25, 33, 220);
+    pub const GLASS_BORDER: Color32 = Color32::from_rgba_premultiplied(255, 255, 255, 28);
 
-    // ── Borders (crisp 1px) ──
-    pub const BORDER_SUBTLE: Color32 = Color32::from_rgb(37, 52, 67);
-    pub const BORDER_MEDIUM: Color32 = Color32::from_rgb(50, 68, 84);
-    pub const BORDER_STRONG: Color32 = Color32::from_rgb(70, 88, 105);
-    pub const BORDER_ACTIVE: Color32 = Color32::from_rgb(14, 120, 220);
+    // ── Borders (crisp 1px with modern cool-slate tone) ──
+    pub const BORDER_SUBTLE: Color32 = Color32::from_rgb(38, 43, 54);
+    pub const BORDER_MEDIUM: Color32 = Color32::from_rgb(48, 55, 69);
+    pub const BORDER_STRONG: Color32 = Color32::from_rgb(64, 73, 92);
+    pub const BORDER_ACTIVE: Color32 = ACCENT_SELECTION;
+    pub const BORDER_FOCUS: Color32 = BORDER_ACTIVE;
 
     // ── Typography Colors ──
-    pub const TEXT_PRIMARY: Color32 = Color32::from_rgb(225, 228, 235);
-    pub const TEXT_SECONDARY: Color32 = Color32::from_rgb(158, 170, 192);
-    pub const TEXT_SECONDARY_BRIGHT: Color32 = Color32::from_rgb(193, 205, 218);
-    pub const TEXT_MUTED: Color32 = Color32::from_rgb(112, 124, 144);
-    pub const TEXT_ACCENT: Color32 = Color32::from_rgb(85, 145, 205);
+    pub const TEXT_PRIMARY: Color32 = Color32::from_rgb(225, 228, 230);
+    pub const TEXT_SECONDARY: Color32 = Color32::from_rgb(158, 166, 172);
+    pub const TEXT_SECONDARY_BRIGHT: Color32 = Color32::from_rgb(193, 199, 203);
+    pub const TEXT_MUTED: Color32 = Color32::from_rgb(112, 120, 125);
+    pub const TEXT_ACCENT: Color32 = ACCENT_SELECTION;
     pub const TEXT_ON_ACCENT: Color32 = Color32::from_rgb(255, 255, 255);
+
+    pub const TUTORIAL_HINT_BACKGROUND: Color32 = Color32::from_rgb(25, 29, 33);
+    pub const TUTORIAL_COMPLETE_BACKGROUND: Color32 = Color32::from_rgb(32, 58, 56);
 
     // ── Layer Label Colors (AE standard) ──
     pub const LABEL_RED: Color32 = Color32::from_rgb(255, 60, 60);
@@ -110,10 +120,11 @@ pub mod colors {
     pub const CENTER_HOVER_RING: Color32 = Color32::from_rgb(70, 135, 190);
 
     // ── Timeline Overlay Colors ──
-    pub const TIMELINE_PLAYHEAD: Color32 = Color32::from_rgb(70, 140, 210);
+    pub const TIMELINE_PLAYHEAD: Color32 = ACCENT_BRAND;
     pub const TIMELINE_KEYFRAME: Color32 = Color32::from_rgb(205, 165, 90);
-    pub const TIMELINE_WAVEFORM: Color32 = Color32::from_rgb(85, 145, 105);
-    pub const TIMELINE_SELECTION: Color32 = Color32::from_rgba_premultiplied(0, 100, 240, 38);
+    pub const TIMELINE_CACHE: Color32 = Color32::from_rgb(176, 105, 66);
+    pub const TIMELINE_WAVEFORM: Color32 = Color32::from_rgb(176, 105, 66);
+    pub const TIMELINE_SELECTION: Color32 = Color32::from_rgba_premultiplied(38, 16, 3, 38);
 }
 
 /// Layout & Spacing Constants for Pro Density
@@ -121,9 +132,17 @@ pub mod colors {
 pub mod layout {
     pub const HIT_TARGET_MIN: f32 = 24.0;
     pub const HIT_TARGET_COMFORT: f32 = 28.0;
+    pub const FIELD_HEIGHT: f32 = 26.0;
+    pub const FIELD_RADIUS: f32 = 6.0;
+    pub const BUTTON_RADIUS: f32 = 6.0;
+    pub const SURFACE_RADIUS: f32 = 8.0;
+    pub const PROPERTY_LABEL_WIDTH: f32 = 136.0;
+    pub const PROPERTY_CONTROL_MIN_WIDTH: f32 = 130.0;
     pub const SIDEBAR_DEFAULT_WIDTH: f32 = 280.0;
     pub const TOOLBAR_HEIGHT: f32 = 32.0;
-    pub const TIMELINE_LEFT_PANE_WIDTH: f32 = 260.0;
+    pub const PANEL_HEADER_HEIGHT: f32 = 32.0;
+    pub const DOCKED_PANELS_MIN_WIDTH: f32 = 840.0;
+    pub const TIMELINE_LEFT_PANE_WIDTH: f32 = 190.0;
     pub const BOTTOM_TIMELINE_HEIGHT: f32 = 280.0;
     pub const STATUS_BAR_HEIGHT: f32 = 20.0;
 
@@ -133,9 +152,11 @@ pub mod layout {
     pub const FONT_SIZE_TITLE: f32 = 14.5;
 }
 
-/// Configure fonts for professional appearance.
-/// Loads Inter for Latin UI, LINE Seed JP / Hiragino for Japanese UI.
-/// Falls back to system fonts gracefully.
+/// Preserve the bundled font metrics so mixed Japanese and Latin runs share one baseline.
+fn japanese_ui_font(data: Vec<u8>) -> egui::FontData {
+    egui::FontData::from_owned(data)
+}
+
 fn configure_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
 
@@ -152,11 +173,28 @@ fn configure_fonts(ctx: &egui::Context) {
             "/System/Library/Fonts/Menlo.ttc",
             "/System/Library/Fonts/Menlo-Regular.ttc",
         ];
-        let jp_font_paths = [
+        let mut jp_font_paths = [
             "/System/Library/Fonts/ヒラギノ角ゴシック W4.ttc",
             "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc",
             "/System/Library/Fonts/STHeiti Light.ttc",
-        ];
+            "/Library/Fonts/LINESeedJP_OTF_Rg.otf",
+            "/Library/Fonts/LINESeedJP_OTF_Rg.ttf",
+        ]
+        .into_iter()
+        .map(std::path::PathBuf::from)
+        .collect::<Vec<_>>();
+        if let Some(home) = std::env::var_os("HOME") {
+            let user_fonts = std::path::PathBuf::from(home).join("Library/Fonts");
+            jp_font_paths.extend(
+                [
+                    "LINESeedJP_OTF_Rg.otf",
+                    "LINESeedJP_OTF_Rg.ttf",
+                    "NotoSansCJKjp-Regular.otf",
+                    "NotoSansJP-Regular.ttf",
+                ]
+                .map(|name| user_fonts.join(name)),
+            );
+        }
         let inter_paths = [
             "/Library/Fonts/Inter.ttf",
             "/System/Library/Fonts/Supplemental/Inter.ttf",
@@ -225,7 +263,7 @@ fn configure_fonts(ctx: &egui::Context) {
             if let Ok(data) = std::fs::read(path) {
                 fonts
                     .font_data
-                    .insert("LineSeedJP".to_string(), egui::FontData::from_owned(data));
+                    .insert("LineSeedJP".to_string(), japanese_ui_font(data));
                 fonts
                     .families
                     .entry(egui::FontFamily::Proportional)
@@ -244,8 +282,31 @@ fn configure_fonts(ctx: &egui::Context) {
             "/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf",
             "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
             "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
         ];
+        let mut linux_jp_paths = [
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/opentype/noto/NotoSansCJKjp-Regular.otf",
+            "/usr/share/fonts/truetype/noto/NotoSansJP-Regular.ttf",
+        ]
+        .into_iter()
+        .map(std::path::PathBuf::from)
+        .collect::<Vec<_>>();
+        let jp_font_names = [
+            "NotoSansCJK-Regular.ttc",
+            "NotoSansCJKjp-Regular.otf",
+            "NotoSansJP-Regular.ttf",
+            "LINESeedJP_OTF_Rg.otf",
+        ];
+        if let Some(data_home) = std::env::var_os("XDG_DATA_HOME") {
+            let user_fonts = std::path::PathBuf::from(data_home).join("fonts");
+            linux_jp_paths.extend(jp_font_names.map(|name| user_fonts.join(name)));
+        }
+        if let Some(home) = std::env::var_os("HOME") {
+            let home = std::path::PathBuf::from(home);
+            for font_dir in [home.join(".local/share/fonts"), home.join(".fonts")] {
+                linux_jp_paths.extend(jp_font_names.map(|name| font_dir.join(name)));
+            }
+        }
         let linux_mono_paths = [
             "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
             "/usr/share/fonts/truetype/ubuntu/UbuntuMono-R.ttf",
@@ -254,10 +315,9 @@ fn configure_fonts(ctx: &egui::Context) {
 
         for path in &linux_prop_paths {
             if let Ok(data) = std::fs::read(path) {
-                fonts.font_data.insert(
-                    "LinuxSystemFont".to_string(),
-                    egui::FontData::from_owned(data),
-                );
+                fonts
+                    .font_data
+                    .insert("LinuxSystemFont".to_string(), japanese_ui_font(data));
                 fonts
                     .families
                     .entry(egui::FontFamily::Proportional)
@@ -268,15 +328,28 @@ fn configure_fonts(ctx: &egui::Context) {
         }
         for path in &linux_mono_paths {
             if let Ok(data) = std::fs::read(path) {
-                fonts.font_data.insert(
-                    "LinuxMonoFont".to_string(),
-                    egui::FontData::from_owned(data),
-                );
+                fonts
+                    .font_data
+                    .insert("LinuxMonoFont".to_string(), japanese_ui_font(data));
                 fonts
                     .families
                     .entry(egui::FontFamily::Monospace)
                     .or_default()
                     .insert(0, "LinuxMonoFont".to_string());
+                break;
+            }
+        }
+        for path in &linux_jp_paths {
+            if let Ok(data) = std::fs::read(path) {
+                fonts.font_data.insert(
+                    "LinuxJapaneseFont".to_string(),
+                    egui::FontData::from_owned(data),
+                );
+                fonts
+                    .families
+                    .entry(egui::FontFamily::Proportional)
+                    .or_default()
+                    .push("LinuxJapaneseFont".to_string());
                 break;
             }
         }
@@ -290,6 +363,26 @@ fn configure_fonts(ctx: &egui::Context) {
             "C:\\Windows\\Fonts\\arial.ttf",
         ];
         let win_mono_paths = ["C:\\Windows\\Fonts\\consola.ttf"];
+        let mut win_jp_paths = [
+            "C:\\Windows\\Fonts\\YuGothR.ttc",
+            "C:\\Windows\\Fonts\\YuGothM.ttc",
+            "C:\\Windows\\Fonts\\msgothic.ttc",
+            "C:\\Windows\\Fonts\\NotoSansCJKjp-Regular.otf",
+            "C:\\Windows\\Fonts\\NotoSansJP-Regular.otf",
+        ]
+        .into_iter()
+        .map(std::path::PathBuf::from)
+        .collect::<Vec<_>>();
+        if let Some(user_font_dir) = std::env::var_os("LOCALAPPDATA") {
+            let user_font_dir = std::path::PathBuf::from(user_font_dir)
+                .join("Microsoft")
+                .join("Windows")
+                .join("Fonts");
+            win_jp_paths.extend([
+                user_font_dir.join("NotoSansCJKjp-Regular.otf"),
+                user_font_dir.join("NotoSansJP-Regular.otf"),
+            ]);
+        }
 
         for path in &win_prop_paths {
             if let Ok(data) = std::fs::read(path) {
@@ -317,19 +410,46 @@ fn configure_fonts(ctx: &egui::Context) {
                 break;
             }
         }
+        for path in &win_jp_paths {
+            if let Ok(data) = std::fs::read(path) {
+                fonts.font_data.insert(
+                    "WindowsJapaneseFont".to_string(),
+                    egui::FontData::from_owned(data),
+                );
+                fonts
+                    .families
+                    .entry(egui::FontFamily::Proportional)
+                    .or_default()
+                    .push("WindowsJapaneseFont".to_string());
+                break;
+            }
+        }
     }
 
     // Keep the product UI visually consistent even when the host OS does not
     // provide Inter. The bundled variable font contains the requested UI weights.
     if let Some(data) = crate::ui::embedded_assets::bytes("assets/fonts/Inter.ttf") {
-        fonts
-            .font_data
-            .insert("KagariInter".to_string(), egui::FontData::from_owned(data.to_vec()));
+        fonts.font_data.insert(
+            "KagariInter".to_string(),
+            egui::FontData::from_owned(data.to_vec()),
+        );
         fonts
             .families
             .entry(egui::FontFamily::Proportional)
             .or_default()
             .insert(0, "KagariInter".to_string());
+    }
+
+    if let Some(data) = crate::ui::embedded_assets::bytes("assets/fonts/NotoSansJP-Regular.otf") {
+        fonts.font_data.insert(
+            "KagariJapanese".to_string(),
+            japanese_ui_font(data.to_vec()),
+        );
+        let proportional = fonts
+            .families
+            .entry(egui::FontFamily::Proportional)
+            .or_default();
+        proportional.insert(0, "KagariJapanese".to_string());
     }
 
     // Phosphor icon glyphs (used across panels for crisp vector icons)
@@ -374,9 +494,9 @@ pub fn configure_ae_theme(ctx: &egui::Context) {
     visuals.faint_bg_color = colors::BG_DEEPEST;
     visuals.extreme_bg_color = colors::BG_EXTREME;
 
-    // ── Selection (calm dark blue; bright pills read as toy UI) ──
+    // ── Selection (calm dark brand; bright pills read as toy UI) ──
     visuals.selection.bg_fill = colors::BG_SELECTION;
-    visuals.selection.stroke = egui::Stroke::new(1.0_f32, colors::ACCENT_BLUE);
+    visuals.selection.stroke = egui::Stroke::new(1.0_f32, colors::ACCENT_SELECTION);
 
     // ── Widget states ──
     // Noninteractive (labels, static text)
@@ -384,38 +504,55 @@ pub fn configure_ae_theme(ctx: &egui::Context) {
     visuals.widgets.noninteractive.bg_fill = colors::BG_DARKEST;
     visuals.widgets.noninteractive.weak_bg_fill = colors::BG_DARKEST;
     visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE);
-    visuals.widgets.noninteractive.rounding = egui::Rounding::same(2.0);
+    visuals.widgets.noninteractive.rounding = egui::Rounding::same(5.0);
 
     // Inactive (buttons, sliders at rest)
     visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0_f32, colors::TEXT_PRIMARY);
     visuals.widgets.inactive.bg_fill = colors::BG_MID;
     visuals.widgets.inactive.weak_bg_fill = colors::BG_MID;
     visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM);
-    visuals.widgets.inactive.rounding = egui::Rounding::same(2.0);
+    visuals.widgets.inactive.rounding = egui::Rounding::same(5.0);
 
     // Hovered
     visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.0_f32, egui::Color32::WHITE);
     visuals.widgets.hovered.bg_fill = colors::BG_HOVER;
     visuals.widgets.hovered.weak_bg_fill = colors::BG_HOVER;
     visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0_f32, colors::BORDER_STRONG);
-    visuals.widgets.hovered.rounding = egui::Rounding::same(2.0);
+    visuals.widgets.hovered.rounding = egui::Rounding::same(5.0);
 
     // Active (pressed)
     visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0_f32, egui::Color32::WHITE);
     visuals.widgets.active.bg_fill = colors::BG_PRESSED;
     visuals.widgets.active.weak_bg_fill = colors::BG_PRESSED;
-    visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0_f32, colors::ACCENT_BLUE);
-    visuals.widgets.active.rounding = egui::Rounding::same(2.0);
+    visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0_f32, colors::BORDER_FOCUS);
+    visuals.widgets.active.rounding = egui::Rounding::same(5.0);
 
     // Open (expanded menus, popups)
     visuals.widgets.open.fg_stroke = egui::Stroke::new(1.0_f32, egui::Color32::WHITE);
     visuals.widgets.open.bg_fill = colors::BG_PANEL;
     visuals.widgets.open.weak_bg_fill = colors::BG_PANEL;
     visuals.widgets.open.bg_stroke = egui::Stroke::new(1.0_f32, colors::BORDER_STRONG);
-    visuals.widgets.open.rounding = egui::Rounding::same(2.0);
+    visuals.widgets.open.rounding = egui::Rounding::same(5.0);
+
+    // ── Window & Popup Shadows (smooth drop shadow for dark glass feel) ──
+    visuals.window_rounding = egui::Rounding::same(8.0);
+    visuals.window_stroke = egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM);
+    visuals.window_shadow = egui::epaint::Shadow {
+        offset: egui::vec2(0.0, 8.0),
+        blur: 24.0,
+        spread: 0.0,
+        color: egui::Color32::from_black_alpha(160),
+    };
+    visuals.popup_shadow = egui::epaint::Shadow {
+        offset: egui::vec2(0.0, 6.0),
+        blur: 18.0,
+        spread: 0.0,
+        color: egui::Color32::from_black_alpha(140),
+    };
+    visuals.menu_rounding = egui::Rounding::same(6.0);
 
     // ── Warning/Error colors ──
-    visuals.warn_fg_color = colors::ACCENT_ORANGE;
+    visuals.warn_fg_color = colors::ACCENT_WARNING;
     visuals.error_fg_color = colors::ACCENT_RED;
 
     // ── Resize handle styling ──
@@ -427,8 +564,7 @@ pub fn configure_ae_theme(ctx: &egui::Context) {
     ctx.style_mut(|style| {
         // Tighter spacing for pro density
         style.spacing.item_spacing = egui::vec2(6.0, 4.0);
-        style.spacing.interact_size =
-            egui::vec2(layout::HIT_TARGET_MIN, layout::HIT_TARGET_MIN);
+        style.spacing.interact_size = egui::vec2(layout::HIT_TARGET_MIN, layout::HIT_TARGET_MIN);
         style.spacing.button_padding = egui::vec2(10.0, 5.0);
         style.spacing.indent = 12.0;
         style.spacing.scroll.bar_width = 5.0;
@@ -466,7 +602,8 @@ pub fn configure_ae_theme(ctx: &egui::Context) {
 pub fn draw_section_header(ui: &mut egui::Ui, title: &str, icon: &str) {
     ui.horizontal(|ui| {
         let (rect, _) = ui.allocate_exact_size(egui::vec2(3.0, 16.0), egui::Sense::hover());
-        ui.painter().rect_filled(rect, 1.0, colors::ACCENT_BLUE);
+        ui.painter()
+            .rect_filled(rect, 1.0, colors::ACCENT_WORKSPACE);
         ui.add_space(4.0);
         if let Some(svg) = crate::ui::icons::svg_for_icon_label(icon) {
             let (icon_rect, _) =
@@ -481,7 +618,11 @@ pub fn draw_section_header(ui: &mut egui::Ui, title: &str, icon: &str) {
             );
             ui.add_space(3.0);
         } else if !icon.is_empty() {
-            ui.label(egui::RichText::new(icon).small().color(colors::TEXT_SECONDARY));
+            ui.label(
+                egui::RichText::new(icon)
+                    .small()
+                    .color(colors::TEXT_SECONDARY),
+            );
             ui.add_space(3.0);
         }
         ui.label(
@@ -497,7 +638,8 @@ pub fn draw_section_header(ui: &mut egui::Ui, title: &str, icon: &str) {
 pub fn draw_section_header_svg(ui: &mut egui::Ui, title: &str, icon: &'static str) {
     ui.horizontal(|ui| {
         let (rect, _) = ui.allocate_exact_size(egui::vec2(3.0, 16.0), egui::Sense::hover());
-        ui.painter().rect_filled(rect, 1.0, colors::ACCENT_BLUE);
+        ui.painter()
+            .rect_filled(rect, 1.0, colors::ACCENT_WORKSPACE);
         ui.add_space(4.0);
         crate::ui::icons::render_svg_bytes(
             ui,
@@ -529,12 +671,16 @@ pub fn draw_custom_tab(ui: &mut egui::Ui, selected: bool, title: &str) -> egui::
     let response = ui.add(egui::Label::new(text).sense(egui::Sense::click()));
     if selected {
         let rect = response.rect;
-        ui.painter().line_segment(
-            [
-                egui::pos2(rect.left(), rect.bottom() - 1.0),
-                egui::pos2(rect.right(), rect.bottom() - 1.0),
-            ],
-            egui::Stroke::new(1.5_f32, colors::ACCENT_BLUE),
+        let line_rect = egui::Rect::from_min_max(
+            egui::pos2(rect.left() + 2.0, rect.bottom() - 2.0),
+            egui::pos2(rect.right() - 2.0, rect.bottom()),
+        );
+        ui.painter().rect_filled(line_rect, 1.0, colors::ACCENT_SELECTION);
+    } else if response.hovered() {
+        ui.painter().rect_filled(
+            response.rect.expand2(egui::vec2(4.0, 2.0)),
+            4.0,
+            colors::BG_HOVER.linear_multiply(0.6),
         );
     }
     if response.hovered() {

@@ -120,76 +120,57 @@ impl PulseAnim {
 
 /// Professional AE-style button with subtle hover gradient
 pub fn ae_button(ui: &mut egui::Ui, label: &str) -> egui::Response {
-    let text = egui::RichText::new(label)
-        .small()
-        .color(colors::TEXT_PRIMARY);
-
-    let button = egui::Button::new(text)
-        .fill(colors::BG_MID)
-        .stroke(egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM))
-        .rounding(egui::Rounding::same(3.0))
-        .min_size(egui::vec2(60.0, 22.0));
-
-    let response = ui.add(button);
-
-    if response.hovered() {
-        let rect = response.rect;
-        ui.painter().rect_filled(rect, 3.0, colors::BG_HOVER);
-        ui.painter()
-            .rect_stroke(rect, 3.0, egui::Stroke::new(1.0_f32, colors::BORDER_STRONG));
-    }
-
-    response
+    crate::ui::kui::button(ui, label, crate::ui::kui::ButtonKind::Default)
 }
 
 /// Accent button (blue background)
 pub fn ae_button_accent(ui: &mut egui::Ui, label: &str) -> egui::Response {
-    // Primary action: restrained steel blue with light text. Strong enough
-    // to find, calm enough for a production tool.
-    let text = egui::RichText::new(label)
-        .small()
-        .color(colors::TEXT_ON_ACCENT);
-
-    let button = egui::Button::new(text)
-        .fill(colors::ACCENT_ACTION)
-        .stroke(egui::Stroke::new(
-            1.0_f32,
-            colors::ACCENT_ACTION_STROKE,
-        ))
-        .rounding(egui::Rounding::same(2.0))
-        .min_size(egui::vec2(60.0, 22.0));
-
-    let response = ui.add(button);
-
-    if response.hovered() {
-        let rect = response.rect;
-        ui.painter()
-            .rect_filled(rect, 2.0, colors::ACCENT_ACTION_HOVER);
-    }
-
-    response
+    crate::ui::kui::button(ui, label, crate::ui::kui::ButtonKind::Accent)
 }
 
 /// Small icon button (for toolbars)
 pub fn ae_icon_button(ui: &mut egui::Ui, icon: &str, tooltip: &str) -> egui::Response {
-    let text = egui::RichText::new(icon)
-        .small()
-        .color(colors::TEXT_SECONDARY);
+    crate::ui::kui::button(ui, icon, crate::ui::kui::ButtonKind::Quiet).on_hover_text(tooltip)
+}
 
-    let button = egui::Button::new(text)
-        .fill(egui::Color32::TRANSPARENT)
-        .stroke(egui::Stroke::NONE)
-        .rounding(egui::Rounding::same(2.0))
-        .min_size(egui::vec2(24.0, 24.0));
-
-    let response = ui.add(button).on_hover_text(tooltip);
-
-    if response.hovered() {
-        let rect = response.rect;
-        ui.painter().rect_filled(rect, 2.0, colors::BG_HOVER);
-    }
-
-    response
+pub(crate) fn painter_button_target(
+    ui: &mut egui::Ui,
+    size: egui::Vec2,
+    label: &str,
+    enabled: bool,
+    selected: bool,
+) -> (egui::Rect, egui::Response) {
+    let response = ui
+        .add_enabled_ui(enabled, |ui| {
+            ui.scope(|ui| {
+                ui.spacing_mut().button_padding = egui::Vec2::ZERO;
+                let widgets = &mut ui.visuals_mut().widgets;
+                for state in [
+                    &mut widgets.inactive,
+                    &mut widgets.hovered,
+                    &mut widgets.active,
+                    &mut widgets.open,
+                ] {
+                    state.bg_fill = egui::Color32::TRANSPARENT;
+                    state.weak_bg_fill = egui::Color32::TRANSPARENT;
+                    state.bg_stroke = egui::Stroke::NONE;
+                    state.expansion = 0.0;
+                }
+                ui.add_sized(
+                    size,
+                    egui::Button::new(
+                        egui::RichText::new(" ")
+                            .size(1.0)
+                            .color(egui::Color32::TRANSPARENT),
+                    )
+                    .frame(false)
+                    .selected(selected),
+                )
+            })
+            .inner
+        })
+        .inner;
+    (response.rect, response.on_hover_text(label))
 }
 
 /// Compact text switch for dense production panels. It stays quiet until
@@ -200,9 +181,12 @@ pub fn ae_text_toggle(
     label: &str,
     tooltip: &str,
 ) -> egui::Response {
-    let (rect, response) = ui.allocate_exact_size(
+    let (rect, response) = painter_button_target(
+        ui,
         egui::vec2(27.0, crate::ui::theme::layout::HIT_TARGET_MIN),
-        egui::Sense::click(),
+        label,
+        true,
+        active,
     );
     if response.hovered() {
         ui.painter().rect_filled(rect, 3.0, colors::BG_HOVER);
@@ -227,7 +211,7 @@ pub fn ae_text_toggle(
                 egui::pos2(rect.left() + 5.0, rect.bottom() - 2.0),
                 egui::pos2(rect.right() - 5.0, rect.bottom() - 2.0),
             ],
-            egui::Stroke::new(1.0_f32, colors::ACCENT_ORANGE),
+            egui::Stroke::new(1.0_f32, colors::ACCENT_SELECTION),
         );
     }
     response.on_hover_text(tooltip)
@@ -241,12 +225,15 @@ pub fn ae_svg_icon_button(
     tooltip: &str,
     tint: egui::Color32,
 ) -> egui::Response {
-    let (rect, response) = ui.allocate_exact_size(
+    let (rect, response) = painter_button_target(
+        ui,
         egui::vec2(
             crate::ui::theme::layout::HIT_TARGET_MIN,
             crate::ui::theme::layout::HIT_TARGET_MIN,
         ),
-        egui::Sense::click(),
+        tooltip,
+        true,
+        false,
     );
     if response.hovered() {
         ui.painter().rect_filled(rect, 2.0, colors::BG_HOVER);
@@ -272,7 +259,7 @@ pub fn ae_svg_toggle(
     active_color: egui::Color32,
     tooltip: &str,
 ) -> egui::Response {
-    let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
+    let (rect, resp) = painter_button_target(ui, size, tooltip, true, *active);
     let is_active = *active;
     let bg_color = if is_active {
         colors::BG_HOVER
@@ -317,7 +304,7 @@ pub fn ae_svg_button(
     default_color: egui::Color32,
     tooltip: &str,
 ) -> egui::Response {
-    let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
+    let (rect, resp) = painter_button_target(ui, size, tooltip, true, false);
     let bg_color = if resp.is_pointer_button_down_on() {
         colors::BG_ACTIVE
     } else if resp.hovered() {
@@ -346,15 +333,18 @@ pub fn ae_svg_button(
 /// AE-style toggle switch
 pub fn ae_toggle(ui: &mut egui::Ui, value: &mut bool, label: &str) -> egui::Response {
     ui.horizontal(|ui| {
-        let (hit_rect, mut response) = ui.allocate_exact_size(
+        let (hit_rect, mut response) = painter_button_target(
+            ui,
             egui::vec2(32.0, crate::ui::theme::layout::HIT_TARGET_MIN),
-            egui::Sense::click(),
+            label,
+            true,
+            *value,
         );
         let rect = egui::Rect::from_center_size(hit_rect.center(), egui::vec2(32.0, 16.0));
 
         // Track
         let track_color = if *value {
-            colors::ACCENT_BLUE
+            colors::ACCENT_TOGGLE
         } else {
             colors::BG_SURFACE
         };
@@ -407,8 +397,7 @@ pub fn ae_section_header(ui: &mut egui::Ui, title: &str, icon: &str) {
         ui.add_space(4.0);
 
         if let Some(svg) = crate::ui::icons::svg_for_icon_label(icon) {
-            let (rect, _) =
-                ui.allocate_exact_size(egui::vec2(14.0, 14.0), egui::Sense::hover());
+            let (rect, _) = ui.allocate_exact_size(egui::vec2(14.0, 14.0), egui::Sense::hover());
             crate::ui::icons::render_svg_at(
                 ui,
                 format!("section-icon-{title}"),
@@ -419,11 +408,15 @@ pub fn ae_section_header(ui: &mut egui::Ui, title: &str, icon: &str) {
             );
             ui.add_space(3.0);
         } else if !icon.is_empty() {
-            ui.label(egui::RichText::new(icon).small().color(colors::TEXT_SECONDARY));
+            ui.label(
+                egui::RichText::new(icon)
+                    .small()
+                    .color(colors::TEXT_SECONDARY),
+            );
             ui.add_space(3.0);
         }
         ui.label(
-            egui::RichText::new(title)
+            egui::RichText::new(crate::ui::localization::tr(title))
                 .small()
                 .strong()
                 .color(colors::TEXT_PRIMARY),
@@ -436,7 +429,7 @@ pub fn ae_section_header(ui: &mut egui::Ui, title: &str, icon: &str) {
 pub fn ae_property_row(ui: &mut egui::Ui, label: &str, value: &str) {
     ui.horizontal(|ui| {
         ui.label(
-            egui::RichText::new(label)
+            egui::RichText::new(crate::ui::localization::tr(label))
                 .small()
                 .color(colors::TEXT_SECONDARY),
         );
@@ -495,17 +488,7 @@ pub fn ae_panel_header(ui: &mut egui::Ui, title: &str) {
 
 /// AE-style color swatch
 pub fn ae_color_swatch(ui: &mut egui::Ui, color: egui::Color32, size: f32) -> egui::Response {
-    let (rect, response) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::click());
-
-    // Outer border
-    ui.painter()
-        .rect_stroke(rect, 2.0, egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM));
-
-    // Inner color
-    let inner = rect.shrink(1.0);
-    ui.painter().rect_filled(inner, 2.0, color);
-
-    response
+    crate::ui::kui::color_swatch(ui, color, size)
 }
 
 /// AE-style progress bar
@@ -526,7 +509,7 @@ pub fn ae_progress_bar(ui: &mut egui::Ui, progress: f32, height: f32) {
     let fill_width = rect.width() * progress.clamp(0.0, 1.0);
     let fill_rect = egui::Rect::from_min_size(rect.min, egui::vec2(fill_width, rect.height()));
     ui.painter()
-        .rect_filled(fill_rect, 2.0, colors::ACCENT_BLUE);
+        .rect_filled(fill_rect, 2.0, colors::ACCENT_PROGRESS);
 
     // Border
     ui.painter()
@@ -535,16 +518,82 @@ pub fn ae_progress_bar(ui: &mut egui::Ui, progress: f32, height: f32) {
 
 /// AE-style text input field
 pub fn ae_text_field(ui: &mut egui::Ui, text: &mut String, placeholder: &str) -> egui::Response {
-    let edit = egui::TextEdit::singleline(text)
-        .hint_text(
-            egui::RichText::new(placeholder)
-                .small()
-                .color(colors::TEXT_MUTED),
-        )
-        .desired_width(ui.available_width())
-        .margin(egui::Margin::symmetric(6.0, 4.0));
+    crate::ui::kui::text_field_with_hint(ui, text, placeholder)
+}
 
-    ui.add(edit)
+/// AE-style tactile scrubber: blue/accent underlined text that can be scrubbed
+/// left/right with the mouse (Shift for 10x, Alt for 0.1x), or clicked to enter exact value.
+pub fn ae_scrubber(
+    ui: &mut egui::Ui,
+    value: &mut f32,
+    speed: f32,
+    unit: &str,
+    range: Option<std::ops::RangeInclusive<f32>>,
+) -> egui::Response {
+    let speed = if ui.input(|i| i.modifiers.shift) {
+        speed * 10.0
+    } else if ui.input(|i| i.modifiers.alt) {
+        speed * 0.1
+    } else {
+        speed
+    };
+
+    let text_val = if unit.is_empty() {
+        format!("{:.1}", value)
+    } else {
+        format!("{:.1}{}", value, unit)
+    };
+
+    let (rect, mut resp) = ui.allocate_exact_size(
+        egui::vec2(
+            (text_val.len() as f32 * 8.0).clamp(42.0, 96.0),
+            crate::ui::theme::layout::FIELD_HEIGHT,
+        ),
+        egui::Sense::click_and_drag(),
+    );
+
+    if resp.dragged() {
+        let delta = resp.drag_delta().x * speed;
+        *value += delta;
+        if let Some(r) = &range {
+            *value = value.clamp(*r.start(), *r.end());
+        }
+        resp.mark_changed();
+    }
+
+    if resp.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+        ui.painter().rect_filled(
+            rect.shrink2(egui::vec2(2.0, 2.0)),
+            4.0,
+            colors::BG_HOVER.linear_multiply(0.5),
+        );
+    }
+
+    let text_color = if resp.dragged() {
+        colors::ACCENT_BRAND_HOVER
+    } else if resp.hovered() {
+        colors::ACCENT_BRAND
+    } else {
+        colors::ACCENT_BLUE_LIGHT
+    };
+
+    ui.painter().text(
+        rect.center(),
+        egui::Align2::CENTER_CENTER,
+        text_val,
+        egui::FontId::monospace(11.5),
+        text_color,
+    );
+
+    // Subtle dashed or dotted style underline for AE look
+    let line_y = rect.bottom() - 3.0;
+    ui.painter().line_segment(
+        [egui::pos2(rect.left() + 4.0, line_y), egui::pos2(rect.right() - 4.0, line_y)],
+        egui::Stroke::new(1.0_f32, text_color.linear_multiply(0.7)),
+    );
+
+    resp
 }
 
 #[cfg(test)]

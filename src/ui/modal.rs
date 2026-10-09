@@ -10,10 +10,23 @@ pub struct DialogWindow<'open> {
 }
 
 pub fn dialog<'open>(title: impl Into<egui::WidgetText>) -> DialogWindow<'open> {
+    let glass_frame = egui::Frame::none()
+        .fill(crate::ui::theme::colors::GLASS_SURFACE)
+        .rounding(egui::Rounding::same(10.0))
+        .stroke(egui::Stroke::new(1.0_f32, crate::ui::theme::colors::GLASS_BORDER))
+        .inner_margin(egui::Margin::same(12.0))
+        .shadow(egui::epaint::Shadow {
+            offset: egui::vec2(0.0, 12.0),
+            blur: 32.0,
+            spread: 0.0,
+            color: egui::Color32::from_black_alpha(180),
+        });
+
     DialogWindow {
         window: egui::Window::new(title)
             .collapsible(false)
-            .order(egui::Order::Foreground),
+            .order(egui::Order::Foreground)
+            .frame(glass_frame),
         open: None,
     }
 }
@@ -91,9 +104,7 @@ impl<'open> DialogWindow<'open> {
     ) -> Option<egui::InnerResponse<Option<R>>> {
         let text_input_focused = crate::ui::focus::is_text_input_focused(ctx);
         let escape_pressed = !text_input_focused
-            && ctx.input_mut(|input| {
-                input.consume_key(egui::Modifiers::NONE, egui::Key::Escape)
-            });
+            && ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
         if escape_pressed {
             if let Some(open) = self.open.as_deref_mut() {
                 *open = false;
