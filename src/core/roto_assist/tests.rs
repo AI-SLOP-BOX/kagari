@@ -1,6 +1,8 @@
 use super::flow_bake::*;
 use super::segmentation::*;
+use crate::core::keyframe::{InterpolationType, Keyframe};
 use crate::core::mask::Mask;
+use crate::core::property::Animatable;
 use crate::core::timeline::TrackerPoint;
 
 #[cfg(test)]
