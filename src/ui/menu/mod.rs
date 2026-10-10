@@ -5,6 +5,7 @@ pub mod effect_factory;
 mod file_edit;
 mod import_helpers;
 mod layer;
+mod layer_ops;
 mod navigation;
 
 pub use effect_factory::apply_effect_by_name;
