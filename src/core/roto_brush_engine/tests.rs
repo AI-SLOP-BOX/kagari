@@ -1,4 +1,5 @@
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod tests {
     use crate::core::roto_brush_engine::filter::*;
     use crate::core::roto_brush_engine::*;

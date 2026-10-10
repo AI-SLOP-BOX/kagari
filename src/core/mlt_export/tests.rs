@@ -1,4 +1,5 @@
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod tests {
     use crate::core::mlt_export::*;
     use crate::core::timeline::{Composition, Layer, LayerType};

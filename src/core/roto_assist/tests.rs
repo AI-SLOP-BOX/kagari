@@ -6,6 +6,7 @@ use crate::core::property::Animatable;
 use crate::core::timeline::TrackerPoint;
 
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod tests {
     use super::*;
 

@@ -1,5 +1,6 @@
 #[cfg(test)]
 #[allow(clippy::items_after_test_module)]
+#[allow(clippy::module_inception)]
 mod tests {
     use crate::ui::project_panel::media_replace::{
         classify_imported_media, replace_media_in_composition,
