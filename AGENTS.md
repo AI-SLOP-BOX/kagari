@@ -11,8 +11,8 @@ cargo build --all-features
 # Run all tests
 cargo test --all-features
 
-# Lint (must be zero warnings)
-cargo clippy --all-features
+# Lint (must be zero warnings, covers test modules)
+cargo clippy --all-features --all-targets
 
 # Run the GUI app
 cargo run --features gui --bin kagari-studio
@@ -54,15 +54,15 @@ cargo run --features cli --bin kagari -- frame --project test_project.json --fra
 - `tracker_panel.rs` — Motion tracker UI
 
 ### State Management
-- `src/app_state.rs` — KagariApp (all app state)
+- `src/app_state/` — KagariApp (all app state)
 - `src/core/history.rs` — ProjectHistory with 128MB byte budget
 - `src/core/autosave.rs` — Crash recovery with 5 rotating slots
 
 ## Critical Rules
 
 1. **NEVER remove `default_fonts` from eframe features** — without it NO text renders
-2. **Always run `cargo test --all-features` before committing** — 469+ tests must pass
-3. **Always run `cargo clippy --all-features`** — must be zero warnings
+2. **Always run `cargo test --all-features` before committing** — 1,770+ tests must pass
+3. **Always run `cargo clippy --all-features --all-targets`** — must be zero warnings
 4. **Use `git commit` after every meaningful change** — atomic commits
 5. **GPU rendering**: viewport uses WgpuRenderer when available; falls back to CPU
 6. **Determinism**: renders must be byte-identical for same input (no pointer hashing)
