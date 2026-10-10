@@ -9,7 +9,9 @@
 pub mod defs;
 pub mod handler;
 pub mod keyframe_ops;
+pub mod layer_actions;
 pub mod timeline_layers;
+pub mod timeline_nav;
 pub mod tools_playback;
 
 pub use defs::{
