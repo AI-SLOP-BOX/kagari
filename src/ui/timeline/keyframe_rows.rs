@@ -1,32 +1,44 @@
-//! Expanded-layer keyframe rows: transform props, effects, time remap,
-//! masks, reveal-mode rows, and nested PreComp children rendering.
-use super::layers::{draw_prop_row, draw_prop_row_ext};
+mod commands;
+mod selection;
+
+use super::keyframe_menu::{self, KeyframeMenuAction};
+use super::layers::{draw_prop_row, draw_prop_row_ext, PropertyRowAction};
 use super::utils::get_kfs;
 use crate::core::timeline::Layer;
 use crate::ui::theme::colors;
 use eframe::egui;
 
-#[allow(clippy::too_many_arguments)]
-pub fn draw_expanded_rows(
-    ui: &mut egui::Ui,
-    layer: &mut Layer,
-    i: usize,
-    selected_keyframes: &mut std::collections::HashSet<(usize, String, u32)>,
-    selected_property: &mut Option<String>,
-    current_frame: &mut u32,
-    start_frame: u32,
-    zoom_span: u32,
-    left_pane_w: f32,
-    total_frames: u32,
-    all_kf_frames: &[u32],
-    precomp_children: &[(usize, Vec<super::precomp_children::PreCompChild>, String)],
-    open_comp_request: &mut Option<String>,
-    project_changed: &mut bool,
-) {
-    // Keyframe drag-to-move: mutator maps a prop label to its Animatable
-    fn move_kf<T: Clone>(anim: &mut crate::core::property::Animatable<T>, old_f: u32, new_f: u32) {
-        let _ = anim.move_keyframe(old_f, new_f);
-    }
+pub struct ExpandedRowsState<'a> {
+    pub layer: &'a mut Layer,
+    pub layer_index: usize,
+    pub selected_keyframes: &'a mut std::collections::HashSet<(usize, String, u32)>,
+    pub selected_property: &'a mut Option<String>,
+    pub current_frame: &'a mut u32,
+    pub start_frame: u32,
+    pub zoom_span: u32,
+    pub left_pane_w: f32,
+    pub all_kf_frames: &'a [u32],
+    pub precomp_children: &'a [(usize, Vec<super::precomp_children::PreCompChild>, String)],
+    pub open_comp_request: &'a mut Option<String>,
+    pub project_changed: &'a mut bool,
+}
+
+pub fn draw_expanded_rows(ui: &mut egui::Ui, state: ExpandedRowsState<'_>) {
+    let ExpandedRowsState {
+        layer,
+        layer_index: i,
+        selected_keyframes,
+        selected_property,
+        current_frame,
+        start_frame,
+        zoom_span,
+        left_pane_w,
+        all_kf_frames,
+        precomp_children,
+        open_comp_request,
+        project_changed,
+    } = state;
+
     let pos_kfs = get_kfs(&layer.transform.position);
     let scale_kfs = get_kfs(&layer.transform.scale);
     let rot_kfs = get_kfs(&layer.transform.rotation);
@@ -47,193 +59,134 @@ pub fn draw_expanded_rows(
     // row borrows end (app and layer cannot borrow together).
     let mut select_requests: Vec<(String, u32, bool, bool)> = Vec::new();
     let mut select_all_reqs: Vec<String> = Vec::new();
-    // Right-click menu commands: (prop_key, frame, action)
-    // 0=Linear 1=EasyEase 2=ToggleHold 3=TimeReverse 4=Delete
-    let mut kf_menu_cmds: Vec<(String, u32, u8)> = Vec::new();
-
-    macro_rules! kf_menu_cb {
-        () => {
-            Some(&mut |_pk: &str, f: u32, resp: &egui::Response| {
-                resp.context_menu(|ui| {
-                    ui.set_min_width(210.0);
-                    if ui.button("Linear Interpolation").clicked() {
-                        kf_menu_cmds.push((_pk.to_owned(), f, 0));
-                        ui.close_menu();
-                    }
-                    if ui.button("Easy Ease (F9)").clicked() {
-                        kf_menu_cmds.push((_pk.to_owned(), f, 1));
-                        ui.close_menu();
-                    }
-                    if ui.button("Ease In (Shift+F9)").clicked() {
-                        kf_menu_cmds.push((_pk.to_owned(), f, 5));
-                        ui.close_menu();
-                    }
-                    if ui.button("Ease Out (Ctrl+Shift+F9)").clicked() {
-                        kf_menu_cmds.push((_pk.to_owned(), f, 6));
-                        ui.close_menu();
-                    }
-                    if ui.button("Overshoot / Spring").clicked() {
-                        kf_menu_cmds.push((_pk.to_owned(), f, 7));
-                        ui.close_menu();
-                    }
-                    if ui.button("Bounce").clicked() {
-                        kf_menu_cmds.push((_pk.to_owned(), f, 8));
-                        ui.close_menu();
-                    }
-                    if ui.button("Elastic").clicked() {
-                        kf_menu_cmds.push((_pk.to_owned(), f, 9));
-                        ui.close_menu();
-                    }
-                    if ui.button("⬛ Toggle Hold Keyframe").clicked() {
-                        kf_menu_cmds.push((_pk.to_owned(), f, 2));
-                        ui.close_menu();
-                    }
-                    ui.separator();
-                    if ui.button("⇄ Time-Reverse Keyframes").clicked() {
-                        kf_menu_cmds.push((_pk.to_owned(), f, 3));
-                        ui.close_menu();
-                    }
-                    if ui.button("Delete Keyframe (Del)").clicked() {
-                        kf_menu_cmds.push((_pk.to_owned(), f, 4));
-                        ui.close_menu();
-                    }
-                });
-            })
-        };
-    }
+    let mut kf_menu_cmds: Vec<(String, u32, KeyframeMenuAction)> = Vec::new();
 
     // Marquee box-select results: (prop_key, boxed frames)
     let mut box_selects: Vec<(String, Vec<u32>)> = Vec::new();
     // Group keyframe moves: (prop_key, dragged_frame, delta)
     let mut group_moves: Vec<(String, u32, i32)> = Vec::new();
 
+    macro_rules! draw_property_row {
+        ($row_ui:expr, $label:expr, $anim:expr, $key:expr $(,)?) => {{
+            let label = $label;
+            let anim = $anim;
+            let kfs = get_kfs(anim);
+            let response = draw_prop_row_ext(
+                $row_ui,
+                &label,
+                &kfs,
+                current_frame,
+                start_frame,
+                zoom_span,
+                left_pane_w,
+                &prop_sel,
+                $key,
+                all_kf_frames,
+            );
+            for action in response.actions {
+                match action {
+                    PropertyRowAction::MoveKeyframe {
+                        old_frame,
+                        new_frame,
+                    } => {
+                        commands::move_kf(anim, old_frame, new_frame);
+                        *project_changed = true;
+                    }
+                    PropertyRowAction::SelectKeyframe {
+                        property_key,
+                        frame,
+                        shift,
+                        command,
+                    } => select_requests.push((property_key, frame, shift, command)),
+                    PropertyRowAction::OpenMenu {
+                        property_key,
+                        frame,
+                        response,
+                    } => keyframe_menu::attach(&response, &property_key, frame, &mut kf_menu_cmds),
+                    PropertyRowAction::BoxSelect {
+                        property_key,
+                        frames,
+                        additive: _,
+                    } => box_selects.push((property_key, frames)),
+                    PropertyRowAction::MoveSelection {
+                        property_key,
+                        dragged_frame,
+                        delta,
+                    } => group_moves.push((property_key, dragged_frame, delta)),
+                    PropertyRowAction::SelectAll { property_key } => {
+                        select_all_reqs.push(property_key)
+                    }
+                }
+            }
+        }};
+    }
+
     {
         let t = &mut layer.transform;
-        let moved: &mut bool = project_changed;
         // ── U / UU / A reveal modes (AE parity) ──
-        // "Keyframed"   -> only properties that have keyframes
-        // "Anchor Point"-> anchor point track only
-        // otherwise     -> all four transform rows
         let reveal_mode = selected_property.clone().unwrap_or_default();
         let show_transform_rows = reveal_mode != "Anchor Point";
+        let is_position_solo = reveal_mode.starts_with("Position");
+        let is_scale_solo = reveal_mode.starts_with("Scale");
+        let is_rotation_solo = reveal_mode == "Rotation";
+        let is_opacity_solo = reveal_mode == "Opacity";
+        let is_specific_solo =
+            is_position_solo || is_scale_solo || is_rotation_solo || is_opacity_solo;
         let kf_only = reveal_mode == "Keyframed";
 
-        if show_transform_rows && (!kf_only || !pos_kfs.is_empty()) {
-            draw_prop_row_ext(
+        if show_transform_rows
+            && (!is_specific_solo || is_position_solo)
+            && (!kf_only || !pos_kfs.is_empty())
+        {
+            draw_property_row!(
                 ui,
-                &format!(
+                format!(
                     "  Position    {:.0}, {:.0}",
                     position_value[0], position_value[1]
                 ),
-                &pos_kfs,
-                current_frame,
-                start_frame,
-                zoom_span,
-                left_pane_w,
-                &prop_sel,
+                &mut t.position,
                 "position",
-                Some(&mut |old_f, new_f| {
-                    move_kf(&mut t.position, old_f, new_f);
-                    *moved = true;
-                }),
-                Some(&mut |pk, f, shift, cmd| select_requests.push((pk.to_owned(), f, shift, cmd))),
-                kf_menu_cb!(),
-                Some(&mut |pk, frames: Vec<u32>, _add: bool| {
-                    box_selects.push((pk.to_owned(), frames))
-                }),
-                Some(&mut |pk, dragged_f, delta| {
-                    group_moves.push((pk.to_owned(), dragged_f, delta))
-                }),
-                all_kf_frames,
-                Some(&mut |pk| select_all_reqs.push(pk.to_owned())),
             );
         }
-        if show_transform_rows && (!kf_only || !scale_kfs.is_empty()) {
-            draw_prop_row_ext(
+        if show_transform_rows
+            && (!is_specific_solo || is_scale_solo)
+            && (!kf_only || !scale_kfs.is_empty())
+        {
+            draw_property_row!(
                 ui,
-                &format!(
+                format!(
                     "  Scale       {:.0}%, {:.0}%",
                     scale_value[0], scale_value[1]
                 ),
-                &scale_kfs,
-                current_frame,
-                start_frame,
-                zoom_span,
-                left_pane_w,
-                &prop_sel,
+                &mut t.scale,
                 "scale",
-                Some(&mut |old_f, new_f| {
-                    move_kf(&mut t.scale, old_f, new_f);
-                    *moved = true;
-                }),
-                Some(&mut |pk, f, shift, cmd| select_requests.push((pk.to_owned(), f, shift, cmd))),
-                kf_menu_cb!(),
-                Some(&mut |pk, frames: Vec<u32>, _add: bool| {
-                    box_selects.push((pk.to_owned(), frames))
-                }),
-                Some(&mut |pk, dragged_f, delta| {
-                    group_moves.push((pk.to_owned(), dragged_f, delta))
-                }),
-                all_kf_frames,
-                Some(&mut |pk| select_all_reqs.push(pk.to_owned())),
             );
         }
-        if show_transform_rows && (!kf_only || !rot_kfs.is_empty()) {
-            draw_prop_row_ext(
+        if show_transform_rows
+            && (!is_specific_solo || is_rotation_solo)
+            && (!kf_only || !rot_kfs.is_empty())
+        {
+            draw_property_row!(
                 ui,
-                &format!("  Rotation    {:.1}°", rotation_value),
-                &rot_kfs,
-                current_frame,
-                start_frame,
-                zoom_span,
-                left_pane_w,
-                &prop_sel,
+                format!("  Rotation    {:.1}°", rotation_value),
+                &mut t.rotation,
                 "rotation",
-                Some(&mut |old_f, new_f| {
-                    move_kf(&mut t.rotation, old_f, new_f);
-                    *moved = true;
-                }),
-                Some(&mut |pk, f, shift, cmd| select_requests.push((pk.to_owned(), f, shift, cmd))),
-                kf_menu_cb!(),
-                Some(&mut |pk, frames: Vec<u32>, _add: bool| {
-                    box_selects.push((pk.to_owned(), frames))
-                }),
-                Some(&mut |pk, dragged_f, delta| {
-                    group_moves.push((pk.to_owned(), dragged_f, delta))
-                }),
-                all_kf_frames,
-                Some(&mut |pk| select_all_reqs.push(pk.to_owned())),
             );
         }
-        if show_transform_rows && (!kf_only || !op_kfs.is_empty()) {
-            draw_prop_row_ext(
+        if show_transform_rows
+            && (!is_specific_solo || is_opacity_solo)
+            && (!kf_only || !op_kfs.is_empty())
+        {
+            draw_property_row!(
                 ui,
-                &format!("  Opacity     {:.0}%", opacity_value),
-                &op_kfs,
-                current_frame,
-                start_frame,
-                zoom_span,
-                left_pane_w,
-                &prop_sel,
+                format!("  Opacity     {:.0}%", opacity_value),
+                &mut t.opacity,
                 "opacity",
-                Some(&mut |old_f, new_f| {
-                    move_kf(&mut t.opacity, old_f, new_f);
-                    *moved = true;
-                }),
-                Some(&mut |pk, f, shift, cmd| select_requests.push((pk.to_owned(), f, shift, cmd))),
-                kf_menu_cb!(),
-                Some(&mut |pk, frames: Vec<u32>, _add: bool| {
-                    box_selects.push((pk.to_owned(), frames))
-                }),
-                Some(&mut |pk, dragged_f, delta| {
-                    group_moves.push((pk.to_owned(), dragged_f, delta))
-                }),
-                all_kf_frames,
-                Some(&mut |pk| select_all_reqs.push(pk.to_owned())),
             );
         }
         if reveal_mode == "Anchor Point" {
             let ap_kfs = get_kfs(&t.anchor_point);
+            let moved: &mut bool = project_changed;
             draw_prop_row(
                 ui,
                 "  Anchor Point",
@@ -243,46 +196,28 @@ pub fn draw_expanded_rows(
                 zoom_span,
                 left_pane_w,
                 Some(&mut |old_f, new_f| {
-                    move_kf(&mut t.anchor_point, old_f, new_f);
+                    commands::move_kf(&mut t.anchor_point, old_f, new_f);
                     *moved = true;
                 }),
             );
         }
     }
 
-    // Shape Repeater animation tracks are regular layer properties, so expose
-    // them beside Transform instead of hiding them in the Inspector only.
+    if let Some(remap) = layer.time_remap.as_mut() {
+        let current_val = remap.evaluate(*current_frame);
+        draw_property_row!(
+            ui,
+            format!("  Time Remap  {:.2}s", current_val),
+            remap,
+            "time_remap",
+        );
+    }
+
+    // Shape Repeater animation tracks
     if let Some(repeater) = layer.shape_repeater.as_mut() {
         macro_rules! repeater_row {
             ($anim:expr, $label:expr, $key:expr) => {{
-                let kfs = get_kfs($anim);
-                draw_prop_row_ext(
-                    ui,
-                    $label,
-                    &kfs,
-                    current_frame,
-                    start_frame,
-                    zoom_span,
-                    left_pane_w,
-                    &prop_sel,
-                    $key,
-                    Some(&mut |old, new| {
-                        move_kf($anim, old, new);
-                        *project_changed = true;
-                    }),
-                    Some(&mut |pk, f, shift, cmd| {
-                        select_requests.push((pk.to_owned(), f, shift, cmd))
-                    }),
-                    kf_menu_cb!(),
-                    Some(&mut |pk, frames: Vec<u32>, _add: bool| {
-                        box_selects.push((pk.to_owned(), frames))
-                    }),
-                    Some(&mut |pk, dragged, delta| {
-                        group_moves.push((pk.to_owned(), dragged, delta))
-                    }),
-                    all_kf_frames,
-                    Some(&mut |pk| select_all_reqs.push(pk.to_owned())),
-                );
+                draw_property_row!(ui, $label, $anim, $key);
             }};
         }
         if let Some(copies) = repeater.copies_animation.as_mut() {
@@ -302,10 +237,9 @@ pub fn draw_expanded_rows(
         }
     }
 
-    // ── Effect keyframe rows: collapsible per-effect groups ──
+    // Effect keyframe rows
     for effect in layer.effects.iter_mut() {
         let fx_name = effect.name.clone();
-        let moved: &mut bool = project_changed;
         use crate::core::effect_params::ParamRef;
         let fx_enabled = effect.enabled;
         let hdr = egui::CollapsingHeader::new(
@@ -332,405 +266,33 @@ pub fn draw_expanded_rows(
                 let prop_key = format!("fxid:{}::{}", effect.id, label);
                 let row_label = format!("  [{}] {}", fx_name, label);
                 match param {
-                    ParamRef::Scalar(anim) => {
-                        let kfs = get_kfs(anim);
-                        draw_prop_row_ext(
-                            ui,
-                            &row_label,
-                            &kfs,
-                            current_frame,
-                            start_frame,
-                            zoom_span,
-                            left_pane_w,
-                            &prop_sel,
-                            &prop_key,
-                            Some(&mut |old_f, new_f| {
-                                move_kf(anim, old_f, new_f);
-                                *moved = true;
-                            }),
-                            Some(&mut |pk, f, shift, cmd| {
-                                select_requests.push((pk.to_owned(), f, shift, cmd))
-                            }),
-                            kf_menu_cb!(),
-                            Some(&mut |pk, frames: Vec<u32>, _add: bool| {
-                                box_selects.push((pk.to_owned(), frames))
-                            }),
-                            Some(&mut |pk, dragged_f, delta| {
-                                group_moves.push((pk.to_owned(), dragged_f, delta))
-                            }),
-                            all_kf_frames,
-                            Some(&mut |pk| select_all_reqs.push(pk.to_owned())),
-                        );
-                    }
-                    ParamRef::Vec2(anim) => {
-                        let kfs = get_kfs(anim);
-                        draw_prop_row_ext(
-                            ui,
-                            &row_label,
-                            &kfs,
-                            current_frame,
-                            start_frame,
-                            zoom_span,
-                            left_pane_w,
-                            &prop_sel,
-                            &prop_key,
-                            Some(&mut |old_f, new_f| {
-                                move_kf(anim, old_f, new_f);
-                                *moved = true;
-                            }),
-                            Some(&mut |pk, f, shift, cmd| {
-                                select_requests.push((pk.to_owned(), f, shift, cmd))
-                            }),
-                            kf_menu_cb!(),
-                            Some(&mut |pk, frames: Vec<u32>, _add: bool| {
-                                box_selects.push((pk.to_owned(), frames))
-                            }),
-                            Some(&mut |pk, dragged_f, delta| {
-                                group_moves.push((pk.to_owned(), dragged_f, delta))
-                            }),
-                            all_kf_frames,
-                            Some(&mut |pk| select_all_reqs.push(pk.to_owned())),
-                        );
-                    }
-                    ParamRef::Vec3(anim) => {
-                        let kfs = get_kfs(anim);
-                        draw_prop_row_ext(
-                            ui,
-                            &row_label,
-                            &kfs,
-                            current_frame,
-                            start_frame,
-                            zoom_span,
-                            left_pane_w,
-                            &prop_sel,
-                            &prop_key,
-                            Some(&mut |old_f, new_f| {
-                                move_kf(anim, old_f, new_f);
-                                *moved = true;
-                            }),
-                            Some(&mut |pk, f, shift, cmd| {
-                                select_requests.push((pk.to_owned(), f, shift, cmd))
-                            }),
-                            kf_menu_cb!(),
-                            Some(&mut |pk, frames: Vec<u32>, _add: bool| {
-                                box_selects.push((pk.to_owned(), frames))
-                            }),
-                            Some(&mut |pk, dragged_f, delta| {
-                                group_moves.push((pk.to_owned(), dragged_f, delta))
-                            }),
-                            all_kf_frames,
-                            Some(&mut |pk| select_all_reqs.push(pk.to_owned())),
-                        );
-                    }
+                    ParamRef::Scalar(anim) => draw_property_row!(ui, &row_label, anim, &prop_key),
+                    ParamRef::Vec2(anim) => draw_property_row!(ui, &row_label, anim, &prop_key),
+                    ParamRef::Vec3(anim) => draw_property_row!(ui, &row_label, anim, &prop_key),
                     ParamRef::Vec4Color(anim) => {
-                        let kfs = get_kfs(anim);
-                        draw_prop_row_ext(
-                            ui,
-                            &row_label,
-                            &kfs,
-                            current_frame,
-                            start_frame,
-                            zoom_span,
-                            left_pane_w,
-                            &prop_sel,
-                            &prop_key,
-                            Some(&mut |old_f, new_f| {
-                                move_kf(anim, old_f, new_f);
-                                *moved = true;
-                            }),
-                            Some(&mut |pk, f, shift, cmd| {
-                                select_requests.push((pk.to_owned(), f, shift, cmd))
-                            }),
-                            kf_menu_cb!(),
-                            Some(&mut |pk, frames: Vec<u32>, _add: bool| {
-                                box_selects.push((pk.to_owned(), frames))
-                            }),
-                            Some(&mut |pk, dragged_f, delta| {
-                                group_moves.push((pk.to_owned(), dragged_f, delta))
-                            }),
-                            all_kf_frames,
-                            Some(&mut |pk| select_all_reqs.push(pk.to_owned())),
-                        );
+                        draw_property_row!(ui, &row_label, anim, &prop_key)
                     }
                 }
             }
         });
     }
 
-    // ── Puppet Pin rows (keyframeable positions) ──
+    // Puppet Pin rows
     for pin in layer.puppet_pins.iter_mut() {
         let pin_key = format!("pin_{}", pin.id);
-        let moved_p: &mut bool = project_changed;
-        let kfs = get_kfs(&pin.position);
-        draw_prop_row_ext(
-            ui,
-            &format!("  {}", pin.name),
-            &kfs,
-            current_frame,
-            start_frame,
-            zoom_span,
-            left_pane_w,
-            &prop_sel,
-            &pin_key,
-            Some(&mut |old_f, new_f| {
-                move_kf(&mut pin.position, old_f, new_f);
-                *moved_p = true;
-            }),
-            Some(&mut |pk, f, shift, cmd| select_requests.push((pk.to_owned(), f, shift, cmd))),
-            None,
-            Some(&mut |pk, frames: Vec<u32>, _add: bool| box_selects.push((pk.to_owned(), frames))),
-            Some(&mut |pk, dragged_f, delta| group_moves.push((pk.to_owned(), dragged_f, delta))),
-            all_kf_frames,
-            Some(&mut |pk| select_all_reqs.push(pk.to_owned())),
-        );
+        draw_property_row!(ui, format!("  {}", pin.name), &mut pin.position, &pin_key);
     }
 
-    // ── Apply keyframe context-menu commands ──
-    fn set_kf_interp<T: Clone>(
-        anim: &mut crate::core::property::Animatable<T>,
-        frames: &[u32],
-        mode: u8,
-    ) {
-        use crate::core::keyframe::{BezierControlPoint, InterpolationType};
-        if let Some(kfs) = anim.keyframes_mut() {
-            for kf in kfs.iter_mut() {
-                if !frames.contains(&kf.frame) {
-                    continue;
-                }
-                kf.interpolation = match mode {
-                    0 => InterpolationType::Linear,
-                    1 => InterpolationType::Bezier {
-                        outgoing: BezierControlPoint {
-                            influence: 0.333,
-                            speed: 0.0,
-                        },
-                        incoming: BezierControlPoint {
-                            influence: 0.333,
-                            speed: 0.0,
-                        },
-                        custom_bezier: Some(
-                            crate::core::keyframe::EasePreset::Standard.control_points(),
-                        ),
-                    },
-                    2 => {
-                        if matches!(kf.interpolation, InterpolationType::Hold) {
-                            InterpolationType::Linear
-                        } else {
-                            InterpolationType::Hold
-                        }
-                    }
-                    5 => InterpolationType::Bezier {
-                        outgoing: BezierControlPoint {
-                            influence: 0.333,
-                            speed: 0.0,
-                        },
-                        incoming: BezierControlPoint {
-                            influence: 0.333,
-                            speed: 0.0,
-                        },
-                        custom_bezier: Some(
-                            crate::core::keyframe::EasePreset::EaseIn.control_points(),
-                        ),
-                    },
-                    6 => InterpolationType::Bezier {
-                        outgoing: BezierControlPoint {
-                            influence: 0.333,
-                            speed: 0.0,
-                        },
-                        incoming: BezierControlPoint {
-                            influence: 0.333,
-                            speed: 0.0,
-                        },
-                        custom_bezier: Some(
-                            crate::core::keyframe::EasePreset::EaseOut.control_points(),
-                        ),
-                    },
-                    7 => InterpolationType::Bezier {
-                        outgoing: BezierControlPoint {
-                            influence: 0.333,
-                            speed: 0.0,
-                        },
-                        incoming: BezierControlPoint {
-                            influence: 0.333,
-                            speed: 0.0,
-                        },
-                        custom_bezier: Some(
-                            crate::core::keyframe::EasePreset::Overshoot.control_points(),
-                        ),
-                    },
-                    8 => InterpolationType::Bezier {
-                        outgoing: BezierControlPoint {
-                            influence: 0.333,
-                            speed: 0.0,
-                        },
-                        incoming: BezierControlPoint {
-                            influence: 0.333,
-                            speed: 0.0,
-                        },
-                        custom_bezier: Some(
-                            crate::core::keyframe::EasePreset::Bounce.control_points(),
-                        ),
-                    },
-                    9 => InterpolationType::Bezier {
-                        outgoing: BezierControlPoint {
-                            influence: 0.333,
-                            speed: 0.0,
-                        },
-                        incoming: BezierControlPoint {
-                            influence: 0.333,
-                            speed: 0.0,
-                        },
-                        custom_bezier: Some(
-                            crate::core::keyframe::EasePreset::Elastic.control_points(),
-                        ),
-                    },
-                    _ => kf.interpolation,
-                };
-            }
-        }
-    }
-    fn reverse_track<T: Clone>(anim: &mut crate::core::property::Animatable<T>) {
-        let _ = anim.reverse_keyframes();
-    }
-    fn delete_track_kf<T: Clone>(anim: &mut crate::core::property::Animatable<T>, frame: u32) {
-        if let Some(kfs) = anim.keyframes_mut() {
-            kfs.retain(|k| k.frame != frame);
-        }
-    }
-    for (pk, f, cmd) in kf_menu_cmds {
-        let t = &mut layer.transform;
-        let sel_frames: Vec<u32> = selected_keyframes
-            .iter()
-            .filter(|(li, p, _)| *li == i && p == &pk)
-            .map(|(_, _, fr)| *fr)
-            .collect();
-        match pk.as_str() {
-            "position" => match cmd {
-                3 => reverse_track(&mut t.position),
-                4 => delete_track_kf(&mut t.position, f),
-                m => set_kf_interp(
-                    &mut t.position,
-                    &if sel_frames.is_empty() {
-                        vec![f]
-                    } else {
-                        sel_frames
-                    },
-                    m,
-                ),
-            },
-            "scale" => match cmd {
-                3 => reverse_track(&mut t.scale),
-                4 => delete_track_kf(&mut t.scale, f),
-                m => set_kf_interp(
-                    &mut t.scale,
-                    &if sel_frames.is_empty() {
-                        vec![f]
-                    } else {
-                        sel_frames
-                    },
-                    m,
-                ),
-            },
-            "rotation" => match cmd {
-                3 => reverse_track(&mut t.rotation),
-                4 => delete_track_kf(&mut t.rotation, f),
-                m => set_kf_interp(
-                    &mut t.rotation,
-                    &if sel_frames.is_empty() {
-                        vec![f]
-                    } else {
-                        sel_frames
-                    },
-                    m,
-                ),
-            },
-            "opacity" => match cmd {
-                3 => reverse_track(&mut t.opacity),
-                4 => delete_track_kf(&mut t.opacity, f),
-                m => set_kf_interp(
-                    &mut t.opacity,
-                    &if sel_frames.is_empty() {
-                        vec![f]
-                    } else {
-                        sel_frames
-                    },
-                    m,
-                ),
-            },
-            _ if pk.starts_with("pin_") => {
-                let pid = pk.strip_prefix("pin_").unwrap_or("");
-                if let Some(pin) = layer.puppet_pins.iter_mut().find(|p| p.id == pid) {
-                    match cmd {
-                        3 => reverse_track(&mut pin.position),
-                        4 => delete_track_kf(&mut pin.position, f),
-                        m => set_kf_interp(
-                            &mut pin.position,
-                            &if sel_frames.is_empty() {
-                                vec![f]
-                            } else {
-                                sel_frames
-                            },
-                            m,
-                        ),
-                    }
-                }
-            }
-            "repeater_copies" | "repeater_position" | "repeater_scale" | "repeater_rotation"
-            | "repeater_opacity" => {
-                if let Some(repeater) = layer.shape_repeater.as_mut() {
-                    macro_rules! apply_repeater {
-                        ($track:expr) => {
-                            match cmd {
-                                3 => reverse_track($track),
-                                4 => delete_track_kf($track, f),
-                                m => set_kf_interp(
-                                    $track,
-                                    &if sel_frames.is_empty() {
-                                        vec![f]
-                                    } else {
-                                        sel_frames.clone()
-                                    },
-                                    m,
-                                ),
-                            }
-                        };
-                    }
-                    match pk.as_str() {
-                        "repeater_copies" => {
-                            if let Some(a) = repeater.copies_animation.as_mut() {
-                                apply_repeater!(a);
-                            }
-                        }
-                        "repeater_position" => {
-                            if let Some(a) = repeater.position_offset_animation.as_mut() {
-                                apply_repeater!(a);
-                            }
-                        }
-                        "repeater_scale" => {
-                            if let Some(a) = repeater.scale_offset_animation.as_mut() {
-                                apply_repeater!(a);
-                            }
-                        }
-                        "repeater_rotation" => {
-                            if let Some(a) = repeater.rotation_offset_animation.as_mut() {
-                                apply_repeater!(a);
-                            }
-                        }
-                        "repeater_opacity" => {
-                            if let Some(a) = repeater.opacity_animation.as_mut() {
-                                apply_repeater!(a);
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            _ => {}
-        }
-        *project_changed = true;
-    }
+    // Apply keyframe context-menu commands
+    commands::apply_kf_menu_commands(
+        layer,
+        i,
+        selected_keyframes,
+        kf_menu_cmds,
+        project_changed,
+    );
 
-    // ── Apply marquee box-selects ──
+    // Apply marquee box-selects
     for (pk, frames) in box_selects {
         for f in frames {
             selected_keyframes.insert((i, pk.to_string(), f));
@@ -738,243 +300,20 @@ pub fn draw_expanded_rows(
         *project_changed = false;
     }
 
-    // ── Group move: selected keyframes follow the dragged one ──
-    {
-        let t = &mut layer.transform;
-        for (pk, dragged_f, delta) in group_moves {
-            let followers: Vec<u32> = selected_keyframes
-                .iter()
-                .filter(|(li, p, fr)| *li == i && p == &pk && *fr != dragged_f)
-                .map(|(_, _, fr)| *fr)
-                .collect();
-            if followers.is_empty() {
-                continue;
-            }
-            let new_frames: Vec<(u32, u32)> = followers
-                .iter()
-                .map(|&f| (f, (f as i64 + delta as i64).max(0) as u32))
-                .collect();
-            macro_rules! shift_track {
-                ($anim:expr) => {{
-                    for (old_f, new_f) in &new_frames {
-                        move_kf($anim, *old_f, *new_f);
-                    }
-                    if let Some(kfs) = $anim.keyframes_mut() {
-                        kfs.sort_by_key(|k| k.frame);
-                    }
-                }};
-            }
-            match pk.as_str() {
-                "position" => shift_track!(&mut t.position),
-                "scale" => shift_track!(&mut t.scale),
-                "rotation" => shift_track!(&mut t.rotation),
-                "opacity" => shift_track!(&mut t.opacity),
-                "repeater_copies" => {
-                    if let Some(a) = layer
-                        .shape_repeater
-                        .as_mut()
-                        .and_then(|r| r.copies_animation.as_mut())
-                    {
-                        shift_track!(a);
-                    }
-                }
-                "repeater_position" => {
-                    if let Some(a) = layer
-                        .shape_repeater
-                        .as_mut()
-                        .and_then(|r| r.position_offset_animation.as_mut())
-                    {
-                        shift_track!(a);
-                    }
-                }
-                "repeater_scale" => {
-                    if let Some(a) = layer
-                        .shape_repeater
-                        .as_mut()
-                        .and_then(|r| r.scale_offset_animation.as_mut())
-                    {
-                        shift_track!(a);
-                    }
-                }
-                "repeater_rotation" => {
-                    if let Some(a) = layer
-                        .shape_repeater
-                        .as_mut()
-                        .and_then(|r| r.rotation_offset_animation.as_mut())
-                    {
-                        shift_track!(a);
-                    }
-                }
-                "repeater_opacity" => {
-                    if let Some(a) = layer
-                        .shape_repeater
-                        .as_mut()
-                        .and_then(|r| r.opacity_animation.as_mut())
-                    {
-                        shift_track!(a);
-                    }
-                }
-                _ if pk.starts_with("pin_") => {
-                    let pid = pk.strip_prefix("pin_").unwrap_or("");
-                    if let Some(pin) = layer.puppet_pins.iter_mut().find(|p| p.id == pid) {
-                        shift_track!(&mut pin.position);
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
+    // Group move
+    selection::apply_group_moves(layer, i, selected_keyframes, group_moves);
 
-    // Resolve every keyframe frame of a property (for label dbl-click select-all).
-    fn prop_all_frames(layer: &crate::core::timeline::Layer, pk: &str) -> Vec<u32> {
-        let mut out = Vec::new();
-        let mut push_anim_f32 = |a: &crate::core::property::Animatable<f32>| {
-            if let Some(kfs) = a.keyframes() {
-                for k in kfs {
-                    out.push(k.frame);
-                }
-            }
-        };
-        match pk {
-            "position" | "scale" => {
-                let a = if pk == "position" {
-                    &layer.transform.position
-                } else {
-                    &layer.transform.scale
-                };
-                if let Some(kfs) = a.keyframes() {
-                    for k in kfs {
-                        out.push(k.frame);
-                    }
-                }
-            }
-            "rotation" => push_anim_f32(&layer.transform.rotation),
-            "opacity" => push_anim_f32(&layer.transform.opacity),
-            "repeater_copies" => {
-                if let Some(anim) = layer
-                    .shape_repeater
-                    .as_ref()
-                    .and_then(|repeater| repeater.copies_animation.as_ref())
-                {
-                    push_anim_f32(anim);
-                }
-            }
-            "repeater_rotation" => {
-                if let Some(anim) = layer
-                    .shape_repeater
-                    .as_ref()
-                    .and_then(|repeater| repeater.rotation_offset_animation.as_ref())
-                {
-                    push_anim_f32(anim);
-                }
-            }
-            "repeater_position" | "repeater_scale" | "repeater_opacity" => {
-                let keyframes = layer.shape_repeater.as_ref().and_then(|repeater| match pk {
-                    "repeater_position" => repeater
-                        .position_offset_animation
-                        .as_ref()
-                        .and_then(|a| a.keyframes()),
-                    "repeater_scale" => repeater
-                        .scale_offset_animation
-                        .as_ref()
-                        .and_then(|a| a.keyframes()),
-                    _ => repeater
-                        .opacity_animation
-                        .as_ref()
-                        .and_then(|a| a.keyframes()),
-                });
-                if let Some(keyframes) = keyframes {
-                    out.extend(keyframes.iter().map(|keyframe| keyframe.frame));
-                }
-            }
-            _ if crate::ui::graph_editor::is_effect_property(pk) => {
-                use crate::core::effect_params::ParamRefRef;
-                let Some((effect_id, label, _)) =
-                    crate::ui::graph_editor::parse_effect_property(pk)
-                else {
-                    return out;
-                };
-                for eff in &layer.effects {
-                    if eff.id != effect_id {
-                        continue;
-                    }
-                    for (plabel, pref) in eff.effect_type.animatable_params_ref() {
-                        if plabel != label {
-                            continue;
-                        }
-                        let frames: Vec<u32> = match pref {
-                            ParamRefRef::Scalar(a) => a
-                                .keyframes()
-                                .map(|ks| ks.iter().map(|k| k.frame).collect())
-                                .unwrap_or_default(),
-                            ParamRefRef::Vec2(a) => a
-                                .keyframes()
-                                .map(|ks| ks.iter().map(|k| k.frame).collect())
-                                .unwrap_or_default(),
-                            ParamRefRef::Vec3(a) => a
-                                .keyframes()
-                                .map(|ks| ks.iter().map(|k| k.frame).collect())
-                                .unwrap_or_default(),
-                            ParamRefRef::Vec4Color(a) => a
-                                .keyframes()
-                                .map(|ks| ks.iter().map(|k| k.frame).collect())
-                                .unwrap_or_default(),
-                        };
-                        out.extend(frames);
-                        break;
-                    }
-                }
-            }
-            _ if pk.starts_with("pin_") => {
-                let pid = pk.strip_prefix("pin_").unwrap_or("");
-                if let Some(pin) = layer.puppet_pins.iter().find(|p| p.id == pid) {
-                    if let Some(kfs) = pin.position.keyframes() {
-                        for k in kfs {
-                            out.push(k.frame);
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
-        out.sort_unstable();
-        out.dedup();
-        out
-    }
+    // Apply selection requests
+    selection::apply_selection_requests(
+        layer,
+        i,
+        selected_keyframes,
+        select_all_reqs,
+        select_requests,
+        project_changed,
+    );
 
-    for pk in select_all_reqs.drain(..) {
-        select_requests.push((pk, u32::MAX, false, false));
-    }
-
-    for (pk, f, shift, cmd) in select_requests {
-        if f == u32::MAX {
-            let all = prop_all_frames(layer, &pk);
-            if shift || cmd {
-                for fr in all {
-                    selected_keyframes.insert((i, pk.to_string(), fr));
-                }
-            } else {
-                selected_keyframes.clear();
-                for fr in all {
-                    selected_keyframes.insert((i, pk.to_string(), fr));
-                }
-            }
-            *project_changed = false;
-            continue;
-        }
-        let entry = (i, pk.to_string(), f);
-        if shift || cmd {
-            if !selected_keyframes.remove(&entry) {
-                selected_keyframes.insert(entry);
-            }
-        } else {
-            selected_keyframes.clear();
-            selected_keyframes.insert(entry);
-        }
-        *project_changed = false; // selection alone is not a project edit
-    }
-
-    // ── Time Remap row (when enabled) ──
+    // Time Remap row (when enabled)
     if let Some(remap) = layer.time_remap.as_mut() {
         let moved_r: &mut bool = project_changed;
         let tr_kfs = get_kfs(remap);
@@ -987,13 +326,13 @@ pub fn draw_expanded_rows(
             zoom_span,
             left_pane_w,
             Some(&mut |o, n| {
-                move_kf(remap, o, n);
+                commands::move_kf(remap, o, n);
                 *moved_r = true;
             }),
         );
     }
 
-    // ── Mask property rows (feather / opacity / expansion / path) ──
+    // Mask property rows
     for (m_idx, mask) in layer.masks.iter_mut().enumerate() {
         let moved_m: &mut bool = project_changed;
         ui.label(
@@ -1012,7 +351,7 @@ pub fn draw_expanded_rows(
             zoom_span,
             left_pane_w,
             Some(&mut |o, n| {
-                move_kf(&mut mask.feather, o, n);
+                commands::move_kf(&mut mask.feather, o, n);
                 *moved_m = true;
             }),
         );
@@ -1026,7 +365,7 @@ pub fn draw_expanded_rows(
             zoom_span,
             left_pane_w,
             Some(&mut |o, n| {
-                move_kf(&mut mask.opacity, o, n);
+                commands::move_kf(&mut mask.opacity, o, n);
                 *moved_m = true;
             }),
         );
@@ -1040,7 +379,7 @@ pub fn draw_expanded_rows(
             zoom_span,
             left_pane_w,
             Some(&mut |o, n| {
-                move_kf(&mut mask.expansion, o, n);
+                commands::move_kf(&mut mask.expansion, o, n);
                 *moved_m = true;
             }),
         );
@@ -1054,14 +393,14 @@ pub fn draw_expanded_rows(
             zoom_span,
             left_pane_w,
             Some(&mut |o, n| {
-                move_kf(&mut mask.path.vertices, o, n);
+                commands::move_kf(&mut mask.path.vertices, o, n);
                 *moved_m = true;
             }),
         );
         let _ = m_idx;
     }
 
-    // ── Pre-comp nested child layers ──
+    // Pre-comp nested child layers
     if let Some((_parent_idx, children, sub_id)) =
         precomp_children.iter().find(|(pi, _, _)| *pi == i)
     {
@@ -1069,7 +408,9 @@ pub fn draw_expanded_rows(
             ui,
             sub_id,
             children,
-            total_frames,
+            left_pane_w,
+            start_frame,
+            zoom_span,
         ) {
             *open_comp_request = Some(sub_id.clone());
         }
