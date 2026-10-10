@@ -13,12 +13,14 @@
 #![allow(dead_code)]
 
 pub mod adapter;
+pub mod naming;
 pub mod params;
 pub mod registry;
 
 pub use adapter::{
     evaluate_effects, gpu_preview_effect_supported, EnumEffectPlugin, RenderEffectPlugin,
 };
+pub use naming::{effect_name, effect_type_id};
 pub use params::EffectParams;
 pub use registry::{
     CustomPixelEffectPlugin, CustomPluginRegistry, EffectPluginRegistry,
