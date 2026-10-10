@@ -7,6 +7,7 @@ mod canvas;
 pub(crate) mod channel_ops;
 pub(crate) mod interpolation_ops;
 pub(crate) mod property;
+pub(crate) mod toolbar;
 pub(crate) mod velocity_ease;
 pub(crate) mod workspace;
 
