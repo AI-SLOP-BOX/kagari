@@ -1,7 +1,9 @@
+mod actions;
 mod asset_card;
 mod asset_row;
 mod media_replace;
 mod panel;
+mod preview;
 #[cfg(test)]
 mod tests;
 
