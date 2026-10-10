@@ -108,110 +108,9 @@ fn move_mask_tangent(
     }
 }
 
-fn demo_reference_texture(ctx: &egui::Context) -> Option<egui::TextureHandle> {
-    let id = egui::Id::new("studio-demo-reference-city");
-    if let Some(texture) = ctx.data_mut(|d| d.get_temp::<egui::TextureHandle>(id)) {
-        return Some(texture);
-    }
-    let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("assets/studio/studio_city_reference.webp");
-    let image = crate::ui::embedded_assets::open_image(path).ok()?.to_rgba8();
-    let size = [image.width() as usize, image.height() as usize];
-    let texture = ctx.load_texture(
-        "studio-demo-reference-city",
-        egui::ColorImage::from_rgba_unmultiplied(size, image.as_raw()),
-        egui::TextureOptions::LINEAR,
-    );
-    ctx.data_mut(|d| d.insert_temp(id, texture.clone()));
-    Some(texture)
-}
-
+#[cfg(test)]
 fn software_preview_required(comp: &crate::core::timeline::Composition, frame: u32) -> bool {
-    let dof_enabled = comp.resolve_camera().dof_enabled_at(frame);
-
-    comp.layers
-        .iter()
-        .filter(|layer| layer.is_active(frame))
-        .any(|layer| {
-            // The GPU mask collector currently evaluates path/feather/opacity
-            // but does not apply geometric expansion or Wiggle Paths.
-            !layer.puppet_pins.is_empty()
-                || layer.masks.iter().any(|mask| {
-                    mask.enabled
-                        && mask.mode != crate::core::mask::MaskMode::None
-                        && (mask.expansion.evaluate(frame).abs() > 0.01
-                            || mask.wiggle.is_some())
-                }) || matches!(
-                layer.layer_type,
-                crate::core::timeline::LayerType::AdjustmentLayer
-                    | crate::core::timeline::LayerType::Particle { .. }
-                    | crate::core::timeline::LayerType::Model3D { .. }
-            ) || matches!(
-                &layer.layer_type,
-                crate::core::timeline::LayerType::Shape {
-                    shape_type:
-                        crate::core::timeline::ShapeType::FreeformBezier { .. },
-                    ..
-                }
-            ) || matches!(
-                &layer.layer_type,
-                crate::core::timeline::LayerType::Shape {
-                    extrusion_depth,
-                    bevel_depth,
-                    ..
-                } if *extrusion_depth > 0.0 || *bevel_depth > 0.0
-            ) || matches!(
-                &layer.layer_type,
-                crate::core::timeline::LayerType::Shape { stroke_width, .. }
-                    if *stroke_width > 0.0
-            ) || (matches!(
-                layer.layer_type,
-                crate::core::timeline::LayerType::Text { .. }
-            ) && (layer.text_formatting.is_some()
-                || layer
-                    .text_animator
-                    .as_ref()
-                    .is_some_and(|animator| animator.enabled)
-                || layer
-                    .text_animator_stack
-                    .as_ref()
-                    .is_some_and(|stack| !stack.animators.is_empty())))
-                || (dof_enabled && layer.is_3d)
-                // The GPU shader currently implements only these seven blend
-                // modes. Unsupported modes must not silently render as Normal.
-                || !matches!(
-                    layer.blend_mode,
-                    crate::core::timeline::BlendMode::Normal
-                        | crate::core::timeline::BlendMode::Multiply
-                        | crate::core::timeline::BlendMode::Screen
-                        | crate::core::timeline::BlendMode::Overlay
-                        | crate::core::timeline::BlendMode::Add
-                        | crate::core::timeline::BlendMode::Darken
-                        | crate::core::timeline::BlendMode::Lighten
-                )
-                || layer.style.drop_shadow.enabled
-                || layer.style.outer_glow.enabled
-                || layer.style.inner_glow.enabled
-                || layer.style.satin.enabled
-                || (layer.effects_enabled && {
-                    let mut enabled_effects = 0usize;
-                    let mut has_unsupported_effect = false;
-                    for effect in &layer.effects {
-                        if effect.enabled {
-                            enabled_effects += 1;
-                            has_unsupported_effect |=
-                                !crate::core::effect_plugin::gpu_preview_effect_supported(
-                                    &effect.effect_type,
-                                );
-                        }
-                    }
-                    // EffectParams is a single-pass representation. It cannot
-                    // preserve repeated effects or the user-authored order, so
-                    // use the software path instead of silently collapsing the
-                    // stack in the realtime preview.
-                    enabled_effects > 1 || has_unsupported_effect
-                })
-        })
+    crate::ui::viewport_rendering::software_preview_required(comp, frame)
 }
 
 fn prepare_roto_brush_source(
@@ -282,16 +181,28 @@ struct RotoSegmentJob {
     receiver: std::sync::Mutex<std::sync::mpsc::Receiver<RotoSegmentCompletion>>,
 }
 
-fn start_roto_segment_job(
-    app: &KagariApp,
-    ctx: &egui::Context,
+struct RotoSegmentRequest {
     layer_index: usize,
     frame: u32,
     previous_strokes: Vec<EngineRotoStroke>,
     strokes: Vec<EngineRotoStroke>,
     settings: RotoBrushSettings,
     feather: f32,
+}
+
+fn start_roto_segment_job(
+    app: &KagariApp,
+    ctx: &egui::Context,
+    request: RotoSegmentRequest,
 ) -> Result<(), String> {
+    let RotoSegmentRequest {
+        layer_index,
+        frame,
+        previous_strokes,
+        strokes,
+        settings,
+        feather,
+    } = request;
     let job_id = egui::Id::new("roto_segment_job");
     if ctx
         .data(|data| data.get_temp::<std::sync::Arc<RotoSegmentJob>>(job_id))
@@ -357,12 +268,8 @@ fn start_roto_segment_job(
                     &worker_strokes,
                     &settings,
                 );
-                let polygon = trace_contour_to_polygon(
-                    &matte,
-                    source_comp.width,
-                    source_comp.height,
-                    2.0,
-                );
+                let polygon =
+                    trace_contour_to_polygon(&matte, source_comp.width, source_comp.height, 2.0);
                 Ok((polygon.len() >= 3).then_some(polygon))
             }))
             .unwrap_or_else(|_| Err("Roto Brush worker encountered an internal error".into()));
@@ -422,7 +329,8 @@ fn poll_roto_segment_job(app: &mut KagariApp, ctx: &egui::Context) {
         || comp.fps != completion.composition_fps
     {
         restore_strokes(ctx);
-        app.toasts.error("Composition changed; Roto Brush result was discarded");
+        app.toasts
+            .error("Composition changed; Roto Brush result was discarded");
         return;
     }
     let Some(layer_index) = comp
@@ -431,7 +339,8 @@ fn poll_roto_segment_job(app: &mut KagariApp, ctx: &egui::Context) {
         .position(|layer| layer.id == completion.layer_id)
     else {
         restore_strokes(ctx);
-        app.toasts.error("Source layer changed; Roto Brush result was discarded");
+        app.toasts
+            .error("Source layer changed; Roto Brush result was discarded");
         return;
     };
     let layer_matches = serde_json::to_vec(&comp.layers[layer_index])
@@ -440,7 +349,8 @@ fn poll_roto_segment_job(app: &mut KagariApp, ctx: &egui::Context) {
         == Some(completion.source_layer_snapshot.as_slice());
     if !layer_matches {
         restore_strokes(ctx);
-        app.toasts.error("Source layer changed during analysis; Roto Brush result was discarded");
+        app.toasts
+            .error("Source layer changed during analysis; Roto Brush result was discarded");
         return;
     }
     let polygon = match completion.result {
@@ -451,11 +361,9 @@ fn poll_roto_segment_job(app: &mut KagariApp, ctx: &egui::Context) {
             return;
         }
     };
-    let frame_stroke_count = crate::core::roto_brush_engine::strokes_for_frame(
-        &completion.strokes,
-        completion.frame,
-    )
-    .len();
+    let frame_stroke_count =
+        crate::core::roto_brush_engine::strokes_for_frame(&completion.strokes, completion.frame)
+            .len();
     let has_polygon = polygon.is_some();
     let layer = &mut comp.layers[layer_index];
     layer.roto_brush_strokes = completion.strokes;
@@ -498,7 +406,10 @@ fn start_roto_flow_bake(
     anchor_frame: u32,
 ) -> Result<(), String> {
     let job_id = egui::Id::new("roto_flow_bake_job");
-    if ctx.data(|data| data.get_temp::<std::sync::Arc<RotoFlowJob>>(job_id)).is_some() {
+    if ctx
+        .data(|data| data.get_temp::<std::sync::Arc<RotoFlowJob>>(job_id))
+        .is_some()
+    {
         return Err("Roto optical-flow propagation is already running".into());
     }
     let composition = app.history.current().active_composition().clone();
@@ -584,7 +495,9 @@ fn start_roto_flow_bake(
                     },
                 )
             }))
-            .unwrap_or_else(|_| Err("Roto optical-flow worker encountered an internal error".into()));
+            .unwrap_or_else(|_| {
+                Err("Roto optical-flow worker encountered an internal error".into())
+            });
             let result = if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
                 Err("Roto optical-flow propagation cancelled".to_owned())
             } else {
@@ -623,7 +536,8 @@ fn poll_roto_flow_bake(app: &mut KagariApp, ctx: &egui::Context) {
         Err(std::sync::mpsc::TryRecvError::Empty) => return,
         Err(std::sync::mpsc::TryRecvError::Disconnected) => {
             ctx.data_mut(|data| data.remove::<std::sync::Arc<RotoFlowJob>>(job_id));
-            app.toasts.error("Roto optical-flow worker stopped unexpectedly");
+            app.toasts
+                .error("Roto optical-flow worker stopped unexpectedly");
             return;
         }
     };
@@ -653,11 +567,13 @@ fn poll_roto_flow_bake(app: &mut KagariApp, ctx: &egui::Context) {
         || comp.height != composition_height
         || comp.fps != composition_fps
     {
-        app.toasts.error("Composition changed; propagated matte was discarded");
+        app.toasts
+            .error("Composition changed; propagated matte was discarded");
         return;
     }
     let Some(layer) = comp.layers.iter_mut().find(|layer| layer.id == layer_id) else {
-        app.toasts.error("Source layer changed; propagated matte was discarded");
+        app.toasts
+            .error("Source layer changed; propagated matte was discarded");
         return;
     };
     if serde_json::to_vec(layer).ok().as_deref() != Some(source_layer_snapshot.as_slice()) {
@@ -666,11 +582,13 @@ fn poll_roto_flow_bake(app: &mut KagariApp, ctx: &egui::Context) {
         return;
     }
     let Some(mask) = layer.masks.iter_mut().find(|mask| mask.id == mask_id) else {
-        app.toasts.error("Roto Brush Matte was removed; propagated result was discarded");
+        app.toasts
+            .error("Roto Brush Matte was removed; propagated result was discarded");
         return;
     };
     if serde_json::to_vec(&mask.path.vertices).ok().as_deref() != Some(original_path.as_slice()) {
-        app.toasts.error("Roto Brush Matte changed during propagation; result was discarded");
+        app.toasts
+            .error("Roto Brush Matte changed during propagation; result was discarded");
         return;
     }
     mask.path.vertices = baked;
@@ -680,27 +598,38 @@ fn poll_roto_flow_bake(app: &mut KagariApp, ctx: &egui::Context) {
 }
 
 fn draw_view_menu_contents(ui: &mut egui::Ui, app: &mut KagariApp) {
-    ui.checkbox(&mut app.show_handles, "Layer handles");
-    ui.checkbox(&mut app.show_guides, "Safe-area guides");
-    ui.checkbox(&mut app.show_grid, "Grid");
-    ui.checkbox(&mut app.viewport_show_stats, "Preview statistics");
+    ui.checkbox(&mut app.show_handles, "レイヤーハンドル");
+    ui.checkbox(&mut app.show_guides, "セーフエリアガイド");
+    ui.checkbox(&mut app.show_grid, "グリッド");
+    ui.checkbox(&mut app.viewport_show_stats, "プレビュー情報");
     ui.separator();
-    ui.collapsing("Preview Proxy", |ui| {
+    ui.collapsing("プレビュー品質", |ui| {
         crate::ui::proxy_panel::draw_proxy_controls(app, ui);
     });
+    let navigator_id = egui::Id::new(crate::ui::viewport_minimap::SHOW_NAVIGATOR_ID);
+    let mut show_navigator = ui
+        .ctx()
+        .data(|data| data.get_temp::<bool>(navigator_id).unwrap_or(false));
+    if ui
+        .checkbox(&mut show_navigator, "コンポジションナビゲーター")
+        .changed()
+    {
+        ui.ctx()
+            .data_mut(|data| data.insert_temp(navigator_id, show_navigator));
+    }
     if let Some(idx) = app.selection.selected_layer_idx {
         ui.separator();
-        ui.menu_button("Anchor snapping", |ui| {
+        ui.menu_button("アンカースナップ", |ui| {
             for (label, x, y) in [
-                ("Top left", 0.0, 0.0),
-                ("Top center", 0.5, 0.0),
-                ("Top right", 1.0, 0.0),
-                ("Center left", 0.0, 0.5),
-                ("Center", 0.5, 0.5),
-                ("Center right", 1.0, 0.5),
-                ("Bottom left", 0.0, 1.0),
-                ("Bottom center", 0.5, 1.0),
-                ("Bottom right", 1.0, 1.0),
+                ("左上", 0.0, 0.0),
+                ("上中央", 0.5, 0.0),
+                ("右上", 1.0, 0.0),
+                ("左中央", 0.0, 0.5),
+                ("中央", 0.5, 0.5),
+                ("右中央", 1.0, 0.5),
+                ("左下", 0.0, 1.0),
+                ("下中央", 0.5, 1.0),
+                ("右下", 1.0, 1.0),
             ] {
                 if ui.button(label).clicked() {
                     app.modify_project(|project| {
@@ -719,44 +648,44 @@ fn draw_view_menu_contents(ui: &mut egui::Ui, app: &mut KagariApp) {
             }
         });
     }
-    if ui.ctx().screen_rect().width() < 950.0 {
+    {
         ui.separator();
         ui.label(
-            egui::RichText::new("Viewport")
+            egui::RichText::new("ビューアー")
                 .small()
                 .color(colors::TEXT_MUTED),
         );
         egui::ComboBox::from_id_salt("compact_cam_view_menu")
             .selected_text(match app.viewport_cam_view {
-                0 => "Active Camera",
-                1 => "Front",
-                2 => "Left",
-                3 => "Top",
-                _ => "Custom View",
+                0 => "アクティブカメラ",
+                1 => "正面",
+                2 => "左面",
+                3 => "上面",
+                _ => "カスタムビュー",
             })
             .show_ui(ui, |ui| {
                 if ui
-                    .selectable_value(&mut app.viewport_cam_view, 0, "Active Camera")
+                    .selectable_value(&mut app.viewport_cam_view, 0, "アクティブカメラ")
                     .clicked()
                 {
                     app.viewport_mode = ViewportMode::Comp2D;
                 }
                 if ui
-                    .selectable_value(&mut app.viewport_cam_view, 1, "Front")
+                    .selectable_value(&mut app.viewport_cam_view, 1, "正面")
                     .clicked()
                 {
                     app.viewport_mode = ViewportMode::Camera3D;
                     app.camera_orbit = (0.0, 0.0, 1000.0);
                 }
                 if ui
-                    .selectable_value(&mut app.viewport_cam_view, 2, "Left")
+                    .selectable_value(&mut app.viewport_cam_view, 2, "左面")
                     .clicked()
                 {
                     app.viewport_mode = ViewportMode::Camera3D;
                     app.camera_orbit = (-90.0, 0.0, 1000.0);
                 }
                 if ui
-                    .selectable_value(&mut app.viewport_cam_view, 3, "Top")
+                    .selectable_value(&mut app.viewport_cam_view, 3, "上面")
                     .clicked()
                 {
                     app.viewport_mode = ViewportMode::Camera3D;
@@ -765,46 +694,62 @@ fn draw_view_menu_contents(ui: &mut egui::Ui, app: &mut KagariApp) {
             });
         egui::ComboBox::from_id_salt("compact_resolution_menu")
             .selected_text(match app.viewport_render_resolution {
-                0 => "Full",
-                1 => "Half",
-                2 => "Third",
-                _ => "Quarter",
+                crate::app_state::PreviewResolution::Full => "フル",
+                crate::app_state::PreviewResolution::Half => "1/2",
+                crate::app_state::PreviewResolution::Third => "1/3",
+                crate::app_state::PreviewResolution::Quarter => "1/4",
             })
             .show_ui(ui, |ui| {
-                ui.selectable_value(&mut app.viewport_render_resolution, 0, "Full");
-                ui.selectable_value(&mut app.viewport_render_resolution, 1, "Half");
-                ui.selectable_value(&mut app.viewport_render_resolution, 2, "Third");
-                ui.selectable_value(&mut app.viewport_render_resolution, 3, "Quarter");
+                ui.selectable_value(
+                    &mut app.viewport_render_resolution,
+                    crate::app_state::PreviewResolution::Full,
+                    "フル",
+                );
+                ui.selectable_value(
+                    &mut app.viewport_render_resolution,
+                    crate::app_state::PreviewResolution::Half,
+                    "1/2",
+                );
+                ui.selectable_value(
+                    &mut app.viewport_render_resolution,
+                    crate::app_state::PreviewResolution::Third,
+                    "1/3",
+                );
+                ui.selectable_value(
+                    &mut app.viewport_render_resolution,
+                    crate::app_state::PreviewResolution::Quarter,
+                    "1/4",
+                );
             });
         egui::ComboBox::from_id_salt("compact_channel_menu")
             .selected_text(match app.viewport_color_channel {
-                0 => "RGB Color",
-                1 => "Red",
-                2 => "Green",
-                3 => "Blue",
-                _ => "Alpha",
+                0 => "RGB",
+                1 => "赤",
+                2 => "緑",
+                3 => "青",
+                _ => "アルファ",
             })
             .show_ui(ui, |ui| {
-                ui.selectable_value(&mut app.viewport_color_channel, 0, "RGB Color");
-                ui.selectable_value(&mut app.viewport_color_channel, 1, "Red");
-                ui.selectable_value(&mut app.viewport_color_channel, 2, "Green");
-                ui.selectable_value(&mut app.viewport_color_channel, 3, "Blue");
-                ui.selectable_value(&mut app.viewport_color_channel, 4, "Alpha");
+                ui.selectable_value(&mut app.viewport_color_channel, 0, "RGB");
+                ui.selectable_value(&mut app.viewport_color_channel, 1, "赤");
+                ui.selectable_value(&mut app.viewport_color_channel, 2, "緑");
+                ui.selectable_value(&mut app.viewport_color_channel, 3, "青");
+                ui.selectable_value(&mut app.viewport_color_channel, 4, "アルファ");
             });
         egui::ComboBox::from_id_salt("compact_quality_menu")
             .selected_text(match app.viewport_fast_preview {
-                0 => "Final Quality",
-                1 => "Adaptive",
-                2 => "Fast Draft",
-                _ => "Wireframe",
+                0 => "最終品質",
+                1 => "適応解像度",
+                2 => "高速ドラフト",
+                _ => "ワイヤーフレーム",
             })
             .show_ui(ui, |ui| {
-                ui.selectable_value(&mut app.viewport_fast_preview, 0, "Final Quality");
-                ui.selectable_value(&mut app.viewport_fast_preview, 1, "Adaptive Resolution");
-                ui.selectable_value(&mut app.viewport_fast_preview, 2, "Fast Draft");
-                ui.selectable_value(&mut app.viewport_fast_preview, 3, "Wireframe");
+                ui.selectable_value(&mut app.viewport_fast_preview, 0, "最終品質");
+                ui.selectable_value(&mut app.viewport_fast_preview, 1, "適応解像度");
+                ui.selectable_value(&mut app.viewport_fast_preview, 2, "高速ドラフト");
+                ui.selectable_value(&mut app.viewport_fast_preview, 3, "ワイヤーフレーム");
             });
-        if ui.button("Take Snapshot").clicked() {
+        if ui.button("スナップショットを撮影").clicked() {
             let frame = app.playback.current_frame;
             crate::ui::viewport_state::set_snap_frame(ui.ctx(), frame);
             app.toasts
@@ -812,11 +757,14 @@ fn draw_view_menu_contents(ui: &mut egui::Ui, app: &mut KagariApp) {
             ui.close_menu();
         }
         let comparing = crate::ui::viewport_state::is_comparing(ui.ctx());
-        if ui.selectable_label(comparing, "Compare Snapshot").clicked() {
+        if ui
+            .selectable_label(comparing, "スナップショットを比較")
+            .clicked()
+        {
             if crate::ui::viewport_state::snap_frame(ui.ctx()).is_some() {
                 crate::ui::viewport_state::toggle_comparing(ui.ctx());
             } else {
-                app.toasts.warning("Take a snapshot first");
+                app.toasts.warning("先にスナップショットを撮影してください");
             }
         }
     }
@@ -836,19 +784,6 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
     }
     egui::CentralPanel::default().show(ctx, |ui| {
         // ── Composition / Layer / Footage tab strip ───────────────────────────────
-        let active_comp_name = app.history.current().active_composition().name.clone();
-        let is_reference_demo = app
-            .history
-            .current()
-            .active_composition()
-            .layers
-            .iter()
-            .any(|layer| layer.id == "demo_bg");
-        let active_comp_display_name = if is_reference_demo {
-            "main_comp".to_string()
-        } else {
-            active_comp_name.clone()
-        };
         let paint_preview_required = app
             .history
             .current()
@@ -881,53 +816,41 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 layer.frame_blending
                     && matches!(layer.layer_type, crate::core::timeline::LayerType::Video { .. })
             });
-        ui.horizontal(|ui| {
-            let tab_frame = egui::Frame::none()
-                .fill(egui::Color32::TRANSPARENT)
-                .inner_margin(egui::Margin::symmetric(4.0, 4.0))
-                .stroke(egui::Stroke::NONE);
-
-            tab_frame.show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    crate::ui::icons::render_svg_bytes(ui, "viewport-composition", crate::ui::icons::SVG_FRAME, egui::vec2(14.0, 14.0), colors::TEXT_SECONDARY);
-                    ui.label(egui::RichText::new("Viewer").strong().color(colors::TEXT_PRIMARY));
-                    ui.label(egui::RichText::new(active_comp_display_name).color(colors::ACCENT_BLUE));
-                    ui.colored_label(colors::ACCENT_BLUE, "●");
-                    if ui.small_button("×").clicked() {
-                        log::info!("Composition tab active");
-                    }
-                });
-            });
-
-            if ctx.screen_rect().width() >= 950.0 {
-                ui.add_space(18.0);
-                ui.label(egui::RichText::new("Layer").color(colors::TEXT_MUTED));
-                ui.label(egui::RichText::new("(none)").color(colors::TEXT_SECONDARY));
-                ui.add_space(28.0);
-                ui.label(egui::RichText::new("Footage").color(colors::TEXT_MUTED));
-                ui.label(egui::RichText::new("(none)").color(colors::TEXT_SECONDARY));
-            }
-        });
-        ui.separator();
-
         // ── Viewport controls ─────────────────────────────────────────────────────
-        ui.horizontal(|ui| {
-            let narrow_toolbar = ctx.screen_rect().width() < 1280.0;
-            crate::ui::toolbar::draw_viewer_tool_strip(app, ui);
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width(), crate::ui::theme::layout::TOOLBAR_HEIGHT),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+            let narrow_toolbar = ui.available_width() < 1180.0;
+            crate::ui::icons::render_svg_bytes(
+                ui,
+                "viewport-composition",
+                crate::ui::icons::SVG_FRAME,
+                egui::vec2(14.0, 14.0),
+                colors::TEXT_SECONDARY,
+            );
+            ui.label(egui::RichText::new("ビューアー").strong().color(colors::TEXT_PRIMARY));
+            let active_comp = app.history.current().active_composition();
+            if active_comp.id != "comp_empty_start" {
+                ui.add_space(4.0);
+                ui.label(egui::RichText::new(active_comp.name.as_str()).color(colors::ACCENT_BRAND));
+                ui.label(egui::RichText::new("●").size(8.0).color(colors::ACCENT_BRAND));
+            }
+            ui.add_space(6.0);
             ui.separator();
             let zoom_label = match app.ui_tabs.viewport_mag_ratio {
-                ratio if ratio <= 0.001 => "Fit",
-                ratio if ratio <= 0.26 => "25%",
-                ratio if ratio <= 0.76 => "50%",
-                ratio if ratio <= 1.26 => "100%",
-                _ => "200%",
+                ratio if ratio <= 0.001 => crate::ui::localization::tr("Fit"),
+                ratio if ratio <= 0.26 => "25%".to_owned(),
+                ratio if ratio <= 0.76 => "50%".to_owned(),
+                ratio if ratio <= 1.26 => "100%".to_owned(),
+                _ => "200%".to_owned(),
             };
             egui::ComboBox::from_id_salt("viewport-zoom")
-                .selected_text(zoom_label)
+                .selected_text(&zoom_label)
                 .width(72.0)
                 .show_ui(ui, |ui| {
-                    for (label, ratio) in [("Fit", 0.0), ("25%", 0.25), ("50%", 0.5), ("100%", 1.0), ("200%", 2.0)] {
-                        if ui.selectable_label(zoom_label == label, label).clicked() {
+                    for (label, ratio) in [(crate::ui::localization::tr("Fit"), 0.0), ("25%".to_owned(), 0.25), ("50%".to_owned(), 0.5), ("100%".to_owned(), 1.0), ("200%".to_owned(), 2.0)] {
+                        if ui.selectable_label(zoom_label == label, &label).clicked() {
                             app.ui_tabs.viewport_mag_ratio = ratio;
                             if ratio == 0.0 {
                                 app.playback.viewport_pan = egui::Vec2::ZERO;
@@ -935,69 +858,33 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                         }
                     }
                 });
-            // Fit is already a mode in the zoom control. Keep the toolbar
-            // focused on real viewer actions instead of a duplicate inert
-            // dropdown.
-            ui.add_space(10.0);
-            for (index, (icon, tooltip, active)) in [
-                (crate::ui::icons::SVG_GRID, "Toggle composition grid", app.show_grid),
-                (crate::ui::icons::SVG_FRAME, "Toggle safe-area guides", app.show_guides),
-                (crate::ui::icons::SVG_SORT, "Fit composition in Viewer", app.ui_tabs.viewport_mag_ratio == 0.0),
-            ]
-            .into_iter()
-            .enumerate()
-            {
-                if narrow_toolbar && index == 2 {
-                    continue;
-                }
-                let (control_rect, control_response) = ui.allocate_exact_size(
-                    egui::vec2(24.0, 24.0),
-                    egui::Sense::click(),
-                );
-                if active || control_response.hovered() {
-                    ui.painter().rect_filled(
-                        control_rect,
-                        2.0,
-                        if active { colors::BG_HOVER } else { colors::BG_DARK },
-                    );
-                }
-                crate::ui::icons::render_svg_at(
-                    ui,
-                    format!("viewport-control-{index}"),
-                    icon,
-                    egui::vec2(16.0, 16.0),
-                    if active { colors::ACCENT_BLUE } else { colors::TEXT_SECONDARY },
-                    control_rect.center() - egui::vec2(8.0, 8.0),
-                );
-                let clicked = control_response.clicked();
-                control_response.on_hover_text(tooltip);
-                if clicked {
-                    match index {
-                        0 => app.show_grid = !app.show_grid,
-                        1 => app.show_guides = !app.show_guides,
-                        2 => {
-                            app.ui_tabs.viewport_mag_ratio = 0.0;
-                            app.playback.viewport_pan = egui::Vec2::ZERO;
-                        }
-                        _ => {}
-                    }
-                }
-                ui.add_space(8.0);
-            }
             ui.add_space(4.0);
             ui.separator();
             ui.add_space(4.0);
             let mode_2d = app.viewport_mode == ViewportMode::Comp2D;
-            if crate::ui::theme::draw_custom_tab(ui, mode_2d, "2D").clicked() {
-                app.viewport_mode = ViewportMode::Comp2D;
-            }
-            if crate::ui::theme::draw_custom_tab(ui, !mode_2d, "3D Camera").clicked() {
-                app.viewport_mode = ViewportMode::Camera3D;
+            if narrow_toolbar {
+                ui.menu_button(if mode_2d { "2D ▾" } else { "3D ▾" }, |ui| {
+                    if crate::ui::kui::menu_item(ui, "2D コンポジション").clicked() {
+                        app.viewport_mode = ViewportMode::Comp2D;
+                        ui.close_menu();
+                    }
+                    if crate::ui::kui::menu_item(ui, "3D カメラ").clicked() {
+                        app.viewport_mode = ViewportMode::Camera3D;
+                        ui.close_menu();
+                    }
+                });
+            } else {
+                if crate::ui::theme::draw_custom_tab(ui, mode_2d, "2D").clicked() {
+                    app.viewport_mode = ViewportMode::Comp2D;
+                }
+                if crate::ui::theme::draw_custom_tab(ui, !mode_2d, "3Dカメラ").clicked() {
+                    app.viewport_mode = ViewportMode::Camera3D;
+                }
             }
             ui.add_space(4.0);
             ui.separator();
             ui.add_space(4.0);
-            ui.menu_button("View", |ui| {
+            ui.menu_button("表示", |ui| {
                 draw_view_menu_contents(ui, app);
                 if narrow_toolbar {
                     ui.separator();
@@ -1027,35 +914,65 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                     button_response.on_hover_text(if app.viewer_maximized { "Restore panels" } else { "Maximize Viewer" });
                 });
             }
-        });
-        ui.separator();
+            },
+        );
+        crate::ui::theme::draw_separator(ui);
 
         // ── Comp Settings Modal ──────────────────────────────────────────────
         crate::ui::comp_settings_dialog::draw_comp_settings_dialog(app, ctx);
 
         // ── AE Viewport Composition Top Tabs & Breadcrumbs Bar ──
-        // The active composition is already present in the compact header;
-        // removing this duplicate strip below 700px keeps a usable Viewer.
-        if ctx.screen_rect().width() >= 700.0 {
+        if app.history.current().active_composition().id != "comp_empty_start"
+            && app.history.current().compositions.len() > 1
+        {
             let active_comp_idx = app.history.current().active_composition_idx;
             let comps_count = app.history.current().compositions.len();
-            ui.horizontal(|ui| {
-                for idx in 0..comps_count {
-                    let is_active = idx == active_comp_idx;
-                    let c_name = app.history.current().compositions[idx].name.clone();
-                    let tab_text = c_name;
-                    if crate::ui::theme::draw_custom_tab(ui, is_active, &tab_text).clicked() {
-                        let mut p = app.history.current().clone();
-                        p.active_composition_idx = idx;
-                        app.commit_project(p);
-                    }
-                }
-            });
-            ui.separator();
+            ui.allocate_ui_with_layout(
+                egui::vec2(ui.available_width(), crate::ui::theme::layout::PANEL_HEADER_HEIGHT),
+                egui::Layout::left_to_right(egui::Align::Center),
+                |ui| {
+                    egui::ScrollArea::horizontal()
+                        .id_salt("viewer_composition_tabs")
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                for idx in 0..comps_count {
+                                    let is_active = idx == active_comp_idx;
+                                    let c_name = app.history.current().compositions[idx].name.clone();
+                                    if crate::ui::theme::draw_custom_tab(ui, is_active, &c_name).clicked() {
+                                        let mut p = app.history.current().clone();
+                                        p.active_composition_idx = idx;
+                                        app.commit_project(p);
+                                    }
+                                }
+                            });
+                        });
+                },
+            );
+            crate::ui::theme::draw_separator(ui);
         }
 
         let size = ui.available_size();
-        let (rect, viewport_response) = ui.allocate_exact_size(size, egui::Sense::click_and_drag());
+        let (rect, viewport_response) = ui
+            .horizontal(|ui| {
+                let tool_strip_width = 40.0_f32;
+                let strip_size = egui::vec2(tool_strip_width, size.y);
+                ui.allocate_ui(strip_size, |ui| {
+                    ui.set_min_size(strip_size);
+                    egui::Frame::none()
+                        .fill(colors::BG_DARK)
+                        .show(ui, |ui| {
+                            crate::ui::toolbar::draw_viewer_tool_strip_vertical(app, ui);
+                        });
+                    ui.painter().line_segment(
+                        [ui.min_rect().right_top(), ui.min_rect().right_bottom()],
+                        egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
+                    );
+                });
+                let canvas_size = ui.available_size().max(egui::vec2(1.0, 1.0));
+                ui.allocate_exact_size(canvas_size, egui::Sense::click_and_drag())
+            })
+            .inner;
         viewport_response.context_menu(|ui| {
             let layer_count = app.history.current().active_composition().layers.len();
             if ui.button("Select All Layers").clicked() {
@@ -1069,7 +986,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 app.mask_selected_vertices = None;
                 ui.close_menu();
             }
-            ui.separator();
+        ui.separator();
             if ui.button("Fit Composition to Viewer").clicked() {
                 app.ui_tabs.viewport_mag_ratio = 0.0;
                 app.playback.viewport_pan = egui::Vec2::ZERO;
@@ -1212,7 +1129,8 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             }?;
             if std::path::Path::new(path).is_file() { None } else { Some(layer.name.clone()) }
         });
-        let software_preview_required = software_preview_required(comp, current_frame);
+        let software_preview_required =
+            crate::ui::viewport_rendering::software_preview_required(comp, current_frame);
         let aspect = comp.width as f32 / comp.height as f32;
 
         // ── One-shot bbox focus request (Shift+Z with selection) ──
@@ -1245,7 +1163,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
         app.viewer_draw_rect = Some(draw_rect);
 
         // ── Checkerboard transparency grid behind comp canvas (Batched single Mesh) ──
-        {
+        if !comp_is_empty {
             let cell = 20.0f32;
             // Keep transparency legible without competing with the footage.
             // A bright checkerboard makes Fit mode read like a debug canvas.
@@ -1286,21 +1204,18 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
         #[allow(unused_mut)]
         let mut rendered_gpu = false;
         #[cfg(feature = "wgpu")]
-        if ctx
-            .data(|d| d.get_temp::<usize>(egui::Id::new("ae_colorspace_lut")))
-            .unwrap_or(0)
-            != 3
+        if app.color_lut_mode != 3
             && !paint_preview_required
             && !source_map_effect_preview_required
             && !frame_blending_required
             && !software_preview_required
+            && !comp_is_empty
         {
             if let Some(renderer) = &mut app.renderer {
             if let Some(wgpu_state) = &app.wgpu_state {
                 let exp_id = egui::Id::new("ae_exposure_ev");
                 let exposure_ev = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(exp_id, || 0.0f32));
-                let lut_id = egui::Id::new("ae_colorspace_lut");
-                let lut_idx = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(lut_id, || 0usize));
+                let lut_idx = app.color_lut_mode as usize;
 
                 let snap_id = egui::Id::new(crate::ui::viewport_state::SNAP_FRAME_ID);
                 let is_comparing_id = egui::Id::new(crate::ui::viewport_state::IS_COMPARING_ID);
@@ -1337,20 +1252,47 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 // ── RAM preview: incremental pre-pass, a few frames per UI frame ──
                 // Rendering everything up front would freeze the UI on heavy comps;
                 // instead we chip away at the work area while playback runs.
-                const RAM_PREPASS_FRAMES_PER_TICK: u32 = 6;
+                const RAM_PREPASS_FRAMES_PER_TICK: u32 = 2;
                 const RAM_PREPASS_MAX_FRAMES: u32 = 300;
+                const RAM_PREVIEW_BUDGET_BYTES: u64 = 256 * 1024 * 1024;
                 if app.playback.is_playing && !app.was_playing_last_frame {
-                    let wa_in = app.playback.work_area_in.unwrap_or(0);
+                    let last_frame = comp.duration_frames.saturating_sub(1);
+                    let wa_in = app.playback.work_area_in.unwrap_or(0).min(last_frame);
                     let wa_out = app
                         .playback.work_area_out
-                        .unwrap_or(comp.duration_frames)
-                        .min(comp.duration_frames.saturating_sub(1));
-                    app.ram_texture_ids.clear();
-                    app.ram_prepass_cursor = wa_in;
-                    app.ram_prepass_end = wa_in + (wa_out - wa_in).min(RAM_PREPASS_MAX_FRAMES);
+                        .unwrap_or(last_frame)
+                        .min(last_frame)
+                        .max(wa_in);
+                    if app.viewport_texture_id.is_some_and(|current| {
+                        app.ram_texture_ids.iter().any(|(_, id)| *id == current)
+                    }) {
+                        app.viewport_texture_id = None;
+                    }
+                    for (_, id) in app.ram_texture_ids.drain(..) {
+                        wgpu_state.renderer.write().free_texture(&id);
+                    }
+                    let frame_width = comp.width.min(preview_px).max(1);
+                    let frame_height = ((comp.height as u64 * frame_width as u64)
+                        / comp.width.max(1) as u64)
+                        .clamp(1, u32::MAX as u64) as u32;
+                    let bytes_per_frame = frame_width as u64 * frame_height as u64 * 8;
+                    let memory_limited_frames = (RAM_PREVIEW_BUDGET_BYTES / bytes_per_frame.max(1))
+                        .clamp(1, RAM_PREPASS_MAX_FRAMES as u64)
+                        as u32;
+                    if comp.duration_frames == 0 {
+                        app.ram_prepass_cursor = 1;
+                        app.ram_prepass_end = 0;
+                    } else {
+                        app.ram_prepass_cursor = wa_in;
+                        app.ram_prepass_end = wa_in.saturating_add(
+                            wa_out.saturating_sub(wa_in).min(memory_limited_frames - 1),
+                        );
+                    }
                 }
                 if app.playback.is_playing && app.ram_prepass_cursor <= app.ram_prepass_end {
-                    let batch_end = app.ram_prepass_cursor + RAM_PREPASS_FRAMES_PER_TICK - 1;
+                    let batch_end = app
+                        .ram_prepass_cursor
+                        .saturating_add(RAM_PREPASS_FRAMES_PER_TICK - 1);
                     let batch_end = batch_end.min(app.ram_prepass_end);
                     renderer.render_ram_preview_range(
                         comp,
@@ -1358,7 +1300,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                         batch_end,
                         exposure_ev,
                         lut_idx as u32,
-                        app.ram_prepass_end - app.ram_prepass_cursor + 1,
+                        RAM_PREPASS_MAX_FRAMES,
                     );
                     for f in app.ram_prepass_cursor..=batch_end {
                         if let Some(view) = renderer.ram_frame_view(f) {
@@ -1374,6 +1316,11 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 }
                 if !app.playback.is_playing && app.was_playing_last_frame {
                     // Playback stopped: free ring textures and egui ids
+                    if app.viewport_texture_id.is_some_and(|current| {
+                        app.ram_texture_ids.iter().any(|(_, id)| *id == current)
+                    }) {
+                        app.viewport_texture_id = None;
+                    }
                     for (_, id) in app.ram_texture_ids.drain(..) {
                         wgpu_state.renderer.write().free_texture(&id);
                     }
@@ -1396,7 +1343,9 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                     // Cached frame: swap the displayed texture, no GPU re-render
                     if app.viewport_texture_id != Some(id) {
                         if let Some(old_id) = app.viewport_texture_id {
-                            wgpu_state.renderer.write().free_texture(&old_id);
+                            if !app.ram_texture_ids.iter().any(|(_, cached)| *cached == old_id) {
+                                wgpu_state.renderer.write().free_texture(&old_id);
+                            }
                         }
                         app.viewport_texture_id = Some(id);
                     }
@@ -1499,83 +1448,15 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             }
         }
 
-        if is_reference_demo {
-            if let Some(texture) = demo_reference_texture(ctx) {
-                let compact_reference_viewer = ctx.screen_rect().width() < 700.0;
-                let footer_reserve = if compact_reference_viewer {
-                    8.0
-                } else if rect.height() >= 140.0 {
-                    56.0
-                } else {
-                    14.0
-                };
-                let preview_area = egui::Rect::from_min_max(
-                    rect.left_top() + egui::vec2(8.0, 8.0),
-                    egui::pos2(
-                        (rect.right() - 8.0).max(rect.left() + 9.0),
-                        (rect.bottom() - footer_reserve).max(rect.top() + 9.0),
-                    ),
-                );
-                let max_preview_width = preview_area.width().max(1.0);
-                let max_preview_height = preview_area.height().max(1.0);
-                let preview_width = max_preview_width.min(max_preview_height * 1.92);
-                let preview_height = preview_width / 1.92;
-                let preview_center = preview_area.center();
-                let preview_rect = egui::Rect::from_center_size(preview_center, egui::vec2(preview_width, preview_height));
-                ui.painter().image(
-                    texture.id(),
-                    preview_rect,
-                    egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-                    egui::Color32::WHITE,
-                );
-                rendered_gpu = true;
-            }
-            if ctx.screen_rect().width() >= 700.0 {
-                let footer_y = rect.bottom() - 34.0;
-                ui.painter().line_segment(
-                    [egui::pos2(rect.left(), footer_y - 25.0), egui::pos2(rect.right(), footer_y - 25.0)],
-                    egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
-                );
-                ui.painter().text(
-                    egui::pos2(rect.left() + 18.0, footer_y),
-                    egui::Align2::LEFT_CENTER,
-                    "00:00:03:12",
-                    egui::FontId::proportional(13.0),
-                    colors::ACCENT_BLUE,
-                );
-                let transport_icons = [
-                    crate::ui::icons::SVG_JUMP_BACK,
-                    crate::ui::icons::SVG_STEP_BACK,
-                    if app.playback.is_playing {
-                        crate::ui::icons::SVG_PAUSE
-                    } else {
-                        crate::ui::icons::SVG_PLAY
-                    },
-                    crate::ui::icons::SVG_STEP_FORWARD,
-                    crate::ui::icons::SVG_JUMP_FORWARD,
-                ];
-                for (index, icon) in transport_icons.into_iter().enumerate() {
-                    crate::ui::icons::render_svg_at(
-                        ui,
-                        format!("reference-transport-{index}"),
-                        icon,
-                        egui::vec2(16.0, 16.0),
-                        colors::TEXT_PRIMARY,
-                        egui::pos2(rect.center().x - 70.0 + index as f32 * 32.0 - 8.0, footer_y - 8.0),
-                    );
-                }
-            }
-        }
-
         // -- CPU Fallback Render (2D) --
         // -- 3D Camera View --
-        if app.viewport_mode == ViewportMode::Camera3D {
+        if app.viewport_mode == ViewportMode::Camera3D && !comp_is_empty {
             crate::ui::viewport_camera_3d::draw_camera_3d_viewport(
                 ui, app, ctx, current_frame, &viewport_response, rect, comp_w, comp_h, draw_w, draw_h,
             );
         }
 
-        if app.viewport_mode == ViewportMode::Comp2D && !rendered_gpu && is_comparing {
+        if app.viewport_mode == ViewportMode::Comp2D && !comp_is_empty && !rendered_gpu && is_comparing {
             if let Some(snap_frame) = snap_frame_opt {
                 let left_rect = egui::Rect::from_min_max(
                     draw_rect.min,
@@ -1603,7 +1484,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
 
         // CPU fallback keeps the Viewer useful when a GPU texture is not
         // available, including CPU-only builds and software preview mode.
-        if app.viewport_mode == ViewportMode::Comp2D && !rendered_gpu && !is_comparing {
+        if app.viewport_mode == ViewportMode::Comp2D && !comp_is_empty && !rendered_gpu && !is_comparing {
             crate::ui::viewport_canvas::draw_software_canvas(
                 ui, app, current_frame, draw_rect, origin_x, origin_y,
                 draw_w, draw_h, comp_w, comp_h, None,
@@ -1613,13 +1494,13 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
 
         // ── Viewport Overlays (Grid, Safe Guides, HUD Badges, 3D Gizmo, Snapshot Wipe) ──
         crate::ui::viewport_overlays::draw_viewport_overlays(
-            ui, app, ctx, current_frame, origin_x, origin_y, draw_w, draw_h, comp_w, comp_h, rendered_gpu,
+            ui, app, ctx, current_frame, rect, origin_x, origin_y, draw_w, draw_h, comp_w, comp_h, rendered_gpu,
         );
 
-        if comp_is_empty {
+        if app.history.current().has_pristine_start_composition() {
             let empty_rect = egui::Rect::from_center_size(
                 rect.center(),
-                egui::vec2(240.0, 74.0),
+                egui::vec2(344.0, 122.0),
             );
             ui.painter().rect_filled(
                 empty_rect,
@@ -1632,12 +1513,32 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
             );
             ui.painter().text(
-                empty_rect.center_top() + egui::vec2(0.0, 22.0),
+                egui::pos2(empty_rect.center().x, empty_rect.top() + 25.0),
                 egui::Align2::CENTER_CENTER,
-                "Drop media here",
+                "プロジェクトを始めましょう",
                 egui::FontId::proportional(14.0),
                 colors::TEXT_SECONDARY,
             );
+            let action_width = 148.0;
+            let action_gap = 10.0;
+            let action_y = empty_rect.top() + 54.0;
+            let create_rect = egui::Rect::from_min_size(
+                egui::pos2(empty_rect.center().x - action_width - action_gap * 0.5, action_y),
+                egui::vec2(action_width, 38.0),
+            );
+            let open_rect = egui::Rect::from_min_size(
+                egui::pos2(empty_rect.center().x + action_gap * 0.5, action_y),
+                egui::vec2(action_width, 38.0),
+            );
+            if ui.put(
+                create_rect,
+                egui::Button::new("新規コンポジション").fill(colors::ACCENT_BRAND),
+            ).clicked() {
+                app.show_new_comp_dialog = true;
+            }
+            if ui.put(open_rect, egui::Button::new("プロジェクトを開く")).clicked() {
+                crate::ui::home_screen::open_project_dialog(app);
+            }
         } else if let Some(layer_name) = missing_media {
             let missing_rect = egui::Rect::from_center_size(rect.center(), egui::vec2(280.0, 72.0));
             ui.painter().rect_filled(
@@ -2448,12 +2349,14 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                             match start_roto_segment_job(
                                 app,
                                 ctx,
-                                sel_li,
-                                current_frame,
-                                previous_strokes.clone(),
-                                all_strokes,
-                                settings,
-                                feather,
+                                RotoSegmentRequest {
+                                    layer_index: sel_li,
+                                    frame: current_frame,
+                                    previous_strokes: previous_strokes.clone(),
+                                    strokes: all_strokes,
+                                    settings,
+                                    feather,
+                                },
                             ) {
                                 Ok(()) => app.toasts.info("Roto Brush matte analysis started"),
                                 Err(error) => {
@@ -3075,7 +2978,11 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                                 }
                                 // Record into motion sketch buffer for the commit-on-stop pass
                                 if app.motion_sketch_active {
-                                    app.motion_sketch_recording.push((current_frame, new_pos));
+                                    crate::core::motion_sketch::record_motion_sketch_sample(
+                                        &mut app.motion_sketch_recording,
+                                        current_frame,
+                                        new_pos,
+                                    );
                                 }
                             }
                         }
@@ -3198,29 +3105,42 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                     if let Some(sel_idx) = app.selection.selected_layer_idx {
                         let recording = std::mem::take(&mut app.motion_sketch_recording);
                         let recording_count = recording.len();
-                        let comp_mut = app.history.current_mut().active_composition_mut();
-                        if let Some(layer) = comp_mut.layers.get_mut(sel_idx) {
-                            // Douglas-Peucker path simplification to reduce redundant keyframes
-                            let simplified = douglas_peucker(&recording, 2.0);
-                            // Smooth the path with a 3-point moving average
-                            let final_smoothed = smooth_path(&simplified);
-                            // Assign bezier easing based on velocity changes
-                            let mut kfs: Vec<crate::core::keyframe::Keyframe<[f32; 2]>> = final_smoothed
-                                .into_iter()
-                                .map(|(frame, pos)| {
-                                    crate::core::keyframe::Keyframe::new(frame, pos, crate::core::keyframe::InterpolationType::Bezier {
-                                        outgoing: crate::core::keyframe::BezierControlPoint { influence: 40.0, speed: 80.0 },
-                                        incoming: crate::core::keyframe::BezierControlPoint { influence: 40.0, speed: 0.0 },
-                                        custom_bezier: Some([0.25, 0.1, 0.25, 1.0]),
-                                    })
-                                })
-                                .collect();
-                            // Remove duplicate frames (keep last value)
-                            kfs.dedup_by_key(|kf| kf.frame);
-                            let count = kfs.len();
-                            layer.transform.position = crate::core::property::Animatable::Animated(kfs);
-                            crate::core::frame_cache::bump_version();
-                            app.toasts.info(format!("Motion Sketch: {} keyframes (from {} raw)", count, recording_count));
+                        let target = app
+                            .history
+                            .current()
+                            .active_composition()
+                            .layers
+                            .get(sel_idx)
+                            .map(|layer| {
+                                (
+                                    app.history.current().active_composition().id.clone(),
+                                    layer.id.clone(),
+                                )
+                            });
+                        if let Some((composition_id, layer_id)) = target {
+                            let project_session_id = app.project_session_id;
+                            let history_generation = app.history.generation();
+                            let (sender, receiver) = std::sync::mpsc::channel();
+                            app.motion_sketch_bake_rx = Some(receiver);
+                            app.toasts.info("Motion Sketchをベイクしています…");
+                            std::thread::spawn(move || {
+                                let keyframes = crate::core::motion_sketch::build_position_keyframes(
+                                    &recording,
+                                    2.0,
+                                );
+                                let _ = sender.send(crate::app_state::MotionSketchBakeResult {
+                                    project_session_id,
+                                    history_generation,
+                                    composition_id,
+                                    layer_id,
+                                    raw_sample_count: recording_count,
+                                    keyframes,
+                                });
+                            });
+                        } else {
+                            app.toasts.warning(
+                                "Motion Sketchの対象レイヤーが見つかりませんでした。",
+                            );
                         }
                     }
                 }
@@ -3436,245 +3356,6 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             }
         }
 
-        // ── AE Viewport Controls Toolbar (BOTTOM OF CANVAS) ──────────────────────────
-        if ctx.screen_rect().width() >= 950.0 && ctx.screen_rect().width() < 1200.0 {
-        let narrow_canvas_controls = ctx.screen_rect().width() < 950.0;
-        ui.separator();
-        if narrow_canvas_controls {
-            ui.horizontal(|ui| {
-                let mag_val = app.ui_tabs.viewport_mag_ratio;
-                egui::ComboBox::from_id_salt("mag_combo_bottom_compact")
-                    .selected_text(if mag_val == 2.0 { "200%" } else if mag_val == 1.0 { "100%" } else if mag_val == 0.5 { "50%" } else if mag_val == 0.25 { "25%" } else { "Fit" })
-                    .width(62.0)
-                    .show_ui(ui, |ui| {
-                        for (label, value) in [("Fit", 0.0), ("25%", 0.25), ("50%", 0.5), ("100%", 1.0), ("200%", 2.0), ("400%", 4.0)] {
-                            if ui.selectable_label(app.ui_tabs.viewport_mag_ratio == value, label).clicked() {
-                                app.ui_tabs.viewport_mag_ratio = value;
-                            }
-                        }
-                    });
-                ui.menu_button("View", |ui| {
-                    ui.checkbox(&mut app.show_grid, "Grid");
-                    ui.checkbox(&mut app.show_guides, "Safe-area guides");
-                    ui.checkbox(&mut app.show_handles, "Layer handles");
-                    ui.separator();
-                    egui::ComboBox::from_id_salt("cam_view_combo_compact")
-                        .selected_text(match app.viewport_cam_view {
-                            0 => "Active Camera",
-                            1 => "Front",
-                            2 => "Left",
-                            3 => "Top",
-                            _ => "Custom View",
-                        })
-                        .show_ui(ui, |ui| {
-                            if ui.selectable_value(&mut app.viewport_cam_view, 0, "Active Camera").clicked() {
-                                app.viewport_mode = ViewportMode::Comp2D;
-                            }
-                            if ui.selectable_value(&mut app.viewport_cam_view, 1, "Front").clicked() {
-                                app.viewport_mode = ViewportMode::Camera3D;
-                                app.camera_orbit = (0.0, 0.0, 1000.0);
-                            }
-                            if ui.selectable_value(&mut app.viewport_cam_view, 2, "Left").clicked() {
-                                app.viewport_mode = ViewportMode::Camera3D;
-                                app.camera_orbit = (-90.0, 0.0, 1000.0);
-                            }
-                            if ui.selectable_value(&mut app.viewport_cam_view, 3, "Top").clicked() {
-                                app.viewport_mode = ViewportMode::Camera3D;
-                                app.camera_orbit = (0.0, -89.0, 1000.0);
-                            }
-                        });
-                    egui::ComboBox::from_id_salt("res_combo_compact")
-                        .selected_text(match app.viewport_render_resolution {
-                            0 => "Full",
-                            1 => "Half",
-                            2 => "Third",
-                            _ => "Quarter",
-                        })
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut app.viewport_render_resolution, 0, "Full");
-                            ui.selectable_value(&mut app.viewport_render_resolution, 1, "Half");
-                            ui.selectable_value(&mut app.viewport_render_resolution, 2, "Third");
-                            ui.selectable_value(&mut app.viewport_render_resolution, 3, "Quarter");
-                        });
-                    egui::ComboBox::from_id_salt("chan_combo_compact")
-                        .selected_text(match app.viewport_color_channel {
-                            0 => "RGB Color",
-                            1 => "Red",
-                            2 => "Green",
-                            3 => "Blue",
-                            _ => "Alpha",
-                        })
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut app.viewport_color_channel, 0, "RGB Color");
-                            ui.selectable_value(&mut app.viewport_color_channel, 1, "Red");
-                            ui.selectable_value(&mut app.viewport_color_channel, 2, "Green");
-                            ui.selectable_value(&mut app.viewport_color_channel, 3, "Blue");
-                            ui.selectable_value(&mut app.viewport_color_channel, 4, "Alpha");
-                        });
-                    egui::ComboBox::from_id_salt("fast_preview_combo_compact")
-                        .selected_text(match app.viewport_fast_preview {
-                            0 => "Final Quality",
-                            1 => "Adaptive",
-                            2 => "Fast Draft",
-                            _ => "Wireframe",
-                        })
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut app.viewport_fast_preview, 0, "Final Quality");
-                            ui.selectable_value(&mut app.viewport_fast_preview, 1, "Adaptive Resolution");
-                            ui.selectable_value(&mut app.viewport_fast_preview, 2, "Fast Draft");
-                            ui.selectable_value(&mut app.viewport_fast_preview, 3, "Wireframe");
-                        });
-                    if ui.button("Take Snapshot").clicked() {
-                        crate::ui::viewport_state::set_snap_frame(ctx, current_frame);
-                        app.toasts.info(format!("Snapshot saved at frame {}", current_frame));
-                        ui.close_menu();
-                    }
-                    let comparing = crate::ui::viewport_state::is_comparing(ctx);
-                    if ui.selectable_label(comparing, "Compare Snapshot").clicked() {
-                        if crate::ui::viewport_state::snap_frame(ctx).is_some() {
-                            crate::ui::viewport_state::toggle_comparing(ctx);
-                        } else {
-                            app.toasts.warning("Take a snapshot first");
-                        }
-                    }
-                });
-            });
-        } else {
-        ui.horizontal(|ui| {
-            ui.style_mut().spacing.item_spacing.x = 4.0;
-            // AE Magnification Ratio Dropdown
-            let mag_val = app.ui_tabs.viewport_mag_ratio;
-            egui::ComboBox::from_id_salt("mag_combo_bottom")
-                .selected_text(if mag_val == 4.0 { "400%" } else if mag_val == 2.0 { "200%" } else if mag_val == 1.0 { "100%" } else if mag_val == 0.5 { "50%" } else if mag_val == 0.25 { "25%" } else { "Fit" })
-                .show_ui(ui, |ui| {
-                    if ui.selectable_label(app.ui_tabs.viewport_mag_ratio == 0.0, "Fit").clicked() { app.ui_tabs.viewport_mag_ratio = 0.0; }
-                    if ui.selectable_label(app.ui_tabs.viewport_mag_ratio == 0.25, "25%").clicked() { app.ui_tabs.viewport_mag_ratio = 0.25; }
-                    if ui.selectable_label(app.ui_tabs.viewport_mag_ratio == 0.5, "50%").clicked() { app.ui_tabs.viewport_mag_ratio = 0.5; }
-                    if ui.selectable_label(app.ui_tabs.viewport_mag_ratio == 1.0, "100%").clicked() { app.ui_tabs.viewport_mag_ratio = 1.0; }
-                    if ui.selectable_label(app.ui_tabs.viewport_mag_ratio == 2.0, "200%").clicked() { app.ui_tabs.viewport_mag_ratio = 2.0; }
-                    if ui.selectable_label(app.ui_tabs.viewport_mag_ratio == 4.0, "400%").clicked() { app.ui_tabs.viewport_mag_ratio = 4.0; }
-                });
-
-            ui.separator();
-            ui.checkbox(&mut app.show_grid, "Grid");
-            ui.checkbox(&mut app.show_guides, "Safe");
-            ui.checkbox(&mut app.show_handles, "Handles");
-
-            ui.separator();
-            // AE Camera View Selector
-            egui::ComboBox::from_id_salt("cam_view_combo_bottom")
-                .selected_text(match app.viewport_cam_view {
-                    0 => "Active Camera",
-                    1 => "Front",
-                    2 => "Left",
-                    3 => "Top",
-                    _ => "Custom View 1",
-                })
-                .show_ui(ui, |ui| {
-                    if ui.selectable_value(&mut app.viewport_cam_view, 0, "Active Camera").clicked() {
-                        app.viewport_mode = ViewportMode::Comp2D;
-                    }
-                    if ui.selectable_value(&mut app.viewport_cam_view, 1, "Front").clicked() {
-                        app.viewport_mode = ViewportMode::Camera3D;
-                        app.camera_orbit = (0.0, 0.0, 1000.0);
-                    }
-                    if ui.selectable_value(&mut app.viewport_cam_view, 2, "Left").clicked() {
-                        app.viewport_mode = ViewportMode::Camera3D;
-                        app.camera_orbit = (-90.0, 0.0, 1000.0);
-                    }
-                    if ui.selectable_value(&mut app.viewport_cam_view, 3, "Top").clicked() {
-                        app.viewport_mode = ViewportMode::Camera3D;
-                        app.camera_orbit = (0.0, -89.0, 1000.0);
-                    }
-                });
-
-            ui.separator();
-            // AE Render Quality / Downsample Resolution
-            egui::ComboBox::from_id_salt("res_combo_bottom")
-                .selected_text(match app.viewport_render_resolution {
-                    0 => "Full",
-                    1 => "Half",
-                    2 => "Third",
-                    _ => "Quarter",
-                })
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut app.viewport_render_resolution, 0, "Full");
-                    ui.selectable_value(&mut app.viewport_render_resolution, 1, "Half");
-                    ui.selectable_value(&mut app.viewport_render_resolution, 2, "Third");
-                    ui.selectable_value(&mut app.viewport_render_resolution, 3, "Quarter");
-                });
-
-            ui.separator();
-            // AE Color Channels
-            egui::ComboBox::from_id_salt("chan_combo_bottom")
-                .selected_text(match app.viewport_color_channel {
-                    0 => "RGB Color",
-                    1 => "Red",
-                    2 => "Green",
-                    3 => "Blue",
-                    _ => "Alpha",
-                })
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut app.viewport_color_channel, 0, "RGB Color");
-                    ui.selectable_value(&mut app.viewport_color_channel, 1, "Red");
-                    ui.selectable_value(&mut app.viewport_color_channel, 2, "Green");
-                    ui.selectable_value(&mut app.viewport_color_channel, 3, "Blue");
-                    ui.selectable_value(&mut app.viewport_color_channel, 4, "Alpha");
-                });
-
-            ui.separator();
-            // AE Snapshot & Fast Previews
-            if crate::ui::custom_widgets::ae_svg_icon_button(
-                ui,
-                "viewport_take_snapshot",
-                crate::ui::icons::SVG_CAMERA,
-                "Take Snapshot (Cmd+F5)",
-                crate::ui::theme::colors::TEXT_SECONDARY,
-            )
-            .clicked()
-            {
-                crate::ui::viewport_state::set_snap_frame(ctx, current_frame);
-                app.toasts.info(format!("Snapshot saved at frame {}", current_frame));
-            }
-            let comparing = crate::ui::viewport_state::is_comparing(ctx);
-            if crate::ui::custom_widgets::ae_svg_icon_button(
-                ui,
-                "viewport_show_snapshot",
-                crate::ui::icons::SVG_EYE_OPEN,
-                "Show Snapshot (F5)",
-                if comparing {
-                    crate::ui::theme::colors::ACCENT_BLUE
-                } else {
-                    crate::ui::theme::colors::TEXT_SECONDARY
-                },
-            )
-            .clicked()
-            {
-                if crate::ui::viewport_state::snap_frame(ctx).is_some() {
-                    crate::ui::viewport_state::toggle_comparing(ctx);
-                } else {
-                    app.toasts.warning("Take a snapshot first");
-                }
-            }
-
-            ui.separator();
-            egui::ComboBox::from_id_salt("fast_preview_combo")
-                .selected_text(match app.viewport_fast_preview {
-                    0 => "Off (Final Quality)",
-                    1 => "Adaptive Resolution",
-                    2 => "Fast Draft",
-                    _ => "Wireframe",
-                })
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut app.viewport_fast_preview, 0, "Off (Final Quality)");
-                    ui.selectable_value(&mut app.viewport_fast_preview, 1, "Adaptive Resolution");
-                    ui.selectable_value(&mut app.viewport_fast_preview, 2, "Fast Draft");
-                    ui.selectable_value(&mut app.viewport_fast_preview, 3, "Wireframe");
-                });
-        });
-        }
-        }
-
         // ── Pen tool commit: turn collected points into a mask on the selected layer ──
         if pen_commit && app.pen_points.len() >= 3 {
             app.begin_drag("Create Pen Mask");
@@ -3728,153 +3409,39 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             app.pen_tangents.clear();
         }
 
-        draw_inline_text_editor(app, ctx, current_frame, origin_x, origin_y, draw_w, draw_h, comp_w, comp_h);
+        draw_inline_text_editor(
+            app,
+            ctx,
+            InlineTextEditorGeometry {
+                current_frame,
+                origin: [origin_x, origin_y],
+                viewport_size: [draw_w, draw_h],
+                composition_size: [comp_w, comp_h],
+            },
+        );
     });
-}
-
-#[allow(float_literal_f32_fallback)]
-#[allow(dead_code)]
-fn draw_target_viewport(app: &mut KagariApp, ctx: &egui::Context) {
-    egui::CentralPanel::default()
-        .frame(egui::Frame::none().fill(egui::Color32::from_rgb(12, 20, 26)))
-        .show(ctx, |ui| {
-            let rect = ui.max_rect();
-            let painter = ui.painter();
-            let border = crate::ui::theme::colors::BORDER_SUBTLE;
-            painter.text(
-                egui::pos2(rect.left() + 14.0, rect.top() + 28.0),
-                egui::Align2::LEFT_CENTER,
-                "Viewer",
-                egui::FontId::proportional(16.0),
-                colors::TEXT_PRIMARY,
-            );
-            for (index, glyph) in ["↖", "✋", "⌕", "□", "✎"].into_iter().enumerate() {
-                painter.text(
-                    egui::pos2(rect.left() + 104.0 + index as f32 * 25.0, rect.top() + 28.0),
-                    egui::Align2::CENTER_CENTER,
-                    glyph,
-                    egui::FontId::proportional(14.0),
-                    if index == 0 {
-                        colors::ACCENT_ORANGE
-                    } else {
-                        colors::TEXT_SECONDARY
-                    },
-                );
-            }
-            painter.text(
-                egui::pos2(rect.right() - 90.0, rect.top() + 28.0),
-                egui::Align2::RIGHT_CENTER,
-                "1080p  ·  50%",
-                egui::FontId::proportional(11.0),
-                colors::TEXT_SECONDARY,
-            );
-            let image_area = egui::vec2(
-                (rect.width() - 30.0).max(80.0),
-                (rect.height() - 135.0).max(80.0),
-            );
-            let image_width = image_area.x.min(image_area.y * 1.7778);
-            let image_height = (image_width / 1.7778).min(image_area.y);
-            let image_rect = egui::Rect::from_center_size(
-                egui::pos2(rect.center().x, rect.top() + 51.0 + image_height * 0.5),
-                egui::vec2(image_width, image_height),
-            );
-            if let Some(texture) = demo_reference_texture(ctx) {
-                painter.image(
-                    texture.id(),
-                    image_rect,
-                    egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-                    egui::Color32::WHITE,
-                );
-            } else {
-                painter.rect_filled(image_rect, 0.0, egui::Color32::from_rgb(22, 34, 44));
-            }
-            painter.rect_stroke(image_rect, 0.0, egui::Stroke::new(1.0, border));
-            let control_y = (image_rect.bottom() + 34.0).min(rect.bottom() - 48.0);
-            painter.text(
-                egui::pos2(rect.left() + 23.0, control_y),
-                egui::Align2::LEFT_CENTER,
-                "00:00:04:12",
-                egui::FontId::proportional(17.0),
-                crate::ui::theme::colors::ACCENT_BRAND,
-            );
-            let compact = rect.width() < 600.0;
-            let control_x = if compact {
-                rect.left() + 133.0
-            } else {
-                rect.left() + (rect.width() * 0.5).max(160.0) - 80.0
-            };
-            let control_step = if compact { 22.0 } else { 42.0 };
-            for (index, glyph) in ["|◀", "◀", "▶", "▶|"].into_iter().enumerate() {
-                painter.text(
-                    egui::pos2(control_x + index as f32 * control_step, control_y),
-                    egui::Align2::CENTER_CENTER,
-                    glyph,
-                    egui::FontId::proportional(if index == 2 { 19.0 } else { 16.0 }),
-                    colors::TEXT_PRIMARY,
-                );
-            }
-            let quality_rect = if compact {
-                egui::Rect::from_min_size(
-                    egui::pos2(rect.right() - 150.0, control_y - 17.0),
-                    egui::vec2(100.0, 34.0),
-                )
-            } else {
-                egui::Rect::from_min_size(
-                    egui::pos2(rect.right() - 257.0, control_y - 17.0),
-                    egui::vec2(101.0, 34.0),
-                )
-            };
-            painter.rect_stroke(quality_rect, 5.0, egui::Stroke::new(1.0, border));
-            painter.text(
-                quality_rect.center(),
-                egui::Align2::CENTER_CENTER,
-                "Full Quality ⌄",
-                egui::FontId::proportional(12.0),
-                colors::TEXT_PRIMARY,
-            );
-            if compact {
-                painter.text(
-                    egui::pos2(rect.right() - 22.0, control_y),
-                    egui::Align2::CENTER_CENTER,
-                    "⛶",
-                    egui::FontId::proportional(18.0),
-                    colors::TEXT_PRIMARY,
-                );
-            } else {
-                for (index, glyph) in ["□", "◎", "⛶"].into_iter().enumerate() {
-                    painter.text(
-                        egui::pos2(rect.right() - 150.0 + index as f32 * 43.0, control_y),
-                        egui::Align2::CENTER_CENTER,
-                        glyph,
-                        egui::FontId::proportional(21.0),
-                        colors::TEXT_PRIMARY,
-                    );
-                }
-            }
-            painter.line_segment(
-                [
-                    egui::pos2(rect.left() + 15.0, control_y + 27.0),
-                    egui::pos2(rect.right() - 15.0, control_y + 27.0),
-                ],
-                egui::Stroke::new(1.0, border),
-            );
-            let _ = app;
-        });
 }
 
 /// Inline source-text editor opened by double-clicking a text layer in the viewport.
 /// Renders as an `egui::Area` positioned exactly over the text layer on the composition canvas.
+struct InlineTextEditorGeometry {
+    current_frame: u32,
+    origin: [f32; 2],
+    viewport_size: [f32; 2],
+    composition_size: [f32; 2],
+}
+
 fn draw_inline_text_editor(
     app: &mut KagariApp,
     ctx: &egui::Context,
-    current_frame: u32,
-    origin_x: f32,
-    origin_y: f32,
-    draw_w: f32,
-    draw_h: f32,
-    comp_w: f32,
-    comp_h: f32,
+    geometry: InlineTextEditorGeometry,
 ) {
+    let InlineTextEditorGeometry {
+        current_frame,
+        origin: [origin_x, origin_y],
+        viewport_size: [draw_w, draw_h],
+        composition_size: [comp_w, comp_h],
+    } = geometry;
     let Some(idx) = app.inline_text_edit_layer else {
         return;
     };
@@ -3993,69 +3560,6 @@ fn draw_inline_text_editor(
         ctx.data_mut(|d| d.remove::<String>(buf_id));
         app.inline_text_edit_layer = None;
     }
-}
-
-/// Douglas-Peucker path simplification for motion sketch recordings.
-fn douglas_peucker(points: &[(u32, [f32; 2])], epsilon: f32) -> Vec<(u32, [f32; 2])> {
-    if points.len() <= 2 {
-        return points.to_vec();
-    }
-    let mut max_dist = 0.0f32;
-    let mut max_idx = 0;
-    let first = points[0].1;
-    let last = points[points.len() - 1].1;
-    for (i, &(_, pt)) in points[1..points.len() - 1].iter().enumerate() {
-        let d = point_to_line_distance(pt, first, last);
-        if d > max_dist {
-            max_dist = d;
-            max_idx = i + 1;
-        }
-    }
-    if max_dist > epsilon {
-        let left = douglas_peucker(&points[..=max_idx], epsilon);
-        let right = douglas_peucker(&points[max_idx..], epsilon);
-        let mut result = left;
-        result.extend_from_slice(&right[1..]);
-        result
-    } else {
-        vec![points[0], points[points.len() - 1]]
-    }
-}
-
-fn point_to_line_distance(pt: [f32; 2], line_start: [f32; 2], line_end: [f32; 2]) -> f32 {
-    let dx = line_end[0] - line_start[0];
-    let dy = line_end[1] - line_start[1];
-    let len_sq = dx * dx + dy * dy;
-    if len_sq < 1e-10 {
-        let ex = pt[0] - line_start[0];
-        let ey = pt[1] - line_start[1];
-        return (ex * ex + ey * ey).sqrt();
-    }
-    let t = ((pt[0] - line_start[0]) * dx + (pt[1] - line_start[1]) * dy) / len_sq;
-    let t = t.clamp(0.0, 1.0);
-    let proj_x = line_start[0] + t * dx;
-    let proj_y = line_start[1] + t * dy;
-    let ex = pt[0] - proj_x;
-    let ey = pt[1] - proj_y;
-    (ex * ex + ey * ey).sqrt()
-}
-
-/// 3-point moving average smooth for motion sketch paths.
-fn smooth_path(points: &[(u32, [f32; 2])]) -> Vec<(u32, [f32; 2])> {
-    if points.len() <= 2 {
-        return points.to_vec();
-    }
-    let mut result = Vec::with_capacity(points.len());
-    result.push(points[0]);
-    for window in points.windows(3) {
-        let avg_x = (window[0].1[0] + window[1].1[0] + window[2].1[0]) / 3.0;
-        let avg_y = (window[0].1[1] + window[1].1[1] + window[2].1[1]) / 3.0;
-        result.push((window[1].0, [avg_x, avg_y]));
-    }
-    if let Some(last) = points.last() {
-        result.push(*last);
-    }
-    result
 }
 
 #[cfg(test)]
@@ -4202,11 +3706,13 @@ mod review_regression_tests {
             },
             30,
         );
-        layer.puppet_pins.push(crate::core::timeline::PuppetPin::new(
-            "pin".to_string(),
-            "Pin 1".to_string(),
-            [160.0, 90.0],
-        ));
+        layer
+            .puppet_pins
+            .push(crate::core::timeline::PuppetPin::new(
+                "pin".to_string(),
+                "Pin 1".to_string(),
+                [160.0, 90.0],
+            ));
         comp.layers.push(layer);
 
         assert!(software_preview_required(&comp, 0));
@@ -4241,16 +3747,14 @@ mod review_regression_tests {
         comp.layers.push(layer);
         assert!(!software_preview_required(&comp, 0));
 
-        comp.layers[0].masks[0].expansion =
-            crate::core::property::Animatable::new_constant(4.0);
+        comp.layers[0].masks[0].expansion = crate::core::property::Animatable::new_constant(4.0);
         assert!(software_preview_required(&comp, 0));
 
         comp.layers[0].masks[0].mode = crate::core::mask::MaskMode::None;
         assert!(!software_preview_required(&comp, 0));
 
         comp.layers[0].masks[0].mode = crate::core::mask::MaskMode::Add;
-        comp.layers[0].masks[0].expansion =
-            crate::core::property::Animatable::new_constant(0.0);
+        comp.layers[0].masks[0].expansion = crate::core::property::Animatable::new_constant(0.0);
         comp.layers[0].masks[0].wiggle =
             Some(crate::core::wiggle_paths::WigglePathsOptions::default());
         assert!(software_preview_required(&comp, 0));
@@ -4331,15 +3835,17 @@ mod review_regression_tests {
         start_roto_segment_job(
             &app,
             &ctx,
-            0,
-            frame,
-            Vec::new(),
-            vec![stroke],
-            RotoBrushSettings {
-                feather_radius: 0.0,
-                ..Default::default()
+            RotoSegmentRequest {
+                layer_index: 0,
+                frame,
+                previous_strokes: Vec::new(),
+                strokes: vec![stroke],
+                settings: RotoBrushSettings {
+                    feather_radius: 0.0,
+                    ..Default::default()
+                },
+                feather: 0.0,
             },
-            0.0,
         )
         .unwrap();
 
@@ -4401,12 +3907,14 @@ mod review_regression_tests {
         start_roto_segment_job(
             &app,
             &ctx,
-            0,
-            frame,
-            Vec::new(),
-            vec![stroke],
-            RotoBrushSettings::default(),
-            3.0,
+            RotoSegmentRequest {
+                layer_index: 0,
+                frame,
+                previous_strokes: Vec::new(),
+                strokes: vec![stroke],
+                settings: RotoBrushSettings::default(),
+                feather: 3.0,
+            },
         )
         .unwrap();
 
@@ -4531,24 +4039,24 @@ mod review_regression_tests {
         start_roto_segment_job(
             &app,
             &ctx,
-            0,
-            1,
-            Vec::new(),
-            vec![stroke],
-            RotoBrushSettings {
-                feather_radius: 0.0,
-                ..Default::default()
+            RotoSegmentRequest {
+                layer_index: 0,
+                frame: 1,
+                previous_strokes: Vec::new(),
+                strokes: vec![stroke],
+                settings: RotoBrushSettings {
+                    feather_radius: 0.0,
+                    ..Default::default()
+                },
+                feather: 0.0,
             },
-            0.0,
         )
         .unwrap();
 
         let started = std::time::Instant::now();
         while ctx
             .data(|data| {
-                data.get_temp::<std::sync::Arc<RotoSegmentJob>>(egui::Id::new(
-                    "roto_segment_job",
-                ))
+                data.get_temp::<std::sync::Arc<RotoSegmentJob>>(egui::Id::new("roto_segment_job"))
             })
             .is_some()
         {
@@ -4561,9 +4069,7 @@ mod review_regression_tests {
         let started = std::time::Instant::now();
         while ctx
             .data(|data| {
-                data.get_temp::<std::sync::Arc<RotoFlowJob>>(egui::Id::new(
-                    "roto_flow_bake_job",
-                ))
+                data.get_temp::<std::sync::Arc<RotoFlowJob>>(egui::Id::new("roto_flow_bake_job"))
             })
             .is_some()
         {
@@ -4584,7 +4090,13 @@ mod review_regression_tests {
         let Animatable::Animated(keyframes) = &matte.path.vertices else {
             panic!("propagated matte should contain per-frame keyframes");
         };
-        assert_eq!(keyframes.iter().map(|keyframe| keyframe.frame).collect::<Vec<_>>(), [0, 1, 2]);
+        assert_eq!(
+            keyframes
+                .iter()
+                .map(|keyframe| keyframe.frame)
+                .collect::<Vec<_>>(),
+            [0, 1, 2]
+        );
     }
 
     #[test]
@@ -4671,8 +4183,9 @@ mod review_regression_tests {
         {
             *stroke_width = 3.0;
         }
-        if let crate::core::timeline::LayerType::Shape { extrusion_depth, .. } =
-            &mut comp.layers[0].layer_type
+        if let crate::core::timeline::LayerType::Shape {
+            extrusion_depth, ..
+        } = &mut comp.layers[0].layer_type
         {
             *extrusion_depth = 0.0;
         }
@@ -4684,8 +4197,9 @@ mod review_regression_tests {
         {
             *stroke_width = 0.0;
         }
-        if let crate::core::timeline::LayerType::Shape { extrusion_depth, .. } =
-            &mut blend_comp.layers[0].layer_type
+        if let crate::core::timeline::LayerType::Shape {
+            extrusion_depth, ..
+        } = &mut blend_comp.layers[0].layer_type
         {
             *extrusion_depth = 0.0;
         }

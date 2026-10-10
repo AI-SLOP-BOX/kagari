@@ -5,15 +5,19 @@
 
 #![allow(dead_code, non_camel_case_types)]
 
-#[repr(C)]
+#[repr(i32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PF_Cmd {
     PF_Cmd_ABOUT = 0,
     PF_Cmd_GLOBAL_SETUP = 1,
     PF_Cmd_PARAMS_SETUP = 2,
-    PF_Cmd_RENDER = 3,
-    PF_Cmd_FRAME_SETUP = 4,
-    PF_Cmd_USER_CHANGED_PARAM = 5,
+    PF_Cmd_FRAME_SETUP = 3,
+    PF_Cmd_RENDER = 4,
+    PF_Cmd_FRAME_SETDOWN = 5,
+    PF_Cmd_USER_CHANGED_PARAM = 6,
+    PF_Cmd_QUERY_DYNAMIC_FLAGS = 7,
+    PF_Cmd_SMART_RENDER = 8,
+    PF_Cmd_SMART_PRE_RENDER = 9,
 }
 
 #[repr(C)]
@@ -55,18 +59,18 @@ pub struct PF_PixelFloat {
     pub b: f32,
 }
 
+pub use super::aegp_sdk_bridge::PF_PixelFormat;
+
 /// Plugin SDK native C-ABI compatible `PF_EffectWorld` structure.
-/// Layout matches VFX compositing SDK struct layout with raw pointer `data`.
+/// Layout matches aegp_sdk_bridge with raw pointer `data` at offset 0.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct PF_EffectWorld {
-    pub format: i32,
     pub data: *mut u8,
-    pub rowbytes: i32,
     pub width: i32,
     pub height: i32,
-    pub origin_x: i32,
-    pub origin_y: i32,
+    pub rowbytes: i32,
+    pub pixel_format: PF_PixelFormat,
 }
 
 unsafe impl Send for PF_EffectWorld {}
@@ -83,13 +87,11 @@ impl SafeEffectWorld {
     pub fn new_rgba8(width: i32, height: i32) -> Self {
         if width <= 0 || height <= 0 || width > (i32::MAX / 4) || height > 65536 {
             let raw = PF_EffectWorld {
-                format: 0, // PF_PixelFormat_ARGB32
                 data: std::ptr::null_mut(),
-                rowbytes: 0,
                 width: width.max(0),
                 height: height.max(0),
-                origin_x: 0,
-                origin_y: 0,
+                rowbytes: 0,
+                pixel_format: PF_PixelFormat::PF_PixelFormat_ARGB32,
             };
             return Self {
                 raw,
@@ -112,13 +114,11 @@ impl SafeEffectWorld {
         };
 
         let raw = PF_EffectWorld {
-            format: 0, // PF_PixelFormat_ARGB32
             data: data_ptr,
-            rowbytes,
             width,
             height,
-            origin_x: 0,
-            origin_y: 0,
+            rowbytes,
+            pixel_format: PF_PixelFormat::PF_PixelFormat_ARGB32,
         };
 
         Self { raw, buffer }

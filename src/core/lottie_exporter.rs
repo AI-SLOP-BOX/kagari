@@ -8,7 +8,7 @@ use crate::core::timeline::{
 use serde_json::{json, Value};
 
 fn color_to_lottie(c: &[f32; 4]) -> Value {
-    json!([c[0], c[1], c[2], 1.0])
+    json!([c[0], c[1], c[2], c[3]])
 }
 
 fn hex_color(c: &[f32; 4]) -> String {
@@ -71,30 +71,32 @@ fn blend_mode_code(bm: &BlendMode) -> i32 {
         BlendMode::Normal => 0,
         BlendMode::Multiply => 1,
         BlendMode::Screen => 2,
-        BlendMode::Overlay | BlendMode::SoftLight | BlendMode::HardLight => 3,
-        BlendMode::Add => 4,
-        BlendMode::Darken
-        | BlendMode::Lighten
-        | BlendMode::Difference
-        | BlendMode::Exclusion
-        | BlendMode::Divide
+        BlendMode::Overlay => 3,
+        BlendMode::Darken => 4,
+        BlendMode::Lighten => 5,
+        BlendMode::ColorDodge => 6,
+        BlendMode::ColorBurn => 7,
+        BlendMode::HardLight => 8,
+        BlendMode::SoftLight => 9,
+        BlendMode::Difference => 10,
+        BlendMode::Exclusion => 11,
+        BlendMode::Hue => 12,
+        BlendMode::Saturation => 13,
+        BlendMode::Color => 14,
+        BlendMode::Luminosity => 15,
+        BlendMode::Add => 16,
+        BlendMode::Divide
         | BlendMode::Subtract
-        | BlendMode::ColorBurn
         | BlendMode::LinearBurn
         | BlendMode::VividLight
-        | BlendMode::ColorDodge
         | BlendMode::LinearDodge
-        | BlendMode::Color
-        | BlendMode::Hue
-        | BlendMode::Saturation
-        | BlendMode::Luminosity
         | BlendMode::StencilAlpha
         | BlendMode::StencilLuma
         | BlendMode::SilhouetteAlpha
         | BlendMode::SilhouetteLuma
         | BlendMode::Behind
         | BlendMode::AlphaAdd
-        | BlendMode::LinearLight => 4,
+        | BlendMode::LinearLight => 0,
     }
 }
 
@@ -160,7 +162,30 @@ fn shape_geometry(st: &ShapeType) -> Value {
 fn merge_dims(w: &Animatable<f32>, h: &Animatable<f32>) -> Animatable<[f32; 2]> {
     match (w, h) {
         (Animatable::Constant(wv), Animatable::Constant(hv)) => Animatable::Constant([*wv, *hv]),
-        _ => Animatable::Animated(Vec::new()),
+        _ => {
+            let mut frames = std::collections::BTreeSet::new();
+            if let Some(keyframes) = w.keyframes() {
+                frames.extend(keyframes.iter().map(|keyframe| keyframe.frame));
+            }
+            if let Some(keyframes) = h.keyframes() {
+                frames.extend(keyframes.iter().map(|keyframe| keyframe.frame));
+            }
+            if frames.is_empty() {
+                return Animatable::Constant([w.evaluate(0), h.evaluate(0)]);
+            }
+            Animatable::Animated(
+                frames
+                    .into_iter()
+                    .map(|frame| {
+                        Keyframe::new(
+                            frame,
+                            [w.evaluate(frame), h.evaluate(frame)],
+                            InterpolationType::Linear,
+                        )
+                    })
+                    .collect(),
+            )
+        }
     }
 }
 
@@ -193,7 +218,10 @@ fn serialize_shapes(
     vec![json!({ "ty": "gr", "it": items, "nm": "Shape", "np": items.len() })]
 }
 
-fn layer_type_code(lt: &LayerType) -> (i32, Value) {
+fn layer_type_code(
+    lt: &LayerType,
+    image_asset_ids: &std::collections::HashMap<String, String>,
+) -> (i32, Value) {
     match lt {
         LayerType::Solid { color } => (
             1,
@@ -203,12 +231,133 @@ fn layer_type_code(lt: &LayerType) -> (i32, Value) {
                     (color[0] * 255.0) as u8, (color[1] * 255.0) as u8, (color[2] * 255.0) as u8),
             }),
         ),
-        LayerType::Image { .. } => (2, json!({ "refId": "asset_0" })),
+        LayerType::Image { path } => (
+            2,
+            json!({ "refId": image_asset_ids.get(path).map(String::as_str).unwrap_or("missing_asset") }),
+        ),
         LayerType::Null => (3, json!({})),
         LayerType::Text { .. } => (5, json!({})),
         LayerType::PreComp { comp_id } => (0, json!({ "refId": comp_id })),
         _ => (4, json!({})), // Shape / others default to shape
     }
+}
+
+fn validate_lottie_comp(comp: &Composition, allow_precomp: bool) -> Result<(), String> {
+    for layer in &comp.layers {
+        if !matches!(
+            layer.blend_mode,
+            BlendMode::Normal
+                | BlendMode::Multiply
+                | BlendMode::Screen
+                | BlendMode::Overlay
+                | BlendMode::Darken
+                | BlendMode::Lighten
+                | BlendMode::ColorDodge
+                | BlendMode::ColorBurn
+                | BlendMode::HardLight
+                | BlendMode::SoftLight
+                | BlendMode::Difference
+                | BlendMode::Exclusion
+                | BlendMode::Hue
+                | BlendMode::Saturation
+                | BlendMode::Color
+                | BlendMode::Luminosity
+                | BlendMode::Add
+        ) {
+            return Err(format!(
+                "Lottie export does not support blend mode {:?} on layer '{}'",
+                layer.blend_mode, layer.name
+            ));
+        }
+        match &layer.layer_type {
+            LayerType::Solid { .. }
+            | LayerType::Image { .. }
+            | LayerType::Null
+            | LayerType::Text { .. }
+            | LayerType::Shape { .. } => {}
+            LayerType::PreComp { .. } if allow_precomp => {}
+            LayerType::PreComp { .. } => {
+                return Err(format!(
+                    "Layer '{}' is a precomposition; export the whole project to preserve it",
+                    layer.name
+                ));
+            }
+            LayerType::Video { .. }
+            | LayerType::Model3D { .. }
+            | LayerType::Audio { .. }
+            | LayerType::AdjustmentLayer
+            | LayerType::Particle { .. } => {
+                return Err(format!(
+                    "Lottie export does not support layer '{}' ({})",
+                    layer.name,
+                    match &layer.layer_type {
+                        LayerType::Video { .. } => "video",
+                        LayerType::Model3D { .. } => "3D model",
+                        LayerType::Audio { .. } => "audio",
+                        LayerType::AdjustmentLayer => "adjustment",
+                        LayerType::Particle { .. } => "particle",
+                        _ => unreachable!(),
+                    }
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn collect_image_assets(
+    compositions: &[&Composition],
+) -> Result<(std::collections::HashMap<String, String>, Vec<Value>), String> {
+    use std::collections::{HashMap, HashSet};
+
+    let mut ids = HashMap::new();
+    let mut seen_paths = HashSet::new();
+    let mut used_ids: HashSet<String> = compositions.iter().map(|comp| comp.id.clone()).collect();
+    let mut assets = Vec::new();
+
+    for composition in compositions {
+        for layer in &composition.layers {
+            let LayerType::Image { path } = &layer.layer_type else {
+                continue;
+            };
+            if !seen_paths.insert(path.clone()) {
+                continue;
+            }
+            let path_ref = std::path::Path::new(path);
+            let (width, height) = image::image_dimensions(path_ref)
+                .map_err(|error| format!("Cannot export image layer '{}': {error}", layer.name))?;
+            let filename = path_ref
+                .file_name()
+                .ok_or_else(|| format!("Image path has no filename: {path}"))?
+                .to_string_lossy()
+                .into_owned();
+            let directory = path_ref
+                .parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+                .map(|parent| {
+                    let mut value = parent.to_string_lossy().into_owned();
+                    if !value.ends_with(std::path::MAIN_SEPARATOR) {
+                        value.push(std::path::MAIN_SEPARATOR);
+                    }
+                    value
+                })
+                .unwrap_or_default();
+            let mut id = format!("kagari_image_{}", assets.len());
+            while !used_ids.insert(id.clone()) {
+                id.push('_');
+            }
+            ids.insert(path.clone(), id.clone());
+            assets.push(json!({
+                "id": id,
+                "w": width,
+                "h": height,
+                "u": directory,
+                "p": filename,
+                "e": 0,
+            }));
+        }
+    }
+    Ok((ids, assets))
 }
 
 /// Lottie matte type code from the app's TrackMatteMode.
@@ -360,8 +509,9 @@ fn serialize_layer(
     comp: &Composition,
     index: usize,
     is_matte_source: bool,
+    image_asset_ids: &std::collections::HashMap<String, String>,
 ) -> Value {
-    let (ty, extra) = layer_type_code(&layer.layer_type);
+    let (ty, extra) = layer_type_code(&layer.layer_type, image_asset_ids);
     let in_frame = layer.in_frame;
     let out_frame = layer
         .out_frame
@@ -445,7 +595,9 @@ fn serialize_layer(
 
 impl LottieExporter {
     /// Serializes a Composition into a valid Lottie JSON string with animated transforms.
-    pub fn export_to_json(comp: &Composition) -> String {
+    pub fn export_to_json(comp: &Composition) -> Result<String, String> {
+        validate_lottie_comp(comp, false)?;
+        let (image_asset_ids, mut assets) = collect_image_assets(&[comp])?;
         let layers: Vec<Value> = comp
             .layers
             .iter()
@@ -456,7 +608,7 @@ impl LottieExporter {
                     .layers
                     .get(i + 1)
                     .is_some_and(|next| !matches!(next.track_matte, TrackMatteMode::None));
-                serialize_layer(layer, comp, i, is_source)
+                serialize_layer(layer, comp, i, is_source, &image_asset_ids)
             })
             .collect();
 
@@ -470,11 +622,11 @@ impl LottieExporter {
             "nm": comp.name,
             "ddd": 0,
             "bg": hex_color(&comp.background_color),
-            "assets": [],
+            "assets": std::mem::take(&mut assets),
             "layers": layers,
         });
 
-        serde_json::to_string_pretty(&lottie_json).unwrap_or_default()
+        serde_json::to_string_pretty(&lottie_json).map_err(|error| error.to_string())
     }
 }
 
@@ -494,7 +646,10 @@ fn flatten_comps(project: &Project) -> Vec<&Composition> {
     out
 }
 
-fn serialize_comp_layers(comp: &Composition) -> Vec<Value> {
+fn serialize_comp_layers(
+    comp: &Composition,
+    image_asset_ids: &std::collections::HashMap<String, String>,
+) -> Vec<Value> {
     comp.layers
         .iter()
         .enumerate()
@@ -503,7 +658,7 @@ fn serialize_comp_layers(comp: &Composition) -> Vec<Value> {
                 .layers
                 .get(i + 1)
                 .is_some_and(|next| !matches!(next.track_matte, TrackMatteMode::None));
-            serialize_layer(layer, comp, i, is_source)
+            serialize_layer(layer, comp, i, is_source, image_asset_ids)
         })
         .collect()
 }
@@ -512,50 +667,58 @@ fn serialize_comp_layers(comp: &Composition) -> Vec<Value> {
 /// (transitively) as bodymovin assets. Precomp layers become `ty:0` slots
 /// pointing at their asset id; unreferenced comps are omitted; missing
 /// references keep their placeholder but emit no asset.
-pub fn export_project_to_json(project: &Project) -> String {
+pub fn export_project_to_json(project: &Project) -> Result<String, String> {
     let Some(root) = project.compositions.get(project.active_composition_idx) else {
-        return json!({ "error": "no active composition" }).to_string();
+        return Err("No active composition to export".into());
     };
 
     let all = flatten_comps(project);
-    let mut emitted: Vec<String> = vec![root.id.clone()];
-    let mut assets: Vec<Value> = Vec::new();
-
-    let mut queue: Vec<String> = root
-        .layers
+    let compositions_by_id = all
         .iter()
-        .filter_map(|l| match &l.layer_type {
-            LayerType::PreComp { comp_id } => Some(comp_id.clone()),
-            _ => None,
-        })
-        .collect();
-
-    while let Some(id) = queue.pop() {
-        if emitted.iter().any(|e| e == &id) {
+        .map(|composition| (composition.id.as_str(), *composition))
+        .collect::<std::collections::HashMap<_, _>>();
+    let mut reachable_compositions = Vec::new();
+    let mut pending = vec![root];
+    let mut visited = std::collections::HashSet::new();
+    while let Some(composition) = pending.pop() {
+        if !visited.insert(composition.id.as_str()) {
             continue;
         }
-        if let Some(c) = all.iter().find(|c| c.id == id) {
-            emitted.push(id.clone());
-            assets.push(json!({
-                "id": c.id,
-                "nm": c.name,
-                "fr": c.fps,
-                "ip": 0,
-                "op": c.duration_frames,
-                "w": c.width,
-                "h": c.height,
-                "layers": serialize_comp_layers(c),
-            }));
-            for l in &c.layers {
-                if let LayerType::PreComp { comp_id } = &l.layer_type {
-                    queue.push(comp_id.clone());
+        reachable_compositions.push(composition);
+        for layer in &composition.layers {
+            if let LayerType::PreComp { comp_id } = &layer.layer_type {
+                if let Some(child) = compositions_by_id.get(comp_id.as_str()) {
+                    pending.push(*child);
                 }
             }
         }
     }
 
+    let (image_asset_ids, image_assets) = collect_image_assets(&reachable_compositions)?;
+    for composition in &reachable_compositions {
+        validate_lottie_comp(composition, true)?;
+    }
+    let precomp_assets = reachable_compositions
+        .iter()
+        .filter(|composition| composition.id.as_str() != root.id.as_str())
+        .map(|composition| {
+            json!({
+                "id": composition.id,
+                "nm": composition.name,
+                "fr": composition.fps,
+                "ip": 0,
+                "op": composition.duration_frames,
+                "w": composition.width,
+                "h": composition.height,
+                "layers": serialize_comp_layers(composition, &image_asset_ids),
+            })
+        })
+        .collect::<Vec<_>>();
+
     // Root layers reuse the same serializer as assets.
-    let layers = serialize_comp_layers(root);
+    let layers = serialize_comp_layers(root, &image_asset_ids);
+    let mut assets = image_assets;
+    assets.extend(precomp_assets);
     let lottie_json = json!({
         "v": "5.7.4",
         "fr": root.fps,
@@ -569,7 +732,7 @@ pub fn export_project_to_json(project: &Project) -> String {
         "assets": assets,
         "layers": layers,
     });
-    serde_json::to_string_pretty(&lottie_json).unwrap_or_default()
+    serde_json::to_string_pretty(&lottie_json).map_err(|error| error.to_string())
 }
 
 // ─────────────────────── Lottie / Bodymovin Import ───────────────────────
@@ -1187,10 +1350,31 @@ mod tests {
     #[test]
     fn test_lottie_export() {
         let comp = Composition::new("c1".into(), "TestComp".into(), 1920, 1080, 30, 300);
-        let json_str = LottieExporter::export_to_json(&comp);
+        let json_str = LottieExporter::export_to_json(&comp).expect("export succeeds");
 
         assert!(json_str.contains("\"v\": \"5.7.4\""));
         assert!(json_str.contains("\"TestComp\""));
+    }
+
+    #[test]
+    fn test_lottie_shape_colors_keep_alpha_and_animated_dimensions() {
+        let exported_color = color_to_lottie(&[0.1, 0.2, 0.3, 0.4]);
+        let exported_color = exported_color.as_array().expect("RGBA array");
+        for (actual, expected) in exported_color.iter().zip([0.1, 0.2, 0.3, 0.4]) {
+            assert!((actual.as_f64().unwrap() - expected).abs() < 1e-6);
+        }
+
+        let width = Animatable::new_animated(vec![
+            Keyframe::new(0, 10.0, InterpolationType::Linear),
+            Keyframe::new(12, 30.0, InterpolationType::Linear),
+        ]);
+        let height = Animatable::new_constant(20.0);
+        let Animatable::Animated(keyframes) = merge_dims(&width, &height) else {
+            panic!("one animated axis should produce animated dimensions");
+        };
+        assert_eq!(keyframes.len(), 2);
+        assert_eq!(keyframes[0].value, [10.0, 20.0]);
+        assert_eq!(keyframes[1].value, [30.0, 20.0]);
     }
 
     #[test]
@@ -1210,7 +1394,7 @@ mod tests {
         ]);
         comp.layers.push(l);
 
-        let json_str = LottieExporter::export_to_json(&comp);
+        let json_str = LottieExporter::export_to_json(&comp).expect("export succeeds");
         let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
         let layer = &v["layers"][0];
         assert_eq!(layer["ty"], 1, "solid layer type");
@@ -1246,7 +1430,9 @@ mod tests {
         comp.layers.push(parent);
         comp.layers.push(child);
 
-        let v: Value = serde_json::from_str(&LottieExporter::export_to_json(&comp)).unwrap();
+        let v: Value =
+            serde_json::from_str(&LottieExporter::export_to_json(&comp).expect("export succeeds"))
+                .unwrap();
         assert_eq!(v["layers"][0]["ty"], 3, "null type");
         assert_eq!(v["layers"][1]["ty"], 5, "text type");
         assert_eq!(v["layers"][1]["parent"], 1, "parent mapped to index");
@@ -1327,7 +1513,9 @@ mod tests {
             30,
         ));
 
-        let v: Value = serde_json::from_str(&LottieExporter::export_to_json(&comp)).unwrap();
+        let v: Value =
+            serde_json::from_str(&LottieExporter::export_to_json(&comp).expect("export succeeds"))
+                .unwrap();
 
         let circle = &v["layers"][0]["shapes"][0];
         assert_eq!(circle["ty"], "gr");
@@ -1362,7 +1550,9 @@ mod tests {
     fn test_lottie_background_color() {
         let mut comp = Composition::new("c".into(), "BG".into(), 100, 100, 30, 30);
         comp.background_color = [0.05, 0.05, 0.08, 1.0];
-        let v: Value = serde_json::from_str(&LottieExporter::export_to_json(&comp)).unwrap();
+        let v: Value =
+            serde_json::from_str(&LottieExporter::export_to_json(&comp).expect("export succeeds"))
+                .unwrap();
         assert_eq!(v["bg"], "#0d0d14", "background as hex string");
     }
 
@@ -1387,7 +1577,9 @@ mod tests {
             60,
         ));
 
-        let v: Value = serde_json::from_str(&LottieExporter::export_to_json(&comp)).unwrap();
+        let v: Value =
+            serde_json::from_str(&LottieExporter::export_to_json(&comp).expect("export succeeds"))
+                .unwrap();
         let doc = &v["layers"][0]["t"];
         assert_eq!(
             doc["d"]["k"][0]["s"]["t"], "Hello Lottie",
@@ -1415,7 +1607,9 @@ mod tests {
             LayerType::Solid { color: [1.0; 4] },
             10,
         ));
-        let v2: Value = serde_json::from_str(&LottieExporter::export_to_json(&plain)).unwrap();
+        let v2: Value =
+            serde_json::from_str(&LottieExporter::export_to_json(&plain).expect("export succeeds"))
+                .unwrap();
         assert!(v2["layers"][0].get("t").is_none());
     }
 
@@ -1438,7 +1632,9 @@ mod tests {
         consumer.track_matte = TrackMatteMode::AlphaMatte;
         comp.layers.push(consumer);
 
-        let v: Value = serde_json::from_str(&LottieExporter::export_to_json(&comp)).unwrap();
+        let v: Value =
+            serde_json::from_str(&LottieExporter::export_to_json(&comp).expect("export succeeds"))
+                .unwrap();
         assert_eq!(v["layers"][0]["td"], 1, "source layer flagged td=1");
         assert_eq!(v["layers"][1]["tt"], 1, "alpha matte → tt=1");
 
@@ -1450,7 +1646,9 @@ mod tests {
         let mut c2 = Layer::new("dst".into(), "C".into(), LayerType::Null, 30);
         c2.track_matte = TrackMatteMode::LumaMatteInverted;
         comp2.layers.push(c2);
-        let v2: Value = serde_json::from_str(&LottieExporter::export_to_json(&comp2)).unwrap();
+        let v2: Value =
+            serde_json::from_str(&LottieExporter::export_to_json(&comp2).expect("export succeeds"))
+                .unwrap();
         assert_eq!(v2["layers"][0]["td"], 1);
         assert_eq!(v2["layers"][1]["tt"], 4);
 
@@ -1462,7 +1660,9 @@ mod tests {
         comp3
             .layers
             .push(Layer::new("b".into(), "B".into(), LayerType::Null, 30));
-        let v3: Value = serde_json::from_str(&LottieExporter::export_to_json(&comp3)).unwrap();
+        let v3: Value =
+            serde_json::from_str(&LottieExporter::export_to_json(&comp3).expect("export succeeds"))
+                .unwrap();
         assert!(v3["layers"][0].get("td").is_none());
         assert!(v3["layers"][1].get("tt").is_none());
     }
@@ -1491,7 +1691,9 @@ mod tests {
         });
         comp.layers.push(layer);
 
-        let v: Value = serde_json::from_str(&LottieExporter::export_to_json(&comp)).unwrap();
+        let v: Value =
+            serde_json::from_str(&LottieExporter::export_to_json(&comp).expect("export succeeds"))
+                .unwrap();
         assert_eq!(v["layers"][0]["hasMask"], true);
         let m = &v["layers"][0]["masksProperties"][0];
         assert_eq!(m["nm"], "Window");
@@ -1532,7 +1734,9 @@ mod tests {
         layer.masks.push(disabled);
         comp.layers.push(layer);
 
-        let v: Value = serde_json::from_str(&LottieExporter::export_to_json(&comp)).unwrap();
+        let v: Value =
+            serde_json::from_str(&LottieExporter::export_to_json(&comp).expect("export succeeds"))
+                .unwrap();
         let props = &v["layers"][0]["masksProperties"];
         assert_eq!(props.as_array().unwrap().len(), 4);
         assert_eq!(props[0]["mode"], "s");
@@ -1575,7 +1779,9 @@ mod tests {
         });
         comp.layers.push(layer);
 
-        let v: Value = serde_json::from_str(&LottieExporter::export_to_json(&comp)).unwrap();
+        let v: Value =
+            serde_json::from_str(&LottieExporter::export_to_json(&comp).expect("export succeeds"))
+                .unwrap();
         let pt = &v["layers"][0]["masksProperties"][0]["pt"];
         assert_eq!(pt["a"], 1, "animated vertices → shape keyframes");
         let kfs = pt["k"].as_array().unwrap();
@@ -1701,7 +1907,7 @@ mod tests {
         comp.layers.push(txt);
         comp.layers.push(shape);
 
-        let exported = LottieExporter::export_to_json(&comp);
+        let exported = LottieExporter::export_to_json(&comp).expect("export succeeds");
         let back = LottieImporter::import_from_str(&exported).expect("roundtrip parses");
         assert_eq!(back.layers.len(), 3);
         assert_eq!(back.fps, 24);
@@ -1794,7 +2000,9 @@ mod tests {
             use_gpu_compute: false,
         };
 
-        let v: Value = serde_json::from_str(&export_project_to_json(&project)).unwrap();
+        let v: Value =
+            serde_json::from_str(&export_project_to_json(&project).expect("export succeeds"))
+                .unwrap();
         // Root precomp slot.
         let root_pc = &v["layers"][0];
         assert_eq!(root_pc["ty"], 0, "precomp layer type");
@@ -1834,7 +2042,8 @@ mod tests {
             assets: Vec::new(),
             use_gpu_compute: false,
         };
-        let v2: Value = serde_json::from_str(&export_project_to_json(&p2)).unwrap();
+        let v2: Value =
+            serde_json::from_str(&export_project_to_json(&p2).expect("export succeeds")).unwrap();
         assert_eq!(v2["layers"][0]["ty"], 0);
         assert_eq!(v2["assets"].as_array().unwrap().len(), 0);
 
@@ -1845,7 +2054,7 @@ mod tests {
             assets: Vec::new(),
             use_gpu_compute: false,
         };
-        assert!(export_project_to_json(&empty).contains("error"));
+        assert!(export_project_to_json(&empty).is_err());
     }
 
     #[test]
@@ -1898,7 +2107,7 @@ mod tests {
             use_gpu_compute: false,
         };
 
-        let exported = export_project_to_json(&project);
+        let exported = export_project_to_json(&project).expect("export succeeds");
         let back =
             LottieImporter::import_project_from_str(&exported).expect("project roundtrip parses");
         // Root + B + C all present; root is active.

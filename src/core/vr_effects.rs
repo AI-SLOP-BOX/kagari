@@ -83,9 +83,9 @@ pub fn apply_vr_horizon(
             let src_v = (((src_lat / std::f32::consts::PI + 0.5).clamp(0.0, 1.0)) * h_f) as usize;
 
             let dst_idx = ((y * width + x) * 4) as usize;
-            let src_idx = ((src_v.min(height as usize - 1) * width as usize
+            let src_idx = (src_v.min(height as usize - 1) * width as usize
                 + src_u.min(width as usize - 1))
-                * 4) as usize;
+                * 4;
 
             pixels[dst_idx..dst_idx + 4].copy_from_slice(&src[src_idx..src_idx + 4]);
         }
@@ -175,7 +175,7 @@ mod tests {
     fn test_vr_blur_preserves_bounds_and_wraps_seam() {
         let mut pixels = vec![0u8; 32 * 16 * 4];
         // Center white spot at boundary seam (x=0, y=8)
-        let idx = (8 * 32 + 0) * 4;
+        let idx = 8 * 32 * 4;
         pixels[idx] = 255;
         pixels[idx + 1] = 255;
         pixels[idx + 2] = 255;

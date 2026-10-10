@@ -1,9 +1,10 @@
-use crate::ui::theme::colors;
+use crate::ui::kui::{self, ButtonKind};
 use crate::KagariApp;
 use eframe::egui;
 
 use crate::core::keyframe::{InterpolationType, Keyframe};
 use crate::core::property::Animatable;
+use crate::ui::localization::{tr, tr_format};
 
 fn rescale_track<T: Clone>(track: &mut Animatable<T>, in_frame: u32, factor: f32) {
     if let Animatable::Animated(kfs) = track {
@@ -16,8 +17,8 @@ fn rescale_track<T: Clone>(track: &mut Animatable<T>, in_frame: u32, factor: f32
 }
 
 pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
-    ui.heading("Time Stretch & Time Remapping");
-    ui.separator();
+    kui::section(ui, "Time Stretch & Time Remapping");
+    kui::separator(ui);
 
     let layer_info = if let Some(idx) = app.selection.selected_layer_idx {
         let comp = app.history.current().active_composition();
@@ -36,12 +37,11 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     };
 
     if let Some((idx, layer_name, in_frame, out_frame)) = layer_info {
-        ui.label(format!("Selected Layer: {}", layer_name));
+        kui::secondary(ui, tr_format("Selected Layer: {}", &[&layer_name]));
 
-        ui.add_space(4.0);
-        if ui
-            .button("Enable Time Remapping (Cmd+Alt+T)")
-            .on_hover_text("Adds Time Remap keyframe track for speed control")
+        ui.add_space(kui::space::XS);
+        if kui::button(ui, "Enable Time Remapping (Cmd+Alt+T)", ButtonKind::Accent)
+            .on_hover_text(tr("Adds Time Remap keyframe track for speed control"))
             .clicked()
         {
             let mut temp_proj = app.history.current().clone();
@@ -54,14 +54,13 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                 ]));
                 app.commit_project(temp_proj);
                 app.toasts
-                    .info(format!("Enabled Time Remapping on {}", layer_name));
+                    .info(tr_format("Enabled Time Remapping on {}", &[&layer_name]));
             }
         }
 
         ui.horizontal(|ui| {
-            if ui
-                .button("Freeze Frame at Playhead")
-                .on_hover_text("Locks layer playback to the current frame")
+            if kui::button(ui, "Freeze Frame at Playhead", ButtonKind::Default)
+                .on_hover_text(tr("Locks layer playback to the current frame"))
                 .clicked()
             {
                 let mut temp_proj = app.history.current().clone();
@@ -70,15 +69,14 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                     let cur_f = app.playback.current_frame.saturating_sub(in_frame) as f32;
                     comp_mut.layers[idx].time_remap = Some(Animatable::new_constant(cur_f));
                     app.commit_project(temp_proj);
-                    app.toasts.info(format!(
+                    app.toasts.info(tr_format(
                         "Froze {} at frame {}",
-                        layer_name, app.playback.current_frame
+                        &[&layer_name, &app.playback.current_frame.to_string()],
                     ));
                 }
             }
-            if ui
-                .button("⏪ Reverse Layer Time")
-                .on_hover_text("Plays the layer backwards")
+            if kui::button(ui, "⏪ Reverse Layer Time", ButtonKind::Default)
+                .on_hover_text(tr("Plays the layer backwards"))
                 .clicked()
             {
                 let mut temp_proj = app.history.current().clone();
@@ -91,107 +89,85 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                     ]));
                     app.commit_project(temp_proj);
                     app.toasts
-                        .info(format!("Reversed playback on {}", layer_name));
+                        .info(tr_format("Reversed playback on {}", &[&layer_name]));
                 }
             }
         });
 
         // ── Loop: bake repeating time-remap keyframes over the layer duration ──
-        ui.add_space(6.0);
-        ui.label(
-            egui::RichText::new("Auto Loop (bakes time-remap keys)")
-                .small()
-                .strong()
-                .color(colors::ACCENT_CYAN),
-        );
+        ui.add_space(kui::space::SM);
+        kui::section_title(ui, "Auto Loop (bakes time-remap keys)");
         let comp_dur = app.history.current().active_composition().duration_frames;
-        ui.horizontal(|ui| {
-            for (label, mode, tip) in [
+        ui.horizontal_wrapped(|ui| {
+            for (mode, tip) in [
                 (
-                    "Loop Cycle",
-                    0usize,
-                    "Repeat source forward continuously",
+                    crate::core::time_remap::LoopMode::Cycle,
+                    tr("Repeat source forward continuously"),
                 ),
-                ("Loop PingPong", 1usize, "Alternate forward / reverse"),
+                (
+                    crate::core::time_remap::LoopMode::PingPong,
+                    tr("Alternate forward / reverse"),
+                ),
             ] {
-                if ui.button(label).on_hover_text(tip).clicked() {
-                    let mut temp_proj = app.history.current().clone();
-                    let comp_mut = temp_proj.active_composition_mut();
-                    if idx < comp_mut.layers.len() {
-                        let src_dur = (out_frame - in_frame).max(1) as f32;
-                        let mut kfs: Vec<Keyframe<f32>> = Vec::new();
-                        let mut t = in_frame as f32;
-                        while t < comp_dur as f32 {
-                            match mode {
-                                0 => {
-                                    kfs.push(Keyframe::new(
-                                        t as u32,
-                                        0.0,
-                                        InterpolationType::Linear,
-                                    ));
-                                    kfs.push(Keyframe::new(
-                                        (t + src_dur - 1.0) as u32,
-                                        src_dur - 1.0,
-                                        InterpolationType::Linear,
-                                    ));
-                                }
-                                _ => {
-                                    kfs.push(Keyframe::new(
-                                        t as u32,
-                                        0.0,
-                                        InterpolationType::Linear,
-                                    ));
-                                    kfs.push(Keyframe::new(
-                                        (t + src_dur - 1.0) as u32,
-                                        src_dur - 1.0,
-                                        InterpolationType::Linear,
-                                    ));
-                                    let back_start = t + src_dur;
-                                    kfs.push(Keyframe::new(
-                                        back_start as u32,
-                                        src_dur - 1.0,
-                                        InterpolationType::Linear,
-                                    ));
-                                    kfs.push(Keyframe::new(
-                                        (back_start + src_dur - 1.0) as u32,
-                                        0.0,
-                                        InterpolationType::Linear,
-                                    ));
-                                }
+                let button_label = if mode == crate::core::time_remap::LoopMode::Cycle {
+                    "Loop Cycle"
+                } else {
+                    "Loop PingPong"
+                };
+                if kui::button(ui, button_label, ButtonKind::Default)
+                    .on_hover_text(tip)
+                    .clicked()
+                {
+                    match crate::core::time_remap::loop_keyframes(
+                        in_frame, out_frame, comp_dur, mode,
+                    ) {
+                        Ok(kfs) => {
+                            let mut temp_proj = app.history.current().clone();
+                            let comp_mut = temp_proj.active_composition_mut();
+                            if idx < comp_mut.layers.len() {
+                                comp_mut.layers[idx].time_remap = Some(Animatable::Animated(kfs));
+                                app.commit_project(temp_proj);
+                                app.toasts.info(tr_format(
+                                    "Baked {} loop onto {}",
+                                    &[&tr(mode.label()), &layer_name],
+                                ));
                             }
-                            t += src_dur * if mode == 0 { 1.0 } else { 2.0 };
                         }
-                        comp_mut.layers[idx].time_remap = Some(Animatable::Animated(kfs));
-                        app.commit_project(temp_proj);
-                        app.toasts.info(format!(
-                            "Baked {} loop onto {}",
-                            if mode == 0 { "cycle" } else { "pingpong" },
-                            layer_name
-                        ));
+                        Err(error) => app.toasts.error(localized_loop_error(&error)),
                     }
                 }
             }
         });
 
-        ui.add_space(8.0);
-        ui.separator();
+        ui.add_space(kui::space::SM);
+        kui::separator(ui);
 
         // ── Time Stretch: scales duration AND all keyframe times around the In point ──
         let stretch_id = egui::Id::new(format!("ae_time_stretch_{}", idx));
         let mut stretch_factor: f32 = ui
             .ctx()
             .data_mut(|d| *d.get_temp_mut_or_insert_with(stretch_id, || 100.0));
-        ui.horizontal(|ui| {
-            ui.label("Stretch Factor:");
-            ui.add(
-                egui::DragValue::new(&mut stretch_factor)
-                    .range(1.0..=1000.0)
-                    .suffix(" %")
-                    .speed(1.0),
-            );
-            if ui
-                .button("Apply Stretch")
-                .on_hover_text("200% = half speed (duration doubles), 50% = double speed")
+        let stretch_label = tr("Stretch Factor:");
+        let stretch_grid = kui::PropertyGrid::new(ui, &[&stretch_label]);
+        if stretch_grid
+            .row(ui, &stretch_label, |ui| {
+                ui.add(
+                    kui::drag(&mut stretch_factor)
+                        .range(1.0..=1000.0)
+                        .unit(" %")
+                        .speed(1.0),
+                )
+            })
+            .changed()
+        {
+            ui.ctx()
+                .data_mut(|data| data.insert_temp(stretch_id, stretch_factor));
+        }
+        ui.horizontal_wrapped(|ui| {
+            if kui::button(ui, "Apply Stretch", ButtonKind::Accent)
+                .on_hover_text(tr(
+                    "200% = half speed (duration doubles), 50% = double speed",
+                ))
                 .clicked()
             {
                 let factor = (stretch_factor / 100.0).max(0.01);
@@ -213,77 +189,69 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                         rescale_track(remap, in_f, factor);
                     }
                     app.commit_project(temp_proj);
-                    app.toasts.info(format!(
-                        "Stretched {} to {:.0}% ({} → {} frames)",
-                        layer_name, stretch_factor, span, new_span
+                    app.toasts.info(tr_format(
+                        "Stretched {} to {}% ({} → {} frames)",
+                        &[
+                            &layer_name,
+                            &format!("{stretch_factor:.0}"),
+                            &span.to_string(),
+                            &new_span.to_string(),
+                        ],
                     ));
                 }
             }
         });
-        ui.small(
-            egui::RichText::new("Keyframe times on Position / Scale / Rotation / Opacity / Anchor / Time Remap are rescaled relative to the layer In point.")
-                .color(colors::TEXT_MUTED),
-        );
+        kui::caption(ui, "Keyframe times on Position / Scale / Rotation / Opacity / Anchor / Time Remap are rescaled relative to the layer In point.");
 
-        ui.add_space(6.0);
-        ui.label("Frame Blending Mode:");
+        ui.add_space(kui::space::SM);
         let blend_id = egui::Id::new("ae_frame_blending_mode");
         let mut blend_idx = ui
             .ctx()
             .data_mut(|d| *d.get_temp_mut_or_insert_with(blend_id, || 0));
+        let blend_label = tr("Frame Blending Mode:");
+        let blend_grid = kui::PropertyGrid::new(ui, &[&blend_label]);
+        if blend_grid.row(ui, &blend_label, |ui| {
+            kui::combo(
+                ui,
+                blend_id,
+                &mut blend_idx,
+                &[(0, "Off"), (1, "Frame Mix"), (2, "Pixel Motion")],
+            )
+        }) {
+            ui.ctx()
+                .data_mut(|data| data.insert_temp(blend_id, blend_idx));
+        }
 
-        ui.horizontal(|ui| {
-            if ui.selectable_value(&mut blend_idx, 0, "Off").clicked() {
-                ui.ctx().data_mut(|d| d.insert_temp(blend_id, blend_idx));
-            }
-            if ui
-                .selectable_value(&mut blend_idx, 1, "Frame Mix")
-                .clicked()
-            {
-                ui.ctx().data_mut(|d| d.insert_temp(blend_id, blend_idx));
-            }
-            if ui
-                .selectable_value(&mut blend_idx, 2, "Pixel Motion")
-                .clicked()
-            {
-                ui.ctx().data_mut(|d| d.insert_temp(blend_id, blend_idx));
-            }
-        });
-
-        ui.add_space(6.0);
+        ui.add_space(kui::space::XS);
         let mut preserve_fps = ui.ctx().data(|d| {
             d.get_temp::<bool>(egui::Id::new("ae_preserve_fps"))
                 .unwrap_or(true)
         });
-        if ui
-            .checkbox(
-                &mut preserve_fps,
-                "Preserve Frame Rate when nested or in render queue",
-            )
-            .changed()
+        if kui::toggle(
+            ui,
+            &mut preserve_fps,
+            "Preserve Frame Rate when nested or in render queue",
+        )
+        .changed()
         {
             ui.ctx()
                 .data_mut(|d| d.insert_temp(egui::Id::new("ae_preserve_fps"), preserve_fps));
             crate::core::frame_cache::bump_version();
         }
 
-        ui.add_space(6.0);
-        ui.separator();
-        ui.label(
-            egui::RichText::new("Audio Time-Stretch & Pitch Correction")
-                .strong()
-                .color(colors::ACCENT_CYAN),
-        );
+        ui.add_space(kui::space::SM);
+        kui::separator(ui);
+        kui::section_title(ui, "Audio Time-Stretch & Pitch Correction");
         let mut preserve_pitch = ui.ctx().data(|d| {
             d.get_temp::<bool>(egui::Id::new("ae_audio_preserve_pitch"))
                 .unwrap_or(true)
         });
-        if ui
-            .checkbox(
-                &mut preserve_pitch,
-                "Preserve Audio Pitch (WSOLA Timestretch)",
-            )
-            .changed()
+        if kui::toggle(
+            ui,
+            &mut preserve_pitch,
+            "Preserve Audio Pitch (WSOLA Timestretch)",
+        )
+        .changed()
         {
             ui.ctx().data_mut(|d| {
                 d.insert_temp(egui::Id::new("ae_audio_preserve_pitch"), preserve_pitch)
@@ -294,24 +262,50 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
             d.get_temp::<f32>(egui::Id::new("ae_audio_pitch_shift"))
                 .unwrap_or(0.0)
         });
-        ui.horizontal(|ui| {
-            ui.label("Pitch Shift:");
-            if ui
-                .add(
-                    egui::DragValue::new(&mut pitch_semitones)
+        let pitch_label = tr("Pitch Shift:");
+        let pitch_grid = kui::PropertyGrid::new(ui, &[&pitch_label]);
+        if pitch_grid
+            .row(ui, &pitch_label, |ui| {
+                ui.add(
+                    kui::drag(&mut pitch_semitones)
                         .range(-24.0..=24.0)
                         .speed(0.5)
-                        .suffix(" st"),
+                        .unit(" st"),
                 )
-                .changed()
-            {
-                ui.ctx().data_mut(|d| {
-                    d.insert_temp(egui::Id::new("ae_audio_pitch_shift"), pitch_semitones)
-                });
-                crate::core::frame_cache::bump_version();
-            }
-        });
+            })
+            .changed()
+        {
+            ui.ctx().data_mut(|d| {
+                d.insert_temp(egui::Id::new("ae_audio_pitch_shift"), pitch_semitones)
+            });
+            crate::core::frame_cache::bump_version();
+        }
     } else {
-        ui.weak("Select a layer to adjust time stretch & remapping.");
+        kui::empty_state(
+            ui,
+            "Select a layer to adjust time stretch & remapping.",
+            72.0,
+        );
     }
+}
+
+fn localized_loop_error(error: &str) -> String {
+    if error == "The selected layer starts after the composition ends." {
+        return tr(error);
+    }
+    if let Some((count, _)) = error
+        .strip_prefix("Loop would create ")
+        .and_then(|message| message.split_once(" keyframes; the limit is "))
+    {
+        if let Some((limit, _)) = error
+            .split_once(" keyframes; the limit is ")
+            .and_then(|(_, rest)| rest.split_once(". Increase the source duration"))
+        {
+            return tr_format(
+                "Loop would create {} keyframes; limit is {}. Increase source duration or shorten the composition.",
+                &[count, limit],
+            );
+        }
+    }
+    tr(error)
 }

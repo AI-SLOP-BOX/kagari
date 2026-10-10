@@ -1,4 +1,5 @@
 use crate::core::proxy::ProxyResolution;
+use crate::ui::localization::tr;
 use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
@@ -15,7 +16,7 @@ pub fn draw_proxy_controls(app: &mut KagariApp, ui: &mut egui::Ui) {
 
     ui.horizontal(|ui| {
         ui.label(
-            egui::RichText::new("Proxy")
+            egui::RichText::new(tr("Proxy"))
                 .small()
                 .color(colors::TEXT_PRIMARY),
         );
@@ -32,7 +33,7 @@ pub fn draw_proxy_controls(app: &mut KagariApp, ui: &mut egui::Ui) {
             )
         };
 
-        if btn(ui, "Full", ProxyResolution::Full).clicked() {
+        if btn(ui, &tr("Full"), ProxyResolution::Full).clicked() {
             app.modify_project(|project| {
                 project
                     .active_composition_mut()
@@ -40,7 +41,7 @@ pub fn draw_proxy_controls(app: &mut KagariApp, ui: &mut egui::Ui) {
                     .global_resolution = ProxyResolution::Full;
             });
         }
-        if btn(ui, "Half", ProxyResolution::Half).clicked() {
+        if btn(ui, &tr("Half"), ProxyResolution::Half).clicked() {
             app.modify_project(|project| {
                 project
                     .active_composition_mut()
@@ -71,9 +72,9 @@ pub fn draw_proxy_controls(app: &mut KagariApp, ui: &mut egui::Ui) {
             .selectable_label(
                 active_in_preview,
                 egui::RichText::new(if active_in_preview {
-                    "Proxy ON"
+                    tr("Proxy ON")
                 } else {
-                    "Proxy OFF"
+                    tr("Proxy OFF")
                 })
                 .small()
                 .color(if active_in_preview {
@@ -99,7 +100,7 @@ pub fn draw_proxy_controls(app: &mut KagariApp, ui: &mut egui::Ui) {
         });
         if ui
             .selectable_label(mfr_enabled, "MFR")
-            .on_hover_text("Multi-Frame Rendering (Rayon CPU Parallelism)")
+            .on_hover_text(tr("Multi-Frame Rendering (Rayon CPU Parallelism)"))
             .clicked()
         {
             mfr_enabled = !mfr_enabled;
@@ -108,12 +109,12 @@ pub fn draw_proxy_controls(app: &mut KagariApp, ui: &mut egui::Ui) {
         }
 
         if ui
-            .small_button("Purge RAM")
-            .on_hover_text("Purge all RAM Preview Frame Cache")
+            .small_button(tr("Purge RAM"))
+            .on_hover_text(tr("Purge all RAM Preview Frame Cache"))
             .clicked()
         {
             crate::core::frame_cache::bump_version();
-            app.toasts.info("RAM Preview Cache purged");
+            app.toasts.info(tr("RAM Preview Cache purged"));
         }
     });
 }
@@ -131,7 +132,7 @@ pub fn draw_layer_proxy(app: &mut KagariApp, ui: &mut egui::Ui, layer_idx: usize
 
     ui.horizontal(|ui| {
         ui.label(
-            egui::RichText::new("Proxy")
+            egui::RichText::new(tr("Proxy"))
                 .small()
                 .color(colors::TEXT_MUTED),
         );

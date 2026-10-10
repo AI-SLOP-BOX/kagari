@@ -481,7 +481,7 @@ pub(crate) fn render_frame_to_pixels_filtered(
         )
     };
     let mut buffer = vec![0u8; size];
-    for p in buffer.chunks_exact_mut(4) {
+    for p in buffer.as_chunks_mut::<4>().0 {
         p[0] = bg_r;
         p[1] = bg_g;
         p[2] = bg_b;
@@ -799,13 +799,9 @@ pub(crate) fn render_frame_to_pixels_filtered(
                     &mut resolved_sub_comp,
                     &layer.essential_properties,
                 );
-                let mut sub_pixels = render_precomp_layers(
-                    comp,
-                    &resolved_sub_comp,
-                    source_frame,
-                    width,
-                    height,
-                );
+                let mut sub_pixels =
+                    render_precomp_layers(comp, &resolved_sub_comp, source_frame, width, height)
+                        .to_vec();
                 if !sub_pixels.is_empty() {
                     if !layer.effects.is_empty() && layer.effects_enabled {
                         crate::core::cpu_effects::apply_layer_effects(
@@ -1201,6 +1197,9 @@ pub(crate) fn render_frame_to_pixels_filtered(
 
     // Apply exposure EV shift and LUT color mapping in parallel across CPU cores
     let mult = 2.0f32.powf(exposure_ev);
+    let active_lut = (lut_mode == 3)
+        .then(crate::core::ocio_color::active_lut)
+        .flatten();
     buffer
         .par_chunks_exact_mut(4)
         .enumerate()
@@ -1215,12 +1214,12 @@ pub(crate) fn render_frame_to_pixels_filtered(
                 g = g.powf(2.2);
                 b = b.powf(2.2);
             } else if lut_mode == 3 {
-                // User-loaded 3D LUT (tetrahedral interpolation); falls back to
-                // passthrough when no LUT is loaded.
-                let (nr, ng, nb) = crate::core::ocio_color::apply_lut_pixel(r, g, b);
-                r = nr;
-                g = ng;
-                b = nb;
+                if let Some(lut) = active_lut.as_ref() {
+                    let (nr, ng, nb) = lut.apply(r, g, b);
+                    r = nr.clamp(0.0, 1.0);
+                    g = ng.clamp(0.0, 1.0);
+                    b = nb.clamp(0.0, 1.0);
+                }
             } else if lut_mode == 2 {
                 // ACES preview pipeline: sRGB-decode → scene-linear exposure →
                 // RRT+ODT filmic tonemap → exact piecewise sRGB re-encode.
@@ -1330,7 +1329,7 @@ pub fn render_frame_to_pixels_f32(
     let n = (width as usize) * (height as usize);
     let mut out = vec![[0.0f32; 4]; n];
     use crate::core::color::srgb_to_linear_piecewise;
-    for (px, dst) in buf8.chunks_exact(4).zip(out.iter_mut()) {
+    for (px, dst) in buf8.as_chunks::<4>().0.iter().zip(out.iter_mut()) {
         // Decode the sRGB-encoded result back to linear (exposure baked in).
         let r = srgb_to_linear_piecewise(px[0] as f32 / 255.0);
         let g = srgb_to_linear_piecewise(px[1] as f32 / 255.0);
@@ -1660,7 +1659,12 @@ mod tests {
         let pixels = render_frame_to_pixels(&comp, 10, 64, 64, 0.0, 0);
         assert_eq!(pixels.len(), 64 * 64 * 4);
         // Some pixels should be brighter than the dark background (20,20,25)
-        let bright = pixels.chunks_exact(4).filter(|p| p[0] > 40).count();
+        let bright = pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .filter(|p| p[0] > 40)
+            .count();
         assert!(bright > 0, "Particle layer should produce visible pixels");
     }
 
@@ -1878,6 +1882,7 @@ mod tests {
 
     #[test]
     fn test_precomp_nested_rendering() {
+        crate::core::frame_cache::bump_version();
         // Sub-comp: red ellipse at its own center
         let mut sub = Composition::new("sub".to_string(), "Sub".to_string(), 64, 64, 30, 30);
         let mut shape = Layer::new(
@@ -1925,7 +1930,14 @@ mod tests {
 
     #[test]
     fn test_precomp_essential_property_override_reaches_nested_render() {
-        let mut sub = Composition::new("essential_sub".into(), "Essential Sub".into(), 16, 16, 30, 30);
+        let mut sub = Composition::new(
+            "essential_sub".into(),
+            "Essential Sub".into(),
+            16,
+            16,
+            30,
+            30,
+        );
         sub.background_color = [0.0, 0.0, 0.0, 0.0];
         let mut solid = Layer::new(
             "solid".into(),
@@ -1938,7 +1950,14 @@ mod tests {
         solid.transform.position = Animatable::new_constant([8.0, 8.0]);
         sub.layers.push(solid);
 
-        let mut comp = Composition::new("essential_main".into(), "Essential Main".into(), 16, 16, 30, 30);
+        let mut comp = Composition::new(
+            "essential_main".into(),
+            "Essential Main".into(),
+            16,
+            16,
+            30,
+            30,
+        );
         comp.background_color = [0.0, 0.0, 0.0, 0.0];
         comp.sub_compositions.push(sub);
         let mut precomp = Layer::new(
@@ -1950,8 +1969,9 @@ mod tests {
             30,
         );
         precomp.transform.position = Animatable::new_constant([8.0, 8.0]);
-        precomp.essential_properties.push(
-            crate::core::essential_properties::EssentialProperty {
+        precomp
+            .essential_properties
+            .push(crate::core::essential_properties::EssentialProperty {
                 name: "Color".into(),
                 prop_type: crate::core::essential_properties::EssentialPropertyType::Color,
                 value: crate::core::essential_properties::EssentialValue::Color([
@@ -1961,8 +1981,7 @@ mod tests {
                 min_value: 0.0,
                 max_value: 100.0,
                 options: Vec::new(),
-            },
-        );
+            });
         comp.layers.push(precomp);
 
         let pixels = render_frame_to_pixels(&comp, 0, 16, 16, 0.0, 0);
@@ -2269,6 +2288,7 @@ mod tests {
 
     #[test]
     fn test_precomp_respects_layer_scale() {
+        crate::core::frame_cache::bump_version();
         // Sub-comp: full-frame red solid
         let mut sub = Composition::new("sub".to_string(), "Sub".to_string(), 64, 64, 30, 30);
         let solid = Layer::new(
@@ -2485,7 +2505,7 @@ mod tests {
 
         // At least some pixels should differ from the original gray
         let mut non_gray = 0;
-        for p in pixels.chunks_exact(4) {
+        for p in pixels.as_chunks::<4>().0 {
             if (p[0] as i32 - p[1] as i32).abs() > 5
                 || (p[1] as i32 - p[2] as i32).abs() > 5
                 || (p[0] as i32 - 128).abs() > 20
@@ -2506,7 +2526,7 @@ mod tests {
 
         let pixels = render_frame_to_pixels(&comp, 0, 8, 8, 0.0, 0);
         assert_eq!(pixels.len(), 8 * 8 * 4);
-        for p in pixels.chunks_exact(4) {
+        for p in pixels.as_chunks::<4>().0 {
             assert_eq!(p[0], 255, "background red must fill an empty composition");
             assert_eq!(p[3], 255, "background alpha must be opaque");
         }
@@ -3442,7 +3462,10 @@ mod shadow_tests {
         // 100 units at scale 100 => 96px span on a 192-wide comp.
         let row = (50..=142u32).filter(|&x| bright(x, 54)).count();
         let col = (6..=102u32).filter(|&y| bright(96, y)).count();
-        assert!(row >= 88 && row <= 100, "circle width unexpected: {row}px",);
+        assert!(
+            (88..=100).contains(&row),
+            "circle width unexpected: {row}px",
+        );
         assert!(
             (row as i32 - col as i32).abs() <= 4,
             "circle distorted on wide comp: w={row} h={col}",
@@ -3523,7 +3546,12 @@ mod shadow_tests {
 
         fn mean_r(px: &[u8]) -> f32 {
             let n = px.len() / 4;
-            px.chunks_exact(4).map(|c| c[0] as f32).sum::<f32>() / n.max(1) as f32
+            px.as_chunks::<4>()
+                .0
+                .iter()
+                .map(|c| c[0] as f32)
+                .sum::<f32>()
+                / n.max(1) as f32
         }
 
         #[test]
@@ -3623,7 +3651,7 @@ mod shadow_tests {
             let full = mk(100.0);
             let half = mk(50.0);
             let mut max_dev = 0.0f32;
-            for (i, px) in half.chunks_exact(4).enumerate() {
+            for (i, px) in half.as_chunks::<4>().0.iter().enumerate() {
                 let expect = full[i * 4] as f32 * 0.5;
                 max_dev = max_dev.max((px[0] as f32 - expect).abs());
             }

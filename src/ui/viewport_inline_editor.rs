@@ -23,13 +23,36 @@ pub fn draw_inline_numeric_editor(
         None => return,
     };
 
+    let Some((layer_name, pos_now)) = app
+        .history
+        .current()
+        .active_composition()
+        .layers
+        .get(sel_idx)
+        .map(|layer| {
+            (
+                layer.name.clone(),
+                layer.transform.position.evaluate(current_frame),
+            )
+        })
+    else {
+        return;
+    };
+
+    let screen_x = origin_x + (pos_now[0] / comp_w) * draw_w;
+    let screen_y = origin_y + (pos_now[1] / comp_h) * draw_h;
+    let window_pos = egui::pos2(
+        (screen_x - 110.0).max(origin_x + 10.0),
+        (screen_y - 120.0).max(origin_y + 10.0),
+    );
+
     let mut project_changed = false;
     let mut should_close = false;
-    let pre_snapshot = if !app.drag_active() {
-        Some(app.history.current().clone())
-    } else {
-        None
-    };
+    app.ensure_panel_edit_snapshot_for_rect(
+        "viewport_inline_editor",
+        ctx,
+        egui::Rect::from_min_size(window_pos, egui::vec2(220.0, 140.0)),
+    );
     let mut is_open = true;
 
     {
@@ -41,18 +64,7 @@ pub fn draw_inline_numeric_editor(
         }
 
         let layer = &mut comp.layers[sel_idx];
-        let pos_now = layer.transform.position.evaluate(current_frame);
-
-        // Calculate canvas screen coordinates for layer center
-        let screen_x = origin_x + (pos_now[0] / comp_w) * draw_w;
-        let screen_y = origin_y + (pos_now[1] / comp_h) * draw_h;
-
-        let window_pos = egui::pos2(
-            (screen_x - 110.0).max(origin_x + 10.0),
-            (screen_y - 120.0).max(origin_y + 10.0),
-        );
-
-        crate::ui::modal::window(format!("Quick Edit: {}", layer.name))
+        crate::ui::modal::window(format!("Quick Edit: {layer_name}"))
             .fixed_pos(window_pos)
             .fixed_size(egui::vec2(220.0, 140.0))
             .resizable(false)
@@ -163,13 +175,13 @@ pub fn draw_inline_numeric_editor(
         let pointer_down = ui_pointer_down(ctx);
         if pointer_down {
             if !app.drag_active() {
-                if let Some(snapshot) = pre_snapshot {
+                if let Some(snapshot) = app.take_panel_edit_snapshot("viewport_inline_editor") {
                     app.begin_drag_with_snapshot(snapshot, "Inline Transform Edit");
                 }
             }
         } else if app.drag_active() {
             app.commit_drag();
-        } else if let Some(snapshot) = pre_snapshot {
+        } else if let Some(snapshot) = app.take_panel_edit_snapshot("viewport_inline_editor") {
             app.begin_drag_with_snapshot(snapshot, "Inline Transform Edit");
             app.commit_drag();
         }

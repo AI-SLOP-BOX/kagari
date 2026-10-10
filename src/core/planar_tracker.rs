@@ -333,7 +333,7 @@ mod tests {
 
     fn make_test_image(w: u32, h: u32, color: [u8; 3]) -> Vec<u8> {
         let mut pixels = vec![0u8; (w * h * 4) as usize];
-        for p in pixels.chunks_exact_mut(4) {
+        for p in pixels.as_chunks_mut::<4>().0 {
             p[0] = color[0];
             p[1] = color[1];
             p[2] = color[2];

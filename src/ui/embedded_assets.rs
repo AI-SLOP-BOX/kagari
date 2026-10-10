@@ -24,6 +24,8 @@ mod tests {
     fn bundled_logo_and_font_are_present() {
         assert!(super::bytes("assets/kagari_logo.webp").is_some());
         assert!(super::bytes("assets/fonts/Inter.ttf").is_some());
+        let japanese_font = super::bytes("assets/fonts/NotoSansJP-Regular.otf").unwrap();
+        assert!(ab_glyph::FontVec::try_from_vec(japanese_font.to_vec()).is_ok());
     }
 
     #[test]

@@ -18,6 +18,7 @@ fn collect(root: &Path, dir: &Path, files: &mut Vec<PathBuf>) {
 fn main() {
     let root = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").expect("manifest dir"));
     let assets = root.join("assets");
+    println!("cargo:rerun-if-changed={}", assets.display());
     let mut files = Vec::new();
     collect(&assets, &assets, &mut files);
     files.sort();

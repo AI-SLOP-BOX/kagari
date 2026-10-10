@@ -1026,13 +1026,13 @@ mod directional_radial_tests {
         px[p + 3] = 255;
         apply_radial_blur(&mut px, w, h, 100.0);
         // Energy must spread to multiple pixels around the original radius
-        let nonzero = px.chunks_exact(4).filter(|p| p[0] > 0).count();
+        let nonzero = px.as_chunks::<4>().0.iter().filter(|p| p[0] > 0).count();
         assert!(
             nonzero > 1,
             "radial blur must spread angularly, got {} lit pixels",
             nonzero
         );
-        let peak = px.chunks_exact(4).map(|p| p[0]).max().unwrap();
+        let peak = px.as_chunks::<4>().0.iter().map(|p| p[0]).max().unwrap();
         assert!(peak < 255, "peak must drop as energy spreads, got {}", peak);
     }
 
@@ -1371,7 +1371,7 @@ pub fn apply_color_overlay(
         return;
     }
     let mix = (opacity / 100.0).clamp(0.0, 1.0);
-    for px in pixels.chunks_exact_mut(4) {
+    for px in pixels.as_chunks_mut::<4>().0 {
         let a = px[3] as f32 / 255.0;
         if a < 0.003 {
             continue;
@@ -1771,8 +1771,8 @@ mod camera_shake_tests {
             }
         }
         super::apply_inner_glow(&mut px, w, h, 2, [255, 255, 0, 255], 100.0);
-        let edge = ((4 * w as usize + 4) * 4) as usize;
-        let center = ((8 * w as usize + 8) * 4) as usize;
+        let edge = (4 * w as usize + 4) * 4;
+        let center = (8 * w as usize + 8) * 4;
         assert!(px[edge] > 60, "inner edge must glow, got {}", px[edge]);
         assert_eq!(px[center], 40, "deep interior untouched");
     }
@@ -1811,7 +1811,7 @@ mod camera_shake_tests {
         let band = px[(7 * w as usize + 9) * 4];
         let far = px[(7 * w as usize + 38) * 4];
         assert!(band < far, "left band tinted: band={band} far={far}");
-        assert!(far <= 120 && far >= 110, "far side ~original: {far}");
+        assert!((110..=120).contains(&far), "far side ~original: {far}");
     }
 
     #[test]

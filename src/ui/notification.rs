@@ -11,8 +11,8 @@ pub enum ToastLevel {
 
 pub fn toast_color(level: &ToastLevel) -> egui::Color32 {
     match level {
-        ToastLevel::Info => colors::ACCENT_BLUE,
-        ToastLevel::Warning => colors::ACCENT_ORANGE,
+        ToastLevel::Info => colors::ACCENT_INFORMATION,
+        ToastLevel::Warning => colors::ACCENT_WARNING,
         ToastLevel::Error => colors::ACCENT_RED,
     }
 }
@@ -70,7 +70,7 @@ impl ToastManager {
     pub fn draw(&mut self, ctx: &egui::Context) {
         let now = Instant::now();
         self.notifications
-            .retain(|t| now.duration_since(t.created_at) < t.duration);
+            .retain(|t| now.duration_since(t.created_at) < t.duration + Duration::from_millis(220));
 
         if self.notifications.is_empty() {
             return;
@@ -86,6 +86,14 @@ impl ToastManager {
                     for toast in self.notifications.iter().rev() {
                         let accent = toast_color(&toast.level);
                         let elapsed = now.duration_since(toast.created_at).as_secs_f32();
+                        let visible = now.duration_since(toast.created_at) < toast.duration;
+                        let opacity = choegui::animated_visibility_with_policy(
+                            ctx,
+                            egui::Id::new(("toast-visibility", toast.id)),
+                            visible,
+                            choegui::Spring::new(9.0, 1.0),
+                            choegui::MotionPolicy::Full,
+                        );
                         let remaining_ratio =
                             (1.0 - elapsed / toast.duration.as_secs_f32()).clamp(0.0, 1.0);
 
@@ -94,7 +102,9 @@ impl ToastManager {
                             .stroke(egui::Stroke::new(1.0_f32, accent))
                             .rounding(egui::Rounding::same(4.0))
                             .inner_margin(egui::Margin::symmetric(12.0, 8.0))
+                            .multiply_with_opacity(opacity)
                             .show(ui, |ui| {
+                                ui.multiply_opacity(opacity);
                                 ui.set_max_width(320.0);
                                 ui.horizontal(|ui| {
                                     let icon = match toast.level {

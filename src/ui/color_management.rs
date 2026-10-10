@@ -1,320 +1,97 @@
-use crate::ui::theme::colors;
+use crate::ui::localization::{tr, tr_format};
 use crate::KagariApp;
 use eframe::egui;
 
 pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
-    let pre_snapshot = if !app.drag_active() {
-        Some(app.history.current().clone())
-    } else {
-        None
-    };
+    app.ensure_panel_edit_snapshot("color_management", ui);
+    let active_lut_path = app.color_lut_path.clone();
+    let active_lut_mode = app.color_lut_mode;
     let comp = app.history.current_mut().active_composition_mut();
     let mut changed = false;
     let mut project_changed = false;
+    let mut pending_lut_path = None;
 
-    crate::ui::custom_widgets::ae_section_header(ui, "Working Space", "🎨");
-
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("Color Space")
-                .small()
-                .color(colors::TEXT_SECONDARY),
-        );
-        egui::ComboBox::from_id_salt("color_space")
-            .selected_text(match app.color_space_idx {
-                0 => "Rec.709 sRGB",
-                1 => "ACEScg",
-                2 => "ACES2065-1",
-                3 => "Display P3",
-                _ => "Rec.709 sRGB",
-            })
-            .show_ui(ui, |ui| {
-                if ui
-                    .selectable_value(&mut app.color_space_idx, 0, "Rec.709 Gamma 2.4 (sRGB)")
-                    .clicked()
-                {
-                    changed = true;
-                }
-                if ui
-                    .selectable_value(&mut app.color_space_idx, 1, "ACEScg (AP1 Linear)")
-                    .clicked()
-                {
-                    changed = true;
-                }
-                if ui
-                    .selectable_value(&mut app.color_space_idx, 2, "ACES2065-1 (AP0 Linear)")
-                    .clicked()
-                {
-                    changed = true;
-                }
-                if ui
-                    .selectable_value(&mut app.color_space_idx, 3, "Display P3")
-                    .clicked()
-                {
-                    changed = true;
-                }
-            });
+    crate::ui::kui::section(ui, "Working Color Space");
+    let grid = crate::ui::kui::PropertyGrid::new(ui, &["Working Color Space", "Bit Depth"]);
+    grid.row(ui, "Working Color Space", |ui| {
+        crate::ui::kui::secondary(ui, "Not applied (color transform not implemented)");
     });
 
-    ui.add_space(4.0);
-    crate::ui::custom_widgets::ae_section_header(ui, "Bit Depth", "🔢");
-    ui.horizontal(|ui| {
-        let depth_labels = ["8-bpc", "16-bpc", "32-bpc Float"];
-        let depths = [
-            crate::core::color_science::BitDepth::EightBit,
-            crate::core::color_science::BitDepth::SixteenBit,
-            crate::core::color_science::BitDepth::ThirtyTwoBitFloat,
+    grid.row(ui, "Bit Depth", |ui| {
+        crate::ui::kui::secondary(ui, "8-bit output (16/32-bit processing unsupported)");
+    });
+
+    crate::ui::kui::section(ui, "Display");
+    let display_grid = crate::ui::kui::PropertyGrid::new(ui, &["Display Simulation"]);
+    display_grid.row(ui, "Display Simulation", |ui| {
+        crate::ui::kui::secondary(ui, "Unsupported");
+    });
+    crate::ui::kui::caption(ui, "Color space conversion and display simulation are not applied yet. Only the loaded LUT affects the preview.");
+
+    crate::ui::kui::section(ui, "Background");
+    let background_grid = crate::ui::kui::PropertyGrid::new(ui, &["Color"]);
+    let c = &mut comp.background_color;
+    let mut col = egui::Color32::from_rgba_unmultiplied(
+        (c[0].clamp(0.0, 1.0) * 255.0) as u8,
+        (c[1].clamp(0.0, 1.0) * 255.0) as u8,
+        (c[2].clamp(0.0, 1.0) * 255.0) as u8,
+        (c[3].clamp(0.0, 1.0) * 255.0) as u8,
+    );
+    if background_grid
+        .row(ui, "Color", |ui| crate::ui::kui::color(ui, &mut col))
+        .changed()
+    {
+        let [r, g, b, a] = col.to_array();
+        *c = [
+            r as f32 / 255.0,
+            g as f32 / 255.0,
+            b as f32 / 255.0,
+            a as f32 / 255.0,
         ];
-        for (label, depth) in depth_labels.iter().zip(depths) {
-            let is_selected = comp.bit_depth == depth;
-            if ui
-                .selectable_label(
-                    is_selected,
-                    egui::RichText::new(*label).small().color(if is_selected {
-                        colors::ACCENT_CYAN
-                    } else {
-                        colors::TEXT_PRIMARY
-                    }),
-                )
-                .clicked()
-            {
-                comp.bit_depth = depth;
-                changed = true;
-                project_changed = true;
-            }
-        }
-    });
-
-    if comp.bit_depth == crate::core::color_science::BitDepth::ThirtyTwoBitFloat {
-        ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("⚠").color(colors::ACCENT_ORANGE));
-            ui.label(
-                egui::RichText::new("32-bpc: Full float precision, higher memory usage")
-                    .small()
-                    .color(colors::TEXT_MUTED),
-            );
-        });
+        changed = true;
+        project_changed = true;
     }
 
-    ui.add_space(4.0);
-    crate::ui::custom_widgets::ae_section_header(ui, "Display", "🖥");
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("Simulation")
-                .small()
-                .color(colors::TEXT_SECONDARY),
-        );
-        egui::ComboBox::from_id_salt("display_sim")
-            .selected_text(match app.display_sim_idx {
-                0 => "Mac sRGB",
-                1 => "Rec.709 HDTV",
-                2 => "DCI-P3 Cinema",
-                _ => "Mac sRGB",
-            })
-            .show_ui(ui, |ui| {
-                if ui
-                    .selectable_value(&mut app.display_sim_idx, 0, "Macintosh sRGB")
-                    .clicked()
-                {
-                    changed = true;
-                }
-                if ui
-                    .selectable_value(&mut app.display_sim_idx, 1, "Rec.709 HDTV")
-                    .clicked()
-                {
-                    changed = true;
-                }
-                if ui
-                    .selectable_value(&mut app.display_sim_idx, 2, "DCI-P3 Cinema")
-                    .clicked()
-                {
-                    changed = true;
-                }
-            });
-    });
+    crate::ui::kui::section(ui, "Motion Blur");
+    let motion_grid = crate::ui::kui::PropertyGrid::new(ui, &["Shutter Angle"]);
+    if motion_grid
+        .row(ui, "Shutter Angle", |ui| {
+            crate::ui::kui::number(
+                ui,
+                &mut comp.motion_blur_shutter_angle,
+                0.0..=720.0,
+                1.0,
+                "°",
+            )
+        })
+        .changed()
+    {
+        changed = true;
+        project_changed = true;
+    }
 
-    ui.add_space(4.0);
-    crate::ui::custom_widgets::ae_section_header(ui, "Background", "🖼");
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("Color")
-                .small()
-                .color(colors::TEXT_SECONDARY),
-        );
-        let c = &mut comp.background_color;
-        let mut col = egui::Color32::from_rgba_premultiplied(
-            (c[0] * 255.0) as u8,
-            (c[1] * 255.0) as u8,
-            (c[2] * 255.0) as u8,
-            (c[3] * 255.0) as u8,
-        );
-        if ui.color_edit_button_srgba(&mut col).changed() {
-            let [r, g, b, a] = col.to_array();
-            *c = [
-                r as f32 / 255.0,
-                g as f32 / 255.0,
-                b as f32 / 255.0,
-                a as f32 / 255.0,
-            ];
-            changed = true;
-            project_changed = true;
-        }
-    });
-
-    ui.add_space(4.0);
-    crate::ui::custom_widgets::ae_section_header(ui, "Motion Blur", "💨");
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("Shutter Angle")
-                .small()
-                .color(colors::TEXT_SECONDARY),
-        );
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(egui::RichText::new("°").small().color(colors::TEXT_MUTED));
-            if ui
-                .add(
-                    egui::DragValue::new(&mut comp.motion_blur_shutter_angle)
-                        .speed(1.0)
-                        .range(0.0..=720.0),
-                )
-                .changed()
-            {
-                changed = true;
-                project_changed = true;
-            }
+    ui.add_space(crate::ui::kui::space::XS);
+    ui.add_space(crate::ui::kui::space::XS);
+    crate::ui::kui::section(ui, "ACES / OCIO Pipeline");
+    crate::ui::kui::panel(ui, |ui| {
+        let grid = crate::ui::kui::PropertyGrid::new(ui, &["Input Transform (IDT)"]);
+        grid.row(ui, "Input Transform (IDT)", |ui| {
+            crate::ui::kui::secondary(ui, "Unsupported");
         });
-    });
-
-    ui.add_space(4.0);
-    ui.add_space(4.0);
-    crate::ui::custom_widgets::ae_section_header(ui, "ACES & OCIO Pipeline", "🎬");
-    ui.group(|ui| {
-        let mut idt_idx = ui.ctx().data(|d| {
-            d.get_temp::<usize>(egui::Id::new("aces_idt_idx"))
-                .unwrap_or(0)
-        });
-        ui.horizontal(|ui| {
-            ui.label(
-                egui::RichText::new("Input (IDT):")
-                    .small()
-                    .color(colors::TEXT_SECONDARY),
-            );
-            egui::ComboBox::from_id_salt("aces_idt")
-                .selected_text(match idt_idx {
-                    0 => "Camera Native / sRGB",
-                    1 => "ARRI LogC3 / Alexa Wide Gamut",
-                    2 => "Sony S-Log3 / S-Gamut3.Cine",
-                    3 => "RED Log3G10 / REDWideGamutRGB",
-                    4 => "Panasonic V-Log / V-Gamut",
-                    _ => "Camera Native",
-                })
-                .show_ui(ui, |ui| {
-                    if ui
-                        .selectable_value(&mut idt_idx, 0, "Camera Native / sRGB")
-                        .clicked()
-                    {
-                        ui.ctx()
-                            .data_mut(|d| d.insert_temp(egui::Id::new("aces_idt_idx"), 0));
-                        changed = true;
-                    }
-                    if ui
-                        .selectable_value(&mut idt_idx, 1, "ARRI LogC3 / Alexa Wide Gamut")
-                        .clicked()
-                    {
-                        ui.ctx()
-                            .data_mut(|d| d.insert_temp(egui::Id::new("aces_idt_idx"), 1));
-                        changed = true;
-                    }
-                    if ui
-                        .selectable_value(&mut idt_idx, 2, "Sony S-Log3 / S-Gamut3.Cine")
-                        .clicked()
-                    {
-                        ui.ctx()
-                            .data_mut(|d| d.insert_temp(egui::Id::new("aces_idt_idx"), 2));
-                        changed = true;
-                    }
-                    if ui
-                        .selectable_value(&mut idt_idx, 3, "RED Log3G10 / REDWideGamutRGB")
-                        .clicked()
-                    {
-                        ui.ctx()
-                            .data_mut(|d| d.insert_temp(egui::Id::new("aces_idt_idx"), 3));
-                        changed = true;
-                    }
-                    if ui
-                        .selectable_value(&mut idt_idx, 4, "Panasonic V-Log / V-Gamut")
-                        .clicked()
-                    {
-                        ui.ctx()
-                            .data_mut(|d| d.insert_temp(egui::Id::new("aces_idt_idx"), 4));
-                        changed = true;
-                    }
-                });
-        });
-
-        let mut odt_idx = ui.ctx().data(|d| {
-            d.get_temp::<usize>(egui::Id::new("aces_odt_idx"))
-                .unwrap_or(0)
-        });
-        ui.horizontal(|ui| {
-            ui.label(
-                egui::RichText::new("Output (ODT):")
-                    .small()
-                    .color(colors::TEXT_SECONDARY),
-            );
-            egui::ComboBox::from_id_salt("aces_odt")
-                .selected_text(match odt_idx {
-                    0 => "ACES 1.3 Rec.709 ODT",
-                    1 => "ACES 1.3 DCI-P3 ODT",
-                    2 => "ACES HDR Rec.2100 PQ (1000 nits)",
-                    3 => "ACES HDR Rec.2100 HLG",
-                    _ => "ACES 1.3 Rec.709 ODT",
-                })
-                .show_ui(ui, |ui| {
-                    if ui
-                        .selectable_value(&mut odt_idx, 0, "ACES 1.3 Rec.709 ODT")
-                        .clicked()
-                    {
-                        ui.ctx()
-                            .data_mut(|d| d.insert_temp(egui::Id::new("aces_odt_idx"), 0));
-                        changed = true;
-                    }
-                    if ui
-                        .selectable_value(&mut odt_idx, 1, "ACES 1.3 DCI-P3 ODT")
-                        .clicked()
-                    {
-                        ui.ctx()
-                            .data_mut(|d| d.insert_temp(egui::Id::new("aces_odt_idx"), 1));
-                        changed = true;
-                    }
-                    if ui
-                        .selectable_value(&mut odt_idx, 2, "ACES HDR Rec.2100 PQ (1000 nits)")
-                        .clicked()
-                    {
-                        ui.ctx()
-                            .data_mut(|d| d.insert_temp(egui::Id::new("aces_odt_idx"), 2));
-                        changed = true;
-                    }
-                    if ui
-                        .selectable_value(&mut odt_idx, 3, "ACES HDR Rec.2100 HLG")
-                        .clicked()
-                    {
-                        ui.ctx()
-                            .data_mut(|d| d.insert_temp(egui::Id::new("aces_odt_idx"), 3));
-                        changed = true;
-                    }
-                });
+        let grid = crate::ui::kui::PropertyGrid::new(ui, &["Output Transform (ODT)"]);
+        grid.row(ui, "Output Transform (ODT)", |ui| {
+            crate::ui::kui::secondary(ui, "Unsupported");
         });
 
         ui.horizontal(|ui| {
-            ui.label(
-                egui::RichText::new("OCIO Config:")
-                    .small()
-                    .color(colors::TEXT_SECONDARY),
-            );
-            if crate::ui::custom_widgets::ae_button(ui, "Browse config.ocio")
-                .on_hover_text("Load OpenColorIO custom config")
-                .clicked()
+            crate::ui::kui::secondary(ui, "OCIO config:");
+            if crate::ui::kui::button(
+                ui,
+                "Load config.ocio",
+                crate::ui::kui::ButtonKind::Default,
+            )
+            .on_hover_text(tr("Load a custom OpenColorIO configuration"))
+            .clicked()
             {
                 let Some(path) = rfd::FileDialog::new()
                     .add_filter("OpenColorIO config", &["ocio"])
@@ -325,50 +102,41 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
                 match crate::core::ocio_color::LoadedOcioConfig::load(&path) {
                     Ok(config) => {
                         let lut_size = config.lut.size;
+                        let lut_path = config.lut_path.to_string_lossy().into_owned();
                         crate::core::ocio_color::set_active_lut(Some(std::sync::Arc::new(
                             config.lut,
                         )));
-                        ui.ctx().data_mut(|d| {
-                            d.insert_temp(egui::Id::new("ae_colorspace_lut"), 3usize);
-                            d.insert_temp(
-                                egui::Id::new("active_ocio_config_path"),
-                                config.path.display().to_string(),
-                            );
-                            d.insert_temp(
-                                egui::Id::new("active_cube_lut_path"),
-                                config.lut_path.display().to_string(),
-                            );
-                        });
-                        crate::core::frame_cache::bump_version();
-                        app.toasts.info(format!(
-                            "Loaded OCIO config with {}x{}x{} FileTransform LUT",
-                            lut_size, lut_size, lut_size
+                        pending_lut_path = Some(lut_path.clone());
+                        changed = true;
+                        let size = lut_size.to_string();
+                        app.toasts.info(tr_format(
+                            "Loaded OCIO LUT ({}³): {}",
+                            &[&size, &lut_path],
                         ));
                     }
-                    Err(error) => app
-                        .toasts
-                        .error(format!("Could not load OCIO config: {error}")),
+                    Err(error) => {
+                        let error = error.to_string();
+                        app.toasts
+                            .error(tr_format("Could not load OCIO config: {}", &[&error]));
+                    }
                 }
             }
-            if let Some(path) = ui
-                .ctx()
-                .data(|d| d.get_temp::<String>(egui::Id::new("active_ocio_config_path")))
-            {
-                ui.label(
-                    egui::RichText::new(format!("Active: {}", path))
-                        .small()
-                        .color(colors::TEXT_MUTED),
+            if let Some(path) = active_lut_path.as_ref() {
+                crate::ui::kui::caption(
+                    ui,
+                    format!("{}: {}", tr(if active_lut_mode == 3 { "Applied" } else { "Saved, not loaded" }), path),
                 );
             }
+            crate::ui::kui::caption(ui, "The LUT path and application state are saved in the project. The LUT file itself remains an external reference.");
         });
     });
 
-    ui.add_space(4.0);
-    crate::ui::custom_widgets::ae_section_header(ui, "3D LUT (.cube)", "📊");
-    ui.group(|ui| {
+    ui.add_space(crate::ui::kui::space::XS);
+    crate::ui::kui::section(ui, "3D LUT (.cube)");
+    crate::ui::kui::panel(ui, |ui| {
         ui.horizontal(|ui| {
-            if crate::ui::custom_widgets::ae_button(ui, "Load .cube LUT")
-                .on_hover_text("Load 3D LUT for film stock emulation")
+            if crate::ui::kui::button(ui, "Load .cube LUT", crate::ui::kui::ButtonKind::Default)
+                .on_hover_text(tr("Load a 3D LUT for film looks"))
                 .clicked()
             {
                 let Some(path) = rfd::FileDialog::new()
@@ -378,128 +146,161 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
                     return;
                 };
 
-                const MAX_LUT_BYTES: u64 = 64 * 1024 * 1024;
-                let size_ok = std::fs::metadata(&path)
-                    .map(|metadata| metadata.len() <= MAX_LUT_BYTES)
-                    .unwrap_or(false);
-                if !size_ok {
-                    app.toasts.error("The .cube LUT is missing or larger than 64 MiB");
-                } else {
-                    match std::fs::read_to_string(&path) {
-                        Ok(contents) => {
-                            match crate::core::ocio_color::Lut3D::parse_cube(&contents) {
-                                Ok(lut) => {
-                                    let lut_size = lut.size;
-                                    crate::core::ocio_color::set_active_lut(Some(
-                                        std::sync::Arc::new(lut),
-                                    ));
-                                    ui.ctx().data_mut(|d| {
-                                        d.insert_temp(
-                                            egui::Id::new("ae_colorspace_lut"),
-                                            3usize,
-                                        );
-                                        d.insert_temp(
-                                            egui::Id::new("active_cube_lut_path"),
-                                            path.display().to_string(),
-                                        );
-                                    });
-                                    crate::core::frame_cache::bump_version();
-                                    app.toasts.info(format!(
-                                        "Loaded {}x{}x{} 3D LUT: {}",
-                                        lut_size,
-                                        lut_size,
-                                        lut_size,
-                                        path.display()
-                                    ));
-                                }
-                                Err(error) => {
-                                    app.toasts.error(format!("Could not parse .cube LUT: {error}"));
-                                }
-                            }
-                        }
-                        Err(error) => {
-                            app.toasts.error(format!("Could not read .cube LUT: {error}"));
-                        }
+                match crate::core::ocio_color::Lut3D::load_cube_file(&path) {
+                    Ok(lut) => {
+                        let lut_size = lut.size;
+                        crate::core::ocio_color::set_active_lut(Some(std::sync::Arc::new(lut)));
+                        let lut_path = path.to_string_lossy().into_owned();
+                        pending_lut_path = Some(lut_path.clone());
+                        changed = true;
+                        let size = lut_size.to_string();
+                        app.toasts.info(tr_format("Loaded {}³ LUT: {}", &[&size, &lut_path]));
+                    }
+                    Err(error) => {
+                        let error = error.to_string();
+                        app.toasts.error(tr_format("Could not load LUT: {}", &[&error]));
                     }
                 }
             }
-            if let Some(path) = ui
-                .ctx()
-                .data(|d| d.get_temp::<String>(egui::Id::new("active_cube_lut_path")))
-            {
-                ui.label(
-                    egui::RichText::new(format!("Active: {}", path))
-                        .small()
-                        .color(colors::TEXT_MUTED),
+            if let Some(path) = active_lut_path.as_ref() {
+                crate::ui::kui::caption(
+                    ui,
+                    format!(
+                        "{}: {}",
+                        tr(if active_lut_mode == 3 { "Applied" } else { "Saved, not loaded" }),
+                        path
+                    ),
                 );
             }
-            if crate::ui::custom_widgets::ae_button(ui, "Export Grade as .cube")
-                .on_hover_text("Export active color grade as 33x33x33 3D LUT (.cube)")
+            let active_lut = crate::core::ocio_color::active_lut();
+            if crate::ui::kui::button(ui, "Export .cube LUT", crate::ui::kui::ButtonKind::Default)
+                .on_hover_text(tr("Save the currently loaded LUT as a .cube file"))
                 .clicked()
             {
-                let path = std::env::temp_dir().join(format!("{}_grade.cube", comp.name));
-                let size = 33usize;
-                let mut content = format!(
-                    "# Created by Kagari VFX\n# Standard 3D LUT\nTITLE \"{}\"\nLUT_3D_SIZE {}\nDOMAIN_MIN 0.0 0.0 0.0\nDOMAIN_MAX 1.0 1.0 1.0\n",
-                    comp.name, size
-                );
-                // Generate identity + grade 3D LUT grid (r varies fastest, then g, then b)
-                for b_i in 0..size {
-                    let b = b_i as f32 / (size - 1) as f32;
-                    for g_i in 0..size {
-                        let g = g_i as f32 / (size - 1) as f32;
-                        for r_i in 0..size {
-                            let r = r_i as f32 / (size - 1) as f32;
+                if let Some(lut) = active_lut {
+                    if let Some(path) = rfd::FileDialog::new()
+                        .add_filter("3D LUT", &["cube"])
+                        .set_file_name(format!("{}.cube", comp.name.replace(['\0', '\n', '\r'], "_")))
+                        .save_file()
+                    {
+                        let title = comp.name.replace(['\0', '\n', '\r', '"'], "_");
+                        let mut content = format!(
+                            "# Created by Kagari VFX\nTITLE \"{}\"\nLUT_3D_SIZE {}\nDOMAIN_MIN 0.0 0.0 0.0\nDOMAIN_MAX 1.0 1.0 1.0\n",
+                            title, lut.size
+                        );
+                        for rgb in lut.data.as_chunks::<3>().0 {
                             use std::fmt::Write;
-                            let _ = writeln!(content, "{:.6} {:.6} {:.6}", r, g, b);
+                            let _ = writeln!(content, "{:.8} {:.8} {:.8}", rgb[0], rgb[1], rgb[2]);
+                        }
+                        match std::fs::write(&path, content) {
+                            Ok(()) => {
+                                crate::ui::project_io::reveal_in_file_manager(&path);
+                                let path = path.display().to_string();
+                                app.toasts.info(tr_format("Exported LUT: {}", &[&path]));
+                            }
+                            Err(error) => {
+                                let error = error.to_string();
+                                app.toasts.error(tr_format("Could not export LUT: {}", &[&error]));
+                            }
                         }
                     }
+                } else {
+                    app.toasts.error(tr("Load a 3D LUT first."));
                 }
-                let _ = std::fs::write(&path, content);
-                crate::ui::project_io::reveal_in_file_manager(&path);
-                app.toasts
-                    .info(format!("Exported 33x33x33 3D LUT: {}", path.display()));
             }
         });
-        ui.horizontal(|ui| {
-            ui.label(
-                egui::RichText::new("Interpolation:")
-                    .small()
-                    .color(colors::TEXT_SECONDARY),
-            );
-            let mut interp = ui.ctx().data(|d| d.get_temp::<usize>(egui::Id::new("lut_interp_idx")).unwrap_or(0));
-            egui::ComboBox::from_id_salt("lut_interp")
-                .selected_text(if interp == 0 {
-                    "Tetrahedral (Highest Quality)"
-                } else {
-                    "Trilinear"
-                })
-                .show_ui(ui, |ui| {
-                    if ui.selectable_value(&mut interp, 0, "Tetrahedral (Highest Quality)").clicked() {
-                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("lut_interp_idx"), 0));
-                    }
-                    if ui.selectable_value(&mut interp, 1, "Trilinear").clicked() {
-                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("lut_interp_idx"), 1));
-                    }
-                });
+        let grid = crate::ui::kui::PropertyGrid::new(ui, &["Interpolation"]);
+        grid.row(ui, "Interpolation", |ui| {
+            crate::ui::kui::secondary(ui, "Tetrahedral interpolation");
         });
     });
+
+    if let Some(path) = pending_lut_path {
+        app.persist_color_lut_path(path);
+    }
 
     if project_changed {
         let pointer_down = ui.input(|input| input.pointer.any_down());
         if pointer_down {
             if !app.drag_active() {
-                if let Some(snapshot) = pre_snapshot {
+                if let Some(snapshot) = app.take_panel_edit_snapshot("color_management") {
                     app.begin_drag_with_snapshot(snapshot, "Color Management Edit");
                 }
             }
         } else if app.drag_active() {
             app.commit_drag();
-        } else if let Some(snapshot) = pre_snapshot {
+        } else if let Some(snapshot) = app.take_panel_edit_snapshot("color_management") {
             app.begin_drag_with_snapshot(snapshot, "Color Management Edit");
             app.commit_drag();
         }
     } else if changed {
         crate::core::frame_cache::bump_version();
     }
+}
+
+pub fn draw_lut_controls(app: &mut KagariApp, ui: &mut egui::Ui) {
+    crate::ui::kui::section(ui, "3D LUT");
+    crate::ui::kui::caption(ui, "Load a .cube LUT and apply it to the viewer.");
+
+    let loaded_lut = crate::core::ocio_color::active_lut();
+    let saved_path = app.color_lut_path.clone();
+    let (kind, status) = match (&saved_path, loaded_lut.as_ref()) {
+        (Some(_), Some(_)) => (crate::ui::kui::StatusKind::Success, "LUT loaded"),
+        (Some(path), None) if std::path::Path::new(path).exists() => (
+            crate::ui::kui::StatusKind::Warning,
+            "Saved LUT is not loaded",
+        ),
+        (Some(_), None) => (crate::ui::kui::StatusKind::Error, "LUT file not found"),
+        (None, _) => (crate::ui::kui::StatusKind::Info, "No LUT loaded"),
+    };
+    crate::ui::kui::panel(ui, |ui| {
+        crate::ui::kui::status(ui, kind, status);
+        if let (Some(path), Some(lut)) = (saved_path.as_deref(), loaded_lut.as_ref()) {
+            crate::ui::kui::secondary(ui, format!("{}³", lut.size));
+            crate::ui::kui::truncated_secondary(ui, path);
+        } else if let Some(path) = saved_path.as_deref() {
+            crate::ui::kui::truncated_secondary(ui, path);
+        }
+        ui.add_space(crate::ui::kui::space::XS);
+        ui.horizontal_wrapped(|ui| {
+            if crate::ui::kui::button(ui, "Load LUT", crate::ui::kui::ButtonKind::Accent).clicked()
+            {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter("3D LUT", &["cube"])
+                    .pick_file()
+                {
+                    match crate::core::ocio_color::Lut3D::load_cube_file(&path) {
+                        Ok(lut) => {
+                            crate::core::ocio_color::set_active_lut(Some(std::sync::Arc::new(lut)));
+                            app.persist_color_lut_path(path.to_string_lossy().into_owned());
+                            crate::core::frame_cache::bump_version();
+                            app.toasts
+                                .info(crate::ui::localization::tr("Applied 3D LUT"));
+                        }
+                        Err(error) => app.toasts.error(format!(
+                            "{}: {error}",
+                            crate::ui::localization::tr("Could not load LUT")
+                        )),
+                    }
+                }
+            }
+            if saved_path.is_some()
+                && crate::ui::kui::button(ui, "Clear LUT", crate::ui::kui::ButtonKind::Quiet)
+                    .clicked()
+            {
+                crate::core::ocio_color::set_active_lut(None);
+                app.color_lut_path = None;
+                app.color_lut_mode = 0;
+                if let Some(document) = app.production_document.as_mut() {
+                    document.color_lut_path = None;
+                }
+                app.autosave.mark_dirty();
+                crate::core::frame_cache::bump_version();
+            }
+        });
+    });
+    crate::ui::kui::caption(
+        ui,
+        "The LUT selection is saved with the project; the .cube file remains external.",
+    );
 }

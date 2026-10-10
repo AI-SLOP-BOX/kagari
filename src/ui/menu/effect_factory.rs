@@ -11,23 +11,34 @@ pub fn apply_effect_by_name(app: &mut crate::KagariApp, effect_name: &str) {
     let mut unsupported = false;
     app.modify_project(|project| {
         let comp = project.active_composition_mut();
-        if idx >= comp.layers.len() { return; }
+        if idx >= comp.layers.len() {
+            return;
+        }
         let layer = &mut comp.layers[idx];
         let len = layer.effects.len();
         let (cw, ch) = (comp.width as f32, comp.height as f32);
         let effect = build_effect(&effect_name, len, cw, ch, layer);
         match effect {
-            Some(e) => { layer.effects.push(e); added = true; }
-            None => { unsupported = true; }
+            Some(e) => {
+                layer.effects.push(e);
+                added = true;
+            }
+            None => {
+                unsupported = true;
+            }
         }
     });
     if added {
         crate::core::frame_cache::bump_version();
         app.toasts.info(format!("Added '{}' effect", effect_name));
     } else if unsupported {
-        app.toasts.error(format!("'{}' is not available in the effect menu yet.", effect_name));
+        app.toasts.error(format!(
+            "'{}' is not available in the effect menu yet.",
+            effect_name
+        ));
     } else {
-        app.toasts.error("Could not add the effect because the selected layer is no longer available.");
+        app.toasts
+            .error("Could not add the effect because the selected layer is no longer available.");
     }
 }
 
@@ -40,42 +51,63 @@ fn build_effect(
 ) -> Option<Effect> {
     let e = match name {
         "Slider Control" => Effect {
-            id: format!("slider_{len}"), name: "Slider Control".into(),
-            effect_type: EffectType::SliderControl { value: Animatable::new_constant(50.0) },
+            id: format!("slider_{len}"),
+            name: "Slider Control".into(),
+            effect_type: EffectType::SliderControl {
+                value: Animatable::new_constant(50.0),
+            },
             enabled: true,
         },
         "Angle Control" => Effect {
-            id: format!("angle_{len}"), name: "Angle Control".into(),
-            effect_type: EffectType::AngleControl { angle_degrees: Animatable::new_constant(0.0) },
+            id: format!("angle_{len}"),
+            name: "Angle Control".into(),
+            effect_type: EffectType::AngleControl {
+                angle_degrees: Animatable::new_constant(0.0),
+            },
             enabled: true,
         },
         "Point Control" => Effect {
-            id: format!("point_{len}"), name: "Point Control".into(),
-            effect_type: EffectType::PointControl { point: Animatable::new_constant([960.0, 540.0]) },
+            id: format!("point_{len}"),
+            name: "Point Control".into(),
+            effect_type: EffectType::PointControl {
+                point: Animatable::new_constant([960.0, 540.0]),
+            },
             enabled: true,
         },
         "Color Control" => Effect {
-            id: format!("color_{len}"), name: "Color Control".into(),
-            effect_type: EffectType::ColorControl { color: Animatable::new_constant([1.0, 1.0, 1.0, 1.0]) },
+            id: format!("color_{len}"),
+            name: "Color Control".into(),
+            effect_type: EffectType::ColorControl {
+                color: Animatable::new_constant([1.0, 1.0, 1.0, 1.0]),
+            },
             enabled: true,
         },
         "Checkbox Control" => Effect {
-            id: format!("checkbox_{len}"), name: "Checkbox Control".into(),
+            id: format!("checkbox_{len}"),
+            name: "Checkbox Control".into(),
             effect_type: EffectType::CheckboxControl { checked: false },
             enabled: true,
         },
         "Dropdown Control" => Effect {
-            id: format!("dropdown_{len}"), name: "Dropdown Control".into(),
-            effect_type: EffectType::DropdownControl { value: 0, options: vec!["Option 1".into(), "Option 2".into(), "Option 3".into()] },
+            id: format!("dropdown_{len}"),
+            name: "Dropdown Control".into(),
+            effect_type: EffectType::DropdownControl {
+                value: 0,
+                options: vec!["Option 1".into(), "Option 2".into(), "Option 3".into()],
+            },
             enabled: true,
         },
         "3D Point Control" => Effect {
-            id: format!("point3d_{len}"), name: "3D Point Control".into(),
-            effect_type: EffectType::Point3DControl { point: Animatable::new_constant([0.0, 0.0, 0.0]) },
+            id: format!("point3d_{len}"),
+            name: "3D Point Control".into(),
+            effect_type: EffectType::Point3DControl {
+                point: Animatable::new_constant([0.0, 0.0, 0.0]),
+            },
             enabled: true,
         },
         "Lens Flare" => Effect {
-            id: format!("flare_{len}"), name: "Lens Flare".into(),
+            id: format!("flare_{len}"),
+            name: "Lens Flare".into(),
             effect_type: EffectType::LensFlare {
                 enabled: Animatable::new_constant(1.0),
                 position_x: Animatable::new_constant(0.5),
@@ -88,27 +120,41 @@ fn build_effect(
             enabled: true,
         },
         "Gaussian Blur" => Effect {
-            id: format!("blur_{len}"), name: "Gaussian Blur".into(),
-            effect_type: EffectType::GaussianBlur { blur_radius: Animatable::new_constant(5.0) },
+            id: format!("blur_{len}"),
+            name: "Gaussian Blur".into(),
+            effect_type: EffectType::GaussianBlur {
+                blur_radius: Animatable::new_constant(5.0),
+            },
             enabled: true,
         },
         "Directional Blur" => Effect {
-            id: format!("dirblur_{len}"), name: "Directional Blur".into(),
-            effect_type: EffectType::DirectionalBlur { angle: Animatable::new_constant(0.0), length: Animatable::new_constant(10.0) },
+            id: format!("dirblur_{len}"),
+            name: "Directional Blur".into(),
+            effect_type: EffectType::DirectionalBlur {
+                angle: Animatable::new_constant(0.0),
+                length: Animatable::new_constant(10.0),
+            },
             enabled: true,
         },
         "Radial Blur" => Effect {
-            id: format!("radblur_{len}"), name: "Radial Blur".into(),
-            effect_type: EffectType::RadialBlur { amount: Animatable::new_constant(10.0) },
+            id: format!("radblur_{len}"),
+            name: "Radial Blur".into(),
+            effect_type: EffectType::RadialBlur {
+                amount: Animatable::new_constant(10.0),
+            },
             enabled: true,
         },
         "Sharpen" => Effect {
-            id: format!("sharp_{len}"), name: "Sharpen".into(),
-            effect_type: EffectType::Sharpen { amount: Animatable::new_constant(50.0) },
+            id: format!("sharp_{len}"),
+            name: "Sharpen".into(),
+            effect_type: EffectType::Sharpen {
+                amount: Animatable::new_constant(50.0),
+            },
             enabled: true,
         },
         "Color Tint" => Effect {
-            id: format!("tint_{len}"), name: "Color Tint".into(),
+            id: format!("tint_{len}"),
+            name: "Color Tint".into(),
             effect_type: EffectType::ColorTint {
                 color: Animatable::new_constant([1.0, 0.2, 0.4, 1.0]),
                 intensity: Animatable::new_constant(1.0),
@@ -116,7 +162,8 @@ fn build_effect(
             enabled: true,
         },
         "Levels" => Effect {
-            id: format!("levels_{len}"), name: "Levels".into(),
+            id: format!("levels_{len}"),
+            name: "Levels".into(),
             effect_type: EffectType::Levels {
                 input_black: Animatable::new_constant(0.0),
                 input_white: Animatable::new_constant(255.0),
@@ -127,7 +174,8 @@ fn build_effect(
             enabled: true,
         },
         "Hue/Saturation" => Effect {
-            id: format!("hs_{len}"), name: "Hue/Saturation".into(),
+            id: format!("hs_{len}"),
+            name: "Hue/Saturation".into(),
             effect_type: EffectType::HueSaturation {
                 hue_shift: Animatable::new_constant(0.0),
                 saturation: Animatable::new_constant(0.0),
@@ -136,12 +184,16 @@ fn build_effect(
             enabled: true,
         },
         "Vibrance" => Effect {
-            id: format!("vib_{len}"), name: "Vibrance".into(),
-            effect_type: EffectType::Vibrance { amount: Animatable::new_constant(50.0) },
+            id: format!("vib_{len}"),
+            name: "Vibrance".into(),
+            effect_type: EffectType::Vibrance {
+                amount: Animatable::new_constant(50.0),
+            },
             enabled: true,
         },
         "Glow" => Effect {
-            id: format!("glow_{len}"), name: "Glow".into(),
+            id: format!("glow_{len}"),
+            name: "Glow".into(),
             effect_type: EffectType::Glow {
                 threshold: Animatable::new_constant(60.0),
                 radius: Animatable::new_constant(10.0),
@@ -151,7 +203,8 @@ fn build_effect(
             enabled: true,
         },
         "Vignette" => Effect {
-            id: format!("vig_{len}"), name: "Vignette".into(),
+            id: format!("vig_{len}"),
+            name: "Vignette".into(),
             effect_type: EffectType::Vignette {
                 intensity: Animatable::new_constant(0.5),
                 roundness: Animatable::new_constant(0.5),
@@ -161,12 +214,18 @@ fn build_effect(
             enabled: true,
         },
         "Film Grain" => Effect {
-            id: format!("grain_{len}"), name: "Film Grain".into(),
-            effect_type: EffectType::FilmGrain { intensity: Animatable::new_constant(0.1), grain_size: 2.0, color_film: false },
+            id: format!("grain_{len}"),
+            name: "Film Grain".into(),
+            effect_type: EffectType::FilmGrain {
+                intensity: Animatable::new_constant(0.1),
+                grain_size: 2.0,
+                color_film: false,
+            },
             enabled: true,
         },
         "Drop Shadow" => Effect {
-            id: format!("ds_{len}"), name: "Drop Shadow".into(),
+            id: format!("ds_{len}"),
+            name: "Drop Shadow".into(),
             effect_type: EffectType::DropShadow {
                 color: Animatable::new_constant([0.0, 0.0, 0.0, 1.0]),
                 opacity: Animatable::new_constant(75.0),
@@ -177,17 +236,26 @@ fn build_effect(
             enabled: true,
         },
         "Twirl" => Effect {
-            id: format!("twirl_{len}"), name: "Twirl".into(),
-            effect_type: EffectType::Twirl { angle: Animatable::new_constant(50.0), radius: Animatable::new_constant(100.0) },
+            id: format!("twirl_{len}"),
+            name: "Twirl".into(),
+            effect_type: EffectType::Twirl {
+                angle: Animatable::new_constant(50.0),
+                radius: Animatable::new_constant(100.0),
+            },
             enabled: true,
         },
         "Bulge" => Effect {
-            id: format!("bulge_{len}"), name: "Bulge".into(),
-            effect_type: EffectType::Bulge { amount: Animatable::new_constant(50.0), radius: Animatable::new_constant(100.0) },
+            id: format!("bulge_{len}"),
+            name: "Bulge".into(),
+            effect_type: EffectType::Bulge {
+                amount: Animatable::new_constant(50.0),
+                radius: Animatable::new_constant(100.0),
+            },
             enabled: true,
         },
         "Mesh Warp" => Effect {
-            id: format!("meshwarp_{len}"), name: "Mesh Warp".into(),
+            id: format!("meshwarp_{len}"),
+            name: "Mesh Warp".into(),
             effect_type: EffectType::MeshWarp {
                 top_left: Animatable::new_constant([0.0, 0.0]),
                 top_right: Animatable::new_constant([1.0, 0.0]),
@@ -197,7 +265,8 @@ fn build_effect(
             enabled: true,
         },
         "Corner Pin" => Effect {
-            id: format!("cornerpin_{len}"), name: "Corner Pin".into(),
+            id: format!("cornerpin_{len}"),
+            name: "Corner Pin".into(),
             effect_type: EffectType::CornerPin {
                 top_left: Animatable::new_constant([0.0, 0.0]),
                 top_right: Animatable::new_constant([cw, 0.0]),
@@ -207,7 +276,8 @@ fn build_effect(
             enabled: true,
         },
         "Chromatic Aberration" => Effect {
-            id: format!("ca_{len}"), name: "Chromatic Aberration".into(),
+            id: format!("ca_{len}"),
+            name: "Chromatic Aberration".into(),
             effect_type: EffectType::ChromaticAberration {
                 shift_r: Animatable::new_constant(5.0),
                 shift_b: Animatable::new_constant(-5.0),
@@ -217,7 +287,8 @@ fn build_effect(
             enabled: true,
         },
         "Bass & Treble" => Effect {
-            id: format!("bass_treble_{len}"), name: "Bass & Treble".into(),
+            id: format!("bass_treble_{len}"),
+            name: "Bass & Treble".into(),
             effect_type: EffectType::BassTreble {
                 bass_gain: Animatable::new_constant(0.0),
                 treble_gain: Animatable::new_constant(0.0),
@@ -226,7 +297,8 @@ fn build_effect(
             enabled: true,
         },
         "Flanger" => Effect {
-            id: format!("flanger_{len}"), name: "Flanger".into(),
+            id: format!("flanger_{len}"),
+            name: "Flanger".into(),
             effect_type: EffectType::Flanger {
                 max_delay_ms: Animatable::new_constant(5.0),
                 lfo_rate: Animatable::new_constant(0.5),
@@ -236,7 +308,8 @@ fn build_effect(
             enabled: true,
         },
         "Chorus" => Effect {
-            id: format!("chorus_{len}"), name: "Chorus".into(),
+            id: format!("chorus_{len}"),
+            name: "Chorus".into(),
             effect_type: EffectType::Chorus {
                 delay_ms: Animatable::new_constant(15.0),
                 depth_ms: Animatable::new_constant(5.0),
@@ -247,7 +320,8 @@ fn build_effect(
             enabled: true,
         },
         "Parametric EQ" => Effect {
-            id: format!("peq_{len}"), name: "Parametric EQ".into(),
+            id: format!("peq_{len}"),
+            name: "Parametric EQ".into(),
             effect_type: EffectType::ParametricEQ {
                 freq_hz: Animatable::new_constant(1000.0),
                 gain_db: Animatable::new_constant(0.0),
@@ -256,7 +330,8 @@ fn build_effect(
             enabled: true,
         },
         "Optical Flares" => Effect {
-            id: format!("optflare_{len}"), name: "Optical Flares".into(),
+            id: format!("optflare_{len}"),
+            name: "Optical Flares".into(),
             effect_type: EffectType::OpticalFlares {
                 position: Animatable::new_constant([cw * 0.5, ch * 0.5]),
                 brightness: Animatable::new_constant(1.0),
@@ -265,7 +340,8 @@ fn build_effect(
             enabled: true,
         },
         "Motion Tile" => Effect {
-            id: format!("motiontile_{len}"), name: "Motion Tile".into(),
+            id: format!("motiontile_{len}"),
+            name: "Motion Tile".into(),
             effect_type: EffectType::MotionTile {
                 tile_center: Animatable::new_constant([cw * 0.5, ch * 0.5]),
                 tile_width: Animatable::new_constant(100.0),
@@ -278,7 +354,8 @@ fn build_effect(
             enabled: true,
         },
         "CC Page Turn" => Effect {
-            id: format!("pageturn_{len}"), name: "CC Page Turn".into(),
+            id: format!("pageturn_{len}"),
+            name: "CC Page Turn".into(),
             effect_type: EffectType::PageTurn {
                 fold_position: Animatable::new_constant([cw, ch]),
                 fold_radius: Animatable::new_constant(120.0),
@@ -290,7 +367,8 @@ fn build_effect(
             enabled: true,
         },
         "Set Matte" => Effect {
-            id: format!("setmatte_{len}"), name: "Set Matte".into(),
+            id: format!("setmatte_{len}"),
+            name: "Set Matte".into(),
             effect_type: EffectType::SetMatte {
                 source_layer_idx: 0,
                 source_channel: crate::core::set_matte::MatteSourceChannel::Alpha,
@@ -300,7 +378,8 @@ fn build_effect(
             enabled: true,
         },
         "Shift Channels" => Effect {
-            id: format!("shiftch_{len}"), name: "Shift Channels".into(),
+            id: format!("shiftch_{len}"),
+            name: "Shift Channels".into(),
             effect_type: EffectType::ShiftChannels {
                 take_red: Animatable::new_constant(0.0),
                 take_green: Animatable::new_constant(1.0),
@@ -310,7 +389,8 @@ fn build_effect(
             enabled: true,
         },
         "Echo" => Effect {
-            id: format!("echo_{len}"), name: "Echo".into(),
+            id: format!("echo_{len}"),
+            name: "Echo".into(),
             effect_type: EffectType::Echo {
                 echo_time_seconds: Animatable::new_constant(-0.033),
                 num_echoes: 3,
@@ -321,12 +401,14 @@ fn build_effect(
             enabled: true,
         },
         "Find Edges" => Effect {
-            id: format!("findedges_{len}"), name: "Find Edges".into(),
+            id: format!("findedges_{len}"),
+            name: "Find Edges".into(),
             effect_type: EffectType::FindEdges { invert: false },
             enabled: true,
         },
         "Transform" => Effect {
-            id: format!("transform_{len}"), name: "Transform".into(),
+            id: format!("transform_{len}"),
+            name: "Transform".into(),
             effect_type: EffectType::Transform {
                 anchor_point: Animatable::new_constant([
                     layer.transform.anchor_point.evaluate(0)[0],
@@ -347,7 +429,8 @@ fn build_effect(
             enabled: true,
         },
         "Camera Lens Blur" => Effect {
-            id: format!("cameralensblur_{len}"), name: "Camera Lens Blur".into(),
+            id: format!("cameralensblur_{len}"),
+            name: "Camera Lens Blur".into(),
             effect_type: EffectType::CameraLensBlur {
                 blur_radius: Animatable::new_constant(15.0),
                 iris_blades: 6,
@@ -359,7 +442,8 @@ fn build_effect(
             enabled: true,
         },
         "Linear Color Key" => Effect {
-            id: format!("linearcolorkey_{len}"), name: "Linear Color Key".into(),
+            id: format!("linearcolorkey_{len}"),
+            name: "Linear Color Key".into(),
             effect_type: EffectType::LinearColorKey {
                 key_color: Animatable::new_constant([0.0, 1.0, 0.0]),
                 match_mode: crate::core::linear_color_key::ColorMatchMode::UsingRGB,
@@ -369,7 +453,8 @@ fn build_effect(
             enabled: true,
         },
         "Channel Combiner" => Effect {
-            id: format!("channelcombiner_{len}"), name: "Channel Combiner".into(),
+            id: format!("channelcombiner_{len}"),
+            name: "Channel Combiner".into(),
             effect_type: EffectType::ChannelCombiner {
                 from_channel: crate::core::channel_combiner::ChannelCombinerFrom::Luminance,
                 to_target: crate::core::channel_combiner::ChannelCombinerTo::Alpha,
@@ -378,7 +463,8 @@ fn build_effect(
             enabled: true,
         },
         "Lightning" => Effect {
-            id: format!("lightning_{len}"), name: "Lightning".into(),
+            id: format!("lightning_{len}"),
+            name: "Lightning".into(),
             effect_type: EffectType::LightningArc {
                 start_x: Animatable::new_constant(0.2),
                 start_y: Animatable::new_constant(0.2),
@@ -390,7 +476,8 @@ fn build_effect(
             enabled: true,
         },
         "Laser Beam" => Effect {
-            id: format!("laser_{len}"), name: "Laser Beam".into(),
+            id: format!("laser_{len}"),
+            name: "Laser Beam".into(),
             effect_type: EffectType::LaserBeam {
                 start_x: Animatable::new_constant(0.1),
                 start_y: Animatable::new_constant(0.5),

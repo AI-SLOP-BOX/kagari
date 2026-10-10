@@ -1047,6 +1047,7 @@ impl GpuComputeContext {
             "gpu_tint",
         )
     }
+    #[allow(clippy::too_many_arguments)]
     pub fn gpu_drop_shadow(
         &self,
         pixels: &mut [u8],
@@ -1119,6 +1120,7 @@ impl GpuComputeContext {
             "gpu_glow",
         )
     }
+    #[allow(clippy::too_many_arguments)]
     pub fn gpu_levels(
         &self,
         pixels: &mut [u8],
@@ -1324,6 +1326,7 @@ impl GpuComputeContext {
             "gpu_spherize",
         )
     }
+    #[allow(clippy::too_many_arguments)]
     pub fn gpu_wave_warp(
         &self,
         pixels: &mut [u8],
@@ -1518,6 +1521,7 @@ impl GpuComputeContext {
             "gpu_lwipe",
         )
     }
+    #[allow(clippy::too_many_arguments)]
     pub fn gpu_shift_channels(
         &self,
         p: &mut [u8],
@@ -2796,6 +2800,7 @@ pub fn try_gpu_glow(
         .map(|c| c.gpu_glow(pixels, w, h, threshold, radius, intensity))
         .unwrap_or(false)
 }
+#[allow(clippy::too_many_arguments)]
 pub fn try_gpu_levels(
     pixels: &mut [u8],
     w: u32,
@@ -3442,7 +3447,7 @@ mod tests {
     }
 
     fn variance(px: &[u8]) -> f64 {
-        let vals: Vec<f64> = px.chunks_exact(4).map(|c| c[0] as f64).collect();
+        let vals: Vec<f64> = px.as_chunks::<4>().0.iter().map(|c| c[0] as f64).collect();
         let n = vals.len() as f64;
         let mean = vals.iter().sum::<f64>() / n;
         vals.iter().map(|v| (v - mean) * (v - mean)).sum::<f64>() / n

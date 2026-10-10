@@ -1,28 +1,33 @@
 use crate::core::property::Animatable;
 use crate::core::the_wiggler::{WiggleDimension, WiggleNoiseType};
-use crate::ui::custom_widgets;
-use crate::ui::theme::colors;
+use crate::ui::kui::{self, ButtonKind};
 use crate::KagariApp;
 use eframe::egui;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum WiggleTarget {
+    Position,
+    Rotation,
+    Scale,
+    Opacity,
+}
+
 pub fn draw_the_wiggler_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
-    ui.heading("The Wiggler");
-    ui.label(
-        egui::RichText::new("Inject procedural noise keyframes into layer transforms")
-            .small()
-            .color(colors::TEXT_SECONDARY),
+    kui::section(ui, "The Wiggler");
+    kui::secondary(
+        ui,
+        "Inject procedural noise keyframes into layer transforms",
     );
-    ui.separator();
 
     let target_id = egui::Id::new("ae_wiggler_target_prop");
-    let mut target_prop: usize = ui
+    let mut target_prop: WiggleTarget = ui
         .ctx()
-        .data_mut(|d| *d.get_temp_mut_or_insert_with(target_id, || 0));
+        .data_mut(|d| *d.get_temp_mut_or_insert_with(target_id, || WiggleTarget::Position));
 
     let noise_type_id = egui::Id::new("ae_wiggler_noise_type");
-    let mut noise_type_idx: usize = ui
+    let mut noise_type: WiggleNoiseType = ui
         .ctx()
-        .data_mut(|d| *d.get_temp_mut_or_insert_with(noise_type_id, || 0));
+        .data_mut(|d| *d.get_temp_mut_or_insert_with(noise_type_id, || WiggleNoiseType::Smooth));
 
     let freq_id = egui::Id::new("ae_wiggler_freq");
     let mut freq: f32 = ui
@@ -34,86 +39,67 @@ pub fn draw_the_wiggler_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
         .ctx()
         .data_mut(|d| *d.get_temp_mut_or_insert_with(mag_id, || 30.0));
 
-    ui.horizontal(|ui| {
-        ui.label("Property:");
-        egui::ComboBox::from_id_salt("wiggler_prop_combo")
-            .selected_text(match target_prop {
-                0 => "Position",
-                1 => "Rotation",
-                2 => "Scale",
-                _ => "Opacity",
-            })
-            .show_ui(ui, |ui| {
-                if ui
-                    .selectable_value(&mut target_prop, 0, "Position")
-                    .clicked()
-                {
-                    ui.ctx().data_mut(|d| d.insert_temp(target_id, target_prop));
-                }
-                if ui
-                    .selectable_value(&mut target_prop, 1, "Rotation")
-                    .clicked()
-                {
-                    ui.ctx().data_mut(|d| d.insert_temp(target_id, target_prop));
-                }
-                if ui.selectable_value(&mut target_prop, 2, "Scale").clicked() {
-                    ui.ctx().data_mut(|d| d.insert_temp(target_id, target_prop));
-                }
-                if ui
-                    .selectable_value(&mut target_prop, 3, "Opacity")
-                    .clicked()
-                {
-                    ui.ctx().data_mut(|d| d.insert_temp(target_id, target_prop));
-                }
-            });
-    });
+    let grid = kui::PropertyGrid::new(ui, &["Property", "Noise Type", "Frequency", "Magnitude"]);
+    if grid.row(ui, "Property", |ui| {
+        kui::combo(
+            ui,
+            "wiggler_prop_combo",
+            &mut target_prop,
+            &[
+                (WiggleTarget::Position, "Position"),
+                (WiggleTarget::Rotation, "Rotation"),
+                (WiggleTarget::Scale, "Scale"),
+                (WiggleTarget::Opacity, "Opacity"),
+            ],
+        )
+    }) {
+        ui.ctx().data_mut(|d| d.insert_temp(target_id, target_prop));
+    }
+    if grid.row(ui, "Noise Type", |ui| {
+        kui::combo(
+            ui,
+            noise_type_id,
+            &mut noise_type,
+            &[
+                (WiggleNoiseType::Smooth, "Smooth"),
+                (WiggleNoiseType::Jagged, "Jagged"),
+            ],
+        )
+    }) {
+        ui.ctx()
+            .data_mut(|d| d.insert_temp(noise_type_id, noise_type));
+    }
+    if grid
+        .row(ui, "Frequency", |ui| {
+            kui::slider(ui, &mut freq, 0.5..=30.0, " wiggles/s")
+        })
+        .changed()
+    {
+        ui.ctx().data_mut(|d| d.insert_temp(freq_id, freq));
+    }
+    if grid
+        .row(ui, "Magnitude", |ui| {
+            kui::slider(ui, &mut mag, 1.0..=200.0, "")
+        })
+        .changed()
+    {
+        ui.ctx().data_mut(|d| d.insert_temp(mag_id, mag));
+    }
 
-    ui.add_space(4.0);
-    ui.horizontal(|ui| {
-        ui.label("Noise Type:");
-        if ui
-            .selectable_value(&mut noise_type_idx, 0, "Smooth")
-            .clicked()
-        {
-            ui.ctx()
-                .data_mut(|d| d.insert_temp(noise_type_id, noise_type_idx));
-        }
-        if ui
-            .selectable_value(&mut noise_type_idx, 1, "Jagged")
-            .clicked()
-        {
-            ui.ctx()
-                .data_mut(|d| d.insert_temp(noise_type_id, noise_type_idx));
-        }
-    });
+    kui::separator(ui);
 
-    ui.add_space(4.0);
-    ui.horizontal(|ui| {
-        ui.label("Frequency:");
-        if ui
-            .add(egui::Slider::new(&mut freq, 0.5..=30.0).suffix(" wiggles/s"))
-            .changed()
-        {
-            ui.ctx().data_mut(|d| d.insert_temp(freq_id, freq));
-        }
-    });
-
-    ui.horizontal(|ui| {
-        ui.label("Magnitude:");
-        if ui.add(egui::Slider::new(&mut mag, 1.0..=200.0)).changed() {
-            ui.ctx().data_mut(|d| d.insert_temp(mag_id, mag));
-        }
-    });
-
-    ui.add_space(8.0);
-    ui.separator();
-
-    if custom_widgets::ae_button(ui, "Apply Wiggle Keyframes")
-        .on_hover_text("Bake procedural noise into layer keyframes")
-        .clicked()
+    if kui::button_enabled(
+        ui,
+        "Apply Wiggle Keyframes",
+        ButtonKind::Accent,
+        app.selection.selected_layer_idx.is_some(),
+    )
+    .on_hover_text("Bake procedural noise into layer keyframes")
+    .clicked()
     {
         let Some(layer_idx) = app.selection.selected_layer_idx else {
-            app.toasts.error("Select a layer first");
+            app.toasts
+                .error(crate::ui::localization::tr("Select a layer first"));
             return;
         };
 
@@ -126,76 +112,57 @@ pub fn draw_the_wiggler_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
 
         let start_f = layer.in_frame;
         let end_f = layer.out_frame;
-        let noise_type = if noise_type_idx == 0 {
-            WiggleNoiseType::Smooth
-        } else {
-            WiggleNoiseType::Jagged
-        };
         let seed = layer_idx as u32 * 100 + 7;
+        let settings = crate::core::the_wiggler::WiggleSettings {
+            start_frame: start_f,
+            end_frame: end_f,
+            fps,
+            frequency: freq,
+            magnitude: mag,
+            noise_type,
+            seed,
+        };
 
         match target_prop {
-            0 => {
+            WiggleTarget::Position => {
                 let pos_anim = layer.transform.position.clone();
-                let kfs = crate::core::the_wiggler::generate_wiggle_vec2_additive(
+                let kfs = crate::core::the_wiggler::generate_wiggle_vec2_additive_with_settings(
                     |f| pos_anim.evaluate(f),
-                    start_f,
-                    end_f,
-                    fps,
-                    freq,
-                    mag,
-                    noise_type,
+                    settings,
                     WiggleDimension::AllIndependent,
-                    seed,
                 );
                 layer.transform.position = Animatable::Animated(kfs);
             }
-            1 => {
+            WiggleTarget::Rotation => {
                 let rot_anim = layer.transform.rotation.clone();
-                let kfs = crate::core::the_wiggler::generate_wiggle_scalar_additive(
+                let kfs = crate::core::the_wiggler::generate_wiggle_scalar_additive_with_settings(
                     |f| rot_anim.evaluate(f),
-                    start_f,
-                    end_f,
-                    fps,
-                    freq,
-                    mag,
-                    noise_type,
-                    seed,
+                    settings,
                 );
                 layer.transform.rotation = Animatable::Animated(kfs);
             }
-            2 => {
+            WiggleTarget::Scale => {
                 let scale_anim = layer.transform.scale.clone();
-                let kfs = crate::core::the_wiggler::generate_wiggle_vec2_additive(
+                let kfs = crate::core::the_wiggler::generate_wiggle_vec2_additive_with_settings(
                     |f| scale_anim.evaluate(f),
-                    start_f,
-                    end_f,
-                    fps,
-                    freq,
-                    mag,
-                    noise_type,
+                    settings,
                     WiggleDimension::AllSame,
-                    seed,
                 );
                 layer.transform.scale = Animatable::Animated(kfs);
             }
-            _ => {
+            WiggleTarget::Opacity => {
                 let op_anim = layer.transform.opacity.clone();
-                let kfs = crate::core::the_wiggler::generate_wiggle_scalar_additive(
+                let kfs = crate::core::the_wiggler::generate_wiggle_scalar_additive_with_settings(
                     |f| op_anim.evaluate(f),
-                    start_f,
-                    end_f,
-                    fps,
-                    freq,
-                    mag,
-                    noise_type,
-                    seed,
+                    settings,
                 );
                 layer.transform.opacity = Animatable::Animated(kfs);
             }
         }
 
         app.commit_project(temp_proj);
-        app.toasts
-            .info("The Wiggler: Baked procedural wiggle keyframes");
+        app.toasts.info(crate::ui::localization::tr(
+            "The Wiggler: Baked procedural wiggle keyframes",
+        ));
     }
 }

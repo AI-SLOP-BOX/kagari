@@ -2470,7 +2470,9 @@ impl Composition {
         let mut index = self.cameras.len().saturating_add(1);
         loop {
             let candidate = format!("camera_{index}");
-            if candidate != self.active_camera.id && !self.cameras.iter().any(|camera| camera.id == candidate) {
+            if candidate != self.active_camera.id
+                && !self.cameras.iter().any(|camera| camera.id == candidate)
+            {
                 return candidate;
             }
             index = index.saturating_add(1);
@@ -2585,7 +2587,9 @@ impl Composition {
             }
         }
         for camera in incoming_cameras {
-            destination.cameras.retain(|existing| existing.id != camera.id);
+            destination
+                .cameras
+                .retain(|existing| existing.id != camera.id);
             destination.cameras.push(camera);
         }
 
@@ -2618,7 +2622,9 @@ impl Composition {
         });
         moved_lights.extend(copied_lights);
         for light in moved_lights {
-            destination.lights.retain(|existing| existing.id != light.id);
+            destination
+                .lights
+                .retain(|existing| existing.id != light.id);
             destination.lights.push(light);
         }
     }
@@ -3151,8 +3157,10 @@ impl Composition {
             } else {
                 [current_pos[0], target_coord]
             };
-            self.layers[layer_idx].transform.position =
-                crate::core::property::Animatable::new_constant(new_pos);
+            self.layers[layer_idx]
+                .transform
+                .position
+                .set_value_at_frame(frame, new_pos);
         }
     }
 
@@ -3418,6 +3426,65 @@ impl Default for Project {
 }
 
 impl Project {
+    pub fn next_composition_id(&self, prefix: &str) -> String {
+        fn contains_id(composition: &Composition, candidate: &str) -> bool {
+            composition.id == candidate
+                || composition
+                    .sub_compositions
+                    .iter()
+                    .any(|child| contains_id(child, candidate))
+        }
+
+        let mut suffix = self.compositions.len();
+        loop {
+            let candidate = format!("{prefix}_{suffix}");
+            if !self
+                .compositions
+                .iter()
+                .any(|composition| contains_id(composition, &candidate))
+            {
+                return candidate;
+            }
+            suffix = suffix.saturating_add(1);
+        }
+    }
+
+    pub fn next_project_item_id(&self, prefix: &str) -> String {
+        let mut suffix = self.assets.len();
+        loop {
+            let candidate = format!("{prefix}_{suffix}");
+            if !self.assets.iter().any(|asset| asset.id == candidate) {
+                return candidate;
+            }
+            suffix = suffix.saturating_add(1);
+        }
+    }
+
+    /// A clean editing session with a safe, empty composition for UI code that
+    /// expects an active composition to exist.
+    pub fn empty_for_new_project() -> Self {
+        Self {
+            compositions: vec![Composition::new(
+                "comp_empty_start".to_string(),
+                "Untitled".to_string(),
+                1920,
+                1080,
+                30,
+                300,
+            )],
+            active_composition_idx: 0,
+            assets: Vec::new(),
+            use_gpu_compute: false,
+        }
+    }
+
+    pub fn has_pristine_start_composition(&self) -> bool {
+        self.compositions.len() == 1
+            && self.compositions[0].id == "comp_empty_start"
+            && self.compositions[0].layers.is_empty()
+            && self.assets.is_empty()
+    }
+
     pub fn active_composition(&self) -> &Composition {
         let idx = self
             .active_composition_idx
@@ -3441,10 +3508,10 @@ impl Project {
                 ProjectItemType::Image { path, .. }
                 | ProjectItemType::Model3D { path }
                 | ProjectItemType::Video { path, .. }
-                | ProjectItemType::Audio { path, .. } => {
-                    if !path.is_empty() {
-                        deps.insert(path.clone());
-                    }
+                | ProjectItemType::Audio { path, .. }
+                    if !path.is_empty() =>
+                {
+                    deps.insert(path.clone());
                 }
                 _ => {}
             }
@@ -3751,6 +3818,47 @@ mod tests {
     }
 
     #[test]
+    fn project_composition_id_generation_checks_nested_compositions() {
+        let mut project = Project::empty_for_new_project();
+        project.compositions[0].id = "comp_1".into();
+        project.compositions[0]
+            .sub_compositions
+            .push(Composition::new(
+                "comp_2".into(),
+                "Nested".into(),
+                16,
+                16,
+                30,
+                30,
+            ));
+
+        assert_eq!(project.next_composition_id("comp"), "comp_3");
+    }
+
+    #[test]
+    fn project_item_id_generation_skips_ids_after_asset_removal() {
+        let mut project = Project::empty_for_new_project();
+        project.assets = vec![
+            ProjectItem::new(
+                "asset_0",
+                "First",
+                ProjectItemType::Folder {
+                    name: "First".into(),
+                },
+            ),
+            ProjectItem::new(
+                "asset_2",
+                "Second",
+                ProjectItemType::Folder {
+                    name: "Second".into(),
+                },
+            ),
+        ];
+
+        assert_eq!(project.next_project_item_id("asset"), "asset_3");
+    }
+
+    #[test]
     fn project_item_missing_media_detection() {
         let missing = ProjectItem::new(
             "a",
@@ -3972,9 +4080,11 @@ mod tests {
     #[test]
     fn test_precompose_moves_referenced_scene_objects() {
         let mut comp = Composition::new("main".into(), "Main".into(), 1920, 1080, 30, 300);
-        let mut camera = Camera3D::default();
-        camera.id = "camera_1".into();
-        camera.active = true;
+        let camera = Camera3D {
+            id: "camera_1".into(),
+            active: true,
+            ..Default::default()
+        };
         comp.cameras.push(camera);
         let mut camera_layer = Layer::new(
             "camera_layer".into(),
@@ -3985,15 +4095,13 @@ mod tests {
         camera_layer.scene_object = Some(SceneObjectRef::Camera {
             id: "camera_1".into(),
         });
-        let mut light = Light3D::default();
-        light.id = "light_2".into();
+        let light = Light3D {
+            id: "light_2".into(),
+            ..Default::default()
+        };
         comp.lights.push(light);
-        let mut light_layer = Layer::new(
-            "light_layer".into(),
-            "Light 2".into(),
-            LayerType::Null,
-            300,
-        );
+        let mut light_layer =
+            Layer::new("light_layer".into(), "Light 2".into(), LayerType::Null, 300);
         light_layer.scene_object = Some(SceneObjectRef::Light {
             id: "light_2".into(),
         });
@@ -4028,12 +4136,19 @@ mod multi_camera_tests {
         assert_eq!(comp.next_camera_id(), "camera_1");
         assert_eq!(comp.next_light_id(), "light_2");
 
-        let mut camera = Camera3D::default();
-        camera.id = "camera_1".into();
+        let camera = Camera3D {
+            id: "camera_1".into(),
+            ..Default::default()
+        };
         comp.cameras.push(camera);
         assert_eq!(comp.next_camera_id(), "camera_2");
 
-        let mut layer = Layer::new("camera_layer".into(), "Camera 1".into(), LayerType::Null, 30);
+        let mut layer = Layer::new(
+            "camera_layer".into(),
+            "Camera 1".into(),
+            LayerType::Null,
+            30,
+        );
         layer.scene_object = Some(SceneObjectRef::Camera {
             id: "camera_1".into(),
         });
@@ -4056,9 +4171,11 @@ mod multi_camera_tests {
     fn removing_scene_layer_removes_its_camera_or_light() {
         let mut comp = Composition::new("c".into(), "C".into(), 100, 100, 30, 30);
 
-        let mut camera = Camera3D::default();
-        camera.id = "camera_1".into();
-        camera.name = "Camera 1".into();
+        let camera = Camera3D {
+            id: "camera_1".into(),
+            name: "Camera 1".into(),
+            ..Default::default()
+        };
         comp.cameras.push(camera);
         comp.set_active_camera(Some(0));
 
@@ -4074,14 +4191,12 @@ mod multi_camera_tests {
         });
         comp.layers.push(camera_layer);
 
-        let mut light = Light3D::default();
-        light.id = "light_2".into();
-        let mut light_layer = Layer::new(
-            "light_layer".into(),
-            "Light 2".into(),
-            LayerType::Null,
-            30,
-        );
+        let light = Light3D {
+            id: "light_2".into(),
+            ..Default::default()
+        };
+        let mut light_layer =
+            Layer::new("light_layer".into(), "Light 2".into(), LayerType::Null, 30);
         light_layer.is_3d = true;
         light_layer.scene_object = Some(SceneObjectRef::Light {
             id: "light_2".into(),
@@ -4101,9 +4216,11 @@ mod multi_camera_tests {
     fn scene_layer_transforms_drive_render_camera_and_light_values() {
         let mut comp = Composition::new("c".into(), "C".into(), 100, 100, 30, 30);
 
-        let mut camera = Camera3D::default();
-        camera.id = "camera_1".into();
-        camera.active = true;
+        let camera = Camera3D {
+            id: "camera_1".into(),
+            active: true,
+            ..Default::default()
+        };
         comp.cameras.push(camera);
         let mut camera_layer = Layer::new(
             "camera_layer".into(),
@@ -4119,15 +4236,13 @@ mod multi_camera_tests {
         camera_layer.transform_3d.rotation = Animatable::new_constant([5.0, 10.0, 15.0]);
         comp.layers.push(camera_layer);
 
-        let mut light = Light3D::default();
-        light.id = "light_2".into();
+        let light = Light3D {
+            id: "light_2".into(),
+            ..Default::default()
+        };
         comp.lights.push(light.clone());
-        let mut light_layer = Layer::new(
-            "light_layer".into(),
-            "Light 2".into(),
-            LayerType::Null,
-            30,
-        );
+        let mut light_layer =
+            Layer::new("light_layer".into(), "Light 2".into(), LayerType::Null, 30);
         light_layer.is_3d = true;
         light_layer.scene_object = Some(SceneObjectRef::Light {
             id: "light_2".into(),
@@ -4150,8 +4265,10 @@ mod multi_camera_tests {
     #[test]
     fn shared_scene_object_survives_until_last_layer_is_removed() {
         let mut comp = Composition::new("c".into(), "C".into(), 100, 100, 30, 30);
-        let mut camera = Camera3D::default();
-        camera.id = "camera_1".into();
+        let camera = Camera3D {
+            id: "camera_1".into(),
+            ..Default::default()
+        };
         comp.cameras.push(camera);
         for index in 0..2 {
             let mut layer = Layer::new(
@@ -4166,18 +4283,22 @@ mod multi_camera_tests {
             comp.layers.push(layer);
         }
 
-        comp.remove_layer_at(0).expect("first shared row should exist");
+        comp.remove_layer_at(0)
+            .expect("first shared row should exist");
         assert!(comp.cameras.iter().any(|camera| camera.id == "camera_1"));
-        comp.remove_layer_at(0).expect("last shared row should exist");
+        comp.remove_layer_at(0)
+            .expect("last shared row should exist");
         assert!(!comp.cameras.iter().any(|camera| camera.id == "camera_1"));
     }
 
     #[test]
     fn precompose_shared_scene_object_keeps_parent_and_child_bindings() {
         let mut comp = Composition::new("main".into(), "Main".into(), 100, 100, 30, 30);
-        let mut camera = Camera3D::default();
-        camera.id = "camera_1".into();
-        camera.active = true;
+        let camera = Camera3D {
+            id: "camera_1".into(),
+            active: true,
+            ..Default::default()
+        };
         comp.cameras.push(camera);
         for index in 0..2 {
             let mut layer = Layer::new(
@@ -4215,10 +4336,12 @@ mod multi_camera_tests {
             "legacy fallback"
         );
 
-        let mut wide = Camera3D::default();
-        wide.name = "Wide".into();
-        wide.fov_degrees = 90.0;
-        wide.active = false;
+        let wide = Camera3D {
+            name: "Wide".into(),
+            fov_degrees: 90.0,
+            active: false,
+            ..Default::default()
+        };
         comp.cameras.push(wide);
         // No active scene camera → legacy active_camera wins
         assert_eq!(comp.resolve_camera().fov_degrees, 50.0);
@@ -4232,9 +4355,11 @@ mod multi_camera_tests {
     fn test_set_active_camera_exclusive() {
         let mut comp = Composition::new("c".into(), "C".into(), 100, 100, 30, 30);
         for i in 0..2 {
-            let mut c = Camera3D::default();
-            c.name = format!("Cam{}", i);
-            c.active = false;
+            let c = Camera3D {
+                name: format!("Cam{}", i),
+                active: false,
+                ..Default::default()
+            };
             comp.cameras.push(c);
         }
         comp.set_active_camera(Some(1));
@@ -4250,22 +4375,25 @@ mod multi_camera_tests {
 
     #[test]
     fn camera_lens_tracks_evaluate_and_fallback_to_legacy_values() {
-        let mut camera = Camera3D::default();
-        assert_eq!(camera.fov_at(12), 50.0);
-        assert_eq!(camera.focus_distance_at(12), 1000.0);
-        assert_eq!(camera.aperture_at(12), 2.8);
-        camera.fov_animation = Some(Animatable::new_animated(vec![
-            Keyframe::new(0, 40.0, InterpolationType::Linear),
-            Keyframe::new(10, 80.0, InterpolationType::Linear),
-        ]));
-        camera.focus_distance_animation = Some(Animatable::new_animated(vec![
-            Keyframe::new(0, 500.0, InterpolationType::Linear),
-            Keyframe::new(10, 1500.0, InterpolationType::Linear),
-        ]));
-        camera.aperture_animation = Some(Animatable::new_animated(vec![
-            Keyframe::new(0, 2.0, InterpolationType::Linear),
-            Keyframe::new(10, 4.0, InterpolationType::Linear),
-        ]));
+        let defaults = Camera3D::default();
+        assert_eq!(defaults.fov_at(12), 50.0);
+        assert_eq!(defaults.focus_distance_at(12), 1000.0);
+        assert_eq!(defaults.aperture_at(12), 2.8);
+        let camera = Camera3D {
+            fov_animation: Some(Animatable::new_animated(vec![
+                Keyframe::new(0, 40.0, InterpolationType::Linear),
+                Keyframe::new(10, 80.0, InterpolationType::Linear),
+            ])),
+            focus_distance_animation: Some(Animatable::new_animated(vec![
+                Keyframe::new(0, 500.0, InterpolationType::Linear),
+                Keyframe::new(10, 1500.0, InterpolationType::Linear),
+            ])),
+            aperture_animation: Some(Animatable::new_animated(vec![
+                Keyframe::new(0, 2.0, InterpolationType::Linear),
+                Keyframe::new(10, 4.0, InterpolationType::Linear),
+            ])),
+            ..defaults
+        };
         assert_eq!(camera.fov_at(0), 40.0);
         assert_eq!(camera.fov_at(10), 80.0);
         assert_eq!(camera.focus_distance_at(5), 1000.0);
@@ -4286,19 +4414,21 @@ mod multi_camera_tests {
 
     #[test]
     fn animated_camera_lens_tracks_survive_json_roundtrip() {
-        let mut camera = Camera3D::default();
-        camera.fov_animation = Some(Animatable::new_animated(vec![
-            Keyframe::new(0, 50.0, InterpolationType::Linear),
-            Keyframe::new(24, 90.0, InterpolationType::Linear),
-        ]));
-        camera.focus_distance_animation = Some(Animatable::new_animated(vec![
-            Keyframe::new(0, 1000.0, InterpolationType::Linear),
-            Keyframe::new(24, 2400.0, InterpolationType::Linear),
-        ]));
-        camera.aperture_animation = Some(Animatable::new_animated(vec![
-            Keyframe::new(0, 2.8, InterpolationType::Linear),
-            Keyframe::new(24, 8.0, InterpolationType::Linear),
-        ]));
+        let camera = Camera3D {
+            fov_animation: Some(Animatable::new_animated(vec![
+                Keyframe::new(0, 50.0, InterpolationType::Linear),
+                Keyframe::new(24, 90.0, InterpolationType::Linear),
+            ])),
+            focus_distance_animation: Some(Animatable::new_animated(vec![
+                Keyframe::new(0, 1000.0, InterpolationType::Linear),
+                Keyframe::new(24, 2400.0, InterpolationType::Linear),
+            ])),
+            aperture_animation: Some(Animatable::new_animated(vec![
+                Keyframe::new(0, 2.8, InterpolationType::Linear),
+                Keyframe::new(24, 8.0, InterpolationType::Linear),
+            ])),
+            ..Default::default()
+        };
         let restored: Camera3D =
             serde_json::from_str(&serde_json::to_string(&camera).unwrap()).unwrap();
         assert_eq!(restored.fov_at(12), 70.0);
@@ -4330,15 +4460,17 @@ mod multi_camera_tests {
 
     #[test]
     fn animated_dof_controls_follow_the_current_frame() {
-        let mut camera = Camera3D::default();
-        camera.dof_enabled_animation = Some(Animatable::new_animated(vec![
-            Keyframe::new(0, 0.0, InterpolationType::Linear),
-            Keyframe::new(10, 1.0, InterpolationType::Linear),
-        ]));
-        camera.dof_max_blur_animation = Some(Animatable::new_animated(vec![
-            Keyframe::new(0, 4.0, InterpolationType::Linear),
-            Keyframe::new(10, 24.0, InterpolationType::Linear),
-        ]));
+        let camera = Camera3D {
+            dof_enabled_animation: Some(Animatable::new_animated(vec![
+                Keyframe::new(0, 0.0, InterpolationType::Linear),
+                Keyframe::new(10, 1.0, InterpolationType::Linear),
+            ])),
+            dof_max_blur_animation: Some(Animatable::new_animated(vec![
+                Keyframe::new(0, 4.0, InterpolationType::Linear),
+                Keyframe::new(10, 24.0, InterpolationType::Linear),
+            ])),
+            ..Default::default()
+        };
         assert!(!camera.dof_enabled_at(0));
         assert!(camera.dof_enabled_at(10));
         assert_eq!(camera.dof_max_blur_at(5), 14.0);
@@ -4363,8 +4495,10 @@ mod multi_camera_tests {
     #[test]
     fn test_resolve_camera_mut_targets_active() {
         let mut comp = Composition::new("c".into(), "C".into(), 100, 100, 30, 30);
-        let mut c = Camera3D::default();
-        c.name = "B".into();
+        let c = Camera3D {
+            name: "B".into(),
+            ..Default::default()
+        };
         comp.cameras.push(c);
         comp.set_active_camera(Some(0));
         comp.resolve_camera_mut().fov_degrees = 120.0;

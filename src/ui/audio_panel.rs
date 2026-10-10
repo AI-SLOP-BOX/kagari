@@ -1,201 +1,167 @@
-use crate::ui::custom_widgets;
-use crate::ui::theme::colors;
+use crate::ui::kui;
+use crate::ui::localization::{tr, tr_format};
 use crate::KagariApp;
 use eframe::egui;
 
 pub fn draw_audio_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
-    ui.heading("Audio Levels & Panning");
-    ui.separator();
+    kui::group(ui, "Audio Levels & Panning", |ui| {
+        let grid = kui::PropertyGrid::new(ui, &["Master Audio Level", "L/R Pan"]);
+        grid.row(ui, "Master Audio Level", |ui| {
+            kui::parameter_slider(ui, &mut app.playback.master_volume, 0.0..=2.0, "×");
+        });
 
-    let master_vol = app.playback.master_volume;
-    ui.horizontal(|ui| {
-        ui.label("Master Audio Level:");
-        ui.add(egui::Slider::new(&mut app.playback.master_volume, 0.0..=2.0).suffix(" x"));
-    });
-    let db_val = if master_vol > 0.001 {
-        20.0 * master_vol.log10()
-    } else {
-        -60.0
-    };
-    ui.small(format!("Master Level: {:.1} dB", db_val));
-
-    // Live Audio VU Meter (-60dB .. +12dB)
-    let vu_norm = ((db_val + 60.0) / 72.0).clamp(0.0, 1.0);
-    ui.horizontal(|ui| {
-        ui.label("L:");
-        ui.add(egui::ProgressBar::new(vu_norm).text(format!("{:.1} dB", db_val)));
-    });
-    ui.horizontal(|ui| {
-        ui.label("R:");
-        ui.add(egui::ProgressBar::new(vu_norm * 0.95).text(format!("{:.1} dB", db_val - 0.5)));
-    });
-
-    ui.add_space(8.0);
-    ui.separator();
-
-    let layer_info = if let Some(idx) = app.selection.selected_layer_idx {
-        let comp = app.history.current().active_composition();
-        if idx < comp.layers.len() {
-            Some((idx, comp.layers[idx].name.clone()))
+        let master_volume = app.playback.master_volume;
+        let db = if master_volume > 0.001 {
+            20.0 * master_volume.log10()
         } else {
-            None
-        }
-    } else {
-        None
+            -60.0
+        };
+        kui::caption(
+            ui,
+            format!(
+                "{} dB",
+                tr_format("Master Level: {}", &[&format!("{db:.1}")])
+            ),
+        );
+        let left_peak = ((db + 60.0) / 72.0).clamp(0.0, 1.0);
+        let right_db = db - 0.5;
+        kui::level_meter(ui, "L", left_peak, &format!("{db:.1} dB"));
+        kui::level_meter(
+            ui,
+            "R",
+            ((right_db + 60.0) / 72.0).clamp(0.0, 1.0),
+            &format!("{right_db:.1} dB"),
+        );
+    });
+
+    let layer_info = app.selection.selected_layer_idx.and_then(|index| {
+        app.history
+            .current()
+            .active_composition()
+            .layers
+            .get(index)
+            .map(|layer| (index, layer.name.clone()))
+    });
+
+    let Some((index, layer_name)) = layer_info else {
+        kui::caption(
+            ui,
+            tr("Select a layer to adjust audio pan and waveform settings."),
+        );
+        return;
     };
 
-    if let Some((idx, layer_name)) = layer_info {
-        ui.label(format!("Selected Layer: {}", layer_name));
-
-        let pan_id = egui::Id::new(format!("ae_audio_pan_{}", idx));
-        let mut pan: f32 = ui
-            .ctx()
-            .data_mut(|d| *d.get_temp_mut_or_insert_with(pan_id, || 0.0));
-        ui.horizontal(|ui| {
-            ui.label("L/R Pan:");
-            if ui
-                .add(egui::Slider::new(&mut pan, -100.0..=100.0).suffix(" %"))
-                .changed()
-            {
-                ui.ctx().data_mut(|d| d.insert_temp(pan_id, pan));
+    let selected_label = tr_format("Selected Layer: {}", &[&layer_name]);
+    kui::group(ui, "Layer Audio", |ui| {
+        kui::secondary(ui, selected_label);
+        let channel_count = app.history.current().active_composition().layers.len();
+        app.audio_mixer_channels
+            .resize(channel_count, Default::default());
+        let grid = kui::PropertyGrid::new(ui, &["L/R Pan"]);
+        grid.row(ui, "L/R Pan", |ui| {
+            if let Some(channel) = app.audio_mixer_channels.get_mut(index) {
+                if kui::parameter_slider(ui, &mut channel.pan, -100.0..=100.0, "%").changed() {
+                    app.autosave.mark_dirty();
+                    app.playback.cached_audio_key = 0;
+                }
             }
         });
 
-        ui.add_space(6.0);
-        let mut waveform_on = ui.ctx().data_mut(|d| {
-            *d.get_temp_mut_or_insert_with(egui::Id::new("ae_show_waveform"), || true)
-        });
-        if ui
-            .checkbox(&mut waveform_on, "Show Layer Audio Waveform (L)")
-            .changed()
-        {
-            ui.ctx()
-                .data_mut(|d| d.insert_temp(egui::Id::new("ae_show_waveform"), waveform_on));
+        let mut waveform_on = app.expanded_waveform_layers.contains(&index);
+        if kui::switch(ui, &mut waveform_on, "Show Layer Audio Waveform (L)").changed() {
+            if waveform_on {
+                app.expanded_waveform_layers.insert(index);
+            } else {
+                app.expanded_waveform_layers.remove(&index);
+            }
         }
+    });
 
-        ui.add_space(8.0);
-        ui.separator();
-        ui.label(
-            egui::RichText::new("Audio-to-Motion Reactive Bind")
-                .strong()
-                .color(colors::ACCENT_CYAN),
-        );
-        ui.horizontal(|ui| {
-            if custom_widgets::ae_button_accent(ui, "Bind to Scale (Kick)")
-                .on_hover_text("Pulse Scale on audio bass peaks")
+    kui::group(ui, "Audio-Reactive Tools", |ui| {
+        ui.horizontal_wrapped(|ui| {
+            if kui::button(ui, "Bind Scale to Bass", kui::ButtonKind::Accent)
+                .on_hover_text(tr("Increase Scale from the analyzed bass band"))
                 .clicked()
             {
-                let mut temp_proj = app.history.current().clone();
-                let comp_mut = temp_proj.active_composition_mut();
-                if idx < comp_mut.layers.len() {
-                    comp_mut.layers[idx].transform.scale_expression =
-                        Some(crate::core::timeline::Expression::Wiggle {
-                            frequency: 4.0,
-                            amplitude: 15.0,
-                        });
-                    app.commit_project(temp_proj);
-                    app.toasts
-                        .info(format!("Bound Audio Bass to {} Scale", layer_name));
+                let mut project = app.history.current().clone();
+                let composition = project.active_composition_mut();
+                if index < composition.layers.len() {
+                    composition.layers[index].transform.scale_expression =
+                        Some(crate::core::timeline::Expression::Raw(
+                            "[value[0] + audioAmplitude(\"bass\") * 15.0, value[1] + audioAmplitude(\"bass\") * 15.0]".into(),
+                        ));
+                    app.commit_project(project);
+                    app.toasts.info(tr_format("Scale now responds to bass on {}", &[&layer_name]));
                 }
             }
-            if custom_widgets::ae_button_accent(ui, "Bind to Glow Pulse")
-                .on_hover_text("Pulsate Glow Intensity on audio peaks")
+            if kui::button(ui, "Add Audio Spectrum", kui::ButtonKind::Default)
+                .on_hover_text(tr("Add a spectrum overlay driven by the composition audio"))
                 .clicked()
             {
-                let mut temp_proj = app.history.current().clone();
-                let comp_mut = temp_proj.active_composition_mut();
-                if idx < comp_mut.layers.len() {
-                    let len = comp_mut.layers[idx].effects.len();
-                    comp_mut.layers[idx]
-                        .effects
-                        .push(crate::core::timeline::Effect {
-                            id: format!("audio_glow_{}", len),
-                            name: "Audio Reactive Glow".to_string(),
-                            effect_type: crate::core::timeline::EffectType::Glow {
-                                threshold: crate::core::property::Animatable::new_constant(0.5),
-                                radius: crate::core::property::Animatable::new_constant(20.0),
-                                intensity: crate::core::property::Animatable::new_constant(2.0),
-                                color: crate::core::property::Animatable::new_constant([
-                                    0.0, 0.8, 1.0, 1.0,
-                                ]),
-                            },
-                            enabled: true,
-                        });
-                    app.commit_project(temp_proj);
-                    app.toasts
-                        .info(format!("Bound Audio to {} Glow Pulse", layer_name));
-                }
-            }
-            if custom_widgets::ae_button(ui, "Add Audio Spectrum")
-                .on_hover_text("Generate real-time frequency spectrum wave on this layer")
-                .clicked()
-            {
-                let mut temp_proj = app.history.current().clone();
-                let comp_mut = temp_proj.active_composition_mut();
-                if idx < comp_mut.layers.len() {
-                    let len = comp_mut.layers[idx].effects.len();
-                    comp_mut.layers[idx]
-                        .effects
-                        .push(crate::core::timeline::Effect {
-                            id: format!("audio_spectrum_{}", len),
-                            name: "Audio Spectrum (64 Bands)".to_string(),
-                            effect_type: crate::core::timeline::EffectType::Glow {
-                                threshold: crate::core::property::Animatable::new_constant(0.2),
-                                radius: crate::core::property::Animatable::new_constant(15.0),
-                                intensity: crate::core::property::Animatable::new_constant(3.0),
-                                color: crate::core::property::Animatable::new_constant([
-                                    0.2, 1.0, 0.5, 1.0,
-                                ]),
-                            },
-                            enabled: true,
-                        });
-                    app.commit_project(temp_proj);
-                    app.toasts
-                        .info(format!("Added Audio Spectrum generator to {}", layer_name));
-                }
-            }
-        });
-
-        ui.add_space(8.0);
-        ui.separator();
-        ui.label(
-            egui::RichText::new("Audio Keyframe Assistant")
-                .strong()
-                .color(colors::ACCENT_YELLOW),
-        );
-        ui.horizontal(|ui| {
-            if custom_widgets::ae_button_accent(ui, "Convert Audio to Keyframes").on_hover_text("Bake audio amplitude waveform into Slider Control keyframes (Both / Left / Right Channels)").clicked() {
-                let source = app
-                    .history
-                    .current()
-                    .active_composition()
-                    .layers
-                    .get(idx)
-                    .and_then(|layer| match &layer.layer_type {
-                        crate::core::timeline::LayerType::Audio { path, .. } => Some(path.clone()),
-                        crate::core::timeline::LayerType::Video {
-                            audio_wav: Some(path), ..
-                        } => Some(path.clone()),
-                        _ => None,
+                let mut project = app.history.current().clone();
+                let composition = project.active_composition_mut();
+                if index < composition.layers.len() {
+                    let effect_index = composition.layers[index].effects.len();
+                    composition.layers[index].effects.push(crate::core::timeline::Effect {
+                        id: format!("audio_spectrum_{effect_index}"),
+                        name: "Audio Spectrum".to_owned(),
+                        effect_type: crate::core::timeline::EffectType::AudioSpectrum {
+                            enabled: crate::core::property::Animatable::new_constant(1.0),
+                            bands: crate::core::property::Animatable::new_constant(5.0),
+                            opacity: crate::core::property::Animatable::new_constant(1.0),
+                            color_start: [0.0, 0.8, 1.0, 1.0],
+                            color_end: [0.8, 0.2, 1.0, 1.0],
+                            position_x: crate::core::property::Animatable::new_constant(0.05),
+                            position_y: crate::core::property::Animatable::new_constant(0.05),
+                            width: crate::core::property::Animatable::new_constant(0.9),
+                            height: crate::core::property::Animatable::new_constant(0.25),
+                        },
+                        enabled: true,
                     });
-                let Some(source) = source else {
-                    app.toasts.error("Selected layer has no readable audio source");
-                    return;
-                };
-                let mut temp_proj = app.history.current().clone();
-                match crate::core::audio_to_keyframes::convert_audio_to_keyframes(
-                    temp_proj.active_composition_mut(),
-                    &source,
-                ) {
-                    Ok(name) => {
-                        app.commit_project(temp_proj);
-                        app.toasts.info(format!("Created '{name}' with baked Slider Control keyframes"));
-                    }
-                    Err(error) => app.toasts.error(error),
+                    app.commit_project(project);
+                    app.toasts.info(tr_format("Added Audio Spectrum to {}", &[&layer_name]));
                 }
             }
         });
-    } else {
-        ui.weak("Select a layer to adjust audio pan and waveform settings.");
-    }
+    });
+
+    kui::group(ui, "Audio Keyframe Assistant", |ui| {
+        kui::caption(ui, tr("Bake audio amplitude waveform into Slider Control keyframes (Both / Left / Right Channels)"));
+        if kui::button(ui, "Convert Audio to Keyframes", kui::ButtonKind::Accent)
+            .on_hover_text(tr("Bake audio amplitude waveform into Slider Control keyframes (Both / Left / Right Channels)"))
+            .clicked()
+        {
+            let source = app
+                .history
+                .current()
+                .active_composition()
+                .layers
+                .get(index)
+                .and_then(|layer| match &layer.layer_type {
+                    crate::core::timeline::LayerType::Audio { path, .. } => Some(path.clone()),
+                    crate::core::timeline::LayerType::Video { audio_wav: Some(path), .. } => {
+                        Some(path.clone())
+                    }
+                    _ => None,
+                });
+            let Some(source) = source else {
+                app.toasts.error(tr("Selected layer has no readable audio source"));
+                return;
+            };
+            let mut project = app.history.current().clone();
+            match crate::core::audio_to_keyframes::convert_audio_to_keyframes(
+                project.active_composition_mut(),
+                &source,
+            ) {
+                Ok(name) => {
+                    app.commit_project(project);
+                    app.toasts.info(tr_format(
+                    "Created {} with baked Slider Control keyframes",
+                        &[&name],
+                    ));
+                }
+                Err(error) => app.toasts.error(error),
+            }
+        }
+    });
 }

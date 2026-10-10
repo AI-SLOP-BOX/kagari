@@ -1,5 +1,7 @@
 use crate::core::keyframe::InterpolationType;
 use crate::core::property::Animatable;
+use crate::ui::graph_editor::property::{GraphProperty, Scalar2dTrack, Vector2Track};
+use crate::ui::kui::{self, ButtonKind};
 use crate::KagariApp;
 use eframe::egui;
 
@@ -37,35 +39,26 @@ fn apply_velocity_bezier<T: Clone + crate::core::property::Interpolate>(
 }
 
 pub fn draw_speed_graph_options(app: &mut KagariApp, ui: &mut egui::Ui, _current_frame: u32) {
-    ui.heading("Graph Editor Options & Keyframe Velocity");
-    ui.separator();
-
-    ui.label("Graph Type:");
+    kui::section(ui, "Graph Editor Options & Keyframe Velocity");
     let graph_mode_id = egui::Id::new("ae_graph_mode_select");
     let mut graph_mode = ui
         .ctx()
         .data_mut(|d| *d.get_temp_mut_or_insert_with(graph_mode_id, || 0));
+    let graph_modes = [(0, "Edit Speed Graph"), (1, "Edit Value Graph")];
+    let graph_grid = kui::PropertyGrid::new(ui, &["Graph Type"]);
+    if graph_grid.row(ui, "Graph Type", |ui| {
+        kui::combo(ui, graph_mode_id, &mut graph_mode, &graph_modes)
+    }) {
+        ui.ctx()
+            .data_mut(|data| data.insert_temp(graph_mode_id, graph_mode));
+    }
 
-    ui.horizontal(|ui| {
-        if ui
-            .selectable_value(&mut graph_mode, 0, "Edit Speed Graph")
-            .clicked()
-        {
-            ui.ctx()
-                .data_mut(|d| d.insert_temp(graph_mode_id, graph_mode));
-        }
-        if ui
-            .selectable_value(&mut graph_mode, 1, "Edit Value Graph")
-            .clicked()
-        {
-            ui.ctx()
-                .data_mut(|d| d.insert_temp(graph_mode_id, graph_mode));
-        }
-    });
-
-    ui.add_space(8.0);
-    ui.separator();
-    ui.label("Keyframe Velocity & Influence (applies to the selected layer's graph property):");
+    ui.add_space(kui::space::SM);
+    kui::separator(ui);
+    kui::caption(
+        ui,
+        "Keyframe Velocity & Influence (applies to the selected layer's graph property):",
+    );
 
     let vel_id = egui::Id::new("ae_velocity_sliders");
     let (mut in_influence, mut in_speed, mut out_influence, mut out_speed) =
@@ -73,33 +66,42 @@ pub fn draw_speed_graph_options(app: &mut KagariApp, ui: &mut egui::Ui, _current
             *d.get_temp_mut_or_insert_with(vel_id, || (33.3f32, 0.0f32, 33.3f32, 0.0f32))
         });
 
-    ui.horizontal(|ui| {
-        ui.label("Incoming Speed:");
-        ui.add(egui::Slider::new(&mut in_speed, 0.0..=2000.0).suffix(" px/s"));
-        ui.label("Influence:");
-        ui.add(egui::Slider::new(&mut in_influence, 0.0..=100.0).suffix("%"));
+    let velocity_grid = kui::PropertyGrid::new(
+        ui,
+        &[
+            "Incoming Speed",
+            "Incoming Influence",
+            "Outgoing Speed",
+            "Outgoing Influence",
+        ],
+    );
+    velocity_grid.row(ui, "Incoming Speed", |ui| {
+        kui::slider(ui, &mut in_speed, 0.0..=2000.0, " px/s")
     });
-    ui.horizontal(|ui| {
-        ui.label("Outgoing Speed:");
-        ui.add(egui::Slider::new(&mut out_speed, 0.0..=2000.0).suffix(" px/s"));
-        ui.label("Influence:");
-        ui.add(egui::Slider::new(&mut out_influence, 0.0..=100.0).suffix("%"));
+    velocity_grid.row(ui, "Incoming Influence", |ui| {
+        kui::slider(ui, &mut in_influence, 0.0..=100.0, "%")
+    });
+    velocity_grid.row(ui, "Outgoing Speed", |ui| {
+        kui::slider(ui, &mut out_speed, 0.0..=2000.0, " px/s")
+    });
+    velocity_grid.row(ui, "Outgoing Influence", |ui| {
+        kui::slider(ui, &mut out_influence, 0.0..=100.0, "%")
     });
     ui.ctx()
         .data_mut(|d| d.insert_temp(vel_id, (in_influence, in_speed, out_influence, out_speed)));
 
-    ui.add_space(8.0);
-    ui.separator();
-    ui.horizontal(|ui| {
-        if ui
-            .button("Apply Velocity")
+    ui.add_space(kui::space::SM);
+    kui::separator(ui);
+    ui.horizontal_wrapped(|ui| {
+        if kui::button(ui, "Apply Velocity", ButtonKind::Accent)
             .on_hover_text(
                 "Write the velocity/influence values into the selected track's keyframes",
             )
             .clicked()
         {
             let Some(layer_idx) = app.selection.selected_layer_idx else {
-                app.toasts.error("Select a layer first");
+                app.toasts
+                    .error(crate::ui::localization::tr("Select a layer first"));
                 return;
             };
             let prop = app
@@ -107,35 +109,42 @@ pub fn draw_speed_graph_options(app: &mut KagariApp, ui: &mut egui::Ui, _current
                 .selected_property
                 .clone()
                 .unwrap_or_else(|| "Position X".into());
+            let graph_property = GraphProperty::parse(&prop);
             app.modify_project(|p| {
                 let comp = p.active_composition_mut();
                 let Some(layer) = comp.layers.get_mut(layer_idx) else {
                     return;
                 };
                 let t = &mut layer.transform;
-                match prop.as_str() {
-                    "Position X" | "Position Y" => apply_velocity_bezier(
+                match graph_property {
+                    GraphProperty::Vector2 {
+                        track: Vector2Track::Position,
+                        ..
+                    } => apply_velocity_bezier(
                         &mut t.position,
                         in_influence,
                         in_speed,
                         out_influence,
                         out_speed,
                     ),
-                    "Scale X" | "Scale Y" => apply_velocity_bezier(
+                    GraphProperty::Vector2 {
+                        track: Vector2Track::Scale,
+                        ..
+                    } => apply_velocity_bezier(
                         &mut t.scale,
                         in_influence,
                         in_speed,
                         out_influence,
                         out_speed,
                     ),
-                    "Rotation" => apply_velocity_bezier(
+                    GraphProperty::Scalar2d(Scalar2dTrack::Rotation) => apply_velocity_bezier(
                         &mut t.rotation,
                         in_influence,
                         in_speed,
                         out_influence,
                         out_speed,
                     ),
-                    "Opacity" => apply_velocity_bezier(
+                    GraphProperty::Scalar2d(Scalar2dTrack::Opacity) => apply_velocity_bezier(
                         &mut t.opacity,
                         in_influence,
                         in_speed,
@@ -145,10 +154,12 @@ pub fn draw_speed_graph_options(app: &mut KagariApp, ui: &mut egui::Ui, _current
                     _ => {}
                 }
             });
-            app.toasts.info(format!("Velocity applied to {}", prop));
+            app.toasts.info(crate::ui::localization::tr_format(
+                "Velocity applied to {}",
+                &[&prop],
+            ));
         }
-        if ui
-            .button("Easy Ease (F9)")
+        if kui::button(ui, "Easy Ease (F9)", ButtonKind::Default)
             .on_hover_text("Symmetrical smooth ease on all keyframes")
             .clicked()
         {
@@ -156,8 +167,7 @@ pub fn draw_speed_graph_options(app: &mut KagariApp, ui: &mut egui::Ui, _current
                 [x1, 0.1, x2, 1.0]
             });
         }
-        if ui
-            .button("Easy Ease In")
+        if kui::button(ui, "Easy Ease In", ButtonKind::Default)
             .on_hover_text("Ease into the next keyframe")
             .clicked()
         {
@@ -165,8 +175,7 @@ pub fn draw_speed_graph_options(app: &mut KagariApp, ui: &mut egui::Ui, _current
                 [0.0, 0.0, x2, 1.0]
             });
         }
-        if ui
-            .button("Easy Ease Out")
+        if kui::button(ui, "Easy Ease Out", ButtonKind::Default)
             .on_hover_text("Ease out of the previous keyframe")
             .clicked()
         {
@@ -187,7 +196,8 @@ fn apply_preset_ease(
     coords: impl Fn(f32, f32, f32, f32) -> [f32; 4],
 ) {
     let Some(layer_idx) = app.selection.selected_layer_idx else {
-        app.toasts.error("Select a layer first");
+        app.toasts
+            .error(crate::ui::localization::tr("Select a layer first"));
         return;
     };
     let prop = app
@@ -233,5 +243,8 @@ fn apply_preset_ease(
             _ => {}
         }
     });
-    app.toasts.info(format!("Ease applied to {}", prop));
+    app.toasts.info(crate::ui::localization::tr_format(
+        "Ease applied to {}",
+        &[&prop],
+    ));
 }

@@ -1,11 +1,14 @@
 //! Preferences dialog: performance / history / autosave / audio settings
 //! with JSON persistence in $HOME/.kagari_prefs.json.
+use crate::ui::kui::{self, ButtonKind};
 use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Prefs {
+    #[serde(default)]
+    pub language: crate::ui::localization::LanguagePreference,
     pub cache_mb: usize,
     pub undo_steps: usize,
     pub autosave_secs: u64,
@@ -26,6 +29,7 @@ fn default_disk_cache_gb() -> usize {
 impl Default for Prefs {
     fn default() -> Self {
         Self {
+            language: crate::ui::localization::LanguagePreference::System,
             cache_mb: 512,
             undo_steps: 50,
             autosave_secs: 30,
@@ -44,18 +48,23 @@ pub(crate) fn load() -> Prefs {
         .unwrap_or_default()
 }
 
-pub(crate) fn save(p: &Prefs) {
-    if let Ok(serde_json::Value::Object(fields)) = serde_json::to_value(p) {
-        crate::ui::project_io::update_prefs(|root| {
-            root.extend(fields);
-        });
-    }
+pub(crate) fn save(p: &Prefs) -> Result<(), String> {
+    let serde_json::Value::Object(fields) = serde_json::to_value(p)
+        .map_err(|error| format!("Could not serialize preferences: {error}"))?
+    else {
+        return Err("Preferences did not serialize to an object".to_owned());
+    };
+    crate::ui::project_io::update_prefs(|root| {
+        root.extend(fields);
+    })
 }
 
-pub(crate) fn save_workspaces(workspaces: &[crate::ui::workspace_manager::SavedWorkspace]) {
+pub(crate) fn save_workspaces(
+    workspaces: &[crate::ui::workspace_manager::SavedWorkspace],
+) -> Result<(), String> {
     let mut prefs = load();
     prefs.custom_workspaces = workspaces.to_vec();
-    save(&prefs);
+    save(&prefs)
 }
 
 /// Apply stored prefs to live app state. Called once at startup.
@@ -65,6 +74,7 @@ pub fn apply_loaded(app: &mut KagariApp) {
 }
 
 pub(crate) fn apply(app: &mut KagariApp, p: &Prefs) {
+    crate::ui::localization::set_preference(p.language);
     app.frame_cache.max_memory_bytes = p.cache_mb * 1024 * 1024;
     crate::core::frame_cache::disk_cache::set_max_disk_bytes(
         p.disk_cache_gb as u64 * 1024 * 1024 * 1024,
@@ -75,7 +85,8 @@ pub(crate) fn apply(app: &mut KagariApp, p: &Prefs) {
         Some(std::path::PathBuf::from(&p.disk_cache_directory))
     };
     if let Err(error) = crate::core::frame_cache::disk_cache::set_cache_directory(cache_path) {
-        app.toasts.error(format!("Could not set disk cache folder: {error}"));
+        app.toasts
+            .error(format!("Could not set disk cache folder: {error}"));
     }
     app.history.set_max_history_entries(p.undo_steps);
     app.autosave.set_interval_secs(p.autosave_secs);
@@ -90,8 +101,10 @@ pub(crate) fn apply(app: &mut KagariApp, p: &Prefs) {
 pub fn reset_to_defaults(app: &mut KagariApp) {
     let defaults = Prefs::default();
     apply(app, &defaults);
-    save(&defaults);
-    app.toasts.info("Preferences reset to defaults");
+    match save(&defaults) {
+        Ok(()) => app.toasts.info("Preferences reset to defaults"),
+        Err(error) => app.toasts.error(error),
+    }
 }
 
 pub fn draw_preferences_dialog(app: &mut KagariApp, ctx: &egui::Context) {
@@ -122,11 +135,7 @@ pub fn draw_preferences_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                     .inner_margin(egui::Margin::same(8.0))
                     .show(ui, |ui| {
                         ui.set_width(154.0);
-                        ui.label(
-                            egui::RichText::new("SETTINGS")
-                                .small()
-                                .color(colors::TEXT_MUTED),
-                        );
+                        crate::ui::kui::caption(ui, "SETTINGS");
                         ui.add_space(6.0);
                         for (index, label) in [
                             "General",
@@ -142,137 +151,121 @@ pub fn draw_preferences_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                         .into_iter()
                         .enumerate()
                         {
-                            let selected = category == index;
-                            let response = ui.add_sized(
-                                [138.0, 28.0],
-                                egui::Button::new(egui::RichText::new(label).size(12.0).color(
-                                    if selected {
-                                        colors::TEXT_PRIMARY
-                                    } else {
-                                        colors::TEXT_SECONDARY
-                                    },
-                                ))
-                                .fill(if selected {
-                                    colors::BG_ACTIVE
-                                } else {
-                                    egui::Color32::TRANSPARENT
-                                })
-                                .rounding(4.0),
-                            );
+                            let response =
+                                crate::ui::kui::selectable_row(ui, category == index, label, 28.0);
                             if response.clicked() {
                                 category = index;
                             }
                         }
                     });
-                ui.separator();
+                crate::ui::kui::separator(ui);
                 ui.vertical(|ui| {
                     ui.set_min_width((ui.available_width() - 8.0).max(360.0));
                     ui.add_space(2.0);
-                    ui.label(
-                        egui::RichText::new(
-                            [
-                                "General",
-                                "Performance",
-                                "Cache",
-                                "CPU",
-                                "Color Management",
-                                "Auto-save",
-                                "UI Appearance",
-                                "Keyboard Shortcuts",
-                                "Plugins",
-                            ][category],
-                        )
-                        .size(16.0),
+                    crate::ui::kui::title(
+                        ui,
+                        [
+                            "General",
+                            "Performance",
+                            "Cache",
+                            "CPU",
+                            "Color Management",
+                            "Auto-save",
+                            "UI Appearance",
+                            "Keyboard Shortcuts",
+                            "Plugins",
+                        ][category],
                     );
                     ui.add_space(8.0);
 
-                    // ── Performance ──
-                    ui.label(
-                        egui::RichText::new("PERFORMANCE")
-                            .small()
-                            .strong()
-                            .color(colors::ACCENT_CYAN),
-                    );
-                    ui.horizontal(|ui| {
-                        ui.label("Frame cache budget:");
-                        ui.add(
-                            egui::Slider::new(&mut p.cache_mb, 128..=2048)
-                                .step_by(64.0)
-                                .suffix(" MB"),
-                        );
+                    crate::ui::kui::section(ui, "Language");
+                    let language_options = [
+                        (
+                            crate::ui::localization::LanguagePreference::System,
+                            "System",
+                        ),
+                        (
+                            crate::ui::localization::LanguagePreference::English,
+                            "English",
+                        ),
+                        (
+                            crate::ui::localization::LanguagePreference::Japanese,
+                            "Japanese",
+                        ),
+                    ];
+                    let language_grid =
+                        crate::ui::kui::PropertyGrid::new(ui, &["Display language"]);
+                    language_grid.row(ui, "Display language", |ui| {
+                        crate::ui::kui::combo(ui, "ui_language", &mut p.language, &language_options)
                     });
-                    ui.checkbox(
+
+                    // ── Performance ──
+                    crate::ui::kui::section(ui, "PERFORMANCE");
+                    crate::ui::kui::property(ui, "Frame cache budget:", |ui| {
+                        kui::scalar_slider(
+                            ui,
+                            &mut p.cache_mb,
+                            128..=2048,
+                            " MB",
+                            Some(64.0),
+                            false,
+                        )
+                    });
+                    crate::ui::kui::toggle(
+                        ui,
                         &mut p.adaptive_preview,
                         "Adaptive preview quality (auto-reduce while playing)",
                     )
-                    .on_hover_text("When off, preview always renders at full resolution");
+                    .on_hover_text(crate::ui::localization::tr(
+                        "When off, preview always renders at full resolution",
+                    ));
 
                     ui.add_space(6.0);
 
                     // ── History ──
-                    ui.label(
-                        egui::RichText::new("HISTORY")
-                            .small()
-                            .strong()
-                            .color(colors::ACCENT_CYAN),
-                    );
-                    ui.horizontal(|ui| {
-                        ui.label("Undo steps:");
-                        ui.add(egui::Slider::new(&mut p.undo_steps, 10..=500).logarithmic(true));
+                    crate::ui::kui::section(ui, "HISTORY");
+                    crate::ui::kui::property(ui, "Undo steps:", |ui| {
+                        kui::scalar_slider(ui, &mut p.undo_steps, 10..=500, "", None, true)
                     });
-                    ui.label(
-                        egui::RichText::new(format!(
-                            "Approx RAM ceiling: {} MB",
-                            app.history.approx_bytes() / 1024 / 1024
-                        ))
-                        .small()
-                        .color(colors::TEXT_MUTED),
+                    crate::ui::kui::caption(
+                        ui,
+                        format!(
+                            "{} {} MB",
+                            crate::ui::localization::tr("Undo history storage:"),
+                            app.history.retained_bytes() / 1024 / 1024
+                        ),
                     );
 
                     ui.add_space(6.0);
 
                     // ── Autosave ──
-                    ui.label(
-                        egui::RichText::new("AUTOSAVE")
-                            .small()
-                            .strong()
-                            .color(colors::ACCENT_CYAN),
-                    );
-                    ui.horizontal(|ui| {
-                        ui.label("Interval:");
-                        ui.add(egui::Slider::new(&mut p.autosave_secs, 5..=600).suffix(" s"));
+                    crate::ui::kui::section(ui, "AUTOSAVE");
+                    crate::ui::kui::property(ui, "Interval:", |ui| {
+                        kui::scalar_slider(ui, &mut p.autosave_secs, 5..=600, " s", None, false)
                     });
 
                     ui.add_space(6.0);
 
                     // ── Audio ──
-                    ui.label(
-                        egui::RichText::new("AUDIO")
-                            .small()
-                            .strong()
-                            .color(colors::ACCENT_CYAN),
+                    crate::ui::kui::section(ui, "AUDIO");
+                    crate::ui::kui::toggle(
+                        ui,
+                        &mut p.audio_preview,
+                        "Preview audio during playback",
                     );
-                    ui.checkbox(&mut p.audio_preview, "Preview audio during playback");
 
                     ui.add_space(6.0);
 
                     // ── Media & Disk Cache ──
-                    ui.label(
-                        egui::RichText::new("MEDIA & DISK CACHE")
-                            .small()
-                            .strong()
-                            .color(colors::ACCENT_YELLOW),
-                    );
-                    ui.horizontal(|ui| {
-                        ui.label("Maximum Disk Cache Size:");
-                        ui.add(egui::Slider::new(&mut p.disk_cache_gb, 10..=500).suffix(" GB"));
+                    crate::ui::kui::section(ui, "MEDIA & DISK CACHE");
+                    crate::ui::kui::property(ui, "Maximum Disk Cache Size:", |ui| {
+                        kui::scalar_slider(ui, &mut p.disk_cache_gb, 10..=500, " GB", None, false)
                     });
                     ui.horizontal(|ui| {
-                        if ui
-                            .button("Choose Cache Folder...")
-                            .on_hover_text(
+                        if kui::button(ui, "Choose Cache Folder...", ButtonKind::Default)
+                            .on_hover_text(crate::ui::localization::tr(
                                 "Select NVMe / SSD drive location for high-speed frame caching",
-                            )
+                            ))
                             .clicked()
                         {
                             let initial = if p.disk_cache_directory.is_empty() {
@@ -280,37 +273,52 @@ pub fn draw_preferences_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                             } else {
                                 std::path::PathBuf::from(&p.disk_cache_directory)
                             };
-                            if let Some(path) = rfd::FileDialog::new().set_directory(initial).pick_folder() {
+                            if let Some(path) =
+                                rfd::FileDialog::new().set_directory(initial).pick_folder()
+                            {
                                 p.disk_cache_directory = path.to_string_lossy().into_owned();
-                                app.toasts.info("Disk cache folder selected. Save preferences to apply it.");
+                                app.toasts.info(crate::ui::localization::tr(
+                                    "Disk cache folder selected. Save preferences to apply it.",
+                                ));
                             }
                         }
-                        ui.label(egui::RichText::new(if p.disk_cache_directory.is_empty() {
-                            crate::core::frame_cache::disk_cache::cache_directory().display().to_string()
-                        } else {
-                            p.disk_cache_directory.clone()
-                        }).small().color(colors::TEXT_MUTED));
-                        if ui
-                            .button("Empty Disk Cache...")
-                            .on_hover_text("Purge all rendered cache files from disk")
+                        kui::secondary(
+                            ui,
+                            if p.disk_cache_directory.is_empty() {
+                                crate::core::frame_cache::disk_cache::cache_directory()
+                                    .display()
+                                    .to_string()
+                            } else {
+                                p.disk_cache_directory.clone()
+                            },
+                        );
+                        if kui::button(ui, "Empty Disk Cache...", ButtonKind::Default)
+                            .on_hover_text(crate::ui::localization::tr(
+                                "Purge all rendered cache files from disk",
+                            ))
                             .clicked()
                         {
                             crate::core::frame_cache::disk_cache::clear_all();
                             crate::core::frame_cache::bump_version();
-                            app.toasts.info("Disk Cache emptied (0 bytes)");
+                            app.toasts
+                                .info(crate::ui::localization::tr("Disk Cache emptied (0 bytes)"));
                         }
                     });
 
                     ui.add_space(8.0);
-                    ui.separator();
+                    kui::separator(ui);
                     ui.horizontal(|ui| {
-                        if ui.button("Save").clicked() {
+                        if kui::button(ui, "Save", ButtonKind::Accent).clicked() {
                             apply(app, &p);
-                            save(&p);
-                            app.toasts.info("Preferences saved");
+                            match save(&p) {
+                                Ok(()) => app
+                                    .toasts
+                                    .info(crate::ui::localization::tr("Preferences saved")),
+                                Err(error) => app.toasts.error(error),
+                            }
                             keep_open = false;
                         }
-                        if ui.button("Cancel").clicked() {
+                        if kui::button(ui, "Cancel", ButtonKind::Default).clicked() {
                             keep_open = false;
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

@@ -1,5 +1,4 @@
 use crate::core::timeline::EffectType;
-use crate::ui::inspector_property::draw_property_ui;
 use eframe::egui;
 
 use super::common::draw_prop;
@@ -21,7 +20,7 @@ pub fn draw(
                 "Offset X",
                 shift_x,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, -300.0..=300.0));
+                    crate::ui::kui::slider(ui, v, -300.0..=300.0, "");
                 },
             );
             draw_prop(
@@ -32,12 +31,12 @@ pub fn draw(
                 "Offset Y",
                 shift_y,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, -300.0..=300.0));
+                    crate::ui::kui::slider(ui, v, -300.0..=300.0, "");
                 },
             );
         }
         EffectType::MotionTile {
-            tile_center: _,
+            tile_center,
             tile_width,
             tile_height,
             output_width,
@@ -45,7 +44,24 @@ pub fn draw(
             mirror_edges,
             phase,
         } => {
-            ui.label("Motion Tile");
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Tile Center",
+                tile_center,
+                |ui, value| {
+                    let _ = crate::ui::kui::vector_axes(
+                        ui,
+                        value,
+                        -10000.0..=10000.0,
+                        1.0,
+                        " px",
+                        ["X", "Y"],
+                    );
+                },
+            );
             draw_prop(
                 ui,
                 current_frame,
@@ -54,7 +70,7 @@ pub fn draw(
                 "Tile Width",
                 tile_width,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 1.0..=500.0).suffix(" %"));
+                    crate::ui::kui::slider(ui, v, 1.0..=500.0, " %");
                 },
             );
             draw_prop(
@@ -65,7 +81,7 @@ pub fn draw(
                 "Tile Height",
                 tile_height,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 1.0..=500.0).suffix(" %"));
+                    crate::ui::kui::slider(ui, v, 1.0..=500.0, " %");
                 },
             );
             draw_prop(
@@ -76,7 +92,7 @@ pub fn draw(
                 "Output Width",
                 output_width,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 100.0..=1000.0).suffix(" %"));
+                    crate::ui::kui::slider(ui, v, 100.0..=1000.0, " %");
                 },
             );
             draw_prop(
@@ -87,10 +103,12 @@ pub fn draw(
                 "Output Height",
                 output_height,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 100.0..=1000.0).suffix(" %"));
+                    crate::ui::kui::slider(ui, v, 100.0..=1000.0, " %");
                 },
             );
-            ui.checkbox(mirror_edges, "Mirror Edges");
+            if crate::ui::kui::toggle(ui, mirror_edges, "Mirror Edges").changed() {
+                *project_changed = true;
+            }
             draw_prop(
                 ui,
                 current_frame,
@@ -99,7 +117,7 @@ pub fn draw(
                 "Phase",
                 phase,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, -360.0..=360.0).suffix(" °"));
+                    crate::ui::kui::slider(ui, v, -360.0..=360.0, " °");
                 },
             );
         }
@@ -114,46 +132,47 @@ pub fn draw(
             rotation_deg,
             opacity,
         } => {
-            ui.label("Transform");
-            let ap_before = anchor_point.clone();
-            if let Some(nf) = draw_property_ui(
-                current_frame,
+            draw_prop(
                 ui,
+                current_frame,
+                project_changed,
+                next_frame,
                 "Anchor Point",
                 anchor_point,
                 |ui, val| {
-                    ui.horizontal(|ui| {
-                        ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
-                        ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
-                    });
+                    let _ = crate::ui::kui::vector_axes(
+                        ui,
+                        val,
+                        f32::MIN..=f32::MAX,
+                        1.0,
+                        "",
+                        ["X", "Y"],
+                    );
                 },
-            ) {
-                *next_frame = Some(nf);
-            }
-            if ap_before != *anchor_point {
+            );
+
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Position",
+                position,
+                |ui, val| {
+                    let _ = crate::ui::kui::vector_axes(
+                        ui,
+                        val,
+                        f32::MIN..=f32::MAX,
+                        1.0,
+                        "",
+                        ["X", "Y"],
+                    );
+                },
+            );
+
+            if crate::ui::kui::toggle(ui, uniform_scale, "Uniform Scale").changed() {
                 *project_changed = true;
             }
-
-            let pos_before = position.clone();
-            if let Some(nf) =
-                draw_property_ui(current_frame, ui, "Position", position, |ui, val| {
-                    ui.horizontal(|ui| {
-                        ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
-                        ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
-                    });
-                })
-            {
-                *next_frame = Some(nf);
-            }
-            if pos_before != *position {
-                *project_changed = true;
-            }
-
-            ui.horizontal(|ui| {
-                if ui.checkbox(uniform_scale, "Uniform Scale").changed() {
-                    *project_changed = true;
-                }
-            });
             draw_prop(
                 ui,
                 current_frame,
@@ -166,7 +185,7 @@ pub fn draw(
                 },
                 scale_width,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=1000.0).suffix("%"));
+                    crate::ui::kui::slider(ui, v, 0.0..=1000.0, "%");
                 },
             );
             if !*uniform_scale {
@@ -178,7 +197,7 @@ pub fn draw(
                     "Scale Height",
                     scale_height,
                     |ui, v| {
-                        ui.add(egui::Slider::new(v, 0.0..=1000.0).suffix("%"));
+                        crate::ui::kui::slider(ui, v, 0.0..=1000.0, "%");
                     },
                 );
             }
@@ -190,7 +209,7 @@ pub fn draw(
                 "Skew",
                 skew_deg,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, -85.0..=85.0).suffix("°"));
+                    crate::ui::kui::slider(ui, v, -85.0..=85.0, "°");
                 },
             );
             draw_prop(
@@ -201,7 +220,7 @@ pub fn draw(
                 "Skew Axis",
                 skew_axis_deg,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°"));
+                    crate::ui::kui::slider(ui, v, 0.0..=360.0, "°");
                 },
             );
             draw_prop(
@@ -212,7 +231,7 @@ pub fn draw(
                 "Rotation",
                 rotation_deg,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, -3600.0..=3600.0).suffix("°"));
+                    crate::ui::kui::slider(ui, v, -3600.0..=3600.0, "°");
                 },
             );
             draw_prop(
@@ -223,7 +242,7 @@ pub fn draw(
                 "Opacity",
                 opacity,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%"));
+                    crate::ui::kui::slider(ui, v, 0.0..=100.0, "%");
                 },
             );
         }
@@ -240,7 +259,7 @@ pub fn draw(
                 "Source Layer ID",
                 source_layer,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=10.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=10.0, "");
                 },
             );
             draw_prop(
@@ -251,7 +270,7 @@ pub fn draw(
                 "Max Horizontal",
                 max_horizontal,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, -200.0..=200.0));
+                    crate::ui::kui::slider(ui, v, -200.0..=200.0, "");
                 },
             );
             draw_prop(
@@ -262,7 +281,7 @@ pub fn draw(
                 "Max Vertical",
                 max_vertical,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, -200.0..=200.0));
+                    crate::ui::kui::slider(ui, v, -200.0..=200.0, "");
                 },
             );
         }

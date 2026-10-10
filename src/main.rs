@@ -19,8 +19,9 @@ fn main() -> eframe::Result<()> {
     env_logger::init();
 
     let mut viewport = egui::ViewportBuilder::default()
-        .with_inner_size([1536.0, 1024.0])
-        .with_min_inner_size([300.0, 220.0])
+        .with_inner_size([960.0, 640.0])
+        .with_min_inner_size([900.0, 600.0])
+        .with_decorations(false)
         .with_title("Kagari VFX");
     if let Some(icon) = kagari_app_icon() {
         viewport = viewport.with_icon(icon);
@@ -39,8 +40,10 @@ fn main() -> eframe::Result<()> {
         Box::new(|cc| {
             let mut app = kagari_vfx::KagariApp::default();
 
-            let (frame_tx, frame_rx) = std::sync::mpsc::channel();
-            let (conn_tx, conn_rx) = std::sync::mpsc::channel();
+            let (frame_tx, frame_rx) = kagari_vfx::core::integration::latest_frame_channel();
+            let (conn_tx, conn_rx) = std::sync::mpsc::sync_channel(
+                kagari_vfx::core::integration::DYNAMIC_LINK_CONNECTION_QUEUE_CAPACITY,
+            );
             if let Err(e) =
                 kagari_vfx::core::integration::start_sync_server(9000, frame_tx, conn_tx)
             {

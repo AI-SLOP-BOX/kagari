@@ -29,6 +29,7 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
 
 pub fn draw_effect_type_ui(
     effect_type: &mut EffectType,
+    effect_id: &str,
     ui: &mut egui::Ui,
     current_frame: u32,
     project_changed: &mut bool,
@@ -201,7 +202,14 @@ pub fn draw_effect_type_ui(
         | EffectType::CheckboxControl { .. }
         | EffectType::DropdownControl { .. }
         | EffectType::Point3DControl { .. } => {
-            expression_controls::draw(effect_type, ui, current_frame, project_changed, next_frame);
+            expression_controls::draw(
+                effect_type,
+                effect_id,
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+            );
         }
 
         // ── Path / Shape ──

@@ -78,16 +78,25 @@ impl AudioBuffer {
 
     /// Resample PCM audio samples to match destination sample rate with linear interpolation.
     #[allow(dead_code)]
-    pub fn resample(&self, target_sample_rate: u32) -> Self {
-        if self.sample_rate == target_sample_rate
-            || self.sample_rate == 0
-            || target_sample_rate == 0
-            || self.samples.is_empty()
-        {
-            return self.clone();
+    pub fn resample(&self, target_sample_rate: u32) -> Result<Self, String> {
+        if self.sample_rate == 0 || target_sample_rate == 0 {
+            return Err("audio sample rate must be positive".into());
+        }
+        if self.sample_rate == target_sample_rate {
+            return Ok(self.clone());
+        }
+        if self.samples.is_empty() {
+            return Ok(Self {
+                samples: Vec::new(),
+                sample_rate: target_sample_rate,
+                channels: self.channels,
+            });
         }
 
         let channels = self.channels.max(1) as usize;
+        if !self.samples.len().is_multiple_of(channels) {
+            return Err("audio buffer has an incomplete interleaved frame".into());
+        }
         let source_frames = self.samples.len() / channels;
         let new_frames = source_frames as f64 * target_sample_rate as f64 / self.sample_rate as f64;
         let max_samples = MAX_DECODED_AUDIO_BYTES / std::mem::size_of::<f32>();
@@ -95,7 +104,7 @@ impl AudioBuffer {
             || new_frames > (max_samples / channels) as f64
             || new_frames > usize::MAX as f64
         {
-            return self.clone();
+            return Err("resampled audio would exceed the 512 MiB memory limit".into());
         }
         let new_frames = new_frames as usize;
         let ratio = self.sample_rate as f64 / target_sample_rate as f64;
@@ -121,11 +130,11 @@ impl AudioBuffer {
                 out.push(s0 + (s1 - s0) * frac);
             }
         }
-        Self {
+        Ok(Self {
             samples: out,
             sample_rate: target_sample_rate,
             channels: self.channels,
-        }
+        })
     }
 }
 
@@ -133,6 +142,8 @@ impl AudioBuffer {
 struct AudioCacheKey {
     path: String,
     sample_rate: u32,
+    file_len: u64,
+    modified_ns: Option<u128>,
 }
 
 struct DecodedAudioCache {
@@ -205,30 +216,44 @@ fn audio_cache() -> &'static Mutex<DecodedAudioCache> {
     CACHE.get_or_init(|| Mutex::new(DecodedAudioCache::new(MAX_AUDIO_CACHE_BYTES)))
 }
 
-fn load_cached_audio(path: &str, sample_rate: u32) -> Option<Arc<AudioBuffer>> {
+fn load_cached_audio(path: &str, sample_rate: u32) -> Result<Arc<AudioBuffer>, String> {
+    validate_audio_path(path)?;
+    let metadata = std::fs::metadata(path)
+        .map_err(|error| format!("could not inspect audio source: {error}"))?;
+    let modified_ns = metadata
+        .modified()
+        .ok()
+        .and_then(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|duration| duration.as_nanos());
     let key = AudioCacheKey {
         path: path.to_owned(),
         sample_rate,
+        file_len: metadata.len(),
+        modified_ns,
     };
     if let Some(buffer) = audio_cache()
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .get(&key)
     {
-        return Some(buffer);
-    }
-    if validate_audio_path(path).is_err() {
-        return None;
+        return Ok(buffer);
     }
     let buffer = AudioBuffer::load_audio(std::path::Path::new(path))
-        .ok()?
-        .resample(sample_rate);
+        .map_err(|error| format!("could not decode audio source: {error}"))?
+        .resample(sample_rate)?;
     let buffer = Arc::new(buffer);
     audio_cache()
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .insert(key, buffer.clone());
-    Some(buffer)
+    Ok(buffer)
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct AudioSourceError {
+    pub layer: String,
+    pub path: String,
+    pub reason: String,
 }
 
 #[allow(dead_code)]
@@ -240,6 +265,10 @@ pub struct AudioFrameMeter {
     pub rms_db_right: f32,
     /// Per-layer post-fader peaks, indexed by composition layer order.
     pub track_peaks: Vec<(f32, f32)>,
+    /// Active sources that could not be loaded; real-time preview may continue silently.
+    pub source_errors: Vec<AudioSourceError>,
+    /// Number of active audio sources successfully decoded for this window.
+    pub loaded_sources: usize,
 }
 
 impl Default for AudioFrameMeter {
@@ -250,6 +279,8 @@ impl Default for AudioFrameMeter {
             rms_db_left: -90.0,
             rms_db_right: -90.0,
             track_peaks: Vec::new(),
+            source_errors: Vec::new(),
+            loaded_sources: 0,
         }
     }
 }
@@ -410,6 +441,8 @@ mod tests {
         let key = |path: &str| AudioCacheKey {
             path: path.to_owned(),
             sample_rate: 48_000,
+            file_len: 10,
+            modified_ns: Some(1),
         };
 
         cache.insert(key("a.wav"), make_buffer(0.1));
@@ -436,6 +469,8 @@ mod tests {
             AudioCacheKey {
                 path: "same.wav".into(),
                 sample_rate: 44_100,
+                file_len: 12,
+                modified_ns: Some(7),
             },
             buffer.clone(),
         );
@@ -443,21 +478,48 @@ mod tests {
             .get(&AudioCacheKey {
                 path: "same.wav".into(),
                 sample_rate: 48_000,
+                file_len: 12,
+                modified_ns: Some(7),
             })
             .is_none());
     }
 
     #[test]
-    fn resample_falls_back_to_source_when_output_exceeds_memory_limit() {
+    fn decoded_audio_cache_key_includes_source_file_revision() {
+        let mut cache = DecodedAudioCache::new(32);
+        let source_key = AudioCacheKey {
+            path: "same.wav".into(),
+            sample_rate: 48_000,
+            file_len: 100,
+            modified_ns: Some(10),
+        };
+        cache.insert(
+            source_key,
+            Arc::new(AudioBuffer {
+                samples: vec![0.25, 0.5],
+                sample_rate: 48_000,
+                channels: 2,
+            }),
+        );
+        assert!(cache
+            .get(&AudioCacheKey {
+                path: "same.wav".into(),
+                sample_rate: 48_000,
+                file_len: 101,
+                modified_ns: Some(11),
+            })
+            .is_none());
+    }
+
+    #[test]
+    fn resample_rejects_output_that_exceeds_memory_limit() {
         let source = AudioBuffer {
             samples: vec![0.25],
             sample_rate: 1,
             channels: 1,
         };
 
-        let result = source.resample(u32::MAX);
-        assert_eq!(result.samples, source.samples);
-        assert_eq!(result.sample_rate, source.sample_rate);
+        assert!(source.resample(u32::MAX).is_err());
     }
 }
 
@@ -764,7 +826,7 @@ mod wav_tests {
             sample_rate: 4,
             channels: 1,
         };
-        let output = input.resample(8);
+        let output = input.resample(8).unwrap();
         assert_eq!(output.channels, 1);
         assert_eq!(output.samples.len(), 8);
         assert!((output.samples[2] - 0.5).abs() < 0.001);
@@ -862,6 +924,28 @@ pub fn apply_layer_audio_effects(samples: &mut [f32], layer: &Layer, sample_rate
 
 // ── Multi-track mixing: real audio sources ──────────────────────────────────
 
+/// Returns whether a composition or any nested precomposition contains an
+/// audio-bearing layer. This is a structural check; it does not decode media.
+pub fn composition_contains_audio_sources(comp: &Composition) -> bool {
+    fn visit(comp: &Composition, depth: u32) -> bool {
+        if depth > 32 {
+            return false;
+        }
+        comp.layers.iter().any(|layer| match &layer.layer_type {
+            LayerType::Audio { .. } => true,
+            LayerType::Video {
+                audio_wav: Some(_), ..
+            } => true,
+            LayerType::PreComp { comp_id, .. } => comp
+                .find_sub_comp(comp_id)
+                .is_some_and(|sub| visit(sub, depth + 1)),
+            _ => false,
+        })
+    }
+
+    visit(comp, 0)
+}
+
 /// Recursively mix audio from a sub-composition (PreComp) into the stereo output.
 #[allow(clippy::too_many_arguments)]
 fn mix_precomp_audio(
@@ -873,6 +957,8 @@ fn mix_precomp_audio(
     gain: f32,
     pan: f32,
     fps: f32,
+    source_errors: &mut Vec<AudioSourceError>,
+    loaded_sources: &mut usize,
 ) {
     for layer in &sub_comp.layers {
         if !layer.is_active(sub_frame) || !layer.visible {
@@ -890,6 +976,8 @@ fn mix_precomp_audio(
                         gain,
                         pan,
                         fps,
+                        source_errors,
+                        loaded_sources,
                     );
                 }
             }
@@ -898,7 +986,8 @@ fn mix_precomp_audio(
                 let layer_gain = gain * 10.0f32.powf(vol_db / 20.0);
                 let time_start = (sub_frame.saturating_sub(layer.in_frame)) as f32 / fps;
                 let source = load_cached_audio(path, sample_rate);
-                if let Some(buf) = source {
+                if let Ok(buf) = source {
+                    *loaded_sources = loaded_sources.saturating_add(1);
                     for i in 0..buffer_size {
                         let t = time_start + i as f32 / sample_rate as f32;
                         let idx =
@@ -920,6 +1009,12 @@ fn mix_precomp_audio(
                             stereo_output[r_idx] += r * gr;
                         }
                     }
+                } else if let Err(reason) = source {
+                    source_errors.push(AudioSourceError {
+                        layer: layer.name.clone(),
+                        path: path.clone(),
+                        reason,
+                    });
                 }
             }
             crate::core::timeline::LayerType::Video {
@@ -927,7 +1022,8 @@ fn mix_precomp_audio(
             } => {
                 let time_start = (sub_frame.saturating_sub(layer.in_frame)) as f32 / fps;
                 let source = load_cached_audio(w, sample_rate);
-                if let Some(buf) = source {
+                if let Ok(buf) = source {
+                    *loaded_sources = loaded_sources.saturating_add(1);
                     for i in 0..buffer_size {
                         let t = time_start + i as f32 / sample_rate as f32;
                         let idx =
@@ -949,6 +1045,12 @@ fn mix_precomp_audio(
                             stereo_output[r_idx] += r * gr;
                         }
                     }
+                } else if let Err(reason) = source {
+                    source_errors.push(AudioSourceError {
+                        layer: layer.name.clone(),
+                        path: w.clone(),
+                        reason,
+                    });
                 }
             }
             _ => {}
@@ -997,6 +1099,8 @@ pub fn mix_audio_sources_for_frame_with_state(
     let mut max_peak_l = 0.0f32;
     let mut max_peak_r = 0.0f32;
     let mut track_peaks = vec![(0.0f32, 0.0f32); comp.layers.len()];
+    let mut source_errors = Vec::new();
+    let mut loaded_sources = 0usize;
     let fps = comp.fps.max(1) as f32;
 
     for (layer_idx, layer) in comp.layers.iter().enumerate() {
@@ -1029,6 +1133,8 @@ pub fn mix_audio_sources_for_frame_with_state(
                         sub_gain,
                         sub_pan,
                         fps,
+                        &mut source_errors,
+                        &mut loaded_sources,
                     );
                 }
             }
@@ -1079,7 +1185,20 @@ pub fn mix_audio_sources_for_frame_with_state(
 
         // Source samples: decoded audio if present, otherwise silent placeholder
         let source: Option<std::sync::Arc<AudioBuffer>> = match &wav_path {
-            Some(path) => load_cached_audio(path, sample_rate),
+            Some(path) => match load_cached_audio(path, sample_rate) {
+                Ok(buffer) => {
+                    loaded_sources = loaded_sources.saturating_add(1);
+                    Some(buffer)
+                }
+                Err(reason) => {
+                    source_errors.push(AudioSourceError {
+                        layer: layer.name.clone(),
+                        path: path.clone(),
+                        reason,
+                    });
+                    None
+                }
+            },
             None => None,
         };
 
@@ -1204,7 +1323,7 @@ pub fn mix_audio_sources_for_frame_with_state(
 
     // Meter the MIXED output, not per-layer contributions — otherwise the peak
     // reflects the loudest single source instead of the actual sum.
-    for chunk in stereo_output.chunks_exact(2) {
+    for chunk in stereo_output.as_chunks::<2>().0 {
         let l = chunk[0];
         let r = chunk[1];
         sum_sq_l += l * l;
@@ -1227,6 +1346,8 @@ pub fn mix_audio_sources_for_frame_with_state(
             rms_db_left: to_db(rms_l),
             rms_db_right: to_db(rms_r),
             track_peaks,
+            source_errors,
+            loaded_sources,
         },
     )
 }
@@ -1295,41 +1416,26 @@ pub fn mix_composition_to_wav(
     sample_rate: u32,
     mixer: Option<&[crate::core::audio_types::MixerChannel]>,
     dsp: &MasterDspParams,
-) -> Option<std::path::PathBuf> {
-    use std::io::Write;
+) -> std::io::Result<Option<std::path::PathBuf>> {
+    use std::io::{BufWriter, Error, ErrorKind, Write};
 
     let fps = comp.fps.max(1);
-    let total_frames = end_frame.saturating_sub(start_frame);
-    if total_frames == 0 {
-        return None;
+    if end_frame <= start_frame {
+        return Ok(None);
     }
-    let buffer_size = ((sample_rate as f64 / fps as f64).round() as usize).max(1);
-    let mut all_samples: Vec<f32> = Vec::new();
-    let mut dsp_state = MasterDspState::default();
-
-    for frame in start_frame..end_frame {
-        let (stereo_buf, _) = mix_audio_sources_for_frame_with_state(
-            comp,
-            frame,
-            sample_rate,
-            buffer_size,
-            mixer,
-            dsp,
-            &mut dsp_state,
-        );
-        all_samples.extend_from_slice(&stereo_buf);
-    }
-
-    if all_samples.is_empty() {
-        return None;
-    }
-
-    let data_len = all_samples
-        .len()
-        .checked_mul(2)
-        .and_then(|size| u32::try_from(size).ok())?;
-    let riff_size = 36u32.checked_add(data_len)?;
-    let byte_rate = sample_rate.checked_mul(2)?.checked_mul(2)?;
+    let sample_boundary =
+        |frame: u32| -> u64 { u64::from(frame) * u64::from(sample_rate) / u64::from(fps) };
+    let sample_count = sample_boundary(end_frame).saturating_sub(sample_boundary(start_frame));
+    let data_len = sample_count
+        .checked_mul(4)
+        .and_then(|bytes| u32::try_from(bytes).ok())
+        .ok_or_else(|| Error::new(ErrorKind::InvalidInput, "mixed WAV exceeds RIFF size limit"))?;
+    let riff_size = 36u32
+        .checked_add(data_len)
+        .ok_or_else(|| Error::new(ErrorKind::InvalidInput, "mixed WAV exceeds RIFF size limit"))?;
+    let byte_rate = sample_rate
+        .checked_mul(4)
+        .ok_or_else(|| Error::new(ErrorKind::InvalidInput, "audio sample rate is too large"))?;
     let block_align = 4u16;
     let bits_per_sample = 16u16;
 
@@ -1340,32 +1446,78 @@ pub fn mix_composition_to_wav(
         std::process::id(),
         sequence
     ));
-    let mut f = std::fs::OpenOptions::new()
+    let f = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
-        .open(&path)
-        .ok()?;
-    f.write_all(b"RIFF").ok()?;
-    f.write_all(&riff_size.to_le_bytes()).ok()?;
-    f.write_all(b"WAVE").ok()?;
-    f.write_all(b"fmt ").ok()?;
-    f.write_all(&16u32.to_le_bytes()).ok()?;
-    f.write_all(&1u16.to_le_bytes()).ok()?;
-    f.write_all(&2u16.to_le_bytes()).ok()?;
-    f.write_all(&sample_rate.to_le_bytes()).ok()?;
-    f.write_all(&byte_rate.to_le_bytes()).ok()?;
-    f.write_all(&block_align.to_le_bytes()).ok()?;
-    f.write_all(&bits_per_sample.to_le_bytes()).ok()?;
-    f.write_all(b"data").ok()?;
-    f.write_all(&data_len.to_le_bytes()).ok()?;
+        .open(&path)?;
+    let mut has_loaded_source = false;
+    let result = (|| -> std::io::Result<()> {
+        let mut writer = BufWriter::new(f);
+        writer.write_all(b"RIFF")?;
+        writer.write_all(&riff_size.to_le_bytes())?;
+        writer.write_all(b"WAVE")?;
+        writer.write_all(b"fmt ")?;
+        writer.write_all(&16u32.to_le_bytes())?;
+        writer.write_all(&1u16.to_le_bytes())?;
+        writer.write_all(&2u16.to_le_bytes())?;
+        writer.write_all(&sample_rate.to_le_bytes())?;
+        writer.write_all(&byte_rate.to_le_bytes())?;
+        writer.write_all(&block_align.to_le_bytes())?;
+        writer.write_all(&bits_per_sample.to_le_bytes())?;
+        writer.write_all(b"data")?;
+        writer.write_all(&data_len.to_le_bytes())?;
 
-    for &s in &all_samples {
-        let clamped = s.clamp(-1.0, 1.0);
-        let i16_val = (clamped * 32767.0) as i16;
-        f.write_all(&i16_val.to_le_bytes()).ok()?;
+        let mut dsp_state = MasterDspState::default();
+        let mut encoded = Vec::new();
+        for frame in start_frame..end_frame {
+            let frame_samples = sample_boundary(frame + 1).saturating_sub(sample_boundary(frame));
+            let frame_samples = usize::try_from(frame_samples)
+                .map_err(|_| Error::new(ErrorKind::InvalidInput, "audio frame is too large"))?;
+            let (stereo_buf, meter) = mix_audio_sources_for_frame_with_state(
+                comp,
+                frame,
+                sample_rate,
+                frame_samples,
+                mixer,
+                dsp,
+                &mut dsp_state,
+            );
+            has_loaded_source |= meter.loaded_sources > 0;
+            if !meter.source_errors.is_empty() {
+                let details = meter
+                    .source_errors
+                    .iter()
+                    .map(|issue| format!("{} ({}): {}", issue.layer, issue.path, issue.reason))
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    format!("audio mix has unreadable source(s): {details}"),
+                ));
+            }
+            encoded.clear();
+            encoded.reserve(stereo_buf.len().saturating_mul(2));
+            for sample in stereo_buf {
+                let value = (sample.clamp(-1.0, 1.0) * 32767.0) as i16;
+                encoded.extend_from_slice(&value.to_le_bytes());
+            }
+            writer.write_all(&encoded)?;
+        }
+        writer.flush()
+    })();
+    if let Err(error) = result {
+        let _ = std::fs::remove_file(&path);
+        return Err(error);
     }
 
-    Some(path)
+    // A valid export range without any active, readable audio source should
+    // not produce a silent WAV that callers mistake for a prepared mix.
+    if !has_loaded_source {
+        let _ = std::fs::remove_file(&path);
+        return Ok(None);
+    }
+
+    Ok(Some(path))
 }
 
 #[cfg(test)]
@@ -1471,23 +1623,63 @@ mod multitrack_tests {
 
     #[test]
     fn mixed_wav_uses_composition_fps_for_audio_duration() {
-        let comp = Composition::new("c".into(), "Duration".into(), 64, 64, 30, 30);
+        let dir = std::env::temp_dir().join(format!("kagari_mix_duration_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let source = dir.join("source.wav");
+        write_wav(&source, &vec![0.25; 48_000], 48_000);
+        let mut comp = Composition::new("c".into(), "Duration".into(), 64, 64, 30, 30);
+        comp.layers.push(Layer::new(
+            "audio".into(),
+            "Audio".into(),
+            LayerType::Audio {
+                path: source.to_string_lossy().into_owned(),
+                volume: Animatable::new_constant(1.0),
+            },
+            30,
+        ));
         let path = mix_composition_to_wav(&comp, 0, 30, 48_000, None, &MasterDspParams::bypass())
-            .expect("empty composition still produces a silent audio track");
+            .expect("audio mix should succeed")
+            .expect("composition audio should produce a mixed WAV");
         let audio = AudioBuffer::load_wav(&path).expect("mixed WAV must be readable");
         assert_eq!(audio.sample_rate, 48_000);
         assert_eq!(audio.samples.len(), 30 * 1_600 * 2);
         let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn empty_composition_does_not_emit_a_silent_mix_file() {
+        let comp = Composition::new("c".into(), "Empty".into(), 64, 64, 30, 30);
+        assert!(
+            mix_composition_to_wav(&comp, 0, 30, 48_000, None, &MasterDspParams::bypass())
+                .expect("empty mix request is valid")
+                .is_none()
+        );
     }
 
     #[test]
     fn concurrent_mixes_receive_distinct_output_paths() {
-        let comp = Composition::new("c".into(), "Concurrent mix".into(), 64, 64, 30, 2);
+        let dir =
+            std::env::temp_dir().join(format!("kagari_mix_concurrent_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let source = dir.join("source.wav");
+        write_wav(&source, &vec![0.25; 48_000], 48_000);
+        let mut comp = Composition::new("c".into(), "Concurrent mix".into(), 64, 64, 30, 2);
+        comp.layers.push(Layer::new(
+            "audio".into(),
+            "Audio".into(),
+            LayerType::Audio {
+                path: source.to_string_lossy().into_owned(),
+                volume: Animatable::new_constant(1.0),
+            },
+            2,
+        ));
         let handles: Vec<_> = (0..2)
             .map(|_| {
                 let comp = comp.clone();
                 std::thread::spawn(move || {
                     mix_composition_to_wav(&comp, 0, 2, 48_000, None, &MasterDspParams::bypass())
+                        .expect("concurrent mix should succeed")
                         .expect("concurrent mix must produce a WAV")
                 })
             })
@@ -1502,6 +1694,7 @@ mod multitrack_tests {
             assert!(path.is_file());
             let _ = std::fs::remove_file(path);
         }
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

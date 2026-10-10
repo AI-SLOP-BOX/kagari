@@ -53,7 +53,7 @@ fn semantic_project() -> Project {
 
 fn patterned_pixels(width: u32, height: u32) -> Vec<u8> {
     let mut pixels = vec![0u8; (width * height * 4) as usize];
-    for (index, pixel) in pixels.chunks_exact_mut(4).enumerate() {
+    for (index, pixel) in pixels.as_chunks_mut::<4>().0.iter_mut().enumerate() {
         let x = (index as u32) % width;
         let y = (index as u32) / width;
         pixel[0] = ((x * 31 + y * 7) % 256) as u8;
@@ -66,7 +66,9 @@ fn patterned_pixels(width: u32, height: u32) -> Vec<u8> {
 
 fn distinct_rgb_count(pixels: &[u8]) -> usize {
     pixels
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|pixel| (pixel[0], pixel[1], pixel[2]))
         .collect::<HashSet<_>>()
         .len()
@@ -426,7 +428,7 @@ fn representative_effects_have_semantic_pixel_contracts() {
             "{name} collapsed the frame to one RGB color"
         );
         assert!(
-            rendered.chunks_exact(4).any(|pixel| pixel[3] > 0),
+            rendered.as_chunks::<4>().0.iter().any(|pixel| pixel[3] > 0),
             "{name} erased every pixel's alpha"
         );
     }
@@ -516,7 +518,12 @@ fn linear_wipe_progresses_from_left_to_right_at_zero_degrees() {
         0,
         24,
     );
-    let alpha: Vec<_> = pixels.chunks_exact(4).map(|pixel| pixel[3]).collect();
+    let alpha: Vec<_> = pixels
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|pixel| pixel[3])
+        .collect();
     assert_eq!(&alpha[..4], &[255, 255, 255, 255]);
     assert_eq!(&alpha[4..], &[0, 0, 0, 0]);
 }
@@ -618,7 +625,7 @@ fn mfr_render_reports_each_expected_frame_once() {
         queue
             .total_frames_rendered
             .load(std::sync::atomic::Ordering::SeqCst),
-        (item_count as u32) * frames_per_item
+        u64::from(item_count as u32) * u64::from(frames_per_item)
     );
 }
 

@@ -1,3 +1,4 @@
+use crate::ui::localization::tr;
 use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
@@ -5,19 +6,19 @@ use eframe::egui;
 pub fn draw_metadata_panel(app: &KagariApp, ui: &mut egui::Ui) {
     let comp = app.history.current().active_composition();
 
-    crate::ui::custom_widgets::ae_section_header(ui, "Composition Info", "📋");
+    crate::ui::custom_widgets::ae_section_header(ui, &tr("Composition Info"), "📋");
 
     egui::Grid::new("metadata_grid")
         .striped(true)
         .show(ui, |ui| {
             ui.label(
-                egui::RichText::new("Property")
+                egui::RichText::new(tr("Property"))
                     .small()
                     .strong()
                     .color(colors::TEXT_SECONDARY),
             );
             ui.label(
-                egui::RichText::new("Value")
+                egui::RichText::new(tr("Value"))
                     .small()
                     .strong()
                     .color(colors::TEXT_SECONDARY),
@@ -25,7 +26,7 @@ pub fn draw_metadata_panel(app: &KagariApp, ui: &mut egui::Ui) {
             ui.end_row();
 
             ui.label(
-                egui::RichText::new("Name")
+                egui::RichText::new(tr("Name"))
                     .small()
                     .color(colors::TEXT_SECONDARY),
             );
@@ -37,7 +38,7 @@ pub fn draw_metadata_panel(app: &KagariApp, ui: &mut egui::Ui) {
             ui.end_row();
 
             ui.label(
-                egui::RichText::new("Resolution")
+                egui::RichText::new(tr("Resolution"))
                     .small()
                     .color(colors::TEXT_SECONDARY),
             );
@@ -49,7 +50,7 @@ pub fn draw_metadata_panel(app: &KagariApp, ui: &mut egui::Ui) {
             ui.end_row();
 
             ui.label(
-                egui::RichText::new("Frame Rate")
+                egui::RichText::new(tr("Frame Rate"))
                     .small()
                     .color(colors::TEXT_SECONDARY),
             );
@@ -64,7 +65,7 @@ pub fn draw_metadata_panel(app: &KagariApp, ui: &mut egui::Ui) {
             let dur_min = (duration_sec / 60.0) as u32;
             let dur_sec = duration_sec % 60.0;
             ui.label(
-                egui::RichText::new("Duration")
+                egui::RichText::new(tr("Duration"))
                     .small()
                     .color(colors::TEXT_SECONDARY),
             );
@@ -79,12 +80,12 @@ pub fn draw_metadata_panel(app: &KagariApp, ui: &mut egui::Ui) {
             ui.end_row();
 
             ui.label(
-                egui::RichText::new("Pixel Aspect")
+                egui::RichText::new(tr("Pixel Aspect"))
                     .small()
                     .color(colors::TEXT_SECONDARY),
             );
             ui.label(
-                egui::RichText::new("1.0 (Square)")
+                egui::RichText::new(tr("1.0 (Square)"))
                     .small()
                     .color(colors::TEXT_PRIMARY),
             );
@@ -92,7 +93,7 @@ pub fn draw_metadata_panel(app: &KagariApp, ui: &mut egui::Ui) {
         });
 
     ui.add_space(6.0);
-    crate::ui::custom_widgets::ae_section_header(ui, "Layer Stats", "📊");
+    crate::ui::custom_widgets::ae_section_header(ui, &tr("Layer Stats"), "📊");
 
     let total_layers = comp.layers.len();
     let visible_layers = comp.layers.iter().filter(|l| l.visible).count();
@@ -103,7 +104,7 @@ pub fn draw_metadata_panel(app: &KagariApp, ui: &mut egui::Ui) {
         .striped(true)
         .show(ui, |ui| {
             ui.label(
-                egui::RichText::new("Total Layers")
+                egui::RichText::new(tr("Total Layers"))
                     .small()
                     .color(colors::TEXT_SECONDARY),
             );
@@ -115,7 +116,7 @@ pub fn draw_metadata_panel(app: &KagariApp, ui: &mut egui::Ui) {
             ui.end_row();
 
             ui.label(
-                egui::RichText::new("Visible")
+                egui::RichText::new(tr("Visible"))
                     .small()
                     .color(colors::TEXT_SECONDARY),
             );
@@ -127,7 +128,7 @@ pub fn draw_metadata_panel(app: &KagariApp, ui: &mut egui::Ui) {
             ui.end_row();
 
             ui.label(
-                egui::RichText::new("Locked")
+                egui::RichText::new(tr("Locked"))
                     .small()
                     .color(colors::TEXT_SECONDARY),
             );
@@ -139,7 +140,7 @@ pub fn draw_metadata_panel(app: &KagariApp, ui: &mut egui::Ui) {
             ui.end_row();
 
             ui.label(
-                egui::RichText::new("Effects")
+                egui::RichText::new(tr("Effects"))
                     .small()
                     .color(colors::TEXT_SECONDARY),
             );
@@ -151,7 +152,7 @@ pub fn draw_metadata_panel(app: &KagariApp, ui: &mut egui::Ui) {
             ui.end_row();
 
             ui.label(
-                egui::RichText::new("Lights")
+                egui::RichText::new(tr("Lights"))
                     .small()
                     .color(colors::TEXT_SECONDARY),
             );
@@ -163,7 +164,7 @@ pub fn draw_metadata_panel(app: &KagariApp, ui: &mut egui::Ui) {
             ui.end_row();
 
             ui.label(
-                egui::RichText::new("Sub-Comps")
+                egui::RichText::new(tr("Sub-Comps"))
                     .small()
                     .color(colors::TEXT_SECONDARY),
             );
@@ -176,32 +177,25 @@ pub fn draw_metadata_panel(app: &KagariApp, ui: &mut egui::Ui) {
         });
 
     ui.add_space(6.0);
-    crate::ui::custom_widgets::ae_section_header(ui, "Render Settings", "⚙");
+    crate::ui::custom_widgets::ae_section_header(ui, &tr("Render Settings"), "⚙");
 
     egui::Grid::new("render_settings_grid")
         .striped(true)
         .show(ui, |ui| {
             ui.label(
-                egui::RichText::new("Color Space")
+                egui::RichText::new(tr("Color Space"))
                     .small()
                     .color(colors::TEXT_SECONDARY),
             );
-            let space_name = match app.color_space_idx {
-                0 => "Rec.709 sRGB",
-                1 => "ACEScg",
-                2 => "ACES2065-1",
-                3 => "Display P3",
-                _ => "Rec.709 sRGB",
-            };
             ui.label(
-                egui::RichText::new(space_name)
+                egui::RichText::new(tr("Not applied"))
                     .small()
                     .color(colors::TEXT_PRIMARY),
             );
             ui.end_row();
 
             ui.label(
-                egui::RichText::new("Bit Depth")
+                egui::RichText::new(tr("Bit Depth"))
                     .small()
                     .color(colors::TEXT_SECONDARY),
             );
@@ -214,7 +208,7 @@ pub fn draw_metadata_panel(app: &KagariApp, ui: &mut egui::Ui) {
             ui.end_row();
 
             ui.label(
-                egui::RichText::new("Shutter Angle")
+                egui::RichText::new(tr("Shutter Angle"))
                     .small()
                     .color(colors::TEXT_SECONDARY),
             );
@@ -227,7 +221,7 @@ pub fn draw_metadata_panel(app: &KagariApp, ui: &mut egui::Ui) {
         });
 
     ui.add_space(6.0);
-    crate::ui::custom_widgets::ae_section_header(ui, "Export Info", "📤");
+    crate::ui::custom_widgets::ae_section_header(ui, &tr("Export Info"), "📤");
 
     let format_name = match app.export_format_preset {
         0 => "H.264 MP4",
@@ -238,12 +232,12 @@ pub fn draw_metadata_panel(app: &KagariApp, ui: &mut egui::Ui) {
     };
     ui.horizontal(|ui| {
         ui.label(
-            egui::RichText::new("Format")
+            egui::RichText::new(tr("Format"))
                 .small()
                 .color(colors::TEXT_SECONDARY),
         );
         ui.label(
-            egui::RichText::new(format_name)
+            egui::RichText::new(tr(format_name))
                 .small()
                 .color(colors::TEXT_PRIMARY),
         );

@@ -1,4 +1,3 @@
-use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
 
@@ -17,15 +16,6 @@ pub fn draw_particle_emitter_controls(app: &mut KagariApp, ui: &mut egui::Ui) {
         return;
     }
 
-    ui.add_space(6.0);
-    ui.separator();
-    ui.label(
-        egui::RichText::new("Particle Emitter")
-            .strong()
-            .color(colors::ACCENT_CYAN),
-    );
-
-    // Local working copy so sliders feel responsive; committed on change.
     let mut em: ParticleEmitter = match app.history.current().active_composition().layers.get(idx) {
         Some(l) => match &l.layer_type {
             LayerType::Particle { emitter } => emitter.clone(),
@@ -35,107 +25,260 @@ pub fn draw_particle_emitter_controls(app: &mut KagariApp, ui: &mut egui::Ui) {
     };
     let mut changed = false;
 
-    ui.collapsing("Emission", |ui| {
-        changed |= row_f32(ui, "Rate (p/s)", &mut em.rate, 0.0..=500.0, 1.0);
-        changed |= row_u32(ui, "Max particles", &mut em.max_particles, 1..=20000);
-        changed |= row_f32(ui, "Lifetime (s)", &mut em.lifetime, 0.1..=30.0, 0.1);
-        changed |= row_f32(
+    crate::ui::kui::section(ui, "Particle Emitter");
+    crate::ui::kui::collapsing_section(ui, "particle-emission", "Emission", true, |ui| {
+        let grid = crate::ui::kui::PropertyGrid::new(
             ui,
-            "Lifetime var",
+            &[
+                "Rate",
+                "Maximum Particles",
+                "Lifetime",
+                "Lifetime Variation",
+                "Speed",
+                "Speed Variation",
+                "Spread",
+            ],
+        );
+        changed |= row_f32(&grid, ui, "Rate", &mut em.rate, 0.0..=500.0, 1.0, " p/s");
+        changed |= row_u32(
+            &grid,
+            ui,
+            "Maximum Particles",
+            &mut em.max_particles,
+            1..=20000,
+        );
+        changed |= row_f32(
+            &grid,
+            ui,
+            "Lifetime",
+            &mut em.lifetime,
+            0.1..=30.0,
+            0.1,
+            " s",
+        );
+        changed |= row_f32(
+            &grid,
+            ui,
+            "Lifetime Variation",
             &mut em.lifetime_variance,
             0.0..=1.0,
             0.01,
+            "",
         );
-        changed |= row_f32(ui, "Speed", &mut em.speed, 0.0..=1000.0, 1.0);
-        changed |= row_f32(ui, "Speed var", &mut em.speed_variance, 0.0..=2.0, 0.01);
-        changed |= row_f32(ui, "Spread (°)", &mut em.spread_degrees, 0.0..=360.0, 1.0);
+        changed |= row_f32(
+            &grid,
+            ui,
+            "Speed",
+            &mut em.speed,
+            0.0..=1000.0,
+            1.0,
+            " px/s",
+        );
+        changed |= row_f32(
+            &grid,
+            ui,
+            "Speed Variation",
+            &mut em.speed_variance,
+            0.0..=2.0,
+            0.01,
+            "",
+        );
+        changed |= row_f32(
+            &grid,
+            ui,
+            "Spread",
+            &mut em.spread_degrees,
+            0.0..=360.0,
+            1.0,
+            "°",
+        );
     });
 
-    ui.collapsing("Shape", |ui| {
+    crate::ui::kui::collapsing_section(ui, "particle-emitter-shape", "Emitter Shape", true, |ui| {
+        let grid = crate::ui::kui::PropertyGrid::new(ui, &["Shape", "Size", "Height"]);
         let shapes = [
-            ("Point", EmitterShape::Point),
-            ("Box", EmitterShape::Box),
-            ("Circle", EmitterShape::Circle),
-            ("Line", EmitterShape::Line),
-            ("Ring", EmitterShape::Ring),
+            (EmitterShape::Point, "Point"),
+            (EmitterShape::Box, "Box"),
+            (EmitterShape::Circle, "Circle"),
+            (EmitterShape::Line, "Line"),
+            (EmitterShape::Ring, "Ring"),
         ];
-        ui.horizontal(|ui| {
-            for (label, shape) in shapes {
-                let selected = em.shape == shape;
-                if ui.selectable_label(selected, label).clicked() {
-                    em.shape = shape;
-                    changed = true;
-                }
-            }
+        changed |= grid.row(ui, "Shape", |ui| {
+            crate::ui::kui::combo(ui, "particle_emitter_shape", &mut em.shape, &shapes)
         });
-        changed |= row_f32(ui, "Size X / Ø", &mut em.emitter_size[0], 1.0..=4000.0, 1.0);
+        changed |= row_f32(
+            &grid,
+            ui,
+            "Size",
+            &mut em.emitter_size[0],
+            1.0..=4000.0,
+            1.0,
+            " px",
+        );
         if em.shape == EmitterShape::Box {
-            changed |= row_f32(ui, "Size Y", &mut em.emitter_size[1], 1.0..=4000.0, 1.0);
+            changed |= row_f32(
+                &grid,
+                ui,
+                "Height",
+                &mut em.emitter_size[1],
+                1.0..=4000.0,
+                1.0,
+                " px",
+            );
         }
     });
 
-    ui.collapsing("Forces", |ui| {
-        ui.horizontal(|ui| {
-            ui.label("Gravity:");
-            changed |= drag2(ui, &mut em.gravity);
-            ui.label("Wind:");
-            changed |= drag2(ui, &mut em.wind);
-        });
-        changed |= row_f32(
+    crate::ui::kui::collapsing_section(ui, "particle-forces", "Forces", true, |ui| {
+        let grid = crate::ui::kui::PropertyGrid::new(
             ui,
-            "Gust strength",
+            &[
+                "Gravity",
+                "Wind",
+                "Gust Strength",
+                "Gust Frequency",
+                "Turbulence",
+                "Air Drag",
+            ],
+        );
+        changed |= grid
+            .row(ui, "Gravity", |ui| {
+                crate::ui::kui::vector_axes(
+                    ui,
+                    &mut em.gravity,
+                    -2000.0..=2000.0,
+                    1.0,
+                    " px/s²",
+                    ["X", "Y"],
+                )
+            })
+            .changed();
+        changed |= grid
+            .row(ui, "Wind", |ui| {
+                crate::ui::kui::vector_axes(
+                    ui,
+                    &mut em.wind,
+                    -2000.0..=2000.0,
+                    1.0,
+                    " px/s",
+                    ["X", "Y"],
+                )
+            })
+            .changed();
+        changed |= row_f32(
+            &grid,
+            ui,
+            "Gust Strength",
             &mut em.wind_gust_strength,
             0.0..=300.0,
             1.0,
+            "",
         );
         changed |= row_f32(
+            &grid,
             ui,
-            "Gust freq (Hz)",
+            "Gust Frequency",
             &mut em.wind_gust_frequency,
             0.0..=10.0,
             0.05,
+            " Hz",
         );
-        changed |= row_f32(ui, "Turbulence", &mut em.turbulence, 0.0..=300.0, 1.0);
-        changed |= row_f32(ui, "Air drag", &mut em.drag, 0.0..=20.0, 0.05);
+        changed |= row_f32(
+            &grid,
+            ui,
+            "Turbulence",
+            &mut em.turbulence,
+            0.0..=300.0,
+            1.0,
+            "",
+        );
+        changed |= row_f32(&grid, ui, "Air Drag", &mut em.drag, 0.0..=20.0, 0.05, "");
     });
 
-    ui.collapsing("Look", |ui| {
-        changed |= row_f32(ui, "Size start", &mut em.size_start, 0.0..=200.0, 0.5);
-        changed |= row_f32(ui, "Size end", &mut em.size_end, 0.0..=200.0, 0.5);
+    crate::ui::kui::collapsing_section(ui, "particle-appearance", "Appearance", false, |ui| {
+        let grid = crate::ui::kui::PropertyGrid::new(ui, &["Start Size", "End Size"]);
+        changed |= row_f32(
+            &grid,
+            ui,
+            "Start Size",
+            &mut em.size_start,
+            0.0..=200.0,
+            0.5,
+            " px",
+        );
+        changed |= row_f32(
+            &grid,
+            ui,
+            "End Size",
+            &mut em.size_end,
+            0.0..=200.0,
+            0.5,
+            " px",
+        );
     });
 
-    ui.collapsing("Collisions", |ui| {
-        if ui
-            .checkbox(&mut em.collision_enabled, "Boundary collisions")
-            .changed()
-        {
-            changed = true;
-        }
+    crate::ui::kui::collapsing_section(ui, "particle-collisions", "Collisions", false, |ui| {
+        let grid = crate::ui::kui::PropertyGrid::new(
+            ui,
+            &[
+                "Boundary Collisions",
+                "Bounds",
+                "Restitution",
+                "Friction",
+                "Particle Collisions",
+                "Contact Diameter",
+            ],
+        );
+        changed |= grid
+            .row(ui, "Boundary Collisions", |ui| {
+                crate::ui::kui::toggle(ui, &mut em.collision_enabled, "Enabled")
+            })
+            .changed();
         if em.collision_enabled {
-            ui.horizontal(|ui| {
-                ui.label("Bounds x0/y0/x1/y1:");
-                for v in &mut em.collision_bounds {
-                    if ui.add(egui::DragValue::new(v).speed(1.0)).changed() {
-                        changed = true;
-                    }
-                }
-            });
-            changed |= row_f32(ui, "Restitution", &mut em.restitution, 0.0..=1.0, 0.01);
-            changed |= row_f32(ui, "Friction", &mut em.surface_friction, 0.0..=1.0, 0.01);
+            changed |= grid
+                .row(ui, "Bounds", |ui| {
+                    crate::ui::kui::vector_axes(
+                        ui,
+                        &mut em.collision_bounds,
+                        -10000.0..=10000.0,
+                        1.0,
+                        " px",
+                        ["X0", "Y0", "X1", "Y1"],
+                    )
+                })
+                .changed();
+            changed |= row_f32(
+                &grid,
+                ui,
+                "Restitution",
+                &mut em.restitution,
+                0.0..=1.0,
+                0.01,
+                "",
+            );
+            changed |= row_f32(
+                &grid,
+                ui,
+                "Friction",
+                &mut em.surface_friction,
+                0.0..=1.0,
+                0.01,
+                "",
+            );
         }
-        if ui
-            .checkbox(&mut em.particle_collisions, "Particle ↔ particle")
-            .changed()
-        {
-            changed = true;
-        }
+        changed |= grid
+            .row(ui, "Particle Collisions", |ui| {
+                crate::ui::kui::toggle(ui, &mut em.particle_collisions, "Enabled")
+            })
+            .changed();
         if em.particle_collisions {
             changed |= row_f32(
+                &grid,
                 ui,
-                "Contact Ø (px)",
+                "Contact Diameter",
                 &mut em.particle_diameter,
                 0.5..=200.0,
                 0.5,
+                " px",
             );
         }
     });
@@ -153,39 +296,27 @@ pub fn draw_particle_emitter_controls(app: &mut KagariApp, ui: &mut egui::Ui) {
 }
 
 fn row_f32(
+    grid: &crate::ui::kui::PropertyGrid,
     ui: &mut egui::Ui,
     label: &str,
-    val: &mut f32,
+    value: &mut f32,
     range: std::ops::RangeInclusive<f32>,
-    speed: f32,
+    speed: f64,
+    unit: &str,
 ) -> bool {
-    ui.horizontal(|ui| {
-        ui.label(label);
-        ui.add(egui::DragValue::new(val).speed(speed).range(range))
-            .changed()
+    grid.row(ui, label, |ui| {
+        crate::ui::kui::number(ui, value, range, speed, unit)
     })
-    .inner
+    .changed()
 }
 
 fn row_u32(
+    grid: &crate::ui::kui::PropertyGrid,
     ui: &mut egui::Ui,
     label: &str,
-    val: &mut u32,
+    value: &mut u32,
     range: std::ops::RangeInclusive<u32>,
 ) -> bool {
-    ui.horizontal(|ui| {
-        ui.label(label);
-        ui.add(egui::DragValue::new(val).range(range)).changed()
-    })
-    .inner
-}
-
-fn drag2(ui: &mut egui::Ui, v: &mut [f32; 2]) -> bool {
-    let mut ch = false;
-    for c in v.iter_mut() {
-        if ui.add(egui::DragValue::new(c).speed(1.0)).changed() {
-            ch = true;
-        }
-    }
-    ch
+    grid.row(ui, label, |ui| crate::ui::kui::integer(ui, value, range))
+        .changed()
 }

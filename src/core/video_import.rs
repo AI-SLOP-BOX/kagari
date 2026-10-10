@@ -9,12 +9,227 @@
 //! access afterwards.
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, ExitStatus, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
+use std::{io, thread};
 
 const MAX_IMPORT_FPS: f32 = 240.0;
 const MAX_IMPORT_DURATION_SECONDS: f64 = 24.0 * 60.0 * 60.0;
 const MAX_IMPORT_FRAMES: u64 = 2_000_000;
 const MAX_IMPORT_DIMENSION: u32 = 16_384;
+const MAX_IMPORT_DECODED_BYTES: u64 = 128 * 1024 * 1024;
+const MIN_IMPORT_FREE_BYTES: u64 = 512 * 1024 * 1024;
+const IMPORT_DISK_HEADROOM_NUMERATOR: u64 = 15;
+const IMPORT_DISK_HEADROOM_DENOMINATOR: u64 = 100;
+const MAX_FFMPEG_DIAGNOSTIC_BYTES: usize = 64 * 1024;
+const FRAME_CACHE_MANIFEST_FILE: &str = ".kagari-frame-cache-v1.json";
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct FrameCacheManifest {
+    version: u32,
+    frame_count: u32,
+    width: u32,
+    height: u32,
+    total_bytes: u64,
+    content_hash: u64,
+}
+
+static FRAME_CACHE_MANIFEST_SEQUENCE: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
+fn dimensions_within_import_budget(width: u32, height: u32) -> bool {
+    if width < 2 || height < 2 || width > MAX_IMPORT_DIMENSION || height > MAX_IMPORT_DIMENSION {
+        return false;
+    }
+    u64::from(width)
+        .checked_mul(u64::from(height))
+        .and_then(|pixels| pixels.checked_mul(4))
+        .is_some_and(|bytes| bytes <= MAX_IMPORT_DECODED_BYTES)
+}
+
+struct FfmpegOutput {
+    status: ExitStatus,
+    stderr: String,
+}
+
+struct ImportSafety<'a> {
+    cancel: &'a AtomicBool,
+    disk_path: &'a Path,
+    minimum_free_bytes: u64,
+}
+
+fn run_ffmpeg(
+    command: &mut Command,
+    safety: Option<&ImportSafety<'_>>,
+) -> io::Result<FfmpegOutput> {
+    const TRUNCATED: &[u8] = b"\n[FFmpeg diagnostics truncated]";
+    let mut child = command
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let Some(mut stderr) = child.stderr.take() else {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(io::Error::other("FFmpeg stderr pipe was not available"));
+    };
+    let reader = thread::Builder::new()
+        .name("kagari-ffmpeg-log".into())
+        .spawn(move || -> io::Result<Vec<u8>> {
+            let keep_limit = MAX_FFMPEG_DIAGNOSTIC_BYTES.saturating_sub(TRUNCATED.len());
+            let mut output = Vec::with_capacity(MAX_FFMPEG_DIAGNOSTIC_BYTES);
+            let mut buffer = [0u8; 8192];
+            let mut truncated = false;
+            loop {
+                let count = io::Read::read(&mut stderr, &mut buffer)?;
+                if count == 0 {
+                    break;
+                }
+                let remaining = keep_limit.saturating_sub(output.len());
+                let kept = count.min(remaining);
+                output.extend_from_slice(&buffer[..kept]);
+                truncated |= kept < count;
+            }
+            if truncated {
+                output.extend_from_slice(TRUNCATED);
+            }
+            Ok(output)
+        });
+    let reader = match reader {
+        Ok(reader) => reader,
+        Err(error) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(error);
+        }
+    };
+    let mut last_space_check = Instant::now();
+    let status = loop {
+        if safety.is_some_and(|safety| safety.cancel.load(Ordering::Relaxed)) {
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = reader.join();
+            return Err(io::Error::new(
+                io::ErrorKind::Interrupted,
+                "video import cancelled",
+            ));
+        }
+        if last_space_check.elapsed() >= Duration::from_millis(500) {
+            last_space_check = Instant::now();
+            if safety.is_some_and(|safety| {
+                available_disk_space(safety.disk_path)
+                    .is_none_or(|available| available < safety.minimum_free_bytes)
+            }) {
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = reader.join();
+                return Err(io::Error::other(
+                    "video import stopped to preserve the minimum free disk space",
+                ));
+            }
+        }
+        if let Some(status) = child.try_wait()? {
+            break status;
+        }
+        thread::sleep(Duration::from_millis(100));
+    };
+    let stderr = reader
+        .join()
+        .map_err(|_| io::Error::other("FFmpeg log reader thread panicked"))??;
+    Ok(FfmpegOutput {
+        status,
+        stderr: String::from_utf8_lossy(&stderr).into_owned(),
+    })
+}
+
+fn available_disk_space(path: &Path) -> Option<u64> {
+    let existing_path = path.ancestors().find(|candidate| candidate.exists())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        let path = std::ffi::CString::new(existing_path.as_os_str().as_bytes()).ok()?;
+        let mut stats: libc::statvfs = unsafe { std::mem::zeroed() };
+        if unsafe { libc::statvfs(path.as_ptr(), &mut stats) } != 0 {
+            return None;
+        }
+        u64::from(stats.f_bavail).checked_mul(stats.f_frsize)
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        use std::ptr;
+        #[link(name = "kernel32")]
+        unsafe extern "system" {
+            fn GetDiskFreeSpaceExW(
+                directory: *const u16,
+                free_bytes_available: *mut u64,
+                total_bytes: *mut u64,
+                total_free_bytes: *mut u64,
+            ) -> i32;
+        }
+        let wide_path = existing_path
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect::<Vec<_>>();
+        let mut available = 0u64;
+        let success = unsafe {
+            GetDiskFreeSpaceExW(
+                wide_path.as_ptr(),
+                &mut available,
+                ptr::null_mut(),
+                ptr::null_mut(),
+            )
+        };
+        (success != 0).then_some(available)
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = existing_path;
+        None
+    }
+}
+
+fn estimate_import_disk_bytes(
+    width: u32,
+    height: u32,
+    frame_count: u64,
+    duration_seconds: f64,
+    has_audio: bool,
+) -> Option<u64> {
+    let frame_estimate = u64::from(width)
+        .checked_mul(u64::from(height))?
+        .checked_mul(frame_count)?
+        / 2;
+    let audio_estimate = if has_audio {
+        (duration_seconds * 176_400.0).ceil() as u64
+    } else {
+        0
+    };
+    frame_estimate.checked_add(audio_estimate)
+}
+
+fn format_disk_bytes(bytes: u64) -> String {
+    const GIB: u64 = 1024 * 1024 * 1024;
+    if bytes >= GIB {
+        format!("{:.1} GiB", bytes as f64 / GIB as f64)
+    } else {
+        format!("{:.0} MiB", bytes as f64 / (1024 * 1024) as f64)
+    }
+}
+
+struct ImportDirectoryGuard {
+    path: PathBuf,
+    keep: bool,
+}
+
+impl Drop for ImportDirectoryGuard {
+    fn drop(&mut self) {
+        if !self.keep {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+}
 
 /// A decoded video asset on disk.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -146,6 +361,18 @@ fn create_unique_import_dir(dest_dir: &Path) -> Result<PathBuf, String> {
 /// `fps` controls extraction rate (use the composition's fps so 1 sequence
 /// frame == 1 composition frame).
 pub fn import_video(src_path: &str, dest_dir: &Path, fps: f32) -> Result<VideoAsset, String> {
+    import_video_with_cancel(src_path, dest_dir, fps, &AtomicBool::new(false))
+}
+
+pub fn import_video_with_cancel(
+    src_path: &str,
+    dest_dir: &Path,
+    fps: f32,
+    cancel: &AtomicBool,
+) -> Result<VideoAsset, String> {
+    if cancel.load(Ordering::Relaxed) {
+        return Err("video import cancelled".into());
+    }
     if !ffmpeg_available() {
         return Err("ffmpeg not found on PATH — install it to import video".into());
     }
@@ -169,14 +396,11 @@ pub fn import_video(src_path: &str, dest_dir: &Path, fps: f32) -> Result<VideoAs
     }
     let (source_width, source_height) =
         probe_dimensions(src).ok_or_else(|| "could not determine video dimensions".to_string())?;
-    if source_width == 0
-        || source_height == 0
-        || source_width > MAX_IMPORT_DIMENSION
-        || source_height > MAX_IMPORT_DIMENSION
-    {
+    if !dimensions_within_import_budget(source_width, source_height) {
         return Err(format!(
-            "video dimensions must be within {}x{}",
-            MAX_IMPORT_DIMENSION, MAX_IMPORT_DIMENSION
+            "video dimensions exceed the import limit (maximum side {} px and decoded RGBA size {} MiB)",
+            MAX_IMPORT_DIMENSION,
+            MAX_IMPORT_DECODED_BYTES / (1024 * 1024)
         ));
     }
     let estimated_frames = (duration * f64::from(fps)).ceil() as u64;
@@ -186,7 +410,42 @@ pub fn import_video(src_path: &str, dest_dir: &Path, fps: f32) -> Result<VideoAs
             MAX_IMPORT_FRAMES
         ));
     }
+    let has_audio = probe_has_audio(src);
+    let estimated_disk_bytes = estimate_import_disk_bytes(
+        source_width,
+        source_height,
+        estimated_frames,
+        duration,
+        has_audio,
+    )
+    .ok_or_else(|| "could not estimate video import disk usage".to_string())?;
+    let minimum_free_bytes = MIN_IMPORT_FREE_BYTES.max(
+        estimated_disk_bytes.saturating_mul(IMPORT_DISK_HEADROOM_NUMERATOR)
+            / IMPORT_DISK_HEADROOM_DENOMINATOR,
+    );
+    let available_bytes = available_disk_space(dest_dir)
+        .ok_or_else(|| "could not determine available disk space for video import".to_string())?;
+    let required_bytes = estimated_disk_bytes.saturating_add(minimum_free_bytes);
+    if available_bytes < required_bytes {
+        return Err(format!(
+            "video import is estimated to need {} and preserve {} free, but only {} is available",
+            format_disk_bytes(estimated_disk_bytes),
+            format_disk_bytes(minimum_free_bytes),
+            format_disk_bytes(available_bytes),
+        ));
+    }
+    let safety = ImportSafety {
+        cancel,
+        disk_path: dest_dir,
+        minimum_free_bytes,
+    };
     let import_dir = create_unique_import_dir(dest_dir)?;
+    let extracted_width = source_width & !1;
+    let extracted_height = source_height & !1;
+    let mut import_dir_guard = ImportDirectoryGuard {
+        path: import_dir.clone(),
+        keep: false,
+    };
     let frames_dir = import_dir.join("frames");
     std::fs::create_dir_all(&frames_dir)
         .map_err(|e| format!("failed to create media dir: {}", e))?;
@@ -195,8 +454,10 @@ pub fn import_video(src_path: &str, dest_dir: &Path, fps: f32) -> Result<VideoAs
     // Lossless WebP keeps imported footage substantially smaller than a PNG
     // sequence while remaining directly decodable by image_cache.
     let webp_pattern = frames_dir.join("frame_%05d.webp");
-    let decode_webp = Command::new("ffmpeg")
+    let mut decode_webp = Command::new("ffmpeg");
+    decode_webp
         .arg("-y")
+        .args(["-v", "error"])
         .arg("-i")
         .arg(src)
         .args([
@@ -213,15 +474,37 @@ pub fn import_video(src_path: &str, dest_dir: &Path, fps: f32) -> Result<VideoAs
         ])
         .args(["-start_number", "0"])
         .arg("--")
-        .arg(&webp_pattern)
-        .output()
+        .arg(&webp_pattern);
+    let decode_webp = run_ffmpeg(&mut decode_webp, Some(&safety))
         .map_err(|e| format!("failed to run ffmpeg: {}", e))?;
     if !decode_webp.status.success() {
+        if cancel.load(Ordering::Relaxed) {
+            return Err("video import cancelled".into());
+        }
+        if available_disk_space(dest_dir).is_none_or(|available| available < minimum_free_bytes) {
+            return Err("video import stopped to preserve the minimum free disk space".into());
+        }
         // Some minimal FFmpeg builds omit libwebp. Keep those installations
         // usable by falling back to the legacy PNG sequence.
+        let entries = std::fs::read_dir(&frames_dir)
+            .map_err(|error| format!("failed to inspect partial WebP frames: {error}"))?;
+        for entry in entries {
+            let path = entry
+                .map_err(|error| format!("failed to inspect partial WebP frame: {error}"))?
+                .path();
+            if path
+                .extension()
+                .is_some_and(|extension| extension == "webp")
+            {
+                std::fs::remove_file(path)
+                    .map_err(|error| format!("failed to clear partial WebP frames: {error}"))?;
+            }
+        }
         let png_pattern = frames_dir.join("frame_%05d.png");
-        let decode_png = Command::new("ffmpeg")
+        let mut decode_png = Command::new("ffmpeg");
+        decode_png
             .arg("-y")
+            .args(["-v", "error"])
             .arg("-i")
             .arg(src)
             .args([
@@ -230,14 +513,13 @@ pub fn import_video(src_path: &str, dest_dir: &Path, fps: f32) -> Result<VideoAs
             ])
             .args(["-start_number", "0"])
             .arg("--")
-            .arg(&png_pattern)
-            .output()
+            .arg(&png_pattern);
+        let decode_png = run_ffmpeg(&mut decode_png, Some(&safety))
             .map_err(|e| format!("failed to run ffmpeg PNG fallback: {}", e))?;
         if !decode_png.status.success() {
             return Err(format!(
                 "ffmpeg frame extraction failed (WebP: {}; PNG: {})",
-                String::from_utf8_lossy(&decode_webp.stderr),
-                String::from_utf8_lossy(&decode_png.stderr)
+                decode_webp.stderr, decode_png.stderr
             ));
         }
     }
@@ -264,35 +546,56 @@ pub fn import_video(src_path: &str, dest_dir: &Path, fps: f32) -> Result<VideoAs
     if frame_count == 0 {
         return Err("ffmpeg produced no frames".into());
     }
+    write_frame_cache_manifest(&frames_dir, frame_count, extracted_width, extracted_height)
+        .map_err(|error| format!("could not verify extracted video frames: {error}"))?;
 
     // 2. Audio extraction (best effort — absence is not fatal)
     let mut audio_wav = None;
-    if probe_has_audio(src) {
+    if cancel.load(Ordering::Relaxed) {
+        return Err("video import cancelled".into());
+    }
+    if has_audio {
         let wav = import_dir.join("audio.wav");
-        let audio = Command::new("ffmpeg")
+        let mut audio = Command::new("ffmpeg");
+        audio
             .arg("-y")
+            .args(["-v", "error"])
             .arg("-i")
             .arg(src)
             .args(["-vn", "-acodec", "pcm_s16le", "-ar", "44100", "-ac", "2"])
             .arg("--")
-            .arg(&wav)
-            .output();
+            .arg(&wav);
+        let audio = run_ffmpeg(&mut audio, Some(&safety));
+        if cancel.load(Ordering::Relaxed) {
+            return Err("video import cancelled".into());
+        }
+        if audio
+            .as_ref()
+            .is_err_and(|error| error.to_string().contains("minimum free disk space"))
+        {
+            return Err("video import stopped to preserve the minimum free disk space".into());
+        }
         if let Ok(out) = audio {
             if out.status.success() && wav.exists() {
                 audio_wav = Some(wav.to_string_lossy().to_string());
             }
         }
     }
+    if cancel.load(Ordering::Relaxed) {
+        return Err("video import cancelled".into());
+    }
 
-    Ok(VideoAsset {
+    let asset = VideoAsset {
         source_path: src_path.to_string(),
         frames_dir: frames_dir.to_string_lossy().to_string(),
         frame_count,
         fps,
-        width: source_width,
-        height: source_height,
+        width: extracted_width,
+        height: extracted_height,
         audio_wav,
-    })
+    };
+    import_dir_guard.keep = true;
+    Ok(asset)
 }
 
 /// Import a numbered still-image sequence through the same WebP frame cache
@@ -318,10 +621,7 @@ pub fn import_image_sequence(
         .and_then(|value| value.to_str())
         .map(str::to_ascii_lowercase)
         .ok_or_else(|| "image sequence source has no extension".to_string())?;
-    if !matches!(
-        extension.as_str(),
-        "png" | "jpg" | "jpeg" | "bmp" | "tga" | "webp"
-    ) {
+    if !matches!(extension.as_str(), "png" | "jpg" | "jpeg" | "webp") {
         return Err(format!("unsupported image sequence format: .{extension}"));
     }
     let stem = src_path
@@ -365,12 +665,22 @@ pub fn import_image_sequence(
         })
         .collect();
     frames.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
-    frames.dedup_by_key(|(frame, _)| *frame);
+    if frames.windows(2).any(|pair| pair[0].0 == pair[1].0) {
+        return Err("image sequence contains duplicate frame numbers".to_string());
+    }
     if frames.is_empty() || !frames.iter().any(|(_, path)| path == src_path) {
         return Err(format!(
             "no numbered image sequence found for {}",
             src_path.display()
         ));
+    }
+    if frames
+        .windows(2)
+        .any(|pair| pair[0].0.checked_add(1) != Some(pair[1].0))
+    {
+        return Err(
+            "image sequence has missing frame numbers; fill the gaps before importing".to_string(),
+        );
     }
     if frames.len() > MAX_IMPORT_FRAMES as usize {
         return Err(format!(
@@ -380,24 +690,52 @@ pub fn import_image_sequence(
     }
     let (width, height) = image::image_dimensions(&frames[0].1)
         .map_err(|error| format!("could not read image sequence dimensions: {error}"))?;
-    if width == 0 || height == 0 || width > MAX_IMPORT_DIMENSION || height > MAX_IMPORT_DIMENSION {
+    if !dimensions_within_import_budget(width, height) {
         return Err(format!(
-            "image sequence dimensions must be within {}x{}",
-            MAX_IMPORT_DIMENSION, MAX_IMPORT_DIMENSION
+            "image sequence dimensions exceed the import limit (maximum side {} px and decoded RGBA size {} MiB)",
+            MAX_IMPORT_DIMENSION,
+            MAX_IMPORT_DECODED_BYTES / (1024 * 1024)
         ));
     }
 
     let import_dir = create_unique_import_dir(dest_dir)?;
+    let mut import_dir_guard = ImportDirectoryGuard {
+        path: import_dir.clone(),
+        keep: false,
+    };
     let frames_dir = import_dir.join("frames");
-    if let Err(error) = std::fs::create_dir_all(&frames_dir) {
-        let _ = std::fs::remove_dir_all(&import_dir);
-        return Err(format!("failed to create image sequence cache: {error}"));
-    }
+    std::fs::create_dir_all(&frames_dir)
+        .map_err(|error| format!("failed to create image sequence cache: {error}"))?;
     for (output_index, (_, source)) in frames.iter().enumerate() {
+        let (frame_width, frame_height) = image::image_dimensions(source).map_err(|error| {
+            format!(
+                "could not read sequence frame dimensions {}: {error}",
+                source.display()
+            )
+        })?;
+        if frame_width != width || frame_height != height {
+            return Err(format!(
+                "image sequence frame {} is {}x{}, expected {}x{}",
+                source.display(),
+                frame_width,
+                frame_height,
+                width,
+                height
+            ));
+        }
+        if !dimensions_within_import_budget(frame_width, frame_height) {
+            return Err(format!(
+                "image sequence frame dimensions exceed the import limit (maximum side {} px and decoded RGBA size {} MiB): {} is {}x{}",
+                MAX_IMPORT_DIMENSION,
+                MAX_IMPORT_DECODED_BYTES / (1024 * 1024),
+                source.display(),
+                frame_width,
+                frame_height
+            ));
+        }
         let image = match image::open(source) {
             Ok(image) => image,
             Err(error) => {
-                let _ = std::fs::remove_dir_all(&import_dir);
                 return Err(format!(
                     "could not decode sequence frame {}: {error}",
                     source.display()
@@ -406,15 +744,16 @@ pub fn import_image_sequence(
         };
         let target = frames_dir.join(format!("frame_{output_index:05}.webp"));
         if let Err(error) = image.save_with_format(&target, image::ImageFormat::WebP) {
-            let _ = std::fs::remove_dir_all(&import_dir);
             return Err(format!(
                 "could not encode sequence frame {}: {error}",
                 source.display()
             ));
         }
     }
+    write_frame_cache_manifest(&frames_dir, frames.len() as u32, width, height)
+        .map_err(|error| format!("could not verify imported image sequence: {error}"))?;
 
-    Ok(VideoAsset {
+    let asset = VideoAsset {
         source_path: src_path.to_string_lossy().into_owned(),
         frames_dir: frames_dir.to_string_lossy().into_owned(),
         frame_count: frames.len() as u32,
@@ -422,7 +761,9 @@ pub fn import_image_sequence(
         width,
         height,
         audio_wav: None,
-    })
+    };
+    import_dir_guard.keep = true;
+    Ok(asset)
 }
 
 /// Rebuilds missing decoded frame caches for video layers after a project
@@ -473,10 +814,15 @@ fn refresh_missing_video_caches_in_comp(
             continue;
         };
 
-        let first_frame = frame_path_in_dir(&frames_dir, 0);
-        let last_frame = frame_path_in_dir(&frames_dir, frame_count.saturating_sub(1));
-        let cache_is_valid = frame_count > 0 && first_frame.is_file() && last_frame.is_file();
-        if cache_is_valid || !Path::new(&source).is_file() {
+        let cache_is_valid = video_frame_cache_is_complete(&frames_dir, frame_count);
+        if cache_is_valid {
+            continue;
+        }
+        if !Path::new(&source).is_file() {
+            errors.push(format!(
+                "{}: decoded frame cache is incomplete and the source video is unavailable",
+                source
+            ));
             continue;
         }
 
@@ -532,6 +878,178 @@ fn refresh_missing_video_caches_in_comp(
     }
 }
 
+fn video_frame_cache_is_complete(frames_dir: &str, frame_count: u32) -> bool {
+    if frame_count == 0 || frame_count as u64 > MAX_IMPORT_FRAMES {
+        return false;
+    }
+    let Ok(entries) = std::fs::read_dir(frames_dir) else {
+        return false;
+    };
+    let mut seen = vec![0u64; (frame_count as usize).div_ceil(64)];
+    let mut found = 0u32;
+    for entry in entries {
+        let Ok(entry) = entry else {
+            return false;
+        };
+        let Some(name) = entry.file_name().to_str().map(str::to_owned) else {
+            continue;
+        };
+        let Some(number) = name.strip_prefix("frame_").and_then(|name| {
+            name.strip_suffix(".webp")
+                .or_else(|| name.strip_suffix(".png"))
+        }) else {
+            continue;
+        };
+        let Ok(index) = number.parse::<u32>() else {
+            continue;
+        };
+        if index >= frame_count
+            || entry
+                .metadata()
+                .map_or(true, |metadata| metadata.len() == 0)
+        {
+            return false;
+        }
+        let word = index as usize / 64;
+        let mask = 1u64 << (index % 64);
+        if seen[word] & mask != 0 {
+            return false;
+        }
+        seen[word] |= mask;
+        found += 1;
+    }
+    if found != frame_count
+        || !(0..frame_count).all(|index| seen[index as usize / 64] & (1u64 << (index % 64)) != 0)
+    {
+        return false;
+    }
+
+    let frames_dir = Path::new(frames_dir);
+    let manifest_path = frames_dir.join(FRAME_CACHE_MANIFEST_FILE);
+    match std::fs::metadata(&manifest_path) {
+        Ok(metadata) if metadata.len() <= 4096 => {
+            let Ok(source) =
+                crate::core::project_migration::read_bounded_text_file(&manifest_path, 4096)
+            else {
+                return false;
+            };
+            let Ok(manifest) = serde_json::from_str::<FrameCacheManifest>(&source) else {
+                return false;
+            };
+            if manifest.version != 1
+                || manifest.frame_count != frame_count
+                || !dimensions_within_import_budget(manifest.width, manifest.height)
+            {
+                return false;
+            }
+            frame_cache_fingerprint(frames_dir, frame_count).is_some_and(|(total, hash)| {
+                total == manifest.total_bytes && hash == manifest.content_hash
+            })
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            let Some((width, height)) = validate_legacy_frame_cache(frames_dir, frame_count) else {
+                return false;
+            };
+            let _ = write_frame_cache_manifest(frames_dir, frame_count, width, height);
+            true
+        }
+        Err(_) => false,
+        Ok(_) => false,
+    }
+}
+
+fn frame_cache_fingerprint(frames_dir: &Path, frame_count: u32) -> Option<(u64, u64)> {
+    use io::Read;
+
+    let mut total_bytes = 0u64;
+    let mut hash = 0xcbf29ce484222325u64;
+    let mut buffer = [0u8; 64 * 1024];
+    for frame in 0..frame_count {
+        let path = frame_path_in_dir(&frames_dir.to_string_lossy(), frame);
+        let mut file = std::fs::File::open(&path).ok()?;
+        hash = fnv1a_update(hash, &frame.to_le_bytes());
+        loop {
+            let count = file.read(&mut buffer).ok()?;
+            if count == 0 {
+                break;
+            }
+            total_bytes = total_bytes.checked_add(count as u64)?;
+            hash = fnv1a_update(hash, &buffer[..count]);
+        }
+    }
+    Some((total_bytes, hash))
+}
+
+fn fnv1a_update(mut hash: u64, bytes: &[u8]) -> u64 {
+    for byte in bytes {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
+}
+
+fn validate_legacy_frame_cache(frames_dir: &Path, frame_count: u32) -> Option<(u32, u32)> {
+    let mut dimensions = None;
+    for frame in 0..frame_count {
+        let path = frame_path_in_dir(&frames_dir.to_string_lossy(), frame);
+        let current = image::image_dimensions(&path).ok()?;
+        if !dimensions_within_import_budget(current.0, current.1)
+            || dimensions.is_some_and(|expected| expected != current)
+        {
+            return None;
+        }
+        image::open(path).ok()?;
+        dimensions = Some(current);
+    }
+    dimensions
+}
+
+fn write_frame_cache_manifest(
+    frames_dir: &Path,
+    frame_count: u32,
+    width: u32,
+    height: u32,
+) -> io::Result<()> {
+    if frame_count == 0
+        || frame_count as u64 > MAX_IMPORT_FRAMES
+        || !dimensions_within_import_budget(width, height)
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "frame cache metadata is outside supported limits",
+        ));
+    }
+    let (total_bytes, content_hash) = frame_cache_fingerprint(frames_dir, frame_count)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "frame cache is incomplete"))?;
+    let manifest = FrameCacheManifest {
+        version: 1,
+        frame_count,
+        width,
+        height,
+        total_bytes,
+        content_hash,
+    };
+    let bytes = serde_json::to_vec(&manifest)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    let temporary = frames_dir.join(format!(
+        "{FRAME_CACHE_MANIFEST_FILE}.tmp.{}.{}",
+        std::process::id(),
+        FRAME_CACHE_MANIFEST_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    let result = (|| {
+        let mut file = std::fs::File::create(&temporary)?;
+        use io::Write;
+        file.write_all(&bytes)?;
+        file.sync_all()?;
+        drop(file);
+        std::fs::rename(&temporary, frames_dir.join(FRAME_CACHE_MANIFEST_FILE))
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(temporary);
+    }
+    result
+}
+
 /// Returns the extracted frame path (WebP preferred, PNG fallback), clamped to
 /// the imported sequence range.
 pub fn frame_path(asset: &VideoAsset, frame: u32) -> PathBuf {
@@ -554,6 +1072,73 @@ pub fn frame_path_in_dir(frames_dir: &str, frame: u32) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_cache_dir(name: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "kagari_{name}_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock should be after unix epoch")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("test cache directory should be created");
+        root
+    }
+
+    #[test]
+    fn legacy_nonempty_but_corrupt_frames_are_rejected() {
+        let root = test_cache_dir("corrupt_video_cache");
+        std::fs::write(root.join("frame_00000.webp"), b"nonempty but not an image")
+            .expect("corrupt test frame should be written");
+
+        assert!(!video_frame_cache_is_complete(
+            root.to_str().expect("temporary path should be UTF-8"),
+            1
+        ));
+
+        std::fs::remove_dir_all(root).expect("test cache directory should be removable");
+    }
+
+    #[test]
+    fn cache_manifest_detects_frame_content_changes() {
+        let root = test_cache_dir("video_cache_manifest");
+        let frame = root.join("frame_00000.png");
+        image::RgbaImage::from_pixel(4, 4, image::Rgba([30, 80, 120, 255]))
+            .save(&frame)
+            .expect("legacy frame should be written");
+
+        let cache_path = root.to_str().expect("temporary path should be UTF-8");
+        assert!(video_frame_cache_is_complete(cache_path, 1));
+        assert!(root.join(FRAME_CACHE_MANIFEST_FILE).is_file());
+
+        std::fs::write(&frame, b"different nonempty content")
+            .expect("mutated frame should be written");
+        assert!(!video_frame_cache_is_complete(cache_path, 1));
+
+        std::fs::remove_dir_all(root).expect("test cache directory should be removable");
+    }
+
+    #[test]
+    fn import_dimensions_respect_decoded_byte_budget() {
+        assert!(dimensions_within_import_budget(8192, 4096));
+        assert!(!dimensions_within_import_budget(8192, 4097));
+        assert!(!dimensions_within_import_budget(16_384, 16_384));
+        assert!(!dimensions_within_import_budget(16_385, 1));
+    }
+
+    #[test]
+    fn disk_estimate_scales_with_frames_and_includes_audio() {
+        let still_video = estimate_import_disk_bytes(1920, 1080, 30, 1.0, false)
+            .expect("bounded dimensions should produce an estimate");
+        let longer_video = estimate_import_disk_bytes(1920, 1080, 60, 2.0, false)
+            .expect("bounded duration should produce an estimate");
+        let with_audio = estimate_import_disk_bytes(1920, 1080, 30, 1.0, true)
+            .expect("bounded duration should include audio estimate");
+
+        assert_eq!(longer_video, still_video * 2);
+        assert!(with_audio > still_video);
+    }
 
     #[test]
     fn test_frame_path_clamps_to_range() {
@@ -631,7 +1216,7 @@ mod tests {
                 .as_nanos()
         ));
         std::fs::create_dir_all(&root).expect("test root should be created");
-        for frame in [1u32, 2, 4] {
+        for frame in [1u32, 2, 3] {
             let image = image::RgbaImage::from_pixel(8, 4, image::Rgba([frame as u8, 20, 40, 255]));
             image
                 .save(root.join(format!("shot_{frame:04}.png")))

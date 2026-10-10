@@ -527,8 +527,7 @@ fn render_stats_calculation() {
 fn make_pixels(w: u32, h: u32) -> Vec<u8> {
     let mut p = vec![128u8; (w * h * 4) as usize];
     // Add gradient to avoid trivial zero-input optimization
-    #[allow(clippy::chunks_exact_to_as_chunks)]
-    for (i, px) in p.chunks_exact_mut(4).enumerate() {
+    for (i, px) in p.as_chunks_mut::<4>().0.iter_mut().enumerate() {
         px[0] = (i as f32 / (w * h) as f32 * 255.0) as u8;
         px[1] = 128;
         px[2] = 64;
@@ -935,7 +934,7 @@ fn blur_and_vignette_preserve_effect_specific_pixel_relationships() {
     assert!(impulse[center + 3] < 255, "blur must soften alpha coverage");
 
     let mut vignette = vec![200u8; (width * height * 4) as usize];
-    for pixel in vignette.chunks_exact_mut(4) {
+    for pixel in vignette.as_chunks_mut::<4>().0 {
         pixel[3] = 255;
     }
     kagari_vfx::core::cpu_effects::apply_layer_effects(
@@ -997,7 +996,11 @@ fn effect_endpoint_contracts_match_pixel_semantics() {
         30,
     );
     assert!(
-        wipe_full.chunks_exact(4).all(|pixel| pixel[3] == 0),
+        wipe_full
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|pixel| pixel[3] == 0),
         "100% wipe must make every pixel transparent"
     );
 
@@ -1017,7 +1020,9 @@ fn effect_endpoint_contracts_match_pixel_semantics() {
     );
     assert_eq!(
         shifted
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .map(|pixel| pixel[0])
             .collect::<Vec<_>>(),
         vec![40, 10, 20, 30],

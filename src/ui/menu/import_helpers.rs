@@ -1,43 +1,5 @@
 use eframe::egui;
 
-pub(super) fn insert_imported_sequence(
-    app: &mut crate::KagariApp,
-    asset: crate::core::video_import::VideoAsset,
-    name: String,
-) {
-    let (comp_w, comp_h, comp_duration) = {
-        let comp = app.history.current().active_composition();
-        (comp.width as f32, comp.height as f32, comp.duration_frames)
-    };
-    let fit = ((comp_w / asset.width.max(1) as f32).min(comp_h / asset.height.max(1) as f32))
-        .min(1.0)
-        * 100.0;
-    app.modify_project(|p| {
-        let comp = p.active_composition_mut();
-        let layer_id = comp.next_layer_id("image_sequence");
-        let mut layer = crate::core::timeline::Layer::new(
-            layer_id,
-            name.clone(),
-            crate::core::timeline::LayerType::Video {
-                source: asset.source_path.clone(),
-                frames_dir: asset.frames_dir.clone(),
-                frame_count: asset.frame_count,
-                audio_wav: None,
-                speed: 1.0,
-            },
-            comp_duration,
-        );
-        layer.transform.position =
-            crate::core::property::Animatable::new_constant([comp_w * 0.5, comp_h * 0.5]);
-        layer.transform.scale = crate::core::property::Animatable::new_constant([fit, fit]);
-        comp.layers.push(layer);
-    });
-    app.toasts.info(format!(
-        "Imported image sequence: {} ({} frames)",
-        name, asset.frame_count
-    ));
-}
-
 pub(super) fn insert_imported_model3d(
     app: &mut crate::KagariApp,
     path: std::path::PathBuf,
@@ -49,7 +11,7 @@ pub(super) fn insert_imported_model3d(
     };
     let source = path.to_string_lossy().into_owned();
     app.modify_project(|project| {
-        let asset_id = format!("model3d_asset_{}", project.assets.len() + 1);
+        let asset_id = project.next_project_item_id("model3d_asset");
         project.assets.push(crate::core::timeline::ProjectItem::new(
             asset_id,
             name.clone(),
@@ -67,10 +29,8 @@ pub(super) fn insert_imported_model3d(
             comp_duration,
         );
         layer.is_3d = true;
-        layer.transform.position = crate::core::property::Animatable::new_constant([
-            comp_w * 0.5,
-            comp_h * 0.5,
-        ]);
+        layer.transform.position =
+            crate::core::property::Animatable::new_constant([comp_w * 0.5, comp_h * 0.5]);
         layer.transform_3d.position = crate::core::property::Animatable::new_constant([
             0.0,
             0.0,
@@ -150,9 +110,7 @@ pub(super) fn import_image_inline(app: &mut crate::KagariApp, path: std::path::P
         (comp.width as f32, comp.height as f32, comp.duration_frames)
     };
     let fit = dimensions
-        .map(|(w, h)| {
-            ((comp_w / w.max(1) as f32).min(comp_h / h.max(1) as f32)).min(1.0) * 100.0
-        })
+        .map(|(w, h)| ((comp_w / w.max(1) as f32).min(comp_h / h.max(1) as f32)).min(1.0) * 100.0)
         .unwrap_or(100.0);
     app.modify_project(|p| {
         let comp = p.active_composition_mut();

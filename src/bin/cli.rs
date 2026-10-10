@@ -207,6 +207,10 @@ enum Commands {
         /// Output height
         #[arg(long)]
         height: Option<u32>,
+
+        /// Render with the experimental WGPU preview renderer
+        #[arg(long)]
+        gpu: bool,
     },
 
     /// Export the project to Lottie / Bodymovin JSON (transforms + keyframes; effects not included)
@@ -375,19 +379,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 load_project(&project)?
             };
             // Tolerate wrapped ProjectFile format too
-            let script_meta = std::fs::metadata(&file)
-                .map_err(|e| std::io::Error::new(e.kind(), format!("cannot read script: {}", e)))?;
-            if script_meta.len() > 1024 * 1024 {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    format!(
-                        "script file too large ({} KB, limit 1 MB)",
-                        script_meta.len() / 1024
-                    ),
-                )
-                .into());
-            }
-            let source = std::fs::read_to_string(&file)?;
+            let source = kagari_vfx::core::project_migration::read_bounded_text_file(
+                std::path::Path::new(&file),
+                1024 * 1024,
+            )
+            .map_err(std::io::Error::other)?;
             let logs = kagari_vfx::automation::run_script(&mut proj, &source)?;
             for l in logs {
                 println!("{l}");
@@ -414,8 +410,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             output,
             width,
             height,
+            gpu,
         } => {
-            cmd_frame(&project, frame, &output, width, height)?;
+            cmd_frame(&project, frame, &output, width, height, gpu)?;
         }
         Commands::Lottie { project, output } => {
             cmd_lottie(&project, &output)?;
@@ -594,16 +591,45 @@ fn cmd_mocap(
     feature_spacing: u32,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use kagari_vfx::core::optical_flow_timewarp::{
-        estimate_markerless_pose, filter_pose_frames_by_quality, markerless_pose_to_bvh,
-        markerless_pose_to_csv, markerless_pose_to_json, name_and_connect_markerless_pose_track,
-        track_markerless_motion,
+        detect_markerless_features, estimate_markerless_pose_from_tracks,
+        filter_pose_frames_by_quality, markerless_pose_to_bvh, markerless_pose_to_csv,
+        markerless_pose_to_json, name_and_connect_markerless_pose_track,
+        track_markerless_motion_stream,
     };
-    let mut paths = std::fs::read_dir(directory)?
-        .filter_map(Result::ok)
+    let entries = std::fs::read_dir(directory)?.collect::<Result<Vec<_>, _>>()?;
+    let mut numbered_paths = entries
+        .into_iter()
         .map(|entry| entry.path())
-        .filter(|path| path.extension().and_then(|e| e.to_str()) == Some("png"))
+        .filter(|path| {
+            path.extension().and_then(|e| e.to_str()) == Some("png")
+                && path
+                    .file_stem()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with("frame_"))
+        })
+        .map(|path| {
+            let frame_number = path
+                .file_stem()
+                .and_then(|name| name.to_str())
+                .and_then(|name| name.strip_prefix("frame_"))
+                .and_then(|number| number.parse::<u64>().ok())
+                .ok_or_else(|| {
+                    format!(
+                        "Mocap frame filename must use frame_<number>.png: {}",
+                        path.display()
+                    )
+                })?;
+            Ok((frame_number, path))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    numbered_paths.sort_by_key(|(frame_number, _)| *frame_number);
+    if numbered_paths.windows(2).any(|pair| pair[0].0 == pair[1].0) {
+        return Err("Mocap frame sequence contains duplicate frame numbers".into());
+    }
+    let paths = numbered_paths
+        .into_iter()
+        .map(|(_, path)| path)
         .collect::<Vec<_>>();
-    paths.sort();
     if paths.is_empty() || (!pose && points.is_empty()) {
         return Err(if pose {
             "frames are required"
@@ -612,51 +638,30 @@ fn cmd_mocap(
         }
         .into());
     }
-    let mut decoded = Vec::with_capacity(paths.len());
-    let mut dimensions = None;
-    for path in &paths {
-        // Peek at the PNG header for dimensions before full decode
-        let (w, h) = if path.extension().and_then(|e| e.to_str()) == Some("png") {
-            let file = std::fs::File::open(path)?;
-            let mut buf = std::io::BufReader::new(file);
-            let mut decoder = png::Decoder::new(&mut buf);
-            let info = decoder
-                .read_header_info()
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-            (info.width, info.height)
-        } else {
-            // For non-PNG files we must decode to learn dimensions
-            let img = image::open(path)?;
-            (img.width(), img.height())
-        };
-        const MAX_DIM: u32 = 16384;
-        if w > MAX_DIM || h > MAX_DIM {
-            return Err(format!(
-                "Frame {:?} dimensions {}x{} exceed {}x{} limit",
-                path, w, h, MAX_DIM, MAX_DIM
-            )
-            .into());
-        }
-        let image = image::open(path)?.to_rgba8();
-        let current = (image.width(), image.height());
-        if dimensions.is_some_and(|expected| expected != current) {
-            return Err("all mocap frames must have identical dimensions".into());
-        }
-        dimensions = Some(current);
-        decoded.push(image.into_raw());
-    }
-    let (width, height) = dimensions.ok_or("no valid frames")?;
-    let refs = decoded.iter().map(Vec::as_slice).collect::<Vec<_>>();
+    let (first_frame, width, height) = load_mocap_frame(&paths[0], None)?;
+    let seed_points = if pose {
+        detect_markerless_features(&first_frame, width, height, max_features, feature_spacing)
+    } else {
+        points.to_vec()
+    };
+    let later_frames = paths.into_iter().skip(1).map(move |path| {
+        load_mocap_frame(&path, Some((width, height)))
+            .map(|(pixels, _, _)| pixels)
+            .map_err(|error| error.to_string())
+    });
+    let frames = std::iter::once(Ok(first_frame)).chain(later_frames);
+    let tracks = track_markerless_motion_stream(
+        frames,
+        width,
+        height,
+        &seed_points,
+        block_radius,
+        search_radius,
+    )
+    .map_err(std::io::Error::other)?;
     if pose {
-        let mut estimated = estimate_markerless_pose(
-            &refs,
-            width,
-            height,
-            max_features,
-            feature_spacing,
-            block_radius,
-            search_radius,
-        );
+        let mut estimated =
+            estimate_markerless_pose_from_tracks(&seed_points, &tracks, width, height);
         let _ = filter_pose_frames_by_quality(&mut estimated, 1, min_confidence);
         let named = name_and_connect_markerless_pose_track(&estimated);
         let serialized = match std::path::Path::new(output)
@@ -690,7 +695,6 @@ fn cmd_mocap(
         println!("wrote pose track to {}", output);
         return Ok(());
     }
-    let tracks = track_markerless_motion(&refs, width, height, points, block_radius, search_radius);
     let json_tracks = tracks
         .iter()
         .map(|track| {
@@ -720,6 +724,40 @@ fn cmd_mocap(
     )?;
     println!("wrote {} track(s) to {}", tracks.len(), output);
     Ok(())
+}
+
+fn load_mocap_frame(
+    path: &std::path::Path,
+    expected_dimensions: Option<(u32, u32)>,
+) -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error>> {
+    const MAX_DIMENSION: u32 = 16_384;
+    let max_flow_pixels = kagari_vfx::core::optical_flow_timewarp::MAX_DENSE_FLOW_PIXELS as u64;
+    let file = std::fs::File::open(path)?;
+    let mut reader = std::io::BufReader::new(file);
+    let mut decoder = png::Decoder::new(&mut reader);
+    let info = decoder
+        .read_header_info()
+        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+    let (width, height) = (info.width, info.height);
+    if width == 0 || height == 0 || width > MAX_DIMENSION || height > MAX_DIMENSION {
+        return Err(format!(
+            "Frame {:?} dimensions {}x{} are outside the supported range (maximum {}x{})",
+            path, width, height, MAX_DIMENSION, MAX_DIMENSION
+        )
+        .into());
+    }
+    if u64::from(width) * u64::from(height) > max_flow_pixels {
+        return Err(format!(
+            "Frame {:?} is {}x{}; markerless flow supports at most {} pixels",
+            path, width, height, max_flow_pixels
+        )
+        .into());
+    }
+    if expected_dimensions.is_some_and(|expected| expected != (width, height)) {
+        return Err("all mocap frames must have identical dimensions".into());
+    }
+    let pixels = image::open(path)?.to_rgba8().into_raw();
+    Ok((pixels, width, height))
 }
 
 fn load_project(path: &str) -> Result<Project, Box<dyn std::error::Error>> {
@@ -825,12 +863,47 @@ fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Error>> {
         .iter()
         .cloned()
         .collect::<std::collections::HashMap<_, _>>();
+    let to = args.to.unwrap_or(comp.duration_frames.saturating_sub(1));
+    if comp.duration_frames == 0 {
+        return Err(format!("Composition '{}' has no frames", comp.name).into());
+    }
+    if args.from > to {
+        return Err(format!("Invalid render range: from {} is after to {to}", args.from).into());
+    }
+    if to >= comp.duration_frames {
+        return Err(format!(
+            "Render frame {to} is outside composition '{}' (0..{})",
+            comp.name,
+            comp.duration_frames - 1
+        )
+        .into());
+    }
+    let width = args.width.unwrap_or(comp.width);
+    let height = args.height.unwrap_or(comp.height);
+    let max_dimension = kagari_vfx::core::software_renderer::MAX_RENDER_DIMENSION;
+    if width == 0 || height == 0 || width > max_dimension || height > max_dimension {
+        return Err(format!(
+            "Render dimensions must be between 1 and {max_dimension} pixels per axis"
+        )
+        .into());
+    }
+    let render_bytes = u64::from(width) * u64::from(height) * 4;
+    if render_bytes > kagari_vfx::core::software_renderer::MAX_RENDER_BYTES as u64 {
+        return Err(format!(
+            "Render buffer requires {render_bytes} bytes; the limit is {} bytes",
+            kagari_vfx::core::software_renderer::MAX_RENDER_BYTES
+        )
+        .into());
+    }
+    if !args.exposure.is_finite() || args.lut > 2 {
+        return Err("Exposure must be finite and LUT mode must be 0, 1, or 2".into());
+    }
     let spec = RenderSpec {
         output: &args.output,
         from: args.from,
-        to: args.to.unwrap_or(comp.duration_frames.saturating_sub(1)),
-        w: args.width.unwrap_or(comp.width),
-        h: args.height.unwrap_or(comp.height),
+        to,
+        w: width,
+        h: height,
         exposure: args.exposure,
         lut: args.lut,
         bindings: &binding_values,
@@ -1542,22 +1615,74 @@ fn cmd_frame(
     output: &str,
     width: Option<u32>,
     height: Option<u32>,
+    gpu: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let project = load_project(project_path)?;
-    let comp = project
-        .compositions
-        .first()
-        .ok_or("Project has no compositions")?;
+    #[cfg(not(feature = "cli-gpu"))]
+    if gpu {
+        return Err(
+            "--gpu requires the optional cli-gpu feature; rebuild with --features cli-gpu".into(),
+        );
+    }
+
+    let meta = std::fs::metadata(project_path)
+        .map_err(|e| format!("Failed to stat project file '{}': {}", project_path, e))?;
+    if meta.len() > 100 * 1024 * 1024 {
+        return Err(format!(
+            "Project file too large ({} MB, limit 100 MB)",
+            meta.len() / (1024 * 1024)
+        )
+        .into());
+    }
+    let json =
+        kagari_vfx::core::project_migration::read_project_json_file(std::path::Path::new(project_path))
+            .map_err(|e| format!("Failed to read project file '{}': {}", project_path, e))?;
+    let doc_opt = kagari_vfx::core::production_document::ProductionDocument::from_json(&json).ok();
+    let project = if let Some(doc) = doc_opt.as_ref() {
+        doc.project.clone()
+    } else {
+        load_project(project_path)?
+    };
+
+    let comp_idx = project.active_composition_idx.min(project.compositions.len().saturating_sub(1));
+    let comp = if let Some(doc) = doc_opt.as_ref() {
+        doc.composition_for_frame(comp_idx, frame)
+            .ok_or("Composition index out of range")?
+    } else {
+        project
+            .compositions
+            .get(comp_idx)
+            .cloned()
+            .ok_or("Project has no compositions")?
+    };
 
     let w = width.unwrap_or(comp.width);
     let h = height.unwrap_or(comp.height);
+
+    #[cfg(feature = "cli-gpu")]
+    if gpu && (w != comp.width || h != comp.height) {
+        return Err("--gpu currently renders at the composition's native resolution".into());
+    }
 
     eprintln!(
         "Rendering frame {} from \"{}\" ({}x{})",
         frame, comp.name, w, h
     );
 
-    let pixels = render_frame_to_pixels(comp, frame, w, h, 0.0, 0);
+    #[cfg(feature = "cli-gpu")]
+    let pixels = if gpu {
+        if kagari_vfx::core::render_capability::software_preview_required(&comp, frame) {
+            eprintln!("Composition uses effects or features unsupported by GPU; falling back to software renderer");
+            render_frame_to_pixels(&comp, frame, w, h, 0.0, 0)
+        } else {
+            eprintln!("Using the experimental WGPU preview renderer");
+            kagari_vfx::core::headless_gpu::HeadlessGpuRenderer::new()?
+                .render_rgba8(&comp, frame, 0.0, 0)?
+        }
+    } else {
+        render_frame_to_pixels(&comp, frame, w, h, 0.0, 0)
+    };
+    #[cfg(not(feature = "cli-gpu"))]
+    let pixels = render_frame_to_pixels(&comp, frame, w, h, 0.0, 0);
     write_png(output, &pixels, w, h)?;
 
     eprintln!("Saved: {}", output);
@@ -1749,7 +1874,7 @@ fn format_qc_batch_report(batch: &QcBatchReport) -> String {
 
 fn cmd_lottie(project_path: &str, output: &str) -> Result<(), Box<dyn std::error::Error>> {
     let project = load_project(project_path)?;
-    let json = kagari_vfx::core::lottie_exporter::export_project_to_json(&project);
+    let json = kagari_vfx::core::lottie_exporter::export_project_to_json(&project)?;
 
     let effect_count: usize = project
         .compositions

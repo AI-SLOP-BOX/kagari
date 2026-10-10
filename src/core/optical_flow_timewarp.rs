@@ -7,6 +7,8 @@
 
 use serde::{Deserialize, Serialize};
 
+pub const MAX_DENSE_FLOW_PIXELS: usize = 16_777_216;
+
 #[derive(Debug, Clone)]
 pub struct DenseFlowField {
     pub width: u32,
@@ -16,10 +18,9 @@ pub struct DenseFlowField {
 
 impl DenseFlowField {
     pub fn new(width: u32, height: u32) -> Self {
-        const MAX_FLOW_PIXELS: usize = 16_777_216;
         let size = (width as usize)
             .checked_mul(height as usize)
-            .filter(|&count| count <= MAX_FLOW_PIXELS)
+            .filter(|&count| count <= MAX_DENSE_FLOW_PIXELS)
             .unwrap_or(0);
         Self {
             width,
@@ -332,6 +333,93 @@ pub fn track_markerless_motion(
         return Vec::new();
     }
 
+    let (mut positions, mut tracks) = initialize_markerless_tracks(width, height, seed_points);
+    if frames.len() == 1 || tracks.is_empty() {
+        return tracks;
+    }
+
+    for frame in 1..frames.len() {
+        advance_markerless_tracks(
+            frames[frame - 1],
+            frames[frame],
+            width,
+            height,
+            frame as u32,
+            block_radius,
+            search_radius,
+            &mut positions,
+            &mut tracks,
+        );
+    }
+    for track in &mut tracks {
+        let _ = reject_markerless_motion_outliers(track, search_radius.max(1) as f32);
+    }
+    tracks
+}
+
+pub fn track_markerless_motion_stream<I>(
+    frames: I,
+    width: u32,
+    height: u32,
+    seed_points: &[[f32; 2]],
+    block_radius: i32,
+    search_radius: i32,
+) -> Result<Vec<MarkerlessMotionTrack>, String>
+where
+    I: IntoIterator<Item = Result<Vec<u8>, String>>,
+{
+    let byte_len = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .ok_or_else(|| "frame dimensions overflow RGBA storage".to_string())?;
+    if width == 0 || height == 0 {
+        return Err("frame dimensions must be non-zero".to_string());
+    }
+    let mut frames = frames.into_iter();
+    let mut previous = frames
+        .next()
+        .ok_or_else(|| "at least one frame is required".to_string())??;
+    if previous.len() != byte_len {
+        return Err("frame pixel data does not match its dimensions".to_string());
+    }
+    let (mut positions, mut tracks) = initialize_markerless_tracks(width, height, seed_points);
+
+    for (index, current) in frames.enumerate() {
+        let current = current?;
+        if current.len() != byte_len {
+            return Err(format!(
+                "frame {} pixel data does not match {}x{} dimensions",
+                index + 1,
+                width,
+                height
+            ));
+        }
+        if !tracks.is_empty() {
+            advance_markerless_tracks(
+                &previous,
+                &current,
+                width,
+                height,
+                index.saturating_add(1) as u32,
+                block_radius,
+                search_radius,
+                &mut positions,
+                &mut tracks,
+            );
+        }
+        previous = current;
+    }
+    for track in &mut tracks {
+        let _ = reject_markerless_motion_outliers(track, search_radius.max(1) as f32);
+    }
+    Ok(tracks)
+}
+
+fn initialize_markerless_tracks(
+    width: u32,
+    height: u32,
+    seed_points: &[[f32; 2]],
+) -> (Vec<[f32; 2]>, Vec<MarkerlessMotionTrack>) {
     let mut positions = Vec::with_capacity(seed_points.len());
     let mut tracks = Vec::with_capacity(seed_points.len());
     for &point in seed_points {
@@ -351,73 +439,79 @@ pub fn track_markerless_motion(
             }],
         });
     }
-    if frames.len() == 1 || tracks.is_empty() {
-        return tracks;
-    }
+    (positions, tracks)
+}
 
-    for frame in 1..frames.len() {
-        let flow = compute_dense_optical_flow(
-            frames[frame - 1],
-            frames[frame],
-            width,
-            height,
-            block_radius,
-            search_radius,
-        );
-        let reverse_flow = compute_dense_optical_flow(
-            frames[frame],
-            frames[frame - 1],
-            width,
-            height,
-            block_radius,
-            search_radius,
-        );
-        for (index, position) in positions.iter_mut().enumerate() {
-            let x = position[0]
-                .round()
-                .clamp(0.0, width.saturating_sub(1) as f32) as u32;
-            let y = position[1]
-                .round()
-                .clamp(0.0, height.saturating_sub(1) as f32) as u32;
-            let vector = flow.get(x, y);
-            let magnitude = vector[0].hypot(vector[1]);
-            let predicted = [
-                (position[0] + vector[0]).clamp(0.0, width.saturating_sub(1) as f32),
-                (position[1] + vector[1]).clamp(0.0, height.saturating_sub(1) as f32),
-            ];
-            let reverse =
-                reverse_flow.get(predicted[0].round() as u32, predicted[1].round() as u32);
-            let consistency = (vector[0] + reverse[0]).hypot(vector[1] + reverse[1]);
-            let confidence = if magnitude.is_finite() && consistency.is_finite() {
-                let motion_score = 1.0 - magnitude / (search_radius.max(1) as f32 + 1.0);
-                let consistency_score = 1.0 - consistency / (search_radius.max(1) as f32 + 1.0);
-                motion_score.min(consistency_score).clamp(0.0, 1.0)
-            } else {
-                0.0
-            };
-            *position = if confidence < 0.15 {
-                redetect_markerless_feature(
-                    frames[frame],
-                    width,
-                    height,
-                    predicted,
-                    search_radius.max(1) as u32,
-                )
-                .unwrap_or(predicted)
-            } else {
-                predicted
-            };
-            tracks[index].samples.push(MarkerlessMotionSample {
-                frame: frame as u32,
+#[allow(clippy::too_many_arguments)]
+fn advance_markerless_tracks(
+    previous: &[u8],
+    current: &[u8],
+    width: u32,
+    height: u32,
+    frame_index: u32,
+    block_radius: i32,
+    search_radius: i32,
+    positions: &mut [[f32; 2]],
+    tracks: &mut [MarkerlessMotionTrack],
+) {
+    let flow = compute_dense_optical_flow(
+        previous,
+        current,
+        width,
+        height,
+        block_radius,
+        search_radius,
+    );
+    let reverse_flow = compute_dense_optical_flow(
+        current,
+        previous,
+        width,
+        height,
+        block_radius,
+        search_radius,
+    );
+    for (index, position) in positions.iter_mut().enumerate() {
+        let x = position[0]
+            .round()
+            .clamp(0.0, width.saturating_sub(1) as f32) as u32;
+        let y = position[1]
+            .round()
+            .clamp(0.0, height.saturating_sub(1) as f32) as u32;
+        let vector = flow.get(x, y);
+        let magnitude = vector[0].hypot(vector[1]);
+        let predicted = [
+            (position[0] + vector[0]).clamp(0.0, width.saturating_sub(1) as f32),
+            (position[1] + vector[1]).clamp(0.0, height.saturating_sub(1) as f32),
+        ];
+        let reverse = reverse_flow.get(predicted[0].round() as u32, predicted[1].round() as u32);
+        let consistency = (vector[0] + reverse[0]).hypot(vector[1] + reverse[1]);
+        let confidence = if magnitude.is_finite() && consistency.is_finite() {
+            let motion_score = 1.0 - magnitude / (search_radius.max(1) as f32 + 1.0);
+            let consistency_score = 1.0 - consistency / (search_radius.max(1) as f32 + 1.0);
+            motion_score.min(consistency_score).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        *position = if confidence < 0.15 {
+            redetect_markerless_feature(
+                current,
+                width,
+                height,
+                predicted,
+                search_radius.max(1) as u32,
+            )
+            .unwrap_or(predicted)
+        } else {
+            predicted
+        };
+        if let Some(track) = tracks.get_mut(index) {
+            track.samples.push(MarkerlessMotionSample {
+                frame: frame_index,
                 position: *position,
                 confidence,
             });
         }
     }
-    for track in &mut tracks {
-        let _ = reject_markerless_motion_outliers(track, search_radius.max(1) as f32);
-    }
-    tracks
 }
 
 pub fn track_markerless_auto(
@@ -449,7 +543,16 @@ pub fn estimate_markerless_pose(
     let seeds = detect_markerless_features(first, width, height, max_features, feature_spacing);
     let tracks =
         track_markerless_motion(frames, width, height, &seeds, block_radius, search_radius);
-    let assignments = assign_features_to_humanoid(&seeds, width, height);
+    estimate_markerless_pose_from_tracks(&seeds, &tracks, width, height)
+}
+
+pub fn estimate_markerless_pose_from_tracks(
+    seeds: &[[f32; 2]],
+    tracks: &[MarkerlessMotionTrack],
+    width: u32,
+    height: u32,
+) -> MarkerlessPoseTrack {
+    let assignments = assign_features_to_humanoid(seeds, width, height);
     let frame_count = tracks
         .iter()
         .map(|track| track.samples.len())
@@ -774,7 +877,7 @@ pub fn rgba_to_normalized_rgb(frame_rgba: &[u8], width: u32, height: u32) -> Opt
         return None;
     }
     let mut rgb = Vec::with_capacity((width as usize) * (height as usize) * 3);
-    for pixel in frame_rgba.chunks_exact(4) {
+    for pixel in frame_rgba.as_chunks::<4>().0 {
         rgb.extend([
             pixel[0] as f32 / 255.0,
             pixel[1] as f32 / 255.0,
@@ -1695,83 +1798,77 @@ pub fn markerless_pose_to_bvh(pose: &NamedMarkerlessPoseTrack, frame_time: f32) 
     }
     let root = parent.iter().position(Option::is_none).unwrap_or(0);
     let mut output = String::from("HIERARCHY\n");
-    fn write_joint(
-        out: &mut String,
-        index: usize,
-        parent: Option<usize>,
-        indent: usize,
-        names: &[String],
-        children: &[Vec<usize>],
-        frame: &MarkerlessPoseFrame,
-        is_root: bool,
-        visited: &mut Vec<bool>,
-    ) {
-        if index >= names.len() || visited[index] {
-            return;
-        }
-        visited[index] = true;
-        let pad = "  ".repeat(indent);
-        out.push_str(&format!(
-            "{}{} {}\n{}{{\n",
-            pad,
-            if is_root { "ROOT" } else { "JOINT" },
-            names[index],
-            pad
-        ));
-        let point = frame.joints.get(index).copied().unwrap_or([0.0, 0.0]);
-        let parent_point = parent
-            .and_then(|p| frame.joints.get(p).copied())
-            .unwrap_or([0.0, 0.0]);
-        let (ox, oy) = if is_root {
-            (0.0, 0.0)
-        } else {
-            (point[0] - parent_point[0], point[1] - parent_point[1])
-        };
-        out.push_str(&format!("{}  OFFSET {:.6} {:.6} 0.000000\n", pad, ox, oy));
-        if is_root {
-            out.push_str(&format!(
-                "{}  CHANNELS 6 Xposition Yposition Zposition Zrotation Xrotation Yrotation\n",
-                pad
-            ));
-        } else {
-            out.push_str(&format!(
-                "{}  CHANNELS 3 Zrotation Xrotation Yrotation\n",
-                pad
-            ));
-        }
-        for &child in &children[index] {
-            write_joint(
-                out,
-                child,
-                Some(index),
-                indent + 1,
-                names,
-                children,
-                frame,
-                false,
-                visited,
-            );
-        }
-        if children[index].is_empty() {
-            out.push_str(&format!(
-                "{}  End Site\n{}  {{\n{}    OFFSET 0.000000 0.000000 0.000000\n{}  }}\n",
-                pad, pad, pad, pad
-            ));
-        }
-        out.push_str(&format!("{}}}\n", pad));
+    struct HierarchyWriter<'a> {
+        names: &'a [String],
+        children: &'a [Vec<usize>],
+        frame: &'a MarkerlessPoseFrame,
+        visited: Vec<bool>,
     }
-    let mut visited = vec![false; pose.joint_names.len()];
-    write_joint(
-        &mut output,
-        root,
-        None,
-        0,
-        &pose.joint_names,
-        &children,
-        first,
-        true,
-        &mut visited,
-    );
+
+    impl HierarchyWriter<'_> {
+        fn write_joint(
+            &mut self,
+            out: &mut String,
+            index: usize,
+            parent: Option<usize>,
+            indent: usize,
+            is_root: bool,
+        ) {
+            if index >= self.names.len() || self.visited[index] {
+                return;
+            }
+            self.visited[index] = true;
+            let pad = "  ".repeat(indent);
+            out.push_str(&format!(
+                "{}{} {}\n{}{{\n",
+                pad,
+                if is_root { "ROOT" } else { "JOINT" },
+                self.names[index],
+                pad
+            ));
+            let point = self.frame.joints.get(index).copied().unwrap_or([0.0, 0.0]);
+            let parent_point = parent
+                .and_then(|parent_index| self.frame.joints.get(parent_index).copied())
+                .unwrap_or([0.0, 0.0]);
+            let (ox, oy) = if is_root {
+                (0.0, 0.0)
+            } else {
+                (point[0] - parent_point[0], point[1] - parent_point[1])
+            };
+            out.push_str(&format!("{}  OFFSET {:.6} {:.6} 0.000000\n", pad, ox, oy));
+            if is_root {
+                out.push_str(&format!(
+                    "{}  CHANNELS 6 Xposition Yposition Zposition Zrotation Xrotation Yrotation\n",
+                    pad
+                ));
+            } else {
+                out.push_str(&format!(
+                    "{}  CHANNELS 3 Zrotation Xrotation Yrotation\n",
+                    pad
+                ));
+            }
+            let child_count = self.children[index].len();
+            for child_index in 0..child_count {
+                let child = self.children[index][child_index];
+                self.write_joint(out, child, Some(index), indent + 1, false);
+            }
+            if self.children[index].is_empty() {
+                out.push_str(&format!(
+                    "{}  End Site\n{}  {{\n{}    OFFSET 0.000000 0.000000 0.000000\n{}  }}\n",
+                    pad, pad, pad, pad
+                ));
+            }
+            out.push_str(&format!("{}}}\n", pad));
+        }
+    }
+
+    let mut writer = HierarchyWriter {
+        names: &pose.joint_names,
+        children: &children,
+        frame: first,
+        visited: vec![false; pose.joint_names.len()],
+    };
+    writer.write_joint(&mut output, root, None, 0, true);
     output.push_str(&format!(
         "MOTION\nFrames: {}\nFrame Time: {:.9}\n",
         pose.frames.len(),
@@ -1784,11 +1881,11 @@ pub fn markerless_pose_to_bvh(pose: &NamedMarkerlessPoseTrack, frame_time: f32) 
             "{:.6} {:.6} 0.000000",
             root_point[0], root_point[1]
         ));
-        for index in 0..pose.joint_names.len() {
+        for (index, parent_index) in parent.iter().enumerate().take(pose.joint_names.len()) {
             if index == root {
                 continue;
             }
-            let angle = parent[index]
+            let angle = parent_index
                 .and_then(|p| {
                     let a = initial.get(index)?;
                     let b = initial.get(p)?;
@@ -1876,6 +1973,7 @@ pub fn markerless_pose_to_json(pose: &MarkerlessPoseTrack) -> Result<String, ser
 
 /// Interpolates an intermediate frame at fractional position `t` (0.0 .. 1.0)
 /// using bidirectional forward and backward flow fields.
+#[allow(clippy::too_many_arguments)]
 pub fn interpolate_timewarp_frame(
     frame_a: &[u8],
     frame_b: &[u8],
@@ -2040,6 +2138,62 @@ mod tests {
             .all(|s| (0.0..=1.0).contains(&s.confidence)));
         let keyframes = markerless_track_keyframes(&tracks[0]);
         assert_eq!(keyframes.keyframes().map(|k| k.len()), Some(3));
+    }
+
+    #[test]
+    fn markerless_streaming_matches_in_memory_tracking_and_pose() {
+        let (w, h) = (16u32, 16u32);
+        let make_frame = |offset: u32| {
+            let mut frame = vec![0u8; (w * h * 4) as usize];
+            for y in 4..8 {
+                for x in (4 + offset)..(8 + offset) {
+                    let i = (y * w + x) as usize * 4;
+                    frame[i..i + 4].copy_from_slice(&[255, 255, 255, 255]);
+                }
+            }
+            frame
+        };
+        let frames = [make_frame(0), make_frame(2), make_frame(4)];
+        let refs = frames.iter().map(Vec::as_slice).collect::<Vec<_>>();
+        let seeds = [[5.0, 5.0], [f32::NAN, 1.0]];
+        let expected = track_markerless_motion(&refs, w, h, &seeds, 1, 3);
+        let streamed =
+            track_markerless_motion_stream(frames.iter().cloned().map(Ok), w, h, &seeds, 1, 3)
+                .unwrap();
+        assert_eq!(streamed, expected);
+
+        let expected_pose = estimate_markerless_pose(&refs, w, h, 1, 2, 1, 3);
+        let pose_seeds = detect_markerless_features(&frames[0], w, h, 1, 2);
+        let streamed_pose = estimate_markerless_pose_from_tracks(&pose_seeds, &streamed, w, h);
+        assert_eq!(
+            markerless_pose_to_json(&streamed_pose).unwrap(),
+            markerless_pose_to_json(&expected_pose).unwrap()
+        );
+    }
+
+    #[test]
+    fn markerless_streaming_reports_decode_and_dimension_errors() {
+        let valid = vec![0u8; 4 * 4 * 4];
+        assert!(track_markerless_motion_stream(
+            [Ok(valid.clone()), Err("decode failed".to_string())],
+            4,
+            4,
+            &[[1.0, 1.0]],
+            1,
+            1
+        )
+        .unwrap_err()
+        .contains("decode failed"));
+        assert!(track_markerless_motion_stream(
+            [Ok(valid.clone()), Ok(vec![0; 3])],
+            4,
+            4,
+            &[[f32::NAN, 1.0]],
+            1,
+            1
+        )
+        .unwrap_err()
+        .contains("does not match"));
     }
 
     #[test]
@@ -2282,7 +2436,7 @@ mod tests {
         assert_eq!(reject_markerless_motion_outliers(&mut track, 5.0), 1);
         assert_eq!(track.samples[1].position, [5.0, 0.0]);
         assert!(track.samples[1].confidence < 0.5);
-        assert!(redetect_markerless_feature(&vec![0u8; 4 * 4 * 4], 4, 4, [1.0, 1.0], 2).is_none());
+        assert!(redetect_markerless_feature(&[0u8; 4 * 4 * 4], 4, 4, [1.0, 1.0], 2).is_none());
     }
 
     #[test]
@@ -2376,7 +2530,7 @@ mod tests {
 
     #[test]
     fn pose_backend_adapter_filters_invalid_joints_and_clamps_confidence() {
-        let frame = vec![0u8; 2 * 2 * 4];
+        let frame = [0u8; 2 * 2 * 4];
         let refs = [&frame[..], &frame[..]];
         let mut backend = TestPoseBackend;
         let pose = estimate_pose_with_backend(&mut backend, &refs, 2, 2);

@@ -3,52 +3,132 @@ use crate::KagariApp;
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum WorkspaceLeftPanel {
+    Project,
+    Effects,
+}
+
+impl WorkspaceLeftPanel {
+    fn index(self) -> usize {
+        match self {
+            Self::Project => 0,
+            Self::Effects => 1,
+        }
+    }
+}
+
+struct BuiltInWorkspace {
+    name: &'static str,
+    description: &'static str,
+    left_panel: WorkspaceLeftPanel,
+    right_panel: crate::app_state::RightPanel,
+}
+
 pub fn draw_workspace_manager(app: &mut KagariApp, ui: &mut egui::Ui) {
     crate::ui::custom_widgets::ae_section_header(ui, "Workspaces", "📐");
 
     // Built-in workspace presets
+    use crate::app_state::RightPanel;
     let workspaces = [
-        ("Standard", "Default AE 3-Column Layout", 0, 0),
-        ("Small Screen", "Compact mode for laptops", 0, 1),
-        ("Motion Tracking", "Tracker & viewport controls", 0, 2),
-        ("Paint & Roto", "Paint brushes & vector masks", 0, 4),
-        ("Text & Type", "Character & paragraph panels", 0, 7),
-        ("Color & Grading", "Color management & VU meters", 1, 19),
-        ("Minimal", "Maximizes viewport canvas", 1, 0),
-        ("Audio", "Audio mixer & waveform", 1, 23),
-        ("3D Layout", "Camera views & 3D options", 0, 25),
-        ("Animation", "Keyframes, graph editor, presets", 0, 5),
-        ("Effects", "Effect controls & library focus", 0, 10),
-        ("Essential Graphics", "Master properties panel", 0, 12),
+        BuiltInWorkspace {
+            name: "Standard",
+            description: "Default AE 3-Column Layout",
+            left_panel: WorkspaceLeftPanel::Project,
+            right_panel: RightPanel::Effects,
+        },
+        BuiltInWorkspace {
+            name: "Small Screen",
+            description: "Compact mode for laptops",
+            left_panel: WorkspaceLeftPanel::Project,
+            right_panel: RightPanel::Align,
+        },
+        BuiltInWorkspace {
+            name: "Motion Tracking",
+            description: "Tracker & viewport controls",
+            left_panel: WorkspaceLeftPanel::Project,
+            right_panel: RightPanel::Tracker,
+        },
+        BuiltInWorkspace {
+            name: "Paint & Roto",
+            description: "Paint brushes & vector masks",
+            left_panel: WorkspaceLeftPanel::Project,
+            right_panel: RightPanel::Paint,
+        },
+        BuiltInWorkspace {
+            name: "Text & Type",
+            description: "Character & paragraph panels",
+            left_panel: WorkspaceLeftPanel::Project,
+            right_panel: RightPanel::Character,
+        },
+        BuiltInWorkspace {
+            name: "Color & Grading",
+            description: "Color management & VU meters",
+            left_panel: WorkspaceLeftPanel::Effects,
+            right_panel: RightPanel::Color,
+        },
+        BuiltInWorkspace {
+            name: "Minimal",
+            description: "Maximizes viewport canvas",
+            left_panel: WorkspaceLeftPanel::Effects,
+            right_panel: RightPanel::Effects,
+        },
+        BuiltInWorkspace {
+            name: "Audio",
+            description: "Audio mixer & waveform",
+            left_panel: WorkspaceLeftPanel::Effects,
+            right_panel: RightPanel::AudioMixer,
+        },
+        BuiltInWorkspace {
+            name: "3D Layout",
+            description: "Camera views & 3D options",
+            left_panel: WorkspaceLeftPanel::Project,
+            right_panel: RightPanel::CameraLight,
+        },
+        BuiltInWorkspace {
+            name: "Animation",
+            description: "Keyframes, graph editor, presets",
+            left_panel: WorkspaceLeftPanel::Project,
+            right_panel: RightPanel::SpeedGraph,
+        },
+        BuiltInWorkspace {
+            name: "Effects",
+            description: "Effect controls & library focus",
+            left_panel: WorkspaceLeftPanel::Project,
+            right_panel: RightPanel::Effects,
+        },
+        BuiltInWorkspace {
+            name: "Essential Graphics",
+            description: "Master properties panel",
+            left_panel: WorkspaceLeftPanel::Project,
+            right_panel: RightPanel::EssentialGraphics,
+        },
     ];
 
-    let mut new_ws: Option<(usize, usize)> = None;
+    let mut new_ws: Option<(usize, crate::app_state::RightPanel)> = None;
 
     egui::ScrollArea::vertical()
         .max_height(300.0)
         .show(ui, |ui| {
-            for (name, desc, l_idx, r_idx) in workspaces.iter() {
-                let is_active =
-                    app.ui_tabs.left_tab_idx == *l_idx && app.ui_tabs.right_tab_idx == *r_idx;
-                let response = ui.selectable_label(
-                    is_active,
-                    egui::RichText::new(*name).small().color(if is_active {
-                        colors::ACCENT_CYAN
-                    } else {
-                        colors::TEXT_PRIMARY
-                    }),
-                );
+            for workspace in &workspaces {
+                let is_active = app.ui_tabs.left_tab_idx == workspace.left_panel.index()
+                    && app.ui_tabs.right_panel == workspace.right_panel;
+                let response = crate::ui::kui::selectable_row(ui, is_active, workspace.name, 24.0);
                 if response.clicked() {
-                    new_ws = Some((*l_idx, *r_idx));
+                    new_ws = Some((workspace.left_panel.index(), workspace.right_panel));
                 }
-                ui.label(egui::RichText::new(*desc).small().color(colors::TEXT_MUTED));
+                ui.label(
+                    egui::RichText::new(crate::ui::localization::tr(workspace.description))
+                        .small()
+                        .color(colors::TEXT_MUTED),
+                );
                 ui.add_space(2.0);
             }
         });
 
     if let Some((l, r)) = new_ws {
         app.ui_tabs.left_tab_idx = l;
-        app.ui_tabs.right_tab_idx = r;
+        app.ui_tabs.right_panel = r;
     }
 
     ui.add_space(4.0);
@@ -56,7 +136,7 @@ pub fn draw_workspace_manager(app: &mut KagariApp, ui: &mut egui::Ui) {
 
     // Custom workspace actions
     ui.label(
-        egui::RichText::new("Custom Workspaces")
+        egui::RichText::new(crate::ui::localization::tr("Custom Workspaces"))
             .small()
             .strong()
             .color(colors::TEXT_PRIMARY),
@@ -66,18 +146,27 @@ pub fn draw_workspace_manager(app: &mut KagariApp, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         if crate::ui::custom_widgets::ae_button(ui, "Save Current").clicked() {
             let ws = SavedWorkspace::capture(
-                format!("Custom {}", app.custom_workspaces.len() + 1),
+                format!(
+                    "{} {}",
+                    crate::ui::localization::tr("Custom"),
+                    app.custom_workspaces.len() + 1
+                ),
                 app,
                 ui.ctx(),
             );
             app.custom_workspaces.push(ws);
-            crate::ui::preferences_dialog::save_workspaces(&app.custom_workspaces);
-            app.toasts.info("Workspace saved".to_string());
+            match crate::ui::preferences_dialog::save_workspaces(&app.custom_workspaces) {
+                Ok(()) => app
+                    .toasts
+                    .info(crate::ui::localization::tr("Workspace saved")),
+                Err(error) => app.toasts.error(error),
+            }
         }
         if crate::ui::custom_widgets::ae_button(ui, "Reset").clicked() {
             app.ui_tabs.left_tab_idx = 0;
-            app.ui_tabs.right_tab_idx = 0;
-            app.toasts.info("Workspace reset to default".to_string());
+            app.ui_tabs.right_panel = crate::app_state::RightPanel::Effects;
+            app.toasts
+                .info(crate::ui::localization::tr("Workspace reset to default"));
         }
     });
 
@@ -88,13 +177,13 @@ pub fn draw_workspace_manager(app: &mut KagariApp, ui: &mut egui::Ui) {
         let mut apply_request = None;
         for (i, ws) in app.custom_workspaces.iter().enumerate() {
             let is_active = app.ui_tabs.left_tab_idx == ws.left_tab
-                && app.ui_tabs.right_tab_idx == ws.right_tab;
+                && app.ui_tabs.right_panel.index() == ws.right_tab;
             ui.horizontal(|ui| {
                 if ui
                     .selectable_label(
                         is_active,
                         egui::RichText::new(&ws.name).small().color(if is_active {
-                            colors::ACCENT_CYAN
+                            colors::ACCENT_WORKSPACE
                         } else {
                             colors::TEXT_PRIMARY
                         }),
@@ -103,14 +192,21 @@ pub fn draw_workspace_manager(app: &mut KagariApp, ui: &mut egui::Ui) {
                 {
                     apply_request = Some(ws.clone());
                 }
-                if ui.small_button("✕").on_hover_text("Delete").clicked() {
+                if crate::ui::kui::button(ui, "✕", crate::ui::kui::ButtonKind::Quiet)
+                    .on_hover_text(crate::ui::localization::tr("Delete"))
+                    .clicked()
+                {
                     delete_idx = Some(i);
                 }
             });
         }
         if let Some(idx) = delete_idx {
             app.custom_workspaces.remove(idx);
-            crate::ui::preferences_dialog::save_workspaces(&app.custom_workspaces);
+            if let Err(error) =
+                crate::ui::preferences_dialog::save_workspaces(&app.custom_workspaces)
+            {
+                app.toasts.error(error);
+            }
         }
         if let Some(ws) = apply_request {
             ws.apply(app);
@@ -174,7 +270,7 @@ impl SavedWorkspace {
         Self {
             name,
             left_tab: app.ui_tabs.left_tab_idx,
-            right_tab: app.ui_tabs.right_tab_idx,
+            right_tab: app.ui_tabs.right_panel.index(),
             bottom_dock_tab: app.ui_tabs.bottom_dock_tab,
             viewport_mag_ratio: app.ui_tabs.viewport_mag_ratio,
             show_switches_pane: app.ui_tabs.show_switches_pane,
@@ -198,7 +294,7 @@ impl SavedWorkspace {
 
     pub fn apply(&self, app: &mut KagariApp) {
         app.ui_tabs.left_tab_idx = self.left_tab;
-        app.ui_tabs.right_tab_idx = self.right_tab;
+        app.ui_tabs.right_panel = crate::app_state::RightPanel::from_index(self.right_tab);
         app.ui_tabs.bottom_dock_tab = self.bottom_dock_tab;
         app.ui_tabs.viewport_mag_ratio = self.viewport_mag_ratio;
         app.ui_tabs.show_switches_pane = self.show_switches_pane;

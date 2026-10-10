@@ -189,7 +189,7 @@ pub const SVG_COLLAPSE_TRANSFORM: &str = r#"<svg xmlns="http://www.w3.org/2000/s
 pub const SVG_QUALITY: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="lightgreen" stroke-width="2"><line x1="4" y1="20" x2="20" y2="4"/><line x1="4" y1="14" x2="14" y2="4"/><line x1="10" y1="20" x2="20" y2="10"/></svg>"#;
 
 #[allow(dead_code)]
-pub const SVG_MOTION_BLUR: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="deepskyblue" stroke-width="2"><circle cx="8" cy="12" r="6" opacity="0.4"/><circle cx="12" cy="12" r="6" opacity="0.7"/><circle cx="16" cy="12" r="6"/></svg>"#;
+pub const SVG_MOTION_BLUR: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="8" cy="12" r="6" opacity="0.4"/><circle cx="12" cy="12" r="6" opacity="0.7"/><circle cx="16" cy="12" r="6"/></svg>"#;
 
 #[allow(dead_code)]
 pub const SVG_TRIM_PATHS: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="magenta" stroke-width="2"><circle cx="12" cy="12" r="9" stroke-dasharray="14 6"/><circle cx="12" cy="3" r="2" fill="magenta"/></svg>"#;
@@ -201,7 +201,7 @@ pub const SVG_EASING_BEZIER: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" v
 pub const SVG_GRAPH_EDITOR: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="cyan" stroke-width="2"><path d="M3 3v18h18"/><path d="M3 18C9 18 11 6 21 6"/><circle cx="11" cy="12" r="1.5" fill="cyan"/></svg>"#;
 
 #[allow(dead_code)]
-pub const SVG_3D_CUBE: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="deepskyblue" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>"#;
+pub const SVG_3D_CUBE: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>"#;
 
 #[allow(dead_code)]
 pub const SVG_EXPRESSION: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="pink" stroke-width="2"><path d="M4 19l4-14M14 8h6M17 5v6M9 12h5"/></svg>"#;

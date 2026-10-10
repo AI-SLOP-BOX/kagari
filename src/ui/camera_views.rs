@@ -3,37 +3,22 @@ use crate::KagariApp;
 use eframe::egui;
 
 pub fn draw_camera_views(app: &mut KagariApp, ui: &mut egui::Ui) {
-    crate::ui::custom_widgets::ae_section_header(ui, "3D Viewports", "📷");
+    crate::ui::kui::section(ui, "3Dビューポート");
 
-    // Viewport layout selector
-    ui.label(
-        egui::RichText::new("Layout")
-            .small()
-            .color(colors::TEXT_SECONDARY),
-    );
-    let layouts = [
-        (0, "1 View"),
-        (1, "2H Split"),
-        (2, "2V Split"),
-        (3, "4 Views"),
-    ];
-    ui.horizontal(|ui| {
-        for (idx, label) in layouts {
-            let is_active = app.camera_view_layout == idx;
-            if ui
-                .selectable_label(
-                    is_active,
-                    egui::RichText::new(label).small().color(if is_active {
-                        colors::ACCENT_CYAN
-                    } else {
-                        colors::TEXT_PRIMARY
-                    }),
-                )
-                .clicked()
-            {
-                app.camera_view_layout = idx;
+    let layout_grid = crate::ui::kui::PropertyGrid::new(ui, &["ビュー配置"]);
+    layout_grid.row(ui, "ビュー配置", |ui| {
+        ui.horizontal(|ui| {
+            for (layout, label) in [
+                (0, "単一ビュー"),
+                (1, "左右分割"),
+                (2, "上下分割"),
+                (3, "4ビュー"),
+            ] {
+                if layout_button(ui, layout, app.camera_view_layout == layout, label).clicked() {
+                    app.camera_view_layout = layout;
+                }
             }
-        }
+        });
     });
 
     // Viewport preview (visual indicator of split layout)
@@ -48,14 +33,25 @@ pub fn draw_camera_views(app: &mut KagariApp, ui: &mut egui::Ui) {
         egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM),
     );
 
-    let view_names = ["Active", "Front", "Left", "Top", "Right"];
+    let view_names = [
+        "アクティブ",
+        "正面",
+        "左",
+        "上",
+        "右",
+        "背面",
+        "下",
+        "カスタム 1",
+        "カスタム 2",
+        "カスタム 3",
+    ];
     match app.camera_view_layout {
         0 => {
             // Single view
             ui.painter().text(
                 preview_rect.center(),
                 egui::Align2::CENTER_CENTER,
-                view_names[app.camera_view_angle.min(4)],
+                view_names[app.camera_view_angle.min(view_names.len() - 1)],
                 egui::FontId::proportional(11.0),
                 colors::TEXT_SECONDARY,
             );
@@ -88,7 +84,7 @@ pub fn draw_camera_views(app: &mut KagariApp, ui: &mut egui::Ui) {
             ui.painter().text(
                 right_center,
                 egui::Align2::CENTER_CENTER,
-                view_names[app.camera_view_angle.min(4)],
+                view_names[app.camera_view_angle.min(view_names.len() - 1)],
                 egui::FontId::proportional(9.0),
                 colors::TEXT_MUTED,
             );
@@ -121,7 +117,7 @@ pub fn draw_camera_views(app: &mut KagariApp, ui: &mut egui::Ui) {
             ui.painter().text(
                 bot_center,
                 egui::Align2::CENTER_CENTER,
-                view_names[app.camera_view_angle.min(4)],
+                view_names[app.camera_view_angle.min(view_names.len() - 1)],
                 egui::FontId::proportional(9.0),
                 colors::TEXT_MUTED,
             );
@@ -162,7 +158,7 @@ pub fn draw_camera_views(app: &mut KagariApp, ui: &mut egui::Ui) {
                     preview_rect.top() + preview_rect.height() * 0.75,
                 ),
             ];
-            let quad_names = ["Top", "Front", "Left", "Active"];
+            let quad_names = ["上", "正面", "左", "アクティブ"];
             for (pos, name) in positions.iter().zip(quad_names.iter()) {
                 ui.painter().text(
                     *pos,
@@ -176,81 +172,83 @@ pub fn draw_camera_views(app: &mut KagariApp, ui: &mut egui::Ui) {
         _ => {}
     }
 
-    ui.add_space(6.0);
-    crate::ui::custom_widgets::ae_section_header(ui, "Active View", "👁");
-
+    ui.add_space(crate::ui::kui::space::XS);
+    crate::ui::kui::section(ui, "アクティブビュー");
     let view_labels = [
-        "Active Camera",
-        "Front",
-        "Left",
-        "Top",
-        "Right",
-        "Back",
-        "Bottom",
-        "Custom View 1",
-        "Custom View 2",
-        "Custom View 3",
+        (0_usize, "アクティブカメラ"),
+        (1, "正面"),
+        (2, "左"),
+        (3, "上"),
+        (4, "右"),
+        (5, "背面"),
+        (6, "下"),
+        (7, "カスタムビュー 1"),
+        (8, "カスタムビュー 2"),
+        (9, "カスタムビュー 3"),
     ];
-
-    egui::Grid::new("cam_views_grid")
-        .striped(true)
-        .show(ui, |ui| {
-            for (i, v_name) in view_labels.iter().enumerate() {
-                let is_active = app.camera_view_angle == i;
-                if ui
-                    .selectable_label(
-                        is_active,
-                        egui::RichText::new(*v_name).small().color(if is_active {
-                            colors::ACCENT_CYAN
-                        } else {
-                            colors::TEXT_PRIMARY
-                        }),
-                    )
-                    .clicked()
-                {
-                    app.camera_view_angle = i;
-                }
-                if (i + 1) % 2 == 0 {
-                    ui.end_row();
-                }
-            }
-        });
-
-    // ── 3D Rendering Engine & Advanced Space ──
-    ui.add_space(8.0);
-    crate::ui::custom_widgets::ae_section_header(ui, "3D Engine", "⚙");
-    ui.group(|ui| {
-        let mut engine_idx = 0;
-        ui.horizontal(|ui| {
-            ui.label("Renderer:");
-            egui::ComboBox::from_id_salt("3d_engine_mode")
-                .selected_text(match engine_idx {
-                    0 => "Classic 3D (Fast GPU)",
-                    1 => "Ray-traced 3D (Physical)",
-                    2 => "Cinema 4D (Extruded)",
-                    _ => "Classic 3D",
-                })
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut engine_idx, 0, "Classic 3D (Fast GPU)");
-                    ui.selectable_value(&mut engine_idx, 1, "Ray-traced 3D (Physical)");
-                    ui.selectable_value(&mut engine_idx, 2, "Cinema 4D (Extruded)");
-                });
-        });
-
-        ui.horizontal(|ui| {
-            ui.label("Shadow Map Res:");
-            let mut shadow_res = 2048u32;
-            egui::ComboBox::from_id_salt("shadow_map_res")
-                .selected_text(format!("{shadow_res} px"))
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut shadow_res, 1024, "1024 px (Low)");
-                    ui.selectable_value(&mut shadow_res, 2048, "2048 px (Standard)");
-                    ui.selectable_value(&mut shadow_res, 4096, "4096 px (High Detail)");
-                });
-        });
-
-        let mut z_sort = true;
-        ui.checkbox(&mut z_sort, "Z-Depth Layer Intersection")
-            .on_hover_text("Enable physical 3D intersection between overlapping 3D layers");
+    let active_view_grid = crate::ui::kui::PropertyGrid::new(ui, &["ビュー"]);
+    active_view_grid.row(ui, "ビュー", |ui| {
+        crate::ui::kui::combo(
+            ui,
+            "camera_active_view",
+            &mut app.camera_view_angle,
+            &view_labels,
+        )
     });
+}
+
+fn layout_button(ui: &mut egui::Ui, layout: usize, selected: bool, hint: &str) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(34.0, 28.0), egui::Sense::click());
+    let visuals = ui.style().interact_selectable(&response, selected);
+    ui.painter().rect_filled(rect, 5.0, visuals.weak_bg_fill);
+    ui.painter().rect_stroke(rect, 5.0, visuals.bg_stroke);
+    let inner = rect.shrink2(egui::vec2(8.0, 6.0));
+    let stroke = egui::Stroke::new(
+        1.5_f32,
+        if selected {
+            colors::ACCENT_CYAN
+        } else {
+            colors::TEXT_SECONDARY
+        },
+    );
+    ui.painter().rect_stroke(inner, 1.5, stroke);
+    let center = inner.center();
+    match layout {
+        1 => {
+            ui.painter().line_segment(
+                [
+                    egui::pos2(center.x, inner.top()),
+                    egui::pos2(center.x, inner.bottom()),
+                ],
+                stroke,
+            );
+        }
+        2 => {
+            ui.painter().line_segment(
+                [
+                    egui::pos2(inner.left(), center.y),
+                    egui::pos2(inner.right(), center.y),
+                ],
+                stroke,
+            );
+        }
+        3 => {
+            ui.painter().line_segment(
+                [
+                    egui::pos2(center.x, inner.top()),
+                    egui::pos2(center.x, inner.bottom()),
+                ],
+                stroke,
+            );
+            ui.painter().line_segment(
+                [
+                    egui::pos2(inner.left(), center.y),
+                    egui::pos2(inner.right(), center.y),
+                ],
+                stroke,
+            );
+        }
+        _ => {}
+    }
+    response.on_hover_text(hint)
 }

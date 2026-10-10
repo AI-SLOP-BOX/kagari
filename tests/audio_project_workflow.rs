@@ -143,8 +143,10 @@ fn project_bin_add_button_inserts_audio_layer_from_pointer_input() {
         )],
         use_gpu_compute: false,
     };
-    let mut app = KagariApp::default();
-    app.history = ProjectHistory::new(project);
+    let mut app = KagariApp {
+        history: ProjectHistory::new(project),
+        ..Default::default()
+    };
     let ctx = egui::Context::default();
     ctx.data_mut(|data| data.insert_temp(egui::Id::new("selected_project_asset"), 0usize));
     let screen_rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 800.0));

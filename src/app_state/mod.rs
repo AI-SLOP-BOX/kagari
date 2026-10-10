@@ -6,6 +6,93 @@ use crate::{ExportEvent, TrackerEvent, ViewportMode};
 
 pub use crate::core::audio_types::MixerChannel;
 
+pub enum ScriptConsoleJobOutput {
+    Expression(String),
+    Automation { project: Project, logs: Vec<String> },
+}
+
+pub struct ScriptConsoleCompletion {
+    pub command: String,
+    pub project_session_id: u64,
+    pub history_generation: u64,
+    pub elapsed: std::time::Duration,
+    pub result: Result<ScriptConsoleJobOutput, String>,
+}
+
+pub struct MotionSketchBakeResult {
+    pub project_session_id: u64,
+    pub history_generation: u64,
+    pub composition_id: String,
+    pub layer_id: String,
+    pub raw_sample_count: usize,
+    pub keyframes: Vec<crate::core::keyframe::Keyframe<[f32; 2]>>,
+}
+
+static PROJECT_SESSION_SEQUENCE: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(1);
+
+fn next_project_session_id() -> u64 {
+    PROJECT_SESSION_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
+fn dirty_exit_marker_path(process_id: u32) -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("kagari_dirty_exit_{process_id}"))
+}
+
+fn process_is_running(process_id: u32) -> bool {
+    #[cfg(unix)]
+    {
+        let result = unsafe { libc::kill(process_id as libc::pid_t, 0) };
+        result == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+    }
+    #[cfg(windows)]
+    {
+        let Ok(output) = std::process::Command::new("tasklist")
+            .args(["/FI", &format!("PID eq {process_id}"), "/FO", "CSV", "/NH"])
+            .output()
+        else {
+            return true;
+        };
+        let text = String::from_utf8_lossy(&output.stdout);
+        return text.lines().any(|line| {
+            line.split(',')
+                .nth(1)
+                .is_some_and(|field| field.trim().trim_matches('"') == process_id.to_string())
+        });
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = process_id;
+        true
+    }
+}
+
+fn find_crashed_session_marker() -> bool {
+    let current_process = std::process::id();
+    let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else {
+        return false;
+    };
+    let mut found_crash = false;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        let Some(process_id) = name
+            .strip_prefix("kagari_dirty_exit_")
+            .and_then(|value| value.parse::<u32>().ok())
+        else {
+            continue;
+        };
+        if process_id == current_process || process_is_running(process_id) {
+            continue;
+        }
+        found_crash = true;
+        let _ = std::fs::remove_file(path);
+    }
+    found_crash
+}
+
 /// User interface complexity mode (Beginner vs Pro/Studio).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum SkillLevel {
@@ -14,6 +101,15 @@ pub enum SkillLevel {
     /// Full professional layout with graph editor, scopes, motion tracking, and 3D tooling.
     #[default]
     Pro,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PreviewResolution {
+    #[default]
+    Full,
+    Half,
+    Third,
+    Quarter,
 }
 
 /// Playback domain state: transport, current frame, work area bounds, volume.
@@ -120,10 +216,123 @@ impl PlaybackDomainState {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RightPanel {
+    #[default]
+    Effects,
+    Align,
+    Info,
+    Tracker,
+    Transport,
+    Paint,
+    Markers,
+    Audio,
+    TimeRemap,
+    Masks,
+    Expressions,
+    EssentialGraphics,
+    ContentAwareFill,
+    Metadata,
+    Scripting,
+    Workspaces,
+    ColorManagement,
+    FlowchartInspector,
+    CameraViews,
+    Color,
+    Libraries,
+    Fonts,
+    RenderPresets,
+    AudioMixer,
+    SpeedGraph,
+    CameraLight,
+    LayerStyles,
+    Character,
+    Paragraph,
+    Reserved,
+    Properties,
+    Other(usize),
+}
+
+impl RightPanel {
+    pub fn from_index(index: usize) -> Self {
+        match index {
+            0 => Self::Effects,
+            1 => Self::Align,
+            2 => Self::Info,
+            3 => Self::Tracker,
+            4 => Self::Transport,
+            5 => Self::Paint,
+            6 => Self::Markers,
+            7 => Self::Audio,
+            8 => Self::TimeRemap,
+            9 => Self::Masks,
+            10 => Self::Expressions,
+            11 => Self::EssentialGraphics,
+            12 => Self::ContentAwareFill,
+            13 => Self::Metadata,
+            14 => Self::Scripting,
+            15 => Self::Workspaces,
+            16 => Self::ColorManagement,
+            17 => Self::FlowchartInspector,
+            18 => Self::CameraViews,
+            19 => Self::Color,
+            20 => Self::Libraries,
+            21 => Self::Fonts,
+            22 => Self::RenderPresets,
+            23 => Self::AudioMixer,
+            24 => Self::SpeedGraph,
+            25 => Self::CameraLight,
+            26 => Self::LayerStyles,
+            27 => Self::Character,
+            28 => Self::Paragraph,
+            29 => Self::Reserved,
+            30 => Self::Properties,
+            other => Self::Other(other),
+        }
+    }
+
+    pub fn index(self) -> usize {
+        match self {
+            Self::Effects => 0,
+            Self::Align => 1,
+            Self::Info => 2,
+            Self::Tracker => 3,
+            Self::Transport => 4,
+            Self::Paint => 5,
+            Self::Markers => 6,
+            Self::Audio => 7,
+            Self::TimeRemap => 8,
+            Self::Masks => 9,
+            Self::Expressions => 10,
+            Self::EssentialGraphics => 11,
+            Self::ContentAwareFill => 12,
+            Self::Metadata => 13,
+            Self::Scripting => 14,
+            Self::Workspaces => 15,
+            Self::ColorManagement => 16,
+            Self::FlowchartInspector => 17,
+            Self::CameraViews => 18,
+            Self::Color => 19,
+            Self::Libraries => 20,
+            Self::Fonts => 21,
+            Self::RenderPresets => 22,
+            Self::AudioMixer => 23,
+            Self::SpeedGraph => 24,
+            Self::CameraLight => 25,
+            Self::LayerStyles => 26,
+            Self::Character => 27,
+            Self::Paragraph => 28,
+            Self::Reserved => 29,
+            Self::Properties => 30,
+            Self::Other(index) => index,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct UiTabsDomainState {
     pub left_tab_idx: usize,
-    pub right_tab_idx: usize,
+    pub right_panel: RightPanel,
     pub bottom_dock_tab: usize,
     pub viewport_mag_ratio: f32,
     pub show_switches_pane: bool,
@@ -136,7 +345,7 @@ impl Default for UiTabsDomainState {
     fn default() -> Self {
         Self {
             left_tab_idx: 0,
-            right_tab_idx: 30,
+            right_panel: RightPanel::default(),
             bottom_dock_tab: 0,
             // Fit keeps the composition legible on first open and lets the
             // Viewer remain the visual center at every window size.
@@ -149,7 +358,7 @@ impl Default for UiTabsDomainState {
     }
 }
 
-/// Outcome of a single render queue item, keyed by composition name.
+/// Outcome of a single render queue item, keyed by composition ID.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QueueItemStatus {
     Queued,
@@ -163,11 +372,29 @@ pub struct ExportDomainState {
     pub export_progress: f32,
     pub export_fps: u32,
     pub export_output_path: String,
-    /// Composition currently rendering (for per-item queue status).
+    /// Stable composition identity currently rendering (for per-item queue status).
+    pub export_comp_id: Option<String>,
+    /// Composition display name currently rendering.
     pub export_comp_name: Option<String>,
     pub is_exporting: bool,
     pub export_rx: Option<Receiver<ExportEvent>>,
     pub tracker_rx: Option<Receiver<TrackerEvent>>,
+}
+
+#[derive(Clone, Copy)]
+pub enum QuadTrackPurpose {
+    Perspective,
+    PlanarSurface,
+}
+
+pub struct QuadTrackJobResult {
+    pub purpose: QuadTrackPurpose,
+    pub composition_name: String,
+    pub composition_size: (u32, u32),
+    pub layer_id: String,
+    pub layer_idx: usize,
+    pub track: crate::core::tracker_engine::QuadTrackData,
+    pub average_confidence: f32,
 }
 
 impl Default for ExportDomainState {
@@ -178,6 +405,7 @@ impl Default for ExportDomainState {
             export_progress: 0.0,
             export_fps: 30,
             export_output_path: String::new(),
+            export_comp_id: None,
             export_comp_name: None,
             is_exporting: false,
             export_rx: None,
@@ -257,10 +485,16 @@ pub struct KagariApp {
     /// Last frame (inclusive) of the current pre-pass.
     pub ram_prepass_end: u32,
     pub viewport_snapshot_texture_id: Option<eframe::egui::TextureId>,
-    pub rx_frame: Option<std::sync::mpsc::Receiver<u32>>,
+    pub rx_frame: Option<crate::core::integration::LatestFrameReceiver>,
     pub rx_connection: Option<std::sync::mpsc::Receiver<Option<String>>>,
     pub connected_app: Option<String>,
     pub project_path: String,
+    pub project_session_id: u64,
+    pub pending_project_load: Option<crate::ui::project_io::PendingProjectLoad>,
+    pub pending_color_lut_load: Option<crate::ui::project_io::PendingColorLutLoad>,
+    pub repaint_context: Option<eframe::egui::Context>,
+    /// Single lazily captured pre-edit snapshot for panels that mutate Project in-place.
+    pub panel_edit_snapshot: Option<(String, u64, u64, Project)>,
     /// Preserves unified audio/timeline metadata when the GUI opens and saves a project.
     pub production_document: Option<crate::core::production_document::ProductionDocument>,
     /// Last history generation synced to production_document. Avoids cloning the
@@ -370,14 +604,20 @@ pub struct KagariApp {
     pub motion_sketch_active: bool,
     /// Motion Sketch recording buffer: (frame, [x, y]) pairs captured during drag.
     pub motion_sketch_recording: Vec<(u32, [f32; 2])>,
+    pub motion_sketch_bake_rx: Option<Receiver<MotionSketchBakeResult>>,
     pub export_format_preset: usize,
     /// Video codec selection shared by Export dialog + Render presets (0=H264,1=ProRes422,2=ProRes4444)
     pub export_codec_idx: usize,
     pub export_resolution_scale: usize,
-    pub import_rx: Vec<std::sync::mpsc::Receiver<crate::ui::drop_import::ImportResult>>,
+    pub import_rx: Vec<crate::ui::drop_import::ImportJob>,
+    pub collect_files_rx: Option<Receiver<Result<(std::path::PathBuf, usize), String>>>,
     pub viewer_draw_rect: Option<eframe::egui::Rect>,
-    pub camera_solve_rx: Option<std::sync::mpsc::Receiver<Result<crate::core::camera_track::CameraSolveResult, String>>>,
+    pub camera_solve_rx: Option<
+        std::sync::mpsc::Receiver<Result<crate::core::camera_track::CameraSolveResult, String>>,
+    >,
     pub camera_solve_target: Option<(String, u32, u32, f32, usize)>,
+    pub quad_track_rx: Option<std::sync::mpsc::Receiver<QuadTrackJobResult>>,
+    pub quad_track_cancel_flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     /// Path of the most recent export (for the "Reveal in Finder" button).
     #[cfg_attr(not(feature = "gui"), allow(dead_code))]
     pub last_export_path: Option<String>,
@@ -401,7 +641,7 @@ pub struct KagariApp {
     /// Temporary A/B bypass state; this is not part of saved correction settings.
     pub master_dsp_bypass: bool,
     pub viewport_cam_view: usize,
-    pub viewport_render_resolution: usize,
+    pub viewport_render_resolution: PreviewResolution,
     pub viewport_color_channel: usize,
     pub viewport_fast_preview: usize,
     pub project_search_query: String,
@@ -416,6 +656,7 @@ pub struct KagariApp {
     pub audio_spectrum_bands: Vec<f32>,
     /// Per-layer post-fader peaks for the Audio Mixer strips.
     pub audio_track_meters: Vec<(f32, f32)>,
+    pub audio_error_notices: HashSet<String>,
     /// Whether the last viewport render used GPU (updated each frame by viewport)
     pub gpu_rendered: bool,
     /// Layer index being renamed (inline edit), None = not renaming
@@ -435,9 +676,9 @@ pub struct KagariApp {
     pub home_banner: Option<eframe::egui::TextureHandle>,
     pub home_thumbs: std::collections::HashMap<std::path::PathBuf, eframe::egui::TextureHandle>,
     pub home_preview: Option<(std::path::PathBuf, eframe::egui::TextureHandle)>,
-    /// Real render queue entries (composition names awaiting export).
+    /// Stable composition IDs awaiting export.
     pub render_queue_items: Vec<String>,
-    /// Per-item queue outcome, keyed by composition name.
+    /// Per-item queue outcome, keyed by composition ID.
     pub render_item_status: std::collections::HashMap<String, QueueItemStatus>,
     /// Sequential batch export: remaining comps to render after the current one.
     pub batch_queue: Vec<String>,
@@ -452,6 +693,7 @@ pub struct KagariApp {
     pub toasts: crate::ui::notification::ToastManager,
     pub frame_cache: crate::core::frame_cache::FrameCache,
     pub lazy_evaluator: crate::core::render_pipeline::LazyFrameEvaluator,
+    pub async_render_pipeline: Option<crate::core::render_pipeline::RenderPipeline>,
     /// Panel animation states for smooth open/close transitions
     pub inspector_animation: crate::ui::panel_animation::PanelAnimation,
     pub effects_animation: crate::ui::panel_animation::PanelAnimation,
@@ -459,9 +701,11 @@ pub struct KagariApp {
     pub script_console_output: Option<Vec<String>>,
     pub script_console_history: Option<Vec<String>>,
     pub script_console_command: String,
-    /// Color management settings
-    pub color_space_idx: usize,
-    pub display_sim_idx: usize,
+    pub script_console_rx: Option<Receiver<ScriptConsoleCompletion>>,
+    pub script_console_cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    /// Persisted LUT selection for the active production document.
+    pub color_lut_path: Option<String>,
+    pub color_lut_mode: u32,
     /// Custom saved workspaces
     pub custom_workspaces: Vec<crate::ui::workspace_manager::SavedWorkspace>,
     /// Selected expression property index
@@ -477,10 +721,11 @@ pub struct KagariApp {
 impl Default for KagariApp {
     fn default() -> Self {
         Self {
-            history: crate::core::history::ProjectHistory::new(Project::default()),
+            history: crate::core::history::ProjectHistory::new(Project::empty_for_new_project()),
             autosave: crate::core::autosave::AutosaveManager::new(
                 std::env::temp_dir().join("kagari_recovery"),
-            ),
+            )
+            .with_process_namespace(std::process::id()),
             autosave_history_generation: 0,
             show_recovery_dialog: false,
             recovery_checked: false,
@@ -490,8 +735,8 @@ impl Default for KagariApp {
             playback_speed: 1,
             u_key_last_press: None,
             selection: SelectionDomainState {
-                selected_layer_idx: Some(1),
-                selected_layers: vec![1].into_iter().collect(),
+                selected_layer_idx: None,
+                selected_layers: std::collections::HashSet::new(),
                 selected_property: None,
                 expanded_layers: std::collections::HashSet::new(),
             },
@@ -514,6 +759,11 @@ impl Default for KagariApp {
             rx_connection: None,
             connected_app: None,
             project_path: "project.json".to_string(),
+            project_session_id: next_project_session_id(),
+            pending_project_load: None,
+            pending_color_lut_load: None,
+            repaint_context: None,
+            panel_edit_snapshot: None,
             production_document: None,
             doc_sync_generation: 0,
             automation_undo: Vec::new(),
@@ -571,12 +821,14 @@ impl Default for KagariApp {
             pen_tangents: Vec::new(),
             motion_sketch_active: false,
             motion_sketch_recording: vec![],
+            motion_sketch_bake_rx: None,
             export: ExportDomainState {
                 show_export_dialog: false,
                 export_status: None,
                 export_progress: 0.0,
                 export_fps: 30,
                 export_output_path: "output.mp4".to_string(),
+                export_comp_id: None,
                 export_comp_name: None,
                 is_exporting: false,
                 export_rx: None,
@@ -618,7 +870,7 @@ impl Default for KagariApp {
             master_dsp_enabled: true,
             master_dsp_bypass: false,
             viewport_cam_view: 0,
-            viewport_render_resolution: 0,
+            viewport_render_resolution: PreviewResolution::Full,
             viewport_color_channel: 0,
             viewport_fast_preview: 0,
             project_search_query: String::new(),
@@ -628,6 +880,7 @@ impl Default for KagariApp {
             audio_meter: (0.0, 0.0),
             audio_spectrum_bands: vec![0.0; 32],
             audio_track_meters: Vec::new(),
+            audio_error_notices: HashSet::new(),
             gpu_rendered: false,
             renaming_layer: None,
             show_home: true,
@@ -666,22 +919,35 @@ impl Default for KagariApp {
             audio_preview_enabled: true,
             ui_ctx: None,
             import_rx: Vec::new(),
+            collect_files_rx: None,
             viewer_draw_rect: None,
             camera_solve_rx: None,
             camera_solve_target: None,
+            quad_track_rx: None,
+            quad_track_cancel_flag: None,
             last_export_path: None,
             command_palette_search: String::new(),
             command_palette_selected_idx: 0,
             toasts: crate::ui::notification::ToastManager::new(),
             frame_cache: crate::core::frame_cache::FrameCache::new(256),
             lazy_evaluator: crate::core::render_pipeline::LazyFrameEvaluator::new(),
+            async_render_pipeline: Some(crate::core::render_pipeline::RenderPipeline::new(|command, result_tx| {
+                if let crate::core::render_pipeline::RenderCommand::RenderFrame { frame, version } = command {
+                    let _ = result_tx.send(crate::core::render_pipeline::RenderResult::FrameReady {
+                        frame,
+                        cache_version: version,
+                    });
+                }
+            })),
             inspector_animation: crate::ui::panel_animation::PanelAnimation::new(true),
             effects_animation: crate::ui::panel_animation::PanelAnimation::new(true),
             script_console_output: None,
             script_console_history: None,
             script_console_command: String::new(),
-            color_space_idx: 0,
-            display_sim_idx: 0,
+            script_console_rx: None,
+            script_console_cancel: None,
+            color_lut_path: None,
+            color_lut_mode: 0,
             custom_workspaces: Vec::new(),
             selected_expression_prop_idx: 0,
             skill_level: SkillLevel::Pro,
@@ -693,8 +959,107 @@ impl Default for KagariApp {
 
 #[cfg(feature = "gui")]
 impl KagariApp {
+    pub fn ensure_panel_edit_snapshot(&mut self, panel: &str, ui: &eframe::egui::Ui) {
+        self.ensure_panel_edit_snapshot_for_rect(panel, ui.ctx(), ui.max_rect());
+    }
+
+    pub fn ensure_panel_edit_snapshot_for_rect(
+        &mut self,
+        panel: &str,
+        ctx: &eframe::egui::Context,
+        panel_rect: eframe::egui::Rect,
+    ) {
+        if self.drag_active() {
+            return;
+        }
+        let keyboard_input_in_panel = ctx.wants_keyboard_input()
+            && ctx
+                .memory(|memory| memory.focused())
+                .and_then(|id| ctx.read_response(id))
+                .is_some_and(|response| panel_rect.intersects(response.rect));
+        let edit_input = ctx.input(|input| {
+            input.events.iter().any(|event| match event {
+                eframe::egui::Event::PointerButton { pos, pressed, .. } => {
+                    *pressed && panel_rect.contains(*pos)
+                }
+                eframe::egui::Event::Key { pressed, .. } => *pressed && keyboard_input_in_panel,
+                eframe::egui::Event::Text(_)
+                | eframe::egui::Event::Paste(_)
+                | eframe::egui::Event::Cut => keyboard_input_in_panel,
+                eframe::egui::Event::MouseWheel { .. } => input
+                    .pointer
+                    .hover_pos()
+                    .is_some_and(|position| panel_rect.contains(position)),
+                _ => false,
+            })
+        });
+        if !edit_input {
+            return;
+        }
+        let session = self.project_session_id;
+        let generation = self.history.generation();
+        let current = self.panel_edit_snapshot.as_ref().is_some_and(
+            |(owner, snapshot_session, snapshot_generation, _)| {
+                owner == panel && *snapshot_session == session && *snapshot_generation == generation
+            },
+        );
+        if !current {
+            self.panel_edit_snapshot = Some((
+                panel.to_owned(),
+                session,
+                generation,
+                self.history.current().clone(),
+            ));
+        }
+    }
+
+    pub fn take_panel_edit_snapshot(&mut self, panel: &str) -> Option<Project> {
+        let (owner, session, generation, project) = self.panel_edit_snapshot.take()?;
+        (owner == panel
+            && session == self.project_session_id
+            && generation == self.history.generation())
+        .then_some(project)
+    }
+
+    pub fn replace_project_history(&mut self, project: Project) {
+        self.history = crate::core::history::ProjectHistory::new(project);
+        self.project_session_id = next_project_session_id();
+        self.panel_edit_snapshot = None;
+        self.production_document = None;
+        self.doc_sync_generation = 0;
+        self.color_lut_path = None;
+        self.color_lut_mode = 0;
+        self.pending_color_lut_load = None;
+        crate::core::ocio_color::set_active_lut(None);
+        self.clear_automation_history();
+        if let Some(playback) = self.audio_playback.as_mut() {
+            playback.pause();
+        }
+        if let Some(path) = self.playback.cached_audio_path.take() {
+            let _ = std::fs::remove_file(path);
+        }
+        self.playback.cached_audio_key = 0;
+    }
+
+    pub fn persist_color_lut_path(&mut self, path: String) {
+        self.color_lut_path = Some(path.clone());
+        self.color_lut_mode = 3;
+        if self.production_document.is_none() {
+            self.production_document =
+                Some(crate::core::production_document::ProductionDocument::new(
+                    self.history.current().clone(),
+                ));
+            self.doc_sync_generation = self.history.generation();
+        }
+        if let Some(document) = self.production_document.as_mut() {
+            document.color_lut_path = Some(path);
+        }
+        self.autosave.mark_dirty();
+    }
+
     pub fn has_blocking_dialog(&self) -> bool {
-        self.export.show_export_dialog
+        self.pending_project_load.is_some()
+            || self.export.show_export_dialog
             || self.show_recovery_dialog
             || self.show_comp_settings
             || self.show_shortcuts_dialog
@@ -898,22 +1263,111 @@ impl KagariApp {
 #[cfg(feature = "gui")]
 impl eframe::App for KagariApp {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
+        self.repaint_context = Some(ctx.clone());
+        if let Some(receiver) = self.motion_sketch_bake_rx.take() {
+            match receiver.try_recv() {
+                Ok(bake) => {
+                    if bake.project_session_id == self.project_session_id
+                        && bake.history_generation == self.history.generation()
+                    {
+                        let keyframe_count = bake.keyframes.len();
+                        let mut applied = false;
+                        self.modify_project(|project| {
+                            if let Some(composition) = project
+                                .compositions
+                                .iter_mut()
+                                .find(|composition| composition.id == bake.composition_id)
+                            {
+                                if let Some(layer) = composition
+                                    .layers
+                                    .iter_mut()
+                                    .find(|layer| layer.id == bake.layer_id)
+                                {
+                                    layer.transform.position =
+                                        crate::core::property::Animatable::Animated(bake.keyframes);
+                                    applied = true;
+                                }
+                            }
+                        });
+                        if applied {
+                            self.toasts.info(format!(
+                                "Motion Sketch: {} keyframes (from {} raw)",
+                                keyframe_count, bake.raw_sample_count
+                            ));
+                        } else {
+                            self.toasts.warning(
+                                "Motion Sketchの対象レイヤーが見つからず、結果を適用しませんでした。",
+                            );
+                        }
+                    } else {
+                        self.toasts.warning(
+                            "ベイク中にプロジェクトが変更されたため、Motion Sketchの結果を破棄しました。",
+                        );
+                    }
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.toasts
+                        .error("Motion Sketchのベイク処理に失敗しました。");
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {
+                    self.motion_sketch_bake_rx = Some(receiver);
+                    ctx.request_repaint_after(std::time::Duration::from_millis(16));
+                }
+            }
+        }
+        crate::ui::project_io::poll_pending_project_load(self, ctx);
+        crate::ui::project_io::poll_color_lut_restore(self, ctx);
         // Re-assert the dark AE theme every frame (cheap, and guards against
         // eframe's system-theme following resetting visuals)
         crate::ui::theme::configure_ae_theme(ctx);
         crate::ui::tracker_panel::poll_camera_solve(self, ctx);
+        crate::ui::tracker_panel::poll_quad_track(self, ctx);
 
         self.update_panels(ctx);
+        crate::ui::project_io::draw_project_load_modal(self, ctx);
+        crate::ui::drop_import::draw_import_progress(self, ctx);
     }
 
     fn on_exit(&mut self) {
-        // Clean exit — remove the dirty-exit marker so next launch doesn't
-        // show the recovery dialog
-        let _ = std::fs::remove_file(std::env::temp_dir().join("kagari_dirty_exit"));
+        if let Some(cancel) = self.script_console_cancel.as_ref() {
+            cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        let mut autosave_succeeded = true;
+        if let Some(path) = self.autosave.wait_for_pending() {
+            log::info!(
+                "[Autosave] Recovery snapshot written before exit: {:?}",
+                path
+            );
+        }
+        if self.autosave.has_unsaved_snapshot() {
+            let project = self.history.current();
+            let correction = self.audio_correction_settings();
+            let save_result = if let Some(document) = self.production_document.as_mut() {
+                document.audio.correction = correction;
+                document.audio.channels = self.audio_mixer_channels.clone();
+                document.audio.master_gain = self.playback.master_volume;
+                self.autosave.save_now_production(project, document)
+            } else {
+                self.autosave.save_now(project)
+            };
+            match save_result {
+                Ok(path) => log::info!("[Autosave] Latest recovery snapshot written: {:?}", path),
+                Err(error) => {
+                    autosave_succeeded = false;
+                    log::error!("[Autosave] Could not flush recovery snapshot on exit: {error}");
+                }
+            }
+        }
+        if autosave_succeeded {
+            let _ = std::fs::remove_file(dirty_exit_marker_path(std::process::id()));
+        }
         if let Some(ref flag) = self.export_cancel_flag {
             flag.store(true, std::sync::atomic::Ordering::SeqCst);
         }
         if let Some(ref flag) = self.tracker_cancel_flag {
+            flag.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+        if let Some(ref flag) = self.quad_track_cancel_flag {
             flag.store(true, std::sync::atomic::Ordering::SeqCst);
         }
         log::info!("Cleaned up background thread lifecycle flags on exit");
@@ -976,7 +1430,31 @@ impl KagariApp {
     pub fn update_panels(&mut self, ctx: &eframe::egui::Context) {
         use eframe::egui;
         self.ui_ctx = Some(ctx.clone());
+        crate::ui::project_io::poll_collect_files(self, ctx);
         crate::ui::workspace_manager::restore_pending_workspace(ctx);
+        let assets_workspace = ctx.data(|data| {
+            data.get_temp::<usize>(eframe::egui::Id::new("studio_active_workspace"))
+                == Some(crate::ui::menu::ASSETS_WORKSPACE_INDEX)
+        });
+        let compact_inspector_drawer = ctx
+            .data(|data| data.get_temp::<bool>(eframe::egui::Id::new("compact_inspector_drawer")))
+            .unwrap_or(false);
+        let scripting_console_visible = !self.show_home
+            && !self.show_guided_tutorial
+            && !(self.ui_tabs.left_tab_idx == 1
+                && self.ui_tabs.right_panel == crate::app_state::RightPanel::Color)
+            && !(assets_workspace
+                && self.ui_tabs.left_tab_idx == 0
+                && self.ui_tabs.right_panel == crate::app_state::RightPanel::Properties)
+            && !self.viewer_maximized
+            && !(ctx.screen_rect().width() < crate::ui::theme::layout::DOCKED_PANELS_MIN_WIDTH
+                && !compact_inspector_drawer)
+            && self.ui_tabs.right_panel == crate::app_state::RightPanel::Scripting;
+        if !scripting_console_visible {
+            if let Some(cancel) = self.script_console_cancel.as_ref() {
+                cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+        }
         let opening_was_active = self.startup_animation.is_animating();
         self.startup_animation
             .update(ctx.input(|input| input.unstable_dt));
@@ -1001,19 +1479,11 @@ impl KagariApp {
             // history, audio preview, and saved workspaces are live from the
             // first frame. This must not share a second one-shot guard below.
             crate::ui::preferences_dialog::apply_loaded(self);
-            let dirty_exit_marker = std::env::temp_dir().join("kagari_dirty_exit");
-            let had_crash = dirty_exit_marker.exists();
-            // Write the marker for THIS session
-            let _ = std::fs::write(&dirty_exit_marker, std::process::id().to_string());
+            let had_crash = find_crashed_session_marker();
+            let dirty_exit_marker = dirty_exit_marker_path(std::process::id());
+            let _ = std::fs::write(dirty_exit_marker, b"active");
             if had_crash && self.autosave.has_recovery() {
-                self.recovery_snapshot_time = std::fs::metadata(
-                    std::env::temp_dir()
-                        .join("kagari_recovery")
-                        .join("recovery_0.json"),
-                )
-                .ok()
-                .and_then(|m| m.modified().ok())
-                .map(|t| {
+                self.recovery_snapshot_time = self.autosave.latest_recovery_modified().map(|t| {
                     let secs = t
                         .duration_since(std::time::UNIX_EPOCH)
                         .map(|d| d.as_secs())
@@ -1035,17 +1505,22 @@ impl KagariApp {
 
         // Crash-recovery autosave: write a rotating snapshot when dirty and due
         let correction = self.audio_correction_settings();
-        let autosave_path = if let Some(document) = self.production_document.as_mut() {
+        if let Some(document) = self.production_document.as_mut() {
             document.audio.correction = correction;
             document.audio.channels = self.audio_mixer_channels.clone();
             document.audio.master_gain = self.playback.master_volume;
-            self.autosave
-                .tick_production(self.history.current(), document)
-        } else {
-            self.autosave.tick(self.history.current())
-        };
+        }
+        let autosave_path = self
+            .autosave
+            .tick_async(self.history.current(), self.production_document.as_ref());
         if let Some(path) = autosave_path {
             log::info!("[Autosave] Recovery snapshot written: {:?}", path);
+        }
+        if let Some(error) = self.autosave.take_last_error() {
+            log::warn!("[Autosave] Recovery snapshot failed; retrying in 30 seconds: {error}");
+            self.toasts.warning(format!(
+                "自動復旧保存に失敗しました。30秒後に再試行します: {error}"
+            ));
         }
 
         // ── Detect play-start transition for wall-clock AV sync ──
@@ -1055,7 +1530,6 @@ impl KagariApp {
         {
             let audio_enabled = self.audio_preview_enabled;
             let fps = self.history.current().active_composition().fps.max(1);
-            let playhead_sec = self.playback.current_frame as f32 / fps as f32;
 
             // Live metering: mix a tiny buffer at the playhead with mixer gains
             {
@@ -1076,6 +1550,15 @@ impl KagariApp {
                     db_to_lin(meter.peak_db_right),
                 );
                 self.audio_track_meters = meter.track_peaks;
+                for issue in &meter.source_errors {
+                    let key = format!("{}\0{}", issue.path, issue.reason);
+                    if self.audio_error_notices.insert(key) {
+                        self.toasts.warning(format!(
+                            "音声素材を読み込めません: {} ({}): {}",
+                            issue.layer, issue.path, issue.reason
+                        ));
+                    }
+                }
                 let spectrum_options = crate::core::audio_spectrum::AudioSpectrumOptions {
                     frequency_bands: 32,
                     ..Default::default()
@@ -1093,10 +1576,20 @@ impl KagariApp {
                 use std::hash::{Hash, Hasher};
                 let project = self.history.current();
                 let comp = project.active_composition();
-                let wa_start = self.playback.work_area_in.unwrap_or(0);
-                let wa_end = self.playback.work_area_out.unwrap_or(comp.duration_frames);
+                let wa_start = self
+                    .playback
+                    .work_area_in
+                    .unwrap_or(0)
+                    .min(comp.duration_frames);
+                let wa_end = self
+                    .playback
+                    .work_area_out
+                    .map(|frame| frame.saturating_add(1))
+                    .unwrap_or(comp.duration_frames)
+                    .clamp(wa_start, comp.duration_frames);
                 let mut hasher = std::collections::hash_map::DefaultHasher::new();
                 comp.id.hash(&mut hasher);
+                self.history.generation().hash(&mut hasher);
                 wa_start.hash(&mut hasher);
                 wa_end.hash(&mut hasher);
                 (self.master_eq_highpass.to_bits()).hash(&mut hasher);
@@ -1123,12 +1616,14 @@ impl KagariApp {
                 }
                 let key = hasher.finish();
 
-                let needs_mix = self.playback.cached_audio_key != key
-                    || self.playback.cached_audio_path.is_none();
+                let needs_mix = self.playback.cached_audio_key != key;
 
                 if needs_mix {
                     let dsp = self.master_dsp_params();
-                    if let Some(wav) = crate::core::audio_engine::mix_composition_to_wav(
+                    if let Some(previous_mix) = self.playback.cached_audio_path.take() {
+                        let _ = std::fs::remove_file(previous_mix);
+                    }
+                    match crate::core::audio_engine::mix_composition_to_wav(
                         comp,
                         wa_start,
                         wa_end,
@@ -1136,8 +1631,20 @@ impl KagariApp {
                         Some(&self.audio_mixer_channels),
                         &dsp,
                     ) {
-                        self.playback.cached_audio_path = Some(wav);
-                        self.playback.cached_audio_key = key;
+                        Ok(Some(wav)) => {
+                            self.playback.cached_audio_path = Some(wav);
+                            self.playback.cached_audio_key = key;
+                        }
+                        Ok(None) => {
+                            self.playback.cached_audio_key = key;
+                            self.playback.cached_audio_path = None;
+                        }
+                        Err(error) => {
+                            self.playback.cached_audio_key = key;
+                            self.toasts
+                                .warning(format!("Could not prepare audio preview: {error}"));
+                            log::error!("Could not prepare audio preview: {error}");
+                        }
                     }
                 }
             }
@@ -1149,7 +1656,11 @@ impl KagariApp {
                 &mut self.audio_playback,
             ) {
                 (true, true, Some(wav), Some(playback)) => {
-                    if let Err(e) = playback.play(wav, playhead_sec) {
+                    let work_area_start = self.playback.work_area_in.unwrap_or(0);
+                    let audio_offset_sec =
+                        self.playback.current_frame.saturating_sub(work_area_start) as f32
+                            / fps as f32;
+                    if let Err(e) = playback.play(wav, audio_offset_sec) {
                         log::warn!("[Audio] playback error: {}", e);
                     }
                 }
@@ -1181,12 +1692,14 @@ impl KagariApp {
         let total_frames = self.history.current().active_composition().duration_frames;
         let mut current_frame = self.playback.current_frame;
 
-        let wa_start = self.playback.work_area_in.unwrap_or(0);
+        let last_frame = total_frames.saturating_sub(1);
+        let wa_start = self.playback.work_area_in.unwrap_or(0).min(last_frame);
         let wa_end = self
             .playback
             .work_area_out
-            .unwrap_or(total_frames.saturating_sub(1))
-            .min(total_frames.saturating_sub(1));
+            .unwrap_or(last_frame)
+            .min(last_frame)
+            .max(wa_start);
 
         if self.playback.is_playing {
             let speed = self.playback_speed.abs().max(1) as u32;
@@ -1268,13 +1781,14 @@ impl KagariApp {
                 }
             }
 
-            let effective_fps = (fps as f32 / speed.max(1) as f32).max(1.0);
+            let effective_fps = (fps as f32 * speed as f32).max(1.0);
             ctx.request_repaint_after(std::time::Duration::from_secs_f32(1.0 / effective_fps));
         }
 
         crate::ui::shortcuts::handle_global_shortcuts(self, ctx, &mut current_frame, total_frames);
         if self.show_home {
             crate::ui::home_screen::draw(self, ctx);
+            crate::ui::preferences_dialog::draw_preferences_dialog(self, ctx);
             crate::ui::shortcuts_dialog::draw_shortcuts_dialog(self, ctx);
             self.toasts.draw(ctx);
             self.draw_startup_animation(ctx);
@@ -1283,32 +1797,35 @@ impl KagariApp {
         }
         if self.show_guided_tutorial {
             crate::ui::tutorial_workspace::draw(self, ctx);
+            crate::ui::preferences_dialog::draw_preferences_dialog(self, ctx);
+            crate::ui::shortcuts_dialog::draw_shortcuts_dialog(self, ctx);
+            self.toasts.draw(ctx);
             self.draw_startup_animation(ctx);
             self.playback.current_frame = current_frame;
             return;
         }
-        if self.ui_tabs.left_tab_idx == 1 && self.ui_tabs.right_tab_idx == 0 {
-            crate::ui::effects_workspace::draw(self, ctx);
-            self.draw_startup_animation(ctx);
-            self.playback.current_frame = current_frame;
-            return;
-        }
-        if self.active_tool == crate::ui::toolbar::ActiveTool::Text {
-            crate::ui::text_workspace::draw(self, ctx);
-            self.draw_startup_animation(ctx);
-            self.playback.current_frame = current_frame;
-            return;
-        }
-        if self.ui_tabs.left_tab_idx == 1 && self.ui_tabs.right_tab_idx == 19 {
+        if self.ui_tabs.left_tab_idx == 1
+            && self.ui_tabs.right_panel == crate::app_state::RightPanel::Color
+            && self.ui_tabs.bottom_dock_tab != 1
+        {
+            crate::ui::menu::draw(self, ctx);
             crate::ui::color_workspace::draw(self, ctx);
+            crate::ui::preferences_dialog::draw_preferences_dialog(self, ctx);
+            crate::ui::shortcuts_dialog::draw_shortcuts_dialog(self, ctx);
+            self.toasts.draw(ctx);
             self.draw_startup_animation(ctx);
             self.playback.current_frame = current_frame;
             return;
         }
         let assets_workspace = ctx.data_mut(|data| {
-            data.get_temp::<usize>(egui::Id::new("studio_active_workspace")) == Some(3)
+            data.get_temp::<usize>(egui::Id::new("studio_active_workspace"))
+                == Some(crate::ui::menu::ASSETS_WORKSPACE_INDEX)
         });
-        if assets_workspace && self.ui_tabs.left_tab_idx == 0 && self.ui_tabs.right_tab_idx == 30 {
+        if assets_workspace
+            && self.ui_tabs.left_tab_idx == 0
+            && self.ui_tabs.right_panel == crate::app_state::RightPanel::Properties
+        {
+            crate::ui::menu::draw(self, ctx);
             crate::ui::asset_library::draw(self, ctx);
             self.draw_startup_animation(ctx);
             self.playback.current_frame = current_frame;
@@ -1322,9 +1839,11 @@ impl KagariApp {
             return;
         }
         crate::ui::menu::draw(self, ctx);
+        // Establish the full-height inspector first, then split the remaining
+        // work area into the upper project/viewer region and lower timeline.
+        crate::ui::effects_library::draw(self, ctx, &mut current_frame);
         crate::ui::timeline::draw(self, ctx, &mut current_frame, total_frames);
         crate::ui::inspector::draw(self, ctx, &mut current_frame);
-        crate::ui::effects_library::draw(self, ctx, &mut current_frame);
 
         let status_frame = egui::Frame::none()
             .fill(crate::ui::theme::colors::BG_DARKEST)
@@ -1336,249 +1855,245 @@ impl KagariApp {
 
         egui::TopBottomPanel::bottom("ae_status_bar")
             .frame(status_frame)
-                .default_height(22.0)
-                .show(ctx, |ui| {
-                    ui.horizontal(|ui| {
-                        let status_width = ctx.screen_rect().width();
-                        ui.style_mut().spacing.item_spacing.x = 6.0;
-                        if status_width >= 1200.0 {
+            .default_height(22.0)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    let status_width = ctx.screen_rect().width();
+                    ui.style_mut().spacing.item_spacing.x = 6.0;
+                    if !self.history.current().has_pristine_start_composition() {
+                        let fps = self.history.current().active_composition().fps.max(1);
+                        crate::ui::timeline::header::draw_transport_controls(
+                            ui,
+                            &mut current_frame,
+                            total_frames,
+                            fps,
+                            &mut self.playback.is_playing,
+                        );
+                        crate::ui::kui::toolbar_separator(ui);
+                    }
+                    if status_width >= 1700.0 {
+                        ui.label(
+                            egui::RichText::new("フレーム描画時間")
+                                .small()
+                                .color(crate::ui::theme::colors::TEXT_MUTED),
+                        );
+                        let render_ms = self.playback.preview_render_ema_ms;
+                        if render_ms > 0.0 {
                             ui.label(
-                                egui::RichText::new("Frame Render Time")
+                                egui::RichText::new(format!("{:.0}ms", render_ms))
                                     .small()
                                     .color(crate::ui::theme::colors::TEXT_MUTED),
                             );
-                            let render_ms = self.playback.preview_render_ema_ms;
-                            if render_ms > 0.0 {
-                                ui.label(
-                                    egui::RichText::new(format!("{:.0}ms", render_ms))
-                                        .small()
-                                        .color(crate::ui::theme::colors::TEXT_MUTED),
-                                );
-                                ui.separator();
-                            }
-                        }
-                        if status_width >= 950.0 {
-                            let (gpu_label, gpu_color) = if self.gpu_rendered {
-                                (
-                                    "● Metal GPU Render Engine",
-                                    crate::ui::theme::colors::TEXT_MUTED,
-                                )
-                            } else {
-                                (
-                                    "○ CPU Software Renderer",
-                                    crate::ui::theme::colors::ACCENT_ORANGE,
-                                )
-                            };
-                            ui.label(egui::RichText::new(gpu_label).small().color(gpu_color));
                             ui.separator();
                         }
-                        // Timecode
-                        let fps = self.history.current().active_composition().fps.max(1);
-                        let cf = self.playback.current_frame;
+                    }
+                    if status_width >= 1500.0 {
+                        let (gpu_label, gpu_color) = if self.gpu_rendered {
+                            (
+                                "● Metal GPUレンダラー",
+                                crate::ui::theme::colors::TEXT_MUTED,
+                            )
+                        } else {
+                            (
+                                "○ CPUソフトウェアレンダラー",
+                                crate::ui::theme::colors::ACCENT_ORANGE,
+                            )
+                        };
+                        ui.label(egui::RichText::new(gpu_label).small().color(gpu_color));
+                        ui.separator();
+                    }
+                    if self.history.current().has_pristine_start_composition() {
                         ui.label(
-                            egui::RichText::new(format!(
-                                "TC: {:02}:{:02}:{:02}:{:02}",
-                                cf / (fps * 3600),
-                                (cf / fps) / 60 % 60,
-                                (cf / fps) % 60,
-                                cf % fps
-                            ))
-                            .monospace()
-                            .small()
-                            .color(crate::ui::theme::colors::ACCENT_YELLOW),
+                            egui::RichText::new("準備完了")
+                                .small()
+                                .color(crate::ui::theme::colors::TEXT_MUTED),
+                        );
+                    }
+                    if status_width >= 1700.0 {
+                        ui.separator();
+                        ui.label(
+                            egui::RichText::new("8-bit出力")
+                                .small()
+                                .color(crate::ui::theme::colors::TEXT_MUTED),
                         );
                         ui.separator();
                         ui.label(
-                            egui::RichText::new(format!("Frame: {} / {}", cf, total_frames))
-                                .small()
-                                .color(crate::ui::theme::colors::TEXT_SECONDARY),
+                            egui::RichText::new(format!(
+                                "フレームキャッシュ {:.0}/{:.0} MB · {}フレーム",
+                                self.frame_cache.current_memory_bytes as f32 / (1024.0 * 1024.0),
+                                self.frame_cache.max_memory_bytes as f32 / (1024.0 * 1024.0),
+                                self.frame_cache.cached_count(),
+                            ))
+                            .small()
+                            .color(crate::ui::theme::colors::TEXT_MUTED),
                         );
-                        if status_width >= 950.0 {
-                            ui.separator();
-                            let bpc_label = self
-                                .history
-                                .current()
-                                .active_composition()
-                                .bit_depth
-                                .short_label();
-                            let cs_label = match self.color_space_idx {
-                                0 => "Rec.709 sRGB",
-                                1 => "Rec.2020",
-                                2 => "P3 D65",
-                                _ => "Rec.709 sRGB",
-                            };
+                        ui.separator();
+                        let render_ms = self.playback.preview_render_ema_ms;
+                        let frame_budget_ms =
+                            1000.0 / self.history.current().active_composition().fps.max(1) as f32;
+                        let ms_color = if render_ms > frame_budget_ms {
+                            crate::ui::theme::colors::ACCENT_ORANGE
+                        } else {
+                            crate::ui::theme::colors::TEXT_MUTED
+                        };
+                        if render_ms > 0.0 {
                             ui.label(
-                                egui::RichText::new(format!("{} | {}", bpc_label, cs_label))
+                                egui::RichText::new(format!("Render: {:.1} ms", render_ms))
                                     .small()
-                                    .color(crate::ui::theme::colors::TEXT_MUTED),
+                                    .color(ms_color),
                             );
                             ui.separator();
+                        }
+                        // Selection summary: layers + keyframes
+                        let kf_count = self.selected_keyframes.len();
+                        let layer_count = self.selection.selected_layers.len();
+                        if kf_count > 0 {
                             ui.label(
                                 egui::RichText::new(format!(
-                                    "Frame cache {:.0}/{:.0} MB · {} frames",
-                                    self.frame_cache.current_memory_bytes as f32 / (1024.0 * 1024.0),
-                                    self.frame_cache.max_memory_bytes as f32 / (1024.0 * 1024.0),
-                                    self.frame_cache.cached_count(),
+                                    "{} keyframes selected (, . move | Del delete | Cmd+C/V)",
+                                    kf_count
                                 ))
-                                    .small()
-                                    .color(crate::ui::theme::colors::TEXT_MUTED),
+                                .small()
+                                .color(crate::ui::theme::colors::ACCENT_ORANGE),
                             );
-                            ui.separator();
-                            let render_ms = self.playback.preview_render_ema_ms;
-                            let frame_budget_ms = 1000.0
-                                / self.history.current().active_composition().fps.max(1) as f32;
-                            let ms_color = if render_ms > frame_budget_ms {
-                                crate::ui::theme::colors::ACCENT_ORANGE
-                            } else {
-                                crate::ui::theme::colors::TEXT_MUTED
-                            };
-                                if render_ms > 0.0 {
-                                    ui.label(
-                                        egui::RichText::new(format!("Render: {:.1} ms", render_ms))
-                                            .small()
-                                            .color(ms_color),
-                                    );
-                                    ui.separator();
-                                }
-                            // Selection summary: layers + keyframes
-                            let kf_count = self.selected_keyframes.len();
-                            let layer_count = self.selection.selected_layers.len();
-                            if kf_count > 0 {
-                                ui.label(
-                                    egui::RichText::new(format!(
-                                        "{} keyframes selected (, . move | Del delete | Cmd+C/V)",
-                                        kf_count
-                                    ))
-                                    .small()
-                                    .color(crate::ui::theme::colors::ACCENT_ORANGE),
-                                );
-                            } else if layer_count > 0 {
-                                ui.label(
-                                    egui::RichText::new(format!(
-                                        "{} layer{} selected",
-                                        layer_count,
-                                        if layer_count > 1 { "s" } else { "" }
-                                    ))
-                                    .small()
-                                    .color(crate::ui::theme::colors::ACCENT_BLUE),
-                                );
-                            }
+                        } else if layer_count > 0 {
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "{} layer{} selected",
+                                    layer_count,
+                                    if layer_count > 1 { "s" } else { "" }
+                                ))
+                                .small()
+                                .color(crate::ui::theme::colors::ACCENT_BLUE),
+                            );
                         }
-                        if status_width >= 1150.0 {
-                            let comp_pixel = ctx.pointer_hover_pos().and_then(|pointer_pos| {
-                                let rect = self.viewer_draw_rect?;
-                                if !rect.contains(pointer_pos) || rect.width() <= 0.0 || rect.height() <= 0.0 {
-                                    return None;
-                                }
-                                let comp = self.history.current().active_composition();
-                                let x = ((pointer_pos.x - rect.left()) / rect.width() * comp.width as f32).floor() as u32;
-                                let y = ((pointer_pos.y - rect.top()) / rect.height() * comp.height as f32).floor() as u32;
-                                (x < comp.width && y < comp.height).then_some((x, y))
-                            });
-                            ui.separator();
-                            if let Some((x, y)) = comp_pixel {
-                                ui.label(
-                                    egui::RichText::new(format!("X: {x} Y: {y} px"))
-                                        .small()
-                                        .color(egui::Color32::from_rgb(0, 180, 255)),
-                                );
+                    }
+                    if status_width >= 1700.0
+                        && !self
+                            .history
+                            .current()
+                            .active_composition()
+                            .layers
+                            .is_empty()
+                    {
+                        let comp_pixel = ctx.pointer_hover_pos().and_then(|pointer_pos| {
+                            let rect = self.viewer_draw_rect?;
+                            if !rect.contains(pointer_pos)
+                                || rect.width() <= 0.0
+                                || rect.height() <= 0.0
+                            {
+                                return None;
                             }
-                            ui.separator();
-                            let pixel_rgba = {
-                                let comp = self.history.current().active_composition();
-                                if let Some((px, py)) = comp_pixel {
-                                    let layer_indices: Vec<usize> = comp
-                                        .layers
-                                        .iter()
-                                        .enumerate()
-                                        .filter(|(_, l)| l.is_active(self.playback.current_frame))
-                                        .map(|(i, _)| i)
-                                        .collect();
-                                    if let Some(entry) = self.frame_cache.get_with_layers(
-                                        self.playback.current_frame,
-                                        &layer_indices,
-                                    ) {
-                                        let idx = ((py * comp.width + px) * 4) as usize;
-                                        if idx + 3 < entry.pixels.len() {
-                                            Some([
-                                                entry.pixels[idx],
-                                                entry.pixels[idx + 1],
-                                                entry.pixels[idx + 2],
-                                                entry.pixels[idx + 3],
-                                            ])
-                                        } else {
-                                            None
-                                        }
+                            let comp = self.history.current().active_composition();
+                            let x = ((pointer_pos.x - rect.left()) / rect.width()
+                                * comp.width as f32)
+                                .floor() as u32;
+                            let y = ((pointer_pos.y - rect.top()) / rect.height()
+                                * comp.height as f32)
+                                .floor() as u32;
+                            (x < comp.width && y < comp.height).then_some((x, y))
+                        });
+                        ui.separator();
+                        if let Some((x, y)) = comp_pixel {
+                            ui.label(
+                                egui::RichText::new(format!("X: {x} Y: {y} px"))
+                                    .small()
+                                    .color(egui::Color32::from_rgb(0, 180, 255)),
+                            );
+                        }
+                        ui.separator();
+                        let pixel_rgba = {
+                            let comp = self.history.current().active_composition();
+                            if let Some((px, py)) = comp_pixel {
+                                let layer_indices: Vec<usize> = comp
+                                    .layers
+                                    .iter()
+                                    .enumerate()
+                                    .filter(|(_, l)| l.is_active(self.playback.current_frame))
+                                    .map(|(i, _)| i)
+                                    .collect();
+                                if let Some(entry) = self
+                                    .frame_cache
+                                    .get_with_layers(self.playback.current_frame, &layer_indices)
+                                {
+                                    let idx = ((py * comp.width + px) * 4) as usize;
+                                    if idx + 3 < entry.pixels.len() {
+                                        Some([
+                                            entry.pixels[idx],
+                                            entry.pixels[idx + 1],
+                                            entry.pixels[idx + 2],
+                                            entry.pixels[idx + 3],
+                                        ])
                                     } else {
                                         None
                                     }
                                 } else {
                                     None
                                 }
-                            };
-                            if let Some([r, g, b, a]) = pixel_rgba {
-                                ui.label(
-                                    egui::RichText::new(format!(
-                                        "R: {} G: {} B: {} A: {}",
-                                        r, g, b, a
-                                    ))
+                            } else {
+                                None
+                            }
+                        };
+                        if let Some([r, g, b, a]) = pixel_rgba {
+                            ui.label(
+                                egui::RichText::new(format!("R: {} G: {} B: {} A: {}", r, g, b, a))
                                     .small()
                                     .color(egui::Color32::from_rgb(255, 200, 100)),
-                                );
-                            } else {
-                                ui.label(
-                                    egui::RichText::new("R: – G: – B: – A: –")
-                                        .small()
-                                        .color(egui::Color32::from_rgb(255, 200, 100)),
-                                );
-                            }
-                        }
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.label(
-                                egui::RichText::new(format!(
-                                    "Kagari VFX v{}",
-                                    env!("CARGO_PKG_VERSION")
-                                ))
-                                .small()
-                                .color(egui::Color32::from_gray(120)),
                             );
-                            if status_width >= 1150.0 {
-                                ui.separator();
-                                let active_tool_label = match self.active_tool {
-                                    crate::ui::toolbar::ActiveTool::Selection => "Selection",
-                                    crate::ui::toolbar::ActiveTool::Hand => "Hand",
-                                    crate::ui::toolbar::ActiveTool::Zoom => "Zoom",
-                                    crate::ui::toolbar::ActiveTool::Camera3D => "Camera 3D",
-                                    crate::ui::toolbar::ActiveTool::Rotation => "Rotation",
-                                    crate::ui::toolbar::ActiveTool::AnchorPoint => "Anchor Point",
-                                    crate::ui::toolbar::ActiveTool::Rectangle => "Rectangle",
-                                    crate::ui::toolbar::ActiveTool::Pen => "Pen",
-                                    crate::ui::toolbar::ActiveTool::Text => "Text",
-                                    crate::ui::toolbar::ActiveTool::Brush => "Brush",
-                                    crate::ui::toolbar::ActiveTool::CloneStamp => "Clone Stamp",
-                                    crate::ui::toolbar::ActiveTool::Eraser => "Eraser",
-                                    crate::ui::toolbar::ActiveTool::RotoBrush => "Roto Brush",
-                                    crate::ui::toolbar::ActiveTool::PuppetPin => "Puppet Pin",
-                                };
-                                ui.label(
-                                    egui::RichText::new(format!("Tool: {active_tool_label}"))
-                                        .small()
-                                        .color(egui::Color32::from_rgb(255, 230, 0)),
-                                );
-                                ui.separator();
-                                let dl_status = if let Some(client) = &self.connected_app {
-                                    format!("Connected to {client}")
-                                } else {
-                                    "Not connected".to_string()
-                                };
-                                ui.label(
-                                    egui::RichText::new(format!("Dynamic Link: {dl_status}"))
-                                        .small()
-                                        .color(egui::Color32::from_rgb(100, 180, 255)),
-                                );
-                                ui.separator();
-                            }
-                        });
+                        } else {
+                            ui.label(
+                                egui::RichText::new("R: – G: – B: – A: –")
+                                    .small()
+                                    .color(egui::Color32::from_rgb(255, 200, 100)),
+                            );
+                        }
+                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "Kagari VFX v{}",
+                                env!("CARGO_PKG_VERSION")
+                            ))
+                            .small()
+                            .color(egui::Color32::from_gray(120)),
+                        );
+                        if status_width >= 1600.0 {
+                            ui.separator();
+                            let active_tool_label = match self.active_tool {
+                                crate::ui::toolbar::ActiveTool::Selection => "Selection",
+                                crate::ui::toolbar::ActiveTool::Hand => "Hand",
+                                crate::ui::toolbar::ActiveTool::Zoom => "Zoom",
+                                crate::ui::toolbar::ActiveTool::Camera3D => "Camera 3D",
+                                crate::ui::toolbar::ActiveTool::Rotation => "Rotation",
+                                crate::ui::toolbar::ActiveTool::AnchorPoint => "Anchor Point",
+                                crate::ui::toolbar::ActiveTool::Rectangle => "Rectangle",
+                                crate::ui::toolbar::ActiveTool::Pen => "Pen",
+                                crate::ui::toolbar::ActiveTool::Text => "Text",
+                                crate::ui::toolbar::ActiveTool::Brush => "Brush",
+                                crate::ui::toolbar::ActiveTool::CloneStamp => "Clone Stamp",
+                                crate::ui::toolbar::ActiveTool::Eraser => "Eraser",
+                                crate::ui::toolbar::ActiveTool::RotoBrush => "Roto Brush",
+                                crate::ui::toolbar::ActiveTool::PuppetPin => "Puppet Pin",
+                            };
+                            ui.label(
+                                egui::RichText::new(format!("Tool: {active_tool_label}"))
+                                    .small()
+                                    .color(egui::Color32::from_rgb(255, 230, 0)),
+                            );
+                            ui.separator();
+                            let dl_status = if let Some(client) = &self.connected_app {
+                                format!("Connected to {client}")
+                            } else {
+                                "Not connected".to_string()
+                            };
+                            ui.label(
+                                egui::RichText::new(format!("Dynamic Link: {dl_status}"))
+                                    .small()
+                                    .color(egui::Color32::from_rgb(100, 180, 255)),
+                            );
+                            ui.separator();
+                        }
+                    });
                 });
             });
 
@@ -1594,10 +2109,11 @@ impl KagariApp {
         crate::ui::export_dialog::draw(self, ctx);
         crate::ui::comp_settings_dialog::draw_comp_settings_dialog(self, ctx);
 
-        let cmd_k_pressed = ctx.input(|i| {
-            (i.modifiers.command || i.modifiers.ctrl)
-                && !i.modifiers.shift
-                && i.key_pressed(egui::Key::K)
+        let cmd_k_pressed = ctx.input(|input| {
+            crate::ui::shortcuts::shortcut_pressed(
+                input,
+                crate::ui::shortcuts::ShortcutId::CommandPalette,
+            )
         });
         if cmd_k_pressed && (!self.has_blocking_dialog() || self.show_command_palette) {
             self.show_command_palette = !self.show_command_palette;
@@ -1617,413 +2133,18 @@ impl KagariApp {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+mod tests;
 
-    fn drive_frames(app: &mut KagariApp, n: usize) {
-        drive_frames_at_size(app, n, 1600.0, 900.0);
-    }
+#[cfg(test)]
+mod right_panel_tests {
+    use super::RightPanel;
 
-    fn drive_frames_at_size(app: &mut KagariApp, n: usize, width: f32, height: f32) {
-        let ctx = eframe::egui::Context::default();
-        for _ in 0..n {
-            let _ = ctx.run(
-                eframe::egui::RawInput {
-                    screen_rect: Some(eframe::egui::Rect::from_min_size(
-                        eframe::egui::Pos2::ZERO,
-                        eframe::egui::vec2(width, height),
-                    )),
-                    ..Default::default()
-                },
-                |ctx| {
-                    crate::ui::theme::configure_ae_theme(ctx);
-                    app.update_panels(ctx);
-                },
-            );
+    #[test]
+    fn right_panel_indices_round_trip_for_legacy_workspace_state() {
+        for index in 0..=30 {
+            assert_eq!(RightPanel::from_index(index).index(), index);
         }
-    }
-
-    #[test]
-    fn full_studio_frame_renders_without_panic_or_leak() {
-        let mut app = KagariApp::default();
-        app.show_home = false;
-        app.show_welcome = false;
-        drive_frames(&mut app, 2);
-        assert!(!app.drag_active(), "no transaction left open");
-        assert_eq!(app.playback.current_frame, 0, "playhead must not drift");
-    }
-
-    #[test]
-    fn blocking_dialog_state_tracks_every_modal_surface() {
-        let mut app = KagariApp::default();
-        app.show_welcome = false;
-        assert!(!app.has_blocking_dialog());
-
-        app.show_preferences = true;
-        assert!(app.has_blocking_dialog());
-        app.show_preferences = false;
-        app.show_command_palette = true;
-        assert!(app.has_blocking_dialog());
-        app.show_command_palette = false;
-        app.export.show_export_dialog = true;
-        assert!(app.has_blocking_dialog());
-        app.export.show_export_dialog = false;
-
-        app.show_recovery_dialog = true;
-        assert!(app.has_blocking_dialog());
-        app.show_recovery_dialog = false;
-        app.show_comp_settings = true;
-        assert!(app.has_blocking_dialog());
-        app.show_comp_settings = false;
-        app.show_shortcuts_dialog = true;
-        assert!(app.has_blocking_dialog());
-        app.show_shortcuts_dialog = false;
-        app.show_precompose_dialog = true;
-        assert!(app.has_blocking_dialog());
-        app.show_precompose_dialog = false;
-        app.show_new_comp_dialog = true;
-        assert!(app.has_blocking_dialog());
-    }
-
-    #[test]
-    fn graph_editor_pointer_drag_moves_keyframe_and_commits_one_undo_step() {
-        use crate::core::keyframe::{InterpolationType, Keyframe};
-        use crate::core::property::Animatable;
-        use eframe::egui::{self, Event, Modifiers, PointerButton, Pos2, RawInput, Rect};
-
-        let mut app = KagariApp::default();
-        app.show_home = false;
-        app.show_welcome = false;
-        app.startup_animation.progress = 1.0;
-        app.startup_animation.target = 1.0;
-        app.show_graph_editor = true;
-        app.selection.selected_property = Some("Position X".to_string());
-
-        let layer_id = {
-            let project = app.history.current_mut();
-            let layer = &mut project.active_composition_mut().layers[1];
-            layer.transform.position = Animatable::new_animated(vec![
-                Keyframe::new(0, [100.0, 540.0], InterpolationType::Linear),
-                Keyframe::new(30, [300.0, 540.0], InterpolationType::Linear),
-            ]);
-            layer.id.clone()
-        };
-
-        let ctx = eframe::egui::Context::default();
-        let screen_rect = Rect::from_min_size(Pos2::ZERO, eframe::egui::vec2(1600.0, 1200.0));
-        let run_frame = |app: &mut KagariApp, events: Vec<Event>| {
-            let _ = ctx.run(
-                RawInput {
-                    screen_rect: Some(screen_rect),
-                    events,
-                    ..Default::default()
-                },
-                |ctx| {
-                    crate::ui::theme::configure_ae_theme(ctx);
-                    app.update_panels(ctx);
-                },
-            );
-        };
-
-        run_frame(&mut app, Vec::new());
-        let anchor_id = egui::Id::new(("ae_graph_anchor_rect", &layer_id, "Position X", 30_u32));
-        let anchor_rect: Rect = ctx
-            .data(|d| d.get_temp(anchor_id))
-            .expect("graph editor must expose the rendered keyframe anchor");
-        let start = anchor_rect.center();
-        let target = start + eframe::egui::vec2(70.0, -12.0);
-
-        run_frame(&mut app, vec![Event::PointerMoved(start)]);
-        run_frame(
-            &mut app,
-            vec![Event::PointerButton {
-                pos: start,
-                button: PointerButton::Primary,
-                pressed: true,
-                modifiers: Modifiers::NONE,
-            }],
-        );
-        run_frame(&mut app, vec![Event::PointerMoved(target)]);
-        run_frame(
-            &mut app,
-            vec![
-                Event::PointerMoved(target),
-                Event::PointerButton {
-                    pos: target,
-                    button: PointerButton::Primary,
-                    pressed: false,
-                    modifiers: Modifiers::NONE,
-                },
-            ],
-        );
-
-        let keyframes = app.history.current().active_composition().layers[1]
-            .transform
-            .position
-            .keyframes()
-            .expect("position remains animated");
-        assert!(
-            keyframes
-                .iter()
-                .any(|key| key.frame != 30 && (key.value[0] - 300.0).abs() > 0.1),
-            "pointer drag must change the selected keyframe's frame or value: {keyframes:?}"
-        );
-        assert_eq!(
-            app.history.len(),
-            2,
-            "one pointer gesture must create one undo step"
-        );
-        assert!(
-            !app.drag_active(),
-            "pointer release must close the graph edit transaction"
-        );
-
-        assert!(
-            app.history.undo().is_some(),
-            "the graph edit must be undoable"
-        );
-        let restored = app.history.current().active_composition().layers[1]
-            .transform
-            .position
-            .keyframes()
-            .expect("position remains animated after undo");
-        assert_eq!(restored[0].frame, 0);
-        assert_eq!(restored[1].frame, 30);
-        assert_eq!(restored[1].value, [300.0, 540.0]);
-    }
-
-    #[test]
-    fn studio_event_loop_closes_drag_transaction_on_pointer_release() {
-        let mut app = KagariApp::default();
-        app.show_home = false;
-        app.show_welcome = false;
-        app.begin_drag("integration test drag");
-        assert!(app.drag_active());
-
-        let ctx = eframe::egui::Context::default();
-        let _ = ctx.run(
-            eframe::egui::RawInput {
-                screen_rect: Some(eframe::egui::Rect::from_min_size(
-                    eframe::egui::Pos2::ZERO,
-                    eframe::egui::vec2(1600.0, 900.0),
-                )),
-                events: vec![eframe::egui::Event::PointerButton {
-                    pos: eframe::egui::pos2(24.0, 24.0),
-                    button: eframe::egui::PointerButton::Primary,
-                    pressed: false,
-                    modifiers: eframe::egui::Modifiers::NONE,
-                }],
-                ..Default::default()
-            },
-            |ctx| {
-                crate::ui::theme::configure_ae_theme(ctx);
-                app.update_panels(ctx);
-            },
-        );
-
-        assert!(
-            !app.drag_active(),
-            "release must close the open transaction"
-        );
-    }
-
-    #[test]
-    fn studio_event_loop_toggles_command_palette_with_keyboard_input() {
-        let mut app = KagariApp::default();
-        app.show_home = false;
-        app.show_welcome = false;
-        let ctx = eframe::egui::Context::default();
-        let screen_rect = eframe::egui::Rect::from_min_size(
-            eframe::egui::Pos2::ZERO,
-            eframe::egui::vec2(1600.0, 900.0),
-        );
-
-        let key_event = || eframe::egui::Event::Key {
-            key: eframe::egui::Key::K,
-            physical_key: None,
-            pressed: true,
-            repeat: false,
-            modifiers: eframe::egui::Modifiers {
-                command: true,
-                ..Default::default()
-            },
-        };
-        let modifiers = eframe::egui::Modifiers {
-            command: true,
-            ..Default::default()
-        };
-
-        let _ = ctx.run(
-            eframe::egui::RawInput {
-                screen_rect: Some(screen_rect),
-                modifiers,
-                events: vec![key_event()],
-                ..Default::default()
-            },
-            |ctx| {
-                crate::ui::theme::configure_ae_theme(ctx);
-                app.update_panels(ctx);
-            },
-        );
-        assert!(
-            app.show_command_palette,
-            "Cmd+K must open the command palette"
-        );
-        assert!(app.command_palette_search.is_empty());
-
-        let _ = ctx.run(
-            eframe::egui::RawInput {
-                screen_rect: Some(screen_rect),
-                modifiers,
-                events: vec![key_event()],
-                ..Default::default()
-            },
-            |ctx| {
-                crate::ui::theme::configure_ae_theme(ctx);
-                app.update_panels(ctx);
-            },
-        );
-        assert!(
-            !app.show_command_palette,
-            "Cmd+K must close the command palette"
-        );
-    }
-
-    #[test]
-    fn command_palette_search_and_enter_executes_layer_action() {
-        let mut app = KagariApp::default();
-        app.show_home = false;
-        app.show_welcome = false;
-        let ctx = eframe::egui::Context::default();
-        let initial_layer_count = app.history.current().active_composition().layers.len();
-        let screen_rect = eframe::egui::Rect::from_min_size(
-            eframe::egui::Pos2::ZERO,
-            eframe::egui::vec2(1600.0, 900.0),
-        );
-        let command_modifiers = eframe::egui::Modifiers {
-            command: true,
-            ..Default::default()
-        };
-
-        let _ = ctx.run(
-            eframe::egui::RawInput {
-                screen_rect: Some(screen_rect),
-                modifiers: command_modifiers,
-                events: vec![eframe::egui::Event::Key {
-                    key: eframe::egui::Key::K,
-                    physical_key: None,
-                    pressed: true,
-                    repeat: false,
-                    modifiers: command_modifiers,
-                }],
-                ..Default::default()
-            },
-            |ctx| {
-                crate::ui::theme::configure_ae_theme(ctx);
-                app.update_panels(ctx);
-            },
-        );
-        assert!(app.show_command_palette);
-
-        let _ = ctx.run(
-            eframe::egui::RawInput {
-                screen_rect: Some(screen_rect),
-                events: vec![
-                    eframe::egui::Event::Text("Add Layer: New Solid Layer".into()),
-                    eframe::egui::Event::Key {
-                        key: eframe::egui::Key::Enter,
-                        physical_key: None,
-                        pressed: true,
-                        repeat: false,
-                        modifiers: eframe::egui::Modifiers::NONE,
-                    },
-                ],
-                ..Default::default()
-            },
-            |ctx| {
-                crate::ui::theme::configure_ae_theme(ctx);
-                app.update_panels(ctx);
-            },
-        );
-
-        assert!(
-            !app.show_command_palette,
-            "Enter must close after executing a command"
-        );
-        assert_eq!(
-            app.history.current().active_composition().layers.len(),
-            initial_layer_count + 1,
-            "command palette action must mutate the active composition"
-        );
-    }
-
-    #[test]
-    fn responsive_studio_frames_render_without_panic() {
-        for (width, height) in [(900.0, 700.0), (640.0, 480.0)] {
-            let mut app = KagariApp::default();
-            app.show_home = false;
-            app.show_welcome = false;
-            drive_frames_at_size(&mut app, 2, width, height);
-            assert_eq!(
-                app.playback.current_frame, 0,
-                "playhead must not drift at {width}px"
-            );
-        }
-    }
-
-    #[test]
-    fn full_home_frame_renders_without_panic() {
-        let mut app = KagariApp::default();
-        app.show_home = true;
-        app.home_dir = std::env::temp_dir();
-        drive_frames(&mut app, 2);
-        assert!(app.show_home, "home must stay up without input");
-    }
-
-    #[test]
-    fn startup_animation_survives_extreme_sizes_and_irregular_frame_times() {
-        let mut app = KagariApp::default();
-        app.show_home = true;
-        app.home_dir = std::env::temp_dir();
-        let ctx = eframe::egui::Context::default();
-        let sizes = [
-            (1536.0, 1024.0),
-            (900.0, 700.0),
-            (640.0, 480.0),
-            (320.0, 240.0),
-            (1.0, 1.0),
-            (2400.0, 1400.0),
-        ];
-
-        for frame in 0..40 {
-            let (width, height) = sizes[frame % sizes.len()];
-            let dt = match frame {
-                0 => 0.0,
-                1 => 0.25,
-                2 => 0.001,
-                3 => 0.033,
-                _ if frame % 7 == 0 => 0.05,
-                _ => 1.0 / 60.0,
-            };
-            let _ = ctx.run(
-                eframe::egui::RawInput {
-                    screen_rect: Some(eframe::egui::Rect::from_min_size(
-                        eframe::egui::Pos2::ZERO,
-                        eframe::egui::vec2(width, height),
-                    )),
-                    predicted_dt: dt,
-                    ..Default::default()
-                },
-                |ctx| {
-                    crate::ui::theme::configure_ae_theme(ctx);
-                    app.update_panels(ctx);
-                },
-            );
-            assert!(app.startup_animation.progress.is_finite());
-            assert!((0.0..=1.0).contains(&app.startup_animation.progress));
-        }
-
-        assert_eq!(app.startup_animation.progress, 1.0);
-        assert!(!app.startup_animation.is_animating());
+        assert_eq!(RightPanel::from_index(73), RightPanel::Other(73));
+        assert_eq!(RightPanel::Other(73).index(), 73);
     }
 }

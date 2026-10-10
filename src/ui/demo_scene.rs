@@ -28,15 +28,8 @@ fn c(v: f32) -> Animatable<f32> {
 }
 
 pub fn build(app: &mut crate::KagariApp) {
-    let count = app.history.current().compositions.len();
-    let mut comp = Composition::new(
-        format!("comp_demo_{}", count),
-        "main_comp".to_string(),
-        3840,
-        2160,
-        30,
-        150,
-    );
+    let comp_id = app.history.current().next_composition_id("comp_demo");
+    let mut comp = Composition::new(comp_id, "main_comp".to_string(), 3840, 2160, 30, 150);
     comp.blend_linear = false;
     comp.dither_output = true;
 
@@ -303,8 +296,12 @@ mod tests {
             crate::core::software_renderer::render_frame_to_pixels(&comp, 75, 320, 180, 0.0, 0);
         assert_eq!(pixels.len(), 320 * 180 * 4);
         // Must be more than a flat background: orb, ring, particles, text.
-        let distinct: std::collections::HashSet<[u8; 3]> =
-            pixels.chunks_exact(4).map(|p| [p[0], p[1], p[2]]).collect();
+        let distinct: std::collections::HashSet<[u8; 3]> = pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|p| [p[0], p[1], p[2]])
+            .collect();
         assert!(
             distinct.len() > 16,
             "demo frame looks flat: {} colors",

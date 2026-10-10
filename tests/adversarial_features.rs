@@ -799,7 +799,10 @@ contract_test!(camera_tracker_rejects_zero_dimensions, {
             observations: vec![(0, [1.0, 1.0]), (1, [2.0, 2.0])],
         })
         .collect::<Vec<_>>();
-    assert!(solve_camera_motion_3d(&tracks, 0, 0, None).is_none());
+    assert!(matches!(
+        solve_camera_motion_3d(&tracks, 0, 0, None),
+        Err(CameraTrackerError::NotImplemented)
+    ));
 });
 contract_test!(camera_tracker_rejects_nonfinite_observation, {
     let tracks = (0..8)
@@ -808,7 +811,10 @@ contract_test!(camera_tracker_rejects_nonfinite_observation, {
             observations: vec![(0, [f32::NAN, 1.0]), (1, [2.0, 2.0])],
         })
         .collect::<Vec<_>>();
-    assert!(solve_camera_motion_3d(&tracks, 100, 100, None).is_none());
+    assert!(matches!(
+        solve_camera_motion_3d(&tracks, 100, 100, None),
+        Err(CameraTrackerError::NotImplemented)
+    ));
 });
 contract_test!(camera_tracker_rejects_unbounded_frame_span, {
     let tracks = (0..8)
@@ -817,7 +823,10 @@ contract_test!(camera_tracker_rejects_unbounded_frame_span, {
             observations: vec![(0, [1.0, 1.0]), (u32::MAX, [2.0, 2.0])],
         })
         .collect::<Vec<_>>();
-    assert!(solve_camera_motion_3d(&tracks, 100, 100, None).is_none());
+    assert!(matches!(
+        solve_camera_motion_3d(&tracks, 100, 100, None),
+        Err(CameraTrackerError::NotImplemented)
+    ));
 });
 contract_test!(cylinder_zero_dimensions_are_safe, {
     let mut out = Vec::new();

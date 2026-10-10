@@ -100,6 +100,26 @@ pub fn draw_transport_panel(
         if ui.checkbox(&mut audio_val, "Audio Preview").changed() {
             app.audio_preview_enabled = audio_val;
         }
+
+        ui.separator();
+        ui.label("Speed:");
+        egui::ComboBox::from_id_salt("transport_playback_speed")
+            .selected_text(match app.playback_speed {
+                -2 => "2x Rev",
+                -1 => "1x Rev",
+                1 => "1x Fwd",
+                2 => "2x Fwd",
+                4 => "4x Fwd",
+                _ => "Custom",
+            })
+            .width(70.0)
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut app.playback_speed, -2, "2x Rev");
+                ui.selectable_value(&mut app.playback_speed, -1, "1x Rev");
+                ui.selectable_value(&mut app.playback_speed, 1, "1x Fwd");
+                ui.selectable_value(&mut app.playback_speed, 2, "2x Fwd");
+                ui.selectable_value(&mut app.playback_speed, 4, "4x Fwd");
+            });
     });
 
     ui.add_space(8.0);
@@ -109,30 +129,30 @@ pub fn draw_transport_panel(
     // Bound directly to the viewport render-resolution setting used by the GPU path
     egui::ComboBox::from_id_salt("preview_res_combo")
         .selected_text(match app.viewport_render_resolution {
-            0 => "Full (1:1 Resolution)",
-            1 => "Half (1/2 Resolution)",
-            2 => "Third (1/3 Resolution)",
-            _ => "Quarter (1/4 Resolution)",
+            crate::app_state::PreviewResolution::Full => "Full (1:1 Resolution)",
+            crate::app_state::PreviewResolution::Half => "Half (1/2 Resolution)",
+            crate::app_state::PreviewResolution::Third => "Third (1/3 Resolution)",
+            crate::app_state::PreviewResolution::Quarter => "Quarter (1/4 Resolution)",
         })
         .show_ui(ui, |ui| {
             ui.selectable_value(
                 &mut app.viewport_render_resolution,
-                0,
+                crate::app_state::PreviewResolution::Full,
                 "Full (1:1 Resolution)",
             );
             ui.selectable_value(
                 &mut app.viewport_render_resolution,
-                1,
+                crate::app_state::PreviewResolution::Half,
                 "Half (1/2 Resolution)",
             );
             ui.selectable_value(
                 &mut app.viewport_render_resolution,
-                2,
+                crate::app_state::PreviewResolution::Third,
                 "Third (1/3 Resolution)",
             );
             ui.selectable_value(
                 &mut app.viewport_render_resolution,
-                3,
+                crate::app_state::PreviewResolution::Quarter,
                 "Quarter (1/4 Resolution)",
             );
         });

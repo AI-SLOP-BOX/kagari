@@ -251,6 +251,32 @@ pub fn current_time() -> f64 {
     CURRENT_TIME.with(|c| c.get())
 }
 
+fn register_audio_functions(engine: &mut Engine) {
+    engine.register_fn("audioAmplitude", || -> f64 {
+        AUDIO_DATA.with(|data| data.borrow().amplitude as f64)
+    });
+    engine.register_fn("audioBand", |index: i64| -> f64 {
+        AUDIO_DATA.with(|data| {
+            let data = data.borrow();
+            let index = index.max(0) as usize;
+            data.bands.get(index).copied().unwrap_or(0.0) as f64
+        })
+    });
+    engine.register_fn("audioAmplitude", |band_name: &str| -> f64 {
+        AUDIO_DATA.with(|data| {
+            let data = data.borrow();
+            match band_name.to_lowercase().as_str() {
+                "bass" | "low" => data.bands[0] as f64,
+                "lowmid" | "low-mid" => data.bands[1] as f64,
+                "mid" | "midrange" => data.bands[2] as f64,
+                "highmid" | "high-mid" => data.bands[3] as f64,
+                "treble" | "high" => data.bands[4] as f64,
+                _ => data.amplitude as f64,
+            }
+        })
+    });
+}
+
 pub fn build_engine() -> Engine {
     let mut engine = Engine::new();
     engine.set_max_expr_depths(64, 32);
@@ -266,6 +292,7 @@ pub fn build_engine() -> Engine {
     engine.disable_symbol("export");
     engine.disable_symbol("to_json");
     engine.disable_symbol("from_json");
+    register_audio_functions(&mut engine);
 
     // --- wiggle(frequency: f32, amplitude: f32) -> f32 ---
     // Built-in pseudo-random noise matching AE's wiggle expression.
@@ -1859,31 +1886,6 @@ thread_local! {
                 Dynamic::from_float(av + bv)
             }).collect()
         });
-        // Audio-reactive expression functions (MV/lyric video support)
-        e.register_fn("audioAmplitude", || -> f64 {
-            AUDIO_DATA.with(|d| d.borrow().amplitude as f64)
-        });
-        e.register_fn("audioBand", |idx: i64| -> f64 {
-            AUDIO_DATA.with(|d| {
-                let data = d.borrow();
-                let i = idx.max(0) as usize;
-                if i < 5 { data.bands[i] as f64 } else { 0.0 }
-            })
-        });
-        // AE-style: audioAmplitude("bass"), audioAmplitude("treble"), etc.
-        e.register_fn("audioAmplitude", |band_name: &str| -> f64 {
-            AUDIO_DATA.with(|d| {
-                let data = d.borrow();
-                match band_name.to_lowercase().as_str() {
-                    "bass" | "low" => data.bands[0] as f64,
-                    "lowmid" | "low-mid" => data.bands[1] as f64,
-                    "mid" | "midrange" => data.bands[2] as f64,
-                    "highmid" | "high-mid" => data.bands[3] as f64,
-                    "treble" | "high" => data.bands[4] as f64,
-                    _ => data.amplitude as f64,
-                }
-            })
-        });
         e
     };
 }
@@ -2535,6 +2537,23 @@ mod tests_loops {
         assert!((values["audio.bass"] - 0.1).abs() < 1e-6);
         assert!((values["audio.treble"] - 0.5).abs() < 1e-6);
         assert_eq!(values.len(), 11);
+    }
+
+    #[test]
+    fn audio_functions_work_in_regular_vector_expressions() {
+        set_audio_expr_data(AudioExprData {
+            amplitude: 0.5,
+            bands: [0.8, 0.4, 0.2, 0.1, 0.05],
+        });
+        let engine = build_engine();
+        let value = eval_v2(
+            &engine,
+            "[value[0] + audioAmplitude(\"bass\") * 15.0, value[1] + audioBand(0) * 15.0]",
+            [100.0, 80.0],
+            0,
+            30,
+        );
+        assert_eq!(value, [112.0, 92.0]);
     }
 
     #[test]

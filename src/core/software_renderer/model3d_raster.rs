@@ -22,7 +22,9 @@ fn mesh_cache() -> &'static Mutex<MeshCache> {
 
 fn load_mesh(path: &str) -> Option<Arc<Mesh3D>> {
     let source = Path::new(path);
-    let modified = std::fs::metadata(source).ok().and_then(|m| m.modified().ok());
+    let modified = std::fs::metadata(source)
+        .ok()
+        .and_then(|m| m.modified().ok());
     if let Ok(cache) = mesh_cache().lock() {
         if let Some((cached_modified, mesh)) = cache.get(path) {
             if *cached_modified == modified {
@@ -30,7 +32,8 @@ fn load_mesh(path: &str) -> Option<Arc<Mesh3D>> {
             }
         }
     }
-    let text = crate::core::project_migration::read_bounded_text_file(source, 128 * 1024 * 1024).ok()?;
+    let text =
+        crate::core::project_migration::read_bounded_text_file(source, 128 * 1024 * 1024).ok()?;
     let mesh = Arc::new(crate::core::obj_loader::parse_obj_str(&text).ok()?);
     if let Ok(mut cache) = mesh_cache().lock() {
         cache.insert(path.to_string(), (modified, mesh.clone()));
@@ -64,7 +67,10 @@ fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
 
 fn normalize(vector: [f32; 3]) -> [f32; 3] {
     let length = vector[0]
-        .mul_add(vector[0], vector[1].mul_add(vector[1], vector[2] * vector[2]))
+        .mul_add(
+            vector[0],
+            vector[1].mul_add(vector[1], vector[2] * vector[2]),
+        )
         .sqrt()
         .max(1.0e-6);
     [vector[0] / length, vector[1] / length, vector[2] / length]
@@ -78,7 +84,14 @@ fn edge(a: [f32; 2], b: [f32; 2], p: [f32; 2]) -> f32 {
     (p[0] - a[0]) * (b[1] - a[1]) - (p[1] - a[1]) * (b[0] - a[0])
 }
 
-fn shade(layer: &Layer, comp: &crate::core::timeline::Composition, world: [f32; 3], normal: [f32; 3], base: [f32; 4], frame: u32) -> [u8; 4] {
+fn shade(
+    layer: &Layer,
+    comp: &crate::core::timeline::Composition,
+    world: [f32; 3],
+    normal: [f32; 3],
+    base: [f32; 4],
+    frame: u32,
+) -> [u8; 4] {
     let material = &layer.material;
     let mut light = material.ambient.clamp(0.0, 1.0) + material.emission.clamp(0.0, 1.0);
     if material.accepts_lights {
@@ -87,8 +100,7 @@ fn shade(layer: &Layer, comp: &crate::core::timeline::Composition, world: [f32; 
                 LightType::Ambient => source.intensity / 100.0,
                 LightType::Point | LightType::Spot { .. } | LightType::Parallel => {
                     let direction = normalize(sub(comp.light_position_at(source, frame), world));
-                    (dot(normal, direction).max(0.0) * source.intensity / 100.0)
-                        .min(1.0)
+                    (dot(normal, direction).max(0.0) * source.intensity / 100.0).min(1.0)
                 }
             };
             light += contribution * material.diffuse.clamp(0.0, 1.0);
@@ -143,7 +155,11 @@ pub(crate) fn rasterize_model3d_layer(ctx: RasterCtx<'_>) {
     let scale = (width.min(height) as f32 * 0.72 / extent).max(0.001);
     let position = layer.transform_3d.position.evaluate(frame);
     let rotation = layer.transform_3d.rotation.evaluate(frame);
-    let model_scale = layer.transform_3d.scale.evaluate(frame).map(|value| value / 100.0);
+    let model_scale = layer
+        .transform_3d
+        .scale
+        .evaluate(frame)
+        .map(|value| value / 100.0);
     let camera = comp.resolve_camera_at();
     let mut projected = Vec::with_capacity(mesh.vertices.len());
     for vertex in &mesh.vertices {
@@ -165,10 +181,16 @@ pub(crate) fn rasterize_model3d_layer(ctx: RasterCtx<'_>) {
             height as f32,
             frame,
         );
-        projected.push(screen.map(|point| (point[0] * width as f32, point[1] * height as f32, world_point)));
+        projected.push(screen.map(|point| {
+            (
+                point[0] * width as f32,
+                point[1] * height as f32,
+                world_point,
+            )
+        }));
     }
     let mut depth = vec![f32::INFINITY; (bw * bh) as usize];
-    for triangle in mesh.indices.chunks_exact(3) {
+    for triangle in mesh.indices.as_chunks::<3>().0 {
         let (Some(a), Some(b), Some(c)) = (
             projected.get(triangle[0] as usize).copied().flatten(),
             projected.get(triangle[1] as usize).copied().flatten(),
@@ -181,13 +203,24 @@ pub(crate) fn rasterize_model3d_layer(ctx: RasterCtx<'_>) {
             continue;
         }
         let min_px = a.0.min(b.0).min(c.0).floor().max(min_x as f32) as u32;
-        let max_px = a.0.max(b.0).max(c.0).ceil().min(max_x.saturating_sub(1) as f32) as u32;
+        let max_px =
+            a.0.max(b.0)
+                .max(c.0)
+                .ceil()
+                .min(max_x.saturating_sub(1) as f32) as u32;
         let min_py = a.1.min(b.1).min(c.1).floor().max(min_y as f32) as u32;
-        let max_py = a.1.max(b.1).max(c.1).ceil().min(max_y.saturating_sub(1) as f32) as u32;
+        let max_py =
+            a.1.max(b.1)
+                .max(c.1)
+                .ceil()
+                .min(max_y.saturating_sub(1) as f32) as u32;
         if min_px > max_px || min_py > max_py {
             continue;
         }
-        let normal = normalize(cross(sub([b.2[0], b.2[1], b.2[2]], a.2), sub([c.2[0], c.2[1], c.2[2]], a.2)));
+        let normal = normalize(cross(
+            sub([b.2[0], b.2[1], b.2[2]], a.2),
+            sub([c.2[0], c.2[1], c.2[2]], a.2),
+        ));
         let color = shade(layer, comp, a.2, normal, base_color, frame);
         for py in min_py..=max_py {
             for px in min_px..=max_px {
@@ -232,15 +265,10 @@ mod tests {
 
     #[test]
     fn model_layer_renders_an_obj_triangle() {
-        let path = std::env::temp_dir().join(format!(
-            "kagari-model3d-test-{}.obj",
-            std::process::id()
-        ));
-        std::fs::write(
-            &path,
-            "v -0.5 -0.5 0\nv 0.5 -0.5 0\nv 0 0.5 0\nf 1 2 3\n",
-        )
-        .expect("write test mesh");
+        let path =
+            std::env::temp_dir().join(format!("kagari-model3d-test-{}.obj", std::process::id()));
+        std::fs::write(&path, "v -0.5 -0.5 0\nv 0.5 -0.5 0\nv 0 0.5 0\nf 1 2 3\n")
+            .expect("write test mesh");
 
         let mut comp = Composition::new("comp".into(), "Comp".into(), 64, 64, 24, 24);
         let mut layer = Layer::new(
@@ -258,10 +286,15 @@ mod tests {
 
         let pixels = render_frame_to_pixels(&comp, 0, 64, 64, 0.0, 0);
         let model_pixels = pixels
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .filter(|pixel| pixel[0] > 25 || pixel[1] > 25 || pixel[2] > 25)
             .count();
-        assert!(model_pixels > 0, "OBJ triangle did not reach the compositor");
+        assert!(
+            model_pixels > 0,
+            "OBJ triangle did not reach the compositor"
+        );
 
         let _ = std::fs::remove_file(path);
     }
@@ -272,11 +305,8 @@ mod tests {
             "kagari-model3d-precomp-test-{}.obj",
             std::process::id()
         ));
-        std::fs::write(
-            &path,
-            "v -0.5 -0.5 0\nv 0.5 -0.5 0\nv 0 0.5 0\nf 1 2 3\n",
-        )
-        .expect("write test mesh");
+        std::fs::write(&path, "v -0.5 -0.5 0\nv 0.5 -0.5 0\nv 0 0.5 0\nf 1 2 3\n")
+            .expect("write test mesh");
 
         let mut nested = Composition::new("nested".into(), "Nested".into(), 64, 64, 24, 24);
         let mut model = Layer::new(
@@ -307,10 +337,15 @@ mod tests {
 
         let pixels = render_frame_to_pixels(&root, 0, 64, 64, 0.0, 0);
         let model_pixels = pixels
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .filter(|pixel| pixel[0] > 25 || pixel[1] > 25 || pixel[2] > 25)
             .count();
-        assert!(model_pixels > 0, "nested OBJ triangle did not reach the compositor");
+        assert!(
+            model_pixels > 0,
+            "nested OBJ triangle did not reach the compositor"
+        );
 
         let _ = std::fs::remove_file(path);
     }

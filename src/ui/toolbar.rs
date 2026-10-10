@@ -1,4 +1,5 @@
 use crate::ui::custom_widgets;
+use crate::ui::icons::SVG_SNAP;
 use eframe::egui;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -20,26 +21,144 @@ pub enum ActiveTool {
     PuppetPin,
 }
 
+#[derive(Clone, Copy)]
+struct ToolDef {
+    tool: ActiveTool,
+    icon: &'static str,
+    name: &'static str,
+    shortcut: Option<crate::ui::shortcuts::ShortcutId>,
+}
+
+const TOOL_DEFS: &[ToolDef] = &[
+    ToolDef {
+        tool: ActiveTool::Selection,
+        icon: crate::ui::icons::SVG_TOOL_SELECT,
+        name: "Select",
+        shortcut: Some(crate::ui::shortcuts::ShortcutId::SelectionTool),
+    },
+    ToolDef {
+        tool: ActiveTool::Hand,
+        icon: crate::ui::icons::SVG_TOOL_HAND,
+        name: "Hand",
+        shortcut: Some(crate::ui::shortcuts::ShortcutId::HandTool),
+    },
+    ToolDef {
+        tool: ActiveTool::Zoom,
+        icon: crate::ui::icons::SVG_TOOL_ZOOM,
+        name: "Zoom",
+        shortcut: Some(crate::ui::shortcuts::ShortcutId::ZoomTool),
+    },
+    ToolDef {
+        tool: ActiveTool::Camera3D,
+        icon: crate::ui::icons::SVG_TOOL_CAMERA,
+        name: "Camera",
+        shortcut: Some(crate::ui::shortcuts::ShortcutId::CameraTool),
+    },
+    ToolDef {
+        tool: ActiveTool::Rotation,
+        icon: crate::ui::icons::SVG_TOOL_ROTATE,
+        name: "Rotate",
+        shortcut: Some(crate::ui::shortcuts::ShortcutId::RotationTool),
+    },
+    ToolDef {
+        tool: ActiveTool::AnchorPoint,
+        icon: crate::ui::icons::SVG_TOOL_ANCHOR,
+        name: "Anchor Point",
+        shortcut: Some(crate::ui::shortcuts::ShortcutId::AnchorTool),
+    },
+    ToolDef {
+        tool: ActiveTool::Rectangle,
+        icon: crate::ui::icons::SVG_TOOL_SHAPE,
+        name: "Shape",
+        shortcut: Some(crate::ui::shortcuts::ShortcutId::RectangleTool),
+    },
+    ToolDef {
+        tool: ActiveTool::Pen,
+        icon: crate::ui::icons::SVG_TOOL_PEN,
+        name: "Pen",
+        shortcut: Some(crate::ui::shortcuts::ShortcutId::PenTool),
+    },
+    ToolDef {
+        tool: ActiveTool::Text,
+        icon: crate::ui::icons::SVG_TOOL_TEXT,
+        name: "Text",
+        shortcut: Some(crate::ui::shortcuts::ShortcutId::TextTool),
+    },
+    ToolDef {
+        tool: ActiveTool::Brush,
+        icon: crate::ui::icons::SVG_TOOL_BRUSH,
+        name: "Brush",
+        shortcut: None,
+    },
+    ToolDef {
+        tool: ActiveTool::CloneStamp,
+        icon: crate::ui::icons::SVG_TOOL_STAMP,
+        name: "Clone Stamp",
+        shortcut: None,
+    },
+    ToolDef {
+        tool: ActiveTool::Eraser,
+        icon: crate::ui::icons::SVG_TOOL_ERASER,
+        name: "Eraser",
+        shortcut: None,
+    },
+    ToolDef {
+        tool: ActiveTool::RotoBrush,
+        icon: crate::ui::icons::SVG_TOOL_ROTO,
+        name: "Roto Brush",
+        shortcut: None,
+    },
+    ToolDef {
+        tool: ActiveTool::PuppetPin,
+        icon: crate::ui::icons::SVG_TOOL_PUPPET,
+        name: "Puppet Pin",
+        shortcut: Some(crate::ui::shortcuts::ShortcutId::PuppetPinTool),
+    },
+];
+
+const VIEWER_TOOLS: &[ActiveTool] = &[
+    ActiveTool::Selection,
+    ActiveTool::Hand,
+    ActiveTool::Zoom,
+    ActiveTool::Rotation,
+    ActiveTool::AnchorPoint,
+    ActiveTool::Pen,
+    ActiveTool::Text,
+    ActiveTool::Camera3D,
+];
+
+fn tool_definition(tool: ActiveTool) -> &'static ToolDef {
+    TOOL_DEFS
+        .iter()
+        .find(|definition| definition.tool == tool)
+        .expect("every toolbar tool must have metadata")
+}
+
+fn tool_tooltip(definition: &ToolDef) -> String {
+    match definition.shortcut {
+        Some(shortcut) => format!(
+            "{} ({})",
+            crate::ui::localization::tr(definition.name),
+            crate::ui::shortcuts::display_shortcut(shortcut)
+        ),
+        None => crate::ui::localization::tr(definition.name).to_owned(),
+    }
+}
+
 /// Compact tool strip for the composition Viewer. The full editing tool set
 /// remains available through the overflow menu on narrow workspaces.
 pub fn draw_viewer_tool_strip(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
-    use crate::ui::icons::*;
     use crate::ui::theme::colors;
 
-    let tools: [(ActiveTool, &'static str, &'static str); 8] = [
-        (ActiveTool::Selection, SVG_TOOL_SELECT, "Select (V)"),
-        (ActiveTool::Hand, SVG_TOOL_HAND, "Hand (H)"),
-        (ActiveTool::Zoom, SVG_TOOL_ZOOM, "Zoom (Z)"),
-        (ActiveTool::Rotation, SVG_TOOL_ROTATE, "Rotate (W)"),
-        (ActiveTool::AnchorPoint, SVG_TOOL_ANCHOR, "Anchor Point (Y)"),
-        (ActiveTool::Pen, SVG_TOOL_PEN, "Pen (G)"),
-        (ActiveTool::Text, SVG_TOOL_TEXT, "Text (Cmd+T)"),
-        (ActiveTool::Camera3D, SVG_TOOL_CAMERA, "Camera (C)"),
-    ];
+    let tools = VIEWER_TOOLS
+        .iter()
+        .copied()
+        .map(tool_definition)
+        .collect::<Vec<_>>();
     let compact = ui.available_width() < 680.0;
     let visible_count = if compact { 3 } else { tools.len() };
 
-    for (index, (tool, svg, tooltip)) in tools.into_iter().enumerate() {
+    for (index, definition) in tools.iter().enumerate() {
         if (index == 3 || index == 7) && !compact {
             ui.add_space(8.0);
             ui.separator();
@@ -48,7 +167,7 @@ pub fn draw_viewer_tool_strip(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
         if index >= visible_count {
             break;
         }
-        let selected = app.active_tool == tool;
+        let selected = app.active_tool == definition.tool;
         let (rect, response) = ui.allocate_exact_size(egui::vec2(25.0, 25.0), egui::Sense::click());
         let fill = if selected || response.hovered() {
             colors::BG_HOVER
@@ -62,40 +181,124 @@ pub fn draw_viewer_tool_strip(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
                     egui::pos2(rect.left() + 4.0, rect.bottom() - 1.0),
                     egui::pos2(rect.right() - 4.0, rect.bottom() - 1.0),
                 ],
-                egui::Stroke::new(2.0_f32, colors::ACCENT_ORANGE),
+                egui::Stroke::new(2.0_f32, colors::ACCENT_SELECTION),
             );
         }
         let _ = crate::ui::icons::render_svg_at(
             ui,
-            format!("viewer_tool_{tool:?}"),
-            svg,
+            format!("viewer_tool_{:?}", definition.tool),
+            definition.icon,
             rect.shrink(4.0).size(),
             if selected {
-                colors::ACCENT_ORANGE
+                colors::ACCENT_SELECTION
             } else {
                 colors::TEXT_SECONDARY
             },
             rect.shrink(4.0).min,
         );
         if response.clicked() {
-            app.active_tool = tool;
+            app.active_tool = definition.tool;
         }
-        response.on_hover_text(tooltip);
+        response.on_hover_text(tool_tooltip(definition));
     }
 
     if compact {
         ui.menu_button("...", |ui| {
-            for (tool, _svg, tooltip) in tools.into_iter().skip(3) {
+            for definition in tools.iter().skip(3) {
+                let tooltip = tool_tooltip(definition);
                 if ui
-                    .selectable_label(app.active_tool == tool, tooltip)
+                    .selectable_label(app.active_tool == definition.tool, tooltip)
                     .clicked()
                 {
-                    app.active_tool = tool;
+                    app.active_tool = definition.tool;
                     ui.close_menu();
                 }
             }
         });
     }
+}
+
+pub fn draw_viewer_tool_strip_vertical(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
+    use crate::ui::theme::colors;
+
+    ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+        ui.add_space(4.0);
+        for (index, tool) in VIEWER_TOOLS.iter().copied().enumerate() {
+            if index == 3 || index == 7 {
+                ui.add_space(2.0);
+                crate::ui::theme::draw_separator(ui);
+                ui.add_space(2.0);
+            }
+            let definition = tool_definition(tool);
+            let selected = app.active_tool == tool;
+            let (rect, response) =
+                ui.allocate_exact_size(egui::vec2(24.0, 24.0), egui::Sense::click());
+            if selected || response.hovered() {
+                ui.painter().rect_filled(
+                    rect,
+                    3.0,
+                    if selected {
+                        colors::BG_HOVER
+                    } else {
+                        colors::BG_DARK
+                    },
+                );
+            }
+            crate::ui::icons::render_svg_at(
+                ui,
+                format!("viewer_tool_vertical_{tool:?}"),
+                definition.icon,
+                egui::vec2(16.0, 16.0),
+                if selected {
+                    colors::ACCENT_SELECTION
+                } else {
+                    colors::TEXT_SECONDARY
+                },
+                rect.center() - egui::vec2(8.0, 8.0),
+            );
+            if response.clicked() {
+                app.active_tool = tool;
+            }
+            response.on_hover_text(tool_tooltip(definition));
+            ui.add_space(1.0);
+        }
+    });
+}
+
+pub fn draw_tool_browser(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
+    crate::ui::kui::secondary(ui, "Select a tool for the Viewer.");
+    ui.add_space(crate::ui::kui::space::SM);
+    let list_height = ui.available_height().max(0.0);
+    egui::ScrollArea::vertical()
+        .id_salt("viewer_tool_browser")
+        .max_height(list_height)
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            ui.spacing_mut().item_spacing.y = 0.0;
+            for (index, definition) in TOOL_DEFS.iter().enumerate() {
+                let selected = app.active_tool == definition.tool;
+                let row = crate::ui::kui::selectable_item_row(ui, selected, 32.0, |ui| {
+                    let icon_id = format!("tool-browser-icon-{index}");
+                    crate::ui::icons::render_svg_bytes(
+                        ui,
+                        &icon_id,
+                        definition.icon,
+                        egui::vec2(16.0, 16.0),
+                        if selected {
+                            crate::ui::theme::colors::ACCENT_SELECTION
+                        } else {
+                            crate::ui::theme::colors::TEXT_SECONDARY
+                        },
+                    );
+                    ui.add_space(8.0);
+                    ui.label(crate::ui::localization::tr(definition.name));
+                });
+                if row.response.clicked() {
+                    app.active_tool = definition.tool;
+                }
+                row.response.on_hover_text(tool_tooltip(definition));
+            }
+        });
 }
 
 #[allow(dead_code)]
@@ -113,28 +316,10 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
             ui.horizontal(|ui| {
                 ui.style_mut().spacing.item_spacing.x = 3.0;
 
-                // Vector tool icons with hover tooltips
-                let tools: [(ActiveTool, &'static str, &'static str); 14] = [
-                    (ActiveTool::Selection, SVG_TOOL_SELECT, "Select (V)"),
-                    (ActiveTool::Hand, SVG_TOOL_HAND, "Hand (H)"),
-                    (ActiveTool::Zoom, SVG_TOOL_ZOOM, "Zoom (Z)"),
-                    (ActiveTool::Camera3D, SVG_TOOL_CAMERA, "Camera (C)"),
-                    (ActiveTool::Rotation, SVG_TOOL_ROTATE, "Rotate (W)"),
-                    (ActiveTool::AnchorPoint, SVG_TOOL_ANCHOR, "Anchor Point (Y)"),
-                    (ActiveTool::Rectangle, SVG_TOOL_SHAPE, "Shape (Q)"),
-                    (ActiveTool::Pen, SVG_TOOL_PEN, "Pen (G)"),
-                    (ActiveTool::Text, SVG_TOOL_TEXT, "Text (Cmd+T)"),
-                    (ActiveTool::Brush, SVG_TOOL_BRUSH, "Brush"),
-                    (ActiveTool::CloneStamp, SVG_TOOL_STAMP, "Clone Stamp"),
-                    (ActiveTool::Eraser, SVG_TOOL_ERASER, "Eraser"),
-                    (ActiveTool::RotoBrush, SVG_TOOL_ROTO, "Roto Brush"),
-                    (ActiveTool::PuppetPin, SVG_TOOL_PUPPET, "Puppet Pin"),
-                ];
-                use crate::ui::icons::*;
-
-                for (tool, svg, tooltip) in tools {
+                for definition in TOOL_DEFS {
+                    let tool = definition.tool;
                     let is_selected = app.active_tool == tool;
-                    let accent = colors::ACCENT_BLUE;
+                    let accent = colors::ACCENT_SELECTION;
                     let tint = if is_selected {
                         accent
                     } else {
@@ -166,7 +351,7 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     let icon_resp = crate::ui::icons::render_svg_at(
                         ui,
                         format!("tool_{:?}", tool),
-                        svg,
+                        definition.icon,
                         icon_rect.size(),
                         tint,
                         icon_rect.min,
@@ -176,7 +361,7 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     if resp.clicked() {
                         app.active_tool = tool;
                     }
-                    resp.on_hover_text(tooltip);
+                    resp.on_hover_text(tool_tooltip(definition));
                 }
 
                 ui.add_space(8.0);
@@ -190,7 +375,7 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     SVG_SNAP,
                     "tb_snap_btn",
                     egui::vec2(22.0, 22.0),
-                    colors::ACCENT_CYAN,
+                    colors::ACCENT_TOGGLE,
                     "Toggle Snapping to Keyframes and Markers (Shift+S)",
                 );
 
@@ -218,9 +403,9 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     if resp.changed() {
                         // Automatically switch right tab to Effects panel (tab 0) if typing search query
                         if !app.ui_tabs.effects_search_query.is_empty()
-                            && app.ui_tabs.right_tab_idx != 0
+                            && app.ui_tabs.right_panel != crate::app_state::RightPanel::Effects
                         {
-                            app.ui_tabs.right_tab_idx = 0;
+                            app.ui_tabs.right_panel = crate::app_state::RightPanel::Effects;
                         }
                     }
                 });

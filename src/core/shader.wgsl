@@ -1052,28 +1052,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         final_color = vec4<f32>(final_color.rgb, final_color.a * matte_alpha);
     }
 
-    // --- AE Blend Mode Compositing ---
-    if (layer.blend_mode == 1u) {
-        final_color = vec4<f32>(final_color.rgb * final_color.rgb, final_color.a);
-    } else if (layer.blend_mode == 2u) {
-        let inv = 1.0 - final_color.rgb;
-        final_color = vec4<f32>(1.0 - inv * inv, final_color.a);
-    } else if (layer.blend_mode == 3u) {
-        let s = final_color.rgb;
-        let overlay = select(
-            1.0 - 2.0 * (1.0 - s) * (1.0 - s),
-            2.0 * s * s,
-            s < vec3<f32>(0.5)
-        );
-        final_color = vec4<f32>(overlay, final_color.a);
-    } else if (layer.blend_mode == 4u) {
-        final_color = vec4<f32>(clamp(final_color.rgb * 1.5, vec3<f32>(0.0), vec3<f32>(1.0)), final_color.a);
-    } else if (layer.blend_mode == 5u) {
-        final_color = vec4<f32>(pow(final_color.rgb, vec3<f32>(1.5)), final_color.a);
-    } else if (layer.blend_mode == 6u) {
-        final_color = vec4<f32>(pow(final_color.rgb, vec3<f32>(0.67)), final_color.a);
-    }
-
     // --- Viewport Exposure Adjustment ---
     final_color = vec4<f32>(final_color.rgb * pow(2.0, globals.exposure_ev), final_color.a);
 
@@ -1088,6 +1066,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let e = 0.14;
         let aces = clamp((final_color.rgb * (a * final_color.rgb + vec3<f32>(b))) / (final_color.rgb * (c * final_color.rgb + vec3<f32>(d)) + vec3<f32>(e)), vec3<f32>(0.0), vec3<f32>(1.0));
         final_color = vec4<f32>(aces, final_color.a);
+    }
+
+    if (layer.blend_mode == 2u) {
+        final_color = vec4<f32>(final_color.rgb * final_color.a, final_color.a);
     }
 
     if (final_color.a <= 0.001) {

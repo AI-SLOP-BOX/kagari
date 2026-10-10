@@ -178,6 +178,7 @@ impl TrackerEngine {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn analyze_markerless_tracks(
         layer: &mut Layer,
         start_frame: u32,
@@ -1100,7 +1101,28 @@ impl TrackerEngine {
         start_frame: u32,
         end_frame: u32,
     ) -> QuadTrackData {
+        Self::analyze_quad_track_cancellable(
+            comp,
+            layer_idx,
+            tracker_indices,
+            start_frame,
+            end_frame,
+            None,
+        )
+    }
+
+    pub fn analyze_quad_track_cancellable(
+        comp: &Composition,
+        layer_idx: usize,
+        tracker_indices: [usize; 4],
+        start_frame: u32,
+        end_frame: u32,
+        cancel_flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    ) -> QuadTrackData {
         let mut out = QuadTrackData::default();
+        if end_frame < start_frame {
+            return out;
+        }
         let Some(layer) = comp.layers.get(layer_idx) else {
             return out;
         };
@@ -1109,6 +1131,12 @@ impl TrackerEngine {
         }
         let fps = comp.fps;
         for f in start_frame..=end_frame {
+            if cancel_flag
+                .as_ref()
+                .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+            {
+                return QuadTrackData::default();
+            }
             let mut frame_corners = [[0.0f32; 2]; 4];
             for (slot, &ti) in tracker_indices.iter().enumerate() {
                 frame_corners[slot] = Self::track_next_frame(layer, fps, ti, f.saturating_sub(1))
@@ -1246,13 +1274,13 @@ pub fn smooth_tracker_keyframes(
         let mut sum_y = 0.0f32;
         let mut weight_sum = 0.0f32;
 
-        for j in min_idx..=max_idx {
+        for (j, keyframe) in kfs.iter().enumerate().take(max_idx + 1).skip(min_idx) {
             let dist = (i as isize - j as isize).abs() as f32;
             let sigma = (window_radius as f32 * 0.5).max(1.0);
             let weight = (-dist * dist / (2.0 * sigma * sigma)).exp();
 
-            sum_x += kfs[j].value[0] * weight;
-            sum_y += kfs[j].value[1] * weight;
+            sum_x += keyframe.value[0] * weight;
+            sum_y += keyframe.value[1] * weight;
             weight_sum += weight;
         }
 
@@ -1917,9 +1945,9 @@ pub fn filter_motion_track_stabilization(
 
         let mut sum_x = 0.0f32;
         let mut sum_y = 0.0f32;
-        for j in start..end {
-            sum_x += cleaned[j][0];
-            sum_y += cleaned[j][1];
+        for point in cleaned.iter().take(end).skip(start) {
+            sum_x += point[0];
+            sum_y += point[1];
         }
         smoothed.push([sum_x / count, sum_y / count]);
     }

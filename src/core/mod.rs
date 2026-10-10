@@ -25,6 +25,10 @@ pub mod clipboard;
 pub mod color;
 pub mod color_science;
 pub mod colorama;
+#[cfg(feature = "wgpu")]
+pub mod compute_pipeline;
+#[cfg(not(feature = "wgpu"))]
+#[path = "compute_pipeline_stub.rs"]
 pub mod compute_pipeline;
 pub mod content_aware_engine;
 pub mod continuous_rasterizer;
@@ -51,6 +55,8 @@ pub mod font_rasterizer;
 pub mod frame_blending;
 pub mod frame_cache;
 pub mod hdr_dither;
+#[cfg(feature = "cli-gpu")]
+pub mod headless_gpu;
 pub mod history;
 pub mod image_cache;
 pub mod integration;
@@ -89,8 +95,9 @@ pub mod property;
 pub mod proxy;
 pub mod puppet_tool_engine;
 pub mod puppet_warp;
+pub mod render_capability;
 pub mod render_pipeline;
-pub mod render_queue;
+#[cfg(feature = "wgpu")]
 pub mod renderer;
 pub mod rive_runtime;
 pub mod roto_assist;
@@ -102,7 +109,6 @@ pub mod shape_repeater;
 pub mod software_renderer;
 pub mod spatial_keyframe;
 pub mod spherize;
-pub mod sql_timeline_db;
 pub mod stabilizer;
 pub mod stroke_modifier;
 pub mod subtitles;
@@ -116,6 +122,7 @@ pub mod text_to_shapes;
 pub mod the_smoother;
 pub mod the_wiggler;
 pub mod tile_cache;
+pub mod time_remap;
 pub mod timeline;
 pub mod tracker_engine;
 pub mod transform_effect;

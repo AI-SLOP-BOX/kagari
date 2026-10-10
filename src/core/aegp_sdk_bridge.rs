@@ -181,7 +181,7 @@ mod tests {
             let len = (world.width * world.height * 4) as usize;
             let slice = std::slice::from_raw_parts_mut(world.data, len);
             // Invert red channel
-            for chunk in slice.chunks_exact_mut(4) {
+            for chunk in slice.as_chunks_mut::<4>().0 {
                 chunk[0] = 255 - chunk[0];
             }
             0 // PF_Err_NONE

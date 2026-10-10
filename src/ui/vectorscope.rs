@@ -5,6 +5,7 @@
 //! per-channel parade columns. Pure math helpers are unit-tested below.
 
 use crate::core::software_renderer;
+use crate::ui::localization::tr;
 use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
@@ -27,7 +28,7 @@ pub struct ScopeSample {
 /// Collects chroma samples for every non-transparent pixel.
 pub fn scope_samples(pixels: &[u8], out: &mut Vec<ScopeSample>) {
     out.clear();
-    for px in pixels.chunks_exact(4) {
+    for px in pixels.as_chunks::<4>().0 {
         if px[3] == 0 {
             continue;
         }
@@ -49,7 +50,7 @@ pub type ParadeCounts = [[u32; PARADE_BUCKETS]; 3];
 
 pub fn parade_buckets(pixels: &[u8], counts: &mut ParadeCounts) {
     *counts = [[0; PARADE_BUCKETS]; 3];
-    for px in pixels.chunks_exact(4) {
+    for px in pixels.as_chunks::<4>().0 {
         if px[3] == 0 {
             continue; // fully transparent → no signal
         }
@@ -69,7 +70,7 @@ pub fn draw_vectorscope_window(app: &mut KagariApp, ctx: &egui::Context) {
     let mut mode: u8 =
         ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new(MODE_ID), || 0u8));
 
-    crate::ui::modal::window("Vectorscope / RGB Parade")
+    crate::ui::modal::window(tr("Vectorscope / RGB Parade"))
         .open(&mut app.show_vectorscope)
         .default_width(260.0)
         .show(ctx, |ui| {
@@ -87,10 +88,10 @@ pub fn draw_vectorscope_window(app: &mut KagariApp, ctx: &egui::Context) {
             );
 
             ui.horizontal(|ui| {
-                ui.radio_value(&mut mode, 0u8, "Vectorscope");
-                ui.radio_value(&mut mode, 1u8, "RGB Parade");
+                ui.radio_value(&mut mode, 0u8, tr("Vectorscope"));
+                ui.radio_value(&mut mode, 1u8, tr("RGB Parade"));
                 if pixels.is_empty() {
-                    ui.weak("(empty)");
+                    ui.weak(tr("(empty)"));
                 }
             });
 
@@ -114,7 +115,7 @@ pub fn draw_vectorscope_window(app: &mut KagariApp, ctx: &egui::Context) {
     ctx.data_mut(|d| d.insert_temp(egui::Id::new(MODE_ID), mode));
 }
 
-fn draw_scope(painter: egui::Painter, rect: egui::Rect, pixels: &[u8]) {
+pub(crate) fn draw_scope(painter: egui::Painter, rect: egui::Rect, pixels: &[u8]) {
     let center = rect.center();
     let radius = rect.width().min(rect.height()) * 0.47;
 

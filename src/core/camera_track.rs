@@ -143,6 +143,25 @@ pub fn solve_3d_camera_from_tracks(
     if features.len() < 8 {
         return Err("Need at least 8 tracked feature points for 3D camera reconstruction".into());
     }
+    if !initial_fov_deg.is_finite()
+        || features.iter().any(|feature| {
+            feature.frames.len() != feature.coords_2d.len()
+                || feature
+                    .coords_2d
+                    .iter()
+                    .flatten()
+                    .any(|coordinate| !coordinate.is_finite())
+                || feature
+                    .frames
+                    .windows(2)
+                    .any(|frames| frames[0] >= frames[1])
+        })
+    {
+        return Err(
+            "Tracked feature frames and coordinates must be finite, aligned, and strictly ordered"
+                .into(),
+        );
+    }
 
     let w_f = img_w.max(1) as f32;
     let h_f = img_h.max(1) as f32;
@@ -160,6 +179,9 @@ pub fn solve_3d_camera_from_tracks(
     if all_frames.is_empty() {
         return Err("No tracked frames found in feature points".into());
     }
+    if all_frames.len() > 100_000 {
+        return Err("Camera solve exceeds the 100,000-frame output limit".into());
+    }
 
     let mut camera_frames = Vec::new();
     let mut point_cloud = Vec::with_capacity(features.len());
@@ -168,7 +190,7 @@ pub fn solve_3d_camera_from_tracks(
     for feat in features {
         if feat.coords_2d.len() >= 2 {
             let p0 = feat.coords_2d[0];
-            let p_last = *feat.coords_2d.last().unwrap();
+            let p_last = feat.coords_2d[feat.coords_2d.len() - 1];
             let norm_x = (p0[0] - w_f * 0.5) / focal_length;
             let norm_y = (p0[1] - h_f * 0.5) / focal_length;
 
@@ -191,7 +213,6 @@ pub fn solve_3d_camera_from_tracks(
     }
 
     // Estimate camera trajectory per frame using weighted centroid motion
-    let _f0 = *all_frames.first().unwrap();
     let mut prev_cam_pos = [0.0f64, 0.0f64, 0.0f64];
     let mut prev_rot = [0.0f64, 0.0f64, 0.0f64];
 
@@ -238,7 +259,7 @@ pub fn solve_3d_camera_from_tracks(
     let ground_plane = if point_cloud.len() >= 3 {
         // Take 3 points spanning the lower half of the cloud
         let mut sorted_by_y = point_cloud.clone();
-        sorted_by_y.sort_by(|a, b| a[1].partial_cmp(&b[1]).unwrap());
+        sorted_by_y.sort_by(|a, b| a[1].total_cmp(&b[1]));
         let p1 = sorted_by_y[0];
         let p2 = sorted_by_y[sorted_by_y.len() / 4];
         let p3 = sorted_by_y[sorted_by_y.len() / 2];

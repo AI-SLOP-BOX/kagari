@@ -20,199 +20,300 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
         app.history.current().active_composition().fps.max(1),
         1,
     );
-    crate::ui::modal::window("Automation Bindings")
+    crate::ui::modal::window("オートメーション")
         .open(&mut open)
-        .default_width(430.0)
-        .default_height(300.0)
-        .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-12.0, 500.0))
+        .default_width(520.0)
+        .default_height(480.0)
+        .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-12.0, 82.0))
         .show(ctx, |ui| {
             let Some(document) = app.production_document.as_mut() else {
-                ui.label(
-                    egui::RichText::new("No unified production document loaded.")
-                        .color(colors::TEXT_SECONDARY),
-                );
+                crate::ui::kui::secondary(ui, "制作ドキュメントが読み込まれていません");
                 return;
             };
             let rate = frame_rate;
             let time = rate.map(|rate| {
                 crate::core::unified_time::Time::from_frame(app.playback.current_frame as i64, rate)
             });
-            ui.label(
-                egui::RichText::new(format!(
-                    "{} binding(s) · frame {}",
-                    document.bindings.len(),
-                    app.playback.current_frame
-                ))
-                .color(colors::TEXT_SECONDARY),
-            );
             ui.horizontal(|ui| {
-                if ui
-                    .button("Open Graph Editor")
-                    .on_hover_text("Open the keyframe Graph Editor for the selected layer")
-                    .clicked()
+                crate::ui::kui::title(ui, "オートメーション");
+                crate::ui::kui::caption(
+                    ui,
+                    format!(
+                        "{} 接続 · フレーム {}",
+                        document.bindings.len(),
+                        app.playback.current_frame
+                    ),
+                );
+            });
+            ui.horizontal(|ui| {
+                if crate::ui::kui::button(
+                    ui,
+                    "グラフエディターを開く",
+                    crate::ui::kui::ButtonKind::Quiet,
+                )
+                .on_hover_text("選択レイヤーのキーフレームグラフを表示")
+                .clicked()
                 {
                     app.show_graph_editor = true;
                 }
-                ui.label(
-                    egui::RichText::new("Shared timeline automation")
-                        .small()
-                        .color(colors::TEXT_MUTED),
-                );
+                crate::ui::kui::caption(ui, "タイムラインと共有");
             });
-            if ui.button("＋ Add Binding").clicked() {
-                document
-                    .bindings
-                    .push(crate::core::automation_binding::AutomationBinding {
-                        source: "audio.source".into(),
-                        target: "vfx.parameter".into(),
-                        curve: crate::core::automation_binding::AutomationCurve {
-                            points: vec![crate::core::automation_binding::AutomationPoint {
-                                time: crate::core::unified_time::Time::ZERO,
-                                value: 0.0,
-                            }],
-                        },
-                        input_min: 0.0,
-                        input_max: 1.0,
-                        output_min: 0.0,
-                        output_max: 1.0,
-                    });
-            }
-            ui.separator();
             ui.horizontal(|ui| {
-                if ui
-                    .add_enabled(!app.automation_undo.is_empty(), egui::Button::new("Undo"))
+                if crate::ui::kui::button(ui, "＋ 接続を追加", crate::ui::kui::ButtonKind::Accent)
                     .clicked()
+                {
+                    document
+                        .bindings
+                        .push(crate::core::automation_binding::AutomationBinding {
+                            source: "audio.source".into(),
+                            target: "vfx.parameter".into(),
+                            curve: crate::core::automation_binding::AutomationCurve {
+                                points: vec![crate::core::automation_binding::AutomationPoint {
+                                    time: crate::core::unified_time::Time::ZERO,
+                                    value: 0.0,
+                                }],
+                            },
+                            input_min: 0.0,
+                            input_max: 1.0,
+                            output_min: 0.0,
+                            output_max: 1.0,
+                        });
+                    selected_binding = Some(document.bindings.len() - 1);
+                }
+                if crate::ui::kui::button_enabled(
+                    ui,
+                    "元に戻す",
+                    crate::ui::kui::ButtonKind::Quiet,
+                    !app.automation_undo.is_empty(),
+                )
+                .clicked()
                 {
                     undo_requested = true;
                 }
-                if ui
-                    .add_enabled(!app.automation_redo.is_empty(), egui::Button::new("Redo"))
-                    .clicked()
+                if crate::ui::kui::button_enabled(
+                    ui,
+                    "やり直す",
+                    crate::ui::kui::ButtonKind::Quiet,
+                    !app.automation_redo.is_empty(),
+                )
+                .clicked()
                 {
                     redo_requested = true;
                 }
             });
+            crate::ui::kui::section(ui, "接続一覧");
             if document.bindings.is_empty() {
-                ui.label("No bindings configured.");
+                crate::ui::kui::secondary(
+                    ui,
+                    "接続はまだありません。入力元と操作対象をつなげて自動化できます。",
+                );
             }
             egui::ScrollArea::vertical().show_rows(
                 ui,
-                150.0,
+                60.0,
                 document.bindings.len(),
                 |ui, range| {
                     for index in range {
-                        let binding = &mut document.bindings[index];
+                        let binding = &document.bindings[index];
                         let value = time.and_then(|time| binding.evaluate(time));
-                        let row_response = ui.vertical(|ui| {
+                        crate::ui::kui::panel(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label("Source");
-                                ui.add_sized(
-                                    [120.0, 20.0],
-                                    egui::TextEdit::singleline(&mut binding.source),
+                                ui.spacing_mut().item_spacing.x = 6.0;
+                                crate::ui::kui::caption(ui, format!("{:02}", index + 1));
+                                let right_controls_width =
+                                    if value.is_some() { 96.0 } else { 44.0 };
+                                let pair_width =
+                                    (ui.available_width() - right_controls_width - 12.0).max(80.0);
+                                let pair_rect = egui::Rect::from_min_size(
+                                    ui.cursor().min,
+                                    egui::vec2(pair_width, 20.0),
                                 );
-                                ui.label("→");
-                                ui.label("Target");
-                                ui.add_sized(
-                                    [140.0, 20.0],
-                                    egui::TextEdit::singleline(&mut binding.target),
+                                let select_response = ui.interact(
+                                    pair_rect,
+                                    ui.make_persistent_id(("automation-binding-select", index)),
+                                    egui::Sense::click(),
+                                );
+                                if select_response.hovered() {
+                                    ui.painter().rect_filled(pair_rect, 3.0, colors::BG_HOVER);
+                                }
+                                if select_response.clicked() {
+                                    selected_binding = Some(index);
+                                }
+                                ui.allocate_ui_with_layout(
+                                    egui::vec2(pair_width, 20.0),
+                                    egui::Layout::left_to_right(egui::Align::Center),
+                                    |ui| {
+                                        let column_width = (pair_width - 18.0) * 0.5;
+                                        let _ = ui.allocate_ui_with_layout(
+                                            egui::vec2(column_width, 20.0),
+                                            egui::Layout::left_to_right(egui::Align::Center),
+                                            |ui| {
+                                                crate::ui::kui::truncated_primary(
+                                                    ui,
+                                                    &binding.source,
+                                                )
+                                            },
+                                        );
+                                        crate::ui::kui::caption(ui, "·");
+                                        let _ = ui.allocate_ui_with_layout(
+                                            egui::vec2(column_width, 20.0),
+                                            egui::Layout::left_to_right(egui::Align::Center),
+                                            |ui| {
+                                                crate::ui::kui::truncated_secondary(
+                                                    ui,
+                                                    &binding.target,
+                                                )
+                                            },
+                                        );
+                                    },
+                                );
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        if let Some(value) = value {
+                                            crate::ui::kui::readout(
+                                                ui,
+                                                format!("{value:.3}"),
+                                                colors::ACCENT_GREEN,
+                                            );
+                                        }
+                                        if crate::ui::kui::button(
+                                            ui,
+                                            "削除",
+                                            crate::ui::kui::ButtonKind::Quiet,
+                                        )
+                                        .clicked()
+                                        {
+                                            remove_index = Some(index);
+                                        }
+                                    },
                                 );
                             });
-                            ui.horizontal(|ui| {
-                                ui.label("Input");
-                                ui.add(egui::DragValue::new(&mut binding.input_min).speed(0.01));
-                                ui.add(egui::DragValue::new(&mut binding.input_max).speed(0.01));
-                                ui.label("Output");
-                                ui.add(egui::DragValue::new(&mut binding.output_min).speed(0.1));
-                                ui.add(egui::DragValue::new(&mut binding.output_max).speed(0.1));
-                            });
-                            if let Some(value) = value {
-                                ui.label(
-                                    egui::RichText::new(format!("Current: {value:.3}"))
-                                        .color(colors::ACCENT_GREEN),
-                                );
-                            }
-                            if let Some(time) = time {
-                                let key_value =
-                                    binding.curve.sample(time).unwrap_or(binding.input_min);
-                                if ui
-                                    .small_button("◆ Key")
-                                    .on_hover_text(
-                                        "Add or update an automation key at the current frame",
-                                    )
-                                    .clicked()
-                                {
-                                    let _ = binding.curve.upsert_point(time, key_value);
-                                }
-                                if ui
-                                    .small_button("⌫ Key")
-                                    .on_hover_text("Remove the automation key at the current frame")
-                                    .clicked()
-                                {
-                                    let _ = binding.curve.remove_point_at(time);
-                                }
-                            }
                             if let Err(error) = binding.validate() {
-                                ui.label(
-                                    egui::RichText::new(error).small().color(colors::ACCENT_RED),
+                                crate::ui::kui::error_text(ui, error);
+                            } else {
+                                crate::ui::kui::caption(
+                                    ui,
+                                    format!(
+                                        "入力範囲 {:.2}–{:.2}　出力範囲 {:.2}–{:.2}　キー {} 件",
+                                        binding.input_min,
+                                        binding.input_max,
+                                        binding.output_min,
+                                        binding.output_max,
+                                        binding.curve.points.len()
+                                    ),
                                 );
                             }
-                            ui.label(format!(
-                                "Keys ({}) — first 4 shown",
-                                binding.curve.points.len()
-                            ));
-                            for (key_index, point) in
-                                binding.curve.points.iter_mut().take(4).enumerate()
-                            {
-                                ui.horizontal(|ui| {
-                                    ui.label(format!(
-                                        "#{key_index} t={}/{}",
-                                        point.time.numerator, point.time.denominator
-                                    ));
-                                    ui.add(egui::DragValue::new(&mut point.value).speed(0.01));
-                                });
-                            }
-                            if ui
-                                .small_button("×")
-                                .on_hover_text("Remove this automation binding")
-                                .clicked()
-                            {
-                                remove_index = Some(index);
+                            if selected_binding == Some(index) {
+                                ui.painter().rect_stroke(
+                                    ui.min_rect().expand(4.0),
+                                    egui::Rounding::same(5.0),
+                                    egui::Stroke::new(1.0_f32, colors::ACCENT_SELECTION),
+                                );
                             }
                         });
-                        if row_response.response.clicked() {
-                            selected_binding = Some(index);
-                        }
                     }
                 },
             );
             if let Some(index) = selected_binding.filter(|index| *index < document.bindings.len()) {
-                ui.separator();
-                ui.label(format!("Selected binding: {index} — all keys"));
+                crate::ui::kui::section(ui, &format!("接続 {:02} の設定", index + 1));
                 let binding = &mut document.bindings[index];
+                crate::ui::kui::panel(ui, |ui| {
+                    let grid = crate::ui::kui::PropertyGrid::new(
+                        ui,
+                        &["入力元", "接続先", "入力範囲", "出力範囲"],
+                    );
+                    grid.row(ui, "入力元", |ui| {
+                        crate::ui::kui::text_field(ui, &mut binding.source)
+                    });
+                    grid.row(ui, "接続先", |ui| {
+                        crate::ui::kui::text_field(ui, &mut binding.target)
+                    });
+                    grid.row(ui, "入力範囲", |ui| {
+                        ui.horizontal(|ui| {
+                            ui.add(crate::ui::kui::drag(&mut binding.input_min).speed(0.01));
+                            ui.add(crate::ui::kui::drag(&mut binding.input_max).speed(0.01));
+                        });
+                    });
+                    grid.row(ui, "出力範囲", |ui| {
+                        ui.horizontal(|ui| {
+                            ui.add(crate::ui::kui::drag(&mut binding.output_min).speed(0.1));
+                            ui.add(crate::ui::kui::drag(&mut binding.output_max).speed(0.1));
+                        });
+                    });
+                    ui.horizontal(|ui| {
+                        if let Some(value) = time.and_then(|time| binding.evaluate(time)) {
+                            crate::ui::kui::readout(
+                                ui,
+                                format!("現在値　{value:.3}"),
+                                colors::ACCENT_GREEN,
+                            );
+                        }
+                        if let Some(time) = time {
+                            let key_value = binding.curve.sample(time).unwrap_or(binding.input_min);
+                            if crate::ui::kui::button(
+                                ui,
+                                "キーを追加／更新",
+                                crate::ui::kui::ButtonKind::Quiet,
+                            )
+                            .on_hover_text("現在のフレームにキーを追加または更新")
+                            .clicked()
+                            {
+                                let _ = binding.curve.upsert_point(time, key_value);
+                            }
+                            if crate::ui::kui::button(
+                                ui,
+                                "キーを削除",
+                                crate::ui::kui::ButtonKind::Quiet,
+                            )
+                            .on_hover_text("現在のフレームのキーを削除")
+                            .clicked()
+                            {
+                                let _ = binding.curve.remove_point_at(time);
+                            }
+                        }
+                    });
+                    if let Err(error) = binding.validate() {
+                        crate::ui::kui::error_text(ui, error);
+                    }
+                });
+                crate::ui::kui::caption(
+                    ui,
+                    format!("キーフレーム　{} 件", binding.curve.points.len()),
+                );
                 egui::ScrollArea::vertical()
                     .max_height(180.0)
                     .show(ui, |ui| {
                         for (key_index, point) in binding.curve.points.iter_mut().enumerate() {
                             ui.horizontal(|ui| {
-                                ui.label(format!("#{key_index}"));
-                                if ui.small_button("◀").clicked() {
+                                crate::ui::kui::caption(ui, format!("#{key_index}"));
+                                if crate::ui::kui::tool_button(ui, false, "前へ").clicked() {
                                     move_key = Some((index, point.time, -1));
                                 }
-                                ui.add(egui::DragValue::new(&mut point.time.numerator).speed(1));
-                                ui.label("/");
                                 ui.add(
-                                    egui::DragValue::new(&mut point.time.denominator)
-                                        .speed(1)
-                                        .range(1..=u32::MAX),
+                                    crate::ui::kui::drag(&mut point.time.numerator)
+                                        .speed(1.0)
+                                        .width(68.0),
                                 );
-                                ui.add(egui::DragValue::new(&mut point.value).speed(0.01));
-                                if ui.small_button("▶").clicked() {
+                                crate::ui::kui::caption(ui, "/");
+                                ui.add(
+                                    crate::ui::kui::drag(&mut point.time.denominator)
+                                        .speed(1.0)
+                                        .range(1..=u32::MAX)
+                                        .width(56.0),
+                                );
+                                ui.add(
+                                    crate::ui::kui::drag(&mut point.value)
+                                        .speed(0.01)
+                                        .width(76.0),
+                                );
+                                if crate::ui::kui::tool_button(ui, false, "次へ").clicked() {
                                     move_key = Some((index, point.time, 1));
                                 }
                             });
                         }
                     });
-                ui.label("Curve preview");
+                crate::ui::kui::section_title(ui, "カーブプレビュー");
                 let (plot_rect, plot_response) = ui.allocate_exact_size(
                     egui::vec2(ui.available_width(), 110.0),
                     egui::Sense::hover(),
@@ -293,7 +394,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
                         })
                         .collect();
                     for point in key_points {
-                        painter.circle_filled(point, 3.5, colors::ACCENT_ORANGE);
+                        painter.circle_filled(point, 3.5, colors::TIMELINE_KEYFRAME);
                     }
 
                     if plot_response.dragged() {
@@ -365,8 +466,10 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
                 document.bindings.remove(index);
                 if selected_binding == Some(index) {
                     selected_binding = None;
+                } else if selected_binding.is_some_and(|selected| selected > index) {
+                    selected_binding = selected_binding.map(|selected| selected - 1);
                 }
-                app.toasts.info("Automation binding removed");
+                app.toasts.info("バインディングを削除しました");
             }
         }
     }
@@ -391,4 +494,63 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
             .as_ref()
             .is_some_and(|document| *index < document.bindings.len())
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::draw;
+    use crate::core::automation_binding::{AutomationBinding, AutomationCurve, AutomationPoint};
+    use crate::core::production_document::ProductionDocument;
+    use crate::core::unified_time::Time;
+    use crate::KagariApp;
+    use eframe::egui;
+
+    #[test]
+    fn selected_binding_detail_renders_with_editable_curve() {
+        let mut app = KagariApp {
+            show_automation_panel: true,
+            ..Default::default()
+        };
+        let project = app.history.current().clone();
+        let mut document = ProductionDocument::new(project);
+        document.bindings.push(AutomationBinding {
+            source: "audio.source".into(),
+            target: "layer.scale.x".into(),
+            curve: AutomationCurve {
+                points: vec![AutomationPoint {
+                    time: Time::ZERO,
+                    value: 0.5,
+                }],
+            },
+            input_min: 0.0,
+            input_max: 1.0,
+            output_min: 0.0,
+            output_max: 2.0,
+        });
+        app.production_document = Some(document);
+        app.selected_automation_binding = Some(0);
+
+        let context = egui::Context::default();
+        let _ = context.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(900.0, 700.0),
+                )),
+                ..Default::default()
+            },
+            |context| {
+                crate::ui::theme::configure_ae_theme(context);
+                draw(&mut app, context);
+            },
+        );
+
+        assert_eq!(app.selected_automation_binding, Some(0));
+        assert_eq!(
+            app.production_document
+                .as_ref()
+                .map(|document| document.bindings.len()),
+            Some(1)
+        );
+    }
 }

@@ -27,26 +27,28 @@ fn roto_brush_strokes_survive_layer_roundtrip() {
     let json = serde_json::to_string(&layer).expect("layer should serialize");
     let restored: Layer = serde_json::from_str(&json).expect("layer should deserialize");
     assert_eq!(restored.roto_brush_strokes.len(), 2);
-    assert_eq!(restored.roto_brush_strokes[0].stroke_type, RotoStrokeType::Foreground);
-    assert_eq!(restored.roto_brush_strokes[0].points, vec![[12.0, 8.0], [14.0, 9.0]]);
+    assert_eq!(
+        restored.roto_brush_strokes[0].stroke_type,
+        RotoStrokeType::Foreground
+    );
+    assert_eq!(
+        restored.roto_brush_strokes[0].points,
+        vec![[12.0, 8.0], [14.0, 9.0]]
+    );
     assert_eq!(restored.roto_brush_strokes[0].frame, Some(12));
 }
 
 #[test]
 fn legacy_roto_strokes_without_frame_remain_global() {
     let json = r#"{"stroke_type":"Foreground","points":[[1.0,2.0]],"radius":3.0}"#;
-    let restored: RotoStroke = serde_json::from_str(json).expect("legacy stroke should deserialize");
+    let restored: RotoStroke =
+        serde_json::from_str(json).expect("legacy stroke should deserialize");
     assert_eq!(restored.frame, None);
 }
 
 #[test]
 fn legacy_layers_without_roto_strokes_default_to_empty() {
-    let layer = Layer::new(
-        "legacy".into(),
-        "Legacy".into(),
-        LayerType::Null,
-        30,
-    );
+    let layer = Layer::new("legacy".into(), "Legacy".into(), LayerType::Null, 30);
     let mut value = serde_json::to_value(layer).expect("layer should serialize");
     value
         .as_object_mut()

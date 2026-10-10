@@ -21,7 +21,7 @@ pub fn draw(
             let c_before = screen_color.clone();
             if let Some(nf) =
                 draw_property_ui(current_frame, ui, "Key Color", screen_color, |ui, val| {
-                    ui.color_edit_button_rgb(val);
+                    crate::ui::kui::color_rgb(ui, val);
                 })
             {
                 *next_frame = Some(nf);
@@ -37,7 +37,7 @@ pub fn draw(
                 "Screen Gain",
                 screen_gain,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.5..=2.0));
+                    crate::ui::kui::slider(ui, v, 0.5..=2.0, "");
                 },
             );
             draw_prop(
@@ -48,7 +48,7 @@ pub fn draw(
                 "Clip Black",
                 clip_black,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
                 },
             );
             draw_prop(
@@ -59,7 +59,7 @@ pub fn draw(
                 "Clip White",
                 clip_white,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
                 },
             );
         }
@@ -76,7 +76,7 @@ pub fn draw(
                 "Low Threshold",
                 low_threshold,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=255.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=255.0, "");
                 },
             );
             draw_prop(
@@ -87,10 +87,10 @@ pub fn draw(
                 "High Threshold",
                 high_threshold,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=255.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=255.0, "");
                 },
             );
-            if ui.checkbox(invert, "Invert").changed() {
+            if crate::ui::kui::toggle(ui, invert, "Invert").changed() {
                 *project_changed = true;
             }
         }
@@ -103,7 +103,7 @@ pub fn draw(
                 "Choke Amount",
                 choke_amount,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, -100.0..=100.0));
+                    crate::ui::kui::slider(ui, v, -100.0..=100.0, "");
                 },
             );
         }
@@ -116,13 +116,10 @@ pub fn draw(
                 "Radius",
                 radius,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 1.0..=64.0).suffix(" px"));
+                    crate::ui::kui::slider(ui, v, 1.0..=64.0, " px");
                 },
             );
-            if ui
-                .checkbox(expand, "Expand (spread instead of choke)")
-                .changed()
-            {
+            if crate::ui::kui::toggle(ui, expand, "Expand (spread instead of choke)").changed() {
                 *project_changed = true;
             }
         }
@@ -135,12 +132,12 @@ pub fn draw(
                 "Radius",
                 radius,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 1.0..=64.0).suffix(" px"));
+                    crate::ui::kui::slider(ui, v, 1.0..=64.0, " px");
                 },
             );
         }
         EffectType::AlphaFromLuminance { invert } => {
-            if ui.checkbox(invert, "Invert (dark = opaque)").changed() {
+            if crate::ui::kui::toggle(ui, invert, "Invert (dark = opaque)").changed() {
                 *project_changed = true;
             }
         }
@@ -156,7 +153,7 @@ pub fn draw(
                 "Choke Amount",
                 choke_amount,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=50.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=50.0, "");
                 },
             );
             draw_prop(
@@ -167,7 +164,7 @@ pub fn draw(
                 "Gray Level",
                 gray_level,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
                 },
             );
         }
@@ -177,62 +174,57 @@ pub fn draw(
             invert_matte,
             composite_mode,
         } => {
-            ui.label("Set Matte");
-            ui.horizontal(|ui| {
-                ui.label("Source Layer Index:");
-                let mut idx_i32 = *source_layer_idx as i32;
-                if ui
-                    .add(egui::DragValue::new(&mut idx_i32).range(0..=99))
-                    .changed()
-                {
-                    *source_layer_idx = idx_i32.max(0) as usize;
-                    *project_changed = true;
-                }
-            });
-            ui.horizontal(|ui| {
-                ui.label("Use For Matte:");
-                egui::ComboBox::from_id_salt("set_matte_channel")
-                    .selected_text(format!("{:?}", source_channel))
-                    .show_ui(ui, |ui| {
-                        for ch in [
-                            crate::core::set_matte::MatteSourceChannel::Alpha,
-                            crate::core::set_matte::MatteSourceChannel::Luminance,
-                            crate::core::set_matte::MatteSourceChannel::Red,
-                            crate::core::set_matte::MatteSourceChannel::Green,
-                            crate::core::set_matte::MatteSourceChannel::Blue,
-                            crate::core::set_matte::MatteSourceChannel::Lightness,
-                        ] {
-                            if ui
-                                .selectable_value(source_channel, ch, format!("{:?}", ch))
-                                .changed()
-                            {
-                                *project_changed = true;
-                            }
-                        }
-                    });
-            });
-            if ui.checkbox(invert_matte, "Invert Matte").changed() {
+            let mut idx_i32 = (*source_layer_idx).min(i32::MAX as usize) as i32;
+            let grid = crate::ui::kui::PropertyGrid::new(
+                ui,
+                &["Source Layer Index", "Use For Matte", "Composite Mode"],
+            );
+            if grid
+                .row(ui, "Source Layer Index", |ui| {
+                    ui.add(crate::ui::kui::drag(&mut idx_i32).range(0..=99))
+                })
+                .changed()
+            {
+                *source_layer_idx = idx_i32.max(0) as usize;
                 *project_changed = true;
             }
-            ui.horizontal(|ui| {
-                ui.label("Composite Mode:");
-                egui::ComboBox::from_id_salt("set_matte_mode")
-                    .selected_text(format!("{:?}", composite_mode))
-                    .show_ui(ui, |ui| {
-                        for m in [
-                            crate::core::set_matte::MatteCompositeMode::Replace,
-                            crate::core::set_matte::MatteCompositeMode::Intersect,
-                            crate::core::set_matte::MatteCompositeMode::Add,
-                            crate::core::set_matte::MatteCompositeMode::Subtract,
-                        ] {
-                            if ui
-                                .selectable_value(composite_mode, m, format!("{:?}", m))
-                                .changed()
-                            {
-                                *project_changed = true;
-                            }
-                        }
-                    });
+            let source_channels = [
+                (crate::core::set_matte::MatteSourceChannel::Alpha, "Alpha"),
+                (
+                    crate::core::set_matte::MatteSourceChannel::Luminance,
+                    "Luminance",
+                ),
+                (crate::core::set_matte::MatteSourceChannel::Red, "Red"),
+                (crate::core::set_matte::MatteSourceChannel::Green, "Green"),
+                (crate::core::set_matte::MatteSourceChannel::Blue, "Blue"),
+                (
+                    crate::core::set_matte::MatteSourceChannel::Lightness,
+                    "Lightness",
+                ),
+            ];
+            *project_changed |= grid.row(ui, "Use For Matte", |ui| {
+                crate::ui::kui::combo(ui, "set_matte_channel", source_channel, &source_channels)
+            });
+            if crate::ui::kui::toggle(ui, invert_matte, "Invert Matte").changed() {
+                *project_changed = true;
+            }
+            let composite_modes = [
+                (
+                    crate::core::set_matte::MatteCompositeMode::Replace,
+                    "Replace",
+                ),
+                (
+                    crate::core::set_matte::MatteCompositeMode::Intersect,
+                    "Intersect",
+                ),
+                (crate::core::set_matte::MatteCompositeMode::Add, "Add"),
+                (
+                    crate::core::set_matte::MatteCompositeMode::Subtract,
+                    "Subtract",
+                ),
+            ];
+            *project_changed |= grid.row(ui, "Composite Mode", |ui| {
+                crate::ui::kui::combo(ui, "set_matte_mode", composite_mode, &composite_modes)
             });
         }
         EffectType::LinearColorKey {
@@ -241,20 +233,10 @@ pub fn draw(
             tolerance,
             softness,
         } => {
-            ui.label("Linear Color Key");
             let kc_before = key_color.clone();
             if let Some(nf) =
                 draw_property_ui(current_frame, ui, "Key Color", key_color, |ui, val| {
-                    let mut col = egui::Color32::from_rgb(
-                        (val[0] * 255.0) as u8,
-                        (val[1] * 255.0) as u8,
-                        (val[2] * 255.0) as u8,
-                    );
-                    if ui.color_edit_button_srgba(&mut col).changed() {
-                        val[0] = col.r() as f32 / 255.0;
-                        val[1] = col.g() as f32 / 255.0;
-                        val[2] = col.b() as f32 / 255.0;
-                    }
+                    crate::ui::kui::color_rgb(ui, val);
                 })
             {
                 *next_frame = Some(nf);
@@ -263,24 +245,23 @@ pub fn draw(
                 *project_changed = true;
             }
 
-            ui.horizontal(|ui| {
-                ui.label("Match Colors:");
-                egui::ComboBox::from_id_salt("key_match_mode")
-                    .selected_text(format!("{:?}", match_mode))
-                    .show_ui(ui, |ui| {
-                        for m in [
-                            crate::core::linear_color_key::ColorMatchMode::UsingRGB,
-                            crate::core::linear_color_key::ColorMatchMode::UsingHue,
-                            crate::core::linear_color_key::ColorMatchMode::UsingChroma,
-                        ] {
-                            if ui
-                                .selectable_value(match_mode, m, format!("{:?}", m))
-                                .changed()
-                            {
-                                *project_changed = true;
-                            }
-                        }
-                    });
+            let match_modes = [
+                (
+                    crate::core::linear_color_key::ColorMatchMode::UsingRGB,
+                    "RGB distance",
+                ),
+                (
+                    crate::core::linear_color_key::ColorMatchMode::UsingHue,
+                    "Hue",
+                ),
+                (
+                    crate::core::linear_color_key::ColorMatchMode::UsingChroma,
+                    "Chroma",
+                ),
+            ];
+            let grid = crate::ui::kui::PropertyGrid::new(ui, &["Match Colors"]);
+            *project_changed |= grid.row(ui, "Match Colors", |ui| {
+                crate::ui::kui::combo(ui, "key_match_mode", match_mode, &match_modes)
             });
             draw_prop(
                 ui,
@@ -290,7 +271,7 @@ pub fn draw(
                 "Tolerance",
                 tolerance,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%"));
+                    crate::ui::kui::slider(ui, v, 0.0..=100.0, "%");
                 },
             );
             draw_prop(
@@ -301,7 +282,7 @@ pub fn draw(
                 "Softness",
                 softness,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%"));
+                    crate::ui::kui::slider(ui, v, 0.0..=100.0, "%");
                 },
             );
         }

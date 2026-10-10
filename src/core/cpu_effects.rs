@@ -32,6 +32,7 @@ fn color3_to_u8(c: [f32; 4]) -> [u8; 3] {
 /// `pixels` is a straight (non-premultiplied) RGBA8 buffer of size
 /// `width*height*4`. Effects are applied in order, mirroring After Effects'
 /// top-to-bottom effect stack within a layer.
+#[allow(clippy::too_many_arguments)]
 pub fn apply_layer_effects(
     comp: Option<&crate::core::timeline::Composition>,
     layer_idx: Option<usize>,
@@ -42,13 +43,24 @@ pub fn apply_layer_effects(
     frame: u32,
     fps: u32,
 ) {
-    apply_layer_effects_ctx(
-        comp, layer_idx, pixels, width, height, effects, frame, fps, None,
+    apply_layer_effects_with_context(
+        pixels,
+        effects,
+        LayerEffectRenderContext {
+            comp,
+            layer_idx,
+            width,
+            height,
+            frame,
+            fps,
+            light_screen: None,
+        },
     );
 }
 
 /// Like [`apply_layer_effects`], with an optional pre-projected light position
 /// (normalized 0..1) for lens flares that link to a comp light.
+#[allow(clippy::too_many_arguments)]
 pub fn apply_layer_effects_ctx(
     comp: Option<&crate::core::timeline::Composition>,
     layer_idx: Option<usize>,
@@ -60,6 +72,38 @@ pub fn apply_layer_effects_ctx(
     fps: u32,
     light_screen: Option<[f32; 2]>,
 ) {
+    apply_layer_effects_with_context(
+        pixels,
+        effects,
+        LayerEffectRenderContext {
+            comp,
+            layer_idx,
+            width,
+            height,
+            frame,
+            fps,
+            light_screen,
+        },
+    );
+}
+
+#[derive(Clone, Copy)]
+pub struct LayerEffectRenderContext<'a> {
+    pub comp: Option<&'a crate::core::timeline::Composition>,
+    pub layer_idx: Option<usize>,
+    pub width: u32,
+    pub height: u32,
+    pub frame: u32,
+    pub fps: u32,
+    pub light_screen: Option<[f32; 2]>,
+}
+
+pub fn apply_layer_effects_with_context(
+    pixels: &mut [u8],
+    effects: &[Effect],
+    context: LayerEffectRenderContext<'_>,
+) {
+    let LayerEffectRenderContext { width, height, .. } = context;
     let Some(expected_len) = (width as usize)
         .checked_mul(height as usize)
         .and_then(|pixels| pixels.checked_mul(4))
@@ -74,31 +118,24 @@ pub fn apply_layer_effects_ctx(
         if !effect.enabled {
             continue;
         }
-        apply_one_ctx(
-            comp,
-            layer_idx,
-            pixels,
-            width,
-            height,
-            &effect.effect_type,
-            frame,
-            fps,
-            light_screen,
-        );
+        apply_one_ctx(pixels, &effect.effect_type, context);
     }
 }
 
 fn apply_one_ctx(
-    comp: Option<&crate::core::timeline::Composition>,
-    layer_idx: Option<usize>,
     pixels: &mut [u8],
-    width: u32,
-    height: u32,
     effect_type: &EffectType,
-    frame: u32,
-    fps: u32,
-    light_screen: Option<[f32; 2]>,
+    context: LayerEffectRenderContext<'_>,
 ) {
+    let LayerEffectRenderContext {
+        comp,
+        layer_idx,
+        width,
+        height,
+        frame,
+        fps,
+        light_screen,
+    } = context;
     use crate::core::ae_effects_pack as pack;
 
     match effect_type {
@@ -519,7 +556,7 @@ fn apply_one_ctx(
                 thread_local! { static LUT_CACHE: RefCell<crate::core::lut_cache::LutCache> = RefCell::new(crate::core::lut_cache::LutCache::new(512)); }
                 if let Ok(text) = std::fs::read_to_string(lut_path) {
                     if let Ok(lut) = crate::core::ocio_color::Lut3D::parse_cube(&text) {
-                        for p in pixels.chunks_exact_mut(4) {
+                        for p in pixels.as_chunks_mut::<4>().0 {
                             let r = p[0] as f32 / 255.0;
                             let g = p[1] as f32 / 255.0;
                             let b = p[2] as f32 / 255.0;
@@ -1000,7 +1037,7 @@ fn apply_one_ctx(
             line_spacing,
             intensity,
         } => {
-            let sp = line_spacing.evaluate(frame).round().clamp(1.0, 200.0) as f32;
+            let sp = line_spacing.evaluate(frame).round().clamp(1.0, 200.0);
             let inten = intensity.evaluate(frame);
             if !crate::core::compute_pipeline::try_gpu_crt_scanlines(
                 pixels, width, height, sp, inten,
@@ -1056,7 +1093,7 @@ fn apply_one_ctx(
             }
         }
         EffectType::GlitchDisplacement { seed, amount } => {
-            let s = seed.evaluate(frame).round().clamp(0.0, 99999.0) as f32;
+            let s = seed.evaluate(frame).round().clamp(0.0, 99999.0);
             let a = amount.evaluate(frame);
             if !crate::core::compute_pipeline::try_gpu_glitch_displacement(
                 pixels, width, height, a, s,
@@ -1288,8 +1325,8 @@ fn apply_one_ctx(
             apply_sobel_edges(pixels, width, height, *invert);
         }
         EffectType::Mosaic { block_w, block_h } => {
-            let bw = block_w.evaluate(frame).round().clamp(1.0, 256.0) as f32;
-            let bh = block_h.evaluate(frame).round().clamp(1.0, 256.0) as f32;
+            let bw = block_w.evaluate(frame).round().clamp(1.0, 256.0);
+            let bh = block_h.evaluate(frame).round().clamp(1.0, 256.0);
             if !crate::core::compute_pipeline::try_gpu_mosaic(pixels, width, height, bw, bh) {
                 use crate::core::ae_effects_pack_v19::apply_mosaic;
                 apply_mosaic(pixels, width, height, bw as u32, bh as u32);
@@ -1366,7 +1403,7 @@ fn apply_one_ctx(
             let src_pixels = comp.map(|c| {
                 crate::core::software_renderer::render_single_layer_pixels(
                     c,
-                    *source_layer_idx as usize,
+                    *source_layer_idx,
                     frame,
                     width,
                     height,
@@ -1634,7 +1671,7 @@ fn apply_one_ctx(
             }
         }
         EffectType::Halftone { cell_size } => {
-            let cs = cell_size.evaluate(frame).round().clamp(2.0, 64.0) as f32;
+            let cs = cell_size.evaluate(frame).round().clamp(2.0, 64.0);
             if !crate::core::compute_pipeline::try_gpu_halftone(pixels, width, height, cs) {
                 use crate::core::ae_effects_pack_v14::apply_halftone_screen;
                 apply_halftone_screen(pixels, width, height, cs as u32);
@@ -1767,7 +1804,7 @@ fn apply_one_ctx(
             depth,
             light_angle_deg,
         } => {
-            let d = depth.evaluate(frame) as f32;
+            let d = depth.evaluate(frame);
             let a = light_angle_deg.evaluate(frame).to_radians();
             if !crate::core::compute_pipeline::try_gpu_bevel_alpha(pixels, width, height, d, a) {
                 use crate::core::ae_effects_pack_v14::apply_bevel_alpha_3d;
@@ -1778,7 +1815,7 @@ fn apply_one_ctx(
             line_gap,
             threshold,
         } => {
-            let gap = line_gap.evaluate(frame).round().clamp(2.0, 64.0) as f32;
+            let gap = line_gap.evaluate(frame).round().clamp(2.0, 64.0);
             let thr = threshold.evaluate(frame).round().clamp(0.0, 255.0) / 255.0;
             if !crate::core::compute_pipeline::try_gpu_crosshatch(pixels, width, height, gap, thr) {
                 use crate::core::ae_effects_pack_v17::apply_cross_hatch;
@@ -1916,13 +1953,13 @@ fn apply_one_ctx(
             let cross = crossover_freq.evaluate(frame).clamp(20.0, 5000.0);
             if pixels.len() >= 4 {
                 let mut luma = Vec::with_capacity(pixels.len() / 4);
-                for p in pixels.chunks_exact(4) {
+                for p in pixels.as_chunks::<4>().0 {
                     luma.push(0.299 * p[0] as f32 + 0.587 * p[1] as f32 + 0.114 * p[2] as f32);
                 }
                 crate::core::ae_effects_pack_v5::apply_bass_treble(
                     &mut luma, 44100.0, bass, treble, cross,
                 );
-                for (px, &lv) in pixels.chunks_exact_mut(4).zip(luma.iter()) {
+                for (px, &lv) in pixels.as_chunks_mut::<4>().0.iter_mut().zip(luma.iter()) {
                     let ratio =
                         if (0.299 * px[0] as f32 + 0.587 * px[1] as f32 + 0.114 * px[2] as f32)
                             > 0.5
@@ -1949,13 +1986,13 @@ fn apply_one_ctx(
             let wd = wet_dry.evaluate(frame);
             if pixels.len() >= 4 {
                 let mut luma = Vec::with_capacity(pixels.len() / 4);
-                for p in pixels.chunks_exact(4) {
+                for p in pixels.as_chunks::<4>().0 {
                     luma.push(0.299 * p[0] as f32 + 0.587 * p[1] as f32 + 0.114 * p[2] as f32);
                 }
                 crate::core::ae_effects_pack_v5::apply_flanger(
                     &mut luma, 44100.0, md, rate, fb, wd,
                 );
-                for (px, &lv) in pixels.chunks_exact_mut(4).zip(luma.iter()) {
+                for (px, &lv) in pixels.as_chunks_mut::<4>().0.iter_mut().zip(luma.iter()) {
                     let orig = 0.299 * px[0] as f32 + 0.587 * px[1] as f32 + 0.114 * px[2] as f32;
                     let ratio = if orig > 0.5 { lv / 128.0 } else { 1.0 };
                     px[0] = (px[0] as f32 * ratio).clamp(0.0, 255.0) as u8;
@@ -1978,13 +2015,13 @@ fn apply_one_ctx(
             let fb = feedback.evaluate(frame).clamp(0.0, 0.9);
             if pixels.len() >= 4 {
                 let mut luma = Vec::with_capacity(pixels.len() / 4);
-                for p in pixels.chunks_exact(4) {
+                for p in pixels.as_chunks::<4>().0 {
                     luma.push(0.299 * p[0] as f32 + 0.587 * p[1] as f32 + 0.114 * p[2] as f32);
                 }
                 crate::core::ae_effects_pack_v5::apply_chorus(
                     &mut luma, 44100.0, dm, dp, rt, vc, fb,
                 );
-                for (px, &lv) in pixels.chunks_exact_mut(4).zip(luma.iter()) {
+                for (px, &lv) in pixels.as_chunks_mut::<4>().0.iter_mut().zip(luma.iter()) {
                     let orig = 0.299 * px[0] as f32 + 0.587 * px[1] as f32 + 0.114 * px[2] as f32;
                     let ratio = if orig > 0.5 { lv / 128.0 } else { 1.0 };
                     px[0] = (px[0] as f32 * ratio).clamp(0.0, 255.0) as u8;
@@ -2003,13 +2040,13 @@ fn apply_one_ctx(
             let q = q_factor.evaluate(frame).clamp(0.5, 20.0);
             if pixels.len() >= 4 {
                 let mut luma = Vec::with_capacity(pixels.len() / 4);
-                for p in pixels.chunks_exact(4) {
+                for p in pixels.as_chunks::<4>().0 {
                     luma.push(0.299 * p[0] as f32 + 0.587 * p[1] as f32 + 0.114 * p[2] as f32);
                 }
                 crate::core::ae_effects_pack_v5::apply_parametric_eq_bell(
                     &mut luma, 44100.0, freq, gain, q,
                 );
-                for (px, &lv) in pixels.chunks_exact_mut(4).zip(luma.iter()) {
+                for (px, &lv) in pixels.as_chunks_mut::<4>().0.iter_mut().zip(luma.iter()) {
                     let orig = 0.299 * px[0] as f32 + 0.587 * px[1] as f32 + 0.114 * px[2] as f32;
                     let ratio = if orig > 0.5 { lv / 128.0 } else { 1.0 };
                     px[0] = (px[0] as f32 * ratio).clamp(0.0, 255.0) as u8;
@@ -2029,7 +2066,7 @@ mod tests {
 
     fn solid_layer(w: u32, h: u32, r: u8, g: u8, b: u8) -> Vec<u8> {
         let mut px = vec![0u8; (w * h * 4) as usize];
-        for p in px.chunks_exact_mut(4) {
+        for p in px.as_chunks_mut::<4>().0 {
             p[0] = r;
             p[1] = g;
             p[2] = b;
@@ -2175,7 +2212,11 @@ mod tests {
             rendered, original,
             "resolved source map must affect target pixels"
         );
-        assert!(rendered.chunks_exact(4).all(|pixel| pixel[3] == 255));
+        assert!(rendered
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|pixel| pixel[3] == 255));
     }
 
     #[test]
@@ -2205,7 +2246,11 @@ mod tests {
             rendered, original,
             "resolved blur map must affect target pixels"
         );
-        assert!(rendered.chunks_exact(4).all(|pixel| pixel[3] == 255));
+        assert!(rendered
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|pixel| pixel[3] == 255));
     }
 
     #[test]
@@ -2229,7 +2274,11 @@ mod tests {
             30,
         );
         assert_ne!(rendered, original);
-        assert!(rendered.chunks_exact(4).all(|pixel| pixel[3] == 255));
+        assert!(rendered
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|pixel| pixel[3] == 255));
     }
 
     #[test]
@@ -2337,7 +2386,7 @@ mod tests {
             0,
             30,
         );
-        for p in px.chunks_exact(4) {
+        for p in px.as_chunks::<4>().0 {
             let luma = (p[0] as u32 * 299 + p[1] as u32 * 587 + p[2] as u32 * 114) / 1000;
             let expected = if luma >= 128 { 255 } else { 0 };
             assert_eq!(p[0], expected);
@@ -2350,7 +2399,7 @@ mod tests {
     fn test_blur_changes_pixels() {
         // A single bright pixel in an otherwise dark buffer should spread when blurred.
         let mut px = vec![0u8; 8 * 8 * 4];
-        for p in px.chunks_exact_mut(4) {
+        for p in px.as_chunks_mut::<4>().0 {
             p[3] = 255;
         }
         let cx = (4 * 8 + 4) * 4;
@@ -2397,7 +2446,7 @@ mod tests {
     fn test_offset_shifts_content() {
         // Place a small bright patch at center of a transparent buffer, then offset.
         let mut px = vec![0u8; 8 * 8 * 4];
-        for p in px.chunks_exact_mut(4) {
+        for p in px.as_chunks_mut::<4>().0 {
             p[3] = 255;
         }
         // Paint pixel (4,4) red.
@@ -2575,7 +2624,7 @@ mod tests {
     fn test_glow_pro_bleeds_bright_pixels() {
         // Dark 8x8 buffer with a single white pixel: glow must spread brightness.
         let mut px = vec![0u8; 8 * 8 * 4];
-        for p in px.chunks_exact_mut(4) {
+        for p in px.as_chunks_mut::<4>().0 {
             p[3] = 255;
         }
         let cx = ((4 * 8 + 4) * 4) as usize;
@@ -2879,7 +2928,7 @@ mod tests {
             0,
             30,
         );
-        for p in px.chunks_exact(4) {
+        for p in px.as_chunks::<4>().0 {
             assert!(p[1] >= p[0] && p[1] >= p[2], "green channel must dominate");
         }
         // Determinism: same frame → identical output.
@@ -2965,7 +3014,12 @@ mod tests {
             0,
             30,
         );
-        for (out, inp) in px.chunks_exact(4).zip(base.chunks_exact(4)) {
+        for (out, inp) in px
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(base.as_chunks::<4>().0.iter())
+        {
             assert!(
                 (out[0] as i32 - inp[0] as i32).abs() <= 2,
                 "R drift {}",
@@ -3343,7 +3397,7 @@ mod tests {
             0,
             30,
         );
-        for p in px.chunks_exact(4) {
+        for p in px.as_chunks::<4>().0 {
             assert_eq!(p[0], 255, "flat gradient map R");
             assert_eq!(p[1], 0, "flat gradient map G");
             assert_eq!(p[2], 0, "flat gradient map B");

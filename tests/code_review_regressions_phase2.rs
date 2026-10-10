@@ -242,12 +242,13 @@ fn history_byte_budget_no_underflow() {
 
     fn huge_project(tag: usize) -> Project {
         let mut comp = Composition::new(format!("c{}", tag), "Test".into(), 100, 100, 30, 30);
-        // 10 layers x 4 animated channels x 1000 keyframes ~= 10MB per entry,
-        // so ~13 distinct commits exceed the 128MB budget and force eviction.
+        let payload = "x".repeat(700_000);
+        // Serialized snapshots include these distinct layer names, keeping the
+        // fixture above the 128MiB history budget with a realistic byte estimate.
         for j in 0..10 {
             let mut layer = Layer::new(
                 format!("l{}_{}", tag, j),
-                format!("Layer {}", j),
+                format!("Layer {}{}", j, payload),
                 LayerType::Solid {
                     color: [1.0, 0.0, 0.0, 1.0],
                 },

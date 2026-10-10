@@ -1,6 +1,6 @@
 //! Composition breadcrumb bar: shows the trail of nested-composition
 //! navigation (double-click PreComp) and lets the user jump back.
-use crate::ui::theme::colors;
+use crate::ui::kui;
 use crate::KagariApp;
 use eframe::egui;
 
@@ -28,35 +28,22 @@ pub fn draw_comp_breadcrumb(app: &mut KagariApp, ui: &mut egui::Ui) {
     };
 
     let mut jump_to: Option<(usize, usize)> = None; // (stack_pos, comp_idx)
-    let mut back_requested = false;
-
     ui.horizontal(|ui| {
-        ui.label(egui::RichText::new("›").small());
-
-        for (pos, label) in stack_labels.iter().enumerate() {
-            if ui.small_button(label).clicked() {
-                jump_to = Some((pos, app.comp_nav_stack[pos]));
+        if kui::breadcrumb_link(ui, "⌂", "トップレベルのコンポジション").clicked() {
+            if let Some(root) = app.comp_nav_stack.first().copied() {
+                jump_to = Some((0, root));
             }
-            ui.label(egui::RichText::new("›").color(colors::TEXT_MUTED));
         }
 
-        // Current location crumb (non-clickable, highlighted).
-        ui.label(
-            egui::RichText::new(current_name.to_string())
-                .small()
-                .strong()
-                .color(colors::ACCENT_BLUE),
-        );
-
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui
-                .small_button("⬅ Back")
-                .on_hover_text("Return to previous composition (pop breadcrumb)")
-                .clicked()
-            {
-                back_requested = true;
+        for (pos, label) in stack_labels.iter().enumerate() {
+            if kui::breadcrumb_link(ui, label, &format!("{} に移動", label)).clicked() {
+                jump_to = Some((pos, app.comp_nav_stack[pos]));
             }
-        });
+            kui::breadcrumb_separator(ui);
+        }
+
+        // Current location is primary text; ancestors remain quiet navigation links.
+        kui::breadcrumb_current(ui, &current_name);
     });
 
     if let Some((pos, comp_idx)) = jump_to {
@@ -67,13 +54,5 @@ pub fn draw_comp_breadcrumb(app: &mut KagariApp, ui: &mut egui::Ui) {
         app.commit_project(project);
         app.selection.selected_layer_idx = None;
         app.selection.selected_layers.clear();
-    } else if back_requested {
-        if let Some(prev) = app.comp_nav_stack.pop() {
-            let mut project = app.history.current().clone();
-            project.active_composition_idx = prev;
-            app.commit_project(project);
-            app.selection.selected_layer_idx = None;
-            app.selection.selected_layers.clear();
-        }
     }
 }

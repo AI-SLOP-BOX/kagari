@@ -37,6 +37,8 @@ pub struct ProductionDocument {
     pub schema_version: u32,
     pub project: Project,
     #[serde(default)]
+    pub color_lut_path: Option<String>,
+    #[serde(default)]
     pub audio: AudioDocumentSettings,
     #[serde(default)]
     pub tempo: TempoMap,
@@ -66,6 +68,7 @@ impl ProductionDocument {
         Self {
             schema_version: Self::CURRENT_SCHEMA_VERSION,
             project,
+            color_lut_path: None,
             audio: AudioDocumentSettings::default(),
             tempo: TempoMap::new(120.0),
             bindings: Vec::new(),
@@ -166,13 +169,7 @@ impl ProductionDocument {
         let rate = FrameRate::new(composition.fps.max(1), 1)?;
         let time = crate::core::unified_time::Time::from_frame(i64::from(frame), rate);
         let targets = self.evaluate_bindings_at_time(time);
-        let mut snapshot = self.clone();
-        snapshot.apply_binding_targets_at_frame_in_composition(&targets, frame, composition_index);
-        snapshot
-            .project
-            .compositions
-            .get(composition_index)
-            .cloned()
+        self.composition_with_targets(composition_index, frame, &targets)
     }
 
     /// Build a frame snapshot using live Audio/MIDI source values. Sources not
@@ -189,13 +186,24 @@ impl ProductionDocument {
         crate::core::expression_engine::set_audio_from_binding_sources(source_values);
         let mut targets = self.evaluate_bindings_at_time(time);
         targets.extend(self.evaluate_bindings(source_values));
-        let mut snapshot = self.clone();
-        snapshot.apply_binding_targets_at_frame_in_composition(&targets, frame, composition_index);
-        snapshot
-            .project
-            .compositions
-            .get(composition_index)
-            .cloned()
+        self.composition_with_targets(composition_index, frame, &targets)
+    }
+
+    fn composition_with_targets(
+        &self,
+        composition_index: usize,
+        frame: u32,
+        targets: &HashMap<String, f64>,
+    ) -> Option<Composition> {
+        let composition = self.project.compositions.get(composition_index)?;
+        let mut snapshot = Self::new(Project {
+            compositions: vec![composition.clone()],
+            active_composition_idx: 0,
+            assets: Vec::new(),
+            use_gpu_compute: self.project.use_gpu_compute,
+        });
+        snapshot.apply_binding_targets_at_frame_in_composition(targets, frame, 0);
+        snapshot.project.compositions.pop()
     }
 
     pub fn apply_binding_targets_at_frame(
@@ -606,6 +614,11 @@ impl ProductionDocument {
         if self.project.compositions.is_empty() {
             return Err("production document must contain at least one composition".into());
         }
+        if self.color_lut_path.as_ref().is_some_and(|path| {
+            path.is_empty() || path.len() > Self::MAX_ASSET_STRING_LENGTH || path.contains('\0')
+        }) {
+            return Err("production document LUT path is invalid or too long".into());
+        }
         if self.project.compositions.len() > Self::MAX_COMPOSITIONS {
             return Err("production document contains too many compositions".into());
         }
@@ -619,15 +632,12 @@ impl ProductionDocument {
         for composition in &self.project.compositions {
             validate_precomp_references(composition, &composition_ids)?;
         }
-        let mut visiting = HashSet::new();
-        let mut visited = HashSet::new();
+        let mut composition_index = HashMap::new();
         for composition in &self.project.compositions {
-            validate_precomp_cycles(
-                composition,
-                &self.project.compositions,
-                &mut visiting,
-                &mut visited,
-            )?;
+            index_nested_compositions(composition, &mut composition_index);
+        }
+        if !precomp_graph_is_acyclic(&composition_index) {
+            return Err("composition precomp graph contains a cycle".into());
         }
         let mut asset_ids = HashSet::new();
         if self.project.assets.len() > Self::MAX_ASSETS {
@@ -718,21 +728,15 @@ impl ProductionDocument {
             .assets
             .iter()
             .filter_map(|asset| match &asset.item_type {
-                ProjectItemType::Folder { .. } => {
-                    Some((asset.id.as_str(), asset.parent_folder.as_deref()))
-                }
+                ProjectItemType::Folder { .. } => asset
+                    .parent_folder
+                    .as_deref()
+                    .map(|parent| (asset.id.as_str(), parent)),
                 _ => None,
             })
             .collect::<HashMap<_, _>>();
-        for folder_id in folder_parents.keys() {
-            let mut current = Some(*folder_id);
-            let mut visited = HashSet::new();
-            while let Some(id) = current {
-                if !visited.insert(id) {
-                    return Err("asset folder hierarchy contains a cycle".into());
-                }
-                current = folder_parents.get(id).copied().flatten();
-            }
+        if !parent_links_are_acyclic(&folder_parents) {
+            return Err("asset folder hierarchy contains a cycle".into());
         }
         if !(1..=384_000).contains(&self.audio.sample_rate) {
             return Err("audio sample rate is outside the supported range".into());
@@ -799,16 +803,11 @@ impl ProductionDocument {
     }
 
     pub fn load(path: impl AsRef<std::path::Path>) -> Result<Self, String> {
-        let metadata = std::fs::metadata(path.as_ref())
-            .map_err(|error| format!("failed to stat production document: {error}"))?;
-        if metadata.len() > crate::core::project_migration::MAX_PROJECT_JSON_BYTES as u64 {
-            return Err(format!(
-                "Production document exceeds the {} MiB limit",
-                crate::core::project_migration::MAX_PROJECT_JSON_BYTES / (1024 * 1024)
-            ));
-        }
-        let json = std::fs::read_to_string(path.as_ref())
-            .map_err(|error| format!("failed to read production document: {error}"))?;
+        let json = crate::core::project_migration::read_bounded_text_file(
+            path.as_ref(),
+            crate::core::project_migration::MAX_PROJECT_JSON_BYTES,
+        )
+        .map_err(|error| format!("failed to read production document: {error}"))?;
         Self::from_json(&json)
     }
 
@@ -939,6 +938,11 @@ fn validate_composition(
         }
     }
     let mut layer_ids = HashSet::new();
+    let all_layer_ids = composition
+        .layers
+        .iter()
+        .map(|layer| layer.id.as_str())
+        .collect::<HashSet<_>>();
     let mut layer_parents = HashMap::new();
     for (layer_index, layer) in composition.layers.iter().enumerate() {
         if !metadata_text_is_safe(&layer.id)
@@ -952,11 +956,7 @@ fn validate_composition(
         if let Some(parent_id) = &layer.parent_id {
             if !metadata_text_is_safe(parent_id)
                 || parent_id.len() > ProductionDocument::MAX_ASSET_STRING_LENGTH
-                || (!layer_ids.contains(parent_id)
-                    && !composition
-                        .layers
-                        .iter()
-                        .any(|candidate| candidate.id == *parent_id))
+                || !all_layer_ids.contains(parent_id.as_str())
             {
                 return Err("layer parent reference is invalid".into());
             }
@@ -1223,15 +1223,8 @@ fn validate_composition(
             validate_mask(mask)?;
         }
     }
-    for layer_id in layer_parents.keys() {
-        let mut current = Some(*layer_id);
-        let mut visited = HashSet::new();
-        while let Some(id) = current {
-            if !visited.insert(id) {
-                return Err("layer parent hierarchy contains a cycle".into());
-            }
-            current = layer_parents.get(id).copied();
-        }
+    if !parent_links_are_acyclic(&layer_parents) {
+        return Err("layer parent hierarchy contains a cycle".into());
     }
     for nested in &composition.sub_compositions {
         validate_composition(nested, depth + 1, composition_ids)?;
@@ -1321,11 +1314,12 @@ fn validate_mask(mask: &crate::core::mask::Mask) -> Result<(), String> {
             }
         }
         crate::core::property::Animatable::Animated(keyframes) => {
-            if keyframes
-                .iter()
-                .any(|keyframe| !validate_vertices(&keyframe.value))
+            if !keyframes_are_strictly_ordered(keyframes)
+                || keyframes
+                    .iter()
+                    .any(|keyframe| !validate_vertices(&keyframe.value))
             {
-                return Err("mask vertex coordinates must be finite".into());
+                return Err("mask path keyframes must be ordered and finite".into());
             }
         }
     }
@@ -1353,17 +1347,27 @@ fn scalar_animation_is_finite(value: &crate::core::property::Animatable<f32>) ->
     match value {
         crate::core::property::Animatable::Constant(value) => value.is_finite(),
         crate::core::property::Animatable::Animated(keyframes) => {
-            keyframes.iter().all(|keyframe| keyframe.value.is_finite())
+            keyframes_are_strictly_ordered(keyframes)
+                && keyframes.iter().all(|keyframe| keyframe.value.is_finite())
         }
     }
+}
+
+fn keyframes_are_strictly_ordered<T>(keyframes: &[Keyframe<T>]) -> bool {
+    keyframes
+        .windows(2)
+        .all(|pair| pair[0].frame < pair[1].frame)
 }
 
 fn scalar_animation_is_nonnegative(value: &crate::core::property::Animatable<f32>) -> bool {
     match value {
         crate::core::property::Animatable::Constant(value) => value.is_finite() && *value >= 0.0,
-        crate::core::property::Animatable::Animated(keyframes) => keyframes
-            .iter()
-            .all(|keyframe| keyframe.value.is_finite() && keyframe.value >= 0.0),
+        crate::core::property::Animatable::Animated(keyframes) => {
+            keyframes_are_strictly_ordered(keyframes)
+                && keyframes
+                    .iter()
+                    .all(|keyframe| keyframe.value.is_finite() && keyframe.value >= 0.0)
+        }
     }
 }
 
@@ -1372,9 +1376,12 @@ fn scalar_animation_is_percentage(value: &crate::core::property::Animatable<f32>
         crate::core::property::Animatable::Constant(value) => {
             value.is_finite() && (0.0..=100.0).contains(value)
         }
-        crate::core::property::Animatable::Animated(keyframes) => keyframes
-            .iter()
-            .all(|keyframe| keyframe.value.is_finite() && (0.0..=100.0).contains(&keyframe.value)),
+        crate::core::property::Animatable::Animated(keyframes) => {
+            keyframes_are_strictly_ordered(keyframes)
+                && keyframes.iter().all(|keyframe| {
+                    keyframe.value.is_finite() && (0.0..=100.0).contains(&keyframe.value)
+                })
+        }
     }
 }
 
@@ -1386,9 +1393,12 @@ fn scalar_animation_is_at_least(
         crate::core::property::Animatable::Constant(value) => {
             value.is_finite() && *value >= minimum
         }
-        crate::core::property::Animatable::Animated(keyframes) => keyframes
-            .iter()
-            .all(|keyframe| keyframe.value.is_finite() && keyframe.value >= minimum),
+        crate::core::property::Animatable::Animated(keyframes) => {
+            keyframes_are_strictly_ordered(keyframes)
+                && keyframes
+                    .iter()
+                    .all(|keyframe| keyframe.value.is_finite() && keyframe.value >= minimum)
+        }
     }
 }
 
@@ -1400,9 +1410,12 @@ fn scalar_animation_is_at_most(
         crate::core::property::Animatable::Constant(value) => {
             value.is_finite() && *value <= maximum
         }
-        crate::core::property::Animatable::Animated(keyframes) => keyframes
-            .iter()
-            .all(|keyframe| keyframe.value.is_finite() && keyframe.value <= maximum),
+        crate::core::property::Animatable::Animated(keyframes) => {
+            keyframes_are_strictly_ordered(keyframes)
+                && keyframes
+                    .iter()
+                    .all(|keyframe| keyframe.value.is_finite() && keyframe.value <= maximum)
+        }
     }
 }
 
@@ -1540,9 +1553,12 @@ fn vector_animation_is_finite(value: &crate::core::property::Animatable<[f32; 2]
         crate::core::property::Animatable::Constant(value) => {
             value.iter().all(|component| component.is_finite())
         }
-        crate::core::property::Animatable::Animated(keyframes) => keyframes
-            .iter()
-            .all(|keyframe| keyframe.value.iter().all(|component| component.is_finite())),
+        crate::core::property::Animatable::Animated(keyframes) => {
+            keyframes_are_strictly_ordered(keyframes)
+                && keyframes
+                    .iter()
+                    .all(|keyframe| keyframe.value.iter().all(|component| component.is_finite()))
+        }
     }
 }
 
@@ -1551,50 +1567,87 @@ fn vector3_animation_is_finite(value: &crate::core::property::Animatable<[f32; 3
         crate::core::property::Animatable::Constant(value) => {
             value.iter().all(|component| component.is_finite())
         }
-        crate::core::property::Animatable::Animated(keyframes) => keyframes
-            .iter()
-            .all(|keyframe| keyframe.value.iter().all(|component| component.is_finite())),
+        crate::core::property::Animatable::Animated(keyframes) => {
+            keyframes_are_strictly_ordered(keyframes)
+                && keyframes
+                    .iter()
+                    .all(|keyframe| keyframe.value.iter().all(|component| component.is_finite()))
+        }
     }
 }
 
-fn validate_precomp_cycles(
-    composition: &crate::core::timeline::Composition,
-    roots: &[crate::core::timeline::Composition],
-    visiting: &mut HashSet<String>,
-    visited: &mut HashSet<String>,
-) -> Result<(), String> {
-    if visited.contains(&composition.id) {
-        return Ok(());
+fn parent_links_are_acyclic<'a>(parents: &HashMap<&'a str, &'a str>) -> bool {
+    let mut state = HashMap::<&str, u8>::with_capacity(parents.len());
+    for &start in parents.keys() {
+        if state.get(start) == Some(&2) {
+            continue;
+        }
+        let mut path = Vec::new();
+        let mut current = Some(start);
+        while let Some(id) = current {
+            match state.get(id) {
+                Some(1) => return false,
+                Some(2) => break,
+                _ => {}
+            }
+            state.insert(id, 1);
+            path.push(id);
+            current = parents.get(id).copied();
+        }
+        for id in path {
+            state.insert(id, 2);
+        }
     }
-    if !visiting.insert(composition.id.clone()) {
-        return Err("composition precomp graph contains a cycle".into());
+    true
+}
+
+fn index_nested_compositions<'a>(
+    composition: &'a Composition,
+    index: &mut HashMap<&'a str, &'a Composition>,
+) {
+    index.insert(composition.id.as_str(), composition);
+    for nested in &composition.sub_compositions {
+        index_nested_compositions(nested, index);
     }
-    for layer in &composition.layers {
-        if let LayerType::PreComp { comp_id } = &layer.layer_type {
-            let target = roots
-                .iter()
-                .find_map(|root| find_nested_composition(root, comp_id));
-            if let Some(target) = target {
-                validate_precomp_cycles(target, roots, visiting, visited)?;
+}
+
+fn precomp_graph_is_acyclic<'a>(compositions: &HashMap<&'a str, &'a Composition>) -> bool {
+    let mut dependency_count = compositions
+        .keys()
+        .map(|&id| (id, 0usize))
+        .collect::<HashMap<_, _>>();
+    let mut dependents = HashMap::<&str, Vec<&str>>::new();
+    for (&id, composition) in compositions {
+        for layer in &composition.layers {
+            if let LayerType::PreComp { comp_id } = &layer.layer_type {
+                let target = comp_id.as_str();
+                if compositions.contains_key(target) {
+                    *dependency_count.entry(id).or_default() += 1;
+                    dependents.entry(target).or_default().push(id);
+                }
             }
         }
     }
-    visiting.remove(&composition.id);
-    visited.insert(composition.id.clone());
-    Ok(())
-}
-
-fn find_nested_composition<'a>(
-    composition: &'a crate::core::timeline::Composition,
-    id: &str,
-) -> Option<&'a crate::core::timeline::Composition> {
-    if composition.id == id {
-        return Some(composition);
-    }
-    composition
-        .sub_compositions
+    let mut ready = dependency_count
         .iter()
-        .find_map(|nested| find_nested_composition(nested, id))
+        .filter_map(|(&id, &count)| (count == 0).then_some(id))
+        .collect::<Vec<_>>();
+    let mut processed = 0usize;
+    while let Some(id) = ready.pop() {
+        processed += 1;
+        if let Some(parents) = dependents.get(id) {
+            for &dependent in parents {
+                let Some(count) = dependency_count.get_mut(dependent) else {
+                    return false;
+                };
+                *count -= 1;
+                if *count == 0 {
+                    ready.push(dependent);
+                }
+            }
+        }
+    }
+    processed == compositions.len()
 }
 
 #[cfg(test)]
@@ -1605,6 +1658,7 @@ mod tests {
     #[test]
     fn round_trip_preserves_audio_vfx_contract() {
         let mut document = ProductionDocument::new(Project::default());
+        document.color_lut_path = Some("looks/film.cube".into());
         document.audio.sample_rate = 44_100;
         document.bindings.push(AutomationBinding {
             source: "audio.bass".into(),
@@ -1622,6 +1676,7 @@ mod tests {
         });
 
         let restored = ProductionDocument::from_json(&document.to_json().unwrap()).unwrap();
+        assert_eq!(restored.color_lut_path.as_deref(), Some("looks/film.cube"));
         assert_eq!(restored.audio.sample_rate, 44_100);
         assert_eq!(restored.bindings.len(), 1);
         assert_eq!(
@@ -1630,6 +1685,15 @@ mod tests {
                 .sample_position(crate::core::unified_time::Time::new(1, 1)),
             44_100
         );
+    }
+
+    #[test]
+    fn legacy_document_without_color_lut_path_defaults_to_none() {
+        let document = ProductionDocument::new(Project::default());
+        let mut value = serde_json::to_value(document).unwrap();
+        value.as_object_mut().unwrap().remove("color_lut_path");
+        let restored = ProductionDocument::from_json(&value.to_string()).unwrap();
+        assert_eq!(restored.color_lut_path, None);
     }
 
     #[test]
@@ -2407,6 +2471,19 @@ mod tests {
             crate::core::mask::Mask::new_rect("mask".into(), "Mask".into(), 0.0, 0.0, 1.0, 1.0),
         );
         assert!(document.validate().is_err());
+    }
+
+    #[test]
+    fn rejects_unsorted_or_duplicate_animation_keyframes() {
+        for frames in [[10, 5], [5, 5]] {
+            let mut document = ProductionDocument::new(Project::default());
+            document.project.compositions[0].layers[0].transform.opacity =
+                Animatable::new_animated(vec![
+                    Keyframe::new(frames[0], 20.0, InterpolationType::Linear),
+                    Keyframe::new(frames[1], 80.0, InterpolationType::Linear),
+                ]);
+            assert!(document.validate().is_err());
+        }
     }
 
     #[test]

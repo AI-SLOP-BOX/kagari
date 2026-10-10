@@ -1,3 +1,4 @@
+use crate::ui::kui::{self, ButtonKind};
 use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
@@ -25,13 +26,12 @@ fn apply_text_style(
 }
 
 pub fn draw_font_picker(app: &mut KagariApp, ui: &mut egui::Ui) {
-    ui.heading("Typography & Faux Font Switches");
-    ui.separator();
+    kui::section(ui, "Typography & Faux Font Switches");
 
     // Real families available to the rasterizer
     let families = crate::core::font_rasterizer::with_font_rasterizer(|r| r.available_families());
     if families.is_empty() {
-        ui.weak("No system fonts detected.");
+        kui::empty_state(ui, "No system fonts detected.", 72.0);
         return;
     }
 
@@ -64,65 +64,90 @@ pub fn draw_font_picker(app: &mut KagariApp, ui: &mut egui::Ui) {
         }
     }
 
+    let pending_id = egui::Id::new(("font_picker_pending", app.selection.selected_layer_idx));
+    let pending_family = ui.ctx().data(|data| data.get_temp::<String>(pending_id));
+    let initial_family = pending_family.as_deref().unwrap_or(&current_family);
     let mut selected = families
         .iter()
-        .position(|f| *f == current_family)
+        .position(|family| family == initial_family)
         .unwrap_or(0);
-    ui.label("Font Family:");
-    egui::ComboBox::from_id_salt("font_family_combo")
-        .selected_text(families.get(selected).map(|s| s.as_str()).unwrap_or("?"))
-        .width(ui.available_width() - 12.0)
-        .show_ui(ui, |ui| {
-            for (i, fam) in families.iter().enumerate() {
-                ui.selectable_value(&mut selected, i, fam);
-            }
+    let family_options: Vec<_> = families
+        .iter()
+        .enumerate()
+        .map(|(index, family)| (index, family.as_str()))
+        .collect();
+    let grid = kui::PropertyGrid::new(ui, &["Font Family"]);
+    let family_changed = grid.row(ui, "Font Family", |ui| {
+        kui::combo(ui, "font_family_combo", &mut selected, &family_options)
+    });
+    if family_changed {
+        ui.ctx().data_mut(|data| {
+            data.insert_temp(pending_id, families[selected].clone());
         });
+    }
 
-    ui.add_space(6.0);
-    ui.horizontal(|ui| {
-        if ui
-            .button("Apply to Selected Text")
-            .on_hover_text("Writes the family into the selected text layer's formatting")
-            .clicked()
-        {
-            if let Some(idx) = app.selection.selected_layer_idx {
-                let fam = families[selected].clone();
-                let fam_for_project = fam.clone();
-                let (faux_bold, faux_italic, all_caps, small_caps) = app.faux_font_switches;
-                app.modify_project(|project| {
-                    let comp = project.active_composition_mut();
-                    if let Some(layer) = comp.layers.get_mut(idx) {
-                        apply_text_style(
-                            layer,
-                            &fam_for_project,
-                            faux_bold,
-                            faux_italic,
-                            all_caps,
-                            small_caps,
-                        );
-                    }
-                });
-                app.toasts.info(format!("Font set to {}", fam));
-            } else {
-                app.toasts.error("Select a text layer first");
-            }
+    ui.add_space(kui::space::SM);
+    let selected_text_layer = app.selection.selected_layer_idx.is_some_and(|idx| {
+        app.history
+            .current()
+            .active_composition()
+            .layers
+            .get(idx)
+            .is_some_and(|layer| {
+                matches!(
+                    &layer.layer_type,
+                    crate::core::timeline::LayerType::Text { .. }
+                )
+            })
+    });
+    if kui::button_enabled(
+        ui,
+        "Apply to Selected Text",
+        ButtonKind::Accent,
+        selected_text_layer,
+    )
+    .on_hover_text("Writes the family into the selected text layer's formatting")
+    .clicked()
+    {
+        if let Some(idx) = app.selection.selected_layer_idx {
+            let fam = families[selected].clone();
+            let fam_for_project = fam.clone();
+            let (faux_bold, faux_italic, all_caps, small_caps) = app.faux_font_switches;
+            app.modify_project(|project| {
+                let comp = project.active_composition_mut();
+                if let Some(layer) = comp.layers.get_mut(idx) {
+                    apply_text_style(
+                        layer,
+                        &fam_for_project,
+                        faux_bold,
+                        faux_italic,
+                        all_caps,
+                        small_caps,
+                    );
+                }
+            });
+            app.toasts.info(crate::ui::localization::tr_format(
+                "Font set to {}",
+                &[&fam],
+            ));
+            ui.ctx().data_mut(|data| data.remove::<String>(pending_id));
         }
-    });
+    }
 
-    ui.add_space(8.0);
-    ui.separator();
-    ui.label("AE Faux Font Switches:");
-
+    ui.add_space(kui::space::SM);
+    kui::separator(ui);
     let previous_switches = app.faux_font_switches;
-    let (ref mut faux_bold, ref mut faux_italic, ref mut all_caps, ref mut small_caps) =
-        app.faux_font_switches;
-
-    ui.horizontal(|ui| {
-        ui.checkbox(faux_bold, "B (Faux Bold)");
-        ui.checkbox(faux_italic, "I (Faux Italic)");
-        ui.checkbox(all_caps, "TT (All Caps)");
-        ui.checkbox(small_caps, "Tt (Small Caps)");
+    ui.add_enabled_ui(selected_text_layer, |ui| {
+        kui::group(ui, "AE Faux Font Switches", |ui| {
+            ui.horizontal_wrapped(|ui| {
+                kui::toggle(ui, &mut app.faux_font_switches.0, "B (Faux Bold)");
+                kui::toggle(ui, &mut app.faux_font_switches.1, "I (Faux Italic)");
+                kui::toggle(ui, &mut app.faux_font_switches.2, "TT (All Caps)");
+                kui::toggle(ui, &mut app.faux_font_switches.3, "Tt (Small Caps)");
+            });
+        });
     });
+
     if previous_switches != app.faux_font_switches {
         if let Some(idx) = app.selection.selected_layer_idx {
             let (bold, italic, caps, small) = app.faux_font_switches;
@@ -134,15 +159,14 @@ pub fn draw_font_picker(app: &mut KagariApp, ui: &mut egui::Ui) {
         }
     }
 
-    ui.weak(
-        egui::RichText::new("Applied to the selected text layer and included in renders.")
-            .small()
-            .color(colors::TEXT_MUTED),
+    kui::caption(
+        ui,
+        "Applied to the selected text layer and included in renders.",
     );
 
-    ui.add_space(8.0);
-    ui.separator();
-    ui.label("Preview:");
+    ui.add_space(kui::space::SM);
+    kui::separator(ui);
+    kui::section_title(ui, "Preview");
     let base = families.get(selected).cloned().unwrap_or_default();
     let sample = if app.faux_font_switches.2 {
         "KAGARI VFX STUDIO"
@@ -154,13 +178,14 @@ pub fn draw_font_picker(app: &mut KagariApp, ui: &mut egui::Ui) {
             .size(22.0)
             .color(colors::TEXT_PRIMARY),
     ));
-    ui.monospace(format!(
-        "family: {} / weight: {}",
-        base,
-        if app.faux_font_switches.0 {
-            "Bold"
-        } else {
-            "Regular"
-        }
-    ));
+    let weight = if app.faux_font_switches.0 {
+        crate::ui::localization::tr("Bold")
+    } else {
+        crate::ui::localization::tr("Regular")
+    };
+    kui::readout(
+        ui,
+        crate::ui::localization::tr_format("family: {} / weight: {}", &[&base, &weight]),
+        colors::TEXT_MUTED,
+    );
 }

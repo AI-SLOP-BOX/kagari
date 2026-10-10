@@ -1,76 +1,335 @@
 pub mod breadcrumb;
+pub mod geometry;
 pub mod header;
+mod keyframe_menu;
 pub mod keyframe_rows;
+pub mod keyframe_tick;
 pub mod layers;
+pub mod layout;
 pub mod pending_actions;
 pub mod precomp_children;
+pub mod ruler;
 pub mod ruler_bar;
+pub mod snapping;
+mod state;
 pub mod utils;
+mod waveform_cache;
 
 use crate::core::timeline::{BlendMode, LabelColor, LayerType, TrackMatteMode};
 use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
 use header::draw_timeline_header;
-use utils::maybe_snap_frame;
+use snapping::maybe_snap_frame;
+use state::{timeline_derived_data, would_create_parent_cycle, LayerBodyDragState};
 
-#[derive(Clone, Copy, Default)]
-struct LayerBodyDragState {
-    frame_offset: i32,
-    previous_y: f32,
-    y_remainder: f32,
+const TIMELINE_THUMBNAIL_WIDTH: f32 = 54.0;
+const MAX_TIMELINE_THUMBNAILS_PER_CLIP: usize = 12;
+const MAX_TIMELINE_THUMBNAIL_TEXTURES: usize = 256;
+
+fn layer_has_timeline_preview(layer_type: &LayerType) -> bool {
+    matches!(
+        layer_type,
+        LayerType::Video { .. } | LayerType::Image { .. }
+    )
+}
+
+struct TimelineThumbnailRequest {
+    key: String,
+    path: std::path::PathBuf,
+    target_dim: u32,
+}
+
+type ThumbnailResultReceiver =
+    std::sync::mpsc::Receiver<(String, Option<(usize, usize, Vec<u8>)>)>;
+
+struct TimelineThumbnailCache {
+    version: u64,
+    textures: std::collections::HashMap<String, egui::TextureHandle>,
+    order: std::collections::VecDeque<String>,
+    requested: std::collections::HashSet<String>,
+    failed: std::collections::HashSet<String>,
+    request_tx: std::sync::mpsc::SyncSender<TimelineThumbnailRequest>,
+    result_rx: ThumbnailResultReceiver,
+}
+
+fn timeline_layer_preview_texture(
+    ctx: &egui::Context,
+    composition: &crate::core::timeline::Composition,
+    layer: &crate::core::timeline::Layer,
+    timeline_frame: u32,
+) -> Option<egui::TextureId> {
+    let version = crate::core::frame_cache::current_version();
+    let (path, source_frame) = match &layer.layer_type {
+        LayerType::Image { path } => (std::path::PathBuf::from(path), Some(0)),
+        LayerType::Video {
+            frames_dir,
+            frame_count,
+            speed,
+            ..
+        } => {
+            let source_position = (match &layer.posterize_time {
+                Some(settings) if settings.enabled => {
+                    layer.effective_render_frame(timeline_frame, composition.fps) as f32
+                }
+                _ => layer.remap_frame_f32(timeline_frame),
+            } * speed.max(0.0))
+            .max(0.0);
+            let source_frame = (source_position.floor() as u32)
+                .min(frame_count.saturating_sub(1));
+            (
+                crate::core::video_import::frame_path_in_dir(frames_dir, source_frame),
+                Some(source_frame),
+            )
+        }
+        _ => return None,
+    };
+    let key = format!(
+        "{}:{}:{}:{}:{}",
+        version,
+        composition.id,
+        layer.id,
+        path.display(),
+        source_frame.unwrap_or(timeline_frame)
+    );
+    let cache_id = egui::Id::new("timeline_media_thumbnail_cache_v2");
+    let cache = ctx.data_mut(|data| {
+        data.get_temp_mut_or_insert_with(cache_id, || {
+            let (request_tx, request_rx) =
+                std::sync::mpsc::sync_channel::<TimelineThumbnailRequest>(8);
+            let (result_tx, result_rx) = std::sync::mpsc::channel();
+            let preview_ctx = ctx.clone();
+            std::thread::Builder::new()
+                .name("timeline-media-thumbnails".into())
+                .spawn(move || {
+                    while let Ok(request) = request_rx.recv() {
+                        let decoded = image::open(&request.path).ok().map(|image| {
+                            let (orig_w, orig_h) = (image.width(), image.height());
+                            let (target_w, target_h) = if orig_w == 0 || orig_h == 0 {
+                                (request.target_dim, request.target_dim)
+                            } else if orig_w >= orig_h {
+                                let w = request.target_dim;
+                                let h = ((request.target_dim as f32 * orig_h as f32) / orig_w as f32).round().max(1.0) as u32;
+                                (w, h)
+                            } else {
+                                let h = request.target_dim;
+                                let w = ((request.target_dim as f32 * orig_w as f32) / orig_h as f32).round().max(1.0) as u32;
+                                (w, h)
+                            };
+                            let thumbnail = image::imageops::resize(
+                                &image.to_rgba8(),
+                                target_w,
+                                target_h,
+                                image::imageops::FilterType::Triangle,
+                            );
+                            (
+                                target_w as usize,
+                                target_h as usize,
+                                thumbnail.into_raw(),
+                            )
+                        });
+                        if result_tx.send((request.key, decoded)).is_err() {
+                            break;
+                        }
+                        preview_ctx.request_repaint_after(std::time::Duration::from_millis(16));
+                    }
+                })
+            .ok();
+            std::sync::Arc::new(std::sync::Mutex::new(TimelineThumbnailCache {
+                version,
+                textures: std::collections::HashMap::new(),
+                order: std::collections::VecDeque::new(),
+                requested: std::collections::HashSet::new(),
+                failed: std::collections::HashSet::new(),
+                request_tx,
+                result_rx,
+            }))
+        })
+        .clone()
+    });
+    let Ok(mut cache) = cache.lock() else {
+        return None;
+    };
+    if cache.version != version {
+        cache.version = version;
+        cache.textures.clear();
+        cache.order.clear();
+        cache.requested.clear();
+        cache.failed.clear();
+    }
+    while let Ok((completed_key, decoded)) = cache.result_rx.try_recv() {
+        cache.requested.remove(&completed_key);
+        if !completed_key.starts_with(&format!("{version}:")) {
+            continue;
+        }
+        match decoded {
+            Some((width, height, pixels)) if width > 0 && height > 0 => {
+                while cache.textures.len() >= MAX_TIMELINE_THUMBNAIL_TEXTURES {
+                    if let Some(oldest_key) = cache.order.pop_front() {
+                        cache.textures.remove(&oldest_key);
+                    } else {
+                        break;
+                    }
+                }
+                let texture = ctx.load_texture(
+                    format!("timeline-media-thumbnail:{completed_key}"),
+                    egui::ColorImage::from_rgba_unmultiplied([width, height], &pixels),
+                    egui::TextureOptions::LINEAR,
+                );
+                cache.textures.insert(completed_key.clone(), texture);
+                cache.order.push_back(completed_key);
+            }
+            Some(_) => {}
+            None => {
+                cache.failed.insert(completed_key);
+            }
+        }
+    }
+    if let Some(texture) = cache.textures.get(&key) {
+        return Some(texture.id());
+    }
+    if (cache.textures.len() + cache.requested.len()) < MAX_TIMELINE_THUMBNAIL_TEXTURES * 2
+        && !cache.failed.contains(&key)
+        && !cache.requested.contains(&key)
+    {
+        let request = TimelineThumbnailRequest {
+            key: key.clone(),
+            path,
+            target_dim: 96,
+        };
+        if cache.request_tx.try_send(request).is_ok() {
+            cache.requested.insert(key);
+        }
+    }
+    None
+}
+
+struct LayerWaveformParams<'a> {
+    timeline_rect: egui::Rect,
+    clip_rect: egui::Rect,
+    layer: &'a crate::core::timeline::Layer,
+    waveform: &'a waveform_cache::WaveformData,
+    start_frame: u32,
+    visible_span: u32,
+    fps: u32,
+    color: egui::Color32,
+}
+
+fn draw_layer_waveform(
+    painter: &egui::Painter,
+    params: LayerWaveformParams<'_>,
+) {
+    let LayerWaveformParams {
+        timeline_rect,
+        clip_rect,
+        layer,
+        waveform,
+        start_frame,
+        visible_span,
+        fps,
+        color,
+    } = params;
+
+    if waveform.peaks.len() < 2
+        || waveform.duration_seconds <= 0.0
+        || timeline_rect.width() <= 8.0
+        || clip_rect.width() <= 0.0
+    {
+        return;
+    }
+    let fps = fps.max(1) as f32;
+    let amp = clip_rect.height() * 0.40;
+    let mut x = clip_rect.left() + 2.0;
+    while x <= clip_rect.right() - 2.0 {
+        let t = (x - timeline_rect.left()) / timeline_rect.width();
+        let comp_frame = start_frame as f32 + t * visible_span.max(1) as f32;
+        let source_frame = match &layer.layer_type {
+            LayerType::Video { speed, .. } => {
+                layer.remap_frame_f32(comp_frame.round() as u32) * speed.max(0.0)
+            }
+            _ => comp_frame - layer.in_frame as f32,
+        };
+        let seconds = source_frame / fps;
+        if seconds >= 0.0 && seconds < waveform.duration_seconds {
+            let index =
+                ((seconds / waveform.duration_seconds) * waveform.peaks.len() as f32) as usize;
+            let peak = waveform.peaks[index.min(waveform.peaks.len() - 1)];
+            let height = (peak * amp).clamp(1.0, amp.max(1.0));
+            let middle = clip_rect.center().y;
+            painter.line_segment(
+                [
+                    egui::pos2(x, middle - height),
+                    egui::pos2(x, middle + height),
+                ],
+                egui::Stroke::new(1.0_f32, color),
+            );
+        }
+        x += 2.0;
+    }
 }
 
 pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, total_frames: u32) {
     let screen_height = ctx.screen_rect().height();
     let narrow_timeline = ctx.screen_rect().width() < 950.0;
-    // Leave the Viewer the dominant surface on first open. The timeline can
-    // still be resized upward, while 900px layouts retain a compact editor
-    // strip instead of losing the composition to a giant dock.
-    let timeline_default_height = if narrow_timeline {
-        (screen_height * 0.23).clamp(168.0, 220.0)
+    // Keep the timeline large enough to show several tracks without forcing the
+    // user to resize the dock on every launch.
+    let (timeline_default_height, timeline_min_height, viewer_min_height) = if narrow_timeline {
+        (
+            (screen_height * 0.30).clamp(160.0, 250.0),
+            (screen_height * 0.15).clamp(80.0, 140.0),
+            (screen_height * 0.35).clamp(180.0, 320.0),
+        )
     } else {
-        (screen_height * 0.30).clamp(206.0, 320.0)
+        (
+            (screen_height * 0.38).clamp(200.0, 340.0),
+            (screen_height * 0.15).clamp(90.0, 150.0),
+            (screen_height * 0.40).clamp(200.0, 420.0),
+        )
     };
-    let timeline_max_height = (screen_height * 0.56).max(260.0);
-    egui::TopBottomPanel::bottom("timeline_panel")
+    let timeline_max_height =
+        (screen_height * 0.94).min((screen_height - viewer_min_height).max(timeline_min_height));
+    egui::TopBottomPanel::bottom("timeline_panel_editor_v12")
         .resizable(true)
         .default_height(timeline_default_height)
-        .min_height(if narrow_timeline { 168.0 } else { 190.0 })
+        .min_height(timeline_min_height)
         .max_height(timeline_max_height)
         .show(ctx, |ui| {
-            if !narrow_timeline {
-                ui.horizontal(|ui| {
-                    let compositions: Vec<(usize, String)> = app
-                        .history
-                        .current()
-                        .compositions
-                        .iter()
-                        .enumerate()
-                        .map(|(index, composition)| (index, composition.name.clone()))
-                        .collect();
-                    for (index, name) in compositions {
-                        let active = app.ui_tabs.bottom_dock_tab == 0
-                            && index == app.history.current().active_composition_idx;
-                        if crate::ui::theme::draw_custom_tab(ui, active, &name).clicked() {
-                            app.ui_tabs.bottom_dock_tab = 0;
-                            if index != app.history.current().active_composition_idx {
-                                let mut project = app.history.current().clone();
-                                project.active_composition_idx = index;
-                                app.commit_project(project);
-                            }
-                        }
-                    }
-                    let _ = ui.small_button("+");
-                    if crate::ui::theme::draw_custom_tab(ui, app.ui_tabs.bottom_dock_tab == 1, "Render Queue").clicked() {
-                        app.ui_tabs.bottom_dock_tab = 1;
-                    }
-                });
-                ui.separator();
+            if app.ui_tabs.bottom_dock_tab != 1
+                && app.history.current().has_pristine_start_composition()
+            {
+                ui.allocate_ui_with_layout(
+                    egui::vec2(ui.available_width(), crate::ui::theme::layout::PANEL_HEADER_HEIGHT),
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| { crate::ui::kui::title(ui, "タイムライン"); },
+                );
+                crate::ui::theme::draw_separator(ui);
+                let empty_height = ui.available_height().max(56.0);
+                crate::ui::kui::empty_state(
+                    ui,
+                    "コンポジションを作成するか、素材を追加するとここに表示されます",
+                    empty_height,
+                );
+                return;
             }
 
             if app.ui_tabs.bottom_dock_tab == 1 {
-                crate::ui::render_queue::draw_render_queue_panel(app, ui);
+                ui.allocate_ui_with_layout(
+                    egui::vec2(ui.available_width(), crate::ui::theme::layout::PANEL_HEADER_HEIGHT),
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| {
+                        if crate::ui::theme::draw_custom_tab(ui, false, "タイムライン").clicked() {
+                            app.ui_tabs.bottom_dock_tab = 0;
+                        }
+                        let _ = crate::ui::theme::draw_custom_tab(ui, true, "レンダーキュー");
+                    },
+                );
+                crate::ui::theme::draw_separator(ui);
+                egui::ScrollArea::vertical()
+                    .id_salt("render_queue_content")
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        crate::ui::render_queue::draw_render_queue_panel(app, ui);
+                    });
                 return;
             }
 
@@ -89,29 +348,13 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
             let _compact_mode = ui.ctx().data_mut(|d| {
                 *d.get_temp_mut_or_insert_with(egui::Id::new("ae_compact_timeline"), || false)
             });
-            let mut pending_precomp_indices: Option<Vec<usize>> = None;
-            let mut swap_request: Option<(usize, usize)> = None;
-            // Context-menu actions deferred to after the layer loop (borrow-safe)
-            let mut pending_dup_layer: Option<usize> = None;
-            let mut pending_split_layer: Option<usize> = None;
-            let mut pending_create_shapes: Option<usize> = None;
-            let mut pending_layer_marker: Option<usize> = None;
-            let mut pending_clear_markers: Option<usize> = None;
-            let mut pending_select_all_kfs: Option<usize> = None;
-            // Shift-trim ripple: (layer_idx, old_out, shift)
-            let mut pending_ripple: Option<(usize, u32, i64)> = None;
-            // Double-clicked PreComp layer: comp_id to open
-            let mut pending_open_comp: Option<String> = None;
-            // Ruler menu: new comp duration
-            let mut pending_duration: Option<u32> = None;
-            let mut pending_pick_whip: Option<(usize, usize)> = None; // (child_idx, parent_idx)
-            // Trim comp to work area: (w_in, w_out)
-            let mut pending_trim_work_area: Option<(u32, u32)> = None;
+            let mut actions = pending_actions::TimelineActions::default();
 
             crate::ui::timeline::breadcrumb::draw_comp_breadcrumb(app, ui);
 
             let mut header_state = header::TimelineHeaderState {
-                is_playing: &mut app.playback.is_playing,
+                bottom_dock_tab: &mut app.ui_tabs.bottom_dock_tab,
+                show_switches_pane: &mut app.ui_tabs.show_switches_pane,
                 timeline_zoom: &mut app.timeline_zoom,
                 snap_to_keyframes: &mut app.snap_to_keyframes,
                 show_graph_editor: &mut app.show_graph_editor,
@@ -159,11 +402,18 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
             }
 
 
-            ui.add_space(4.0);
-
-            crate::ui::timeline::ruler_bar::draw_ram_ruler(app, ui, current_frame, total_frames);
-
-            ui.add_space(2.0);
+            let timeline_history_generation = app.history.generation();
+            // Rebuild while a model-edit transaction or row reorder is live,
+            // because keyframe frames and layer indices can change mid-gesture.
+            // Unrelated pointer activity (hover, scroll, toolbar clicks) does
+            // not invalidate these derived lists and should keep using cache.
+            let timeline_interacting = app.drag_active() || app.dragging_layer.is_some();
+            let derived_timeline = timeline_derived_data(
+                ui.ctx(),
+                app.history.current().active_composition(),
+                timeline_history_generation,
+                timeline_interacting,
+            );
 
             let mut automation_curve = app
                 .production_document
@@ -220,32 +470,96 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
 
 
             // ── Pre-collect sub-comp layer data (before mutable borrow) ──
-            let precomp_children = crate::ui::timeline::precomp_children::collect(temp_project, &app.selection.expanded_layers);
+            let precomp_children = crate::ui::timeline::precomp_children::collect_cached(
+                ui.ctx(),
+                temp_project,
+                &app.selection.expanded_layers,
+                app.project_session_id,
+                timeline_history_generation,
+            );
 
             // ── Tracks Mode: Layer List & Keyframe Ruler Area ──
             let comp = temp_project.active_composition_mut();
 
             // ── Responsive Width Calculation ──
             let total_w = ui.available_width();
-            let left_pane_w = (total_w * 0.28)
-                .clamp(280.0, 360.0)
-                .min((total_w - 180.0).max(0.0));
+            let left_pane_width_id = egui::Id::new("timeline_left_pane_width_v2");
+            let default_left_pane_w = crate::ui::theme::layout::TIMELINE_LEFT_PANE_WIDTH;
+            let requested_left_pane_w = ui.ctx().data_mut(|data| {
+                data.get_persisted::<f32>(left_pane_width_id)
+            })
+            .unwrap_or(default_left_pane_w);
+            let initial_columns = layout::TimelineColumns::new(
+                total_w,
+                requested_left_pane_w,
+                ui.spacing().item_spacing.x,
+            );
+            let mut left_pane_w = initial_columns.left_width;
+            let max_left_pane_w = initial_columns.max_left_width;
 
             // ── Work Area (In / Out) Handles Bar ──
             ui.horizontal(|ui| {
-                ui.allocate_ui(egui::vec2(left_pane_w, 18.0), |ui| {
+                let divider_rect = egui::Rect::from_min_size(
+                    egui::pos2(ui.max_rect().left() + left_pane_w - 7.0, ui.cursor().top() - 4.0),
+                    egui::vec2(14.0, 26.0),
+                );
+                let divider_response = ui.interact(
+                    divider_rect,
+                    left_pane_width_id.with("divider"),
+                    egui::Sense::drag(),
+                );
+                let divider_color = if divider_response.hovered() || divider_response.dragged() {
+                    colors::BORDER_ACTIVE
+                } else {
+                    colors::BORDER_SUBTLE
+                };
+                if divider_response.hovered() || divider_response.dragged() {
+                    ui.painter().rect_filled(
+                        divider_rect,
+                        3.0,
+                        colors::BG_HOVER,
+                    );
+                }
+                ui.painter().line_segment(
+                    [divider_rect.center_top(), divider_rect.center_bottom()],
+                    egui::Stroke::new(1.0_f32, divider_color),
+                );
+                if divider_response.hovered() || divider_response.dragged() {
+                    ui.output_mut(|output| output.cursor_icon = egui::CursorIcon::ResizeHorizontal);
+                }
+                if divider_response.dragged() || divider_response.drag_stopped() {
+                    if let Some(pointer) = divider_response.interact_pointer_pos() {
+                        left_pane_w = (pointer.x - ui.max_rect().left())
+                            .clamp(initial_columns.min_left_width, max_left_pane_w);
+                        ui.ctx().data_mut(|data| {
+                            data.insert_persisted(left_pane_width_id, left_pane_w);
+                        });
+                    }
+                }
+                divider_response.on_hover_text("ドラッグしてレイヤー列の幅を調整");
+
+                let columns = layout::TimelineColumns::new(
+                    total_w,
+                    left_pane_w,
+                    ui.spacing().item_spacing.x,
+                );
+
+                ui.allocate_ui(egui::vec2(left_pane_w, layout::COLUMN_HEADER_HEIGHT), |ui| {
                     ui.set_min_width(left_pane_w);
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("Layers").small().strong().color(colors::TEXT_SECONDARY));
+                        ui.label(egui::RichText::new("レイヤー").small().strong().color(colors::TEXT_SECONDARY))
+                            .on_hover_text("B：作業範囲の開始点、N：終了点を現在位置に設定");
 
-                        if ui.selectable_label(app.ui_tabs.global_shy_active, "Shy").on_hover_text("Hide / Show All Marked Shy Layers").clicked() {
+                        if ui.selectable_label(app.ui_tabs.global_shy_active, "シャイ").on_hover_text("シャイレイヤーの表示／非表示を切り替えます").clicked() {
                             app.ui_tabs.global_shy_active = !app.ui_tabs.global_shy_active;
                         }
 
                         let is_w_hovered = ui.rect_contains_pointer(ui.max_rect());
-                        let w_in_frame = app.playback.work_area_in.unwrap_or(0);
-                        let w_out_frame = app.playback.work_area_out.unwrap_or(total_frames);
-                        ui.weak(format!("Work Area: {}f - {}f", w_in_frame, w_out_frame));
+                        if app.playback.work_area_in.is_some() || app.playback.work_area_out.is_some() {
+                            let w_in_frame = app.playback.work_area_in.unwrap_or(0);
+                            let w_out_frame = app.playback.work_area_out.unwrap_or(total_frames);
+                            ui.weak(format!("範囲 {}–{}f", w_in_frame, w_out_frame));
+                        }
 
                         if is_w_hovered && ui.input(|i| i.key_pressed(egui::Key::B)) {
                             app.playback.work_area_in = Some(*current_frame);
@@ -258,9 +572,9 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
                     });
                 });
 
-                let avail_w = ui.available_width().max(0.0);
+                let avail_w = ui.available_width().max(0.0).min(columns.time_width);
                 let (ruler_rect, ruler_response) = ui.allocate_exact_size(
-                    egui::vec2(avail_w, 26.0),
+                    egui::vec2(avail_w, layout::COLUMN_HEADER_HEIGHT),
                     egui::Sense::click_and_drag(),
                 );
 
@@ -272,21 +586,45 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
                 ui.painter().rect_filled(ruler_rect, 0.0, colors::BG_DARK);
 
                 let zoom_span = (total_frames as f32 / app.timeline_zoom.max(0.01)).max(10.0) as u32;
-                // Keep the visible window fixed while scrubbing; only re-center when
-                // the playhead moves out of view (playback, J/L/Home/End jumps).
-                if *current_frame < app.timeline_view_start
+                let playhead_moved = ui.ctx().data_mut(|data| {
+                    let id = egui::Id::new("timeline_last_playhead_frame");
+                    let previous = data.get_temp::<u32>(id);
+                    data.insert_temp(id, *current_frame);
+                    previous.is_some_and(|frame| frame != *current_frame)
+                });
+                // Preserve user-panned/zoomed views while idle. Recenter only when
+                // playback or a scrub actually moves the playhead outside the view.
+                if playhead_moved
+                    && (*current_frame < app.timeline_view_start
                     || *current_frame >= app.timeline_view_start.saturating_add(zoom_span)
+                    )
                 {
                     app.timeline_view_start =
                         current_frame.saturating_sub(zoom_span / 2).min(total_frames.saturating_sub(zoom_span));
                 }
                 let start_frame = app.timeline_view_start;
 
+                crate::ui::timeline::ruler_bar::draw_ram_ruler(
+                    &app.frame_cache,
+                    comp,
+                    ui,
+                    total_frames,
+                    ruler_rect,
+                    start_frame,
+                    zoom_span,
+                );
+
                 // Work area highlighted bar
                 let wa_in = app.playback.work_area_in.unwrap_or(0);
                 let wa_out = app.playback.work_area_out.unwrap_or(total_frames);
                 let mut wa_drag_active = false;
-                if wa_out > wa_in && wa_out >= start_frame && wa_in <= start_frame + zoom_span {
+                let has_explicit_work_area = app.playback.work_area_in.is_some()
+                    || app.playback.work_area_out.is_some();
+                if has_explicit_work_area
+                    && wa_out > wa_in
+                    && wa_out >= start_frame
+                    && wa_in <= start_frame + zoom_span
+                {
                     let norm_in = (wa_in.saturating_sub(start_frame)) as f32 / zoom_span as f32;
                     let norm_out = (wa_out.saturating_sub(start_frame)) as f32 / zoom_span as f32;
                     let wa_rect = egui::Rect::from_min_max(
@@ -333,34 +671,60 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
                     }
                 }
 
-                // Ruler Ticks
-                let step = (zoom_span / 10).max(1);
+                // Measure real timecode labels before choosing a tick interval so
+                // the labels remain readable across zoom, panel width, and UI scale.
                 let fps = comp.fps.max(1);
-                // Thin out timecode labels when ticks would overlap (11 mono chars ≈ 66px)
-                let tick_px = ruler_rect.width() * (step as f32 / zoom_span as f32);
-                let label_every = ((70.0 / tick_px.max(1.0)).ceil() as usize).max(1);
-                for (tick_i, f) in (start_frame..=(start_frame + zoom_span)).step_by(step as usize).enumerate() {
+                let timecode_font = egui::FontId::new(
+                    ui.text_style_height(&egui::TextStyle::Small) * 0.72,
+                    egui::FontFamily::Monospace,
+                );
+                let end_frame = start_frame.saturating_add(zoom_span);
+                let measured_label_width = [start_frame, end_frame]
+                    .into_iter()
+                    .map(|frame| {
+                        let label = crate::ui::timeline::ruler::format_timecode_label(frame, fps);
+                        ui.painter()
+                            .layout_no_wrap(label, timecode_font.clone(), colors::TEXT_MUTED)
+                            .size()
+                            .x
+                    })
+                    .fold(0.0_f32, f32::max);
+                let step = crate::ui::timeline::ruler::ruler_label_step(
+                    zoom_span,
+                    ruler_rect.width(),
+                    measured_label_width,
+                );
+                let mut last_label_right = f32::NEG_INFINITY;
+                for f in crate::ui::timeline::ruler::ruler_tick_frames(
+                    start_frame,
+                    zoom_span,
+                    step,
+                ) {
                     let norm = (f - start_frame) as f32 / zoom_span as f32;
                     let tick_x = ruler_rect.left() + norm * ruler_rect.width();
                     ui.painter().line_segment(
                         [egui::pos2(tick_x, ruler_rect.bottom() - 6.0), egui::pos2(tick_x, ruler_rect.bottom())],
                         egui::Stroke::new(1.0_f32, colors::BORDER_STRONG),
                     );
-                    if tick_px < 70.0 && tick_i % label_every != 0 {
-                        continue;
-                    }
-                    let tc_s = f / fps;
-                    let tc_sub = f % fps;
-                    let tc_m = tc_s / 60;
-                    let tc_h = tc_m / 60;
-                    let tc_str = format!("{:02}:{:02}:{:02}:{:02}", tc_h, tc_m % 60, tc_s % 60, tc_sub);
-                    ui.painter().text(
-                        egui::pos2(tick_x, ruler_rect.top() + 2.0),
-                        egui::Align2::CENTER_TOP,
-                        &tc_str,
-                        egui::FontId::monospace(9.0),
-                        colors::TEXT_SECONDARY,
+                    let tc_str = crate::ui::timeline::ruler::format_timecode_label(f, fps);
+                    let galley = ui.painter().layout_no_wrap(
+                        tc_str.clone(),
+                        timecode_font.clone(),
+                        colors::TEXT_MUTED,
                     );
+                    let label_rect = egui::Rect::from_center_size(
+                        egui::pos2(tick_x, ruler_rect.top() + 7.0),
+                        galley.size(),
+                    );
+                    if label_rect.left() >= ruler_rect.left()
+                        && label_rect.right() <= ruler_rect.right()
+                        && label_rect.left() >= last_label_right + 6.0
+                    {
+                        ui.painter()
+                            .with_clip_rect(ruler_rect)
+                            .galley(label_rect.min, galley, colors::TEXT_MUTED);
+                        last_label_right = label_rect.right();
+                    }
                 }
 
                 // Current Playhead Line (Blue indicator)
@@ -368,14 +732,17 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
                 let playhead_x = ruler_rect.left() + playhead_norm * ruler_rect.width();
                 if (0.0..=1.0).contains(&playhead_norm) {
                     ui.painter().line_segment(
-                        [egui::pos2(playhead_x, ruler_rect.top() + 4.0), egui::pos2(playhead_x, ruler_rect.bottom() + 300.0)],
+                        [
+                            egui::pos2(playhead_x, ruler_rect.top() + 4.0),
+                            egui::pos2(playhead_x, ruler_rect.bottom()),
+                        ],
                         egui::Stroke::new(1.5_f32, colors::TIMELINE_PLAYHEAD),
                     );
                     // Inverted triangle handle (AE-style grab point)
                     let tri = vec![
-                        egui::pos2(playhead_x - 5.0, ruler_rect.top()),
-                        egui::pos2(playhead_x + 5.0, ruler_rect.top()),
-                        egui::pos2(playhead_x, ruler_rect.top() + 4.0),
+                        egui::pos2(playhead_x - 4.0, ruler_rect.top()),
+                        egui::pos2(playhead_x + 4.0, ruler_rect.top()),
+                        egui::pos2(playhead_x, ruler_rect.top() + 6.0),
                     ];
                     ui.painter().add(egui::Shape::convex_polygon(tri, colors::TIMELINE_PLAYHEAD, egui::Stroke::NONE));
                 }
@@ -416,12 +783,43 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
                     }
                 }
 
-                if !wa_drag_active && !cmd_mod && (ruler_response.clicked() || ruler_response.dragged()) {
-                    if let Some(pos) = ruler_response.interact_pointer_pos() {
+                let ruler_scrub_response = ui.interact(
+                    ruler_rect,
+                    egui::Id::new("timeline_ruler_scrub"),
+                    egui::Sense::click_and_drag(),
+                );
+                let (pointer_pos, primary_pressed, primary_down, primary_released) = ui.input(|input| {
+                    (
+                        input.pointer.interact_pos().or_else(|| input.pointer.hover_pos()),
+                        input.pointer.button_pressed(egui::PointerButton::Primary),
+                        input.pointer.button_down(egui::PointerButton::Primary),
+                        input.pointer.button_released(egui::PointerButton::Primary),
+                    )
+                });
+                let scrub_id = egui::Id::new("timeline_ruler_scrub_active");
+                if primary_pressed && pointer_pos.is_some_and(|pos| ruler_rect.contains(pos)) {
+                    ui.ctx().data_mut(|data| data.insert_temp(scrub_id, true));
+                }
+                let scrub_active = ui.ctx().data(|data| data.get_temp::<bool>(scrub_id).unwrap_or(false));
+                let should_scrub = !wa_drag_active
+                    && !cmd_mod
+                    && pointer_pos.is_some_and(|pos| ruler_rect.contains(pos))
+                    && ((scrub_active && (primary_down || primary_released))
+                        || ruler_scrub_response.clicked()
+                        || ruler_scrub_response.dragged());
+                if should_scrub {
+                    if let Some(pos) = pointer_pos {
                         let norm = ((pos.x - ruler_rect.left()) / ruler_rect.width()).clamp(0.0, 1.0);
                         let raw_f = start_frame + (norm * zoom_span as f32).round() as u32;
-                        *current_frame = maybe_snap_frame(raw_f, app.snap_to_keyframes, comp);
+                        *current_frame = maybe_snap_frame(
+                            raw_f,
+                            app.snap_to_keyframes,
+                            &derived_timeline.keyframe_frames,
+                        );
                     }
+                }
+                if primary_released || (scrub_active && !primary_down) {
+                    ui.ctx().data_mut(|data| data.remove_temp::<bool>(scrub_id));
                 }
 
                 // ── Ruler context menu (AE parity) ──
@@ -443,7 +841,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
                     }
                     if let Some(layer_idx) = app.selection.selected_layer_idx {
                         if ui.button("Split Selected Layer at Playhead").clicked() {
-                            pending_split_layer = Some(layer_idx);
+                            actions.pending_split_layer = Some(layer_idx);
                             ui.close_menu();
                         }
                     }
@@ -459,7 +857,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
                     if ui.button("Set Comp Duration to Work Area End").clicked() {
                         let w_out = app.playback.work_area_out.unwrap_or(total_frames);
                         if w_out > 0 && w_out <= total_frames {
-                            pending_duration = Some(w_out);
+                            actions.pending_duration = Some(w_out);
                             app.toasts.info(format!("Comp duration set to {} frames", w_out));
                         }
                         ui.close_menu();
@@ -468,8 +866,8 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
                         let w_in = app.playback.work_area_in.unwrap_or(0);
                         let w_out = app.playback.work_area_out.unwrap_or(total_frames);
                         if w_out > w_in {
-                            pending_duration = Some(w_out);
-                            pending_trim_work_area = Some((w_in, w_out));
+                            actions.pending_duration = Some(w_out);
+                            actions.pending_trim_work_area = Some((w_in, w_out));
                             app.toasts.info(format!("Trimmed to work area: {}f–{}f", w_in, w_out));
                         }
                         ui.close_menu();
@@ -506,6 +904,21 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
                             .saturating_sub(new_head_offset)
                             .min(total_frames.saturating_sub(new_span))
                     };
+                    let pointer_anchored_start =
+                        |old_zoom: f32, old_start: u32, new_zoom: f32, pointer_x: f32| -> u32 {
+                        let old_span =
+                            (total_frames as f32 / old_zoom.max(0.01)).max(10.0) as u32;
+                        let new_span = (total_frames as f32 / new_zoom.max(0.01))
+                            .max(10.0) as u32;
+                        let pointer_fraction = ((pointer_x - ruler_rect.left())
+                            / ruler_rect.width().max(1.0))
+                            .clamp(0.0, 1.0);
+                        let frame_under_pointer = old_start as f32 + pointer_fraction * old_span as f32;
+                        ((frame_under_pointer - pointer_fraction * new_span as f32)
+                            .round()
+                            .max(0.0) as u32)
+                            .min(total_frames.saturating_sub(new_span))
+                    };
                     if ui.input(|i| i.key_pressed(egui::Key::Equals)) && app.timeline_zoom < 20.0 {
                         let new_zoom = (app.timeline_zoom * 1.25).min(20.0);
                         app.timeline_view_start = anchored_start(app.timeline_zoom, new_zoom);
@@ -516,31 +929,39 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
                         app.timeline_view_start = anchored_start(app.timeline_zoom, new_zoom);
                         app.timeline_zoom = new_zoom;
                     }
-                    // Scroll wheel over ruler: zoom anchored at pointer (NLE standard)
-                    if ruler_response.hovered() && ui.input(|i| i.raw_scroll_delta.y != 0.0) && !ui.input(|i| i.modifiers.command) {
-                        let scroll = ui.input(|i| i.raw_scroll_delta.y);
-                        let factor = if scroll > 0.0 { 1.0 / 1.15 } else { 1.15 };
-                        let new_zoom = (app.timeline_zoom * factor).clamp(0.1, 20.0);
-                        if new_zoom != app.timeline_zoom {
-                            app.timeline_view_start = anchored_start(app.timeline_zoom, new_zoom);
-                            app.timeline_zoom = new_zoom;
-                        }
-                    }
-                    // Cmd/Ctrl + scroll: horizontal pan
-                    else if ruler_response.hovered() && ui.input(|i| i.modifiers.command) {
-                        let scroll = ui.input(|i| i.raw_scroll_delta.y);
+                    if ruler_response.hovered() {
+                        let (scroll, command, pointer_x) = ui.input(|i| {
+                            (
+                                i.raw_scroll_delta.y,
+                                i.modifiers.command,
+                                i.pointer.hover_pos().map(|pos| pos.x),
+                            )
+                        });
                         if scroll != 0.0 {
-                            let new_zoom = (app.timeline_zoom * (if scroll > 0.0 { 1.15 } else { 1.0 / 1.15 })).clamp(0.1, 20.0);
-                            if new_zoom != app.timeline_zoom {
-                                app.timeline_view_start = anchored_start(app.timeline_zoom, new_zoom);
-                                app.timeline_zoom = new_zoom;
+                            if command {
+                                let max_start = total_frames.saturating_sub(zoom_span);
+                                let pan_frames = (-scroll * zoom_span as f32 * 0.08).round() as i64;
+                                app.timeline_view_start = (app.timeline_view_start as i64 + pan_frames)
+                                    .clamp(0, max_start as i64) as u32;
+                            } else if let Some(pointer_x) = pointer_x {
+                                let factor = if scroll > 0.0 { 1.15 } else { 1.0 / 1.15 };
+                                let new_zoom = (app.timeline_zoom * factor).clamp(0.1, 20.0);
+                                if new_zoom != app.timeline_zoom {
+                                    app.timeline_view_start = pointer_anchored_start(
+                                        app.timeline_zoom,
+                                        app.timeline_view_start,
+                                        new_zoom,
+                                        pointer_x,
+                                    );
+                                    app.timeline_zoom = new_zoom;
+                                }
                             }
                         }
                     }
                 }
             });
 
-            ui.separator();
+            crate::ui::theme::draw_separator(ui);
 
             // ── Scrollable Layer Rows & Property Tracks ──
             let zoom_span = (total_frames as f32 / app.timeline_zoom.max(0.01)).max(10.0) as u32;
@@ -548,27 +969,94 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
             // Capture effect drag info before closure to avoid borrow conflicts
             let drag_info = app.dragging_effect.clone();
             // Collect pending effect drops to apply after the closure
-            let mut pending_effect_drops: Vec<(usize, String, usize)> = Vec::new();
-            let mut pending_select_label_group: Option<crate::core::timeline::LabelColor> = None;
 
-            let expanded_timeline = !app.selection.expanded_layers.is_empty() || app.show_graph_editor;
-            let layer_scroll_height = if narrow_timeline && ui.ctx().screen_rect().width() < 700.0 {
-                32.0
-            } else if narrow_timeline {
-                54.0
-            } else if ui.ctx().screen_rect().width() <= 1200.0 {
-                120.0
-            } else {
-                if expanded_timeline { 200.0 } else { 140.0 }
-            };
+            let layer_scroll_height = ui.available_height().max(32.0);
             let _scroll_resp = egui::ScrollArea::vertical().max_height(layer_scroll_height).show(ui, |ui| {
                 let layers_len = comp.layers.len();
                 let comp_w_f = comp.width as f32;
-                let parent_choices: Vec<(String, String)> = comp.layers.iter().map(|l| (l.id.clone(), l.name.clone())).collect();
-                let parent_choices_ref = &parent_choices;
-                let layer_edges: Vec<(u32, u32)> = comp.layers.iter().map(|l| (l.in_frame, l.out_frame)).collect();
-                let all_kf_frames: Vec<u32> = crate::ui::timeline::utils::collect_all_kf_frames(comp);
+                let comp_h_f = comp.height.max(1) as f32;
+                let derived = &derived_timeline;
+                let parent_choices_ref = &derived.parent_choices;
+                let layer_edges = &derived.layer_edges;
+                let all_kf_frames = &derived.keyframe_frames;
+                if layers_len == 0 {
+                    ui.add_space(4.0);
+                    ui.vertical_centered(|ui| {
+                        ui.label(
+                            egui::RichText::new("素材を追加するか、ここにドロップして編集を始めます")
+                                .small()
+                                .color(colors::TEXT_MUTED),
+                        );
+                    });
+                    ui.add_space(4.0);
+                }
                 for i in 0..layers_len {
+                    let layer_preview_textures = comp.layers.get(i).and_then(|layer| {
+                        if !layer_has_timeline_preview(&layer.layer_type)
+                            || (app.ui_tabs.global_shy_active && layer.is_shy)
+                            || (!app.ui_tabs.layer_filter_text.is_empty()
+                                && !layer
+                                    .name
+                                    .to_lowercase()
+                                    .contains(&app.ui_tabs.layer_filter_text.to_lowercase()))
+                        {
+                            return None;
+                        }
+                        let mut layer_height = layout::LAYER_ROW_HEIGHT;
+                        if app.selection.expanded_layers.contains(&i) {
+                            layer_height +=
+                                (5 + layer.effects.len() + layer.masks.len()) as f32
+                                    * layout::PROPERTY_ROW_HEIGHT;
+                        }
+                        let row_probe = egui::Rect::from_min_size(
+                            ui.cursor().min,
+                            egui::vec2(ui.available_width(), layer_height),
+                        );
+                        if !ui.is_rect_visible(row_probe) {
+                            return None;
+                        }
+                        let visible_start = layer.in_frame.max(start_frame);
+                        let visible_end = layer
+                            .out_frame
+                            .min(start_frame.saturating_add(zoom_span));
+                        let visible_span = visible_end.saturating_sub(visible_start);
+                        if visible_span == 0 {
+                            return None;
+                        }
+                        let time_canvas_width =
+                            (ui.available_width() - left_pane_w).max(0.0);
+                        let visible_width = visible_span as f32 / zoom_span.max(1) as f32
+                            * time_canvas_width;
+                        let sample_count = (visible_width / TIMELINE_THUMBNAIL_WIDTH)
+                            .ceil()
+                            .clamp(1.0, MAX_TIMELINE_THUMBNAILS_PER_CLIP as f32)
+                            as usize;
+                        let clip_span = layer.out_frame.saturating_sub(layer.in_frame).max(1) as f32;
+                        let preview_start = visible_start
+                            .saturating_sub(layer.in_frame) as f32
+                            / clip_span;
+                        let preview_end = visible_end
+                            .saturating_sub(layer.in_frame) as f32
+                            / clip_span;
+                        Some((
+                            preview_start.clamp(0.0, 1.0),
+                            preview_end.clamp(0.0, 1.0),
+                            (0..sample_count)
+                                .map(|sample| {
+                                    let sample_t = (sample as f32 + 0.5) / sample_count as f32;
+                                    let frame = visible_start.saturating_add(
+                                        (visible_span as f32 * sample_t).round() as u32,
+                                    );
+                                    timeline_layer_preview_texture(
+                                        ui.ctx(),
+                                        comp,
+                                        layer,
+                                        frame,
+                                    )
+                                })
+                                .collect::<Vec<_>>(),
+                        ))
+                    });
                     // Safe index access (.get_mut(i))
                     if let Some(layer) = comp.layers.get_mut(i) {
                         if app.ui_tabs.global_shy_active && layer.is_shy {
@@ -579,10 +1067,10 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
                         }
 
                         // Calculate exact estimated height for this layer based on expanded rows
-                        let mut layer_height = 22.0;
+                        let mut layer_height = layout::LAYER_ROW_HEIGHT;
                         if app.selection.expanded_layers.contains(&i) {
                             let prop_count = 5 + layer.effects.len() + layer.masks.len();
-                            layer_height += prop_count as f32 * 20.0;
+                            layer_height += prop_count as f32 * layout::PROPERTY_ROW_HEIGHT;
                         }
 
                         // ── Visibility Culling: skip off-screen rows ──
@@ -596,20 +1084,37 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
                             continue;
                         }
 
+                        let row_columns = layout::TimelineColumns::new(
+                            total_w,
+                            left_pane_w,
+                            ui.spacing().item_spacing.x,
+                        );
+
                         ui.horizontal(|ui| {
                             // Denser rows: shrink button padding for the pill
                             // controls (Switches/Modes/reorder) in this row.
                             ui.style_mut().spacing.button_padding = egui::vec2(4.0, 1.0);
-                            ui.allocate_ui(egui::vec2(left_pane_w, 22.0), |ui| {
+                            ui.allocate_ui(egui::vec2(left_pane_w, layout::LAYER_ROW_HEIGHT), |ui| {
                                 ui.set_min_width(left_pane_w);
+                                ui.spacing_mut().item_spacing.y = 0.0;
+                                ui.spacing_mut().item_spacing.x = if left_pane_w < 240.0 { 2.0 } else { 4.0 };
+                                ui.spacing_mut().interact_size.y = layout::LAYER_ROW_HEIGHT;
+                                ui.spacing_mut().button_padding = egui::vec2(2.0, 0.0);
                                 ui.horizontal(|ui| {
-                                    ui.label(egui::RichText::new(format!("{:02}", i + 1)).small().strong().color(colors::TEXT_SECONDARY));
-                                    ui.add_space(2.0);
+                                    if left_pane_w >= 240.0 {
+                                        ui.label(egui::RichText::new(format!("{:02}", i + 1)).small().strong().color(colors::TEXT_SECONDARY));
+                                        ui.add_space(2.0);
+                                    }
 
                                     // ── Layer type icon ──
                                     {
 let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
-                                        ui.label(egui::RichText::new(type_icon).small().color(colors::TEXT_SECONDARY));
+                                        crate::ui::kui::icon_glyph(
+                                            ui,
+                                            type_icon,
+                                            14.0,
+                                            colors::TEXT_SECONDARY,
+                                        );
                                     }
                                     ui.add_space(1.0);
 
@@ -648,7 +1153,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             project_changed = true;
                                         }
                                         if chip_resp.secondary_clicked() {
-                                            pending_select_label_group = Some(layer.label);
+                                            actions.pending_select_label_group = Some(layer.label);
                                         }
                                         if chip_resp.hovered() {
                                             ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
@@ -656,25 +1161,11 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                     }
                                     ui.add_space(2.0);
 
-                                    ui.allocate_ui(egui::vec2(50.0, 24.0), |ui| {
-                                    ui.set_min_width(50.0);
-                                    ui.horizontal(|ui| {
-                                    // Layer Stacking Order Reorder Buttons
-                                    if i > 0
-                                        && crate::ui::custom_widgets::ae_icon_button(ui, "↑", "Move Layer Up in Render Stack").clicked() {
-                                        swap_request = Some((i, i - 1));
-                                    }
-                                    if i + 1 < layers_len
-                                        && crate::ui::custom_widgets::ae_icon_button(ui, "↓", "Move Layer Down in Render Stack").clicked() {
-                                        swap_request = Some((i, i + 1));
-                                    }
-
-                                    });
-                                    });
+                                    ui.add_space(if left_pane_w < 240.0 { 1.0 } else { 4.0 });
                                     let is_expanded = app.selection.expanded_layers.contains(&i);
                                     let arrow = if is_expanded { "⌄" } else { "›" };
                                     let (arrow_rect, arrow_response) = ui.allocate_exact_size(
-                                        egui::vec2(20.0, 22.0),
+                                        egui::vec2(if left_pane_w < 240.0 { 14.0 } else { 20.0 }, 22.0),
                                         egui::Sense::click(),
                                     );
                                     if arrow_response.hovered() {
@@ -695,6 +1186,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         }
                                     }
 
+                                    if left_pane_w >= 240.0 {
                                     ui.scope(|ui| {
                                     let widgets = &mut ui.style_mut().visuals.widgets;
                                     widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
@@ -703,7 +1195,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                     widgets.hovered.bg_fill = colors::BG_HOVER;
                                     widgets.hovered.bg_stroke = egui::Stroke::NONE;
                                     widgets.hovered.weak_bg_fill = colors::BG_HOVER;
-                                    ui.menu_button(egui::RichText::new("S").small(), |ui| {
+                                    ui.menu_button(egui::RichText::new("色").small(), |ui| {
                                     // ── AE Layer Color Label Square Picker ──
                                     let label_rgb = layer.label.to_rgb();
                                     let label_c32 = egui::Color32::from_rgb(
@@ -745,46 +1237,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                 }
             });
 
-                                    // ── Vector SVG Layer Switches ──
-                                    use crate::ui::custom_widgets::ae_svg_toggle;
-                                    use crate::ui::icons::*;
-
-                                    let is_vis = layer.visible;
-                                    if ae_svg_toggle(ui, &mut layer.visible, if is_vis { SVG_EYE_OPEN } else { SVG_EYE_CLOSED }, &format!("vis_{}", i), egui::vec2(18.0, 18.0), egui::Color32::WHITE, "Toggle Layer Visibility (V)").clicked() {
-                                        project_changed = true;
-                                    }
-
-                                    if ae_svg_toggle(ui, &mut layer.solo, SVG_SWITCH_SOLO, &format!("solo_{}", i), egui::vec2(18.0, 18.0), egui::Color32::GOLD, "Toggle Solo (S)").clicked() {
-                                        project_changed = true;
-                                    }
-
-                                    let is_lkd = layer.locked;
-                                    if ae_svg_toggle(ui, &mut layer.locked, if is_lkd { SVG_LOCK } else { SVG_UNLOCK }, &format!("lock_{}", i), egui::vec2(18.0, 18.0), colors::ACCENT_ORANGE, "Toggle Layer Lock (L)").clicked() {
-                                        project_changed = true;
-                                    }
-
-                                    if ae_svg_toggle(ui, &mut layer.is_collapsed, SVG_COLLAPSE_TRANSFORM, &format!("col_{}", i), egui::vec2(18.0, 18.0), colors::ACCENT_YELLOW, "Collapse Transformations / Continuously Rasterize").clicked() {
-                                        project_changed = true;
-                                    }
-
-                                    if ae_svg_toggle(ui, &mut layer.is_3d, SVG_3D_CUBE, &format!("3d_{}", i), egui::vec2(18.0, 18.0), colors::ACCENT_BLUE, "Toggle 3D Layer").clicked() {
-                                        project_changed = true;
-                                    }
-
-                                    if ae_svg_toggle(ui, &mut layer.motion_blur, SVG_MOTION_BLUR, &format!("mb_{}", i), egui::vec2(18.0, 18.0), colors::ACCENT_CYAN, "Toggle Layer Motion Blur").clicked() {
-                                        project_changed = true;
-                                    }
-
-                                    if ae_svg_toggle(ui, &mut layer.is_shy, SVG_SHY, &format!("shy_{}", i), egui::vec2(18.0, 18.0), colors::ACCENT_GREEN, "Shy Layer (Hide in timeline)").clicked() {
-                                        project_changed = true;
-                                    }
-
-                                    let fx_on = layer.effects_enabled;
-                                    if crate::ui::custom_widgets::ae_text_toggle(ui, fx_on, "fx", "Toggle All Layer Effects On/Off").clicked() {
-                                        layer.effects_enabled = !fx_on;
-                                        project_changed = true;
-                                    }
-
+                                    if !app.ui_tabs.show_switches_pane {
                                     // Track Matte Mode Selection (AE Standard)
                                     let matte_id = ui.make_persistent_id(format!("tm_combo_{}", i));
                                     let matte_label = match layer.track_matte {
@@ -886,37 +1339,19 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                                 }
                                             }
                                         });
-
-
-                                    let mb = layer.motion_blur;
-                                    if crate::ui::custom_widgets::ae_text_toggle(ui, mb, "M", "Motion Blur Switch").clicked() {
-                                        layer.motion_blur = !mb;
-                                        project_changed = true;
                                     }
 
-                                    let is_3d = layer.is_3d;
-                                    if crate::ui::custom_widgets::ae_text_toggle(ui, is_3d, "3D", "3D Layer Switch").clicked() {
-                                        layer.is_3d = !is_3d;
-                                        project_changed = true;
-                                    }
-
-                                    let is_shy = layer.is_shy;
-                                    if crate::ui::custom_widgets::ae_text_toggle(ui, is_shy, "Shy", "Shy Layer Switch").clicked() {
-                                        layer.is_shy = !is_shy;
-                                        project_changed = true;
-                                    }
-
-                                    let is_guide = layer.is_guide_layer;
-                                    if crate::ui::custom_widgets::ae_text_toggle(ui, is_guide, "⌁", "Guide Layer Switch: Excludes layer from final render export").clicked() {
-                                        layer.is_guide_layer = !is_guide;
-                                        project_changed = true;
-                                    }
 
                                     });
                                     });
+                                    }
                                     let is_selected = app.selection.selected_layers.contains(&i) || app.selection.selected_layer_idx == Some(i);
+                                    let name_width = layout::TimelineColumns::layer_name_width(
+                                        ui.available_width(),
+                                        app.ui_tabs.show_switches_pane,
+                                    );
                                     let (name_rect, click_resp) = ui.allocate_exact_size(
-                                        egui::vec2(110.0, 22.0),
+                                        egui::vec2(name_width, layout::LAYER_ROW_HEIGHT),
                                         egui::Sense::click_and_drag(),
                                     );
                                     if is_selected || click_resp.hovered() {
@@ -934,22 +1369,49 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                                 egui::vec2(2.0, name_rect.height()),
                                             ),
                                             1.0,
-                                            colors::ACCENT_BLUE,
+                                            colors::ACCENT_SELECTION,
                                         );
                                     }
-                                    ui.painter().text(
+                                    ui.painter().with_clip_rect(name_rect.shrink2(egui::vec2(6.0, 0.0))).text(
                                         egui::pos2(name_rect.left() + 8.0, name_rect.center().y),
                                         egui::Align2::LEFT_CENTER,
                                         &layer.name,
                                         egui::FontId::proportional(12.0),
                                         if is_selected { colors::TEXT_PRIMARY } else { colors::TEXT_SECONDARY },
                                     );
+                                    let click_resp = click_resp.on_hover_text(&layer.name);
+
+                                    if app.ui_tabs.show_switches_pane {
+                                        use crate::ui::custom_widgets::ae_svg_toggle;
+                                        use crate::ui::icons::*;
+
+                                        let visibility_icon = if layer.visible { SVG_EYE_OPEN } else { SVG_EYE_CLOSED };
+                                        if ae_svg_toggle(ui, &mut layer.visible, visibility_icon, &format!("row_vis_{i}"), egui::vec2(15.0, 15.0), colors::TEXT_PRIMARY, "表示／非表示 (V)").clicked() {
+                                            project_changed = true;
+                                        }
+                                        let lock_icon = if layer.locked { SVG_LOCK } else { SVG_UNLOCK };
+                                        if ae_svg_toggle(ui, &mut layer.locked, lock_icon, &format!("row_lock_{i}"), egui::vec2(15.0, 15.0), colors::ACCENT_TOGGLE, "ロック (L)").clicked() {
+                                            project_changed = true;
+                                        }
+                                        if ae_svg_toggle(ui, &mut layer.is_shy, SVG_SHY, &format!("row_shy_{i}"), egui::vec2(15.0, 15.0), colors::ACCENT_CYAN, "シャイレイヤー (Shy)").clicked() {
+                                            project_changed = true;
+                                        }
+                                        if ae_svg_toggle(ui, &mut layer.is_collapsed, SVG_COLLAPSE_TRANSFORM, &format!("row_col_{i}"), egui::vec2(15.0, 15.0), colors::ACCENT_ORANGE, "トランスフォームの折りたたみ／コラプス").clicked() {
+                                            project_changed = true;
+                                        }
+                                        if ae_svg_toggle(ui, &mut layer.is_3d, SVG_3D_CUBE, &format!("row_3d_{i}"), egui::vec2(15.0, 15.0), colors::ACCENT_TOGGLE, "3Dレイヤー").clicked() {
+                                            project_changed = true;
+                                        }
+                                        if ae_svg_toggle(ui, &mut layer.motion_blur, SVG_MOTION_BLUR, &format!("row_mb_{i}"), egui::vec2(15.0, 15.0), colors::ACCENT_TOGGLE, "モーションブラー").clicked() {
+                                            project_changed = true;
+                                        }
+                                    }
 
                                     // ── Pick Whip: clicking a layer in pick mode sets it as parent ──
                                     if click_resp.clicked() && app.pick_whip_mode {
                                         if let Some(sel) = app.selection.selected_layer_idx {
                                             if sel != i {
-                                                pending_pick_whip = Some((sel, i));
+                                                actions.pending_pick_whip = Some((sel, i));
                                             }
                                         }
                                         app.pick_whip_mode = false;
@@ -960,7 +1422,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         // Double-click a PreComp layer opens its nested composition (AE parity)
                                         // (deferred: resolved after the row loop)
                                         if let crate::core::timeline::LayerType::PreComp { comp_id } = &layer.layer_type {
-                                            pending_open_comp = Some(comp_id.clone());
+                                            actions.pending_open_comp = Some(comp_id.clone());
                                         } else {
                                             app.renaming_layer = Some(i);
                                         }
@@ -984,7 +1446,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                     if let Some(src) = app.dragging_layer {
                                         if click_resp.hovered() && src != i {
                                             // Live swap; the dragged row follows the pointer
-                                            swap_request = Some((src, i));
+                                            actions.swap_request = Some((src, i));
                                             app.dragging_layer = Some(i);
                                         }
                                     }
@@ -1009,7 +1471,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         }
                                         // Collect effect on drop (apply after loop to avoid borrow conflicts)
                                         if click_resp.drag_stopped() && click_resp.hovered() {
-                                            pending_effect_drops.push((i, effect_name.clone(), preset_idx));
+                                            actions.pending_effect_drops.push((i, effect_name.clone(), preset_idx));
                                             app.dragging_effect = None;
                                         }
                                     }
@@ -1033,8 +1495,17 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         }
                                     }
                                     click_resp.context_menu(|ui| {
+                                        if i > 0 && ui.button("↑ 上へ移動").clicked() {
+                                            actions.swap_request = Some((i, i - 1));
+                                            ui.close_menu();
+                                        }
+                                        if i + 1 < layers_len && ui.button("↓ 下へ移動").clicked() {
+                                            actions.swap_request = Some((i, i + 1));
+                                            ui.close_menu();
+                                        }
+                                        ui.separator();
                                         if ui.button("Duplicate Layer (Cmd+D)").clicked() {
-                                            pending_dup_layer = Some(i);
+                                            actions.pending_dup_layer = Some(i);
                                             app.toasts.info("Duplicated selected layer");
                                             ui.close_menu();
                                         }
@@ -1045,11 +1516,11 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             app.show_precompose_dialog = true;
                                             ui.close_menu();
                                         }
-                                        if matches!(layer.layer_type, crate::core::timeline::LayerType::Text { .. }) {
-                                            if ui.button("Create Shapes from Text").on_hover_text("Decompose this Text layer into animatable vector Bezier Shape paths").clicked() {
-                                                pending_create_shapes = Some(i);
-                                                ui.close_menu();
-                                            }
+                                        if matches!(layer.layer_type, crate::core::timeline::LayerType::Text { .. })
+                                            && ui.button("Create Shapes from Text").on_hover_text("Decompose this Text layer into animatable vector Bezier Shape paths").clicked()
+                                        {
+                                            actions.pending_create_shapes = Some(i);
+                                            ui.close_menu();
                                         }
                                         if ui.button("Toggle 3D Layer").on_hover_text("Switch this layer between 2D and 3D").clicked() {
                                             layer.is_3d = !layer.is_3d;
@@ -1080,8 +1551,14 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             app.toasts.info("Keyframes time-reversed");
                                             ui.close_menu();
                                         }
+                                        if ui.button("⏱ Enable Time Remapping (Cmd+Opt+T)").on_hover_text("Enable variable speed time remapping on this layer").clicked() {
+                                            layer.enable_time_remapping();
+                                            project_changed = true;
+                                            app.toasts.info("Time remapping enabled for layer");
+                                            ui.close_menu();
+                                        }
                                         if ui.button("Split Layer at Current Time (Cmd+Shift+D)").clicked() {
-                                            pending_split_layer = Some(i);
+                                            actions.pending_split_layer = Some(i);
                                             ui.close_menu();
                                         }
                                         ui.separator();
@@ -1103,20 +1580,20 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         }
                                         ui.separator();
                                         if ui.button("Add Layer Marker at Playhead").clicked() {
-                                            pending_layer_marker = Some(i);
+                                            actions.pending_layer_marker = Some(i);
                                             ui.close_menu();
                                         }
                                         if !layer.markers.is_empty()
                                             && ui.button("Clear Layer Markers").clicked() {
-                                            pending_clear_markers = Some(i);
+                                            actions.pending_clear_markers = Some(i);
                                             ui.close_menu();
                                         }
                                         if ui.button("⬚ Select All Keyframes").on_hover_text("Select every keyframe on this layer (transform, effects, pins)").clicked() {
-                                            pending_select_all_kfs = Some(i);
+                                            actions.pending_select_all_kfs = Some(i);
                                             ui.close_menu();
                                         }
                                         if ui.button("Select Label Group").on_hover_text("Select all layers with the same label color").clicked() {
-                                            pending_select_label_group = Some(layer.label);
+                                            actions.pending_select_label_group = Some(layer.label);
                                             ui.close_menu();
                                         }
                                         // ── Animation Presets ──
@@ -1173,7 +1650,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             } else {
                                                 vec![i]
                                             };
-                                            pending_precomp_indices = Some(selected_indices);
+                                            actions.pending_precomp_indices = Some(selected_indices);
                                             ui.close_menu();
                                         }
                                         if ui.button("Reset Transform").clicked() {
@@ -1239,6 +1716,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                     });
                                     ui.style_mut().visuals.override_text_color = None;
 
+                                    if !app.ui_tabs.show_switches_pane {
                                     ui.scope(|ui| {
                                     let widgets = &mut ui.style_mut().visuals.widgets;
                                     widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
@@ -1247,7 +1725,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                     widgets.hovered.bg_fill = colors::BG_HOVER;
                                     widgets.hovered.bg_stroke = egui::Stroke::NONE;
                                     widgets.hovered.weak_bg_fill = colors::BG_HOVER;
-                                    ui.menu_button(egui::RichText::new("M").small(), |ui| {
+                                    ui.menu_button(egui::RichText::new("モード").small(), |ui| {
                                     // ── Blend Mode Dropdown ──
                                     let bm_text = format!("{:?}", layer.blend_mode);
                                     egui::ComboBox::from_id_salt(format!("tl_blend_{}", i))
@@ -1310,9 +1788,11 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             app.toasts.info("Pick Whip active: click a layer to set as parent");
                                         }
                                     }
-                                    let parent_name_resolved = layer.parent_id.as_deref().and_then(|pid| {
-                                        parent_choices_ref.iter().find(|(id, _)| id == pid).map(|(_, name)| name.as_str())
-                                    }).unwrap_or("None");
+                                    let parent_name_resolved = layer.parent_id.as_deref()
+                                        .and_then(|pid| derived.parent_indices.get(pid))
+                                        .and_then(|index| parent_choices_ref.get(*index))
+                                        .map(|(_, name)| name.as_str())
+                                        .unwrap_or("None");
                                     let parent_prefix = if layer.is_3d { "Parent (3D)" } else { "Parent" };
                                     egui::ComboBox::from_id_salt(format!("tl_parent_{}", i))
                                         .selected_text(format!("{}: {}", parent_prefix, parent_name_resolved))
@@ -1325,8 +1805,11 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                                 if p_idx != i {
                                                     let is_p = layer.parent_id.as_deref() == Some(p_id);
                                                     if ui.selectable_label(is_p, p_name).clicked() {
-                                                        // Cycle prevention check using parent_choices_ref
-                                                        let is_cycle = parent_choices_ref.iter().any(|(p_id_check, _)| p_id_check == p_id && layer.parent_id.as_deref() == Some(&layer.id));
+                                                        let is_cycle = would_create_parent_cycle(
+                                                            &layer.id,
+                                                            p_id,
+                                                            &derived.parents,
+                                                        );
 
                                                         if is_cycle {
                                                             app.toasts.warning(format!("Cycle prevented! Cannot parent '{}' to '{}'", layer.name, p_name));
@@ -1341,18 +1824,19 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                         });
                                     });
                                     });
+                                    }
                                 });
                             });
 
                             // Render Layer Bar Span & Waveform + parent link line
-                            let avail_w = ui.available_width();
+                            let avail_w = ui.available_width().min(row_columns.time_width).max(0.0);
                             let (bar_rect, _bar_sense) = ui.allocate_exact_size(
-                                egui::vec2(avail_w, 22.0),
+                                egui::vec2(avail_w, layout::LAYER_ROW_HEIGHT),
                                 egui::Sense::hover().union(egui::Sense::drag()),
                             );
                             // Draw parent connection if this layer has a parent
                             if let Some(pid) = &layer.parent_id {
-                                if parent_choices_ref.iter().any(|(lid, _)| lid == pid) {
+                                if derived.parent_indices.contains_key(pid) {
                                     // Small chain icon on the left of the bar
                                      ui.painter().text(
                                          egui::pos2(bar_rect.left() + 8.0, bar_rect.top() + 4.0),
@@ -1372,7 +1856,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                 egui::pos2(bar_rect.left() + norm_out * bar_rect.width(), bar_rect.bottom() - 4.0),
                             );
 
-                            let fill_c = if app.selection.selected_layer_idx == Some(i) {
+                            let label_fill = if app.selection.selected_layer_idx == Some(i) {
                                 // Selected: label color at reduced gain, never neon.
                                 let [r, g, b] = layer.label.to_rgb();
                                 egui::Color32::from_rgb(
@@ -1389,8 +1873,104 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                     (b * 115.0 + 19.0) as u8,
                                 )
                             };
+                            let fill_c = match &layer.layer_type {
+                                LayerType::Solid { color } => egui::Color32::from_rgba_unmultiplied(
+                                    (color[0].clamp(0.0, 1.0) * 255.0).round() as u8,
+                                    (color[1].clamp(0.0, 1.0) * 255.0).round() as u8,
+                                    (color[2].clamp(0.0, 1.0) * 255.0).round() as u8,
+                                    (color[3].clamp(0.0, 1.0) * 255.0).round() as u8,
+                                ),
+                                _ => label_fill,
+                            };
 
-                            ui.painter().rect_filled(layer_rect, 2.0, fill_c);
+                            let has_rendered_thumbnail =
+                                layer_has_timeline_preview(&layer.layer_type);
+                            let bar_fill = if has_rendered_thumbnail {
+                                egui::Color32::from_rgb(17, 20, 25)
+                            } else {
+                                fill_c
+                            };
+                            ui.painter().rect_filled(layer_rect, 2.0, bar_fill);
+                            if has_rendered_thumbnail {
+                                ui.painter().rect_filled(
+                                    egui::Rect::from_min_max(
+                                        layer_rect.left_top(),
+                                        egui::pos2(
+                                            (layer_rect.left() + 3.0).min(layer_rect.right()),
+                                            layer_rect.bottom(),
+                                        ),
+                                    ),
+                                    1.0,
+                                    fill_c,
+                                );
+                            }
+                            let preview_painter = ui.painter().with_clip_rect(layer_rect.shrink(1.0));
+                            if layer_rect.width() > 46.0 {
+                                if let Some((preview_start, preview_end, textures)) = &layer_preview_textures {
+                                    let preview_left = layer_rect.left() + layer_rect.width() * preview_start;
+                                    let preview_right = layer_rect.left() + layer_rect.width() * preview_end;
+                                    let preview_width = (preview_right - preview_left).max(0.0);
+                                    let tile_width = preview_width / textures.len().max(1) as f32;
+                                    for (tile_index, texture) in textures.iter().enumerate() {
+                                        let x = preview_left + tile_index as f32 * tile_width;
+                                        let tile_right = if tile_index + 1 == textures.len() {
+                                            preview_right
+                                        } else {
+                                            x + tile_width + 0.5
+                                        };
+                                        if let Some(texture) =
+                                            texture.as_ref().filter(|_| tile_width > 0.0)
+                                        {
+                                            let tile = egui::Rect::from_min_max(
+                                                egui::pos2(x, layer_rect.top()),
+                                                egui::pos2(tile_right.min(layer_rect.right()), layer_rect.bottom()),
+                                            );
+                                            let source_aspect = comp_w_f / comp_h_f;
+                                            let tile_aspect = tile.width() / tile.height().max(1.0);
+                                            let uv = if source_aspect > tile_aspect {
+                                                let visible = tile_aspect / source_aspect.max(0.01);
+                                                egui::Rect::from_min_max(
+                                                    egui::pos2((1.0 - visible) * 0.5, 0.0),
+                                                    egui::pos2(1.0 - (1.0 - visible) * 0.5, 1.0),
+                                                )
+                                            } else {
+                                                let visible = source_aspect / tile_aspect.max(0.01);
+                                                egui::Rect::from_min_max(
+                                                    egui::pos2(0.0, (1.0 - visible) * 0.5),
+                                                    egui::pos2(1.0, 1.0 - (1.0 - visible) * 0.5),
+                                                )
+                                            };
+                                            preview_painter.image(*texture, tile, uv, egui::Color32::WHITE);
+                                        }
+                                    }
+                                }
+                            }
+                            if layer_rect.width() > 72.0 {
+                                let label = layer.name.as_str();
+                                let label_galley = ui.painter().layout_no_wrap(
+                                    label.to_owned(),
+                                    egui::FontId::proportional(10.0),
+                                    egui::Color32::WHITE,
+                                );
+                                let label_rect = egui::Rect::from_min_size(
+                                    egui::pos2(layer_rect.left() + 2.0, layer_rect.top() + 1.0),
+                                    egui::vec2(
+                                        (label_galley.size().x + 10.0)
+                                            .min(layer_rect.width() - 4.0),
+                                        (label_galley.size().y + 4.0)
+                                            .min(layer_rect.height() - 2.0)
+                                            .max(1.0),
+                                    ),
+                                );
+                                preview_painter.rect_filled(label_rect, 1.0, egui::Color32::from_black_alpha(92));
+                                preview_painter.with_clip_rect(label_rect).text(
+                                    label_rect.left_center() + egui::vec2(4.0, 0.0),
+                                    egui::Align2::LEFT_CENTER,
+                                    label,
+                                    egui::FontId::proportional(10.0),
+                                    egui::Color32::WHITE,
+                                );
+                            }
                             ui.painter().rect_stroke(layer_rect, 2.0, egui::Stroke::new(1.0_f32, colors::TEXT_SECONDARY));
 
                             // ── Audio waveform overlay inside the bar ──
@@ -1400,43 +1980,22 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                 _ => None,
                             };
                             if let Some(apath) = audio_path {
-                                let key = egui::Id::new(("tl_waveform", apath.as_str()));
-                                let cached: std::sync::Arc<(Vec<f32>, f32)> = ui.ctx().data_mut(|d| {
-                                    d.get_temp::<std::sync::Arc<(Vec<f32>, f32)>>(key).unwrap_or_else(|| {
-                                        let built = crate::core::audio_engine::AudioBuffer::load_audio(std::path::Path::new(&apath))
-                                            .map(|b| {
-                                                let dur = b.samples.len() as f32
-                                                    / (b.sample_rate.max(1) as f32 * b.channels.max(1) as f32);
-                                                (b.waveform_peaks(600), dur)
-                                            })
-                                            .unwrap_or((Vec::new(), 0.0));
-                                        let arc = std::sync::Arc::new(built);
-                                        d.insert_temp(key, arc.clone());
-                                        arc
-                                    })
-                                });
-                                let (peaks, dur_sec) = (&cached.0, cached.1);
-                                if peaks.len() > 1 && dur_sec > 0.0 && layer_rect.width() > 8.0 {
-                                    let fps_c = comp.fps.max(1) as f32;
-                                    let mid_y = layer_rect.center().y;
-                                    let amp = layer_rect.height() * 0.40;
-                                    let wf_color = colors::TIMELINE_WAVEFORM.linear_multiply(0.9);
-                                    let mut x = layer_rect.left() + 2.0;
-                                    while x <= layer_rect.right() - 2.0 {
-                                        let t = (x - layer_rect.left()) / layer_rect.width();
-                                        let frame_f = layer.in_frame as f32 + t * (layer.out_frame - layer.in_frame) as f32;
-                                        let sec = frame_f / fps_c;
-                                        if sec < dur_sec {
-                                            let bin = ((sec / dur_sec) * peaks.len() as f32) as usize;
-                                            let pk = peaks.get(bin.min(peaks.len() - 1)).copied().unwrap_or(0.0);
-                                            let h = (pk * amp).clamp(1.0, amp);
-                                            ui.painter().line_segment(
-                                                [egui::pos2(x, mid_y - h), egui::pos2(x, mid_y + h)],
-                                                egui::Stroke::new(1.0_f32, wf_color),
-                                            );
-                                        }
-                                        x += 2.0;
-                                    }
+                                if let Some(waveform) =
+                                    waveform_cache::get(ui.ctx(), std::path::Path::new(&apath))
+                                {
+                                    draw_layer_waveform(
+                                        &ui.painter().with_clip_rect(layer_rect),
+                                        LayerWaveformParams {
+                                            timeline_rect: bar_rect,
+                                            clip_rect: layer_rect,
+                                            layer,
+                                            waveform: &waveform,
+                                            start_frame,
+                                            visible_span: zoom_span,
+                                            fps: comp.fps,
+                                            color: colors::TIMELINE_WAVEFORM,
+                                        },
+                                    );
                                 }
                             }
 
@@ -1489,7 +2048,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                     let delta_frames = total_frame_offset - drag_state.frame_offset;
                                     drag_state.frame_offset = total_frame_offset;
                                     // ── Vertical drag → reorder layers in stack ──
-                                    let row_h = 26.0f32;
+                                    let row_h = layout::LAYER_ROW_HEIGHT;
                                     let total_y = body_resp.drag_delta().y;
                                     let incremental_y = total_y - drag_state.previous_y;
                                     drag_state.previous_y = total_y;
@@ -1498,7 +2057,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                     if row_offset != 0 {
                                         let target = (i as i32 - row_offset).clamp(0, layers_len as i32 - 1) as usize;
                                         if target != i {
-                                            swap_request = Some((i, target));
+                                            actions.swap_request = Some((i, target));
                                         }
                                         drag_state.y_remainder = new_accum - row_offset as f32 * row_h;
                                     } else {
@@ -1578,20 +2137,11 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                                 .clamp(0, (total_frames - span) as i32)
                                                 as u32;
                                             let new_in = if app.snap_to_keyframes {
-                                                let threshold = 5i32;
-                                                let mut best = raw_in;
-                                                let mut best_dist = threshold + 1;
-                                                for (j, &(e_in, e_out)) in layer_edges.iter().enumerate() {
-                                                    if j == i { continue; }
-                                                    for edge in [e_in, e_out] {
-                                                        let dist = (raw_in as i32 - edge as i32).abs();
-                                                        if dist < best_dist {
-                                                            best_dist = dist;
-                                                            best = edge;
-                                                        }
-                                                    }
-                                                }
-                                                best
+                                                crate::ui::timeline::snapping::snap_to_sorted_layer_edges(
+                                                    raw_in,
+                                                    i,
+                                                    layer_edges,
+                                                )
                                             } else {
                                                 raw_in
                                             };
@@ -1635,7 +2185,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                             // ── Shift+drag Out = ripple edit: close gaps for layers below ──
                                             if ui.input(|inp| inp.modifiers.shift) && layer.out_frame != old_out {
                                                 let shift = layer.out_frame as i64 - old_out as i64;
-                                                pending_ripple = Some((i, old_out, shift));
+                                                actions.pending_ripple = Some((i, old_out, shift));
                                             }
                                         }
                                         project_changed = true;
@@ -1661,77 +2211,64 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
 
                             // ── Real waveform for video layers with audio ──
                             if let LayerType::Video { audio_wav: Some(wav_path), .. } = &layer.layer_type {
-                                let wav_id = egui::Id::new(("wav_peaks", layer.id.as_str()));
-                                let peaks: std::sync::Arc<Vec<f32>> = ui.ctx().data_mut(|d| {
-                                    d.get_temp::<std::sync::Arc<Vec<f32>>>(wav_id)
-                                        .unwrap_or_else(|| {
-                                            let peaks = std::cell::RefCell::new(Vec::new());
-                                            if let Ok(buf) = crate::core::audio_engine::AudioBuffer::load_audio(std::path::Path::new(wav_path)) {
-                                                *peaks.borrow_mut() = buf.waveform_peaks(200);
-                                            }
-                                            let peaks = std::sync::Arc::new(peaks.into_inner());
-                                            d.insert_temp(wav_id, peaks.clone());
-                                            peaks
-                                        })
-                                });
-                                if !peaks.is_empty() {
-                                    let bin_span = (total_frames.max(1) as f32) / peaks.len() as f32;
-                                    for (bin, &amp) in peaks.iter().enumerate() {
-                                        let frame_at = bin as f32 * bin_span;
-                                        if frame_at < start_frame as f32 || frame_at > (start_frame + zoom_span) as f32 {
-                                            continue;
-                                        }
-                                        let norm = (frame_at - start_frame as f32) / zoom_span as f32;
-                                        let sx = bar_rect.left() + norm * bar_rect.width();
-                                        let h = (amp * layer_rect.height() * 0.45).max(1.0);
-                                        let sy = layer_rect.center().y;
-                                        ui.painter().line_segment(
-                                            [egui::pos2(sx, sy - h), egui::pos2(sx, sy + h)],
-                                            egui::Stroke::new(1.0_f32, colors::ACCENT_CYAN),
-                                        );
-                                    }
+                                if let Some(waveform) = waveform_cache::get(
+                                    ui.ctx(),
+                                    std::path::Path::new(wav_path),
+                                ) {
+                                    draw_layer_waveform(
+                                        &ui.painter().with_clip_rect(layer_rect),
+                                        LayerWaveformParams {
+                                            timeline_rect: bar_rect,
+                                            clip_rect: layer_rect,
+                                            layer,
+                                            waveform: &waveform,
+                                            start_frame,
+                                            visible_span: zoom_span,
+                                            fps: comp.fps,
+                                            color: colors::TIMELINE_WAVEFORM,
+                                        },
+                                    );
                                 }
                             }
 
                             if let LayerType::Audio { path, .. } = &layer.layer_type {
-                                // Real waveform from the audio file (cached per layer)
-                                let wav_id = egui::Id::new(("audio_peaks", layer.id.as_str()));
-                                let peaks: std::sync::Arc<Vec<f32>> = ui.ctx().data_mut(|d| {
-                                    d.get_temp::<std::sync::Arc<Vec<f32>>>(wav_id)
-                                        .unwrap_or_else(|| {
-                                            let peaks = std::cell::RefCell::new(Vec::new());
-                                            if let Ok(buf) = crate::core::audio_engine::AudioBuffer::load_audio(std::path::Path::new(path)) {
-                                                *peaks.borrow_mut() = buf.waveform_peaks(200);
-                                            }
-                                            let peaks = std::sync::Arc::new(peaks.into_inner());
-                                            d.insert_temp(wav_id, peaks.clone());
-                                            peaks
-                                        })
-                                });
-                                if peaks.is_empty() {
-                                    // No decodable audio: flat placeholder line
-                                    ui.painter().line_segment(
-                                        [egui::pos2(layer_rect.left() + 2.0, layer_rect.center().y),
-                                         egui::pos2(layer_rect.right() - 2.0, layer_rect.center().y)],
-                                        egui::Stroke::new(1.0_f32, colors::ACCENT_CYAN.linear_multiply(0.5)),
+                                if let Some(waveform) = waveform_cache::get(
+                                    ui.ctx(),
+                                    std::path::Path::new(path),
+                                ) {
+                                    draw_layer_waveform(
+                                        &ui.painter().with_clip_rect(layer_rect),
+                                        LayerWaveformParams {
+                                            timeline_rect: bar_rect,
+                                            clip_rect: layer_rect,
+                                            layer,
+                                            waveform: &waveform,
+                                            start_frame,
+                                            visible_span: zoom_span,
+                                            fps: comp.fps,
+                                            color: colors::TIMELINE_WAVEFORM,
+                                        },
                                     );
-                                } else {
-                                    let bin_span = (total_frames.max(1) as f32) / peaks.len() as f32;
-                                    for (bin, &amp) in peaks.iter().enumerate() {
-                                        let frame_at = bin as f32 * bin_span;
-                                        if frame_at < start_frame as f32 || frame_at > (start_frame + zoom_span) as f32 {
-                                            continue;
-                                        }
-                                        let norm = (frame_at - start_frame as f32) / zoom_span as f32;
-                                        let sx = bar_rect.left() + norm * bar_rect.width();
-                                        let h = (amp * layer_rect.height() * 0.45).max(1.0);
-                                        let sy = layer_rect.center().y;
-                                        ui.painter().line_segment(
-                                            [egui::pos2(sx, sy - h), egui::pos2(sx, sy + h)],
-                                            egui::Stroke::new(1.0_f32, colors::ACCENT_CYAN),
-                                        );
-                                    }
                                 }
+                            }
+
+                            let playhead_norm =
+                                (*current_frame as f32 - start_frame as f32) / zoom_span as f32;
+                            if (0.0..=1.0).contains(&playhead_norm) {
+                                let playhead_x =
+                                    bar_rect.left() + playhead_norm * bar_rect.width();
+                                ui.painter()
+                                    .with_clip_rect(bar_rect)
+                                    .line_segment(
+                                        [
+                                            egui::pos2(playhead_x, bar_rect.top()),
+                                            egui::pos2(playhead_x, bar_rect.bottom()),
+                                        ],
+                                        egui::Stroke::new(
+                                            1.5_f32,
+                                            colors::TIMELINE_PLAYHEAD,
+                                        ),
+                                    );
                             }
                         });
 
@@ -1747,38 +2284,42 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                 let (response, painter) = ui.allocate_painter(egui::vec2(ui.available_width(), wf_height), egui::Sense::hover());
                                 let wf_rect = response.rect;
                                 painter.rect_filled(wf_rect, 0.0, egui::Color32::from_rgba_premultiplied(20, 20, 25, 255));
-                                let key = egui::Id::new(("tl_wf_exp", apath.as_str()));
-                                let cached: std::sync::Arc<(Vec<f32>, f32)> = ui.ctx().data_mut(|d| {
-                                    d.get_temp::<std::sync::Arc<(Vec<f32>, f32)>>(key).unwrap_or_else(|| {
-                                        let built = crate::core::audio_engine::AudioBuffer::load_audio(std::path::Path::new(&apath))
-                                            .map(|b| {
-                                                let dur = b.samples.len() as f32
-                                                    / (b.sample_rate.max(1) as f32 * b.channels.max(1) as f32);
-                                                (b.waveform_peaks(1200), dur)
-                                            })
-                                            .unwrap_or((Vec::new(), 0.0));
-                                        let arc = std::sync::Arc::new(built);
-                                        d.insert_temp(key, arc.clone());
-                                        arc
-                                    })
-                                });
-                                let (peaks, dur_sec) = (&cached.0, cached.1);
-                                if peaks.len() > 1 && dur_sec > 0.0 && wf_rect.width() > 8.0 {
-                                    let mid_y = wf_rect.center().y;
-                                    let amp = wf_rect.height() * 0.45;
-                                    let wf_color = crate::ui::theme::colors::TIMELINE_WAVEFORM;
-                                    let mut x = wf_rect.left() + 2.0;
-                                    while x <= wf_rect.right() - 2.0 {
-                                        let t = ((x - wf_rect.left()) / wf_rect.width()) * dur_sec;
-                                        let peak_idx = ((t / dur_sec) * (peaks.len() - 1) as f32).round() as usize;
-                                        let peak = peaks.get(peak_idx).copied().unwrap_or(0.0);
-                                        let bar_h = (peak * amp).max(1.0);
-                                        painter.line_segment(
-                                            [egui::pos2(x, mid_y - bar_h), egui::pos2(x, mid_y + bar_h)],
-                                            egui::Stroke::new(1.0_f32, wf_color),
-                                        );
-                                        x += 2.0;
-                                    }
+                                if let Some(waveform) =
+                                    waveform_cache::get(ui.ctx(), std::path::Path::new(&apath))
+                                {
+                                    let timeline_rect = egui::Rect::from_min_max(
+                                        egui::pos2(wf_rect.left() + left_pane_w, wf_rect.top()),
+                                        wf_rect.right_bottom(),
+                                    );
+                                    let start_norm =
+                                        layer.in_frame.saturating_sub(start_frame) as f32
+                                            / zoom_span.max(1) as f32;
+                                    let end_norm =
+                                        layer.out_frame.saturating_sub(start_frame) as f32
+                                            / zoom_span.max(1) as f32;
+                                    let clip_rect = egui::Rect::from_min_max(
+                                        egui::pos2(
+                                            timeline_rect.left() + start_norm * timeline_rect.width(),
+                                            wf_rect.top(),
+                                        ),
+                                        egui::pos2(
+                                            timeline_rect.left() + end_norm * timeline_rect.width(),
+                                            wf_rect.bottom(),
+                                        ),
+                                    );
+                                    draw_layer_waveform(
+                                        &painter.with_clip_rect(clip_rect),
+                                        LayerWaveformParams {
+                                            timeline_rect,
+                                            clip_rect,
+                                            layer,
+                                            waveform: &waveform,
+                                            start_frame,
+                                            visible_span: zoom_span,
+                                            fps: comp.fps,
+                                            color: colors::TIMELINE_WAVEFORM,
+                                        },
+                                    );
                                 }
                             }
                         }
@@ -1786,140 +2327,34 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                         // If expanded, render transform properties & effects
                         if app.selection.expanded_layers.contains(&i) {
                             crate::ui::timeline::keyframe_rows::draw_expanded_rows(
-                                ui, layer, i,
-                                &mut app.selected_keyframes,
-                                &mut app.selection.selected_property,
-                                current_frame, start_frame, zoom_span, left_pane_w,
-                                total_frames, &all_kf_frames, &precomp_children,
-                                &mut pending_open_comp, &mut project_changed,
+                                ui,
+                                crate::ui::timeline::keyframe_rows::ExpandedRowsState {
+                                    layer,
+                                    layer_index: i,
+                                    selected_keyframes: &mut app.selected_keyframes,
+                                    selected_property: &mut app.selection.selected_property,
+                                    current_frame,
+                                    start_frame,
+                                    zoom_span,
+                                    left_pane_w,
+                                    all_kf_frames,
+                                    precomp_children: &precomp_children,
+                                    open_comp_request: &mut actions.pending_open_comp,
+                                    project_changed: &mut project_changed,
+                                },
                             );
                         }
                     }
                 }
             });
 
-            // ── Select every keyframe on a layer (context menu) ──
-            if let Some(idx) = pending_select_all_kfs {
-                let mut collected: Vec<(String, u32)> = Vec::new();
-                if let Some(layer) = comp.layers.get(idx) {
-                    macro_rules! track {
-                        ($key:expr, $anim:expr) => {
-                            if let Some(kfs) = $anim.keyframes() {
-                                for k in kfs { collected.push(($key.to_string(), k.frame)); }
-                            }
-                        };
-                    }
-                    track!("position", layer.transform.position);
-                    track!("scale", layer.transform.scale);
-                    track!("rotation", layer.transform.rotation);
-                    track!("opacity", layer.transform.opacity);
-                    for eff in &layer.effects {
-                        for (lbl, pref) in eff.effect_type.animatable_params_ref() {
-                            let key = format!("fxid:{}::{}", eff.id, lbl);
-                            match pref {
-                                crate::core::effect_params::ParamRefRef::Scalar(a) => track!(key.as_str(), a),
-                                crate::core::effect_params::ParamRefRef::Vec2(a) => track!(key.as_str(), a),
-                                crate::core::effect_params::ParamRefRef::Vec3(a) => track!(key.as_str(), a),
-                                crate::core::effect_params::ParamRefRef::Vec4Color(a) => track!(key.as_str(), a),
-                            }
-                        }
-                    }
-                    for pin in &layer.puppet_pins {
-                        track!(format!("pin_{}", pin.id), pin.position);
-                    }
-                }
-                if collected.is_empty() {
-                    app.toasts.info("Layer has no keyframes");
-                } else {
-                    app.selected_keyframes.clear();
-                    for (pk, f) in collected {
-                        app.selected_keyframes.insert((idx, pk, f));
-                    }
-                }
-            }
-
-            if let Some(target_label) = pending_select_label_group {
-                app.selection.selected_layers.clear();
-                for (idx, l) in comp.layers.iter().enumerate() {
-                    if l.label == target_label {
-                        app.selection.selected_layers.insert(idx);
-                        app.selection.selected_layer_idx = Some(idx);
-                    }
-                }
-                app.toasts.info(format!("Selected {} layers in label group", app.selection.selected_layers.len()));
-            }
-
-            crate::ui::timeline::pending_actions::apply_effect_drops(app, pending_effect_drops, &mut project_changed);
-
-            // ── AE Timeline Bottom Controls Bar ──
-            if narrow_timeline {
-                if ui.input(|i| i.key_pressed(egui::Key::F4)) {
-                    app.ui_tabs.show_switches_pane = !app.ui_tabs.show_switches_pane;
-                }
-            } else {
-                ui.add_space(2.0);
-                ui.horizontal(|ui| {
-                    ui.small(egui::RichText::new("Controls").strong().color(colors::TEXT_SECONDARY));
-                    if ui.selectable_label(app.ui_tabs.show_switches_pane, "Switches").on_hover_text("Show layer switches").clicked() {
-                        app.ui_tabs.show_switches_pane = true;
-                    }
-                    if ui.selectable_label(!app.ui_tabs.show_switches_pane, "Modes").on_hover_text("Show blend modes and track mattes").clicked() {
-                        app.ui_tabs.show_switches_pane = false;
-                    }
-                    if ui.input(|i| i.key_pressed(egui::Key::F4)) {
-                        app.ui_tabs.show_switches_pane = !app.ui_tabs.show_switches_pane;
-                    }
-                    ui.separator();
-                    ui.small(egui::RichText::new("F4 toggles · Double-click to rename · Space to preview").color(colors::TEXT_SECONDARY));
-                });
-            }
-
-            crate::ui::timeline::pending_actions::apply(
+            crate::ui::timeline::pending_actions::apply_deferred(
                 app,
                 ui,
                 *current_frame,
                 &mut project_changed,
-                swap_request,
-                pending_duration,
-                pending_trim_work_area,
-                pending_open_comp,
-                pending_ripple,
-                pending_layer_marker,
-                pending_clear_markers,
-                pending_dup_layer,
-                pending_split_layer,
-                pending_precomp_indices,
+                &mut actions,
             );
-
-            // ── Apply pending pick whip ──
-            if let Some((child_idx, parent_idx)) = pending_pick_whip {
-                let comp_mut = app.history.current_mut().active_composition_mut();
-                if child_idx < comp_mut.layers.len() && parent_idx < comp_mut.layers.len() {
-                    let parent_id = comp_mut.layers[parent_idx].id.clone();
-                    let child_name = comp_mut.layers[child_idx].name.clone();
-                    let parent_name = comp_mut.layers[parent_idx].name.clone();
-                    comp_mut.layers[child_idx].parent_id = Some(parent_id);
-                    app.toasts.info(format!("Parented '{}' → '{}'", child_name, parent_name));
-                    project_changed = true;
-                }
-            }
-
-            // ── Apply pending Create Shapes from Text ──
-            if let Some(idx) = pending_create_shapes {
-                let comp_mut = app.history.current_mut().active_composition_mut();
-                if idx < comp_mut.layers.len() {
-                    if let Some(shape_layer) = crate::core::text_to_shapes::convert_text_to_shapes(
-                        &comp_mut.layers[idx],
-                        comp_mut.width,
-                        comp_mut.height,
-                    ) {
-                        let name = comp_mut.layers[idx].name.clone();
-                        comp_mut.layers.insert(idx, shape_layer);
-                        app.toasts.info(format!("Created shapes from '{}'", name));
-                        project_changed = true;
-                    }
-                }
-            }
 
             if project_changed {
                 // Transactional undo commit: snapshot on pointer-down, single entry on release
@@ -1939,555 +2374,20 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
         });
 }
 
-#[allow(float_literal_f32_fallback)]
-#[allow(dead_code)]
-fn draw_target_timeline(
-    app: &mut KagariApp,
-    ctx: &egui::Context,
-    current_frame: &mut u32,
-    total_frames: u32,
-) {
-    let screen_height = ctx.screen_rect().height();
-    let timeline_height = (screen_height * 0.38).clamp(300.0, 394.0);
-    egui::TopBottomPanel::bottom("timeline_panel")
-        .resizable(false)
-        .exact_height(timeline_height)
-        .frame(egui::Frame::none().fill(crate::ui::theme::colors::BG_DARKEST))
-        .show(ctx, |ui| {
-            let rect = ui.max_rect();
-            let painter = ui.painter();
-            let border = crate::ui::theme::colors::BORDER_SUBTLE;
-            let muted = colors::TEXT_SECONDARY;
-            let left_width = 338.0;
-            let compact = rect.height() < 360.0;
-            let header_h = if compact { 34.0 } else { 42.0 };
-            let tools_h = if compact { 30.0 } else { 42.0 };
-            let ruler_h = if compact { 24.0 } else { 35.0 };
-            let row_h = if compact { 28.0 } else { 37.0 };
-            painter.rect_filled(rect, 0.0, crate::ui::theme::colors::BG_DARKEST);
-            painter.line_segment(
-                [
-                    egui::pos2(rect.left(), rect.top() + header_h),
-                    egui::pos2(rect.right(), rect.top() + header_h),
-                ],
-                egui::Stroke::new(1.0, border),
-            );
-            painter.line_segment(
-                [
-                    egui::pos2(rect.left(), rect.top() + header_h + tools_h),
-                    egui::pos2(rect.right(), rect.top() + header_h + tools_h),
-                ],
-                egui::Stroke::new(1.0, border),
-            );
-            painter.line_segment(
-                [
-                    egui::pos2(rect.left(), rect.top() + header_h + tools_h + ruler_h),
-                    egui::pos2(rect.right(), rect.top() + header_h + tools_h + ruler_h),
-                ],
-                egui::Stroke::new(1.0, border),
-            );
-            painter.line_segment(
-                [
-                    egui::pos2(rect.left() + left_width, rect.top()),
-                    egui::pos2(rect.left() + left_width, rect.bottom()),
-                ],
-                egui::Stroke::new(1.0, border),
-            );
-            painter.text(
-                egui::pos2(rect.left() + 24.0, rect.top() + header_h * 0.5),
-                egui::Align2::LEFT_CENTER,
-                "Timeline",
-                egui::FontId::proportional(if compact { 12.0 } else { 14.0 }),
-                colors::TEXT_PRIMARY,
-            );
-            painter.line_segment(
-                [
-                    egui::pos2(rect.left() + 16.0, rect.top() + header_h - 2.0),
-                    egui::pos2(rect.left() + 116.0, rect.top() + header_h - 2.0),
-                ],
-                egui::Stroke::new(2.0, crate::ui::theme::colors::ACCENT_BRAND),
-            );
-            painter.text(
-                egui::pos2(rect.left() + 146.0, rect.top() + header_h * 0.5),
-                egui::Align2::LEFT_CENTER,
-                "Graph",
-                egui::FontId::proportional(if compact { 11.0 } else { 13.0 }),
-                muted,
-            );
-            for (index, glyph) in ["↖", "♧", "⌁", "✥", "⌁", "↻", "▱", "⊙"]
-                .into_iter()
-                .enumerate()
-            {
-                painter.text(
-                    egui::pos2(
-                        rect.left() + 31.0 + index as f32 * 34.0,
-                        rect.top() + header_h + tools_h * 0.5,
-                    ),
-                    egui::Align2::CENTER_CENTER,
-                    glyph,
-                    egui::FontId::proportional(if compact { 13.0 } else { 16.0 }),
-                    if index == 0 {
-                        crate::ui::theme::colors::ACCENT_BRAND
-                    } else {
-                        muted
-                    },
-                );
-            }
-            let ruler_y = rect.top() + header_h + tools_h;
-            for second in 0..33 {
-                let x = rect.left() + left_width + second as f32 * 37.0;
-                painter.line_segment(
-                    [
-                        egui::pos2(x, ruler_y + ruler_h * 0.6),
-                        egui::pos2(x, ruler_y + ruler_h),
-                    ],
-                    egui::Stroke::new(1.0, border),
-                );
-                if second % 5 == 0 {
-                    painter.text(
-                        egui::pos2(x + 4.0, ruler_y + ruler_h * 0.4),
-                        egui::Align2::LEFT_CENTER,
-                        format!("00:{second:02}"),
-                        egui::FontId::proportional(if compact { 9.0 } else { 11.0 }),
-                        muted,
-                    );
-                }
-            }
-            let names = [
-                (6usize, "ADJ", "Adjustment Layer"),
-                (1usize, "TEXT", "Main Title"),
-                (5usize, "FX", "Particles"),
-                (4usize, "MEDIA", "Footage"),
-                (0usize, "AUDIO", "Ambient"),
-                (2usize, "FX", "Light Leak"),
-            ];
-            let rows_top = ruler_y + ruler_h;
-            let selected_layer = app.selection.selected_layer_idx;
-            for (index, (layer_idx, track, name)) in names.into_iter().enumerate() {
-                let y = rows_top + index as f32 * row_h;
-                painter.line_segment(
-                    [
-                        egui::pos2(rect.left(), y + row_h),
-                        egui::pos2(rect.right(), y + row_h),
-                    ],
-                    egui::Stroke::new(1.0, border),
-                );
-                if selected_layer == Some(layer_idx) {
-                    painter.rect_filled(
-                        egui::Rect::from_min_size(
-                            egui::pos2(rect.left(), y),
-                            egui::vec2(rect.width(), row_h),
-                        ),
-                        0.0,
-                        egui::Color32::from_rgba_premultiplied(25, 85, 135, 42),
-                    );
-                }
-                painter.text(
-                    egui::pos2(rect.left() + 28.0, y + row_h * 0.5),
-                    egui::Align2::CENTER_CENTER,
-                    "◉",
-                    egui::FontId::proportional(if compact { 11.0 } else { 14.0 }),
-                    muted,
-                );
-                painter.text(
-                    egui::pos2(rect.left() + 63.0, y + row_h * 0.5),
-                    egui::Align2::CENTER_CENTER,
-                    "♙",
-                    egui::FontId::proportional(if compact { 11.0 } else { 14.0 }),
-                    muted,
-                );
-                painter.rect_filled(
-                    egui::Rect::from_min_size(
-                        egui::pos2(rect.left() + 82.0, y + 1.0),
-                        egui::vec2(50.0, row_h - 2.0),
-                    ),
-                    0.0,
-                    egui::Color32::from_rgb(19, 30, 38),
-                );
-                painter.text(
-                    egui::pos2(rect.left() + 99.0, y + row_h * 0.5),
-                    egui::Align2::CENTER_CENTER,
-                    track,
-                    egui::FontId::proportional(if compact { 9.0 } else { 11.0 }),
-                    muted,
-                );
-                painter.text(
-                    egui::pos2(rect.left() + 137.0, y + row_h * 0.5),
-                    egui::Align2::LEFT_CENTER,
-                    "▸",
-                    egui::FontId::proportional(if compact { 9.0 } else { 11.0 }),
-                    muted,
-                );
-                painter.text(
-                    egui::pos2(rect.left() + 152.0, y + row_h * 0.5),
-                    egui::Align2::LEFT_CENTER,
-                    name,
-                    egui::FontId::proportional(if compact { 10.0 } else { 12.0 }),
-                    colors::TEXT_PRIMARY,
-                );
-                let bar_left =
-                    rect.left() + left_width + [7.0, 185.0, 188.0, 108.0, 27.0, 62.0][index];
-                let bar_width: f32 = [766.0, 535.0, 324.0, 633.0, 912.0, 492.0][index];
-                let bar_color = [
-                    egui::Color32::from_rgb(91, 80, 169),
-                    egui::Color32::from_rgb(156, 77, 150),
-                    egui::Color32::from_rgb(37, 108, 177),
-                    egui::Color32::from_rgb(40, 108, 182),
-                    egui::Color32::from_rgb(34, 124, 91),
-                    egui::Color32::from_rgb(35, 112, 82),
-                ][index];
-                painter.rect_filled(
-                    egui::Rect::from_min_size(
-                        egui::pos2(bar_left, y + 3.0),
-                        egui::vec2(
-                            bar_width.min(rect.right() - bar_left - 8.0),
-                            (row_h - 6.0).max(12.0),
-                        ),
-                    ),
-                    2.0,
-                    bar_color,
-                );
-                painter.text(
-                    egui::pos2(bar_left + 9.0, y + row_h * 0.5),
-                    egui::Align2::LEFT_CENTER,
-                    [
-                        "Adjustment Layer",
-                        "CREATE COMPOSITE ILLUMINATE",
-                        "particles.mp4",
-                        "mountain.mp4",
-                        "ambient.mp3",
-                        "whoosh.wav",
-                    ][index],
-                    egui::FontId::proportional(if compact { 10.0 } else { 12.0 }),
-                    egui::Color32::from_rgb(230, 232, 237),
-                );
-                if layer_idx == 1 {
-                    for keyframe_x in [0.34, 0.56, 0.76] {
-                        painter.text(
-                            egui::pos2(
-                                bar_left
-                                    + bar_width.min(rect.right() - bar_left - 8.0) * keyframe_x,
-                                y + row_h * 0.5,
-                            ),
-                            egui::Align2::CENTER_CENTER,
-                            "◆",
-                            egui::FontId::proportional(if compact { 8.0 } else { 10.0 }),
-                            egui::Color32::from_rgb(230, 220, 255),
-                        );
-                    }
-                }
-            }
-            let play_x = rect.left() + left_width + 164.0;
-            painter.line_segment(
-                [
-                    egui::pos2(play_x, ruler_y - 2.0),
-                    egui::pos2(play_x, rect.bottom()),
-                ],
-                egui::Stroke::new(2.0, crate::ui::theme::colors::ACCENT_BRAND),
-            );
-            painter.rect_filled(
-                egui::Rect::from_min_size(
-                    egui::pos2(play_x - 6.0, ruler_y - 5.0),
-                    egui::vec2(12.0, 12.0),
-                ),
-                2.0,
-                crate::ui::theme::colors::ACCENT_BRAND,
-            );
-            *current_frame = (*current_frame).min(total_frames.saturating_sub(1));
-            let _ = app;
-        });
-}
+#[cfg(test)]
+mod tests {
+    use super::state::would_create_parent_cycle;
+    use std::collections::HashMap;
 
-#[allow(dead_code)]
-fn draw_reference_timeline(
-    app: &mut KagariApp,
-    ctx: &egui::Context,
-    current_frame: &mut u32,
-    total_frames: u32,
-) {
-    egui::TopBottomPanel::bottom("timeline_panel")
-        .resizable(true)
-        .min_height(350.0)
-        .default_height(359.0)
-        .show(ctx, |ui| {
-            let rect = ui.max_rect();
-            let left_width = 312.0_f32.min(rect.width() * 0.24);
-            let main_left = rect.left() + left_width;
-            let list_width = (rect.width() * 0.33).clamp(420.0, 506.0);
-            let bars_left = (main_left + list_width).min(rect.right() - 220.0);
-            let fill = egui::Color32::from_rgb(14, 24, 34);
-            let border = egui::Color32::from_rgb(39, 55, 71);
-            let secondary = colors::TEXT_SECONDARY;
-            ui.painter().rect_filled(rect, 0.0, fill);
-            ui.painter().rect_filled(
-                egui::Rect::from_min_max(rect.min, egui::pos2(main_left, rect.bottom())),
-                0.0,
-                egui::Color32::from_rgb(12, 22, 32),
-            );
-            ui.painter().line_segment(
-                [
-                    egui::pos2(main_left, rect.top()),
-                    egui::pos2(main_left, rect.bottom()),
-                ],
-                egui::Stroke::new(1.0_f32, border),
-            );
+    #[test]
+    fn parent_pick_whip_rejects_descendant_and_self() {
+        let parents = HashMap::from([
+            ("child".to_string(), "middle".to_string()),
+            ("middle".to_string(), "root".to_string()),
+        ]);
 
-            let assets = [
-                ("city_01.mp4", "3840 × 2160   00:12"),
-                ("mountain_bg.exr", "3840 × 2160"),
-                ("smoke_01.mov", "3840 × 2160"),
-                ("light_leak.mov", "3840 × 2160"),
-                ("glass_texture.png", "4096 × 4096"),
-                ("logo.png", "1024 × 1024"),
-            ];
-            for (index, (name, meta)) in assets.into_iter().enumerate() {
-                let y = rect.top() + 8.0 + index as f32 * 55.0;
-                let selected = index == 0;
-                let row = egui::Rect::from_min_size(
-                    egui::pos2(rect.left() + 10.0, y),
-                    egui::vec2(left_width - 20.0, 48.0),
-                );
-                if selected {
-                    ui.painter()
-                        .rect_filled(row, 4.0, crate::ui::theme::colors::BG_ACTIVE);
-                }
-                ui.painter()
-                    .rect_stroke(row, 4.0, egui::Stroke::new(1.0_f32, border));
-                let thumb = egui::Rect::from_min_size(
-                    egui::pos2(row.left() + 8.0, row.top() + 5.0),
-                    egui::vec2(62.0, 38.0),
-                );
-                if let Some(texture) = timeline_reference_texture(ui.ctx(), index) {
-                    ui.painter().image(
-                        texture.id(),
-                        thumb,
-                        egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-                        egui::Color32::WHITE,
-                    );
-                } else {
-                    ui.painter()
-                        .rect_filled(thumb, 3.0, egui::Color32::from_rgb(31, 48, 64));
-                }
-                ui.painter().text(
-                    egui::pos2(thumb.right() + 9.0, row.top() + 16.0),
-                    egui::Align2::LEFT_CENTER,
-                    name,
-                    egui::FontId::proportional(11.0),
-                    colors::TEXT_PRIMARY,
-                );
-                ui.painter().text(
-                    egui::pos2(thumb.right() + 9.0, row.top() + 33.0),
-                    egui::Align2::LEFT_CENTER,
-                    meta,
-                    egui::FontId::proportional(9.0),
-                    secondary,
-                );
-            }
-            ui.painter().text(
-                egui::pos2(rect.left() + 12.0, rect.bottom() - 12.0),
-                egui::Align2::LEFT_CENTER,
-                "Frame Render Time   12ms",
-                egui::FontId::proportional(10.0),
-                secondary,
-            );
-
-            let tabs = [
-                ("main_comp", true),
-                ("text_comp", false),
-                ("render_comp", false),
-            ];
-            for (index, (label, active)) in tabs.into_iter().enumerate() {
-                let x = main_left + 12.0 + index as f32 * 116.0;
-                ui.painter().text(
-                    egui::pos2(x + 14.0, rect.top() + 22.0),
-                    egui::Align2::LEFT_CENTER,
-                    label,
-                    egui::FontId::proportional(12.0),
-                    if active {
-                        colors::TEXT_PRIMARY
-                    } else {
-                        secondary
-                    },
-                );
-                if active {
-                    ui.painter().line_segment(
-                        [
-                            egui::pos2(x, rect.top() + 37.0),
-                            egui::pos2(x + 96.0, rect.top() + 37.0),
-                        ],
-                        egui::Stroke::new(2.0_f32, colors::ACCENT_BLUE),
-                    );
-                }
-            }
-            ui.painter().line_segment(
-                [
-                    egui::pos2(main_left, rect.top() + 42.0),
-                    egui::pos2(rect.right(), rect.top() + 42.0),
-                ],
-                egui::Stroke::new(1.0_f32, border),
-            );
-            ui.painter().text(
-                egui::pos2(main_left + 14.0, rect.top() + 64.0),
-                egui::Align2::LEFT_CENTER,
-                "00:00:03:12",
-                egui::FontId::proportional(16.0),
-                colors::ACCENT_BLUE,
-            );
-            ui.painter().text(
-                egui::pos2(main_left + 14.0, rect.top() + 80.0),
-                egui::Align2::LEFT_CENTER,
-                "00102   (24.00 fps)",
-                egui::FontId::proportional(9.0),
-                secondary,
-            );
-            for (index, glyph) in ["↶", "♧", "♧", "↷", "▧"].into_iter().enumerate() {
-                ui.painter().text(
-                    egui::pos2(main_left + 165.0 + index as f32 * 28.0, rect.top() + 66.0),
-                    egui::Align2::CENTER_CENTER,
-                    glyph,
-                    egui::FontId::proportional(15.0),
-                    secondary,
-                );
-            }
-            ui.painter().line_segment(
-                [
-                    egui::pos2(main_left, rect.top() + 91.0),
-                    egui::pos2(rect.right(), rect.top() + 91.0),
-                ],
-                egui::Stroke::new(1.0_f32, border),
-            );
-
-            let ruler_top = rect.top() + 94.0;
-            ui.painter().text(
-                egui::pos2(bars_left + 8.0, ruler_top + 16.0),
-                egui::Align2::LEFT_CENTER,
-                "00s          02s          04s          06s          08s          10s          12s",
-                egui::FontId::proportional(10.0),
-                secondary,
-            );
-            ui.painter().line_segment(
-                [
-                    egui::pos2(bars_left, ruler_top + 30.0),
-                    egui::pos2(rect.right() - 10.0, ruler_top + 30.0),
-                ],
-                egui::Stroke::new(1.0_f32, border),
-            );
-            let names = [
-                "[Adjustment layer]",
-                "[logo.png]",
-                "[Light Leak]",
-                "[Character]",
-                "[city_01.mp4]",
-                "[Clouds]",
-                "[BG]",
-            ];
-            let spans = [
-                (8, 142),
-                (14, 132),
-                (4, 126),
-                (34, 149),
-                (26, 149),
-                (20, 146),
-                (12, 146),
-            ];
-            let row_top = ruler_top + 38.0;
-            let row_height =
-                ((rect.bottom() - row_top - 20.0) / names.len() as f32).clamp(25.0, 31.0);
-            for (index, name) in names.into_iter().enumerate() {
-                let y = row_top + index as f32 * row_height;
-                ui.painter().line_segment(
-                    [
-                        egui::pos2(main_left, y + row_height),
-                        egui::pos2(rect.right(), y + row_height),
-                    ],
-                    egui::Stroke::new(1.0_f32, border),
-                );
-                ui.painter().text(
-                    egui::pos2(main_left + 12.0, y + row_height * 0.5),
-                    egui::Align2::LEFT_CENTER,
-                    format!("{}  {}", index + 1, name),
-                    egui::FontId::proportional(11.0),
-                    colors::TEXT_PRIMARY,
-                );
-                let start = bars_left
-                    + (spans[index].0 as f32 / total_frames.max(1) as f32)
-                        * (rect.right() - bars_left - 10.0);
-                let end = bars_left
-                    + (spans[index].1 as f32 / total_frames.max(1) as f32)
-                        * (rect.right() - bars_left - 10.0);
-                let bar = egui::Rect::from_min_max(
-                    egui::pos2(start, y + 4.0),
-                    egui::pos2(end.max(start + 8.0), y + row_height - 5.0),
-                );
-                let colors_by_row = [
-                    egui::Color32::from_rgb(111, 105, 157),
-                    egui::Color32::from_rgb(118, 108, 161),
-                    egui::Color32::from_rgb(172, 105, 142),
-                    egui::Color32::from_rgb(42, 67, 82),
-                    egui::Color32::from_rgb(73, 145, 157),
-                    egui::Color32::from_rgb(70, 128, 119),
-                    egui::Color32::from_rgb(56, 135, 116),
-                ];
-                ui.painter().rect_filled(bar, 2.0, colors_by_row[index]);
-                if index == 1 || index == 3 {
-                    for frame in if index == 1 {
-                        [28, 68, 110].as_slice()
-                    } else {
-                        [56, 82, 122].as_slice()
-                    } {
-                        let x = bars_left
-                            + (*frame as f32 / total_frames.max(1) as f32)
-                                * (rect.right() - bars_left - 10.0);
-                        let diamond = [
-                            egui::pos2(x, y + row_height * 0.5 - 5.0),
-                            egui::pos2(x + 5.0, y + row_height * 0.5),
-                            egui::pos2(x, y + row_height * 0.5 + 5.0),
-                            egui::pos2(x - 5.0, y + row_height * 0.5),
-                        ];
-                        ui.painter().add(egui::Shape::convex_polygon(
-                            diamond.to_vec(),
-                            colors::TEXT_PRIMARY,
-                            egui::Stroke::NONE,
-                        ));
-                    }
-                }
-            }
-            let play_x = bars_left
-                + (102.0 / total_frames.max(1) as f32) * (rect.right() - bars_left - 10.0);
-            ui.painter().line_segment(
-                [
-                    egui::pos2(play_x, ruler_top + 2.0),
-                    egui::pos2(play_x, rect.bottom() - 14.0),
-                ],
-                egui::Stroke::new(2.0_f32, colors::ACCENT_CYAN),
-            );
-            *current_frame = (*current_frame).min(total_frames.saturating_sub(1));
-            let _ = app;
-        });
-}
-
-#[allow(dead_code)]
-fn timeline_reference_texture(ctx: &egui::Context, index: usize) -> Option<egui::TextureHandle> {
-    let id = egui::Id::new(("reference-timeline-thumb", index));
-    if let Some(texture) = ctx.data_mut(|data| data.get_temp::<egui::TextureHandle>(id)) {
-        return Some(texture);
+        assert!(would_create_parent_cycle("root", "child", &parents));
+        assert!(would_create_parent_cycle("middle", "middle", &parents));
+        assert!(!would_create_parent_cycle("child", "root", &parents));
     }
-    let file = match index {
-        0 => "assets/studio/assets_city.webp",
-        1 => "assets/studio/assets_mountain.webp",
-        2 => "assets/studio/assets_clouds.webp",
-        3 => "assets/studio/assets_light_leak.webp",
-        4 => "assets/studio/assets_glass_texture.webp",
-        _ => "assets/kagari_logo.webp",
-    };
-    let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(file);
-    let image = crate::ui::embedded_assets::open_image(path).ok()?.to_rgba8();
-    let size = [image.width() as usize, image.height() as usize];
-    let texture = ctx.load_texture(
-        format!("reference-timeline-thumb-{index}"),
-        egui::ColorImage::from_rgba_unmultiplied(size, image.as_raw()),
-        egui::TextureOptions::LINEAR,
-    );
-    ctx.data_mut(|data| data.insert_temp(id, texture.clone()));
-    Some(texture)
 }

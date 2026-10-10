@@ -30,50 +30,10 @@ pub fn parse_aep(data: &[u8]) -> Result<AepHeader, String> {
     if data.len() < 16 {
         return Err("File too small for AEP header".into());
     }
-
-    let magic = [data[0], data[1], data[2], data[3]];
-    let version = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
-
-    let mut items = Vec::new();
-    let mut pos = 0;
-
-    while pos + 8 < data.len() {
-        if let Some(name) = try_extract_string(data, pos) {
-            if name.len() > 1 && name.len() < 256 && is_printable_ascii(&name) {
-                items.push(AepItem {
-                    item_type: AepItemType::Composition,
-                    name,
-                    start_frame: 0,
-                    duration_frames: 0,
-                    width: 1920,
-                    height: 1080,
-                    fps: 30.0,
-                });
-            }
-        }
-        pos += 1;
-    }
-
-    Ok(AepHeader {
-        magic,
-        version,
-        items,
-    })
+    Err("After Effects .aep project parsing is not supported; no project data was imported".into())
 }
 
-fn try_extract_string(data: &[u8], pos: usize) -> Option<String> {
-    if pos >= data.len() {
-        return None;
-    }
-    let end = data[pos..].iter().position(|&b| b == 0)?;
-    if end > 0 && end < 256 {
-        let bytes = &data[pos..pos + end];
-        String::from_utf8(bytes.to_vec()).ok()
-    } else {
-        None
-    }
-}
-
+#[cfg(test)]
 fn is_printable_ascii(s: &str) -> bool {
     s.bytes().all(|b| (0x20..0x7F).contains(&b))
 }
@@ -109,8 +69,7 @@ mod tests {
     fn test_parse_aep_empty_items() {
         let mut data = vec![0xCF, 0xFA, 0xED, 0xFE, 0, 0, 0, 0];
         data.extend_from_slice(&[0u8; 64]);
-        let header = parse_aep(&data).unwrap();
-        assert_eq!(header.magic, [0xCF, 0xFA, 0xED, 0xFE]);
+        assert!(parse_aep(&data).unwrap_err().contains("not supported"));
     }
 
     #[test]

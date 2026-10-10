@@ -1,11 +1,9 @@
-use eframe::egui;
 use super::import_helpers;
+use eframe::egui;
 
 pub fn draw_file_menu(app: &mut crate::KagariApp, ctx: &egui::Context, ui: &mut egui::Ui) {
     if ui.button("New Project").clicked() {
-        app.history = crate::core::history::ProjectHistory::new(
-            crate::core::timeline::Project::default(),
-        );
+        app.replace_project_history(crate::core::timeline::Project::default());
         app.selection.selected_layer_idx = None;
         app.selection.selected_layers.clear();
         crate::core::frame_cache::bump_version();
@@ -13,17 +11,15 @@ pub fn draw_file_menu(app: &mut crate::KagariApp, ctx: &egui::Context, ui: &mut 
     }
     ui.separator();
     let save_sc = crate::ui::shortcuts::format_shortcut("S", true, false, false);
-    if ui.add(egui::Button::new("Save Project").shortcut_text(save_sc)).clicked() {
+    if ui
+        .add(egui::Button::new("Save Project").shortcut_text(save_sc))
+        .clicked()
+    {
         let path = app.project_path.clone();
-        let project = app.history.current();
-        match crate::core::project_migration::save_project_atomic(project, &path) {
-            Ok(_) => {
-                let _ = app.autosave.save_now(project);
-                app.toasts.info(format!("Saved: {}", path));
-            }
-            Err(e) => {
-                app.toasts.error(format!("Save failed: {}", e));
-            }
+        if let Err(e) =
+            crate::ui::project_io::save_project_to_path(app, std::path::Path::new(&path))
+        {
+            app.toasts.error(format!("Save failed: {}", e));
         }
         ui.close_menu();
     }
@@ -39,46 +35,87 @@ pub fn draw_file_menu(app: &mut crate::KagariApp, ctx: &egui::Context, ui: &mut 
         }
         ui.close_menu();
     }
-    if ui.button("Collect Files...").on_hover_text("Collect all source footage, audio, and asset dependencies into an archive folder").clicked() {
+    if ui
+        .add_enabled(
+            app.collect_files_rx.is_none(),
+            egui::Button::new("Collect Files..."),
+        )
+        .on_hover_text("Copy referenced media and save a portable project bundle")
+        .clicked()
+    {
         if let Some(folder) = rfd::FileDialog::new().pick_folder() {
-            let project = app.history.current();
-            let target_json = folder.join("collected_project.json");
-            match crate::core::project_migration::save_project_atomic(project, target_json.to_str().unwrap_or("")) {
-                Ok(_) => {
-                    crate::ui::project_io::reveal_in_file_manager(&folder);
-                    app.toasts.info(format!("Collected project & assets to {}", folder.display()));
-                }
-                Err(e) => app.toasts.error(format!("Collect failed: {}", e)),
-            }
+            let mut document = app.production_document.clone().unwrap_or_else(|| {
+                crate::core::production_document::ProductionDocument::new(
+                    app.history.current().clone(),
+                )
+            });
+            *document.project_mut() = app.history.current().clone();
+            document.audio.correction = app.audio_correction_settings();
+            document.audio.channels = app.audio_mixer_channels.clone();
+            document.audio.master_gain = app.playback.master_volume;
+            let source_project_dir = std::path::Path::new(&app.project_path)
+                .parent()
+                .unwrap_or_else(|| std::path::Path::new("."))
+                .to_path_buf();
+            let (sender, receiver) = std::sync::mpsc::channel();
+            app.collect_files_rx = Some(receiver);
+            std::thread::spawn(move || {
+                let result = crate::core::project_migration::collect_production_document(
+                    &document,
+                    &folder,
+                    &source_project_dir,
+                );
+                let _ = sender.send(result);
+            });
         }
         ui.close_menu();
     }
-    if ui.button("Remove Unused Footage").on_hover_text("Remove unused footage items from project").clicked() {
+    if ui
+        .button("Remove Unused Footage")
+        .on_hover_text("Remove unused footage items from project")
+        .clicked()
+    {
         let mut temp_proj = app.history.current().clone();
         let mut used_names = std::collections::HashSet::new();
         for c in &temp_proj.compositions {
             for l in &c.layers {
                 used_names.insert(l.name.clone());
                 match &l.layer_type {
-                    crate::core::timeline::LayerType::Image { path } => { used_names.insert(path.clone()); }
-                    crate::core::timeline::LayerType::Model3D { path } => { used_names.insert(path.clone()); }
-                    crate::core::timeline::LayerType::Video { source, .. } => { used_names.insert(source.clone()); }
-                    crate::core::timeline::LayerType::Audio { path, .. } => { used_names.insert(path.clone()); }
+                    crate::core::timeline::LayerType::Image { path } => {
+                        used_names.insert(path.clone());
+                    }
+                    crate::core::timeline::LayerType::Model3D { path } => {
+                        used_names.insert(path.clone());
+                    }
+                    crate::core::timeline::LayerType::Video { source, .. } => {
+                        used_names.insert(source.clone());
+                    }
+                    crate::core::timeline::LayerType::Audio { path, .. } => {
+                        used_names.insert(path.clone());
+                    }
                     _ => {}
                 }
             }
         }
         let before = temp_proj.assets.len();
         temp_proj.assets.retain(|a| {
-            matches!(a.item_type, crate::core::timeline::ProjectItemType::Composition { .. } | crate::core::timeline::ProjectItemType::Folder { .. })
-                || used_names.contains(&a.name)
+            matches!(
+                a.item_type,
+                crate::core::timeline::ProjectItemType::Composition { .. }
+                    | crate::core::timeline::ProjectItemType::Folder { .. }
+            ) || used_names.contains(&a.name)
         });
         let rem = before.saturating_sub(temp_proj.assets.len());
         app.commit_project(temp_proj);
-        app.toasts.info(format!("Removed {} unused footage items", rem));
+        app.toasts
+            .info(format!("Removed {} unused footage items", rem));
         ui.close_menu();
     }
-    if ui.button("Reduce Project").on_hover_text("Keep only the active composition and its dependencies").clicked() {
+    if ui
+        .button("Reduce Project")
+        .on_hover_text("Keep only the active composition and its dependencies")
+        .clicked()
+    {
         let mut temp_proj = app.history.current().clone();
         let act = temp_proj.active_composition_idx;
         if act < temp_proj.compositions.len() {
@@ -120,9 +157,13 @@ pub fn draw_file_menu(app: &mut crate::KagariApp, ctx: &egui::Context, ui: &mut 
         app.export.show_export_dialog = true;
         ui.close_menu();
     }
-    if ui.button("Quick Export Active Comp").on_hover_text("Export the active composition to MP4 with current settings (no dialog)").clicked() {
-        let comp_name = app.history.current().active_composition().name.clone();
-        crate::ui::export_dialog::start_comp_export(app, ctx, &comp_name);
+    if ui
+        .button("Quick Export Active Comp")
+        .on_hover_text("Export the active composition to MP4 with current settings (no dialog)")
+        .clicked()
+    {
+        let comp_id = app.history.current().active_composition().id.clone();
+        crate::ui::export_dialog::start_comp_export(app, ctx, &comp_id);
         ui.close_menu();
     }
     ui.separator();
@@ -132,24 +173,37 @@ pub fn draw_file_menu(app: &mut crate::KagariApp, ctx: &egui::Context, ui: &mut 
 }
 
 fn draw_import_subtitles(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
-    if ui.button("Import Subtitles (.srt / .vtt)...").on_hover_text("Create timed, bottom-center caption text layers").clicked() {
+    if ui
+        .button("Import Subtitles (.srt / .vtt)...")
+        .on_hover_text("Create timed, bottom-center caption text layers")
+        .clicked()
+    {
         if let Some(path) = rfd::FileDialog::new()
             .add_filter("Subtitles", &["srt", "vtt"])
             .pick_file()
         {
             match crate::core::project_migration::read_bounded_text_file(&path, 8 * 1024 * 1024)
-                .map(|s| crate::core::subtitles::parse_srt(&s, app.history.current().active_composition().fps))
-            {
+                .map(|s| {
+                    crate::core::subtitles::parse_srt(
+                        &s,
+                        app.history.current().active_composition().fps,
+                    )
+                }) {
                 Ok(cues) => {
                     if cues.is_empty() {
                         app.toasts.error("No cues found in subtitle file");
                     } else {
-                        let (cw, ch) = { let cc = app.history.current().active_composition(); (cc.width as f32, cc.height as f32) };
+                        let (cw, ch) = {
+                            let cc = app.history.current().active_composition();
+                            (cc.width as f32, cc.height as f32)
+                        };
                         let layers = crate::core::subtitles::cues_to_layers(&cues, cw, ch, 48);
                         let n = layers.len();
                         app.modify_project(|project| {
                             let comp = project.active_composition_mut();
-                            for l in layers { comp.add_layer(l); }
+                            for l in layers {
+                                comp.add_layer(l);
+                            }
                         });
                         app.toasts.info(format!("{} caption layers created", n));
                     }
@@ -162,7 +216,11 @@ fn draw_import_subtitles(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
 }
 
 fn draw_import_blender_camera(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
-    if ui.button("Import Blender Camera Track (.json)...").on_hover_text("Bake a tracked camera solve onto this comp's active 3D camera").clicked() {
+    if ui
+        .button("Import Blender Camera Track (.json)...")
+        .on_hover_text("Bake a tracked camera solve onto this comp's active 3D camera")
+        .clicked()
+    {
         if let Some(path) = rfd::FileDialog::new()
             .add_filter("Camera Track JSON", &["json"])
             .pick_file()
@@ -193,12 +251,16 @@ fn draw_export_otio(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
     if ui.button("Export OpenTimelineIO (.otio.json)").clicked() {
         let comp = app.history.current().active_composition();
         let otio = crate::core::integration::OtioTimeline::from_composition(comp);
-        match serde_json::to_string_pretty(&otio) {
+        match otio.to_json() {
             Ok(json) => match std::fs::write(&app.otio_path, json) {
                 Ok(_) => app.toasts.info(format!("Exported OTIO: {}", app.otio_path)),
-                Err(err) => app.toasts.error(format!("Failed to save OTIO file: {}", err)),
+                Err(err) => app
+                    .toasts
+                    .error(format!("Failed to save OTIO file: {}", err)),
             },
-            Err(err) => app.toasts.error(format!("Failed to serialize OTIO: {}", err)),
+            Err(err) => app
+                .toasts
+                .error(format!("Failed to serialize OTIO: {}", err)),
         }
         ui.close_menu();
     }
@@ -217,7 +279,11 @@ fn draw_import_image(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
 }
 
 fn draw_import_svg(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
-    if ui.button("Import SVG as Mask Layer...").on_hover_text("Import SVG path geometry as editable Bezier masks on a solid layer").clicked() {
+    if ui
+        .button("Import SVG as Mask Layer...")
+        .on_hover_text("Import SVG path geometry as editable Bezier masks on a solid layer")
+        .clicked()
+    {
         if let Some(path) = rfd::FileDialog::new()
             .add_filter("SVG Vector", &["svg"])
             .pick_file()
@@ -226,9 +292,13 @@ fn draw_import_svg(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
                 Ok(svg) => {
                     let paths = crate::core::svg_ai_importer::parse_svg_document(&svg);
                     if paths.is_empty() {
-                        app.toasts.error("No supported SVG path geometry was found in this file");
+                        app.toasts
+                            .error("No supported SVG path geometry was found in this file");
                     } else {
-                        let name = path.file_stem().map(|v| v.to_string_lossy().into_owned()).unwrap_or_else(|| "svg".into());
+                        let name = path
+                            .file_stem()
+                            .map(|v| v.to_string_lossy().into_owned())
+                            .unwrap_or_else(|| "svg".into());
                         import_helpers::insert_imported_svg_masks(app, paths, name);
                     }
                 }
@@ -240,7 +310,11 @@ fn draw_import_svg(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
 }
 
 fn draw_import_obj(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
-    if ui.button("Import OBJ 3D Model...").on_hover_text("Import a Wavefront OBJ mesh as a camera-rendered 3D layer").clicked() {
+    if ui
+        .button("Import OBJ 3D Model...")
+        .on_hover_text("Import a Wavefront OBJ mesh as a camera-rendered 3D layer")
+        .clicked()
+    {
         if let Some(path) = rfd::FileDialog::new()
             .add_filter("Wavefront OBJ", &["obj"])
             .pick_file()
@@ -252,10 +326,12 @@ fn draw_import_obj(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
                         return Err("OBJ contains no renderable faces".to_string());
                     }
                     Ok(())
-                })
-            {
+                }) {
                 Ok(()) => {
-                    let name = path.file_stem().map(|v| v.to_string_lossy().into_owned()).unwrap_or_else(|| "model".into());
+                    let name = path
+                        .file_stem()
+                        .map(|v| v.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| "model".into());
                     import_helpers::insert_imported_model3d(app, path, name);
                 }
                 Err(error) => app.toasts.error(format!("OBJ import failed: {error}")),
@@ -268,34 +344,43 @@ fn draw_import_obj(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
 fn draw_import_image_sequence(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
     if ui.button("Import Image Sequence...").clicked() {
         if let Some(path) = rfd::FileDialog::new()
-            .add_filter("Image Sequence", &["png", "jpg", "jpeg", "bmp", "tga", "webp"])
+            .add_filter("Image Sequence", &["png", "jpg", "jpeg", "webp"])
             .pick_file()
         {
-            let fps = app.history.current().active_composition().fps.max(1) as f32;
-            let name = path.file_stem().map(|v| v.to_string_lossy().to_string()).unwrap_or_else(|| "image_sequence".to_string());
-            let destination = std::env::temp_dir().join("kagari_media").join("image_sequences").join(&name);
-            app.toasts.info(format!("Importing image sequence '{}' as WebP frames...", name));
-            match crate::core::video_import::import_image_sequence(&path, &destination, fps) {
-                Ok(asset) => import_helpers::insert_imported_sequence(app, asset, name),
-                Err(error) => app.toasts.error(format!("Image sequence import failed: {error}")),
-            }
+            let name = path
+                .file_stem()
+                .map(|v| v.to_string_lossy().to_string())
+                .unwrap_or_else(|| "image_sequence".to_string());
+            crate::ui::drop_import::start_image_sequence_import(app, ui.ctx(), path, name);
         }
         ui.close_menu();
     }
 }
 
 fn draw_export_mlt(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
-    if ui.button("Export MLT XML (Shotcut / Kdenlive)...").clicked() {
+    if ui
+        .button("Export MLT XML (Shotcut / Kdenlive)...")
+        .clicked()
+    {
         if let Some(path) = rfd::FileDialog::new()
             .add_filter("MLT XML", &["xml", "mlt"])
-            .set_file_name(format!("{}.mlt.xml", app.history.current().active_composition().name))
+            .set_file_name(format!(
+                "{}.mlt.xml",
+                app.history.current().active_composition().name
+            ))
             .save_file()
         {
             let comp = app.history.current().active_composition();
-            let xml = crate::core::mlt_export::MltExporter::export_to_xml(comp);
-            match std::fs::write(&path, xml) {
-                Ok(_) => app.toasts.info(format!("Exported MLT XML: {}", path.to_string_lossy())),
-                Err(err) => app.toasts.error(format!("Failed to save MLT file: {}", err)),
+            match crate::core::mlt_export::MltExporter::export_to_xml(comp) {
+                Ok(xml) => match std::fs::write(&path, xml) {
+                    Ok(_) => app
+                        .toasts
+                        .info(format!("Exported MLT XML: {}", path.to_string_lossy())),
+                    Err(err) => app
+                        .toasts
+                        .error(format!("Failed to save MLT file: {}", err)),
+                },
+                Err(err) => app.toasts.error(err),
             }
         }
         ui.close_menu();
@@ -308,15 +393,26 @@ fn draw_import_otio(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
             std::path::Path::new(&app.otio_path),
             crate::core::project_migration::MAX_PROJECT_JSON_BYTES,
         ) {
-            Ok(json) => match serde_json::from_str::<crate::core::integration::OtioTimeline>(&json) {
-                Ok(otio) => {
-                    let comp = otio.to_composition();
-                    app.modify_project(|p| p.compositions[0] = comp);
-                    app.toasts.info(format!("Imported OTIO: {}", app.otio_path));
-                }
+            Ok(json) => match crate::core::integration::OtioTimeline::from_json(&json) {
+                Ok(otio) => match otio.to_composition() {
+                    Ok(comp) => {
+                        app.modify_project(|p| {
+                            let idx = p.active_composition_idx.min(p.compositions.len().saturating_sub(1));
+                            if let Some(target) = p.compositions.get_mut(idx) {
+                                *target = comp;
+                            } else {
+                                p.compositions.push(comp);
+                            }
+                        });
+                        app.toasts.info(format!("Imported OTIO: {}", app.otio_path));
+                    }
+                    Err(err) => app.toasts.error(format!("Invalid OTIO timeline: {err}")),
+                },
                 Err(err) => app.toasts.error(format!("Invalid OTIO format: {}", err)),
             },
-            Err(err) => app.toasts.error(format!("Could not read OTIO file: {}", err)),
+            Err(err) => app
+                .toasts
+                .error(format!("Could not read OTIO file: {}", err)),
         }
         ui.close_menu();
     }
@@ -324,37 +420,59 @@ fn draw_import_otio(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
 
 pub fn draw_edit_menu(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
     let undo_sc = crate::ui::shortcuts::format_shortcut("Z", true, false, false);
-    if ui.add_enabled(app.history.can_undo(), egui::Button::new("Undo (元に戻す)").shortcut_text(undo_sc)).clicked() {
+    if ui
+        .add_enabled(
+            app.history.can_undo(),
+            egui::Button::new("Undo (元に戻す)").shortcut_text(undo_sc),
+        )
+        .clicked()
+    {
         app.history.undo();
         ui.close_menu();
     }
     let redo_sc = crate::ui::shortcuts::format_shortcut("Z", true, true, false);
-    if ui.add_enabled(app.history.can_redo(), egui::Button::new("Redo (やり直す)").shortcut_text(redo_sc)).clicked() {
+    if ui
+        .add_enabled(
+            app.history.can_redo(),
+            egui::Button::new("Redo (やり直す)").shortcut_text(redo_sc),
+        )
+        .clicked()
+    {
         app.history.redo();
         ui.close_menu();
     }
-    if ui.button("Undo History…").on_hover_text("Open the named-step history panel and jump to any step").clicked() {
+    if ui
+        .button("Undo History…")
+        .on_hover_text("Open the named-step history panel and jump to any step")
+        .clicked()
+    {
         app.show_history_panel = !app.show_history_panel;
         ui.close_menu();
     }
     ui.separator();
-    if ui.add(egui::Button::new("Duplicate").shortcut_text(
-        crate::ui::shortcuts::format_shortcut("D", true, false, false),
-    )).clicked() {
+    if ui
+        .add(
+            egui::Button::new("Duplicate").shortcut_text(crate::ui::shortcuts::format_shortcut(
+                "D", true, false, false,
+            )),
+        )
+        .clicked()
+    {
         if let Some(sel_idx) = app.selection.selected_layer_idx {
             let mut duplicated = false;
             app.modify_project(|project| {
                 let comp = project.active_composition_mut();
                 if sel_idx < comp.layers.len() {
                     let mut cloned = comp.layers[sel_idx].clone();
-                    let n = comp.layers.len();
-                    cloned.id = format!("{}_copy_{}", cloned.id, n);
+                    cloned.id = comp.next_layer_id(&format!("{}_copy", cloned.id));
                     cloned.name = format!("{} copy", cloned.name);
                     comp.layers.insert(sel_idx + 1, cloned);
                     duplicated = true;
                 }
             });
-            if duplicated { app.toasts.info("Layer duplicated"); }
+            if duplicated {
+                app.toasts.info("Layer duplicated");
+            }
         }
         ui.close_menu();
     }
@@ -363,7 +481,11 @@ pub fn draw_edit_menu(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
 }
 
 fn draw_auto_trace(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
-    if ui.add(egui::Button::new("Auto-Trace Layer")).on_hover_text("Trace selected layer's alpha into a new Shape layer (FreeformBezier)").clicked() {
+    if ui
+        .add(egui::Button::new("Auto-Trace Layer"))
+        .on_hover_text("Trace selected layer's alpha into a new Shape layer (FreeformBezier)")
+        .clicked()
+    {
         if let Some(sel_idx) = app.selection.selected_layer_idx {
             let cur_frame = app.playback.current_frame;
             let comp = app.history.current().active_composition();
@@ -395,7 +517,11 @@ fn draw_auto_trace(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
                         tangents: (0..len).map(|_| ([0.0f32, 0.0], [0.0f32, 0.0])).collect(),
                         closed: true,
                     };
-                    let opacity = layer.transform.opacity.evaluate(cur_frame).clamp(0.0, 100.0);
+                    let opacity = layer
+                        .transform
+                        .opacity
+                        .evaluate(cur_frame)
+                        .clamp(0.0, 100.0);
                     let alpha = opacity / 100.0;
                     let new_layer = crate::core::timeline::Layer::new(
                         format!("Auto-Trace {name}"),
@@ -411,10 +537,14 @@ fn draw_auto_trace(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
                         },
                         dur,
                     );
-                    app.modify_project(|p| { p.active_composition_mut().layers.push(new_layer); });
-                    app.toasts.info(format!("Auto-traced '{name}' into shape layer"));
+                    app.modify_project(|p| {
+                        p.active_composition_mut().layers.push(new_layer);
+                    });
+                    app.toasts
+                        .info(format!("Auto-traced '{name}' into shape layer"));
                 } else {
-                    app.toasts.error("Layer has no traceable mask or alpha data");
+                    app.toasts
+                        .error("Layer has no traceable mask or alpha data");
                 }
             }
         }

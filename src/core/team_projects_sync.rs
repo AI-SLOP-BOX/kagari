@@ -1,7 +1,4 @@
-//! Cloud-Based Team Projects Real-Time Collaborative Editing & Conflict Resolution Engine.
-//!
-//! Provides Operational Transformation (OT) and Conflict-Free Replicated Data Type (CRDT) semantics
-//! for multi-user real-time composition editing, version tracking, and branch merging.
+//! Experimental packet model for a future team editing system.
 
 #![allow(dead_code)]
 
@@ -46,12 +43,28 @@ pub struct SyncPacket {
     pub operations: Vec<ProjectChangeOp>,
 }
 
-/// State synchronization manager resolving collaborative conflicts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TeamSyncError {
+    NotImplemented,
+    SequenceExhausted,
+}
+
+impl std::fmt::Display for TeamSyncError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotImplemented => f.write_str("team project synchronization is not implemented"),
+            Self::SequenceExhausted => f.write_str("team sync sequence number is exhausted"),
+        }
+    }
+}
+
+impl std::error::Error for TeamSyncError {}
+
+/// Packet construction only; applying remote operations is not implemented.
 #[derive(Debug, Default)]
 pub struct TeamSyncEngine {
     pub client_id: String,
     pub current_sequence: u64,
-    pub applied_packets: Vec<SyncPacket>,
 }
 
 impl TeamSyncEngine {
@@ -59,69 +72,34 @@ impl TeamSyncEngine {
         Self {
             client_id: client_id.to_string(),
             current_sequence: 0,
-            applied_packets: Vec::new(),
         }
     }
 
-    /// Creates an outgoing sync packet containing local mutations.
-    pub fn create_packet(&mut self, ops: Vec<ProjectChangeOp>) -> SyncPacket {
-        self.current_sequence += 1;
+    /// Creates a packet without retaining it in an unbounded in-memory history.
+    pub fn create_packet(
+        &mut self,
+        ops: Vec<ProjectChangeOp>,
+    ) -> Result<SyncPacket, TeamSyncError> {
+        self.current_sequence = self
+            .current_sequence
+            .checked_add(1)
+            .ok_or(TeamSyncError::SequenceExhausted)?;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_millis() as u64)
             .unwrap_or(0);
 
-        let packet = SyncPacket {
+        Ok(SyncPacket {
             client_id: self.client_id.clone(),
             timestamp_ms: now,
             sequence_num: self.current_sequence,
             operations: ops,
-        };
-
-        self.applied_packets.push(packet.clone());
-        packet
+        })
     }
 
-    /// Merges an incoming remote packet, resolving conflicting concurrent edits using deterministic LWW.
-    pub fn merge_remote_packet(&mut self, packet: SyncPacket) -> Vec<ProjectChangeOp> {
-        let mut accepted_ops = Vec::new();
-
-        for op in &packet.operations {
-            let mut conflict = false;
-            // Conflict check against locally queued operations
-            for local in self.applied_packets.iter().rev() {
-                for local_op in &local.operations {
-                    match (op, local_op) {
-                        (
-                            ProjectChangeOp::UpdatePosition {
-                                layer_id: id1,
-                                frame: f1,
-                                version: v1,
-                                ..
-                            },
-                            ProjectChangeOp::UpdatePosition {
-                                layer_id: id2,
-                                frame: f2,
-                                version: v2,
-                                ..
-                            },
-                        ) if id1 == id2 && f1 == f2 => {
-                            if v1 <= v2 && packet.timestamp_ms < local.timestamp_ms {
-                                conflict = true;
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            }
-
-            if !conflict {
-                accepted_ops.push(op.clone());
-            }
-        }
-
-        self.applied_packets.push(packet);
-        accepted_ops
+    /// Remote packets are rejected until operations can be applied atomically to a project.
+    pub fn merge_remote_packet(&mut self, _packet: SyncPacket) -> Result<(), TeamSyncError> {
+        Err(TeamSyncError::NotImplemented)
     }
 }
 
@@ -130,18 +108,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_team_sync_packet_exchange_and_conflict_resolution() {
+    fn test_team_sync_packet_creation_does_not_claim_remote_merge() {
         let mut alice = TeamSyncEngine::new("Alice");
         let mut bob = TeamSyncEngine::new("Bob");
 
-        let p1 = alice.create_packet(vec![ProjectChangeOp::AddLayer {
-            layer_id: "L1".into(),
-            name: "Text Layer".into(),
-            layer_type: "Text".into(),
-        }]);
+        let p1 = alice
+            .create_packet(vec![ProjectChangeOp::AddLayer {
+                layer_id: "L1".into(),
+                name: "Text Layer".into(),
+                layer_type: "Text".into(),
+            }])
+            .unwrap();
 
-        let accepted_by_bob = bob.merge_remote_packet(p1);
-        assert_eq!(accepted_by_bob.len(), 1);
-        assert_eq!(bob.applied_packets.len(), 1);
+        assert_eq!(
+            bob.merge_remote_packet(p1),
+            Err(TeamSyncError::NotImplemented)
+        );
     }
 }

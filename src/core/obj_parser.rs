@@ -98,48 +98,45 @@ impl Mesh3DModel {
                         uvs.push([u, v]);
                     }
                 }
-                "f" => {
-                    if parts.len() >= 4 {
-                        let parse_vertex = |spec: &str| -> Result<Mesh3DVertex, String> {
-                            let tokens: Vec<&str> = spec.split('/').collect();
-                            let pos_idx = resolve_obj_index(tokens[0], positions.len(), "Vertex")?;
-                            let pos = positions[pos_idx];
+                "f" if parts.len() >= 4 => {
+                    let parse_vertex = |spec: &str| -> Result<Mesh3DVertex, String> {
+                        let tokens: Vec<&str> = spec.split('/').collect();
+                        let pos_idx = resolve_obj_index(tokens[0], positions.len(), "Vertex")?;
+                        let pos = positions[pos_idx];
 
-                            let uv = if tokens.len() > 1 && !tokens[1].is_empty() {
-                                let uv_idx = resolve_obj_index(tokens[1], uvs.len(), "UV")?;
-                                uvs[uv_idx]
-                            } else {
-                                [0.0, 0.0]
-                            };
-
-                            let normal = if tokens.len() > 2 && !tokens[2].is_empty() {
-                                let norm_idx =
-                                    resolve_obj_index(tokens[2], normals.len(), "Normal")?;
-                                normals[norm_idx]
-                            } else {
-                                [0.0, 0.0, 1.0]
-                            };
-
-                            Ok(Mesh3DVertex {
-                                position: pos,
-                                normal,
-                                uv,
-                            })
+                        let uv = if tokens.len() > 1 && !tokens[1].is_empty() {
+                            let uv_idx = resolve_obj_index(tokens[1], uvs.len(), "UV")?;
+                            uvs[uv_idx]
+                        } else {
+                            [0.0, 0.0]
                         };
 
-                        let face_vertices: Vec<Mesh3DVertex> = parts[1..]
-                            .iter()
-                            .map(|spec| parse_vertex(spec))
-                            .collect::<Result<_, _>>()?;
-                        for triangle_index in 1..face_vertices.len().saturating_sub(1) {
-                            triangles.push(Mesh3DTriangle {
-                                vertices: [
-                                    face_vertices[0].clone(),
-                                    face_vertices[triangle_index].clone(),
-                                    face_vertices[triangle_index + 1].clone(),
-                                ],
-                            });
-                        }
+                        let normal = if tokens.len() > 2 && !tokens[2].is_empty() {
+                            let norm_idx = resolve_obj_index(tokens[2], normals.len(), "Normal")?;
+                            normals[norm_idx]
+                        } else {
+                            [0.0, 0.0, 1.0]
+                        };
+
+                        Ok(Mesh3DVertex {
+                            position: pos,
+                            normal,
+                            uv,
+                        })
+                    };
+
+                    let face_vertices: Vec<Mesh3DVertex> = parts[1..]
+                        .iter()
+                        .map(|spec| parse_vertex(spec))
+                        .collect::<Result<_, _>>()?;
+                    for triangle_index in 1..face_vertices.len().saturating_sub(1) {
+                        triangles.push(Mesh3DTriangle {
+                            vertices: [
+                                face_vertices[0].clone(),
+                                face_vertices[triangle_index].clone(),
+                                face_vertices[triangle_index + 1].clone(),
+                            ],
+                        });
                     }
                 }
                 _ => {}

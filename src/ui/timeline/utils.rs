@@ -1,7 +1,12 @@
-use crate::core::keyframe::InterpolationType;
+pub use super::geometry::{
+    clamp_view_start, frame_to_x, visible_range, x_to_frame, TimelineViewport,
+};
+pub use super::keyframe_tick::{draw_keyframe_tick, KeyframeTickResult};
+pub use super::ruler::{format_timecode_label, ruler_label_step, ruler_tick_frames};
+pub use super::snapping::{
+    collect_all_kf_frames, maybe_snap_frame, snap_to_layer_edges, snap_to_sorted_layer_edges,
+};
 use crate::core::property::Animatable;
-use crate::ui::theme::colors;
-use eframe::egui;
 
 pub fn get_kfs<T: Clone>(
     prop: &Animatable<T>,
@@ -11,256 +16,30 @@ pub fn get_kfs<T: Clone>(
         .unwrap_or_default()
 }
 
-pub fn maybe_snap_frame(frame: u32, snap: bool, comp: &crate::core::timeline::Composition) -> u32 {
-    if !snap {
-        return frame;
-    }
-    let threshold = 3i32;
-    for layer in &comp.layers {
-        for (kf_f, _) in get_kfs(&layer.transform.position)
-            .into_iter()
-            .chain(get_kfs(&layer.transform.scale))
-            .chain(get_kfs(&layer.transform.rotation))
-            .chain(get_kfs(&layer.transform.opacity))
-        {
-            if (frame as i32 - kf_f as i32).abs() <= threshold {
-                return kf_f;
-            }
-        }
-    }
-    frame
-}
-
-pub fn snap_to_layer_edges(
-    frame: u32,
-    exclude_idx: usize,
-    comp: &crate::core::timeline::Composition,
-) -> u32 {
-    let threshold = 5i32;
-    let mut best = frame;
-    let mut best_dist = threshold + 1;
-    for (i, layer) in comp.layers.iter().enumerate() {
-        if i == exclude_idx {
-            continue;
-        }
-        for edge in [layer.in_frame, layer.out_frame] {
-            let dist = (frame as i32 - edge as i32).abs();
-            if dist < best_dist {
-                best_dist = dist;
-                best = edge;
-            }
-        }
-    }
-    best
-}
-
-pub fn collect_all_kf_frames(comp: &crate::core::timeline::Composition) -> Vec<u32> {
-    let mut frames = Vec::new();
-    for layer in &comp.layers {
-        if let Some(kfs) = layer.transform.position.keyframes() {
-            for kf in kfs {
-                frames.push(kf.frame);
-            }
-        }
-        if let Some(kfs) = layer.transform.scale.keyframes() {
-            for kf in kfs {
-                frames.push(kf.frame);
-            }
-        }
-        if let Some(kfs) = layer.transform.rotation.keyframes() {
-            for kf in kfs {
-                frames.push(kf.frame);
-            }
-        }
-        if let Some(kfs) = layer.transform.opacity.keyframes() {
-            for kf in kfs {
-                frames.push(kf.frame);
-            }
-        }
-        for pin in &layer.puppet_pins {
-            if let Some(kfs) = pin.position.keyframes() {
-                for kf in kfs {
-                    frames.push(kf.frame);
-                }
-            }
-        }
-    }
-    frames.sort();
-    frames.dedup();
-    frames
-}
-
-/// Interaction result of a single keyframe tick.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum KeyframeTickResult {
-    /// No interaction this frame.
-    None,
-    /// Tick was clicked. Carries modifier state so the caller can implement
-    /// multi-select toggling (shift/cmd-click).
-    Clicked { shift: bool, cmd: bool },
-    /// Tick was right-clicked (context menu trigger).
-    RightClicked,
-    /// Tick was dragged to a new frame.
-    Dragged { new_frame: u32 },
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn draw_keyframe_tick(
-    ui: &mut egui::Ui,
-    x: f32,
-    y: f32,
-    is_sub_prop: bool,
-    current_frame: &mut u32,
-    kf_frame: u32,
-    _interpolation: Option<crate::core::keyframe::InterpolationType>,
-    is_selected: bool,
-) -> (KeyframeTickResult, egui::Response) {
-    let size = if is_sub_prop { 5.0 } else { 7.0 };
-    let rect = egui::Rect::from_center_size(
-        egui::pos2(x, y),
-        egui::vec2(size * 2.0 + 4.0, size * 2.0 + 4.0),
-    );
-    let color = if is_selected {
-        colors::ACCENT_ORANGE
-    } else if *current_frame == kf_frame {
-        colors::TIMELINE_KEYFRAME
-    } else {
-        colors::TEXT_SECONDARY
-    };
-
-    // Shape by interpolation type: diamond=bezier/ease, circle=linear, square=hold
-    let painter = ui.painter();
-    let is_linear = matches!(_interpolation, Some(InterpolationType::Linear));
-    let is_hold = matches!(_interpolation, Some(InterpolationType::Hold));
-
-    if is_selected {
-        // Selection glow ring behind keyframe
-        painter.circle_filled(
-            egui::pos2(x, y),
-            size + 3.0,
-            egui::Color32::from_rgba_premultiplied(255, 140, 0, 50),
-        );
-        painter.circle_stroke(
-            egui::pos2(x, y),
-            size + 2.0,
-            egui::Stroke::new(1.5_f32, colors::ACCENT_ORANGE),
-        );
-    }
-
-    if is_linear {
-        // Linear: circle (AE convention)
-        painter.circle_filled(egui::pos2(x, y), size * 0.8, color);
-    } else if is_hold {
-        // Hold: square (AE convention)
-        painter.rect_filled(
-            egui::Rect::from_center_size(egui::pos2(x, y), egui::vec2(size * 1.4, size * 1.4)),
-            1.0,
-            color,
-        );
-    } else {
-        // Bezier/Default: diamond (AE convention)
-        #[allow(clippy::useless_vec)]
-        let pts = vec![
-            egui::pos2(x, y - size),
-            egui::pos2(x + size, y),
-            egui::pos2(x, y + size),
-            egui::pos2(x - size, y),
-        ];
-        painter.add(egui::Shape::convex_polygon(pts, color, egui::Stroke::NONE));
-    }
-
-    if is_selected {
-        let sel_rect =
-            egui::Rect::from_center_size(egui::pos2(x, y), egui::vec2(size * 2.0, size * 2.0));
-        painter.rect_stroke(
-            sel_rect,
-            1.5,
-            egui::Stroke::new(1.5_f32, colors::ACCENT_ORANGE),
-        );
-    }
-
-    let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());
-
-    // Hover tooltip: frame + interpolation shape (AE shows similar hints)
-    {
-        let interp_name = match _interpolation {
-            Some(InterpolationType::Linear) => "Linear",
-            Some(InterpolationType::Hold) => "Hold",
-            Some(InterpolationType::Bezier {
-                custom_bezier: Some(_),
-                ..
-            }) => "Bezier (custom)",
-            Some(InterpolationType::Bezier { .. }) => "Bezier / Ease",
-            None => "Keyframe",
-        };
-        response
-            .clone()
-            .on_hover_text(format!("Frame {} · {}", kf_frame, interp_name));
-    }
-    if response.secondary_clicked() {
-        return (KeyframeTickResult::RightClicked, response);
-    }
-    if response.clicked() {
-        *current_frame = kf_frame;
-        let mods = ui.input(|i| i.modifiers);
-        return (
-            KeyframeTickResult::Clicked {
-                shift: mods.shift,
-                cmd: mods.command || mods.ctrl,
-            },
-            response,
-        );
-    }
-    if response.dragged() {
-        let delta = response.drag_delta().x;
-        let step = (delta / 8.0).round() as i32;
-        if step != 0 {
-            let new_f = (kf_frame as i64 + step as i64).clamp(0, u32::MAX as i64) as u32;
-            return (KeyframeTickResult::Dragged { new_frame: new_f }, response);
-        }
-    }
-    (KeyframeTickResult::None, response)
-}
-
-/// Authoritative visible timeline range. Used by ruler, layer bars, keyframes,
-/// playhead, markers, snapping, and hit-testing. Every call site must use this
-/// instead of deriving its own `start_frame` / `zoom_span`.
-pub fn visible_range(total_frames: u32, zoom: f32, view_start: u32) -> (u32, u32) {
-    let zoom_span = (total_frames as f32 / zoom.max(0.01)).max(10.0) as u32;
-    (view_start, zoom_span)
-}
-
-/// Convert a frame number to pixel x-position within `rect`.
-pub fn frame_to_x(frame: u32, start_frame: u32, zoom_span: u32, rect: egui::Rect) -> f32 {
-    let norm = (frame.saturating_sub(start_frame)) as f32 / zoom_span.max(1) as f32;
-    rect.left() + norm * rect.width()
-}
-
-/// Convert a pixel x-position within `rect` to a frame number.
-pub fn x_to_frame(px: f32, start_frame: u32, zoom_span: u32, rect: egui::Rect) -> u32 {
-    let norm = ((px - rect.left()) / rect.width()).clamp(0.0, 1.0);
-    start_frame + (norm * zoom_span as f32).round() as u32
-}
-
-/// Ensure `view_start` auto-recenters when the playhead leaves the visible range.
-pub fn clamp_view_start(
-    current_frame: u32,
-    zoom_span: u32,
-    total_frames: u32,
-    view_start: u32,
-) -> u32 {
-    if current_frame < view_start || current_frame >= view_start.saturating_add(zoom_span) {
-        current_frame
-            .saturating_sub(zoom_span / 2)
-            .min(total_frames.saturating_sub(zoom_span))
-    } else {
-        view_start
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ui::theme::colors;
+    use eframe::egui;
+
+    #[test]
+    fn sorted_snap_search_chooses_nearest_keyframe_and_respects_threshold() {
+        let frames = [10, 20, 31, 50];
+        assert_eq!(maybe_snap_frame(29, true, &frames), 31);
+        assert_eq!(maybe_snap_frame(25, true, &frames), 25);
+        assert_eq!(maybe_snap_frame(29, false, &frames), 29);
+    }
+
+    #[test]
+    fn sorted_layer_snap_skips_the_dragged_layer() {
+        let edges = [(95, 2), (98, 1), (101, 0), (103, 1), (108, 3)];
+        assert_eq!(snap_to_sorted_layer_edges(100, 1, &edges), 101);
+        assert_eq!(snap_to_sorted_layer_edges(100, 0, &edges), 98);
+        assert_eq!(
+            snap_to_sorted_layer_edges(100, 1, &[(94, 1), (105, 2)]),
+            105
+        );
+    }
 
     #[test]
     fn visible_range_basic() {
@@ -334,15 +113,106 @@ mod tests {
         let view_start = 100u32;
         let current_frame = 200u32;
 
-        let (zoom_span_1, _) = visible_range(total_frames, zoom, view_start);
+        let (_, zoom_span_1) = visible_range(total_frames, zoom, view_start);
         let effective_start_1 =
             clamp_view_start(current_frame, zoom_span_1, total_frames, view_start);
 
-        let (zoom_span_2, _) = visible_range(total_frames, zoom, view_start);
+        let (_, zoom_span_2) = visible_range(total_frames, zoom, view_start);
         let effective_start_2 =
             clamp_view_start(current_frame, zoom_span_2, total_frames, view_start);
 
         assert_eq!(effective_start_1, effective_start_2);
         assert_eq!(zoom_span_1, zoom_span_2);
+    }
+
+    #[test]
+    fn ruler_labels_get_more_space_when_width_or_ui_text_grows() {
+        let wide = ruler_label_step(1000, 1200.0, 50.0);
+        let narrow = ruler_label_step(1000, 600.0, 50.0);
+        let scaled_text = ruler_label_step(1000, 1200.0, 100.0);
+
+        assert!(narrow > wide);
+        assert!(scaled_text > wide);
+    }
+
+    #[test]
+    fn ruler_ticks_align_to_time_intervals_across_scroll_positions() {
+        assert_eq!(ruler_tick_frames(3, 27, 10), vec![10, 20, 30]);
+        assert_eq!(ruler_tick_frames(40, 20, 10), vec![40, 50, 60]);
+        assert_eq!(ruler_tick_frames(u32::MAX - 2, 10, 5), vec![u32::MAX]);
+    }
+
+    #[test]
+    fn timecode_label_uses_composition_frame_rate() {
+        assert_eq!(format_timecode_label(267, 30), "00:00:08:27");
+        assert_eq!(format_timecode_label(120, 0), "00:02:00:00");
+    }
+
+    #[test]
+    fn measured_timecode_labels_do_not_overlap_at_common_widths_and_scales() {
+        for pixels_per_point in [1.0, 1.5, 2.0] {
+            let context = egui::Context::default();
+            context.set_pixels_per_point(pixels_per_point);
+            let _ = context.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(1600.0, 900.0),
+                    )),
+                    ..Default::default()
+                },
+                |context| {
+                    crate::ui::theme::configure_ae_theme(context);
+                    egui::CentralPanel::default().show(context, |ui| {
+                        for (width, start_frame, span, fps) in
+                            [(260.0, 37, 900, 24), (720.0, 137, 2400, 30), (1400.0, 59, 12000, 60)]
+                        {
+                            let font = egui::FontId::new(
+                                ui.text_style_height(&egui::TextStyle::Small) * 0.78,
+                                egui::FontFamily::Monospace,
+                            );
+                            let end_frame = start_frame + span;
+                            let measured_width = [start_frame, end_frame]
+                                .into_iter()
+                                .map(|frame| {
+                                    ui.painter()
+                                        .layout_no_wrap(
+                                            format_timecode_label(frame, fps),
+                                            font.clone(),
+                                            colors::TEXT_SECONDARY,
+                                        )
+                                        .size()
+                                        .x
+                                })
+                                .fold(0.0_f32, f32::max);
+                            let step = ruler_label_step(span, width, measured_width);
+                            let ticks = ruler_tick_frames(start_frame, span, step);
+                            let mut previous: Option<(f32, f32)> = None;
+                            for frame in ticks {
+                                let label_width = ui
+                                    .painter()
+                                    .layout_no_wrap(
+                                        format_timecode_label(frame, fps),
+                                        font.clone(),
+                                        colors::TEXT_SECONDARY,
+                                    )
+                                    .size()
+                                    .x;
+                                let center_x =
+                                    (frame - start_frame) as f32 / span as f32 * width;
+                                if let Some((previous_x, previous_width)) = previous {
+                                    assert!(
+                                        center_x - previous_x
+                                            >= (label_width + previous_width) * 0.5 + 7.9,
+                                        "labels overlap at scale {pixels_per_point}, width {width}, frames {start_frame}–{end_frame}, step {step}"
+                                    );
+                                }
+                                previous = Some((center_x, label_width));
+                            }
+                        }
+                    });
+                },
+            );
+        }
     }
 }

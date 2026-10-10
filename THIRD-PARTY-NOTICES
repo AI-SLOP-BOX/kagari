@@ -73,3 +73,13 @@ metadata) before cutting release binaries for those targets.
 
 `r-efi` is `MIT OR Apache-2.0 OR LGPL-2.1-or-later`; this project uses it
 under the MIT/Apache-2.0 alternatives, so no LGPL obligations arise.
+
+## 7. Tutorial footage
+
+- `assets/library/tutorial_practice.mp4` is a 2-second excerpt from the
+  Blender Foundation's *Big Buck Bunny* trailer. The excerpt was resized to
+  640×356, re-encoded as H.264, and its audio was removed for the tutorial.
+  Licensed under Creative Commons Attribution 3.0 (CC BY 3.0).
+  Attribution: © Blender Foundation, https://www.bigbuckbunny.org/.
+  Source trailer: https://download.blender.org/peach/trailer/trailer_400p.ogg
+  License: https://creativecommons.org/licenses/by/3.0/.

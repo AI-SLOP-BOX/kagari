@@ -1,17 +1,12 @@
 use crate::core::property::Animatable;
-use crate::ui::custom_widgets;
-use crate::ui::theme::colors;
+use crate::ui::kui::{self, ButtonKind};
 use crate::KagariApp;
 use eframe::egui;
 
 pub fn draw_the_smoother_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
-    ui.heading("The Smoother");
-    ui.label(
-        egui::RichText::new("Reduce keyframe density using RDP curve fitting")
-            .small()
-            .color(colors::TEXT_SECONDARY),
-    );
-    ui.separator();
+    kui::section(ui, "The Smoother");
+    kui::secondary(ui, "Reduce keyframe density using RDP curve fitting");
+    kui::separator(ui);
 
     let tol_id = egui::Id::new("ae_smoother_tolerance");
     let mut tolerance: f32 = ui
@@ -23,49 +18,48 @@ pub fn draw_the_smoother_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
         .ctx()
         .data_mut(|d| *d.get_temp_mut_or_insert_with(mode_id, || 0));
 
-    ui.horizontal(|ui| {
-        ui.label("Apply To:");
-        if ui
-            .selectable_value(&mut mode_idx, 0, "Spatial Path")
-            .clicked()
-        {
-            ui.ctx().data_mut(|d| d.insert_temp(mode_id, mode_idx));
-        }
-        if ui
-            .selectable_value(&mut mode_idx, 1, "Temporal Graph")
-            .clicked()
-        {
-            ui.ctx().data_mut(|d| d.insert_temp(mode_id, mode_idx));
-        }
-    });
-
-    ui.add_space(4.0);
-    ui.horizontal(|ui| {
-        ui.label("Tolerance:");
-        if ui
-            .add(
-                egui::Slider::new(&mut tolerance, 0.1..=50.0).suffix(if mode_idx == 0 {
-                    " px"
-                } else {
-                    " val"
-                }),
+    let grid = kui::PropertyGrid::new(ui, &["Apply To", "Tolerance"]);
+    if grid.row(ui, "Apply To", |ui| {
+        kui::combo(
+            ui,
+            mode_id,
+            &mut mode_idx,
+            &[(0, "Spatial Path"), (1, "Temporal Graph")],
+        )
+    }) {
+        ui.ctx().data_mut(|d| d.insert_temp(mode_id, mode_idx));
+    }
+    if grid
+        .row(ui, "Tolerance", |ui| {
+            kui::slider(
+                ui,
+                &mut tolerance,
+                0.1..=50.0,
+                if mode_idx == 0 { " px" } else { " val" },
             )
-            .changed()
-        {
-            ui.ctx().data_mut(|d| d.insert_temp(tol_id, tolerance));
-        }
-    });
+        })
+        .changed()
+    {
+        ui.ctx().data_mut(|d| d.insert_temp(tol_id, tolerance));
+    }
 
-    ui.add_space(8.0);
-    ui.separator();
+    kui::separator(ui);
 
-    if custom_widgets::ae_button(ui, "Apply Smoother")
-        .on_hover_text("Simplify keyframes on active selected layer")
-        .clicked()
+    if kui::button_enabled(
+        ui,
+        "Apply Smoother",
+        ButtonKind::Accent,
+        app.selection.selected_layer_idx.is_some(),
+    )
+    .on_hover_text(crate::ui::localization::tr(
+        "Simplify keyframes on active selected layer",
+    ))
+    .clicked()
     {
         let Some(layer_idx) = app.selection.selected_layer_idx else {
-            app.toasts
-                .error("Select a layer with animated keyframes first");
+            app.toasts.error(crate::ui::localization::tr(
+                "Select a layer with animated keyframes first",
+            ));
             return;
         };
 
@@ -105,13 +99,14 @@ pub fn draw_the_smoother_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
 
         if reduced_count > 0 {
             app.commit_project(temp_proj);
-            app.toasts.info(format!(
+            app.toasts.info(crate::ui::localization::tr_format(
                 "The Smoother: Removed {} redundant keyframes",
-                reduced_count
+                &[&reduced_count.to_string()],
             ));
         } else {
-            app.toasts
-                .info("Keyframes are already optimal for this tolerance");
+            app.toasts.info(crate::ui::localization::tr(
+                "Keyframes are already optimal for this tolerance",
+            ));
         }
     }
 }

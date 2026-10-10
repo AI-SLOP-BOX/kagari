@@ -21,6 +21,8 @@ pub struct CustomShaderRegistry {
 }
 
 static REGISTRY: OnceLock<CustomShaderRegistry> = OnceLock::new();
+const MAX_SHADER_CACHE_ENTRIES: usize = 128;
+const MAX_SHADER_CACHE_BYTES: usize = 16 * 1024 * 1024;
 
 impl CustomShaderRegistry {
     pub fn global() -> &'static Self {
@@ -77,39 +79,60 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {{
         };
 
         // Parse with naga WGSL frontend
-        match naga::front::wgsl::parse_str(&full_source) {
-            Ok(_) => {
-                let status = ShaderCompileStatus {
-                    is_valid: true,
-                    error_message: None,
-                    line_number: None,
-                };
-                if let Ok(mut guard) = self.cache.lock() {
-                    guard.insert(source.to_string(), status.clone());
-                }
-                status
+        let validation_error = match naga::front::wgsl::parse_str(&full_source) {
+            Ok(module) => {
+                let mut validator = naga::valid::Validator::new(
+                    naga::valid::ValidationFlags::all(),
+                    naga::valid::Capabilities::all(),
+                );
+                validator
+                    .validate(&module)
+                    .err()
+                    .map(|error| error.to_string())
             }
-            Err(e) => {
-                let msg = e.emit_to_string(&full_source);
-                let line = msg
-                    .lines()
-                    .find(|l| l.contains("-->") || l.contains(':'))
-                    .and_then(|l| {
-                        l.split(':')
-                            .nth(1)
-                            .and_then(|num_str| num_str.trim().parse::<usize>().ok())
-                    });
+            Err(error) => Some(error.emit_to_string(&full_source)),
+        };
+        let status = if let Some(message) = validation_error {
+            let line = message
+                .lines()
+                .find(|line| line.contains("-->") || line.contains(':'))
+                .and_then(|line| {
+                    line.split(':')
+                        .nth(1)
+                        .and_then(|number| number.trim().parse::<usize>().ok())
+                });
+            ShaderCompileStatus {
+                is_valid: false,
+                error_message: Some(message),
+                line_number: line,
+            }
+        } else {
+            ShaderCompileStatus {
+                is_valid: true,
+                error_message: None,
+                line_number: None,
+            }
+        };
+        self.cache_status(source, status.clone());
+        status
+    }
 
-                let status = ShaderCompileStatus {
-                    is_valid: false,
-                    error_message: Some(msg),
-                    line_number: line,
-                };
-                if let Ok(mut guard) = self.cache.lock() {
-                    guard.insert(source.to_string(), status.clone());
-                }
-                status
+    fn cache_status(&self, source: &str, status: ShaderCompileStatus) {
+        let entry_bytes = source.len() + status.error_message.as_ref().map_or(0, String::len);
+        if entry_bytes > MAX_SHADER_CACHE_BYTES {
+            return;
+        }
+        if let Ok(mut cache) = self.cache.lock() {
+            let current_bytes: usize = cache
+                .iter()
+                .map(|(key, value)| key.len() + value.error_message.as_ref().map_or(0, String::len))
+                .sum();
+            if cache.len() >= MAX_SHADER_CACHE_ENTRIES
+                || current_bytes.saturating_add(entry_bytes) > MAX_SHADER_CACHE_BYTES
+            {
+                cache.clear();
             }
+            cache.insert(source.to_string(), status);
         }
     }
 
@@ -123,14 +146,7 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {{
 
 /// Helper to get default template for custom WGSL shaders.
 pub fn default_wgsl_template() -> String {
-    r#"// Custom WGSL VFX Shader Template
-// Available: src (input color vec4), uv (vec2), u.time, u.p0..p3
-let t = u.time;
-let dist = distance(uv, vec2<f32>(0.5, 0.5));
-let wave = sin(dist * 20.0 - t * 4.0) * 0.5 + 0.5;
-let tint = vec4<f32>(wave * u.p0, (1.0 - wave) * u.p1, wave * u.p2, 1.0);
-return mix(src, tint, u.p3);"#
-        .to_string()
+    crate::core::custom_shader_cpu::DEFAULT_TEMPLATE_SOURCE.to_string()
 }
 
 #[cfg(test)]
@@ -156,5 +172,21 @@ mod tests {
         let status = registry.validate_wgsl(invalid_code);
         assert!(!status.is_valid);
         assert!(status.error_message.is_some());
+    }
+
+    #[test]
+    fn shader_within_file_picker_limit_is_retained_in_validation_cache() {
+        let registry = CustomShaderRegistry {
+            cache: Mutex::new(HashMap::new()),
+        };
+        let source = format!(
+            "//{}\nreturn vec4<f32>(src.rgb, src.a);",
+            "x".repeat(3 * 1024 * 1024)
+        );
+
+        let status = registry.validate_wgsl(&source);
+
+        assert!(status.is_valid, "{:?}", status.error_message);
+        assert!(registry.cache.lock().unwrap().contains_key(&source));
     }
 }

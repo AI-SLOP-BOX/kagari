@@ -1,11 +1,38 @@
 use crate::core::property::Animatable;
 use crate::core::timeline::{Composition, Layer, LayerType, ShapeType};
-use crate::ui::theme::colors;
 use eframe::egui;
 use std::collections::HashSet;
 
+fn draw_timeline_header_row(
+    ui: &mut egui::Ui,
+    id: &'static str,
+    add_contents: impl FnOnce(&mut egui::Ui),
+) {
+    let width = ui.available_width();
+    ui.allocate_ui_with_layout(
+        egui::vec2(width, 28.0),
+        egui::Layout::left_to_right(egui::Align::Center),
+        |ui| {
+            ui.spacing_mut().interact_size.y = 22.0;
+            ui.spacing_mut().button_padding = egui::vec2(6.0, 2.0);
+            ui.spacing_mut().item_spacing = egui::vec2(4.0, 0.0);
+            egui::ScrollArea::horizontal()
+                .id_salt(id)
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    ui.spacing_mut().interact_size.y = 22.0;
+                    ui.spacing_mut().button_padding = egui::vec2(6.0, 2.0);
+                    ui.spacing_mut().item_spacing = egui::vec2(4.0, 0.0);
+                    ui.horizontal(add_contents);
+                });
+        },
+    );
+    crate::ui::theme::draw_separator(ui);
+}
+
 pub struct TimelineHeaderState<'a> {
-    pub is_playing: &'a mut bool,
+    pub bottom_dock_tab: &'a mut usize,
+    pub show_switches_pane: &'a mut bool,
     pub timeline_zoom: &'a mut f32,
     pub snap_to_keyframes: &'a mut bool,
     pub show_graph_editor: &'a mut bool,
@@ -18,25 +45,131 @@ pub struct TimelineHeaderState<'a> {
     pub fit_all: &'a mut bool,
 }
 
-fn draw_transport_icon_button(
+pub fn draw_transport_controls(
     ui: &mut egui::Ui,
-    id: &'static str,
-    svg: &'static str,
-    tooltip: &'static str,
-) -> egui::Response {
-    let (rect, response) = ui.allocate_exact_size(egui::vec2(24.0, 24.0), egui::Sense::click());
-    if response.hovered() {
-        ui.painter().rect_filled(rect, 2.0, colors::BG_HOVER);
-    }
-    crate::ui::icons::render_svg_at(
-        ui,
-        id.to_string(),
-        svg,
-        egui::vec2(16.0, 16.0),
-        colors::TEXT_SECONDARY,
-        rect.center() - egui::vec2(8.0, 8.0),
+    current_frame: &mut u32,
+    total_frames: u32,
+    fps: u32,
+    is_playing: &mut bool,
+) {
+    ui.spacing_mut().item_spacing.x = 5.0;
+    let tc_popup_id = ui.make_persistent_id("ae_tc_goto_popup");
+    let mut show_popup = ui
+        .ctx()
+        .data_mut(|data| *data.get_temp_mut_or_insert_with(tc_popup_id, || false));
+    let buffer_id = ui.make_persistent_id("ae_tc_goto_buf");
+    let mut input = ui.ctx().data_mut(|data| {
+        data.get_temp_mut_or_insert_with(buffer_id, || current_frame.to_string())
+            .clone()
+    });
+    let mut goto_frame = None;
+    let fps = fps.max(1);
+    let seconds = *current_frame / fps;
+    let timecode = format!(
+        "{:02}:{:02}:{:02}:{:02}",
+        seconds / 3600,
+        seconds / 60 % 60,
+        seconds % 60,
+        *current_frame % fps,
     );
-    response.on_hover_text(tooltip)
+    if crate::ui::kui::button(
+        ui,
+        &format!("TC: {timecode}"),
+        crate::ui::kui::ButtonKind::Quiet,
+    )
+    .clicked()
+    {
+        show_popup = !show_popup;
+        input = current_frame.to_string();
+    }
+    ui.add_sized(
+        egui::vec2(120.0, 20.0),
+        egui::Slider::new(current_frame, 0..=total_frames.max(1)).show_value(false),
+    );
+    let buttons = [
+        (
+            "transport-first-frame",
+            crate::ui::icons::SVG_STEP_BACK,
+            "Go to First Frame (Home)",
+            0,
+        ),
+        (
+            "transport-previous-frame",
+            crate::ui::icons::SVG_STEP_BACK,
+            "Previous Frame (PageUp / Left)",
+            1,
+        ),
+        (
+            "transport-play-pause",
+            if *is_playing {
+                crate::ui::icons::SVG_PAUSE
+            } else {
+                crate::ui::icons::SVG_PLAY
+            },
+            "Play / Pause RAM Preview (Spacebar)",
+            2,
+        ),
+        (
+            "transport-next-frame",
+            crate::ui::icons::SVG_STEP_FORWARD,
+            "Next Frame (PageDown / Right)",
+            3,
+        ),
+        (
+            "transport-last-frame",
+            crate::ui::icons::SVG_STEP_FORWARD,
+            "Go to Last Frame (End)",
+            4,
+        ),
+    ];
+    for (id, icon, tooltip, action) in buttons {
+        if crate::ui::kui::svg_icon_button(ui, id, icon, tooltip, false, 24.0).clicked() {
+            match action {
+                0 => *current_frame = 0,
+                1 => *current_frame = current_frame.saturating_sub(1),
+                2 => *is_playing = !*is_playing,
+                3 => *current_frame = (*current_frame + 1).min(total_frames),
+                _ => *current_frame = total_frames,
+            }
+        }
+    }
+    if show_popup {
+        egui::Area::new(egui::Id::new("ae_tc_goto"))
+            .fixed_pos(ui.cursor().left_top())
+            .order(egui::Order::Foreground)
+            .show(ui.ctx(), |ui| {
+                crate::ui::kui::group(ui, "Go to Frame", |ui| {
+                    ui.set_width(160.0);
+                    let response = crate::ui::kui::text_field_with_hint(ui, &mut input, "Frame #");
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if crate::ui::kui::button(ui, "Go", crate::ui::kui::ButtonKind::Accent)
+                            .clicked()
+                            || (response.lost_focus()
+                                && ui.input(|i| i.key_pressed(egui::Key::Enter)))
+                        {
+                            goto_frame = input
+                                .trim()
+                                .parse::<u32>()
+                                .ok()
+                                .map(|frame| frame.min(total_frames));
+                            show_popup = false;
+                        }
+                        if crate::ui::kui::button(ui, "Cancel", crate::ui::kui::ButtonKind::Quiet)
+                            .clicked()
+                        {
+                            show_popup = false;
+                        }
+                    });
+                });
+            });
+    }
+    if let Some(frame) = goto_frame {
+        *current_frame = frame;
+    }
+    ui.ctx().data_mut(|data| {
+        data.insert_temp(tc_popup_id, show_popup);
+        data.insert_temp(buffer_id, input);
+    });
 }
 
 fn draw_view_mode(
@@ -45,33 +178,28 @@ fn draw_view_mode(
     selected: bool,
     tooltip: &'static str,
 ) -> egui::Response {
-    let width = if label == "Timeline" { 62.0 } else { 52.0 };
-    let (rect, response) = ui.allocate_exact_size(egui::vec2(width, 24.0), egui::Sense::click());
-    if response.hovered() && !selected {
-        ui.painter()
-            .rect_filled(rect, 3.0, colors::BG_HOVER.linear_multiply(0.5));
-    }
-    ui.painter().text(
-        rect.center(),
-        egui::Align2::CENTER_CENTER,
-        label,
-        egui::FontId::proportional(12.0),
-        if selected {
-            colors::TEXT_PRIMARY
+    let label = crate::ui::localization::tr(label);
+    let response = ui.add(
+        egui::Label::new(egui::RichText::new(label).small().color(if selected {
+            crate::ui::theme::colors::TEXT_PRIMARY
         } else {
-            colors::TEXT_MUTED
-        },
+            crate::ui::theme::colors::TEXT_SECONDARY
+        }))
+        .sense(egui::Sense::click()),
     );
     if selected {
         ui.painter().line_segment(
             [
-                egui::pos2(rect.left() + 8.0, rect.bottom() - 1.0),
-                egui::pos2(rect.right() - 8.0, rect.bottom() - 1.0),
+                egui::pos2(response.rect.left(), response.rect.bottom()),
+                egui::pos2(response.rect.right(), response.rect.bottom()),
             ],
-            egui::Stroke::new(2.0_f32, colors::ACCENT_ORANGE),
+            egui::Stroke::new(1.5_f32, crate::ui::theme::colors::ACCENT_ACTION),
         );
     }
-    response.on_hover_text(tooltip)
+    if response.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    response.on_hover_text(crate::ui::localization::tr(tooltip))
 }
 
 pub fn draw_timeline_header(
@@ -83,472 +211,362 @@ pub fn draw_timeline_header(
 ) -> bool {
     let mut project_changed = false;
 
-    // Timecode "Go to Frame" popup state (persisted via egui temp data)
-    let tc_popup_id = ui.make_persistent_id("ae_tc_goto_popup");
-    let mut show_tc_popup: bool = ui
-        .ctx()
-        .data_mut(|d| *d.get_temp_mut_or_insert_with(tc_popup_id, || false));
-    let mut tc_input_buf: String = ui.ctx().data_mut(|d| {
-        d.get_temp_mut_or_insert_with(ui.make_persistent_id("ae_tc_goto_buf"), || {
-            current_frame.to_string()
-        })
-        .clone()
-    });
-    let mut goto_frame: Option<u32> = None;
-    let compact = ui.ctx().screen_rect().width() < 950.0;
-    let very_narrow = ui.ctx().screen_rect().width() < 700.0;
-
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        let fps = comp.fps.max(1);
-        let secs = *current_frame / fps;
-        let sub_f = *current_frame % fps;
-        let mins = secs / 60;
-        let hours = mins / 60;
-        let tc_str = format!(
-            "{:02}:{:02}:{:02}:{:02}",
-            hours,
-            mins % 60,
-            secs % 60,
-            sub_f
-        );
-
-        // Clickable timecode → opens "Go to Frame" popup
-        let tc_resp = ui.label(
-            egui::RichText::new(format!("TC: {}", tc_str))
-                .strong()
-                .color(colors::ACCENT_YELLOW),
-        );
-        if tc_resp.interact(egui::Sense::click()).clicked() {
-            show_tc_popup = !show_tc_popup;
-            tc_input_buf = current_frame.to_string();
-        }
-        if !compact {
-            ui.add_space(4.0);
-            ui.add(
-                egui::DragValue::new(current_frame)
-                    .range(0..=total_frames)
-                    .prefix("Frame: ")
-                    .suffix(format!(" / {}", total_frames)),
-            )
-            .on_hover_text("Click or Drag to set current frame timecode");
-            ui.add_space(8.0);
-        } else {
-            ui.add_space(4.0);
-        }
-
-        if draw_transport_icon_button(
+    draw_timeline_header_row(ui, "timeline_view_row", |ui| {
+        if draw_view_mode(
             ui,
-            "timeline-first-frame",
-            crate::ui::icons::SVG_STEP_BACK,
-            "Go to First Frame (Home)",
+            "タイムライン",
+            !*state.show_graph_editor,
+            "レイヤーの時間軸",
         )
         .clicked()
         {
-            *current_frame = 0;
-        }
-        if draw_transport_icon_button(
-            ui,
-            "timeline-previous-frame",
-            crate::ui::icons::SVG_STEP_BACK,
-            "Previous Frame (PageUp / Left)",
-        )
-        .clicked()
-        {
-            *current_frame = current_frame.saturating_sub(1);
-        }
-        let play_svg = if *state.is_playing {
-            crate::ui::icons::SVG_PAUSE
-        } else {
-            crate::ui::icons::SVG_PLAY
-        };
-        if draw_transport_icon_button(
-            ui,
-            "timeline-play-pause",
-            play_svg,
-            "Play / Pause RAM Preview (Spacebar)",
-        )
-        .clicked()
-        {
-            *state.is_playing = !*state.is_playing;
-        }
-        if draw_transport_icon_button(
-            ui,
-            "timeline-next-frame",
-            crate::ui::icons::SVG_STEP_FORWARD,
-            "Next Frame (PageDown / Right)",
-        )
-        .clicked()
-        {
-            *current_frame = (*current_frame + 1).min(total_frames);
-        }
-        if draw_transport_icon_button(
-            ui,
-            "timeline-last-frame",
-            crate::ui::icons::SVG_STEP_FORWARD,
-            "Go to Last Frame (End)",
-        )
-        .clicked()
-        {
-            *current_frame = total_frames;
-        }
-    });
-
-    ui.separator();
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        if draw_view_mode(ui, "Timeline", !*state.show_graph_editor, "Layer timeline").clicked() {
             *state.show_graph_editor = false;
         }
-        ui.add_space(2.0);
-        if draw_view_mode(ui, "Graph", *state.show_graph_editor, "Graph Editor / Speed Curves").clicked() {
+        if draw_view_mode(
+            ui,
+            "グラフ",
+            *state.show_graph_editor,
+            "グラフエディター／速度カーブ",
+        )
+        .clicked()
+        {
             *state.show_graph_editor = true;
         }
-        use crate::ui::icons::*;
-        ui.label("Zoom");
-        ui.add(egui::DragValue::new(state.timeline_zoom)
-            .speed(0.05).range(0.1..=20.0).suffix("×"))
-            .on_hover_text("Timeline magnification");
-        ui.menu_button("View", |ui| {
-        if ui
-            .button("Fit")
-            .on_hover_text("Fit Timeline to Work Area (or full duration)")
-            .clicked()
-        {
-            let w_in = *state.work_area_in;
-            let w_out = *state.work_area_out;
-            let span = match (w_in, w_out) {
-                (Some(wi), Some(wo)) => (wo - wi).max(10),
-                (Some(wi), None) => (total_frames - wi).max(10),
-                (None, Some(wo)) => wo.max(10),
-                (None, None) => total_frames,
-            };
-            *state.timeline_zoom = (total_frames as f32 / span as f32).clamp(0.1, 20.0);
-            *state.timeline_view_start = w_in.unwrap_or(0);
-        }
-        if ui
-            .button("Fit Sel")
-            .on_hover_text("Fit Timeline to Selected Layers' time range")
-            .clicked()
-        {
-            *state.fit_to_selection = true;
-        }
-        if ui
-            .button("Fit All")
-            .on_hover_text("Fit Timeline to show all layers' time range")
-            .clicked()
-        {
-            *state.fit_to_selection = true;
-            *state.fit_all = true;
-        }
-        if ui
-            .button("Clear WA")
-            .on_hover_text("Clear Work Area (In/Out)")
-            .clicked()
-        {
-            *state.work_area_in = None;
-            *state.work_area_out = None;
-        }
-        if ui
-            .button("Expand All")
-            .on_hover_text("Expand all layer properties")
-            .clicked()
-        {
-            for i in 0..comp.layers.len() {
-                state.expanded_layers.insert(i);
-            }
-        }
-        if ui
-            .button("Collapse All")
-            .on_hover_text("Collapse all layer properties")
-            .clicked()
-        {
-            state.expanded_layers.clear();
-        }
-
-        });
-
-        if !very_narrow {
-            use crate::ui::custom_widgets::ae_svg_toggle;
-            ae_svg_toggle(
-                ui,
-                state.snap_to_keyframes,
-                SVG_SNAP,
-                "snap_btn_header",
-                egui::vec2(22.0, 22.0),
-                colors::ACCENT_CYAN,
-                "Toggle Keyframe & Marker Snapping (Shift+S)",
-            );
-        }
-
-        // ── 8bpc / 16bpc / 32bpc (Float) HDR Color Depth Quick Toggle ──
-        if !very_narrow {
-        ui.add_space(4.0);
-        let depth_badge_color = match comp.bit_depth {
-            crate::core::color_science::BitDepth::EightBit => egui::Color32::from_rgb(140, 140, 150),
-            crate::core::color_science::BitDepth::SixteenBit => crate::ui::theme::colors::ACCENT_BLUE_LIGHT,
-            crate::core::color_science::BitDepth::ThirtyTwoBitFloat => egui::Color32::from_rgb(255, 200, 60),
-        };
-        let depth_btn = ui.add(
-            egui::Button::new(
-                egui::RichText::new(comp.bit_depth.label())
-                    .small()
-                    .strong()
-                    .color(depth_badge_color),
-            )
-            .fill(egui::Color32::from_rgb(30, 32, 40)),
+        if draw_view_mode(
+            ui,
+            "レンダーキュー",
+            *state.bottom_dock_tab == 1,
+            "レンダーキューを表示",
         )
-        .on_hover_text("Click to cycle Color Depth: 8bpc (Integer) ↔ 16bpc (Half Float) ↔ 32bpc (Float / HDR)");
-        if depth_btn.clicked() {
-            comp.bit_depth = comp.bit_depth.next();
-            crate::core::frame_cache::bump_version();
-            project_changed = true;
+        .clicked()
+        {
+            *state.bottom_dock_tab = 1;
         }
-        }
-
-        // ── AE Timeline Layer Filter ──
-        ui.add_space(if very_narrow { 3.0 } else { 8.0 });
-        if !very_narrow {
-            ui.label(
-                egui::RichText::new("Filter:")
-                    .small()
-                    .color(crate::ui::theme::colors::TEXT_SECONDARY),
-            );
-        }
+        crate::ui::kui::toolbar_separator(ui);
+        crate::ui::kui::caption(ui, "ズーム");
         ui.add(
-            egui::TextEdit::singleline(state.layer_filter_text)
-                .hint_text("Search layers...")
-                .desired_width(if very_narrow { 76.0 } else { 110.0 }),
-        );
-
-        ui.menu_button(if very_narrow { "+" } else { "+ Add Layer" }, |ui| {
-        if ui.button("+ Solid").clicked() {
-            let id = format!("layer_{}", comp.layers.len());
-            let name = format!("Solid {}", comp.layers.len());
-            let mut layer = Layer::new(
-                id,
-                name,
-                LayerType::Solid {
-                    color: [0.3, 0.5, 0.7, 1.0],
-                },
-                total_frames,
-            );
-            layer.transform.position =
-                Animatable::new_constant([comp.width as f32 / 2.0, comp.height as f32 / 2.0]);
-            comp.add_layer(layer);
-            project_changed = true;
-        }
-        if ui.button("+ Text").clicked() {
-            let id = format!("layer_{}", comp.layers.len());
-            let name = format!("Text {}", comp.layers.len());
-            let mut layer = Layer::new(
-                id,
-                name,
-                LayerType::new_text("New Text", 48, [1.0, 1.0, 1.0, 1.0]),
-                total_frames,
-            );
-
-            layer.transform.position =
-                Animatable::new_constant([comp.width as f32 / 2.0, comp.height as f32 / 2.0]);
-            comp.add_layer(layer);
-            project_changed = true;
-        }
-        if ui.button("+ Adj").clicked() {
-            let id = format!("layer_{}", comp.layers.len());
-            let name = format!("Adjustment Layer {}", comp.layers.len());
-            let layer = Layer::new_adjustment(id, name, total_frames);
-            comp.add_layer(layer);
-            project_changed = true;
-        }
-
-        if ui.button("+ Marker (M)").clicked() {
-            let m_idx = comp.markers.len() + 1;
-            comp.markers.push(crate::core::timeline::TimelineMarker {
-                frame: *current_frame,
-                label: format!("Marker {}", m_idx),
-                color: [1.0, 0.6, 0.1],
-            });
-            project_changed = true;
-        }
-        if !comp.markers.is_empty()
-            && ui
-                .small_button("YouTube Chapters")
-                .on_hover_text("Copy YouTube timestamp chapters formatted from markers")
+            crate::ui::kui::drag(state.timeline_zoom)
+                .speed(0.05)
+                .range(0.1..=20.0)
+                .width(88.0)
+                .unit("×"),
+        )
+        .on_hover_text("Timeline magnification");
+        crate::ui::kui::menu_button(ui, "表示", |ui| {
+            if crate::ui::kui::menu_item(ui, "全体を表示")
+                .on_hover_text("作業範囲、または全尺に合わせます")
                 .clicked()
-        {
-            let fps = (comp.fps as f32).max(1.0);
-            let mut sorted = comp.markers.clone();
-            sorted.sort_by_key(|m| m.frame);
-            let mut lines = Vec::new();
-            for m in sorted {
-                let total_secs = (m.frame as f32 / fps).floor() as u32;
-                let mins = total_secs / 60;
-                let secs = total_secs % 60;
-                lines.push(format!("{:02}:{:02} {}", mins, secs, m.label));
+            {
+                let w_in = *state.work_area_in;
+                let w_out = *state.work_area_out;
+                let span = match (w_in, w_out) {
+                    (Some(wi), Some(wo)) => (wo - wi).max(10),
+                    (Some(wi), None) => (total_frames - wi).max(10),
+                    (None, Some(wo)) => wo.max(10),
+                    (None, None) => total_frames,
+                };
+                *state.timeline_zoom = (total_frames as f32 / span as f32).clamp(0.1, 20.0);
+                *state.timeline_view_start = w_in.unwrap_or(0);
             }
-            let output = lines.join("\n");
-            ui.output_mut(|o| o.copied_text = output);
-        }
-        if ui
-            .button("+ Camera")
-            .on_hover_text("Add a 3D camera to the composition")
-            .clicked()
-        {
-            let mut camera = crate::core::timeline::Camera3D::default();
-            camera.id = comp.next_camera_id();
-            camera.name = format!("Camera {}", comp.cameras.len() + 1);
-            let camera_id = camera.id.clone();
-            let camera_transform = camera.transform.clone();
-            comp.cameras.push(camera);
-            let camera_idx = comp.cameras.len().saturating_sub(1);
-            comp.set_active_camera(Some(camera_idx));
-            let mut layer = Layer::new(
-                comp.next_layer_id("camera"),
-                format!("Camera {}", comp.cameras.len()),
-                LayerType::Null,
-                total_frames,
-            );
-            layer.is_3d = true;
-            layer.transform_3d = camera_transform;
-            layer.scene_object = Some(crate::core::timeline::SceneObjectRef::Camera {
-                id: camera_id,
-            });
-            comp.add_layer(layer);
-            project_changed = true;
-        }
-        if ui
-            .button("+ Light")
-            .on_hover_text("Add a point light to the composition")
-            .clicked()
-        {
-            let mut light = crate::core::timeline::Light3D::default();
-            light.id = comp.next_light_id();
-            light.name = format!("Light {}", comp.lights.len() + 1);
-            let light_id = light.id.clone();
-            let light_position = light.position.clone();
-            comp.lights.push(light);
-            let mut layer = Layer::new(
-                comp.next_layer_id("light"),
-                format!("Light {}", comp.lights.len()),
-                LayerType::Null,
-                total_frames,
-            );
-            layer.is_3d = true;
-            layer.transform_3d.position = light_position;
-            layer.scene_object = Some(crate::core::timeline::SceneObjectRef::Light {
-                id: light_id,
-            });
-            comp.add_layer(layer);
-            project_changed = true;
-        }
-        if ui.button("+ Shape").clicked() {
-            let id = format!("layer_{}", comp.layers.len());
-            let name = format!("Shape {}", comp.layers.len());
-            let mut layer = Layer::new(
-                id,
-                name,
-                LayerType::Shape {
-                    shape_type: ShapeType::Star {
-                        points: Animatable::new_constant(5.0),
-                        inner_radius: Animatable::new_constant(40.0),
-                        outer_radius: Animatable::new_constant(100.0),
-                    },
-                    color: [0.9, 0.4, 0.2, 1.0],
-                    stroke_color: [0.0, 0.0, 0.0, 1.0],
-                    stroke_width: 0.0,
-                    fill_type: Default::default(),
-                    extrusion_depth: 0.0,
-                    bevel_depth: 0.0,
-                },
-                total_frames,
-            );
-            layer.transform.position =
-                Animatable::new_constant([comp.width as f32 / 2.0, comp.height as f32 / 2.0]);
-            comp.add_layer(layer);
-            project_changed = true;
-        }
-        if ui.button("+ Audio").clicked() {
-            let id = format!("layer_{}", comp.layers.len());
-            let name = format!("Audio {}", comp.layers.len());
-            let mut layer = Layer::new(
-                id,
-                name,
-                LayerType::Audio {
-                    path: "audio_track_01.wav".to_string(),
-                    volume: Animatable::new_constant(1.0),
-                },
-                total_frames,
-            );
-            layer.label = crate::core::timeline::LabelColor::Aqua;
-            comp.add_layer(layer);
-            project_changed = true;
-        }
-        if ui.button("+ Particles").clicked() {
-            let id = format!("layer_{}", comp.layers.len());
-            let name = format!("Particles {}", comp.layers.len());
-            let mut layer = Layer::new(
-                id,
-                name,
-                LayerType::Particle {
-                    emitter: crate::core::particle_system::ParticleEmitter::default(),
-                },
-                total_frames,
-            );
-            layer.transform.position =
-                Animatable::new_constant([comp.width as f32 / 2.0, comp.height as f32 * 0.75]);
-            layer.label = crate::core::timeline::LabelColor::Yellow;
-            comp.add_layer(layer);
-            project_changed = true;
-        }
-        if ui.button("+ Null").clicked() {
-            let id = format!("layer_{}", comp.layers.len());
-            let name = format!("Null {}", comp.layers.len());
-            let layer = Layer::new_null(id, name, total_frames);
-            comp.add_layer(layer);
-            project_changed = true;
-        }
+            if crate::ui::kui::menu_item(ui, "選択レイヤー")
+                .on_hover_text("選択レイヤーの時間範囲に合わせます")
+                .clicked()
+            {
+                *state.fit_to_selection = true;
+            }
+            if crate::ui::kui::menu_item(ui, "全レイヤー")
+                .on_hover_text("全レイヤーの時間範囲に合わせます")
+                .clicked()
+            {
+                *state.fit_to_selection = true;
+                *state.fit_all = true;
+            }
+            if crate::ui::kui::menu_item(ui, "作業範囲を解除")
+                .on_hover_text("作業範囲のイン／アウトを解除します")
+                .clicked()
+            {
+                *state.work_area_in = None;
+                *state.work_area_out = None;
+            }
+            if crate::ui::kui::menu_item(ui, "すべて展開")
+                .on_hover_text("全レイヤーのプロパティを展開します")
+                .clicked()
+            {
+                for i in 0..comp.layers.len() {
+                    state.expanded_layers.insert(i);
+                }
+            }
+            if crate::ui::kui::menu_item(ui, "すべて折りたたむ")
+                .on_hover_text("全レイヤーのプロパティを折りたたみます")
+                .clicked()
+            {
+                state.expanded_layers.clear();
+            }
         });
-    });
+        crate::ui::kui::menu_button(ui, "⋯", |ui| {
+            let snap_label = if *state.snap_to_keyframes {
+                "✓ スナップを有効化"
+            } else {
+                "　スナップを有効化"
+            };
+            if crate::ui::kui::menu_item(ui, snap_label)
+                .on_hover_text("キーフレームとマーカーへの吸着を切り替えます（Shift+S）")
+                .clicked()
+            {
+                *state.snap_to_keyframes = !*state.snap_to_keyframes;
+            }
 
-    // ── Go to Frame popup ──
-    if show_tc_popup {
-        egui::Area::new(egui::Id::new("ae_tc_goto"))
-            .fixed_pos(ui.cursor().left_top())
-            .order(egui::Order::Foreground)
-            .show(ui.ctx(), |ui| {
-                ui.group(|ui| {
-                    ui.set_min_width(160.0);
-                    ui.label(egui::RichText::new("Go to Frame").strong());
-                    let resp = ui.add(
-                        egui::TextEdit::singleline(&mut tc_input_buf)
-                            .desired_width(100.0)
-                            .hint_text("Frame #"),
-                    );
-                    if ui.button("Go").clicked()
-                        || (resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
-                    {
-                        if let Ok(f) = tc_input_buf.trim().parse::<u32>() {
-                            goto_frame = Some(f.min(total_frames));
-                        }
-                        show_tc_popup = false;
-                    }
-                    if ui.button("Cancel").clicked() {
-                        show_tc_popup = false;
-                    }
+            crate::ui::kui::separator(ui);
+            if crate::ui::kui::menu_item(
+                ui,
+                if *state.show_switches_pane {
+                    "✓ スイッチを表示"
+                } else {
+                    "　スイッチを表示"
+                },
+            )
+            .clicked()
+            {
+                *state.show_switches_pane = true;
+            }
+            if crate::ui::kui::menu_item(
+                ui,
+                if !*state.show_switches_pane {
+                    "✓ モードを表示"
+                } else {
+                    "　モードを表示"
+                },
+            )
+            .clicked()
+            {
+                *state.show_switches_pane = false;
+            }
+
+            crate::ui::kui::separator(ui);
+            let depth = comp.bit_depth;
+            let depth_label = format!("色深度: {}", depth.label());
+            if crate::ui::kui::menu_item(ui, &depth_label)
+                .on_hover_text("色深度を 8 / 16 / 32 bpc で切り替えます")
+                .clicked()
+            {
+                comp.bit_depth = comp.bit_depth.next();
+                crate::core::frame_cache::bump_version();
+                project_changed = true;
+            }
+
+            crate::ui::kui::separator(ui);
+            crate::ui::kui::search_field_sized(
+                ui,
+                state.layer_filter_text,
+                "レイヤーを検索…",
+                180.0,
+            );
+        })
+        .response
+        .on_hover_text("タイムライン表示とレイヤー操作");
+        if ui.input(|input| input.key_pressed(egui::Key::F4)) {
+            *state.show_switches_pane = !*state.show_switches_pane;
+        }
+
+        crate::ui::kui::menu_button(ui, "+", |ui| {
+            if crate::ui::kui::menu_item(ui, "+ ソリッド").clicked() {
+                let id = comp.next_layer_id("layer");
+                let name = format!("Solid {}", comp.layers.len());
+                let mut layer = Layer::new(
+                    id,
+                    name,
+                    LayerType::Solid {
+                        color: [0.3, 0.5, 0.7, 1.0],
+                    },
+                    total_frames,
+                );
+                layer.transform.position =
+                    Animatable::new_constant([comp.width as f32 / 2.0, comp.height as f32 / 2.0]);
+                comp.add_layer(layer);
+                project_changed = true;
+                ui.close_menu();
+            }
+            if crate::ui::kui::menu_item(ui, "+ テキスト").clicked() {
+                let id = comp.next_layer_id("layer");
+                let name = format!("Text {}", comp.layers.len());
+                let mut layer = Layer::new(
+                    id,
+                    name,
+                    LayerType::new_text("New Text", 48, [1.0, 1.0, 1.0, 1.0]),
+                    total_frames,
+                );
+
+                layer.transform.position =
+                    Animatable::new_constant([comp.width as f32 / 2.0, comp.height as f32 / 2.0]);
+                comp.add_layer(layer);
+                project_changed = true;
+                ui.close_menu();
+            }
+            if crate::ui::kui::menu_item(ui, "+ 調整レイヤー").clicked() {
+                let id = comp.next_layer_id("layer");
+                let name = format!("Adjustment Layer {}", comp.layers.len());
+                let layer = Layer::new_adjustment(id, name, total_frames);
+                comp.add_layer(layer);
+                project_changed = true;
+                ui.close_menu();
+            }
+
+            if crate::ui::kui::menu_item(ui, "+ マーカー (M)").clicked() {
+                let m_idx = comp.markers.len() + 1;
+                comp.markers.push(crate::core::timeline::TimelineMarker {
+                    frame: *current_frame,
+                    label: format!("Marker {}", m_idx),
+                    color: [1.0, 0.6, 0.1],
                 });
-            });
-    }
-
-    if let Some(f) = goto_frame {
-        *current_frame = f;
-    }
-
-    // Persist popup state
-    ui.ctx().data_mut(|d| {
-        d.insert_temp(tc_popup_id, show_tc_popup);
-    });
-    ui.ctx().data_mut(|d| {
-        d.insert_temp(ui.make_persistent_id("ae_tc_goto_buf"), tc_input_buf);
+                project_changed = true;
+                ui.close_menu();
+            }
+            if !comp.markers.is_empty()
+                && crate::ui::kui::menu_item(ui, "YouTubeチャプターをコピー")
+                    .on_hover_text("マーカーからYouTube用のチャプター時刻をコピー")
+                    .clicked()
+            {
+                let fps = (comp.fps as f32).max(1.0);
+                let mut sorted = comp.markers.clone();
+                sorted.sort_by_key(|m| m.frame);
+                let mut lines = Vec::new();
+                for m in sorted {
+                    let total_secs = (m.frame as f32 / fps).floor() as u32;
+                    let mins = total_secs / 60;
+                    let secs = total_secs % 60;
+                    lines.push(format!("{:02}:{:02} {}", mins, secs, m.label));
+                }
+                let output = lines.join("\n");
+                ui.output_mut(|o| o.copied_text = output);
+                ui.close_menu();
+            }
+            if crate::ui::kui::menu_item(ui, "+ カメラ")
+                .on_hover_text("コンポジションに3Dカメラを追加")
+                .clicked()
+            {
+                let camera = crate::core::timeline::Camera3D {
+                    id: comp.next_camera_id(),
+                    name: format!("Camera {}", comp.cameras.len() + 1),
+                    ..Default::default()
+                };
+                let camera_id = camera.id.clone();
+                let camera_transform = camera.transform.clone();
+                comp.cameras.push(camera);
+                let camera_idx = comp.cameras.len().saturating_sub(1);
+                comp.set_active_camera(Some(camera_idx));
+                let mut layer = Layer::new(
+                    comp.next_layer_id("camera"),
+                    format!("Camera {}", comp.cameras.len()),
+                    LayerType::Null,
+                    total_frames,
+                );
+                layer.is_3d = true;
+                layer.transform_3d = camera_transform;
+                layer.scene_object =
+                    Some(crate::core::timeline::SceneObjectRef::Camera { id: camera_id });
+                comp.add_layer(layer);
+                project_changed = true;
+                ui.close_menu();
+            }
+            if crate::ui::kui::menu_item(ui, "+ ライト")
+                .on_hover_text("コンポジションにポイントライトを追加")
+                .clicked()
+            {
+                let light = crate::core::timeline::Light3D {
+                    id: comp.next_light_id(),
+                    name: format!("Light {}", comp.lights.len() + 1),
+                    ..Default::default()
+                };
+                let light_id = light.id.clone();
+                let light_position = light.position.clone();
+                comp.lights.push(light);
+                let mut layer = Layer::new(
+                    comp.next_layer_id("light"),
+                    format!("Light {}", comp.lights.len()),
+                    LayerType::Null,
+                    total_frames,
+                );
+                layer.is_3d = true;
+                layer.transform_3d.position = light_position;
+                layer.scene_object =
+                    Some(crate::core::timeline::SceneObjectRef::Light { id: light_id });
+                comp.add_layer(layer);
+                project_changed = true;
+                ui.close_menu();
+            }
+            if crate::ui::kui::menu_item(ui, "+ シェイプ").clicked() {
+                let id = comp.next_layer_id("layer");
+                let name = format!("Shape {}", comp.layers.len());
+                let mut layer = Layer::new(
+                    id,
+                    name,
+                    LayerType::Shape {
+                        shape_type: ShapeType::Star {
+                            points: Animatable::new_constant(5.0),
+                            inner_radius: Animatable::new_constant(40.0),
+                            outer_radius: Animatable::new_constant(100.0),
+                        },
+                        color: [0.9, 0.4, 0.2, 1.0],
+                        stroke_color: [0.0, 0.0, 0.0, 1.0],
+                        stroke_width: 0.0,
+                        fill_type: Default::default(),
+                        extrusion_depth: 0.0,
+                        bevel_depth: 0.0,
+                    },
+                    total_frames,
+                );
+                layer.transform.position =
+                    Animatable::new_constant([comp.width as f32 / 2.0, comp.height as f32 / 2.0]);
+                comp.add_layer(layer);
+                project_changed = true;
+                ui.close_menu();
+            }
+            if crate::ui::kui::menu_item(ui, "+ オーディオ").clicked() {
+                let id = comp.next_layer_id("layer");
+                let name = format!("Audio {}", comp.layers.len());
+                let mut layer = Layer::new(
+                    id,
+                    name,
+                    LayerType::Audio {
+                        path: "audio_track_01.wav".to_string(),
+                        volume: Animatable::new_constant(1.0),
+                    },
+                    total_frames,
+                );
+                layer.label = crate::core::timeline::LabelColor::Aqua;
+                comp.add_layer(layer);
+                project_changed = true;
+                ui.close_menu();
+            }
+            if crate::ui::kui::menu_item(ui, "+ パーティクル").clicked() {
+                let id = comp.next_layer_id("layer");
+                let name = format!("Particles {}", comp.layers.len());
+                let mut layer = Layer::new(
+                    id,
+                    name,
+                    LayerType::Particle {
+                        emitter: crate::core::particle_system::ParticleEmitter::default(),
+                    },
+                    total_frames,
+                );
+                layer.transform.position =
+                    Animatable::new_constant([comp.width as f32 / 2.0, comp.height as f32 * 0.75]);
+                layer.label = crate::core::timeline::LabelColor::Yellow;
+                comp.add_layer(layer);
+                project_changed = true;
+                ui.close_menu();
+            }
+            if crate::ui::kui::menu_item(ui, "+ ヌル").clicked() {
+                let id = comp.next_layer_id("layer");
+                let name = format!("Null {}", comp.layers.len());
+                let layer = Layer::new_null(id, name, total_frames);
+                comp.add_layer(layer);
+                project_changed = true;
+                ui.close_menu();
+            }
+        })
+        .response
+        .on_hover_text("レイヤーを追加");
     });
 
     project_changed

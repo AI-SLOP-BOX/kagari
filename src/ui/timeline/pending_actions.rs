@@ -5,56 +5,183 @@
 use crate::KagariApp;
 use eframe::egui;
 
-#[allow(clippy::too_many_arguments)]
+#[derive(Default)]
+pub struct TimelineActions {
+    pub swap_request: Option<(usize, usize)>,
+    pub pending_duration: Option<u32>,
+    pub pending_trim_work_area: Option<(u32, u32)>,
+    pub pending_open_comp: Option<String>,
+    pub pending_ripple: Option<(usize, u32, i64)>,
+    pub pending_layer_marker: Option<usize>,
+    pub pending_clear_markers: Option<usize>,
+    pub pending_dup_layer: Option<usize>,
+    pub pending_split_layer: Option<usize>,
+    pub pending_precomp_indices: Option<Vec<usize>>,
+    pub pending_create_shapes: Option<usize>,
+    pub pending_select_all_kfs: Option<usize>,
+    pub pending_pick_whip: Option<(usize, usize)>,
+    pub pending_effect_drops: Vec<(usize, String, usize)>,
+    pub pending_select_label_group: Option<crate::core::timeline::LabelColor>,
+}
+
+pub fn apply_deferred(
+    app: &mut KagariApp,
+    ui: &egui::Ui,
+    current_frame: u32,
+    project_changed: &mut bool,
+    actions: &mut TimelineActions,
+) {
+    if let Some(idx) = actions.pending_select_all_kfs.take() {
+        select_all_layer_keyframes(app, idx);
+    }
+
+    if let Some(target_label) = actions.pending_select_label_group.take() {
+        let matching_layers: Vec<usize> = app
+            .history
+            .current()
+            .active_composition()
+            .layers
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, layer)| (layer.label == target_label).then_some(idx))
+            .collect();
+        app.selection.selected_layers = matching_layers.iter().copied().collect();
+        if let Some(&last) = matching_layers.last() {
+            app.selection.selected_layer_idx = Some(last);
+        }
+        app.toasts.info(format!(
+            "Selected {} layers in label group",
+            app.selection.selected_layers.len()
+        ));
+    }
+
+    apply_effect_drops(
+        app,
+        std::mem::take(&mut actions.pending_effect_drops),
+        project_changed,
+    );
+    apply(app, ui, current_frame, project_changed, actions);
+
+    if let Some((child_idx, parent_idx)) = actions.pending_pick_whip.take() {
+        let comp_mut = app.history.current_mut().active_composition_mut();
+        if child_idx < comp_mut.layers.len() && parent_idx < comp_mut.layers.len() {
+            let parent_id = comp_mut.layers[parent_idx].id.clone();
+            let child_name = comp_mut.layers[child_idx].name.clone();
+            let parent_name = comp_mut.layers[parent_idx].name.clone();
+            comp_mut.layers[child_idx].parent_id = Some(parent_id);
+            app.toasts
+                .info(format!("Parented '{}' → '{}'", child_name, parent_name));
+            *project_changed = true;
+        }
+    }
+
+    if let Some(idx) = actions.pending_create_shapes.take() {
+        let comp_mut = app.history.current_mut().active_composition_mut();
+        if idx < comp_mut.layers.len() {
+            if let Some(shape_layer) = crate::core::text_to_shapes::convert_text_to_shapes(
+                &comp_mut.layers[idx],
+                comp_mut.width,
+                comp_mut.height,
+            ) {
+                let name = comp_mut.layers[idx].name.clone();
+                comp_mut.layers.insert(idx, shape_layer);
+                app.toasts.info(format!("Created shapes from '{}'", name));
+                *project_changed = true;
+            }
+        }
+    }
+}
+
+fn select_all_layer_keyframes(app: &mut KagariApp, idx: usize) {
+    let mut collected: Vec<(String, u32)> = Vec::new();
+    if let Some(layer) = app.history.current().active_composition().layers.get(idx) {
+        macro_rules! track {
+            ($key:expr, $anim:expr) => {
+                if let Some(kfs) = $anim.keyframes() {
+                    for keyframe in kfs {
+                        collected.push(($key.to_string(), keyframe.frame));
+                    }
+                }
+            };
+        }
+        track!("position", layer.transform.position);
+        track!("scale", layer.transform.scale);
+        track!("rotation", layer.transform.rotation);
+        track!("opacity", layer.transform.opacity);
+        for effect in &layer.effects {
+            for (label, param) in effect.effect_type.animatable_params_ref() {
+                let key = format!("fxid:{}::{}", effect.id, label);
+                match param {
+                    crate::core::effect_params::ParamRefRef::Scalar(anim) => {
+                        track!(key.as_str(), anim)
+                    }
+                    crate::core::effect_params::ParamRefRef::Vec2(anim) => {
+                        track!(key.as_str(), anim)
+                    }
+                    crate::core::effect_params::ParamRefRef::Vec3(anim) => {
+                        track!(key.as_str(), anim)
+                    }
+                    crate::core::effect_params::ParamRefRef::Vec4Color(anim) => {
+                        track!(key.as_str(), anim)
+                    }
+                }
+            }
+        }
+        for pin in &layer.puppet_pins {
+            track!(format!("pin_{}", pin.id), pin.position);
+        }
+    }
+
+    if collected.is_empty() {
+        app.toasts.info("Layer has no keyframes");
+    } else {
+        app.selected_keyframes.clear();
+        for (property, frame) in collected {
+            app.selected_keyframes.insert((idx, property, frame));
+        }
+    }
+}
+
 pub fn apply(
     app: &mut KagariApp,
     ui: &egui::Ui,
     current_frame: u32,
     project_changed: &mut bool,
-    swap_request: Option<(usize, usize)>,
-    pending_duration: Option<u32>,
-    pending_trim_work_area: Option<(u32, u32)>,
-    pending_open_comp: Option<String>,
-    pending_ripple: Option<(usize, u32, i64)>,
-    pending_layer_marker: Option<usize>,
-    pending_clear_markers: Option<usize>,
-    pending_dup_layer: Option<usize>,
-    pending_split_layer: Option<usize>,
-    pending_precomp_indices: Option<Vec<usize>>,
+    actions: &mut TimelineActions,
 ) {
-    if let Some((a, b)) = swap_request {
+    if let Some((a, b)) = actions.swap_request.take() {
         apply_swap(app, a, b, project_changed);
     }
-    if let Some(dur) = pending_duration {
+    if let Some(dur) = actions.pending_duration.take() {
         app.history
             .current_mut()
             .active_composition_mut()
             .duration_frames = dur;
         *project_changed = true;
     }
-    if let Some((w_in, w_out)) = pending_trim_work_area {
+    if let Some((w_in, w_out)) = actions.pending_trim_work_area.take() {
         trim_layers_to_work_area(app, w_in, w_out, project_changed);
     }
-    if let Some(comp_id) = pending_open_comp {
+    if let Some(comp_id) = actions.pending_open_comp.take() {
         open_nested_comp(app, &comp_id);
     }
-    if let Some((idx, old_out, shift)) = pending_ripple {
+    if let Some((idx, old_out, shift)) = actions.pending_ripple.take() {
         ripple_edit(app, idx, old_out, shift, project_changed);
     }
-    if let Some(idx) = pending_layer_marker {
+    if let Some(idx) = actions.pending_layer_marker.take() {
         add_layer_marker(app, idx, current_frame, project_changed);
     }
-    if let Some(idx) = pending_clear_markers {
+    if let Some(idx) = actions.pending_clear_markers.take() {
         clear_layer_markers(app, idx, project_changed);
     }
     toggle_marker_alt_m(app, ui, current_frame, project_changed);
-    if let Some(idx) = pending_dup_layer {
+    if let Some(idx) = actions.pending_dup_layer.take() {
         duplicate_layer_at(app, idx, project_changed, "");
     }
-    if let Some(idx) = pending_split_layer {
+    if let Some(idx) = actions.pending_split_layer.take() {
         split_layer_at(app, idx, current_frame, project_changed);
     }
-    if let Some(selected_indices) = pending_precomp_indices {
+    if let Some(selected_indices) = actions.pending_precomp_indices.take() {
         precompose_selected(app, selected_indices, project_changed);
     }
     duplicate_shortcut_cmd_d(app, ui, current_frame, project_changed);
@@ -254,26 +381,23 @@ fn duplicate_layer_at(
 
 fn split_layer_at(app: &mut KagariApp, idx: usize, current_frame: u32, project_changed: &mut bool) {
     let temp_project = app.history.current_mut();
-    let layers_len = temp_project.active_composition().layers.len();
+    let comp = temp_project.active_composition_mut();
+    let layers_len = comp.layers.len();
     if idx >= layers_len {
         return;
     }
-    let orig_out = temp_project.active_composition().layers[idx].out_frame;
-    if current_frame > temp_project.active_composition().layers[idx].in_frame
-        && current_frame < orig_out
-    {
+    let orig_out = comp.layers[idx].out_frame;
+    if current_frame > comp.layers[idx].in_frame && current_frame < orig_out {
+        let split_id = comp.next_layer_id(&format!("{}_split", comp.layers[idx].id));
         // 1) Head keeps [in .. cur)
-        temp_project.active_composition_mut().layers[idx].out_frame = current_frame;
+        comp.layers[idx].out_frame = current_frame;
         // 2) Tail is a fresh layer covering [cur .. out)
-        let mut tail = temp_project.active_composition().layers[idx].clone();
-        tail.id = format!("{}_split_{}", tail.id, layers_len);
+        let mut tail = comp.layers[idx].clone();
+        tail.id = split_id;
         tail.name = format!("{} split", tail.name);
         tail.in_frame = current_frame;
         tail.out_frame = orig_out;
-        temp_project
-            .active_composition_mut()
-            .layers
-            .insert(idx + 1, tail);
+        comp.layers.insert(idx + 1, tail);
         app.selection.selected_layer_idx = Some(idx + 1);
         app.selection.selected_layers.clear();
         app.selection.selected_layers.insert(idx + 1);
@@ -292,6 +416,7 @@ fn precompose_selected(
     project_changed: &mut bool,
 ) {
     let temp_project = app.history.current_mut();
+    let precomp_id = temp_project.next_composition_id("precomp");
     let comp_len = temp_project.compositions.len();
     let (c_w, c_h, c_fps, c_dur) = {
         let active = temp_project.active_composition();
@@ -302,7 +427,6 @@ fn precompose_selected(
             active.duration_frames,
         )
     };
-    let precomp_id = format!("precomp_{}", comp_len);
     let precomp_name = format!("Pre-comp {}", comp_len + 1);
     let mut new_comp = crate::core::timeline::Composition::new(
         precomp_id.clone(),
@@ -327,7 +451,7 @@ fn precompose_selected(
     active_comp.move_scene_objects_to(&mut new_comp, &moved_layers);
 
     let precomp_layer = crate::core::timeline::Layer::new(
-        format!("layer_{}", precomp_id),
+        active_comp.next_layer_id("precomp"),
         precomp_name,
         crate::core::timeline::LayerType::PreComp {
             comp_id: precomp_id,
