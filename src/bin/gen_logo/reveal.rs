@@ -1,657 +1,15 @@
+use super::geometry::*;
+use super::still::{apart, c1, c2, ring_layer};
 use kagari_vfx::core::keyframe::*;
-use kagari_vfx::core::project_migration::save_project_atomic;
-use kagari_vfx::core::property::*;
+use kagari_vfx::core::particle_system::{EmitterShape, FadeCurve, ParticleEmitter};
+use kagari_vfx::core::property::Animatable;
 use kagari_vfx::core::timeline::*;
 
-// NOTE: FreeformBezier tangents are ABSOLUTE handle positions.
-// Straight edge => handle == anchor. Smooth => handles along (next-prev).
-type Pt2 = [f32; 2];
+pub const R_CTR: [f32; 2] = [960.0, 430.0];
+pub const R_RING: f32 = 303.0;
+pub const RING_U: f32 = 140.0;
 
-fn smooth_closed(points: &[Pt2], corners: &[usize]) -> Vec<(Pt2, Pt2)> {
-    let n = points.len();
-    (0..n)
-        .map(|i| {
-            if corners.contains(&i) {
-                (points[i], points[i])
-            } else {
-                let prev = points[(i + n - 1) % n];
-                let next = points[(i + 1) % n];
-                let t = [(next[0] - prev[0]) * 0.22, (next[1] - prev[1]) * 0.22];
-                (
-                    [points[i][0] - t[0], points[i][1] - t[1]],
-                    [points[i][0] + t[0], points[i][1] + t[1]],
-                )
-            }
-        })
-        .collect()
-}
-
-fn sharp(points: &[Pt2]) -> Vec<(Pt2, Pt2)> {
-    points.iter().map(|p| (*p, *p)).collect()
-}
-
-// ─── Logo part path data (units; 1 unit == comp/200 px at scale 100) ───
-
-fn flame_outer_pts() -> Vec<Pt2> {
-    vec![
-        [-0.3, -71.7],
-        [1.3, -63.3],
-        [2.7, -54.9],
-        [4.4, -50.8],
-        [6.4, -46.8],
-        [8.8, -42.8],
-        [11.8, -38.7],
-        [14.8, -34.7],
-        [17.8, -30.6],
-        [20.9, -26.6],
-        [23.9, -22.6],
-        [26.3, -18.5],
-        [27.9, -14.5],
-        [29.3, -10.4],
-        [30.0, -6.4],
-        [30.0, -2.4],
-        [29.3, 1.7],
-        [27.6, 5.7],
-        [25.3, 9.8],
-        [22.2, 13.5],
-        [18.9, 17.2],
-        [14.8, 20.5],
-        [10.1, 23.9],
-        [5.4, 27.3],
-        [2.0, 31.3],
-        [-0.3, 35.4],
-        [-2.0, 38.7],
-        [-1.3, 39.1],
-        [-4.4, 35.4],
-        [-6.7, 31.3],
-        [-10.1, 27.3],
-        [-15.2, 21.9],
-        [-20.9, 17.8],
-        [-25.3, 13.5],
-        [-28.3, 9.8],
-        [-30.0, 5.7],
-        [-31.0, 1.7],
-        [-30.3, -2.7],
-        [-31.0, -6.4],
-        [-31.0, -10.4],
-        [-30.3, -14.5],
-        [-29.0, -18.5],
-        [-26.9, -22.6],
-        [-24.6, -26.6],
-        [-21.5, -30.6],
-        [-18.2, -34.7],
-        [-15.2, -38.7],
-        [-12.1, -42.8],
-        [-9.4, -46.8],
-        [-7.1, -50.8],
-        [-5.1, -54.9],
-        [-2.7, -63.3],
-    ]
-}
-
-fn flame_mid_pts() -> Vec<Pt2> {
-    vec![
-        [-0.3, -48.1],
-        [4.4, -38.0],
-        [8.8, -27.9],
-        [12.8, -17.8],
-        [16.2, -7.7],
-        [17.5, 2.4],
-        [16.2, 12.5],
-        [12.8, 20.9],
-        [7.7, 27.6],
-        [2.7, 32.7],
-        [0.0, 35.4],
-        [-2.7, 32.7],
-        [-7.7, 27.6],
-        [-12.8, 20.9],
-        [-16.2, 12.5],
-        [-17.5, 2.4],
-        [-16.2, -7.7],
-        [-12.8, -17.8],
-        [-8.8, -27.9],
-        [-4.4, -38.0],
-    ]
-}
-
-fn flame_core_pts() -> Vec<Pt2> {
-    vec![
-        [0.3, -27.9],
-        [1.3, -23.9],
-        [3.7, -19.9],
-        [6.1, -15.8],
-        [8.8, -11.8],
-        [10.8, -7.7],
-        [12.1, -3.7],
-        [11.8, 0.3],
-        [10.8, 4.4],
-        [8.8, 8.4],
-        [6.1, 12.5],
-        [3.7, 16.5],
-        [1.7, 20.5],
-        [0.0, 23.2],
-        [-0.3, 19.2],
-        [-0.3, 12.5],
-        [-0.3, 5.7],
-        [-0.3, -1.0],
-        [-0.3, -7.7],
-        [-0.3, -14.5],
-        [-0.3, -21.2],
-    ]
-}
-
-fn half_light_l_pts() -> Vec<Pt2> {
-    vec![
-        [0.0, -78.0],
-        [-4.0, -64.0],
-        [-9.0, -51.0],
-        [-18.0, -39.0],
-        [-27.0, -26.0],
-        [-31.0, -13.0],
-        [-31.0, -3.0],
-        [-24.0, 16.0],
-        [-8.0, 38.0],
-        [0.0, 44.0],
-        [1.5, 20.0],
-        [1.5, -10.0],
-        [1.5, -40.0],
-        [1.5, -60.0],
-    ]
-}
-
-fn half_light_l_fill() -> ShapeFillType {
-    ShapeFillType::LinearGradient {
-        start: [0.0, -370.0],
-        end: [0.0, 220.0],
-        colors: vec![
-            [1.0, 0.85, 0.55, 0.0],
-            [1.0, 0.85, 0.55, 0.0],
-            [1.0, 0.82, 0.50, 0.50],
-            [1.0, 0.82, 0.50, 0.52],
-        ],
-        stops: vec![0.0, 0.45, 0.75, 1.0],
-    }
-}
-
-fn half_shade_r_fill() -> ShapeFillType {
-    ShapeFillType::LinearGradient {
-        start: [0.0, -370.0],
-        end: [0.0, 220.0],
-        colors: vec![
-            [0.50, 0.05, 0.02, 0.0],
-            [0.50, 0.05, 0.02, 0.0],
-            [0.45, 0.04, 0.02, 0.40],
-            [0.45, 0.04, 0.02, 0.45],
-        ],
-        stops: vec![0.0, 0.45, 0.75, 1.0],
-    }
-}
-
-fn mirror(pts: &[Pt2]) -> Vec<Pt2> {
-    pts.iter().map(|p| [-p[0], p[1]]).collect()
-}
-
-fn shadow_ul_pts() -> Vec<Pt2> {
-    vec![
-        [-0.7, -71.0],
-        [-2.4, -63.3],
-        [-5.1, -54.9],
-        [-7.1, -50.8],
-        [-9.4, -46.8],
-        [-12.1, -42.8],
-        [-15.2, -38.7],
-        [-18.2, -34.7],
-        [-21.5, -30.6],
-        [-24.6, -26.6],
-        [-14.1, -24.6],
-        [-5.4, -23.6],
-        [-4.0, -26.3],
-        [-2.7, -29.0],
-        [-1.7, -31.6],
-        [-1.0, -34.3],
-        [-0.7, -44.8],
-        [-0.7, -61.6],
-    ]
-}
-
-fn shadow_ul_fill() -> ShapeFillType {
-    ShapeFillType::LinearGradient {
-        start: [0.0, -353.0],
-        end: [0.0, -123.0],
-        colors: vec![
-            [0.80, 0.25, 0.06, 1.0],
-            [0.95, 0.24, 0.04, 1.0],
-            [1.0, 0.28, 0.06, 1.0],
-        ],
-        stops: vec![0.0, 0.5, 1.0],
-    }
-}
-
-fn shield_l_pts() -> Vec<Pt2> {
-    vec![[-13.5, 42.1], [-3.4, 42.1], [-3.4, 69.7], [-13.5, 69.7]]
-}
-
-fn cube_r_pts() -> Vec<Pt2> {
-    vec![[-3.4, 42.1], [6.7, 42.1], [6.7, 69.7], [-3.4, 69.7]]
-}
-
-fn wing_dark_l_pts() -> Vec<Pt2> {
-    vec![
-        [-57.2, 10.8],
-        [-52.5, 14.1],
-        [-47.8, 17.8],
-        [-43.1, 21.5],
-        [-38.0, 25.6],
-        [-32.7, 30.0],
-        [-27.6, 34.0],
-        [-22.9, 37.4],
-        [-18.9, 40.1],
-        [-16.2, 42.1],
-        [-13.5, 44.1],
-        [-10.8, 45.8],
-        [-6.1, 44.8],
-        [-1.3, 42.1],
-        [-1.3, 44.1],
-        [-7.5, 45.0],
-        [-12.5, 45.5],
-        [-16.2, 45.8],
-        [-17.5, 44.8],
-        [-20.9, 44.1],
-        [-26.3, 41.8],
-        [-31.6, 38.7],
-        [-37.0, 35.0],
-        [-42.4, 30.6],
-        [-47.8, 25.6],
-        [-53.2, 19.9],
-        [-57.2, 14.5],
-    ]
-}
-
-fn wing_blade_l_pts() -> Vec<Pt2> {
-    vec![
-        [-60.6, 8.1],
-        [-54.5, 5.4],
-        [-48.5, 2.4],
-        [-43.4, -0.3],
-        [-39.7, -1.0],
-        [-38.7, 7.4],
-        [-38.0, 15.8],
-        [-35.0, 19.9],
-        [-31.6, 23.9],
-        [-27.6, 27.3],
-        [-23.6, 30.6],
-        [-19.5, 33.7],
-        [-15.5, 36.0],
-        [-12.1, 37.7],
-        [-10.1, 39.1],
-        [-6.1, 42.8],
-        [-8.1, 44.1],
-        [-10.8, 44.4],
-        [-13.5, 42.8],
-        [-16.2, 40.7],
-        [-18.9, 38.7],
-        [-22.9, 36.0],
-        [-27.6, 32.7],
-        [-32.7, 28.6],
-        [-38.0, 24.2],
-        [-43.1, 20.2],
-        [-47.8, 16.5],
-        [-52.5, 12.8],
-        [-57.2, 9.4],
-    ]
-}
-
-fn flame_outer_fill() -> ShapeFillType {
-    ShapeFillType::LinearGradient {
-        start: [0.0, -358.0],
-        end: [0.0, 196.0],
-        colors: vec![
-            [1.0, 0.75, 0.24, 1.0],
-            [1.0, 0.66, 0.21, 1.0],
-            [1.0, 0.55, 0.16, 1.0],
-            [1.0, 0.33, 0.08, 1.0],
-            [1.0, 0.48, 0.15, 1.0],
-            [1.0, 0.68, 0.23, 1.0],
-            [1.0, 0.82, 0.29, 1.0],
-            [1.0, 0.62, 0.18, 1.0],
-            [0.93, 0.27, 0.08, 1.0],
-        ],
-        stops: vec![0.0, 0.20, 0.33, 0.42, 0.50, 0.60, 0.72, 0.85, 1.0],
-    }
-}
-
-fn flame_mid_fill() -> ShapeFillType {
-    ShapeFillType::LinearGradient {
-        start: [0.0, -240.0],
-        end: [0.0, 177.0],
-        colors: vec![
-            [1.0, 0.75, 0.43, 1.0],
-            [1.0, 0.84, 0.59, 1.0],
-            [1.0, 0.90, 0.73, 1.0],
-        ],
-        stops: vec![0.0, 0.55, 1.0],
-    }
-}
-
-fn flame_core_fill() -> ShapeFillType {
-    ShapeFillType::Solid
-}
-
-#[allow(clippy::too_many_arguments)]
-fn apart(
-    comp: &mut Composition,
-    id: &str,
-    pts: Vec<Pt2>,
-    tans: Vec<(Pt2, Pt2)>,
-    color: [f32; 4],
-    fill: ShapeFillType,
-    pos: Animatable<[f32; 2]>,
-    scale: Animatable<[f32; 2]>,
-    opacity: Animatable<f32>,
-    dur: u32,
-) {
-    comp.add_layer(Layer::new(
-        id.into(),
-        id.into(),
-        LayerType::Shape {
-            shape_type: ShapeType::FreeformBezier {
-                points: pts,
-                tangents: tans,
-                closed: true,
-            },
-            color,
-            stroke_color: [0.0; 4],
-            stroke_width: 0.0,
-            fill_type: fill,
-            extrusion_depth: 0.0,
-            bevel_depth: 0.0,
-        },
-        dur,
-    ));
-    let l = comp.layers.last_mut().unwrap();
-    l.transform.position = pos;
-    l.transform.scale = scale;
-    l.transform.opacity = opacity;
-}
-
-#[allow(clippy::too_many_arguments)]
-fn ring_layer(
-    comp: &mut Composition,
-    id: &str,
-    color: [f32; 4],
-    diam: f32,
-    sw: f32,
-    start: Animatable<f32>,
-    end: Animatable<f32>,
-    pos: [f32; 2],
-    scale: Animatable<[f32; 2]>,
-    opacity: Animatable<f32>,
-    glow: bool,
-    dur: u32,
-) {
-    comp.add_layer(Layer::new(
-        id.into(),
-        id.into(),
-        LayerType::Shape {
-            shape_type: ShapeType::Ellipse {
-                width: Animatable::new_constant(diam),
-                height: Animatable::new_constant(diam),
-            },
-            color: [0.0; 4],
-            stroke_color: color,
-            stroke_width: sw,
-            fill_type: ShapeFillType::Solid,
-            extrusion_depth: 0.0,
-            bevel_depth: 0.0,
-        },
-        dur,
-    ));
-    let l = comp.layers.last_mut().unwrap();
-    l.transform.position = Animatable::new_constant(pos);
-    l.transform.scale = scale;
-    l.transform.opacity = opacity;
-    l.trim_paths = Some(TrimPaths {
-        start,
-        end,
-        offset: Animatable::new_constant(0.0),
-    });
-    if glow {
-        l.effects.push(Effect {
-            id: format!("{id}_glow"),
-            name: "Ring Glow".into(),
-            effect_type: EffectType::Glow {
-                threshold: Animatable::new_constant(62.0),
-                radius: Animatable::new_constant(10.0),
-                intensity: Animatable::new_constant(38.0),
-                color: Animatable::new_constant([1.0, 0.5, 0.1, 1.0]),
-            },
-            enabled: true,
-        });
-    }
-}
-
-type RingDraw = (&'static str, f32, f32, [f32; 4], u32, u32);
-
-fn c2(v: [f32; 2]) -> Animatable<[f32; 2]> {
-    Animatable::new_constant(v)
-}
-fn c1(v: f32) -> Animatable<f32> {
-    Animatable::new_constant(v)
-}
-
-// ─── Still composition (1000x1000, quality reference) ───
-
-fn build_still() -> Composition {
-    let mut comp = Composition::new(
-        "LogoStill".into(),
-        "Kagari Vector Logo".into(),
-        1000,
-        1000,
-        30,
-        2,
-    );
-    let ctr = [492.0, 476.0];
-    let s100 = c2([100.0, 100.0]);
-    let o100 = c1(100.0);
-
-    comp.add_layer(Layer::new(
-        "bg".into(),
-        "BG".into(),
-        LayerType::Solid {
-            color: [0.247, 0.247, 0.247, 1.0],
-        },
-        2,
-    ));
-    comp.layers.last_mut().unwrap().transform.position = c2([500.0, 500.0]);
-
-    // cube pedestal (light left face / navy right face)
-    let sl = shield_l_pts();
-    apart(
-        &mut comp,
-        "cube_l",
-        sl.clone(),
-        sharp(&sl),
-        [0.757, 0.722, 0.655, 1.0],
-        ShapeFillType::Solid,
-        c2(ctr),
-        s100.clone(),
-        o100.clone(),
-        2,
-    );
-    let sr = cube_r_pts();
-    apart(
-        &mut comp,
-        "cube_r",
-        sr.clone(),
-        sharp(&sr),
-        [0.122, 0.141, 0.169, 1.0],
-        ShapeFillType::Solid,
-        c2(ctr),
-        s100.clone(),
-        o100.clone(),
-        2,
-    );
-
-    // wings (navy under, white blade over)
-    let wd = wing_dark_l_pts();
-    apart(
-        &mut comp,
-        "wing_dl",
-        wd.clone(),
-        sharp(&wd),
-        [0.122, 0.141, 0.169, 1.0],
-        ShapeFillType::Solid,
-        c2(ctr),
-        s100.clone(),
-        o100.clone(),
-        2,
-    );
-    let wdr = mirror(&wd);
-    apart(
-        &mut comp,
-        "wing_dr",
-        wdr.clone(),
-        sharp(&wdr),
-        [0.122, 0.141, 0.169, 1.0],
-        ShapeFillType::Solid,
-        c2(ctr),
-        s100.clone(),
-        o100.clone(),
-        2,
-    );
-    let wb = wing_blade_l_pts();
-    apart(
-        &mut comp,
-        "wing_l",
-        wb.clone(),
-        sharp(&wb),
-        [1.0, 0.973, 0.910, 1.0],
-        ShapeFillType::Solid,
-        c2(ctr),
-        s100.clone(),
-        o100.clone(),
-        2,
-    );
-    let wbr = mirror(&wb);
-    apart(
-        &mut comp,
-        "wing_r",
-        wbr.clone(),
-        sharp(&wbr),
-        [1.0, 0.973, 0.910, 1.0],
-        ShapeFillType::Solid,
-        c2(ctr),
-        s100.clone(),
-        o100.clone(),
-        2,
-    );
-
-    // ring arcs (two tapered gradient arcs, flat vector look)
-    let segs: &[(&str, f32, f32, [f32; 4])] = &[
-        ("ring_lb2", 34.9, 36.5, [1.0, 0.235, 0.04, 1.0]),
-        ("ring_lb", 36.5, 39.0, [1.0, 0.267, 0.043, 1.0]),
-        ("ring_lb2x", 39.0, 41.5, [1.0, 0.373, 0.059, 1.0]),
-        ("ring_lb3", 41.5, 45.5, [1.0, 0.57, 0.106, 1.0]),
-        ("ring_lm3", 45.5, 50.0, [1.0, 0.765, 0.157, 1.0]),
-        ("ring_lm", 50.0, 54.5, [1.0, 0.745, 0.153, 1.0]),
-        ("ring_lm2b", 54.5, 60.5, [1.0, 0.66, 0.133, 1.0]),
-        ("ring_lm2a", 60.5, 66.5, [1.0, 0.62, 0.122, 1.0]),
-        ("ring_lt", 66.5, 71.3, [1.0, 0.63, 0.125, 1.0]),
-        ("ring_rt", 78.5, 84.0, [1.0, 0.64, 0.126, 1.0]),
-        ("ring_rm", 84.0, 89.5, [1.0, 0.628, 0.126, 1.0]),
-        ("ring_rm2", 89.5, 95.0, [1.0, 0.675, 0.137, 1.0]),
-        ("ring_rm3a", 95.0, 100.0, [1.0, 0.745, 0.153, 1.0]),
-        ("ring_rm3b", 0.0, 2.5, [1.0, 0.804, 0.161, 1.0]),
-        ("ring_rm4", 2.5, 6.5, [1.0, 0.698, 0.137, 1.0]),
-        ("ring_rb2", 6.5, 10.0, [1.0, 0.49, 0.09, 1.0]),
-        ("ring_rb3", 10.0, 12.5, [1.0, 0.306, 0.051, 1.0]),
-        ("ring_rb", 12.5, 15.1, [1.0, 0.235, 0.04, 1.0]),
-    ];
-    for (id, s, e, sc) in segs.iter().copied() {
-        ring_layer(
-            &mut comp,
-            id,
-            sc,
-            137.5,
-            20.0,
-            c1(s),
-            c1(e),
-            [487.7, 476.6],
-            s100.clone(),
-            o100.clone(),
-            false,
-            2,
-        );
-    }
-
-    // flames (flat vector zones: red shell / upper-left shadow / orange band / cream core)
-    let fo = flame_outer_pts();
-    apart(
-        &mut comp,
-        "flame_outer",
-        fo.clone(),
-        smooth_closed(&fo, &[0, 27]),
-        [1.0; 4],
-        flame_outer_fill(),
-        c2(ctr),
-        s100.clone(),
-        o100.clone(),
-        2,
-    );
-    let su = shadow_ul_pts();
-    apart(
-        &mut comp,
-        "shade_ul",
-        su.clone(),
-        smooth_closed(&su, &[0, 11]),
-        [1.0; 4],
-        shadow_ul_fill(),
-        c2(ctr),
-        s100.clone(),
-        o100.clone(),
-        2,
-    );
-    let fm = flame_mid_pts();
-    apart(
-        &mut comp,
-        "flame_mid",
-        fm.clone(),
-        smooth_closed(&fm, &[0, 10]),
-        [1.0; 4],
-        flame_mid_fill(),
-        c2(ctr),
-        s100.clone(),
-        o100.clone(),
-        2,
-    );
-    let fc = flame_core_pts();
-    apart(
-        &mut comp,
-        "flame_core",
-        fc.clone(),
-        smooth_closed(&fc, &[0, 13]),
-        [1.0, 0.973, 0.910, 1.0],
-        flame_core_fill(),
-        c2(ctr),
-        s100.clone(),
-        o100.clone(),
-        2,
-    );
-
-    comp
-}
-
-// ─── Reveal composition (1920x1080): one energy phenomenon forms the mark ───
-// trim% maps to ring angle: 0% = 3 o'clock, increasing clockwise (y-down).
-// Ring center (960,430), radius ~202px in this comp.
-
-use kagari_vfx::core::particle_system::{EmitterShape, FadeCurve, ParticleEmitter};
-
-const R_CTR: [f32; 2] = [960.0, 430.0];
-const R_RING: f32 = 303.0;
-const RING_U: f32 = 140.0;
-
-fn ez4(c: [f32; 4]) -> InterpolationType {
+pub fn ez4(c: [f32; 4]) -> InterpolationType {
     InterpolationType::Bezier {
         outgoing: BezierControlPoint {
             influence: 0.33,
@@ -665,28 +23,29 @@ fn ez4(c: [f32; 4]) -> InterpolationType {
     }
 }
 
-const E_FASTIN: [f32; 4] = [0.55, 0.0, 1.0, 1.0];
-const E_SMOOTH: [f32; 4] = [0.0, 0.0, 0.4, 1.0];
-const E_SNAP: [f32; 4] = [0.3, 0.0, 0.2, 1.0];
-const E_HEAVY: [f32; 4] = [0.5, 0.0, 0.3, 1.0];
-const E_DRIFT: [f32; 4] = [0.37, 0.0, 0.63, 1.0];
+pub const E_FASTIN: [f32; 4] = [0.55, 0.0, 1.0, 1.0];
+pub const E_SMOOTH: [f32; 4] = [0.0, 0.0, 0.4, 1.0];
+pub const E_SNAP: [f32; 4] = [0.3, 0.0, 0.2, 1.0];
+pub const E_HEAVY: [f32; 4] = [0.5, 0.0, 0.3, 1.0];
+pub const E_DRIFT: [f32; 4] = [0.37, 0.0, 0.63, 1.0];
 
-fn k1(f: u32, v: f32, e: InterpolationType) -> Keyframe<f32> {
+pub fn k1(f: u32, v: f32, e: InterpolationType) -> Keyframe<f32> {
     Keyframe::new(f, v, e)
 }
-fn k2(f: u32, v: [f32; 2], e: InterpolationType) -> Keyframe<[f32; 2]> {
+
+pub fn k2(f: u32, v: [f32; 2], e: InterpolationType) -> Keyframe<[f32; 2]> {
     Keyframe::new(f, v, e)
 }
 
 /// Position on the ring for a trim percentage (energy comet follow-path).
-fn comet_pos(trim_pct: f32) -> [f32; 2] {
+pub fn comet_pos(trim_pct: f32) -> [f32; 2] {
     let th = trim_pct * 3.6 * std::f32::consts::PI / 180.0;
     [R_CTR[0] + R_RING * th.cos(), R_CTR[1] + R_RING * th.sin()]
 }
 
 /// Cheap glow: radial-gradient halo with its own opacity/scale envelopes.
 #[allow(clippy::too_many_arguments)]
-fn halo(
+pub fn halo(
     comp: &mut Composition,
     id: &str,
     size: f32,
@@ -726,7 +85,7 @@ fn halo(
 }
 
 /// Bright traveling window on the ring (energy pulse): thin white-gold arc.
-fn pulse_layer(
+pub fn pulse_layer(
     comp: &mut Composition,
     id: &str,
     start: Animatable<f32>,
@@ -761,7 +120,7 @@ fn pulse_layer(
     });
 }
 
-fn particle_layer(
+pub fn particle_layer(
     comp: &mut Composition,
     id: &str,
     emitter: ParticleEmitter,
@@ -780,7 +139,7 @@ fn particle_layer(
     l.transform.opacity = opacity;
 }
 
-fn base_emitter() -> ParticleEmitter {
+pub fn base_emitter() -> ParticleEmitter {
     ParticleEmitter {
         fade_curve: FadeCurve::EaseOut,
         blend_mode: 1,
@@ -788,7 +147,9 @@ fn base_emitter() -> ParticleEmitter {
     }
 }
 
-fn build_reveal() -> Composition {
+pub type RingDraw = (&'static str, f32, f32, [f32; 4], u32, u32);
+
+pub fn build_reveal() -> Composition {
     let mut comp = Composition::new(
         "LogoReveal".into(),
         "Kagari Logo Reveal".into(),
@@ -1269,7 +630,6 @@ fn build_reveal() -> Composition {
     );
 
     // ring arcs IGNITE behind the traveling comets (fronts track comet angle).
-    // Left comet f10->36 (trim 25->75); right comet f12->38 (trim 25->0/100->77).
     let front = |v0: f32, v1: f32, f0: u32, f1: u32| {
         Animatable::new_animated(vec![
             k1(0, v0, lin),
@@ -1285,7 +645,6 @@ fn build_reveal() -> Composition {
         k1(135, 100.0, lin),
         k1(150, 0.0, lin),
     ]);
-    // (id, fixed_start, front_end_anim, fixed_end, front_start_anim, color)
     let ring_draws: &[(RingDraw, bool)] = &[
         (
             ("ring_lb2", 34.9, 36.5, [1.0, 0.235, 0.04, 1.0], 10, 15),
@@ -1384,7 +743,6 @@ fn build_reveal() -> Composition {
 
     // ring charge: a thicker, hotter arc set fades in over the base ring as
     // the climax charge (thin -> luminous band), then settles to a glow.
-    // Same segments, static trims — the base draw-on already ran.
     let charge_op = Animatable::new_animated(vec![
         k1(0, 0.0, lin),
         k1(68, 0.0, lin),
@@ -1436,7 +794,6 @@ fn build_reveal() -> Composition {
     }
 
     // traveling energy pulses: bright windows riding just ahead of each front.
-    // Left side (wrap-free): window [t, t+10], t 17->65, f10->35.
     pulse_layer(
         &mut comp,
         "pulse_l",
@@ -1452,7 +809,6 @@ fn build_reveal() -> Composition {
         ]),
         150,
     );
-    // Right lower (25->0, wrap-free): window [t-12, t], t 25->12, f12->24.
     pulse_layer(
         &mut comp,
         "pulse_r1",
@@ -1468,7 +824,6 @@ fn build_reveal() -> Composition {
         ]),
         150,
     );
-    // Right upper (100->77, wrap-free): window [t-12, t], t 100->89, f24->37.
     pulse_layer(
         &mut comp,
         "pulse_r2",
@@ -1484,7 +839,6 @@ fn build_reveal() -> Composition {
         ]),
         150,
     );
-    // Return sweep: wing-lock energy travels back through the full ring (f70-86).
     pulse_layer(
         &mut comp,
         "pulse_back",
@@ -1502,7 +856,6 @@ fn build_reveal() -> Composition {
     );
 
     // comet heads: white-hot cores riding the fronts, then diving to center.
-    // Left comet: arc f10->36, dive f36->44.
     let comet_keys_l = vec![
         k2(0, comet_pos(25.0), lin),
         k2(10, comet_pos(25.0), lin),
@@ -1516,7 +869,6 @@ fn build_reveal() -> Composition {
         k2(44, ctr, ez4(E_SNAP)),
         k2(150, ctr, lin),
     ];
-    // Right comet: arc f12->38 (through 0/100), dive f38->46. Leads no one: 2f late.
     let comet_keys_r = vec![
         k2(0, comet_pos(25.0), lin),
         k2(12, comet_pos(25.0), lin),
@@ -1560,7 +912,6 @@ fn build_reveal() -> Composition {
         let l = comp.layers.last_mut().unwrap();
         l.transform.position = Animatable::new_animated(keys.clone());
         l.transform.opacity = head_op;
-        // dive stretch: elongate along the fall (vertical), relax on arrival
         l.transform.scale = Animatable::new_animated(vec![
             k2(0, [100.0, 100.0], lin),
             k2(35 + d, [100.0, 100.0], lin),
@@ -1590,7 +941,6 @@ fn build_reveal() -> Composition {
     }
 
     // convergence streams: ring-shaped emitter pulled to center (f34-50).
-    // Visible ONLY as inward-flying energy because lifetime is short.
     particle_layer(
         &mut comp,
         "converge",
@@ -1630,8 +980,7 @@ fn build_reveal() -> Composition {
         150,
     );
 
-    // flames: anticipation squash (f40-44) -> explosive overshoot -> recoil ->
-    // settle -> damped breathing. Mid/core stagger inside-out; shade lags 2f.
+    // flames: anticipation squash -> explosive overshoot -> recoil -> settle
     let flame_op = Animatable::new_animated(vec![
         k1(0, 0.0, lin),
         k1(40, 0.0, lin),
@@ -1721,7 +1070,6 @@ fn build_reveal() -> Composition {
         flame_op.clone(),
         150,
     );
-    // core flares again at the white-hot peak (reaction to the return sweep)
     let core_scale = Animatable::new_animated(vec![
         k2(0, [0.0, 0.0], lin),
         k2(46, [0.0, 0.0], lin),
@@ -1746,11 +1094,11 @@ fn build_reveal() -> Composition {
         flame_core_fill(),
         c2(ctr),
         core_scale,
-        flame_op.clone(),
+        flame_op,
         150,
     );
 
-    // ignition sparks: burst REACTING to the ignition (short life + opacity gate)
+    // ignition sparks
     particle_layer(
         &mut comp,
         "sparks",
@@ -1785,7 +1133,7 @@ fn build_reveal() -> Composition {
         150,
     );
 
-    // drifting embers: slow residue of the ignition, floating upward
+    // drifting embers
     particle_layer(
         &mut comp,
         "embers",
@@ -1820,7 +1168,7 @@ fn build_reveal() -> Composition {
         150,
     );
 
-    // ---- titles: rise with overshoot after the logo settles, staggered ----
+    // titles
     let title_rise = |t0: u32, y_end: f32| {
         Animatable::new_animated(vec![
             k2(0, [960.0, y_end - 200.0], lin),
@@ -1933,8 +1281,7 @@ fn build_reveal() -> Composition {
         l.transform.opacity = title_op(114);
     }
 
-    // photographic finish: subtle vignette + fine grain over everything.
-    // Grain ramps in with the light (deterministic, frame-seeded).
+    // photographic finish
     comp.add_layer(Layer::new(
         "finish".into(),
         "Finish".into(),
@@ -1963,13 +1310,4 @@ fn build_reveal() -> Composition {
     }
 
     comp
-}
-
-fn main() {
-    let project = Project {
-        compositions: vec![build_still(), build_reveal()],
-        ..Default::default()
-    };
-    save_project_atomic(&project, "logo_project.json").unwrap();
-    println!("Wrote logo_project.json");
 }
