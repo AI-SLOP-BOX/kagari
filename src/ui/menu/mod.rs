@@ -1,4 +1,5 @@
 mod composition;
+mod dialogs;
 mod effect_anim;
 pub mod effect_factory;
 mod file_edit;
@@ -404,7 +405,7 @@ pub fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
             });
         });
     });
-    effect_anim::draw_dialogs(app, ctx);
+    dialogs::draw_dialogs(app, ctx);
 }
 
 #[cfg(test)]
