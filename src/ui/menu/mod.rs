@@ -1,147 +1,386 @@
+mod composition;
 mod effect_anim;
-mod effect_factory;
+pub mod effect_factory;
 mod file_edit;
 mod import_helpers;
 mod layer;
 
+pub use effect_factory::apply_effect_by_name;
+
 use eframe::egui;
 
-fn draw_header_action(ui: &mut egui::Ui, label: &str, width: f32, size: f32) -> egui::Response {
-    let (rect, response) = ui.allocate_exact_size(egui::vec2(width, 28.0), egui::Sense::click());
-    if response.hovered() {
-        ui.painter().rect_filled(rect, 4.0, crate::ui::theme::colors::BG_HOVER);
-    }
-    ui.painter().text(
-        rect.center(),
-        egui::Align2::CENTER_CENTER,
-        label,
-        egui::FontId::proportional(size),
-        crate::ui::theme::colors::TEXT_SECONDARY,
-    );
-    response.on_hover_text("Open Render Queue")
+pub(crate) const ASSETS_WORKSPACE_INDEX: usize = 7;
+const SVG_UNDO: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 1 1 0 12h-2"/></svg>"#;
+const SVG_REDO: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m15 4 5 5-5 5"/><path d="M20 9H10a6 6 0 1 0 0 12h2"/></svg>"#;
+
+fn composition_aspect_label(width: u32, height: u32) -> String {
+    let aspect = width as f32 / height.max(1) as f32;
+    [
+        ("16:9", 16.0 / 9.0),
+        ("16:10", 16.0 / 10.0),
+        ("4:3", 4.0 / 3.0),
+        ("1:1", 1.0),
+        ("9:16", 9.0 / 16.0),
+        ("2.39:1", 2.39),
+        ("2.35:1", 2.35),
+    ]
+    .into_iter()
+    .find(|(_, preset)| (aspect - preset).abs() < 0.025)
+    .map(|(label, _)| label.to_owned())
+    .unwrap_or_else(|| format!("{aspect:.2}:1"))
 }
 
 pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
-    if !app.show_home && ctx.screen_rect().width() >= 1200.0 {
-        draw_reference_studio_header(app, ctx);
-        return;
-    }
     draw_studio_header(app, ctx);
 }
 
-fn draw_reference_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context) {
-    egui::TopBottomPanel::top("studio_header")
-        .exact_height(48.0)
-        .resizable(false)
-        .frame(egui::Frame::none().fill(crate::ui::theme::colors::BG_DEEPEST))
-        .show(ctx, |ui| {
-            let rect = ui.max_rect();
-            ui.painter().line_segment(
-                [egui::pos2(rect.left(), rect.bottom() - 1.0), egui::pos2(rect.right(), rect.bottom() - 1.0)],
-                egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(43, 55, 65)),
-            );
-            ui.allocate_new_ui(
-                egui::UiBuilder::new().max_rect(rect).layout(egui::Layout::left_to_right(egui::Align::Center)),
-                |ui| {
-                    ui.add_space(17.0);
-                    load_logo_if_needed(app, ctx);
-                    if let Some(texture) = app.home_banner.as_ref() {
-                        ui.add(egui::Image::new(egui::load::SizedTexture::new(texture.id(), egui::vec2(34.0, 34.0))));
-                    }
-                    ui.add_space(7.0);
-                    ui.label(egui::RichText::new("Kagari VFX").size(17.0).strong().color(crate::ui::theme::colors::TEXT_PRIMARY));
-                    ui.add_space(22.0);
-                    crate::ui::icons::render_svg_bytes(ui, "studio-breadcrumb-arrow", crate::ui::icons::SVG_CHEVRON_RIGHT, egui::vec2(18.0, 18.0), crate::ui::theme::colors::TEXT_SECONDARY);
-                    ui.add_space(18.0);
-                    ui.painter().line_segment(
-                        [egui::pos2(ui.cursor().left(), rect.top() + 10.0), egui::pos2(ui.cursor().left(), rect.bottom() - 10.0)],
-                        egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(42, 54, 64)),
-                    );
-                    ui.add_space(18.0);
-                    crate::ui::icons::render_svg_bytes(ui, "studio-project-folder", crate::ui::icons::SVG_FOLDER, egui::vec2(18.0, 18.0), egui::Color32::from_rgb(174, 190, 207));
-                    ui.add_space(10.0);
-                    ui.label(egui::RichText::new("Sample Project / main_comp").size(14.0).color(crate::ui::theme::colors::TEXT_SECONDARY));
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let render_response = draw_header_action(ui, "Render", 68.0, 13.0);
-                        if render_response.clicked() { app.show_home = false; app.ui_tabs.bottom_dock_tab = 1; }
-                        ui.add_space(14.0);
-                        ui.label(egui::RichText::new("Autosaved 10:24").size(12.0).color(crate::ui::theme::colors::TEXT_SECONDARY));
-                    });
-                },
-            );
-        });
-}
-
 fn draw_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context) {
-    let compact_header = ctx.screen_rect().width() < 1200.0;
-    let composition_label = app.history.current().active_composition().name.clone();
+    let compact_header =
+        ctx.screen_rect().width() < crate::ui::theme::layout::DOCKED_PANELS_MIN_WIDTH;
+    let project_name = std::path::Path::new(&app.project_path)
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .filter(|name| *name != "project")
+        .unwrap_or("名称未設定")
+        .to_owned();
+    let composition = app.history.current().active_composition();
+    let is_pristine_start = composition.id == "comp_empty_start";
+    let composition_label = if is_pristine_start {
+        "コンポジション未作成".to_string()
+    } else {
+        composition.name.clone()
+    };
     let workspace_id = egui::Id::new("studio_active_workspace");
-    let inferred_workspace = if app.show_home { 0_usize }
-        else if app.ui_tabs.left_tab_idx == 1 && app.ui_tabs.right_tab_idx == 1 { 4 }
-        else if app.ui_tabs.left_tab_idx == 1 && app.ui_tabs.right_tab_idx == 0 { 2 }
-        else { 1 };
-    let mut active_workspace = ctx.data_mut(|data| data.get_temp::<usize>(workspace_id)).unwrap_or(inferred_workspace);
-    if app.show_home { active_workspace = 0; }
-    else if active_workspace == 0 {
-        active_workspace = inferred_workspace;
-        ctx.data_mut(|data| data.insert_temp(workspace_id, active_workspace));
-    }
-    let workspaces = [
-        ("Home", crate::ui::home_screen::HomeNav::Home),
-        ("Compositing", crate::ui::home_screen::HomeNav::Compositing),
-        ("Effects", crate::ui::home_screen::HomeNav::Effects),
-        ("Assets", crate::ui::home_screen::HomeNav::Projects),
-        ("Render", crate::ui::home_screen::HomeNav::Render),
+    let mut active_workspace = active_workspace_index(app, ctx);
+    let project_label = crate::ui::localization::tr("Project");
+    let edit_label = crate::ui::localization::tr("Edit");
+    let export_label = crate::ui::localization::tr("Export");
+    let primary_workspaces = [
+        (
+            ASSETS_WORKSPACE_INDEX,
+            project_label.as_str(),
+            crate::ui::home_screen::HomeNav::Projects,
+        ),
+        (
+            1,
+            edit_label.as_str(),
+            crate::ui::home_screen::HomeNav::Compositing,
+        ),
+        (
+            8,
+            export_label.as_str(),
+            crate::ui::home_screen::HomeNav::Render,
+        ),
     ];
-    let workspace_label = workspaces.get(active_workspace).map(|(label, _)| *label).unwrap_or("Compositing");
+    let other_workspaces = [
+        (4, "カラー", crate::ui::home_screen::HomeNav::Color),
+        (2, "エフェクト", crate::ui::home_screen::HomeNav::Effects),
+        (5, "オーディオ", crate::ui::home_screen::HomeNav::Audio),
+    ];
+    let secondary_modes = [
+        (3, "グラフ", crate::ui::home_screen::HomeNav::Graph),
+        (6, "リタイム", crate::ui::home_screen::HomeNav::Retiming),
+    ];
+    let top_workspace = primary_workspace_index(active_workspace);
     egui::TopBottomPanel::top("studio_header")
-        .exact_height(66.0)
+        .exact_height(36.0)
         .frame(
             egui::Frame::none()
                 .fill(crate::ui::theme::colors::BG_DEEPEST)
-                .stroke(egui::Stroke::new(1.0_f32, crate::ui::theme::colors::BORDER_SUBTLE))
-                .inner_margin(egui::Margin::symmetric(if compact_header { 8.0 } else { 24.0 }, 0.0)),
+                .stroke(egui::Stroke::new(
+                    1.0_f32,
+                    crate::ui::theme::colors::BORDER_SUBTLE,
+                ))
+                .inner_margin(egui::Margin::symmetric(
+                    if compact_header { 8.0 } else { 11.0 },
+                    0.0,
+                )),
         )
         .show(ctx, |ui| {
             let header_size = ui.available_size();
-            ui.allocate_ui_with_layout(header_size, egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                load_logo_if_needed(app, ctx);
-                if let Some(texture) = app.home_banner.as_ref() {
-                    ui.add(egui::Image::new(egui::load::SizedTexture::new(texture.id(), egui::vec2(
-                        if compact_header { 28.0 } else { 38.0 },
-                        if compact_header { 28.0 } else { 38.0 },
-                    ))));
-                }
-                ui.add_space(if compact_header { 6.0 } else { 10.0 });
-                ui.label(egui::RichText::new("Kagari VFX").size(if compact_header { 15.0 } else { 20.0 }).color(crate::ui::theme::colors::TEXT_PRIMARY));
-                ui.add_space(if compact_header { 12.0 } else { 22.0 });
-                crate::ui::icons::render_svg_bytes(ui, "studio-project-folder", crate::ui::icons::SVG_FOLDER, egui::vec2(if compact_header { 16.0 } else { 18.0 }, if compact_header { 16.0 } else { 18.0 }), crate::ui::theme::colors::TEXT_SECONDARY);
-                ui.add_space(6.0);
-                ui.label(egui::RichText::new(format!("Sample Project / {composition_label}")).size(if compact_header { 12.0 } else { 14.0 }).color(crate::ui::theme::colors::TEXT_SECONDARY));
-                ui.add_space(6.0);
-                ui.menu_button(
-                    egui::RichText::new(workspace_label).size(if compact_header { 12.0 } else { 13.0 }).color(crate::ui::theme::colors::TEXT_PRIMARY),
-                    |ui| {
-                        for (workspace_index, (label, nav)) in workspaces.iter().enumerate() {
-                            if ui.selectable_label(active_workspace == workspace_index, *label).clicked() {
-                                active_workspace = workspace_index;
-                                ctx.data_mut(|data| data.insert_temp(workspace_id, active_workspace));
-                                apply_workspace_nav(app, nav);
-                                ui.close_menu();
+            ui.allocate_ui_with_layout(
+                header_size,
+                egui::Layout::left_to_right(egui::Align::Center),
+                |ui| {
+                    load_logo_if_needed(app, ctx);
+                    if let Some(texture) = app.home_banner.as_ref() {
+                        ui.add(egui::Image::new(egui::load::SizedTexture::new(
+                            texture.id(),
+                            egui::vec2(
+                                if compact_header { 26.0 } else { 28.0 },
+                                if compact_header { 26.0 } else { 28.0 },
+                            ),
+                        )));
+                    }
+                    ui.add_space(if compact_header { 6.0 } else { 4.0 });
+                    let brand = ui.add(
+                        egui::Label::new(
+                            egui::RichText::new("Kagari")
+                                .size(if compact_header { 13.0 } else { 12.0 })
+                                .color(crate::ui::theme::colors::TEXT_PRIMARY),
+                        )
+                        .sense(egui::Sense::click()),
+                    );
+                    if brand.clicked() {
+                        app.show_home = true;
+                        crate::ui::home_screen::set_home_nav(
+                            ctx,
+                            crate::ui::home_screen::HomeNav::Home,
+                        );
+                    }
+                    brand.on_hover_text(crate::ui::localization::tr("Home"));
+                    if ctx.screen_rect().width() >= 1200.0 {
+                        ui.add_space(16.0);
+                        crate::ui::icons::render_svg_bytes(
+                            ui,
+                            "studio-project-folder",
+                            crate::ui::icons::SVG_FOLDER,
+                            egui::vec2(18.0, 18.0),
+                            crate::ui::theme::colors::TEXT_SECONDARY,
+                        );
+                        ui.add_space(6.0);
+                        let full_project_context = if is_pristine_start {
+                            project_name.clone()
+                        } else {
+                            format!("{project_name} / {composition_label}")
+                        };
+                        let display_context = if full_project_context.chars().count() > 36 {
+                            let truncated: String = full_project_context.chars().take(33).collect();
+                            format!("{truncated}...")
+                        } else {
+                            full_project_context.clone()
+                        };
+                        ui.label(
+                            egui::RichText::new(display_context)
+                                .size(14.0)
+                                .color(crate::ui::theme::colors::TEXT_SECONDARY),
+                        )
+                        .on_hover_text(&full_project_context);
+                        ui.add_space(6.0);
+                    } else {
+                        ui.add_space(10.0);
+                    }
+                    if compact_header {
+                        ui.menu_button(
+                            egui::RichText::new("画面")
+                                .size(12.0)
+                                .color(crate::ui::theme::colors::TEXT_PRIMARY),
+                            |ui| {
+                                for (workspace_index, label, nav) in primary_workspaces {
+                                    let selected = top_workspace == workspace_index;
+                                    if ui.selectable_label(selected, label).clicked() {
+                                        activate_workspace(
+                                            app,
+                                            ctx,
+                                            workspace_id,
+                                            &mut active_workspace,
+                                            workspace_index,
+                                            nav,
+                                        );
+                                        ui.close_menu();
+                                    }
+                                }
+                                ui.separator();
+                                for (workspace_index, label, nav) in other_workspaces {
+                                    if ui
+                                        .selectable_label(
+                                            active_workspace == workspace_index,
+                                            label,
+                                        )
+                                        .clicked()
+                                    {
+                                        activate_workspace(
+                                            app,
+                                            ctx,
+                                            workspace_id,
+                                            &mut active_workspace,
+                                            workspace_index,
+                                            nav,
+                                        );
+                                        ui.close_menu();
+                                    }
+                                }
+                                ui.separator();
+                                for (workspace_index, label, nav) in secondary_modes {
+                                    if ui
+                                        .selectable_label(
+                                            active_workspace == workspace_index,
+                                            label,
+                                        )
+                                        .clicked()
+                                    {
+                                        activate_workspace(
+                                            app,
+                                            ctx,
+                                            workspace_id,
+                                            &mut active_workspace,
+                                            workspace_index,
+                                            nav,
+                                        );
+                                        ui.close_menu();
+                                    }
+                                }
+                            },
+                        );
+                    } else {
+                        for (workspace_index, label, nav) in primary_workspaces {
+                            let response = crate::ui::theme::draw_custom_tab(
+                                ui,
+                                top_workspace == workspace_index,
+                                label,
+                            );
+                            if response.clicked() {
+                                activate_workspace(
+                                    app,
+                                    ctx,
+                                    workspace_id,
+                                    &mut active_workspace,
+                                    workspace_index,
+                                    nav,
+                                );
                             }
                         }
-                    },
-                );
-                if compact_header { draw_compact_drawers(ctx, app, ui); }
-                let right_width = if compact_header { 220.0 } else { 390.0 };
-                ui.add_space((ui.available_width() - right_width).max(0.0));
-                ui.allocate_ui_with_layout(egui::vec2(right_width, header_size.y), egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let render_response = draw_header_action(ui, "Render", if compact_header { 68.0 } else { 76.0 }, if compact_header { 12.0 } else { 13.0 });
-                    if render_response.clicked() { app.show_home = false; app.ui_tabs.bottom_dock_tab = 1; }
-                    ui.add_space(12.0);
-                    ui.label(egui::RichText::new("Autosaved").size(11.0).color(crate::ui::theme::colors::TEXT_MUTED));
-                });
-            });
+                        ui.menu_button("⋯", |ui| {
+                            for (workspace_index, label, nav) in other_workspaces {
+                                if ui
+                                    .selectable_label(active_workspace == workspace_index, label)
+                                    .clicked()
+                                {
+                                    activate_workspace(
+                                        app,
+                                        ctx,
+                                        workspace_id,
+                                        &mut active_workspace,
+                                        workspace_index,
+                                        nav,
+                                    );
+                                    ui.close_menu();
+                                }
+                            }
+                            ui.separator();
+                            for (workspace_index, label, nav) in secondary_modes {
+                                if ui
+                                    .selectable_label(active_workspace == workspace_index, label)
+                                    .clicked()
+                                {
+                                    activate_workspace(
+                                        app,
+                                        ctx,
+                                        workspace_id,
+                                        &mut active_workspace,
+                                        workspace_index,
+                                        nav,
+                                    );
+                                    ui.close_menu();
+                                }
+                            }
+                        });
+                    }
+                    if compact_header {
+                        draw_compact_drawers(ctx, app, ui);
+                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.menu_button("⚙", |ui| {
+                            if ui.button("最小化").clicked() {
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                                ui.close_menu();
+                            }
+                            if ui.button("終了").clicked() {
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                                ui.close_menu();
+                            }
+                        });
+                        if ui.available_width() > 300.0 {
+                            egui::ComboBox::from_id_salt("studio_global_preview_quality")
+                                .width(116.0)
+                                .selected_text(match app.viewport_fast_preview {
+                                    0 => crate::ui::localization::tr("Full Quality"),
+                                    1 => crate::ui::localization::tr("Adaptive Resolution"),
+                                    2 => crate::ui::localization::tr("Fast Draft"),
+                                    _ => crate::ui::localization::tr("Wireframe"),
+                                })
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(
+                                        &mut app.viewport_fast_preview,
+                                        0,
+                                        crate::ui::localization::tr("Full Quality"),
+                                    );
+                                    ui.selectable_value(
+                                        &mut app.viewport_fast_preview,
+                                        1,
+                                        crate::ui::localization::tr("Adaptive Resolution"),
+                                    );
+                                    ui.selectable_value(
+                                        &mut app.viewport_fast_preview,
+                                        2,
+                                        crate::ui::localization::tr("Fast Draft"),
+                                    );
+                                    ui.selectable_value(
+                                        &mut app.viewport_fast_preview,
+                                        3,
+                                        crate::ui::localization::tr("Wireframe"),
+                                    );
+                                });
+                            let composition = app.history.current().active_composition();
+                            if ui
+                                .button(composition_aspect_label(
+                                    composition.width,
+                                    composition.height,
+                                ))
+                                .on_hover_text(crate::ui::localization::tr("Composition Settings"))
+                                .clicked()
+                            {
+                                app.show_comp_settings = true;
+                            }
+                            let redo = ui
+                                .add_enabled_ui(app.history.can_redo(), |ui| {
+                                    crate::ui::kui::svg_icon_button(
+                                        ui,
+                                        "studio-redo",
+                                        SVG_REDO,
+                                        "Redo",
+                                        false,
+                                        26.0,
+                                    )
+                                })
+                                .inner
+                                .on_hover_text(crate::ui::localization::tr("Redo"));
+                            if redo.clicked() && app.history.redo().is_some() {
+                                crate::core::frame_cache::bump_version();
+                                app.autosave.mark_dirty();
+                                app.autosave_history_generation = app.history.generation();
+                            }
+                            let undo = ui
+                                .add_enabled_ui(app.history.can_undo(), |ui| {
+                                    crate::ui::kui::svg_icon_button(
+                                        ui,
+                                        "studio-undo",
+                                        SVG_UNDO,
+                                        "Undo",
+                                        false,
+                                        26.0,
+                                    )
+                                })
+                                .inner
+                                .on_hover_text(crate::ui::localization::tr("Undo"));
+                            if undo.clicked() && app.history.undo().is_some() {
+                                crate::core::frame_cache::bump_version();
+                                app.autosave.mark_dirty();
+                                app.autosave_history_generation = app.history.generation();
+                            }
+                        }
+                        let width = ui.available_width();
+                        let (_, response) = ui.allocate_exact_size(
+                            egui::vec2(width.max(0.0), 28.0),
+                            egui::Sense::click_and_drag(),
+                        );
+                        if response.drag_started() {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+                        }
+                    });
+                },
+            );
         });
 }
 
@@ -155,37 +394,178 @@ fn load_logo_if_needed(app: &mut crate::KagariApp, ctx: &egui::Context) {
     }
 }
 
-fn apply_workspace_nav(app: &mut crate::KagariApp, nav: &crate::ui::home_screen::HomeNav) {
+fn activate_workspace(
+    app: &mut crate::KagariApp,
+    ctx: &egui::Context,
+    workspace_id: egui::Id,
+    active_workspace: &mut usize,
+    workspace_index: usize,
+    nav: crate::ui::home_screen::HomeNav,
+) {
+    *active_workspace = workspace_index;
+    ctx.data_mut(|data| data.insert_temp(workspace_id, workspace_index));
+    apply_workspace_nav(app, ctx, &nav);
+}
+
+fn primary_workspace_index(workspace_index: usize) -> usize {
+    match workspace_index {
+        1..=3 | 6 => 1,
+        _ => workspace_index,
+    }
+}
+
+pub(crate) fn apply_workspace_nav(
+    app: &mut crate::KagariApp,
+    ctx: &egui::Context,
+    nav: &crate::ui::home_screen::HomeNav,
+) {
     match nav {
-        crate::ui::home_screen::HomeNav::Home => app.show_home = true,
-        crate::ui::home_screen::HomeNav::Compositing => { app.show_home = false; app.ui_tabs.left_tab_idx = 0; app.ui_tabs.right_tab_idx = 30; }
-        crate::ui::home_screen::HomeNav::Effects => { app.show_home = false; app.ui_tabs.left_tab_idx = 1; app.ui_tabs.right_tab_idx = 0; }
-        crate::ui::home_screen::HomeNav::Projects => { app.show_home = false; app.ui_tabs.left_tab_idx = 0; app.ui_tabs.right_tab_idx = 30; }
-        crate::ui::home_screen::HomeNav::Render => { app.show_home = false; app.ui_tabs.left_tab_idx = 1; app.ui_tabs.right_tab_idx = 1; }
+        crate::ui::home_screen::HomeNav::Home => {
+            app.show_home = true;
+            crate::ui::home_screen::set_home_nav(ctx, crate::ui::home_screen::HomeNav::Home);
+        }
+        crate::ui::home_screen::HomeNav::Compositing => {
+            app.show_home = false;
+            app.show_guided_tutorial = false;
+            app.show_graph_editor = false;
+            app.ui_tabs.left_tab_idx = 0;
+            app.ui_tabs.right_panel = crate::app_state::RightPanel::Properties;
+            app.ui_tabs.bottom_dock_tab = 0;
+        }
+        crate::ui::home_screen::HomeNav::Effects => {
+            app.show_home = false;
+            app.show_guided_tutorial = false;
+            app.show_graph_editor = false;
+            app.ui_tabs.left_tab_idx = 1;
+            app.ui_tabs.right_panel = crate::app_state::RightPanel::Effects;
+            app.ui_tabs.bottom_dock_tab = 0;
+        }
+        crate::ui::home_screen::HomeNav::Graph => {
+            app.show_home = false;
+            app.show_guided_tutorial = false;
+            app.show_graph_editor = true;
+            app.ui_tabs.left_tab_idx = 0;
+            app.ui_tabs.right_panel = crate::app_state::RightPanel::Properties;
+            app.ui_tabs.bottom_dock_tab = 0;
+        }
+        crate::ui::home_screen::HomeNav::Color => {
+            app.show_home = false;
+            app.show_guided_tutorial = false;
+            app.show_graph_editor = false;
+            app.ui_tabs.left_tab_idx = 1;
+            app.ui_tabs.right_panel = crate::app_state::RightPanel::Color;
+            app.ui_tabs.bottom_dock_tab = 0;
+        }
+        crate::ui::home_screen::HomeNav::Audio => {
+            app.show_home = false;
+            app.show_guided_tutorial = false;
+            app.show_graph_editor = false;
+            app.ui_tabs.left_tab_idx = 0;
+            app.ui_tabs.right_panel = crate::app_state::RightPanel::AudioMixer;
+            app.ui_tabs.bottom_dock_tab = 0;
+        }
+        crate::ui::home_screen::HomeNav::Retiming => {
+            app.show_home = false;
+            app.show_guided_tutorial = false;
+            app.show_graph_editor = false;
+            app.ui_tabs.left_tab_idx = 0;
+            app.ui_tabs.right_panel = crate::app_state::RightPanel::TimeRemap;
+            app.ui_tabs.bottom_dock_tab = 0;
+        }
+        crate::ui::home_screen::HomeNav::Projects => {
+            app.show_home = false;
+            app.show_guided_tutorial = false;
+            app.show_graph_editor = false;
+            app.ui_tabs.left_tab_idx = 0;
+            app.ui_tabs.right_panel = crate::app_state::RightPanel::Properties;
+            app.ui_tabs.bottom_dock_tab = 0;
+        }
+        crate::ui::home_screen::HomeNav::Render => {
+            app.show_home = false;
+            app.show_guided_tutorial = false;
+            app.show_graph_editor = false;
+            app.ui_tabs.left_tab_idx = 0;
+            app.ui_tabs.right_panel = crate::app_state::RightPanel::Properties;
+            app.ui_tabs.bottom_dock_tab = 1;
+        }
         _ => {}
+    }
+}
+
+pub(crate) fn active_workspace_index(app: &crate::KagariApp, ctx: &egui::Context) -> usize {
+    if app.show_home {
+        0
+    } else if app.ui_tabs.bottom_dock_tab == 1 {
+        8
+    } else if app.ui_tabs.left_tab_idx == 1
+        && app.ui_tabs.right_panel == crate::app_state::RightPanel::Effects
+    {
+        2
+    } else if app.ui_tabs.left_tab_idx == 1
+        && app.ui_tabs.right_panel == crate::app_state::RightPanel::Color
+    {
+        4
+    } else if app.ui_tabs.left_tab_idx == 0
+        && app.ui_tabs.right_panel == crate::app_state::RightPanel::AudioMixer
+    {
+        5
+    } else if app.ui_tabs.left_tab_idx == 0
+        && app.ui_tabs.right_panel == crate::app_state::RightPanel::TimeRemap
+    {
+        6
+    } else if app.show_graph_editor {
+        3
+    } else if app.ui_tabs.left_tab_idx == 0
+        && app.ui_tabs.right_panel == crate::app_state::RightPanel::Properties
+        && ctx.data(|data| {
+            data.get_temp::<usize>(egui::Id::new("studio_active_workspace"))
+                == Some(ASSETS_WORKSPACE_INDEX)
+        })
+    {
+        7
+    } else {
+        1
     }
 }
 
 fn draw_compact_drawers(ctx: &egui::Context, app: &mut crate::KagariApp, ui: &mut egui::Ui) {
     let drawer_id = egui::Id::new("compact_project_drawer");
-    let drawer_open = ctx.data(|data| data.get_temp::<bool>(drawer_id)).unwrap_or(false);
-    let drawer_label = if drawer_open { "Close Panel" } else if app.ui_tabs.left_tab_idx == 1 { "Effects" } else { "Project" };
+    let drawer_open = ctx
+        .data(|data| data.get_temp::<bool>(drawer_id))
+        .unwrap_or(false);
+    let drawer_label = if drawer_open {
+        "パネルを閉じる"
+    } else if app.ui_tabs.left_tab_idx == 1 {
+        "エフェクト"
+    } else {
+        "プロジェクト"
+    };
     if ui.small_button(drawer_label).clicked() {
         let next_open = !drawer_open;
         ctx.data_mut(|data| {
             data.insert_temp(drawer_id, next_open);
-            if next_open { data.insert_temp(egui::Id::new("compact_inspector_drawer"), false); }
+            if next_open {
+                data.insert_temp(egui::Id::new("compact_inspector_drawer"), false);
+            }
         });
     }
-    if ctx.screen_rect().width() < 950.0 {
+    if ctx.screen_rect().width() < crate::ui::theme::layout::DOCKED_PANELS_MIN_WIDTH {
         let inspector_id = egui::Id::new("compact_inspector_drawer");
-        let inspector_open = ctx.data(|data| data.get_temp::<bool>(inspector_id)).unwrap_or(false);
-        let inspector_label = if inspector_open { "Hide Inspector" } else { "Inspector" };
+        let inspector_open = ctx
+            .data(|data| data.get_temp::<bool>(inspector_id))
+            .unwrap_or(false);
+        let inspector_label = if inspector_open {
+            "インスペクターを閉じる"
+        } else {
+            "インスペクター"
+        };
         if ui.small_button(inspector_label).clicked() {
             let next_open = !inspector_open;
             ctx.data_mut(|data| {
                 data.insert_temp(inspector_id, next_open);
-                if next_open { data.insert_temp(egui::Id::new("compact_project_drawer"), false); }
+                if next_open {
+                    data.insert_temp(egui::Id::new("compact_project_drawer"), false);
+                }
             });
         }
     }
@@ -196,7 +576,9 @@ pub fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
         egui::menu::bar(ui, |ui| {
             ui.menu_button("File", |ui| file_edit::draw_file_menu(app, ctx, ui));
             ui.menu_button("Edit", |ui| file_edit::draw_edit_menu(app, ui));
-            ui.menu_button("Composition", |ui| layer::draw_composition_menu(app, ctx, ui));
+            ui.menu_button("Composition", |ui| {
+                composition::draw_composition_menu(app, ctx, ui)
+            });
             ui.menu_button("Layer", |ui| layer::draw_layer_menu(app, ui));
             ui.menu_button("Effect", |ui| effect_anim::draw_effect_menu(app, ui));
             ui.menu_button("Animation", |ui| effect_anim::draw_animation_menu(app, ui));
@@ -204,15 +586,47 @@ pub fn draw_legacy_menus(app: &mut crate::KagariApp, ctx: &egui::Context) {
             ui.menu_button("Help", |ui| effect_anim::draw_help_menu(app, ctx, ui));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let (btn_text, next_mode) = match app.skill_level {
-                    crate::app_state::SkillLevel::Beginner => ("Mode: Beginner (Simple)", crate::app_state::SkillLevel::Pro),
-                    crate::app_state::SkillLevel::Pro => ("Mode: Pro Studio (Full)", crate::app_state::SkillLevel::Beginner),
+                    crate::app_state::SkillLevel::Beginner => {
+                        ("Mode: Beginner (Simple)", crate::app_state::SkillLevel::Pro)
+                    }
+                    crate::app_state::SkillLevel::Pro => (
+                        "Mode: Pro Studio (Full)",
+                        crate::app_state::SkillLevel::Beginner,
+                    ),
                 };
-                if ui.button(btn_text).on_hover_text("Toggle between Simple Beginner UI and Full Pro Studio Layout").clicked() {
+                if ui
+                    .button(btn_text)
+                    .on_hover_text("Toggle between Simple Beginner UI and Full Pro Studio Layout")
+                    .clicked()
+                {
                     app.skill_level = next_mode;
-                    app.toasts.info(format!("Switched UI Mode to {:?}", next_mode));
+                    app.toasts
+                        .info(format!("Switched UI Mode to {:?}", next_mode));
                 }
             });
         });
     });
     effect_anim::draw_dialogs(app, ctx);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::primary_workspace_index;
+
+    #[test]
+    fn color_and_audio_are_distinct_top_level_workspaces() {
+        assert_eq!(primary_workspace_index(1), 1);
+        assert_eq!(primary_workspace_index(2), 1);
+        assert_eq!(primary_workspace_index(3), 1);
+        assert_eq!(primary_workspace_index(4), 4);
+        assert_eq!(primary_workspace_index(5), 5);
+        assert_eq!(primary_workspace_index(6), 1);
+    }
+
+    #[test]
+    fn top_level_destinations_keep_their_own_navigation_group() {
+        assert_eq!(primary_workspace_index(0), 0);
+        assert_eq!(primary_workspace_index(7), 7);
+        assert_eq!(primary_workspace_index(8), 8);
+    }
 }
