@@ -1,11 +1,13 @@
-//! Nested pre-composition rendering for the software renderer.
-//!
-//! Covers sub-comp entry points, nesting guards/caches, and the
-//! recursive inner renderer (with its own opacity/matte handling).
+pub mod raster;
+pub mod revision;
 
 use super::{render_frame_to_pixels_filtered, rgba_buffer_size};
 use crate::core::sdf::rasterize_shape_sdf;
 use crate::core::timeline::{Composition, LayerType};
+use raster::{rasterize_pixel_layer, rasterize_texture_layer, RasterizationRegion};
+use revision::composition_content_revision;
+use std::sync::Arc;
+use std::sync::{Mutex, OnceLock};
 
 /// Maximum pre-comp nesting depth before we bail out (cycle / pathological nesting guard).
 pub const MAX_PRECOMP_DEPTH: u32 = 16;
@@ -14,12 +16,21 @@ thread_local! {
     static PRECOMP_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
     /// Stack of composition IDs currently being rendered (cycle detection).
     static PRECOMP_STACK: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
-    /// Precomp render cache: avoids re-rendering the same sub-comp at the
-    /// same frame when it's referenced by multiple layers.
-    static PRECOMP_RENDER_CACHE: std::cell::RefCell<crate::core::precomp_cache::PrecompCache> = std::cell::RefCell::new(crate::core::precomp_cache::PrecompCache::new(64));
     /// Source-layer effects can reference another layer which references a
     /// third one, but a cycle must not recurse forever.
     static SOURCE_LAYER_RENDER_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+static PRECOMP_RENDER_CACHE: OnceLock<Mutex<crate::core::precomp_cache::PrecompCache>> =
+    OnceLock::new();
+
+fn with_precomp_cache<R>(f: impl FnOnce(&mut crate::core::precomp_cache::PrecompCache) -> R) -> R {
+    let cache = PRECOMP_RENDER_CACHE
+        .get_or_init(|| Mutex::new(crate::core::precomp_cache::PrecompCache::new(64)));
+    let mut guard = cache
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    f(&mut guard)
 }
 
 const MAX_SOURCE_LAYER_RENDER_DEPTH: u32 = 16;
@@ -34,13 +45,11 @@ pub fn render_precomp_layers(
     frame: u32,
     width: u32,
     height: u32,
-) -> Vec<u8> {
-    let content_revision = composition_content_revision(precomp_comp);
+) -> Arc<[u8]> {
+    let content_revision = composition_content_revision(precomp_comp, frame);
     // Cache check: skip full render if we already have this precomp's pixels
-    let cached = PRECOMP_RENDER_CACHE.with(|cache| {
-        cache
-            .borrow_mut()
-            .get(&precomp_comp.id, content_revision, frame, width, height)
+    let cached = with_precomp_cache(|cache| {
+        cache.get(&precomp_comp.id, content_revision, frame, width, height)
     });
     if let Some(pixels) = cached {
         return pixels;
@@ -62,7 +71,7 @@ pub fn render_precomp_layers(
             "[Renderer] Pre-comp cycle detected at '{}' ; skipping nested render",
             precomp_comp.name
         );
-        return Vec::new();
+        return Arc::from([]);
     }
     // Guard against pathologically deep (but acyclic) pre-comp nesting
     let overflow = PRECOMP_DEPTH.with(|d| {
@@ -79,178 +88,33 @@ pub fn render_precomp_layers(
         PRECOMP_STACK.with(|s| {
             s.borrow_mut().pop();
         });
-        return Vec::new();
+        return Arc::from([]);
     }
-    let result = render_precomp_layers_inner(_comp, precomp_comp, frame, width, height);
+    let result = Arc::<[u8]>::from(render_precomp_layers_inner(
+        _comp,
+        precomp_comp,
+        frame,
+        width,
+        height,
+    ));
     PRECOMP_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
     PRECOMP_STACK.with(|s| {
         s.borrow_mut().pop();
     });
     // Cache the result for future lookups at the same (comp, frame, resolution)
     if !result.is_empty() {
-        PRECOMP_RENDER_CACHE.with(|cache| {
-            cache.borrow_mut().insert(
+        with_precomp_cache(|cache| {
+            cache.insert(
                 &precomp_comp.id,
                 content_revision,
                 frame,
                 width,
                 height,
-                result.clone(),
+                Arc::clone(&result),
             );
         });
     }
     result
-}
-
-fn composition_content_revision(comp: &Composition) -> u64 {
-    let Ok(bytes) = serde_json::to_vec(comp) else {
-        return crate::core::frame_cache::current_version();
-    };
-    // Preview proxy media and final media must never share a cached nested
-    // composition frame, even though the serialized project is identical.
-    let seed = if super::preview_proxy_active() {
-        0x84222325cbf29ce4u64
-    } else {
-        0xcbf29ce484222325u64
-    };
-    bytes.iter().fold(seed, |hash, byte| {
-        (hash ^ u64::from(*byte)).wrapping_mul(0x100000001b3)
-    })
-}
-
-/// Rasterize an image sequence into a transformed layer buffer.
-///
-/// The main composition renderer and the nested pre-comp renderer must sample
-/// the same source pixels. Keeping the sequence sampling here also makes the
-/// WebP-first/PNG-fallback rule explicit for nested video layers.
-fn rasterize_texture_layer(
-    layer_buf: &mut [u8],
-    path: &str,
-    next_path: Option<&str>,
-    blend_t: f32,
-    min_x: u32,
-    min_y: u32,
-    max_x: u32,
-    max_y: u32,
-    bw: u32,
-    cx: f32,
-    cy: f32,
-    cos_r: f32,
-    sin_r: f32,
-    bounds_x: f32,
-    bounds_y: f32,
-) {
-    use crate::core::image_cache::with_image_cache;
-
-    with_image_cache(|cache| {
-        let Some(img) = cache.load_image(path).cloned() else {
-            return;
-        };
-        let next_img = next_path
-            .filter(|candidate| *candidate != path && blend_t > 0.0)
-            .and_then(|candidate| cache.load_image(candidate).cloned())
-            .filter(|next| next.width == img.width && next.height == img.height);
-        let img_w = img.width as f32;
-        let img_h = img.height as f32;
-
-        for py in min_y..max_y {
-            for px in min_x..max_x {
-                let dx = px as f32 - cx;
-                let dy = py as f32 - cy;
-                let lx = dx * cos_r + dy * sin_r;
-                let ly = -dx * sin_r + dy * cos_r;
-                let u = (lx / bounds_x + 1.0) * 0.5;
-                let v = (ly / bounds_y + 1.0) * 0.5;
-                if !(0.0..=1.0).contains(&u) || !(0.0..=1.0).contains(&v) {
-                    continue;
-                }
-
-                let tex_x = ((u * (img_w - 1.0)).round() as u32).min(img.width - 1);
-                let tex_y = ((v * (img_h - 1.0)).round() as u32).min(img.height - 1);
-                let tidx = ((tex_y * img.width + tex_x) * 4) as usize;
-                if tidx + 3 >= img.pixels.len() {
-                    continue;
-                }
-                let lidx = (((py - min_y) * bw + (px - min_x)) * 4) as usize;
-                if lidx + 3 >= layer_buf.len() {
-                    continue;
-                }
-
-                let sample = |channel: usize| -> u8 {
-                    let a = img.pixels[tidx + channel] as f32;
-                    let b = next_img
-                        .as_ref()
-                        .and_then(|next| {
-                            let next_idx = ((tex_y * next.width + tex_x) * 4) as usize;
-                            next.pixels.get(next_idx + channel).copied()
-                        })
-                        .map(f32::from)
-                        .unwrap_or(a);
-                    (a + (b - a) * blend_t).round().clamp(0.0, 255.0) as u8
-                };
-                layer_buf[lidx] = sample(0);
-                layer_buf[lidx + 1] = sample(1);
-                layer_buf[lidx + 2] = sample(2);
-                layer_buf[lidx + 3] = sample(3);
-            }
-        }
-    });
-}
-
-/// Rasterize an already-rendered nested composition into a transformed layer
-/// buffer. Keeping this sampling path separate from filesystem-backed footage
-/// lets nested PreComps recurse without manufacturing temporary image files.
-fn rasterize_pixel_layer(
-    layer_buf: &mut [u8],
-    pixels: &[u8],
-    source_width: u32,
-    source_height: u32,
-    min_x: u32,
-    min_y: u32,
-    max_x: u32,
-    max_y: u32,
-    bw: u32,
-    cx: f32,
-    cy: f32,
-    cos_r: f32,
-    sin_r: f32,
-    bounds_x: f32,
-    bounds_y: f32,
-) {
-    if source_width == 0 || source_height == 0 {
-        return;
-    }
-    let source_size = (source_width as usize)
-        .checked_mul(source_height as usize)
-        .and_then(|size| size.checked_mul(4));
-    if source_size != Some(pixels.len()) {
-        return;
-    }
-
-    let source_w = source_width as f32;
-    let source_h = source_height as f32;
-    for py in min_y..max_y {
-        for px in min_x..max_x {
-            let dx = px as f32 - cx;
-            let dy = py as f32 - cy;
-            let lx = dx * cos_r + dy * sin_r;
-            let ly = -dx * sin_r + dy * cos_r;
-            let u = (lx / bounds_x + 1.0) * 0.5;
-            let v = (ly / bounds_y + 1.0) * 0.5;
-            if !(0.0..=1.0).contains(&u) || !(0.0..=1.0).contains(&v) {
-                continue;
-            }
-
-            let sx = ((u * (source_w - 1.0)).round() as u32).min(source_width - 1);
-            let sy = ((v * (source_h - 1.0)).round() as u32).min(source_height - 1);
-            let source_idx = ((sy * source_width + sx) * 4) as usize;
-            let layer_idx = (((py - min_y) * bw + (px - min_x)) * 4) as usize;
-            if source_idx + 3 < pixels.len() && layer_idx + 3 < layer_buf.len() {
-                layer_buf[layer_idx..layer_idx + 4]
-                    .copy_from_slice(&pixels[source_idx..source_idx + 4]);
-            }
-        }
-    }
 }
 
 /// Render a single layer from `comp` at the given frame, returning an RGBA8 buffer
@@ -265,7 +129,7 @@ pub(crate) fn render_single_layer_pixels(
 ) -> Vec<u8> {
     let size = rgba_buffer_size(width, height).unwrap_or(0);
     if size == 0 || layer_idx >= comp.layers.len() {
-        return vec![0u8; size as usize];
+        return vec![0u8; size];
     }
 
     SOURCE_LAYER_RENDER_DEPTH.with(|depth| {
@@ -275,7 +139,7 @@ pub(crate) fn render_single_layer_pixels(
                 "[Renderer] source-layer effect recursion exceeded {} levels",
                 MAX_SOURCE_LAYER_RENDER_DEPTH
             );
-            return vec![0u8; size as usize];
+            return vec![0u8; size];
         }
 
         depth.set(current + 1);
@@ -299,7 +163,6 @@ fn render_precomp_layers_inner(
     }
 
     let mut buffer = vec![0u8; size];
-    // Fill with transparent black
     for p in (0..size).step_by(4) {
         buffer[p] = 0;
         buffer[p + 1] = 0;
@@ -358,13 +221,9 @@ fn render_precomp_layers_inner(
             }
             LayerType::Text { .. } => (precomp_comp.width as f32, precomp_comp.height as f32),
             LayerType::Shape { .. } => {
-                // Shape units are uniform (composition-width referenced) so
-                // circles stay circular on non-square compositions.
                 (precomp_comp.width as f32, precomp_comp.width as f32)
             }
-            LayerType::Model3D { .. } => {
-                (precomp_comp.width as f32, precomp_comp.height as f32)
-            }
+            LayerType::Model3D { .. } => (precomp_comp.width as f32, precomp_comp.height as f32),
             LayerType::Image { .. } | LayerType::Video { .. } => {
                 (precomp_comp.width as f32, precomp_comp.height as f32)
             }
@@ -378,8 +237,6 @@ fn render_precomp_layers_inner(
             LayerType::Solid { color } | LayerType::Text { color, .. } => *color,
             LayerType::Shape { color, .. } => *color,
             LayerType::Image { .. } => [0.2, 0.6, 0.9, 1.0],
-            // Video content is filled by the sequence rasterizer below; the
-            // fallback color only keeps this shared geometry setup alive.
             LayerType::Video { .. } => [1.0, 1.0, 1.0, 1.0],
             LayerType::Model3D { .. } => [0.72, 0.78, 0.9, 1.0],
             LayerType::PreComp { .. } => [1.0, 1.0, 1.0, 1.0],
@@ -393,8 +250,6 @@ fn render_precomp_layers_inner(
         let bounds_x = w * 0.5;
         let bounds_y = h * 0.5;
 
-        // NaN-safe, sign-safe bounding box (`as u32` saturates NaN/inf; abs() guards
-        // against negative scale flipping the bounds)
         let ext_x = (bounds_x.abs() + 2.0) * 1.5;
         let ext_y = (bounds_y.abs() + 2.0) * 1.5;
         let min_x = ((cx - ext_x).max(0.0) as u32).min(width);
@@ -409,6 +264,19 @@ fn render_precomp_layers_inner(
 
         let buf_size = (bw * bh * 4) as usize;
         let mut layer_buf = vec![0u8; buf_size];
+        let raster_region = RasterizationRegion {
+            min_x,
+            min_y,
+            max_x,
+            max_y,
+            buffer_width: bw,
+            center_x: cx,
+            center_y: cy,
+            cos_rotation: cos_r,
+            sin_rotation: sin_r,
+            bounds_x,
+            bounds_y,
+        };
 
         match &layer.layer_type {
             LayerType::Shape {
@@ -419,7 +287,6 @@ fn render_precomp_layers_inner(
                 fill_type,
                 ..
             } => {
-                // SDF shape rendering (same path as the main renderer)
                 rasterize_shape_sdf(
                     &mut layer_buf,
                     bw,
@@ -443,23 +310,7 @@ fn render_precomp_layers_inner(
             LayerType::Image { path } => {
                 let proxy_path = super::preview_proxy_path(layer, 0);
                 let image_path = proxy_path.as_deref().unwrap_or(path);
-                rasterize_texture_layer(
-                    &mut layer_buf,
-                    image_path,
-                    None,
-                    0.0,
-                    min_x,
-                    min_y,
-                    max_x,
-                    max_y,
-                    bw,
-                    cx,
-                    cy,
-                    cos_r,
-                    sin_r,
-                    bounds_x,
-                    bounds_y,
-                );
+                rasterize_texture_layer(&mut layer_buf, image_path, None, 0.0, raster_region);
             }
             LayerType::Video {
                 frames_dir,
@@ -498,17 +349,7 @@ fn render_precomp_layers_inner(
                         Some(&second_path_text)
                     },
                     if proxy_path.is_some() { 0.0 } else { blend_t },
-                    min_x,
-                    min_y,
-                    max_x,
-                    max_y,
-                    bw,
-                    cx,
-                    cy,
-                    cos_r,
-                    sin_r,
-                    bounds_x,
-                    bounds_y,
+                    raster_region,
                 );
             }
             LayerType::PreComp { comp_id } => {
@@ -530,52 +371,17 @@ fn render_precomp_layers_inner(
                         &nested_pixels,
                         width,
                         height,
-                        min_x,
-                        min_y,
-                        max_x,
-                        max_y,
-                        bw,
-                        cx,
-                        cy,
-                        cos_r,
-                        sin_r,
-                        bounds_x,
-                        bounds_y,
+                        raster_region,
                     );
                 }
             }
             LayerType::Model3D { .. } => {
-                // Reuse the top-level mesh rasterizer for nested model layers,
-                // but isolate the layer and make the temporary composition
-                // transparent so its background cannot occlude sibling layers.
                 let mut isolated = precomp_comp.clone();
                 isolated.layers = vec![layer.clone()];
                 isolated.background_color[3] = 0.0;
-                let model_pixels = super::render_frame_to_pixels(
-                    &isolated,
-                    source_frame,
-                    width,
-                    height,
-                    0.0,
-                    0,
-                );
-                rasterize_pixel_layer(
-                    &mut layer_buf,
-                    &model_pixels,
-                    width,
-                    height,
-                    min_x,
-                    min_y,
-                    max_x,
-                    max_y,
-                    bw,
-                    cx,
-                    cy,
-                    cos_r,
-                    sin_r,
-                    bounds_x,
-                    bounds_y,
-                );
+                let model_pixels =
+                    super::render_frame_to_pixels(&isolated, source_frame, width, height, 0.0, 0);
+                rasterize_pixel_layer(&mut layer_buf, &model_pixels, width, height, raster_region);
             }
             LayerType::Text {
                 text,
@@ -585,7 +391,6 @@ fn render_precomp_layers_inner(
                 tracking,
                 ..
             } => {
-                // Glyph rendering via font rasterizer
                 use crate::core::font_rasterizer::with_font_rasterizer;
                 let text_color = *color;
                 let text_str = text.clone();
@@ -599,7 +404,6 @@ fn render_precomp_layers_inner(
                     {
                         let origin_x = (cx - tw as f32 * 0.5) as i32;
                         let origin_y = (cy - th as f32 * 0.5) as i32;
-                        // Tighten scan to bitmap bounds (same proof as above).
                         let text_w = tw as i32;
                         let text_h = th as i32;
                         let qx0 = origin_x.max(min_x as i32).clamp(0, width as i32) as u32;
@@ -639,7 +443,6 @@ fn render_precomp_layers_inner(
                 });
             }
             _ => {
-                // Flat fill for Solid / PreComp / others
                 for py in min_y..max_y {
                     for px in min_x..max_x {
                         let dx = px as f32 - cx;
@@ -661,9 +464,7 @@ fn render_precomp_layers_inner(
             }
         }
 
-        // ── Paint strokes: drawn in buffer space so they follow the layer ──
-        // DirtyRect integration: compute the layer's bounding box in buffer
-        // space and skip strokes that are entirely outside it.
+        // Paint strokes
         if !layer.paint_strokes.is_empty() {
             let inv_sx = if scale[0].abs() > f32::EPSILON {
                 100.0 / scale[0]
@@ -676,13 +477,11 @@ fn render_precomp_layers_inner(
                 0.0
             };
             let to_buf_local = |lp: [f32; 2]| -> [f32; 2] {
-                // local -> world (rotate + scale + pos), then into buffer px
                 let wx = cx + (lp[0] * cos_r - lp[1] * sin_r) * scale[0] / 100.0;
                 let wy = cy + (lp[0] * sin_r + lp[1] * cos_r) * scale[1] / 100.0;
                 [wx - min_x as f32, wy - min_y as f32]
             };
-            let _ = (inv_sx, inv_sy); // inverse reserved for future pick tools
-                                      // DirtyRect: bounding box of all strokes in buffer-pixel space
+            let _ = (inv_sx, inv_sy);
             let mut dirty_min_x = bw as f32;
             let mut dirty_min_y = bh as f32;
             let mut dirty_max_x = 0.0f32;
@@ -705,7 +504,6 @@ fn render_precomp_layers_inner(
                     dirty_max_y = dirty_max_y.max(bp[1] + half);
                 }
             }
-            // Clamp dirty rect to buffer bounds
             let dr_x0 = dirty_min_x.floor().max(0.0) as u32;
             let dr_y0 = dirty_min_y.floor().max(0.0) as u32;
             let dr_x1 = dirty_max_x.ceil().min(bw as f32) as u32;
@@ -719,7 +517,6 @@ fn render_precomp_layers_inner(
                 if source_frame < stroke.start_frame || source_frame > end_f {
                     continue;
                 }
-                // Quick AABB test: skip strokes entirely outside the dirty rect
                 let stroke_min = stroke.points.iter().fold([f32::MAX, f32::MAX], |acc, p| {
                     [acc[0].min(p[0]), acc[1].min(p[1])]
                 });
@@ -737,7 +534,7 @@ fn render_precomp_layers_inner(
                     || s_max_y < dr_y0 as f32
                     || s_min_y > dr_y1 as f32
                 {
-                    continue; // stroke entirely outside dirty rect
+                    continue;
                 }
                 let buf_pts: Vec<[f32; 2]> =
                     stroke.points.iter().map(|&p| to_buf_local(p)).collect();
@@ -782,10 +579,8 @@ fn render_precomp_layers_inner(
             }
         }
 
-        // ── Puppet warp: IDW-displace the isolated layer buffer before effects ──
+        // Puppet warp
         if !layer.puppet_pins.is_empty() {
-            // layer_buf rows/cols are world-aligned samples offset by
-            // (min_x, min_y), so comp-space -> buffer-space is a translation.
             let to_buf = |p: [f32; 2]| -> [f32; 2] { [p[0] - min_x as f32, p[1] - min_y as f32] };
             let pins: Vec<([f32; 2], [f32; 2])> = layer
                 .puppet_pins
@@ -814,9 +609,6 @@ fn render_precomp_layers_inner(
         for ly in 0..bh {
             for lx in 0..bw {
                 let lidx = ((ly * bw + lx) * 4) as usize;
-                // Composite-time opacity: the layer's opacity scales its
-                // contribution here (once, for every blend path), instead of
-                // being baked into the raster where effects could clobber it.
                 let src_a = layer_buf[lidx + 3] as f32 / 255.0 * l_opacity;
                 if src_a <= 0.001 {
                     continue;
