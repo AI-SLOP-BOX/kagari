@@ -1,7 +1,7 @@
+use super::media_replace::replacement_filter;
 use crate::core::timeline::{ProjectItem, ProjectItemType};
 use crate::ui::theme::colors;
 use eframe::egui;
-use super::media_replace::replacement_filter;
 
 /// One row of the asset list; shared by root listing and folder bins.
 #[allow(clippy::too_many_arguments)]

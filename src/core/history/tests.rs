@@ -17,13 +17,7 @@ mod tests {
                 30,
             );
             let kfs: Vec<Keyframe<[f32; 2]>> = (0..keyframes_per_layer)
-                .map(|k| {
-                    Keyframe::new(
-                        k as u32,
-                        [k as f32, 0.0],
-                        InterpolationType::Linear,
-                    )
-                })
+                .map(|k| Keyframe::new(k as u32, [k as f32, 0.0], InterpolationType::Linear))
                 .collect();
             l.transform.position = Animatable::new_animated(kfs);
             comp.layers.push(l);

@@ -122,5 +122,4 @@ pub fn add_title_and_tagline(comp: &mut Composition) {
             Keyframe::new(150, 0.0, InterpolationType::Linear),
         ]);
     }
-
 }

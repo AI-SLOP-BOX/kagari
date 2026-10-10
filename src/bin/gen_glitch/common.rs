@@ -103,4 +103,3 @@ pub fn char_specs() -> Vec<CharSpec> {
     }
     out
 }
-

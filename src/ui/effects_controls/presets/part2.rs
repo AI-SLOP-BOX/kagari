@@ -1,6 +1,6 @@
+use super::EffectPreset;
 use crate::core::property::Animatable;
 use crate::core::timeline::{Effect, EffectType};
-use super::EffectPreset;
 
 pub(crate) fn get_presets_part2() -> Vec<EffectPreset> {
     vec![
@@ -425,6 +425,5 @@ pub(crate) fn get_presets_part2() -> Vec<EffectPreset> {
                 enabled: true,
             },
         },
-
     ]
 }

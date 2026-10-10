@@ -13,7 +13,10 @@ pub fn dialog<'open>(title: impl Into<egui::WidgetText>) -> DialogWindow<'open> 
     let glass_frame = egui::Frame::none()
         .fill(crate::ui::theme::colors::GLASS_SURFACE)
         .rounding(egui::Rounding::same(10.0))
-        .stroke(egui::Stroke::new(1.0_f32, crate::ui::theme::colors::GLASS_BORDER))
+        .stroke(egui::Stroke::new(
+            1.0_f32,
+            crate::ui::theme::colors::GLASS_BORDER,
+        ))
         .inner_margin(egui::Margin::same(12.0))
         .shadow(egui::epaint::Shadow {
             offset: egui::vec2(0.0, 12.0),

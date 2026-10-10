@@ -22,9 +22,7 @@ pub use adapter::{
 };
 pub use naming::{effect_name, effect_type_id};
 pub use params::EffectParams;
-pub use registry::{
-    CustomPixelEffectPlugin, CustomPluginRegistry, EffectPluginRegistry,
-};
+pub use registry::{CustomPixelEffectPlugin, CustomPluginRegistry, EffectPluginRegistry};
 
 #[cfg(test)]
 mod tests {

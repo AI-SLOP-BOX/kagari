@@ -80,9 +80,7 @@ pub fn draw_shadow_and_glow(ui: &mut egui::Ui, style: &mut LayerStyle, changed: 
                     .color(colors::TEXT_SECONDARY),
             );
             if ui
-                .add(
-                    egui::Slider::new(&mut style.drop_shadow.angle, -180.0..=180.0).suffix("°"),
-                )
+                .add(egui::Slider::new(&mut style.drop_shadow.angle, -180.0..=180.0).suffix("°"))
                 .changed()
             {
                 *changed = true;
@@ -95,10 +93,7 @@ pub fn draw_shadow_and_glow(ui: &mut egui::Ui, style: &mut LayerStyle, changed: 
                     .color(colors::TEXT_SECONDARY),
             );
             if ui
-                .add(
-                    egui::Slider::new(&mut style.drop_shadow.distance, 0.0..=200.0)
-                        .suffix(" px"),
-                )
+                .add(egui::Slider::new(&mut style.drop_shadow.distance, 0.0..=200.0).suffix(" px"))
                 .changed()
             {
                 *changed = true;

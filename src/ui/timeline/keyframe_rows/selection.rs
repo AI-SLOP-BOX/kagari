@@ -65,8 +65,7 @@ pub fn prop_all_frames(layer: &Layer, pk: &str) -> Vec<u32> {
         }
         _ if crate::ui::graph_editor::is_effect_property(pk) => {
             use crate::core::effect_params::ParamRefRef;
-            let Some((effect_id, label, _)) =
-                crate::ui::graph_editor::parse_effect_property(pk)
+            let Some((effect_id, label, _)) = crate::ui::graph_editor::parse_effect_property(pk)
             else {
                 return out;
             };

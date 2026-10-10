@@ -219,5 +219,4 @@ pub fn add_embers_and_burst(comp: &mut Composition) {
             Keyframe::new(66, 0.0, InterpolationType::Linear),
         ]);
     }
-
 }

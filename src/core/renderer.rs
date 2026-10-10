@@ -1817,7 +1817,8 @@ impl WgpuRenderer {
         };
 
         // Pipeline (Normal Source-Over ALPHA_BLENDING)
-        let render_pipeline = create_pipeline("Render Pipeline", Some(wgpu::BlendState::ALPHA_BLENDING));
+        let render_pipeline =
+            create_pipeline("Render Pipeline", Some(wgpu::BlendState::ALPHA_BLENDING));
 
         // Pipeline (Screen: final = S*Sa + D*(1 - S*Sa))
         let screen_blend = wgpu::BlendState {
@@ -3374,7 +3375,9 @@ impl WgpuRenderer {
                     #[allow(clippy::needless_range_loop)]
                     for i in run.start..run.end {
                         let pipeline = match active_layers[i].blend_mode {
-                            crate::core::timeline::BlendMode::Screen => &self.render_pipeline_screen,
+                            crate::core::timeline::BlendMode::Screen => {
+                                &self.render_pipeline_screen
+                            }
                             _ => &self.render_pipeline,
                         };
                         render_pass.set_pipeline(pipeline);

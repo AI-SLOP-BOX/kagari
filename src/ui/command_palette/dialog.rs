@@ -1,6 +1,6 @@
+use super::commands::{get_all_commands, PaletteCommand};
 use crate::KagariApp;
 use eframe::egui;
-use super::commands::{get_all_commands, PaletteCommand};
 
 pub fn draw_command_palette(app: &mut KagariApp, ctx: &egui::Context) {
     if !app.show_command_palette {
@@ -84,21 +84,52 @@ pub fn draw_command_palette(app: &mut KagariApp, ctx: &egui::Context) {
                             crate::ui::kui::selectable_item_row(ui, is_selected, 32.0, |ui| {
                                 // Category Pill Badge
                                 let (badge_bg, badge_fg) = match cmd.category {
-                                    "Effects" => (egui::Color32::from_rgb(45, 25, 55), egui::Color32::from_rgb(220, 150, 255)),
-                                    "Layer" | "Layer Styles" => (egui::Color32::from_rgb(20, 45, 60), egui::Color32::from_rgb(100, 200, 255)),
-                                    "Animation" => (egui::Color32::from_rgb(50, 40, 20), egui::Color32::from_rgb(255, 200, 100)),
-                                    "Export" | "File" => (egui::Color32::from_rgb(25, 45, 30), egui::Color32::from_rgb(120, 230, 150)),
-                                    "Tools" => (egui::Color32::from_rgb(45, 35, 50), egui::Color32::from_rgb(210, 170, 240)),
-                                    _ => (egui::Color32::from_rgb(32, 36, 44), egui::Color32::from_rgb(170, 180, 195)),
+                                    "Effects" => (
+                                        egui::Color32::from_rgb(45, 25, 55),
+                                        egui::Color32::from_rgb(220, 150, 255),
+                                    ),
+                                    "Layer" | "Layer Styles" => (
+                                        egui::Color32::from_rgb(20, 45, 60),
+                                        egui::Color32::from_rgb(100, 200, 255),
+                                    ),
+                                    "Animation" => (
+                                        egui::Color32::from_rgb(50, 40, 20),
+                                        egui::Color32::from_rgb(255, 200, 100),
+                                    ),
+                                    "Export" | "File" => (
+                                        egui::Color32::from_rgb(25, 45, 30),
+                                        egui::Color32::from_rgb(120, 230, 150),
+                                    ),
+                                    "Tools" => (
+                                        egui::Color32::from_rgb(45, 35, 50),
+                                        egui::Color32::from_rgb(210, 170, 240),
+                                    ),
+                                    _ => (
+                                        egui::Color32::from_rgb(32, 36, 44),
+                                        egui::Color32::from_rgb(170, 180, 195),
+                                    ),
                                 };
 
                                 let font_id = egui::FontId::proportional(10.0);
-                                let galley = ui.painter().layout_no_wrap(cmd.category.to_string(), font_id, badge_fg);
+                                let galley = ui.painter().layout_no_wrap(
+                                    cmd.category.to_string(),
+                                    font_id,
+                                    badge_fg,
+                                );
                                 let badge_size = galley.size() + egui::vec2(12.0, 6.0);
-                                let (badge_rect, _) = ui.allocate_exact_size(badge_size, egui::Sense::hover());
+                                let (badge_rect, _) =
+                                    ui.allocate_exact_size(badge_size, egui::Sense::hover());
                                 ui.painter().rect_filled(badge_rect, 4.0, badge_bg);
-                                ui.painter().rect_stroke(badge_rect, 4.0, egui::Stroke::new(1.0f32, badge_fg.gamma_multiply(0.25f32)));
-                                ui.painter().galley(badge_rect.min + egui::vec2(6.0, 3.0), galley, badge_fg);
+                                ui.painter().rect_stroke(
+                                    badge_rect,
+                                    4.0,
+                                    egui::Stroke::new(1.0f32, badge_fg.gamma_multiply(0.25f32)),
+                                );
+                                ui.painter().galley(
+                                    badge_rect.min + egui::vec2(6.0, 3.0),
+                                    galley,
+                                    badge_fg,
+                                );
 
                                 ui.add_space(4.0);
                                 crate::ui::kui::item_title(ui, cmd.name);

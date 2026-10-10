@@ -230,4 +230,3 @@ pub(crate) fn draw_sidebar(
         y += 34.0;
     }
 }
-

@@ -1,8 +1,8 @@
+use super::color_controls::{color_control_value, set_color_control};
 use crate::core::editor::EditorSession;
 use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
-use super::color_controls::{color_control_value, set_color_control};
 
 pub(crate) fn draw_effect_controls(
     app: &mut KagariApp,

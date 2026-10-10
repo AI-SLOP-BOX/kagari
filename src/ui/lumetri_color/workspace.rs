@@ -1,8 +1,8 @@
+use super::effects_io::*;
+use super::widgets::*;
 use crate::core::timeline::{Effect, EffectType};
 use crate::KagariApp;
 use eframe::egui;
-use super::effects_io::*;
-use super::widgets::*;
 
 pub fn draw_workspace_controls(app: &mut KagariApp, ui: &mut egui::Ui) {
     let Some(layer_idx) = app.selection.selected_layer_idx else {
@@ -141,4 +141,3 @@ pub fn draw_workspace_controls(app: &mut KagariApp, ui: &mut egui::Ui) {
         draw_look_presets(app, ui);
     });
 }
-

@@ -1,8 +1,8 @@
 //! Layer manipulation shortcuts (split, pre-comp, reordering, duplicate, delete, nudging).
 
+use super::defs::{shortcut_pressed, ShortcutId};
 use crate::KagariApp;
 use eframe::egui::{self, Key};
-use super::defs::{shortcut_pressed, ShortcutId};
 
 pub fn handle_layer_manipulation(
     app: &mut KagariApp,
@@ -334,10 +334,7 @@ pub fn handle_layer_manipulation(
     }
 
     // Delete / Backspace → Delete all selected layers
-    if allow_single_key
-        && (i.key_pressed(Key::Delete) || i.key_pressed(Key::Backspace))
-        && !shift
-    {
+    if allow_single_key && (i.key_pressed(Key::Delete) || i.key_pressed(Key::Backspace)) && !shift {
         let mut indices: Vec<usize> = app.selection.selected_layers.iter().copied().collect();
         if indices.is_empty() {
             if let Some(s) = app.selection.selected_layer_idx {
@@ -471,13 +468,11 @@ pub fn handle_layer_manipulation(
                     let bs = l.bounding_size();
                     if bs[0] > 1.0 && bs[1] > 1.0 {
                         let s = ((dims.0 / bs[0]).max(dims.1 / bs[1])) * 100.0;
-                        l.transform.scale =
-                            crate::core::property::Animatable::new_constant([s, s]);
-                        l.transform.position =
-                            crate::core::property::Animatable::new_constant([
-                                dims.0 / 2.0,
-                                dims.1 / 2.0,
-                            ]);
+                        l.transform.scale = crate::core::property::Animatable::new_constant([s, s]);
+                        l.transform.position = crate::core::property::Animatable::new_constant([
+                            dims.0 / 2.0,
+                            dims.1 / 2.0,
+                        ]);
                     }
                 }
             });

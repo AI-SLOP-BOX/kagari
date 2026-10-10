@@ -1017,7 +1017,12 @@ impl DynamicLinkServer {
             Err(error) => Some(DynamicLinkMessage::Error {
                 message: format!("Invalid Dynamic Link message: {error}"),
             }),
-            Ok(DynamicLinkMessage::Pong | DynamicLinkMessage::AssetAdded { .. } | DynamicLinkMessage::RenderTriggered { .. } | DynamicLinkMessage::Error { .. }) => None,
+            Ok(
+                DynamicLinkMessage::Pong
+                | DynamicLinkMessage::AssetAdded { .. }
+                | DynamicLinkMessage::RenderTriggered { .. }
+                | DynamicLinkMessage::Error { .. },
+            ) => None,
         }
     }
 }
@@ -1162,17 +1167,29 @@ fn handle_sync_client(
                     DynamicLinkMessage::SyncPlayhead { frame } => frame_tx.publish(frame),
                     DynamicLinkMessage::AddAsset { name, path } => {
                         if std::path::Path::new(&path).exists() {
-                            write_dynamic_link_message(&mut writer, &DynamicLinkMessage::AssetAdded { name, path });
+                            write_dynamic_link_message(
+                                &mut writer,
+                                &DynamicLinkMessage::AssetAdded { name, path },
+                            );
                         } else {
-                            write_dynamic_link_message(&mut writer, &DynamicLinkMessage::Error {
-                                message: format!("Asset file does not exist: {path}"),
-                            });
+                            write_dynamic_link_message(
+                                &mut writer,
+                                &DynamicLinkMessage::Error {
+                                    message: format!("Asset file does not exist: {path}"),
+                                },
+                            );
                         }
                     }
                     DynamicLinkMessage::TriggerRender { comp_id, frame } => {
-                        write_dynamic_link_message(&mut writer, &DynamicLinkMessage::RenderTriggered { comp_id, frame });
+                        write_dynamic_link_message(
+                            &mut writer,
+                            &DynamicLinkMessage::RenderTriggered { comp_id, frame },
+                        );
                     }
-                    DynamicLinkMessage::Pong | DynamicLinkMessage::AssetAdded { .. } | DynamicLinkMessage::RenderTriggered { .. } | DynamicLinkMessage::Error { .. } => {}
+                    DynamicLinkMessage::Pong
+                    | DynamicLinkMessage::AssetAdded { .. }
+                    | DynamicLinkMessage::RenderTriggered { .. }
+                    | DynamicLinkMessage::Error { .. } => {}
                 }
             }
             Err(error)

@@ -182,4 +182,3 @@ pub fn add_edge_streak(comp: &mut Composition, name: &str, dir: f32, appear: u32
         Keyframe::new(appear + 14, 0.0, InterpolationType::Linear),
     ]);
 }
-

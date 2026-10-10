@@ -65,12 +65,7 @@ fn vector_axes_inner<const N: usize>(
                         "Z" | "R" => colors::GIZMO_Z,
                         _ => colors::TEXT_SECONDARY,
                     };
-                    ui.label(
-                        egui::RichText::new(axis)
-                            .small()
-                            .strong()
-                            .color(axis_color),
-                    );
+                    ui.label(egui::RichText::new(axis).small().strong().color(axis_color));
                     let field_width = (ui.available_width() - 4.0).clamp(36.0, 56.0);
                     let field = drag(&mut value[index])
                         .speed(speed)

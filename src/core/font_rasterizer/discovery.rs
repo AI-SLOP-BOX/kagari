@@ -15,10 +15,7 @@ pub fn system_font_paths(family_name: &str) -> Vec<PathBuf> {
 
     #[cfg(target_os = "macos")]
     {
-        paths.push(PathBuf::from(format!(
-            "/Library/Fonts/{}.ttf",
-            family_name
-        )));
+        paths.push(PathBuf::from(format!("/Library/Fonts/{}.ttf", family_name)));
         paths.push(PathBuf::from(format!(
             "/System/Library/Fonts/{}.ttf",
             family_name
@@ -38,9 +35,7 @@ pub fn system_font_paths(family_name: &str) -> Vec<PathBuf> {
         )));
         // Also check ~/Library/Fonts
         if let Some(home) = std::env::var_os("HOME") {
-            paths.push(
-                PathBuf::from(home).join(format!("Library/Fonts/{}.ttf", family_name)),
-            );
+            paths.push(PathBuf::from(home).join(format!("Library/Fonts/{}.ttf", family_name)));
         }
     }
 

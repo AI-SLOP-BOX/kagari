@@ -40,8 +40,7 @@ struct TimelineThumbnailRequest {
     target_dim: u32,
 }
 
-type ThumbnailResultReceiver =
-    std::sync::mpsc::Receiver<(String, Option<(usize, usize, Vec<u8>)>)>;
+type ThumbnailResultReceiver = std::sync::mpsc::Receiver<(String, Option<(usize, usize, Vec<u8>)>)>;
 
 struct TimelineThumbnailCache {
     version: u64,
@@ -75,8 +74,7 @@ fn timeline_layer_preview_texture(
                 _ => layer.remap_frame_f32(timeline_frame),
             } * speed.max(0.0))
             .max(0.0);
-            let source_frame = (source_position.floor() as u32)
-                .min(frame_count.saturating_sub(1));
+            let source_frame = (source_position.floor() as u32).min(frame_count.saturating_sub(1));
             (
                 crate::core::video_import::frame_path_in_dir(frames_dir, source_frame),
                 Some(source_frame),
@@ -109,11 +107,17 @@ fn timeline_layer_preview_texture(
                                 (request.target_dim, request.target_dim)
                             } else if orig_w >= orig_h {
                                 let w = request.target_dim;
-                                let h = ((request.target_dim as f32 * orig_h as f32) / orig_w as f32).round().max(1.0) as u32;
+                                let h = ((request.target_dim as f32 * orig_h as f32)
+                                    / orig_w as f32)
+                                    .round()
+                                    .max(1.0) as u32;
                                 (w, h)
                             } else {
                                 let h = request.target_dim;
-                                let w = ((request.target_dim as f32 * orig_w as f32) / orig_h as f32).round().max(1.0) as u32;
+                                let w = ((request.target_dim as f32 * orig_w as f32)
+                                    / orig_h as f32)
+                                    .round()
+                                    .max(1.0) as u32;
                                 (w, h)
                             };
                             let thumbnail = image::imageops::resize(
@@ -122,11 +126,7 @@ fn timeline_layer_preview_texture(
                                 target_h,
                                 image::imageops::FilterType::Triangle,
                             );
-                            (
-                                target_w as usize,
-                                target_h as usize,
-                                thumbnail.into_raw(),
-                            )
+                            (target_w as usize, target_h as usize, thumbnail.into_raw())
                         });
                         if result_tx.send((request.key, decoded)).is_err() {
                             break;
@@ -134,7 +134,7 @@ fn timeline_layer_preview_texture(
                         preview_ctx.request_repaint_after(std::time::Duration::from_millis(16));
                     }
                 })
-            .ok();
+                .ok();
             std::sync::Arc::new(std::sync::Mutex::new(TimelineThumbnailCache {
                 version,
                 textures: std::collections::HashMap::new(),
@@ -215,10 +215,7 @@ struct LayerWaveformParams<'a> {
     color: egui::Color32,
 }
 
-fn draw_layer_waveform(
-    painter: &egui::Painter,
-    params: LayerWaveformParams<'_>,
-) {
+fn draw_layer_waveform(painter: &egui::Painter, params: LayerWaveformParams<'_>) {
     let LayerWaveformParams {
         timeline_rect,
         clip_rect,

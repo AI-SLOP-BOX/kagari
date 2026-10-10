@@ -1,5 +1,7 @@
 use crate::core::timeline::{Layer, LayerType, ProjectItem, ProjectItemType};
-use crate::ui::project_panel::media_replace::{classify_imported_media, start_replace_footage_import};
+use crate::ui::project_panel::media_replace::{
+    classify_imported_media, start_replace_footage_import,
+};
 use crate::KagariApp;
 use eframe::egui;
 
@@ -203,12 +205,7 @@ pub fn apply_project_mutations(
         }
 
         if let Some((asset_idx, new_path, _new_name)) = replace_info {
-            start_replace_footage_import(
-                app,
-                ctx,
-                asset_idx,
-                std::path::PathBuf::from(new_path),
-            );
+            start_replace_footage_import(app, ctx, asset_idx, std::path::PathBuf::from(new_path));
         }
 
         if changed {

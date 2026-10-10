@@ -120,13 +120,17 @@ impl CustomPluginRegistry {
                     )
                 })
                 .collect()
-            } else {
-                vec![]
-            }
+        } else {
+            vec![]
+        }
     }
 
     /// Register an AE C++ native plugin context into the custom plugin registry.
-    pub fn register_ae_plugin(&self, id: &str, context: Arc<crate::core::aegp_sdk_bridge::AePluginHostContext>) {
+    pub fn register_ae_plugin(
+        &self,
+        id: &str,
+        context: Arc<crate::core::aegp_sdk_bridge::AePluginHostContext>,
+    ) {
         struct AePluginAdapter {
             id: String,
             context: Arc<crate::core::aegp_sdk_bridge::AePluginHostContext>,
@@ -141,8 +145,21 @@ impl CustomPluginRegistry {
             fn category(&self) -> &str {
                 "After Effects Plugins"
             }
-            fn process_pixels(&self, pixels: &mut [u8], width: u32, height: u32, frame: u32, _time_sec: f32) {
-                let _ = self.context.render_frame(pixels, width as i32, height as i32, frame as i32, 30);
+            fn process_pixels(
+                &self,
+                pixels: &mut [u8],
+                width: u32,
+                height: u32,
+                frame: u32,
+                _time_sec: f32,
+            ) {
+                let _ = self.context.render_frame(
+                    pixels,
+                    width as i32,
+                    height as i32,
+                    frame as i32,
+                    30,
+                );
             }
         }
 

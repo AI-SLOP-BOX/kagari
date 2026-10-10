@@ -71,7 +71,10 @@ pub(crate) fn asset_kind(item: &ProjectItem) -> &'static str {
     }
 }
 
-pub(crate) fn video_preview_path(compositions: &[Composition], source: &str) -> Option<std::path::PathBuf> {
+pub(crate) fn video_preview_path(
+    compositions: &[Composition],
+    source: &str,
+) -> Option<std::path::PathBuf> {
     for comp in compositions {
         for layer in &comp.layers {
             if let LayerType::Video {
@@ -267,4 +270,3 @@ pub(crate) fn draw_asset_card(
         response.on_hover_text(format!("{}\n{}", item.name, detail))
     }
 }
-

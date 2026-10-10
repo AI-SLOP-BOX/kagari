@@ -390,4 +390,3 @@ fn draw_effect_preview(painter: &egui::Painter, rect: egui::Rect, name: &str) {
         _ => {}
     }
 }
-

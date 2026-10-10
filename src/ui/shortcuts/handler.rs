@@ -1,9 +1,9 @@
-use crate::KagariApp;
-use eframe::egui::{self, Key};
 use super::defs::{shortcut_pressed, ShortcutId};
 use super::keyframe_ops::handle_keyframe_editing;
 use super::timeline_layers::handle_timeline_and_layers;
 use super::tools_playback::handle_tools_and_playback;
+use crate::KagariApp;
+use eframe::egui::{self, Key};
 
 /// Centralized Keyboard Shortcut Manager for Kagari VFX.
 /// Encapsulates global keybindings: Spacebar playback, frame stepping, keyframe navigation (J/K),
@@ -75,7 +75,15 @@ pub fn handle_global_shortcuts(
         handle_tools_and_playback(app, i, current_frame, allow_single_key, cmd, shift);
 
         // 2. Timeline Navigation, Markers, Layer Ordering, and Property Selectors
-        handle_timeline_and_layers(app, i, current_frame, total_frames, allow_single_key, cmd, shift);
+        handle_timeline_and_layers(
+            app,
+            i,
+            current_frame,
+            total_frames,
+            allow_single_key,
+            cmd,
+            shift,
+        );
 
         // 3. Keyframe Editing (Batch nudging, Delete, Copy, Paste)
         handle_keyframe_editing(app, i, current_frame, allow_single_key, cmd, shift);

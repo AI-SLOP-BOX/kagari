@@ -121,7 +121,9 @@ pub fn draw_layer_transforms(
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if kui::button(ui, "Reset", kui::ButtonKind::Quiet)
-                        .on_hover_text("Reset position, scale, rotation, and anchor point to default values")
+                        .on_hover_text(
+                            "Reset position, scale, rotation, and anchor point to default values",
+                        )
                         .clicked()
                     {
                         layer.transform = crate::core::timeline::Transform2D::default();
@@ -256,7 +258,13 @@ pub fn draw_layer_transforms(
                 &mut layer.transform.opacity,
                 |ui, val| {
                     ui.horizontal(|ui| {
-                        crate::ui::custom_widgets::ae_scrubber(ui, val, 1.0, "%", Some(0.0..=100.0));
+                        crate::ui::custom_widgets::ae_scrubber(
+                            ui,
+                            val,
+                            1.0,
+                            "%",
+                            Some(0.0..=100.0),
+                        );
                         kui::slider(ui, val, 0.0..=100.0, "%");
                     });
                 },

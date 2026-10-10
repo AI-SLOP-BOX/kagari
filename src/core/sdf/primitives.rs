@@ -132,7 +132,7 @@ pub fn sdf_polygon_points(x: f32, y: f32, points: &[(f32, f32)]) -> f32 {
                 wn += 1;
             }
         } else if b.1 <= y && (b.0 - a.0) * (y - a.1) - (b.1 - a.1) * (x - a.0) < 0.0 {
-                wn -= 1;
+            wn -= 1;
         }
     }
     if wn != 0 {

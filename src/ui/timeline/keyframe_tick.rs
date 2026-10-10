@@ -74,7 +74,14 @@ pub fn draw_keyframe_tick(
         painter.circle_stroke(
             egui::pos2(x, y),
             size + 2.0,
-            egui::Stroke::new(1.5_f32, if is_selected { colors::ACCENT_SELECTION } else { colors::ACCENT_BRAND_HOVER }),
+            egui::Stroke::new(
+                1.5_f32,
+                if is_selected {
+                    colors::ACCENT_SELECTION
+                } else {
+                    colors::ACCENT_BRAND_HOVER
+                },
+            ),
         );
     }
     let interpolation_name = match interpolation {

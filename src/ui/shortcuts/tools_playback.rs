@@ -1,6 +1,6 @@
+use super::defs::{shortcut_pressed, ShortcutId};
 use crate::KagariApp;
 use eframe::egui::{self, Key};
-use super::defs::{shortcut_pressed, ShortcutId};
 
 /// Handles tools switching, playback controls, viewport zooming, and layer creation shortcuts.
 pub fn handle_tools_and_playback(
@@ -89,9 +89,7 @@ pub fn handle_tools_and_playback(
     // Shift+Z → Viewport zoom to fit / to selected layers' bbox (AE parity)
     if shift && !cmd && i.key_pressed(Key::Z) {
         let mut bbox_request: Option<([f32; 2], [f32; 2])> = None;
-        if !app.selection.selected_layers.is_empty()
-            || app.selection.selected_layer_idx.is_some()
-        {
+        if !app.selection.selected_layers.is_empty() || app.selection.selected_layer_idx.is_some() {
             let comp = app.history.current().active_composition();
             let cf = *current_frame;
             let idxs: Vec<usize> = if app.selection.selected_layers.is_empty() {

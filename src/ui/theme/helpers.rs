@@ -1,7 +1,6 @@
 use super::{colors, layout};
 use eframe::egui;
 
-
 /// Helper: Render section headers with a crisp left accent bar, icon, and high-contrast typography.
 #[allow(dead_code)]
 pub fn draw_section_header(ui: &mut egui::Ui, title: &str, icon: &str) {
@@ -80,7 +79,8 @@ pub fn draw_custom_tab(ui: &mut egui::Ui, selected: bool, title: &str) -> egui::
             egui::pos2(rect.left() + 2.0, rect.bottom() - 2.0),
             egui::pos2(rect.right() - 2.0, rect.bottom()),
         );
-        ui.painter().rect_filled(line_rect, 1.0, colors::ACCENT_SELECTION);
+        ui.painter()
+            .rect_filled(line_rect, 1.0, colors::ACCENT_SELECTION);
     } else if response.hovered() {
         ui.painter().rect_filled(
             response.rect.expand2(egui::vec2(4.0, 2.0)),

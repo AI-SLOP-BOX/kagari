@@ -1,5 +1,5 @@
-use std::f32::consts::TAU;
 use super::wave_warp::sample_bilinear;
+use std::f32::consts::TAU;
 
 /// Parameters for [`apply_cc_lens_pro`].
 #[derive(Debug, Clone, Copy)]

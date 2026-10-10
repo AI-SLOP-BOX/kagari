@@ -98,15 +98,11 @@ pub fn draw_warp_lens(
             }
 
             let tr_before = top_right.clone();
-            if let Some(nf) = draw_property_ui(
-                current_frame,
-                ui,
-                "Top Right Pin",
-                top_right,
-                |ui, val| {
+            if let Some(nf) =
+                draw_property_ui(current_frame, ui, "Top Right Pin", top_right, |ui, val| {
                     crate::ui::kui::vector(ui, val, f32::MIN..=f32::MAX, 1.0, "");
-                },
-            ) {
+                })
+            {
                 *next_frame = Some(nf);
             }
             if tr_before != *top_right {

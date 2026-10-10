@@ -225,4 +225,3 @@ pub(crate) fn draw_footer(ui: &mut egui::Ui, width: f32, mobile: bool) {
         );
     }
 }
-

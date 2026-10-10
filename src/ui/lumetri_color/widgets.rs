@@ -1,7 +1,7 @@
+use super::effects_io::*;
 use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
-use super::effects_io::*;
 
 pub fn draw_look_presets(app: &mut KagariApp, ui: &mut egui::Ui) {
     let looks: [LookPreset<'_>; 5] = [
@@ -94,4 +94,3 @@ pub(crate) fn wheel_widget(ui: &mut egui::Ui, label: &str, arr: &mut [f32; 3]) -
     });
     changed
 }
-

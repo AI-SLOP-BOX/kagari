@@ -28,8 +28,7 @@ fn legacy_prefs_without_flag_default_to_showing_welcome() {
     assert!(RecentsFile::default().show_welcome_on_startup);
     // Explicit false survives a serde roundtrip.
     let parsed: RecentsFile =
-        serde_json::from_str(r#"{"recent_projects":[],"show_welcome_on_startup":false}"#)
-            .unwrap();
+        serde_json::from_str(r#"{"recent_projects":[],"show_welcome_on_startup":false}"#).unwrap();
     assert!(!parsed.show_welcome_on_startup);
 }
 

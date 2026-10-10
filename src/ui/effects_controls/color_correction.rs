@@ -14,11 +14,5 @@ pub fn draw(
     if basic::draw_basic_color(effect_type, ui, current_frame, project_changed, next_frame) {
         return;
     }
-    advanced::draw_advanced_color(
-        effect_type,
-        ui,
-        current_frame,
-        project_changed,
-        next_frame,
-    );
+    advanced::draw_advanced_color(effect_type, ui, current_frame, project_changed, next_frame);
 }

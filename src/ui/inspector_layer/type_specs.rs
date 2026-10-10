@@ -21,8 +21,14 @@ pub fn draw_layer_type_specs(
             ui.label("Layer Specs");
 
             // Dispatch to specialized submodules
-            if !media::draw_media_specs(ui, layer, current_frame, project_changed, next_frame, comp_fps)
-                && !text::draw_text_specs(ui, layer, current_frame, project_changed, next_frame)
+            if !media::draw_media_specs(
+                ui,
+                layer,
+                current_frame,
+                project_changed,
+                next_frame,
+                comp_fps,
+            ) && !text::draw_text_specs(ui, layer, current_frame, project_changed, next_frame)
                 && !shape::draw_shape_specs(ui, layer, current_frame, project_changed, next_frame)
             {
                 other::draw_other_specs(ui, layer, current_frame, project_changed, next_frame);
@@ -31,6 +37,12 @@ pub fn draw_layer_type_specs(
             ui.separator();
 
             // Layer-wide composite features (Shape repeater, puppet, paint, trim, styles)
-            layer_features::draw_layer_features(ui, layer, current_frame, project_changed, next_frame);
+            layer_features::draw_layer_features(
+                ui,
+                layer,
+                current_frame,
+                project_changed,
+                next_frame,
+            );
         });
 }

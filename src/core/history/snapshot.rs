@@ -1,7 +1,7 @@
 //! Bounded serialization and project comparison writers for undo history.
 
-use std::io::{self, Write};
 use crate::core::timeline::Project;
+use std::io::{self, Write};
 
 pub(crate) struct ProjectComparisonWriter<'a> {
     reference: &'a [u8],

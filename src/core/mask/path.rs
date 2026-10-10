@@ -446,4 +446,3 @@ impl MaskPath {
         result
     }
 }
-

@@ -204,7 +204,10 @@ pub fn ae_scrubber(
     // Subtle dashed or dotted style underline for AE look
     let line_y = rect.bottom() - 3.0;
     ui.painter().line_segment(
-        [egui::pos2(rect.left() + 4.0, line_y), egui::pos2(rect.right() - 4.0, line_y)],
+        [
+            egui::pos2(rect.left() + 4.0, line_y),
+            egui::pos2(rect.right() - 4.0, line_y),
+        ],
         egui::Stroke::new(1.0_f32, text_color.linear_multiply(0.7)),
     );
 

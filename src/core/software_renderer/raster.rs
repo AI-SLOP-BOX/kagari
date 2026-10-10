@@ -170,7 +170,8 @@ fn rasterize_image_layer(ctx: RasterCtx<'_>) {
                                             next.width == img.width && next.height == img.height
                                         })
                                         .and_then(|next| {
-                                            let next_idx = ((tex_y * next.width + tex_x) * 4) as usize;
+                                            let next_idx =
+                                                ((tex_y * next.width + tex_x) * 4) as usize;
                                             next.pixels.get(next_idx + channel).copied()
                                         })
                                         .map(f32::from)

@@ -36,7 +36,9 @@ pub fn draw_flowchart_view(app: &mut KagariApp, ui: &mut egui::Ui, comp: &Compos
         let pan_id = egui::Id::new("flowchart_canvas_pan");
         let zoom_id = egui::Id::new("flowchart_canvas_zoom");
 
-        let mut pan = ui.ctx().data(|d| d.get_temp::<egui::Vec2>(pan_id).unwrap_or(egui::Vec2::ZERO));
+        let mut pan = ui
+            .ctx()
+            .data(|d| d.get_temp::<egui::Vec2>(pan_id).unwrap_or(egui::Vec2::ZERO));
         let mut zoom = ui.ctx().data(|d| d.get_temp::<f32>(zoom_id).unwrap_or(1.0));
 
         if response.hovered() {
@@ -82,7 +84,8 @@ pub fn draw_flowchart_view(app: &mut KagariApp, ui: &mut egui::Ui, comp: &Compos
 
         // Draw Composition Root Node
         let root_pos = egui::pos2(rect.left() + 90.0 * zoom + pan.x, rect.center().y + pan.y);
-        let root_rect = egui::Rect::from_center_size(root_pos, egui::vec2(130.0 * zoom, 44.0 * zoom));
+        let root_rect =
+            egui::Rect::from_center_size(root_pos, egui::vec2(130.0 * zoom, 44.0 * zoom));
         painter.rect_filled(root_rect, 6.0, colors::BG_ACTIVE);
         painter.rect_stroke(
             root_rect,
@@ -124,7 +127,8 @@ pub fn draw_flowchart_view(app: &mut KagariApp, ui: &mut egui::Ui, comp: &Compos
 
             let is_selected = app.selection.selected_layers.contains(&i)
                 || app.selection.selected_layer_idx == Some(i);
-            let node_rect = egui::Rect::from_center_size(npos, egui::vec2(140.0 * zoom, 36.0 * zoom));
+            let node_rect =
+                egui::Rect::from_center_size(npos, egui::vec2(140.0 * zoom, 36.0 * zoom));
 
             let base_color = match layer.layer_type {
                 LayerType::Null => egui::Color32::from_rgb(140, 80, 80),
@@ -240,7 +244,8 @@ pub fn draw_flowchart_view(app: &mut KagariApp, ui: &mut egui::Ui, comp: &Compos
         if response.clicked() {
             if let Some(ptr) = response.interact_pointer_pos() {
                 for (i, npos) in node_positions.iter().enumerate() {
-                    let nrect = egui::Rect::from_center_size(*npos, egui::vec2(140.0 * zoom, 36.0 * zoom));
+                    let nrect =
+                        egui::Rect::from_center_size(*npos, egui::vec2(140.0 * zoom, 36.0 * zoom));
                     if nrect.contains(ptr) {
                         app.selection.selected_layers.clear();
                         app.selection.selected_layers.insert(i);

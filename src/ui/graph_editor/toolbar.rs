@@ -179,10 +179,7 @@ pub fn draw_graph_toolbar(
                             } else {
                                 format!("fxid:{}::{}|{}", effect.id, label, channel)
                             };
-                            props.push((
-                                key,
-                                format!("⚙ {} / {}{}", effect.name, label, suffix),
-                            ));
+                            props.push((key, format!("⚙ {} / {}{}", effect.name, label, suffix)));
                         }
                     }
                 }
@@ -332,12 +329,8 @@ pub fn draw_graph_toolbar(
                 p if p.starts_with("3D Rotation") => {
                     reverse_keyframes(&mut layer.transform_3d.rotation)
                 }
-                p if p.starts_with("3D Scale") => {
-                    reverse_keyframes(&mut layer.transform_3d.scale)
-                }
-                p if p.starts_with("Pin") => {
-                    pin_anim_mut(layer, p).is_some_and(reverse_keyframes)
-                }
+                p if p.starts_with("3D Scale") => reverse_keyframes(&mut layer.transform_3d.scale),
+                p if p.starts_with("Pin") => pin_anim_mut(layer, p).is_some_and(reverse_keyframes),
                 p if is_effect_property(p) => reverse_effect_property(layer, p),
                 _ => false,
             };
@@ -451,8 +444,7 @@ pub fn draw_graph_toolbar(
             let target_id = egui::Id::new(("ae_graph_hovered_kf", &layer.id, prop));
             let index: Option<usize> = ui.ctx().data(|d| d.get_temp(target_id));
             if let Some((index, mut values)) = index.and_then(|index| {
-                layer_velocity(layer, prop, index, fps as f32, None)
-                    .map(|values| (index, values))
+                layer_velocity(layer, prop, index, fps as f32, None).map(|values| (index, values))
             }) {
                 let mut changed = false;
                 ui.horizontal(|ui| {

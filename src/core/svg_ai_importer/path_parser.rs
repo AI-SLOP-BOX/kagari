@@ -1,5 +1,5 @@
-use crate::core::mask::MaskVertex;
 use super::tokenizer::{expand_repeated_svg_commands, tokenize_svg_path};
+use crate::core::mask::MaskVertex;
 
 /// Parses an SVG path definition string (`d="..."`) into a list of `MaskVertex` points.
 pub fn parse_svg_path_data(d: &str) -> Result<Vec<MaskVertex>, String> {

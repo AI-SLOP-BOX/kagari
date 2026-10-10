@@ -76,8 +76,7 @@ fn production_autosave_uses_latest_project_with_metadata() {
 
 #[test]
 fn async_autosave_preserves_newer_edits_while_worker_writes() {
-    let dir =
-        std::env::temp_dir().join(format!("kagari_autosave_async_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("kagari_autosave_async_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let mut manager = AutosaveManager::new(&dir).with_interval(Duration::from_secs(0));
     let mut project = sample_project();
@@ -156,8 +155,7 @@ fn production_snapshot_written_by_older_schema_remains_recoverable() {
 
 #[test]
 fn legacy_project_snapshot_remains_recoverable() {
-    let dir =
-        std::env::temp_dir().join(format!("kagari_autosave_legacy_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("kagari_autosave_legacy_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let json = serde_json::to_string(&sample_project()).unwrap();
@@ -278,8 +276,7 @@ fn production_recovery_skips_document_with_invalid_project() {
 
 #[test]
 fn failed_tick_keeps_dirty_state_for_retry() {
-    let path =
-        std::env::temp_dir().join(format!("kagari_autosave_blocked_{}", std::process::id()));
+    let path = std::env::temp_dir().join(format!("kagari_autosave_blocked_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&path);
     std::fs::write(&path, "not a directory").unwrap();
     let mut manager = AutosaveManager::new(&path).with_interval(Duration::from_secs(0));
@@ -343,16 +340,14 @@ fn test_rotating_slots_never_exceed_limit() {
 
 #[test]
 fn test_corrupt_recovery_files_are_skipped() {
-    let dir =
-        std::env::temp_dir().join(format!("kagari_autosave_corrupt_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("kagari_autosave_corrupt_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
 
     // Slot 0: truncated garbage; slot 1: valid project
     std::fs::write(dir.join("recovery_0.json"), "{\"compositions\": [").unwrap();
     let good = dir.join("recovery_1.json");
-    serde_json::to_writer_pretty(std::fs::File::create(&good).unwrap(), &sample_project())
-        .unwrap();
+    serde_json::to_writer_pretty(std::fs::File::create(&good).unwrap(), &sample_project()).unwrap();
 
     let mgr = AutosaveManager::new(&dir);
     let recovered = mgr

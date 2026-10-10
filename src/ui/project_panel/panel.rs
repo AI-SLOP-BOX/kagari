@@ -611,4 +611,3 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
         replace_info,
     );
 }
-

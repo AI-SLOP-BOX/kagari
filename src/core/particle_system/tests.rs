@@ -466,8 +466,8 @@ fn test_gravity_curve_accelerates_fall() {
     strong.update(0.5, 0.0, 0.0);
     let y_weak: f32 =
         weak.particles.iter().map(|p| p.y).sum::<f32>() / weak.particles.len().max(1) as f32;
-    let y_strong: f32 = strong.particles.iter().map(|p| p.y).sum::<f32>()
-        / strong.particles.len().max(1) as f32;
+    let y_strong: f32 =
+        strong.particles.iter().map(|p| p.y).sum::<f32>() / strong.particles.len().max(1) as f32;
     assert!(
         y_strong > y_weak * 1.5,
         "curve-multiplied gravity should fall faster"

@@ -151,5 +151,4 @@ pub fn add_glitch_text_layers(comp: &mut Composition) {
             ));
         }
     }
-
 }

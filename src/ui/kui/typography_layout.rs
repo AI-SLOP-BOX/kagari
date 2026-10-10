@@ -207,14 +207,17 @@ pub fn selectable_item_row<R>(
         (false, false) => egui::Color32::TRANSPARENT,
     };
     if bg_color != egui::Color32::TRANSPARENT {
-        ui.painter().with_clip_rect(rect).rect_filled(rect, layout::BUTTON_RADIUS, bg_color);
+        ui.painter()
+            .with_clip_rect(rect)
+            .rect_filled(rect, layout::BUTTON_RADIUS, bg_color);
     }
     if selected {
         let indicator_rect = egui::Rect::from_min_size(
             egui::pos2(rect.min.x + 2.0, rect.min.y + 4.0),
             egui::vec2(3.0, (rect.height() - 8.0).max(4.0)),
         );
-        ui.painter().rect_filled(indicator_rect, 1.5, colors::ACCENT_SELECTION);
+        ui.painter()
+            .rect_filled(indicator_rect, 1.5, colors::ACCENT_SELECTION);
     }
     if response.clicked() {
         response.request_focus();

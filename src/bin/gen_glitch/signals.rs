@@ -190,5 +190,4 @@ pub fn add_signals_and_background(comp: &mut Composition) {
             ]);
         }
     }
-
 }

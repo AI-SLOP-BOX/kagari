@@ -57,8 +57,8 @@ pub fn rasterize_text_animated(
     let pad = (font_size.ceil() as u32 + 96).max(128);
     let buf_w = (layout.total_width.ceil() as u32).max(1) + pad * 2;
     let line_height = font_size * leading;
-    let buf_h = ((layout.total_height.ceil() as u32) + pad * 2)
-        .max(line_height.ceil() as u32 + pad * 2);
+    let buf_h =
+        ((layout.total_height.ceil() as u32) + pad * 2).max(line_height.ceil() as u32 + pad * 2);
     let mut pixels = vec![0u8; (buf_w * buf_h * 4) as usize];
     let r = (color[0].clamp(0.0, 1.0) * 255.0) as u8;
     let g = (color[1].clamp(0.0, 1.0) * 255.0) as u8;
@@ -122,11 +122,8 @@ pub fn rasterize_text_animated(
                             + c.position_offset[0]
                             + c.tracking_offset
                             + bounds.min.x;
-                        let dest_y = pad as f32
-                            + cursor_y
-                            + max_top
-                            + bounds.min.y
-                            + c.position_offset[1];
+                        let dest_y =
+                            pad as f32 + cursor_y + max_top + bounds.min.y + c.position_offset[1];
 
                         let sx = c.scale_multiplier[0].max(0.01);
                         let sy = c.scale_multiplier[1].max(0.01);
@@ -144,11 +141,7 @@ pub fn rasterize_text_animated(
                                 let uy = (-rx * sin_r + ry * cos_r) / sy + bounds.height() * 0.5;
                                 let sxi = ux.floor() as isize;
                                 let syi = uy.floor() as isize;
-                                if sxi < 0
-                                    || syi < 0
-                                    || sxi >= bw as isize
-                                    || syi >= bh as isize
-                                {
+                                if sxi < 0 || syi < 0 || sxi >= bw as isize || syi >= bh as isize {
                                     continue;
                                 }
                                 let a = src_rgba[((syi as usize) * bw + (sxi as usize)) * 4 + 3];
@@ -164,9 +157,9 @@ pub fn rasterize_text_animated(
                                 {
                                     continue;
                                 }
-                                let out_a = (a as f32 * c.opacity_multiplier)
-                                    .round()
-                                    .clamp(0.0, 255.0) as u8;
+                                let out_a =
+                                    (a as f32 * c.opacity_multiplier).round().clamp(0.0, 255.0)
+                                        as u8;
                                 if out_a == 0 {
                                     continue;
                                 }
@@ -224,8 +217,8 @@ pub fn rasterize_text_animated_stack(
     let pad = (font_size.ceil() as u32 + 96).max(128);
     let buf_w = (layout.total_width.ceil() as u32).max(1) + pad * 2;
     let line_height = font_size * leading;
-    let buf_h = ((layout.total_height.ceil() as u32) + pad * 2)
-        .max(line_height.ceil() as u32 + pad * 2);
+    let buf_h =
+        ((layout.total_height.ceil() as u32) + pad * 2).max(line_height.ceil() as u32 + pad * 2);
     let mut pixels = vec![0u8; (buf_w * buf_h * 4) as usize];
     let r = (color[0].clamp(0.0, 1.0) * 255.0) as u8;
     let g = (color[1].clamp(0.0, 1.0) * 255.0) as u8;
@@ -263,17 +256,16 @@ pub fn rasterize_text_animated_stack(
                                 cov[yi * bw + xi] = coverage;
                             }
                         });
-                        let (char_r, char_g, char_b) = if let Some(fc) =
-                            advanced.get(char_idx).and_then(|a| a.fill_color)
-                        {
-                            (
-                                (fc[0].clamp(0.0, 1.0) * 255.0) as u8,
-                                (fc[1].clamp(0.0, 1.0) * 255.0) as u8,
-                                (fc[2].clamp(0.0, 1.0) * 255.0) as u8,
-                            )
-                        } else {
-                            (r, g, b)
-                        };
+                        let (char_r, char_g, char_b) =
+                            if let Some(fc) = advanced.get(char_idx).and_then(|a| a.fill_color) {
+                                (
+                                    (fc[0].clamp(0.0, 1.0) * 255.0) as u8,
+                                    (fc[1].clamp(0.0, 1.0) * 255.0) as u8,
+                                    (fc[2].clamp(0.0, 1.0) * 255.0) as u8,
+                                )
+                            } else {
+                                (r, g, b)
+                            };
                         let mut src_rgba = vec![0u8; bw * bh * 4];
                         for (i, cv) in cov.iter().enumerate() {
                             src_rgba[i * 4] = char_r;
@@ -296,11 +288,8 @@ pub fn rasterize_text_animated_stack(
                             + c.position_offset[0]
                             + c.tracking_offset
                             + bounds.min.x;
-                        let dest_y = pad as f32
-                            + cursor_y
-                            + max_top
-                            + bounds.min.y
-                            + c.position_offset[1];
+                        let dest_y =
+                            pad as f32 + cursor_y + max_top + bounds.min.y + c.position_offset[1];
 
                         let sx = c.scale_multiplier[0].max(0.01);
                         let sy = c.scale_multiplier[1].max(0.01);
@@ -318,11 +307,7 @@ pub fn rasterize_text_animated_stack(
                                 let uy = (-rx * sin_r + ry * cos_r) / sy + bounds.height() * 0.5;
                                 let sxi = ux.floor() as isize;
                                 let syi = uy.floor() as isize;
-                                if sxi < 0
-                                    || syi < 0
-                                    || sxi >= bw as isize
-                                    || syi >= bh as isize
-                                {
+                                if sxi < 0 || syi < 0 || sxi >= bw as isize || syi >= bh as isize {
                                     continue;
                                 }
                                 let sa = cov[(syi as usize) * bw + (sxi as usize)];
@@ -340,7 +325,8 @@ pub fn rasterize_text_animated_stack(
                                 }
                                 let out_a = (sa * 255.0 * c.opacity_multiplier)
                                     .round()
-                                    .clamp(0.0, 255.0) as u8;
+                                    .clamp(0.0, 255.0)
+                                    as u8;
                                 if out_a == 0 {
                                     continue;
                                 }

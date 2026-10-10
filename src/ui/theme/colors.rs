@@ -1,6 +1,5 @@
 use eframe::egui::Color32;
 
-
 // ── Background Layers (darkest → lightest) ──
 /// Deep application background (#121418 - ultra-dense studio base).
 pub const BG_DEEPEST: Color32 = Color32::from_rgb(18, 20, 24);

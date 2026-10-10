@@ -179,4 +179,3 @@ impl Drop for EditorSession<'_> {
         }
     }
 }
-

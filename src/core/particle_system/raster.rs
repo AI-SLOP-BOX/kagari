@@ -1,4 +1,3 @@
-
 /// Rasterize one soft-circle dot with the emitter's blend mode.
 pub fn draw_dot(
     buffer: &mut [u8],

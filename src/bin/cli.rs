@@ -1633,9 +1633,10 @@ fn cmd_frame(
         )
         .into());
     }
-    let json =
-        kagari_vfx::core::project_migration::read_project_json_file(std::path::Path::new(project_path))
-            .map_err(|e| format!("Failed to read project file '{}': {}", project_path, e))?;
+    let json = kagari_vfx::core::project_migration::read_project_json_file(std::path::Path::new(
+        project_path,
+    ))
+    .map_err(|e| format!("Failed to read project file '{}': {}", project_path, e))?;
     let doc_opt = kagari_vfx::core::production_document::ProductionDocument::from_json(&json).ok();
     let project = if let Some(doc) = doc_opt.as_ref() {
         doc.project.clone()
@@ -1643,7 +1644,9 @@ fn cmd_frame(
         load_project(project_path)?
     };
 
-    let comp_idx = project.active_composition_idx.min(project.compositions.len().saturating_sub(1));
+    let comp_idx = project
+        .active_composition_idx
+        .min(project.compositions.len().saturating_sub(1));
     let comp = if let Some(doc) = doc_opt.as_ref() {
         doc.composition_for_frame(comp_idx, frame)
             .ok_or("Composition index out of range")?

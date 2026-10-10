@@ -119,4 +119,3 @@ pub fn point_in_polygon(px: f32, py: f32, verts: &[[f32; 2]]) -> bool {
     }
     inside
 }
-

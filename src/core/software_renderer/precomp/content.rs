@@ -64,7 +64,13 @@ pub fn rasterize_layer_content(
         LayerType::Image { path } => {
             let proxy_path = crate::core::software_renderer::preview_proxy_path(p.layer, 0);
             let image_path = proxy_path.as_deref().unwrap_or(path);
-            super::raster::rasterize_texture_layer(layer_buf, image_path, None, 0.0, p.raster_region);
+            super::raster::rasterize_texture_layer(
+                layer_buf,
+                image_path,
+                None,
+                0.0,
+                p.raster_region,
+            );
         }
         LayerType::Video {
             frames_dir,
@@ -88,9 +94,7 @@ pub fn rasterize_layer_content(
             let first_path = proxy_path
                 .as_deref()
                 .map(std::path::PathBuf::from)
-                .unwrap_or_else(|| {
-                    crate::core::video_import::frame_path_in_dir(frames_dir, first)
-                });
+                .unwrap_or_else(|| crate::core::video_import::frame_path_in_dir(frames_dir, first));
             let second_path = crate::core::video_import::frame_path_in_dir(frames_dir, second);
             let first_path_text = first_path.to_string_lossy();
             let second_path_text = second_path.to_string_lossy();
@@ -141,7 +145,13 @@ pub fn rasterize_layer_content(
                 0.0,
                 0,
             );
-            super::raster::rasterize_pixel_layer(layer_buf, &model_pixels, width, height, p.raster_region);
+            super::raster::rasterize_pixel_layer(
+                layer_buf,
+                &model_pixels,
+                width,
+                height,
+                p.raster_region,
+            );
         }
         LayerType::Text {
             text,
@@ -209,7 +219,11 @@ pub fn rasterize_layer_content(
                     let dy = py as f32 - tb.cy;
                     let lx = dx * tb.cos_r + dy * tb.sin_r;
                     let ly = -dx * tb.sin_r + dy * tb.cos_r;
-                    if lx >= -tb.bounds_x && lx <= tb.bounds_x && ly >= -tb.bounds_y && ly <= tb.bounds_y {
+                    if lx >= -tb.bounds_x
+                        && lx <= tb.bounds_x
+                        && ly >= -tb.bounds_y
+                        && ly <= tb.bounds_y
+                    {
                         let lidx = (((py - tb.min_y) * tb.bw + (px - tb.min_x)) * 4) as usize;
                         if lidx + 3 < layer_buf.len() {
                             let src_a = p.base_color[3];

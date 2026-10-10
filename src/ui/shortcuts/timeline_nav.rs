@@ -1,8 +1,8 @@
 //! Playhead transport, markers navigation, and work area shortcuts.
 
+use super::defs::{shortcut_pressed, ShortcutId};
 use crate::KagariApp;
 use eframe::egui::{self, Key};
-use super::defs::{shortcut_pressed, ShortcutId};
 
 pub fn handle_navigation_and_markers(
     app: &mut KagariApp,

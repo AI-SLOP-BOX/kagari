@@ -15,8 +15,8 @@ pub use camera::draw_camera_lens_graph;
 pub use canvas::draw_graph_editor;
 pub use channel_ops::{
     axis_3d, clamp_bezier_x, graph_keyframe_frame, is_effect_property, move_and_set_channel,
-    parse_effect_property, pin_anim_mut, pin_component, reverse_effect_property,
-    reverse_keyframes, rove_across_time, rove_keyframes, GraphChannelValue,
+    parse_effect_property, pin_anim_mut, pin_component, reverse_effect_property, reverse_keyframes,
+    rove_across_time, rove_keyframes, GraphChannelValue,
 };
 pub use interpolation_ops::{
     effect_channel_bezier_points, effect_parameter_channel_keyframes,

@@ -258,4 +258,3 @@ pub fn progress_bar(ui: &mut egui::Ui, fraction: f32, label: Option<&str>) -> eg
     );
     response
 }
-

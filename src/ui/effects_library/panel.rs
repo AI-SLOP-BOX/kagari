@@ -1,10 +1,10 @@
+use super::character_tab::draw_character_tab;
+use super::effect_controls::draw_effect_controls;
+use super::presets_tab::draw_effects_presets_tab;
 use crate::core::editor::EditorSession;
 use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
-use super::character_tab::draw_character_tab;
-use super::effect_controls::draw_effect_controls;
-use super::presets_tab::draw_effects_presets_tab;
 
 pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
     let dt = ctx.input(|i| i.stable_dt);
@@ -87,15 +87,30 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                     }
                     ui.menu_button("…", |ui| {
                         let more_panels = [
-                            (crate::app_state::RightPanel::Tracker, "トラッカー (Tracker)"),
+                            (
+                                crate::app_state::RightPanel::Tracker,
+                                "トラッカー (Tracker)",
+                            ),
                             (crate::app_state::RightPanel::Audio, "オーディオ (Audio)"),
                             (crate::app_state::RightPanel::Character, "文字 (Character)"),
                             (crate::app_state::RightPanel::Paragraph, "段落 (Paragraph)"),
                             (crate::app_state::RightPanel::Align, "整列 (Align)"),
-                            (crate::app_state::RightPanel::RenderPresets, "書き出しプリセット"),
-                            (crate::app_state::RightPanel::LayerStyles, "レイヤースタイル"),
-                            (crate::app_state::RightPanel::EssentialGraphics, "エッセンシャルグラフィックス"),
-                            (crate::app_state::RightPanel::ContentAwareFill, "コンテンツに応じた塗りつぶし"),
+                            (
+                                crate::app_state::RightPanel::RenderPresets,
+                                "書き出しプリセット",
+                            ),
+                            (
+                                crate::app_state::RightPanel::LayerStyles,
+                                "レイヤースタイル",
+                            ),
+                            (
+                                crate::app_state::RightPanel::EssentialGraphics,
+                                "エッセンシャルグラフィックス",
+                            ),
+                            (
+                                crate::app_state::RightPanel::ContentAwareFill,
+                                "コンテンツに応じた塗りつぶし",
+                            ),
                             (crate::app_state::RightPanel::Info, "情報 (Info)"),
                         ];
                         for (panel, title) in more_panels {

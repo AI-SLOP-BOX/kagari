@@ -1,6 +1,6 @@
 use super::operators::{
-    apply_pucker_bloat, apply_round_corners, apply_zig_zag, trim_path_vertices,
-    PuckerBloatOptions, ZigZagOptions,
+    apply_pucker_bloat, apply_round_corners, apply_zig_zag, trim_path_vertices, PuckerBloatOptions,
+    ZigZagOptions,
 };
 use crate::core::mask::MaskVertex;
 

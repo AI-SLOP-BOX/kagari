@@ -23,11 +23,7 @@ pub fn export_frame_range(
     (0, comp_total)
 }
 
-pub fn batch_output_path(
-    base: &str,
-    composition_name: &str,
-    composition_id: &str,
-) -> String {
+pub fn batch_output_path(base: &str, composition_name: &str, composition_id: &str) -> String {
     let path = std::path::Path::new(base);
     let stem = path
         .file_stem()

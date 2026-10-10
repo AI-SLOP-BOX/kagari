@@ -224,10 +224,7 @@ pub fn read_frame(key: &(u32, u64)) -> Option<(Vec<u8>, u32, u32)> {
     read_frame_in_namespace(key, 0)
 }
 
-pub fn read_frame_in_namespace(
-    key: &(u32, u64),
-    namespace: u128,
-) -> Option<(Vec<u8>, u32, u32)> {
+pub fn read_frame_in_namespace(key: &(u32, u64), namespace: u128) -> Option<(Vec<u8>, u32, u32)> {
     read_frame_in_namespace_with_limit(key, namespace, 512 * 1024 * 1024)
 }
 

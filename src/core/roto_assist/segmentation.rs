@@ -440,4 +440,3 @@ pub fn refine_edge_guided_filter(
 
     refined
 }
-

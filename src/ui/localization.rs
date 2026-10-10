@@ -109,8 +109,12 @@ pub fn tr(english: &str) -> String {
         "Auto-Trace & Roto Assist" => "オートトレース ＆ Roto アシスト",
         "Auto-Trace Settings" => "オートトレース設定",
         "Roto Brush & Refine Edge" => "Roto Brush ＆ エッジ調整",
-        "Select a layer to perform motion tracking." => "モーショントラッキングを実行するレイヤーを選択してください。",
-        "No layer selected. Select a layer in timeline." => "レイヤーが選択されていません。タイムラインでレイヤーを選択してください。",
+        "Select a layer to perform motion tracking." => {
+            "モーショントラッキングを実行するレイヤーを選択してください。"
+        }
+        "No layer selected. Select a layer in timeline." => {
+            "レイヤーが選択されていません。タイムラインでレイヤーを選択してください。"
+        }
         "No layer selected" => "レイヤーが選択されていません",
         "Paint" => "ペイント",
         "Audio" => "オーディオ",

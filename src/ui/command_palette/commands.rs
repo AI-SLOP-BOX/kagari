@@ -1,6 +1,6 @@
-use crate::KagariApp;
 use super::advanced;
 use super::general;
+use crate::KagariApp;
 
 pub struct PaletteCommand {
     pub name: &'static str,

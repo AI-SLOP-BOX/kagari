@@ -339,4 +339,3 @@ pub(crate) fn complete_replace_footage(
         replacement.old_name, replacement.new_name
     ));
 }
-

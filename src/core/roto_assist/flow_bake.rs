@@ -1,8 +1,8 @@
+use super::segmentation::*;
 use crate::core::keyframe::{InterpolationType, Keyframe};
 use crate::core::mask::Mask;
 use crate::core::property::Animatable;
 use crate::core::timeline::TrackerPoint;
-use super::segmentation::*;
 
 const ROTO_FLOW_MAX_DIMENSION: f32 = 160.0;
 const ROTO_FLOW_SEARCH_RADIUS: i32 = 8;
@@ -339,7 +339,13 @@ pub(crate) fn resample_closed_polygon(points: &[[f32; 2]], count: usize) -> Vec<
     output
 }
 
-pub(crate) fn downsample_rgba(source: &[u8], width: u32, height: u32, out_w: u32, out_h: u32) -> Vec<u8> {
+pub(crate) fn downsample_rgba(
+    source: &[u8],
+    width: u32,
+    height: u32,
+    out_w: u32,
+    out_h: u32,
+) -> Vec<u8> {
     let mut output = vec![0u8; out_w as usize * out_h as usize * 4];
     for y in 0..out_h {
         let sy = (((y as f32 + 0.5) * height as f32 / out_h as f32).floor() as u32).min(height - 1);

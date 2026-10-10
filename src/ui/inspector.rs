@@ -290,11 +290,19 @@ fn draw_effect_browser(app: &mut KagariApp, ui: &mut egui::Ui) {
                 .filter(|(_, p)| query.is_empty() || p.name.to_lowercase().contains(&query))
                 .take(20)
             {
-                let row_rect = egui::Rect::from_min_size(ui.cursor().min, egui::vec2(ui.available_width(), 28.0));
-                let resp = ui.interact(row_rect, egui::Id::new(("left_effect_item", idx)), egui::Sense::click_and_drag());
+                let row_rect = egui::Rect::from_min_size(
+                    ui.cursor().min,
+                    egui::vec2(ui.available_width(), 28.0),
+                );
+                let resp = ui.interact(
+                    row_rect,
+                    egui::Id::new(("left_effect_item", idx)),
+                    egui::Sense::click_and_drag(),
+                );
                 let hovered = resp.hovered();
                 if hovered {
-                    ui.painter().rect_filled(row_rect, 3.0, colors::BG_HOVER.linear_multiply(0.7));
+                    ui.painter()
+                        .rect_filled(row_rect, 3.0, colors::BG_HOVER.linear_multiply(0.7));
                 }
 
                 ui.allocate_new_ui(egui::UiBuilder::new().max_rect(row_rect), |ui| {
@@ -302,13 +310,21 @@ fn draw_effect_browser(app: &mut KagariApp, ui: &mut egui::Ui) {
                         ui.add_space(4.0);
                         ui.label(
                             egui::RichText::new("◇")
-                                .color(if hovered { colors::ACCENT_BRAND } else { colors::ACCENT_CYAN })
+                                .color(if hovered {
+                                    colors::ACCENT_BRAND
+                                } else {
+                                    colors::ACCENT_CYAN
+                                })
                                 .size(12.0),
                         );
                         ui.label(
                             egui::RichText::new(preset.name)
                                 .size(12.0)
-                                .color(if hovered { colors::TEXT_PRIMARY } else { colors::TEXT_SECONDARY }),
+                                .color(if hovered {
+                                    colors::TEXT_PRIMARY
+                                } else {
+                                    colors::TEXT_SECONDARY
+                                }),
                         );
                     });
                 });
@@ -317,7 +333,9 @@ fn draw_effect_browser(app: &mut KagariApp, ui: &mut egui::Ui) {
                     app.dragging_effect = Some((preset.name.to_string(), idx));
                 }
 
-                if resp.double_clicked() || (resp.clicked() && !ui.input(|i| i.pointer.is_decidedly_dragging())) {
+                if resp.double_clicked()
+                    || (resp.clicked() && !ui.input(|i| i.pointer.is_decidedly_dragging()))
+                {
                     crate::ui::menu::apply_effect_by_name(app, preset.name);
                 }
             }

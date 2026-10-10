@@ -1,6 +1,6 @@
+use super::EffectPreset;
 use crate::core::property::Animatable;
 use crate::core::timeline::{ColorConversionMode, Effect, EffectType};
-use super::EffectPreset;
 
 pub(crate) fn get_presets_part1() -> Vec<EffectPreset> {
     vec![
@@ -440,6 +440,5 @@ pub(crate) fn get_presets_part1() -> Vec<EffectPreset> {
             },
         },
         // ── New AE-standard effects ──
-
     ]
 }

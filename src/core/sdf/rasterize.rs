@@ -1,6 +1,6 @@
-use crate::core::timeline::{ShapeFillType, ShapeType, TrimPaths};
 use super::color::resolve_fill_color;
 use super::primitives::*;
+use crate::core::timeline::{ShapeFillType, ShapeType, TrimPaths};
 
 /// Rasterize a shape layer into the layer buffer using SDF.
 /// Returns true if any pixels were written.

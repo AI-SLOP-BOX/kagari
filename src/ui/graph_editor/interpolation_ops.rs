@@ -315,7 +315,12 @@ pub fn set_effect_channel_bezier(
     false
 }
 
-pub fn set_effect_channel_at_frame(layer: &mut Layer, property: &str, frame: u32, value: f32) -> bool {
+pub fn set_effect_channel_at_frame(
+    layer: &mut Layer,
+    property: &str,
+    frame: u32,
+    value: f32,
+) -> bool {
     let Some((effect_id, parameter_name, component)) = parse_effect_property(property) else {
         return false;
     };

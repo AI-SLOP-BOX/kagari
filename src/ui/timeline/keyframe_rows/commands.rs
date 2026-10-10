@@ -47,9 +47,7 @@ pub fn set_kf_interp<T: Clone>(
                         influence: 0.333,
                         speed: 0.0,
                     },
-                    custom_bezier: Some(
-                        crate::core::keyframe::EasePreset::EaseIn.control_points(),
-                    ),
+                    custom_bezier: Some(crate::core::keyframe::EasePreset::EaseIn.control_points()),
                 },
                 KeyframeMenuAction::EaseOut => InterpolationType::Bezier {
                     outgoing: BezierControlPoint {
@@ -86,9 +84,7 @@ pub fn set_kf_interp<T: Clone>(
                         influence: 0.333,
                         speed: 0.0,
                     },
-                    custom_bezier: Some(
-                        crate::core::keyframe::EasePreset::Bounce.control_points(),
-                    ),
+                    custom_bezier: Some(crate::core::keyframe::EasePreset::Bounce.control_points()),
                 },
                 KeyframeMenuAction::Elastic => InterpolationType::Bezier {
                     outgoing: BezierControlPoint {

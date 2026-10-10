@@ -4,13 +4,7 @@ use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw_grid(
-    ui: &mut egui::Ui,
-    origin_x: f32,
-    origin_y: f32,
-    draw_w: f32,
-    draw_h: f32,
-) {
+pub fn draw_grid(ui: &mut egui::Ui, origin_x: f32, origin_y: f32, draw_w: f32, draw_h: f32) {
     let grid_step = draw_w / 16.0;
     let grid_stroke = egui::Stroke::new(0.5_f32, colors::GRID_LINE);
     let mut gx = origin_x + grid_step;
@@ -31,13 +25,7 @@ pub fn draw_grid(
     }
 }
 
-pub fn draw_safe_guides(
-    ui: &mut egui::Ui,
-    origin_x: f32,
-    origin_y: f32,
-    draw_w: f32,
-    draw_h: f32,
-) {
+pub fn draw_safe_guides(ui: &mut egui::Ui, origin_x: f32, origin_y: f32, draw_w: f32, draw_h: f32) {
     let guide_stroke = egui::Stroke::new(1.0_f32, colors::GUIDE_LINE);
     let cx = origin_x + draw_w * 0.5;
     let cy = origin_y + draw_h * 0.5;

@@ -1,4 +1,8 @@
-pub(crate) fn color_control_value(layer: &crate::core::timeline::Layer, key: &str, frame: u32) -> f32 {
+pub(crate) fn color_control_value(
+    layer: &crate::core::timeline::Layer,
+    key: &str,
+    frame: u32,
+) -> f32 {
     let Some(effect) = layer
         .effects
         .iter()
@@ -32,7 +36,12 @@ pub(crate) fn color_control_value(layer: &crate::core::timeline::Layer, key: &st
     }
 }
 
-pub(crate) fn set_color_control(layer: &mut crate::core::timeline::Layer, key: &str, frame: u32, value: f32) {
+pub(crate) fn set_color_control(
+    layer: &mut crate::core::timeline::Layer,
+    key: &str,
+    frame: u32,
+    value: f32,
+) {
     use crate::core::property::Animatable;
     use crate::core::timeline::{Effect, EffectType};
 
@@ -95,4 +104,3 @@ pub(crate) fn set_color_control(layer: &mut crate::core::timeline::Layer, key: &
         _ => {}
     }
 }
-

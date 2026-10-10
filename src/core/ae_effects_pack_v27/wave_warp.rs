@@ -1,5 +1,5 @@
-use std::f32::consts::{PI, TAU};
 use crate::core::effect_utils;
+use std::f32::consts::{PI, TAU};
 
 /// Clamp-to-edge bilinear RGBA sample — delegates to shared `effect_utils`.
 #[inline]

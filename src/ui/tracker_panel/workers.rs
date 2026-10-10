@@ -245,4 +245,3 @@ pub(crate) fn start_quad_track(
     });
     true
 }
-

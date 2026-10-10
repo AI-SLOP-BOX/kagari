@@ -5,11 +5,7 @@ use crate::ui::viewport_state::ViewportTransform;
 use crate::KagariApp;
 use eframe::egui;
 
-pub fn draw_motion_paths(
-    ui: &mut egui::Ui,
-    app: &KagariApp,
-    transform: &ViewportTransform,
-) {
+pub fn draw_motion_paths(ui: &mut egui::Ui, app: &KagariApp, transform: &ViewportTransform) {
     let comp = app.history.current().active_composition();
     if let Some(idx) = app.selection.selected_layer_idx {
         if idx < comp.layers.len() {

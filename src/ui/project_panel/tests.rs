@@ -2,10 +2,10 @@
 #[allow(clippy::items_after_test_module)]
 #[allow(clippy::module_inception)]
 mod tests {
+    use crate::core::timeline::{Composition, Layer, LayerType, ProjectItemType};
     use crate::ui::project_panel::media_replace::{
         classify_imported_media, replace_media_in_composition,
     };
-    use crate::core::timeline::{Composition, Layer, LayerType, ProjectItemType};
     use std::collections::HashMap;
     use std::path::Path;
 
@@ -151,4 +151,3 @@ mod tests {
         assert_eq!(comp.layers[2].name, "fire.obj");
     }
 }
-

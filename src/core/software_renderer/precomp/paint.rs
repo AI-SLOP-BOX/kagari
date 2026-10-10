@@ -77,8 +77,7 @@ pub fn apply_paint_strokes(
         {
             continue;
         }
-        let buf_pts: Vec<[f32; 2]> =
-            stroke.points.iter().map(|&p| to_buf_local(p)).collect();
+        let buf_pts: Vec<[f32; 2]> = stroke.points.iter().map(|&p| to_buf_local(p)).collect();
         let col = stroke.color;
         if stroke.mode == crate::core::timeline::PaintStrokeMode::CloneStamp {
             let source_buf = layer_buf.to_vec();
@@ -86,10 +85,7 @@ pub fn apply_paint_strokes(
                 .points
                 .iter()
                 .map(|&p| {
-                    to_buf_local([
-                        p[0] + stroke.clone_offset[0],
-                        p[1] + stroke.clone_offset[1],
-                    ])
+                    to_buf_local([p[0] + stroke.clone_offset[0], p[1] + stroke.clone_offset[1]])
                 })
                 .collect();
             crate::core::paint::draw_clone_stroke_with_brush(

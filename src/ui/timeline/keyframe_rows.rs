@@ -284,13 +284,7 @@ pub fn draw_expanded_rows(ui: &mut egui::Ui, state: ExpandedRowsState<'_>) {
     }
 
     // Apply keyframe context-menu commands
-    commands::apply_kf_menu_commands(
-        layer,
-        i,
-        selected_keyframes,
-        kf_menu_cmds,
-        project_changed,
-    );
+    commands::apply_kf_menu_commands(layer, i, selected_keyframes, kf_menu_cmds, project_changed);
 
     // Apply marquee box-selects
     for (pk, frames) in box_selects {

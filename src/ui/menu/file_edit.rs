@@ -397,7 +397,9 @@ fn draw_import_otio(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
                 Ok(otio) => match otio.to_composition() {
                     Ok(comp) => {
                         app.modify_project(|p| {
-                            let idx = p.active_composition_idx.min(p.compositions.len().saturating_sub(1));
+                            let idx = p
+                                .active_composition_idx
+                                .min(p.compositions.len().saturating_sub(1));
                             if let Some(target) = p.compositions.get_mut(idx) {
                                 *target = comp;
                             } else {

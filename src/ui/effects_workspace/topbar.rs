@@ -149,4 +149,3 @@ pub(crate) fn effects_header_action(
         .truncate(),
     );
 }
-

@@ -260,9 +260,8 @@ fn rewrite_model_companions(
     if extension != "obj" && extension != "mtl" {
         return Ok(());
     }
-    let source_text = std::fs::read_to_string(source).map_err(|error| {
-        format!("Cannot rewrite model file '{}': {error}", source.display())
-    })?;
+    let source_text = std::fs::read_to_string(source)
+        .map_err(|error| format!("Cannot rewrite model file '{}': {error}", source.display()))?;
     let mut rewritten = String::with_capacity(source_text.len());
     for line in source_text.lines() {
         let content = line.split('#').next().unwrap_or_default();
@@ -292,9 +291,7 @@ fn rewrite_model_companions(
                         .unwrap_or_else(|| Path::new("."))
                         .join(&reference),
                 )
-                .map_err(|error| {
-                    format!("Cannot resolve OBJ material '{reference}': {error}")
-                })?;
+                .map_err(|error| format!("Cannot resolve OBJ material '{reference}': {error}"))?;
                 names.push(
                     canonical_names
                         .get(&canonical)

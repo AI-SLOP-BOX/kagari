@@ -110,8 +110,7 @@ fn test_metadata_catalog_complete() {
         assert!(!e.type_id().is_empty());
         assert!(!e.display_name().is_empty());
         assert!(
-            ["Distort", "Stylize", "Blur & Sharpen", "Color Correction"]
-                .contains(&e.category()),
+            ["Distort", "Stylize", "Blur & Sharpen", "Color Correction"].contains(&e.category()),
             "unknown category {}",
             e.category()
         );
