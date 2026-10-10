@@ -5,16 +5,16 @@
 
 pub mod animator;
 pub mod discovery;
+pub mod global;
 pub mod glyph;
 pub mod rasterizer;
 pub mod types;
 
 pub use animator::{rasterize_text_animated, rasterize_text_animated_stack};
 pub use discovery::{discover_system_fonts, system_font_paths};
+pub use global::{init_font_rasterizer, with_font_rasterizer, GLOBAL_FONT_RASTERIZER};
 pub use glyph::{rasterize_glyph_uncached, GLYPH_CACHE_BUDGET_BYTES, MAX_GLYPH_BITMAP_BYTES};
-pub use rasterizer::{
-    init_font_rasterizer, with_font_rasterizer, FontRasterizer, GLOBAL_FONT_RASTERIZER,
-};
+pub use rasterizer::FontRasterizer;
 pub use types::{
     apply_faux_bitmap_style, parse_font, styled_text_input, FauxTextStyle, GlyphCache,
     RasterizedGlyph,
