@@ -137,7 +137,11 @@ pub mod wiggle_paths;
 // progressively wired into the render pipeline via `core::cpu_effects`; until a
 // given kernel is referenced it is intentionally allowed to be unused rather
 // than deleted, so the library stays available for future effects.
-pub mod advanced_3d_engine;
+// NOTE: `advanced_3d_engine` was retired 2026-10-11: its thin-lens CoC formula
+// survives as `camera_dof::calculate_circle_of_confusion_thin_lens`; the
+// TwoNode/OneNode camera, physical light falloff and HDRI sampler had no
+// callers (the live 3D path is `timeline::{Camera3D, Light3D}` +
+// `software_renderer::model3d_raster`).
 pub mod advanced_motion_blur;
 pub mod advanced_particles_3d;
 pub mod ae_effects_pack;
