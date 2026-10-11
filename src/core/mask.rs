@@ -5,7 +5,7 @@
 //! and an expansion/contraction value.
 //!
 //! Data model follows AE's mask architecture:
-//!   Layer → Vec<Mask> → MaskPath → Vec<MaskVertex>
+//!   `Layer → Vec<Mask> → MaskPath → Vec<MaskVertex>`
 
 mod entity;
 mod path;

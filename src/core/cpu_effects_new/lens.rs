@@ -71,7 +71,7 @@ pub fn apply_chromatic_aberration(
 /// intensity: 0.0=no effect, 1.0=full black edges.
 /// roundness: shape of vignette (0.0=circular, 1.0=elliptical).
 /// feather: edge softness (0.0=hard, 1.0=very soft).
-/// color: vignette color [r,g,b].
+/// color: vignette color \[r,g,b].
 pub fn apply_vignette(
     pixels: &mut [u8],
     width: u32,

@@ -95,7 +95,7 @@ pub enum LayerType {
         /// Paragraph alignment: 0=Left, 1=Center, 2=Right
         #[serde(default)]
         align: usize,
-        /// Stroke color [r,g,b,a]
+        /// Stroke color \[r,g,b,a]
         #[serde(default = "default_stroke_color")]
         stroke_color: [f32; 4],
         /// Stroke width in pixels (0 = no stroke)

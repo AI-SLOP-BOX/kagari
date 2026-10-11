@@ -81,7 +81,7 @@ impl BezierHandle {
     }
 }
 
-/// Evaluate cubic bezier at parameter t ∈ [0,1]
+/// Evaluate cubic bezier at parameter t ∈ \[0,1]
 pub fn cubic_bezier(p0: f32, p1: f32, p2: f32, p3: f32, t: f32) -> f32 {
     let t2 = t * t;
     let t3 = t2 * t;

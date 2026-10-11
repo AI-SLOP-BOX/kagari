@@ -56,7 +56,7 @@ pub fn apply_motion_blur(pixels: &mut [u8], width: u32, height: u32, angle: f32,
 }
 
 /// Apply 4-corner mesh warp displacement.
-/// top_left/top_right/bottom_left/bottom_right: [x,y] displacement in pixels.
+/// top_left/top_right/bottom_left/bottom_right: \[x,y] displacement in pixels.
 pub fn apply_mesh_warp(
     pixels: &mut [u8],
     width: u32,

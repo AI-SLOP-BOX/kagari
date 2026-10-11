@@ -2,7 +2,7 @@
 //! covering the full Kagari VFX workflow from basics to advanced.
 //!
 //! Submodules:
-//! - [`steps`]: Data model, static steps, chapters, and shortcut representations.
+//! - `steps`: Data model, static steps, chapters, and shortcut representations.
 //! - [`card`]: Floating modal window renderer, progress indicators, and actions.
 
 pub mod card;
