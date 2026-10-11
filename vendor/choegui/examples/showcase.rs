@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use choegui::design::{ButtonKind, StatusKind, Theme};
+use choegui::design::{ButtonKind, ScrubField, StatusKind, Theme};
 use choegui::{Button, Spring, Surface};
 use eframe::egui;
 
@@ -13,6 +13,7 @@ struct Showcase {
     exposure: f32,
     contrast: f32,
     lut_enabled: bool,
+    zoom: f32,
 }
 
 impl Default for Showcase {
@@ -26,6 +27,7 @@ impl Default for Showcase {
             exposure: 0.35,
             contrast: 12.0,
             lut_enabled: true,
+            zoom: 100.0,
         }
     }
 }
@@ -83,12 +85,26 @@ impl eframe::App for Showcase {
                 theme.title(ui, "Reusable design primitives");
                 theme.secondary(ui, "The host application owns labels, icons, and state.");
                 theme.separator(ui);
-                let grid = theme.property_grid(ui, &["Exposure", "Contrast"]);
+                let grid = theme.property_grid(ui, &["Exposure", "Contrast", "Zoom"]);
                 grid.row(ui, "Exposure", |ui| {
                     theme.slider(ui, &mut self.exposure, -5.0..=5.0, " EV")
                 });
                 grid.row(ui, "Contrast", |ui| {
                     theme.number(ui, &mut self.contrast, -100.0..=100.0, 0.1, "%")
+                });
+                grid.row(ui, "Zoom", |ui| {
+                    let (resp, changed) = ScrubField::new(theme)
+                        .range(10.0..=400.0)
+                        .speed(0.5)
+                        .precision(0)
+                        .suffix(" %")
+                        .id("scrub-zoom")
+                        .width(120.0)
+                        .show(ui, &mut self.zoom);
+                    if changed {
+                        // Scrub feedback hook — production tools react to live drags here.
+                        let _ = resp;
+                    }
                 });
                 theme.toggle(ui, &mut self.lut_enabled, "Preview LUT");
                 theme.progress_bar(ui, self.exposure.abs() / 5.0, Some("Preview analysis"));

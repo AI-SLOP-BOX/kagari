@@ -655,6 +655,200 @@ impl PropertyGrid {
     }
 }
 
+/// A numeric field you scrub by dragging and type into by double-clicking.
+///
+/// Drag horizontally to change the value, hold `Shift` for fine control, and
+/// double-click to type an exact number. Hover and drag feedback share the
+/// kit's springs, so the feel matches the buttons and rows.
+#[derive(Clone, Copy, Debug)]
+pub struct ScrubField {
+    theme: Theme,
+    min: f32,
+    max: f32,
+    speed: f64,
+    precision: usize,
+    suffix: &'static str,
+    id: Option<Id>,
+    width: f32,
+}
+
+impl ScrubField {
+    pub fn new(theme: Theme) -> Self {
+        Self {
+            theme,
+            min: 0.0,
+            max: 1.0,
+            speed: 0.01,
+            precision: 2,
+            suffix: "",
+            id: None,
+            width: 112.0,
+        }
+    }
+
+    pub fn range(mut self, range: RangeInclusive<f32>) -> Self {
+        self.min = *range.start();
+        self.max = *range.end();
+        self
+    }
+
+    /// Value change per pixel of horizontal drag. `Shift` divides this by ten.
+    pub fn speed(mut self, speed: f64) -> Self {
+        self.speed = speed.max(0.0);
+        self
+    }
+
+    pub fn precision(mut self, precision: usize) -> Self {
+        self.precision = precision.min(9);
+        self
+    }
+
+    pub fn suffix(mut self, suffix: &'static str) -> Self {
+        self.suffix = suffix;
+        self
+    }
+
+    pub fn id(mut self, id: impl std::hash::Hash + std::fmt::Debug) -> Self {
+        self.id = Some(Id::new(id));
+        self
+    }
+
+    pub fn width(mut self, width: f32) -> Self {
+        self.width = width.max(24.0);
+        self
+    }
+
+    fn bounds(&self) -> (f64, f64) {
+        if self.min <= self.max {
+            (self.min as f64, self.max as f64)
+        } else {
+            (self.max as f64, self.min as f64)
+        }
+    }
+
+    fn clamp(&self, value: f64) -> f32 {
+        let (lo, hi) = self.bounds();
+        value.clamp(lo, hi) as f32
+    }
+
+    fn display(&self, value: f32) -> String {
+        format!("{:.*}{}", self.precision, value, self.suffix)
+    }
+
+    fn paint_field(&self, ui: &Ui, rect: Rect, hover: f32, dragging: bool) {
+        let painter = ui.painter();
+        let radius = self.theme.field_radius as f32;
+        painter.rect_filled(rect, radius, self.theme.surface_raised);
+        if hover > 0.001 {
+            painter.rect_filled(rect, radius, self.theme.hover.gamma_multiply(hover * 0.5));
+        }
+        let stroke = if dragging {
+            Stroke::new(2.0_f32, self.theme.accent)
+        } else {
+            Stroke::new(1.0_f32, self.theme.border)
+        };
+        painter.rect_stroke(rect, radius, stroke);
+    }
+
+    fn paint_value(&self, ui: &Ui, rect: Rect, value: f32) {
+        ui.painter().text(
+            rect.center(),
+            egui::Align2::CENTER_CENTER,
+            self.display(value),
+            egui::FontId::proportional(12.0),
+            self.theme.text,
+        );
+    }
+
+    fn close_editor(&self, ui: &Ui, base: Id) {
+        ui.data_mut(|data| {
+            data.insert_temp::<bool>(base.with("editing"), false);
+            data.remove_temp::<bool>(base.with("focused"));
+        });
+    }
+
+    /// Draw the field. Returns the response and whether `value` changed this frame.
+    pub fn show(&self, ui: &mut Ui, value: &mut f32) -> (Response, bool) {
+        let id = self.id.unwrap_or_else(|| Id::new("choegui_scrub_field"));
+        let editing = ui
+            .data(|data| data.get_temp::<bool>(id.with("editing")))
+            .unwrap_or(false);
+
+        let size = vec2(self.width, self.theme.field_height);
+        let sense = if editing {
+            Sense::click()
+        } else {
+            Sense::click_and_drag()
+        };
+        let (rect, response) = ui.allocate_exact_size(size, sense);
+
+        let hover = animate_with_policy(
+            ui.ctx(),
+            response.id.with("hover"),
+            f32::from(response.hovered()),
+            Spring::new(10.0, 1.0),
+            self.theme.motion,
+        );
+        let dragging = response.dragged();
+
+        self.paint_field(ui, rect, hover, dragging);
+        let mut changed = false;
+
+        if editing {
+            let mut buffer = ui
+                .data(|data| data.get_temp::<String>(id.with("buffer")))
+                .unwrap_or_else(|| self.display(*value));
+            let editor = egui::TextEdit::singleline(&mut buffer)
+                .id(id.with("editor"))
+                .font(egui::FontId::proportional(12.0))
+                .desired_width(self.width - 12.0)
+                .horizontal_align(egui::Align::Center);
+            let inner = ui
+                .scope_builder(
+                    egui::UiBuilder::new().max_rect(rect.shrink2(vec2(6.0, 1.0))),
+                    |ui| ui.add(editor),
+                )
+                .inner;
+            ui.data_mut(|data| data.insert_temp(id.with("buffer"), buffer.clone()));
+            // Commit when the editor loses focus (Enter or click-away).
+            if inner.lost_focus() {
+                let trimmed = buffer.trim();
+                let numeric: String = trimmed
+                    .chars()
+                    .take_while(|c| c.is_ascii_digit() || *c == '.' || *c == '-' || *c == '+')
+                    .collect();
+                if let Ok(parsed) = numeric.parse::<f32>() {
+                    *value = self.clamp(parsed as f64);
+                    changed = true;
+                }
+                self.close_editor(ui, id);
+            }
+        } else {
+            self.paint_value(ui, rect, *value);
+            if response.double_clicked() {
+                ui.data_mut(|data| {
+                    data.insert_temp(id.with("editing"), true);
+                    data.insert_temp(id.with("buffer"), self.display(*value));
+                    data.insert_temp(id.with("focused"), true);
+                });
+            }
+            if dragging {
+                let delta = response.drag_delta().x as f64;
+                let fine = ui.input(|i| i.modifiers.shift);
+                let step = self.speed * if fine { 0.1 } else { 1.0 };
+                let next = *value as f64 + delta * step;
+                let clamped = self.clamp(next);
+                if (clamped - *value).abs() > f32::EPSILON {
+                    *value = clamped;
+                    changed = true;
+                }
+            }
+        }
+
+        (response, changed)
+    }
+}
+
 pub fn field<R>(
     ui: &mut Ui,
     theme: &Theme,
@@ -693,4 +887,65 @@ pub fn selectable_row<R>(
 
 pub fn stable_id(id: impl std::hash::Hash + std::fmt::Debug) -> Id {
     Id::new(id)
+}
+
+#[cfg(test)]
+mod scrub_field_tests {
+    use super::*;
+
+    fn field() -> ScrubField {
+        ScrubField::new(Theme::default())
+    }
+
+    #[test]
+    fn test_default_range_clamps_to_unit_interval() {
+        let f = field();
+        assert_eq!(f.clamp(-5.0), 0.0);
+        assert_eq!(f.clamp(5.0), 1.0);
+        assert_eq!(f.clamp(0.5), 0.5);
+    }
+
+    #[test]
+    fn test_reversed_range_is_normalized() {
+        let f = field().range(10.0..=0.0);
+        assert_eq!(f.bounds(), (0.0, 10.0));
+        assert_eq!(f.clamp(-1.0), 0.0);
+        assert_eq!(f.clamp(20.0), 10.0);
+        assert_eq!(f.clamp(3.0), 3.0);
+    }
+
+    #[test]
+    fn test_equal_bounds_collapse_to_single_value() {
+        let f = field().range(4.0..=4.0);
+        assert_eq!(f.bounds(), (4.0, 4.0));
+        assert_eq!(f.clamp(99.0), 4.0);
+    }
+
+    #[test]
+    fn test_negative_range_is_supported() {
+        let f = field().range(-100.0..=100.0);
+        assert_eq!(f.bounds(), (-100.0, 100.0));
+        assert_eq!(f.clamp(-500.0), -100.0);
+        assert_eq!(f.clamp(500.0), 100.0);
+        assert_eq!(f.clamp(-42.5), -42.5);
+    }
+
+    #[test]
+    fn test_display_honours_precision_and_suffix() {
+        let f = field().precision(3).suffix(" px");
+        assert_eq!(f.display(1.5), "1.500 px");
+    }
+
+    #[test]
+    fn test_precision_is_capped() {
+        let f = field().precision(50);
+        assert_eq!(f.display(1.0), "1.000000000");
+    }
+
+    #[test]
+    fn test_speed_and_width_reject_negative() {
+        let f = field().speed(-1.0).width(-40.0);
+        assert_eq!(f.speed, 0.0);
+        assert_eq!(f.width, 24.0);
+    }
 }
