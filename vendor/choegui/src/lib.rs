@@ -24,6 +24,36 @@ pub enum MotionPolicy {
     Reduced,
 }
 
+/// Default repaint cadence while a spring is settling (frames per second).
+const DEFAULT_ANIMATION_FPS: f64 = 120.0;
+
+/// egui temporary-memory key holding the app-wide animation repaint rate.
+fn animation_fps_id() -> Id {
+    Id::new("choegui/animation_fps")
+}
+
+/// Set how often animations request repaints while a spring is settling.
+///
+/// Defaults to 120 Hz. Lower it (e.g. `60.0`) on standard monitors or in
+/// power-saving environments — springs stay smooth because the solver is
+/// time-based, only the repaint cadence drops.
+pub fn set_animation_fps(ctx: &Context, fps: f32) {
+    let fps = fps.clamp(30.0, 240.0) as f64;
+    ctx.data_mut(|data| data.insert_temp(animation_fps_id(), fps));
+}
+
+fn animation_fps(ctx: &Context) -> f64 {
+    ctx.data(|data| {
+        data.get_temp::<f64>(animation_fps_id())
+            .unwrap_or(DEFAULT_ANIMATION_FPS)
+    })
+}
+
+/// Repaint after one animation frame interval at the configured cadence.
+fn request_animation_frame(ctx: &Context) {
+    ctx.request_repaint_after(Duration::from_secs_f64(1.0 / animation_fps(ctx)));
+}
+
 /// Damped spring configuration. Frequency is measured in oscillations per second.
 #[derive(Clone, Copy, Debug)]
 pub struct Spring {
@@ -116,17 +146,17 @@ fn animate_inner(
         state.initialized = true;
         state.time = now;
         if policy == MotionPolicy::Full && (state.value - target).abs() >= 0.001 {
-            ctx.request_repaint_after(Duration::from_secs_f64(1.0 / 120.0));
+            request_animation_frame(ctx);
         }
     } else {
-        let dt = (now - state.time).max(0.0).min(0.1) as f32;
+        let dt = (now - state.time).clamp(0.0, 0.1) as f32;
         integrate_spring(&mut state, dt, spring);
         state.target = target;
         if (state.target - state.value).abs() < 0.001 && state.velocity.abs() < 0.01 {
             state.value = state.target;
             state.velocity = 0.0;
         } else {
-            ctx.request_repaint_after(Duration::from_secs_f64(1.0 / 120.0));
+            request_animation_frame(ctx);
         }
         state.time = now;
     }
@@ -215,6 +245,23 @@ impl Surface {
     pub fn new() -> Self {
         Self::default()
     }
+    /// Build a surface whose colours follow a [`Theme`](crate::design::Theme),
+    /// so cards adopt the active light/dark palette instead of fixed defaults.
+    pub fn from_theme(theme: &crate::design::Theme) -> Self {
+        Self {
+            fill: theme.surface,
+            stroke: Stroke::new(1.0_f32, theme.border),
+            radius: theme.radius,
+            ..Self::default()
+        }
+    }
+    /// Adopt a theme's colours after construction.
+    pub fn theme(mut self, theme: &crate::design::Theme) -> Self {
+        self.fill = theme.surface;
+        self.stroke = Stroke::new(1.0_f32, theme.border);
+        self.radius = theme.radius;
+        self
+    }
     pub fn fill(mut self, fill: Color32) -> Self {
         self.fill = fill;
         self
@@ -235,10 +282,10 @@ impl Surface {
             .shadow(self.shadow)
             .multiply_with_opacity(self.opacity)
             .inner_margin(egui::Margin::same(18.0));
-        frame.show(ui, |ui| {
-            ui.multiply_opacity(self.opacity);
-            add_contents(ui)
-        })
+        // Frame::multiply_with_opacity already scales the whole frame (fill, stroke,
+        // shadow *and* every widget painted inside it), so the contents inherit the
+        // same opacity. Multiplying again on the inner Ui would apply it twice.
+        frame.show(ui, add_contents)
     }
 }
 
@@ -263,6 +310,17 @@ impl Button {
     }
     pub fn id(mut self, id: impl std::hash::Hash + std::fmt::Debug) -> Self {
         self.id = Some(Id::new(id));
+        self
+    }
+    /// Build a button whose fill follows a [`Theme`](crate::design::Theme)'s accent,
+    /// so it adopts the active light/dark palette instead of the fixed default.
+    pub fn from_theme(theme: &crate::design::Theme, text: impl Into<egui::WidgetText>) -> Self {
+        Self::new(text).theme(theme)
+    }
+    /// Adopt a theme's accent fill and text colour after construction.
+    pub fn theme(mut self, theme: &crate::design::Theme) -> Self {
+        self.fill = theme.accent;
+        self.motion = theme.motion;
         self
     }
     pub fn fill(mut self, fill: Color32) -> Self {

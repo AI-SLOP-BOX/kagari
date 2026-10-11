@@ -98,7 +98,17 @@ impl eframe::App for Showcase {
                         self.toast_until = Some(Instant::now() + Duration::from_secs(2));
                     }
                     theme.status(ui, StatusKind::Success, "Viewer ready");
-                    theme.icon_button(ui, "reset-look", "↺", "Reset look", false, true, 30.0);
+                    theme.icon_button(
+                        ui,
+                        "reset-look",
+                        choegui::design::IconOptions {
+                            glyph: "↺",
+                            tooltip: "Reset look",
+                            selected: false,
+                            enabled: true,
+                            size: 30.0,
+                        },
+                    );
                 });
                 theme.section(ui, "curve-section", "Curves", false, |ui| {
                     theme.caption(ui, "The application can place custom Painter content here.");

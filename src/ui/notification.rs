@@ -104,7 +104,6 @@ impl ToastManager {
                             .inner_margin(egui::Margin::symmetric(12.0, 8.0))
                             .multiply_with_opacity(opacity)
                             .show(ui, |ui| {
-                                ui.multiply_opacity(opacity);
                                 ui.set_max_width(320.0);
                                 ui.horizontal(|ui| {
                                     let icon = match toast.level {

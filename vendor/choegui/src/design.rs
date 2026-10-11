@@ -27,6 +27,34 @@ pub struct Theme {
     pub motion: MotionPolicy,
 }
 
+/// Bundled options for [`Theme::icon_button`] and the free [`icon_button`],
+/// keeping their argument lists small and self-documenting.
+#[derive(Clone, Copy, Debug)]
+pub struct IconOptions<'a> {
+    /// Glyph or character drawn as the icon.
+    pub glyph: &'a str,
+    /// Hover tooltip.
+    pub tooltip: &'a str,
+    /// Whether the icon renders in its selected (accented) state.
+    pub selected: bool,
+    /// Whether the button responds to input.
+    pub enabled: bool,
+    /// Square edge length in points.
+    pub size: f32,
+}
+
+impl Default for IconOptions<'_> {
+    fn default() -> Self {
+        Self {
+            glyph: "",
+            tooltip: "",
+            selected: false,
+            enabled: true,
+            size: 24.0,
+        }
+    }
+}
+
 impl Theme {
     pub const fn dark() -> Self {
         Self {
@@ -240,19 +268,25 @@ impl Theme {
         &self,
         ui: &mut Ui,
         id: impl std::hash::Hash + std::fmt::Debug,
-        glyph: &str,
-        tooltip: &str,
-        selected: bool,
-        enabled: bool,
-        size: f32,
+        opts: IconOptions<'_>,
     ) -> Response {
-        self.icon_button_painted(
-            ui,
-            id,
+        let IconOptions {
+            glyph,
             tooltip,
             selected,
             enabled,
             size,
+        } = opts;
+        self.icon_button_painted(
+            ui,
+            id,
+            IconOptions {
+                glyph: "",
+                tooltip,
+                selected,
+                enabled,
+                size,
+            },
             |painter, rect, color| {
                 painter.text(
                     rect.center(),
@@ -269,12 +303,16 @@ impl Theme {
         &self,
         ui: &mut Ui,
         id: impl std::hash::Hash + std::fmt::Debug,
-        tooltip: &str,
-        selected: bool,
-        enabled: bool,
-        size: f32,
+        opts: IconOptions<'_>,
         paint_icon: impl FnOnce(&Painter, Rect, Color32),
     ) -> Response {
+        let IconOptions {
+            tooltip,
+            selected,
+            enabled,
+            size,
+            ..
+        } = opts;
         let response = self
             .field(ui, |ui| {
                 ui.add_enabled(
@@ -463,14 +501,13 @@ impl Theme {
         selected: bool,
         contents: impl FnOnce(&mut Ui) -> R,
     ) -> InnerResponse<R> {
+        // Allocate the row's space and click sense directly instead of dropping a
+        // transparent Button widget. This keeps the selection/hover background from
+        // being painted on top of sibling drawing (order is fully under our control),
+        // and lets interactive child widgets added afterwards win input on their own
+        // area while clicks on empty row space still select the row.
         let size = vec2(ui.available_width(), self.row_height);
-        let response = ui.add(
-            egui::Button::new("")
-                .fill(Color32::TRANSPARENT)
-                .stroke(Stroke::NONE)
-                .min_size(size),
-        );
-        let rect = response.rect;
+        let (rect, response) = ui.allocate_exact_size(size, Sense::click());
         let hover = animate_with_policy(
             ui.ctx(),
             response.id.with(id),
@@ -478,6 +515,8 @@ impl Theme {
             Spring::new(10.0, 1.0),
             self.motion,
         );
+        // Paint the background first so any contents drawn by the child Ui below are
+        // always composited on top of it.
         if selected {
             ui.painter()
                 .rect_filled(rect, self.field_radius as f32, self.selection);
@@ -637,13 +676,9 @@ pub fn icon_button(
     ui: &mut Ui,
     theme: &Theme,
     id: impl std::hash::Hash + std::fmt::Debug,
-    glyph: &str,
-    tooltip: &str,
-    selected: bool,
-    enabled: bool,
-    size: f32,
+    opts: IconOptions<'_>,
 ) -> Response {
-    theme.icon_button(ui, id, glyph, tooltip, selected, enabled, size)
+    theme.icon_button(ui, id, opts)
 }
 
 pub fn selectable_row<R>(
