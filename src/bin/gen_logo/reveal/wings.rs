@@ -20,19 +20,19 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
             sharp(&pts),
             [1.0, 0.8, 0.45, 1.0],
             ShapeFillType::Solid,
-            c2([x0, 444.0]),
+            const_vec2([x0, 444.0]),
             Animatable::new_animated(vec![
-                k2(0, [0.0, base], lin),
-                k2(52 + d, [0.0, base], lin),
-                k2(59 + d, [base * 1.1, base], ez4(E_FASTIN)),
-                k2(150, [base * 1.1, base], lin),
+                key_vec2(0, [0.0, base], lin),
+                key_vec2(52 + d, [0.0, base], lin),
+                key_vec2(59 + d, [base * 1.1, base], ez4(E_FASTIN)),
+                key_vec2(150, [base * 1.1, base], lin),
             ]),
             Animatable::new_animated(vec![
-                k1(0, 0.0, lin),
-                k1(52 + d, 0.0, lin),
-                k1(55 + d, 90.0, ez4(E_SNAP)),
-                k1(62 + d, 0.0, ez4(E_SMOOTH)),
-                k1(150, 0.0, lin),
+                key_scalar(0, 0.0, lin),
+                key_scalar(52 + d, 0.0, lin),
+                key_scalar(55 + d, 90.0, ez4(E_SNAP)),
+                key_scalar(62 + d, 0.0, ez4(E_SMOOTH)),
+                key_scalar(150, 0.0, lin),
             ]),
             150,
         );
@@ -44,37 +44,37 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
     let deploy = |from_x: f32, t0: u32, rot0: f32| {
         (
             Animatable::new_animated(vec![
-                k2(0, [ctr[0] + from_x, ctr[1]], lin),
-                k2(t0, [ctr[0] + from_x, ctr[1]], lin),
-                k2(t0 + 12, [ctr[0] + from_x * 0.12, ctr[1]], ez4(E_SNAP)),
-                k2(t0 + 16, ctr, ez4(E_SMOOTH)),
-                k2(150, ctr, lin),
+                key_vec2(0, [ctr[0] + from_x, ctr[1]], lin),
+                key_vec2(t0, [ctr[0] + from_x, ctr[1]], lin),
+                key_vec2(t0 + 12, [ctr[0] + from_x * 0.12, ctr[1]], ez4(E_SNAP)),
+                key_vec2(t0 + 16, ctr, ez4(E_SMOOTH)),
+                key_vec2(150, ctr, lin),
             ]),
             Animatable::new_animated(vec![
-                k1(0, rot0, lin),
-                k1(t0, rot0, lin),
-                k1(t0 + 12, -rot0 * 0.22, ez4(E_SNAP)),
-                k1(t0 + 18, 0.0, ez4(E_SMOOTH)),
-                k1(150, 0.0, lin),
+                key_scalar(0, rot0, lin),
+                key_scalar(t0, rot0, lin),
+                key_scalar(t0 + 12, -rot0 * 0.22, ez4(E_SNAP)),
+                key_scalar(t0 + 18, 0.0, ez4(E_SMOOTH)),
+                key_scalar(150, 0.0, lin),
             ]),
         )
     };
     let wing_op = |t0: u32| {
         Animatable::new_animated(vec![
-            k1(0, 0.0, lin),
-            k1(t0 + 8, 0.0, lin),
-            k1(t0 + 12, 100.0, ez4(E_SNAP)),
-            k1(135, 100.0, lin),
-            k1(150, 0.0, lin),
+            key_scalar(0, 0.0, lin),
+            key_scalar(t0 + 8, 0.0, lin),
+            key_scalar(t0 + 12, 100.0, ez4(E_SNAP)),
+            key_scalar(135, 100.0, lin),
+            key_scalar(150, 0.0, lin),
         ])
     };
     let unfold = |t0: u32| {
         Animatable::new_animated(vec![
-            k2(0, [base * 0.35, base], lin),
-            k2(t0 + 8, [base * 0.35, base], lin),
-            k2(t0 + 13, [base * 1.12, base], ez4(E_SNAP)),
-            k2(t0 + 18, [base, base], ez4(E_SMOOTH)),
-            k2(150, [base, base], lin),
+            key_vec2(0, [base * 0.35, base], lin),
+            key_vec2(t0 + 8, [base * 0.35, base], lin),
+            key_vec2(t0 + 13, [base * 1.12, base], ez4(E_SNAP)),
+            key_vec2(t0 + 18, [base, base], ez4(E_SMOOTH)),
+            key_vec2(150, [base, base], lin),
         ])
     };
     let wd = wing_dark_l_pts();
@@ -87,7 +87,7 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
         [0.08, 0.10, 0.16, 1.0],
         ShapeFillType::Solid,
         wp,
-        c2([base, base]),
+        const_vec2([base, base]),
         wing_op(56),
         150,
     );
@@ -102,7 +102,7 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
         [0.08, 0.10, 0.16, 1.0],
         ShapeFillType::Solid,
         wp,
-        c2([base, base]),
+        const_vec2([base, base]),
         wing_op(58),
         150,
     );
@@ -145,14 +145,14 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
         40.0,
         200.0,
         [1.0, 0.8, 0.5, 1.0],
-        c2([792.0, 445.0]),
-        c2([100.0, 100.0]),
+        const_vec2([792.0, 445.0]),
+        const_vec2([100.0, 100.0]),
         Animatable::new_animated(vec![
-            k1(0, 0.0, lin),
-            k1(68, 0.0, lin),
-            k1(72, 100.0, ez4(E_SNAP)),
-            k1(80, 0.0, ez4(E_SMOOTH)),
-            k1(150, 0.0, lin),
+            key_scalar(0, 0.0, lin),
+            key_scalar(68, 0.0, lin),
+            key_scalar(72, 100.0, ez4(E_SNAP)),
+            key_scalar(80, 0.0, ez4(E_SMOOTH)),
+            key_scalar(150, 0.0, lin),
         ]),
         150,
     );
@@ -162,32 +162,32 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
         40.0,
         200.0,
         [1.0, 0.8, 0.5, 1.0],
-        c2([1128.0, 445.0]),
-        c2([100.0, 100.0]),
+        const_vec2([1128.0, 445.0]),
+        const_vec2([100.0, 100.0]),
         Animatable::new_animated(vec![
-            k1(0, 0.0, lin),
-            k1(70, 0.0, lin),
-            k1(74, 100.0, ez4(E_SNAP)),
-            k1(82, 0.0, ez4(E_SMOOTH)),
-            k1(150, 0.0, lin),
+            key_scalar(0, 0.0, lin),
+            key_scalar(70, 0.0, lin),
+            key_scalar(74, 100.0, ez4(E_SNAP)),
+            key_scalar(82, 0.0, ez4(E_SMOOTH)),
+            key_scalar(150, 0.0, lin),
         ]),
         150,
     );
 
     // shield rises heavy: slow-in, small overshoot bounce, settles
     let rise = Animatable::new_animated(vec![
-        k2(0, [ctr[0], ctr[1] + 330.0], lin),
-        k2(60, [ctr[0], ctr[1] + 330.0], lin),
-        k2(78, [ctr[0], ctr[1] - 7.0], ez4(E_HEAVY)),
-        k2(84, ctr, ez4(E_SMOOTH)),
-        k2(150, ctr, lin),
+        key_vec2(0, [ctr[0], ctr[1] + 330.0], lin),
+        key_vec2(60, [ctr[0], ctr[1] + 330.0], lin),
+        key_vec2(78, [ctr[0], ctr[1] - 7.0], ez4(E_HEAVY)),
+        key_vec2(84, ctr, ez4(E_SMOOTH)),
+        key_vec2(150, ctr, lin),
     ]);
     let shield_op = Animatable::new_animated(vec![
-        k1(0, 0.0, lin),
-        k1(60, 0.0, lin),
-        k1(70, 100.0, ez4(E_SMOOTH)),
-        k1(135, 100.0, lin),
-        k1(150, 0.0, lin),
+        key_scalar(0, 0.0, lin),
+        key_scalar(60, 0.0, lin),
+        key_scalar(70, 100.0, ez4(E_SMOOTH)),
+        key_scalar(135, 100.0, lin),
+        key_scalar(150, 0.0, lin),
     ]);
     let sl = shield_l_pts();
     apart(
@@ -198,7 +198,7 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
         [0.757, 0.722, 0.655, 1.0],
         ShapeFillType::Solid,
         rise.clone(),
-        c2([base, base]),
+        const_vec2([base, base]),
         shield_op.clone(),
         150,
     );
@@ -211,7 +211,7 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
         [0.122, 0.141, 0.169, 1.0],
         ShapeFillType::Solid,
         rise,
-        c2([base, base]),
+        const_vec2([base, base]),
         shield_op,
         150,
     );

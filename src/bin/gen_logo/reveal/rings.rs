@@ -4,18 +4,18 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
     // ring arcs IGNITE behind the traveling comets (fronts track comet angle).
     let front = |v0: f32, v1: f32, f0: u32, f1: u32| {
         Animatable::new_animated(vec![
-            k1(0, v0, lin),
-            k1(f0, v0, lin),
-            k1(f1, v1, ez4(E_FASTIN)),
-            k1(150, v1, lin),
+            key_scalar(0, v0, lin),
+            key_scalar(f0, v0, lin),
+            key_scalar(f1, v1, ez4(E_FASTIN)),
+            key_scalar(150, v1, lin),
         ])
     };
     let ring_op = Animatable::new_animated(vec![
-        k1(0, 0.0, lin),
-        k1(9, 0.0, lin),
-        k1(14, 100.0, ez4(E_SMOOTH)),
-        k1(135, 100.0, lin),
-        k1(150, 0.0, lin),
+        key_scalar(0, 0.0, lin),
+        key_scalar(9, 0.0, lin),
+        key_scalar(14, 100.0, ez4(E_SMOOTH)),
+        key_scalar(135, 100.0, lin),
+        key_scalar(150, 0.0, lin),
     ]);
     let ring_draws: &[(RingDraw, bool)] = &[
         (
@@ -93,9 +93,9 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
     ];
     for ((id, s, e, sc, d0, d1), grow_end) in ring_draws.iter().copied() {
         let (st, en) = if grow_end {
-            (c1(s), front(s, e, d0, d1))
+            (const_scalar(s), front(s, e, d0, d1))
         } else {
-            (front(e, s, d0, d1), c1(e))
+            (front(e, s, d0, d1), const_scalar(e))
         };
         ring_layer(
             comp,
@@ -106,7 +106,7 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
             st,
             en,
             ctr,
-            c2([base, base]),
+            const_vec2([base, base]),
             ring_op.clone(),
             false,
             150,
@@ -116,12 +116,12 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
     // ring charge: a thicker, hotter arc set fades in over the base ring as
     // the climax charge (thin -> luminous band), then settles to a glow.
     let charge_op = Animatable::new_animated(vec![
-        k1(0, 0.0, lin),
-        k1(68, 0.0, lin),
-        k1(86, 80.0, ez4(E_SMOOTH)),
-        k1(100, 55.0, ez4(E_DRIFT)),
-        k1(135, 55.0, lin),
-        k1(150, 0.0, lin),
+        key_scalar(0, 0.0, lin),
+        key_scalar(68, 0.0, lin),
+        key_scalar(86, 80.0, ez4(E_SMOOTH)),
+        key_scalar(100, 55.0, ez4(E_DRIFT)),
+        key_scalar(135, 55.0, lin),
+        key_scalar(150, 0.0, lin),
     ]);
     let charge_cols: &[[f32; 4]] = &[
         [1.0, 0.90, 0.55, 1.0],
@@ -155,12 +155,12 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
             150,
         ));
         let l = comp.layers.last_mut().unwrap();
-        l.transform.position = c2(ctr);
-        l.transform.scale = c2([base, base]);
+        l.transform.position = const_vec2(ctr);
+        l.transform.scale = const_vec2([base, base]);
         l.transform.opacity = charge_op.clone();
         l.trim_paths = Some(TrimPaths {
-            start: c1(s),
-            end: c1(e),
+            start: const_scalar(s),
+            end: const_scalar(e),
             offset: Animatable::new_constant(0.0),
         });
     }
@@ -172,12 +172,12 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
         front(17.0, 65.0, 10, 35),
         front(27.0, 75.0, 10, 35),
         Animatable::new_animated(vec![
-            k1(0, 0.0, lin),
-            k1(10, 0.0, lin),
-            k1(13, 100.0, ez4(E_SMOOTH)),
-            k1(35, 100.0, lin),
-            k1(39, 0.0, ez4(E_FASTIN)),
-            k1(150, 0.0, lin),
+            key_scalar(0, 0.0, lin),
+            key_scalar(10, 0.0, lin),
+            key_scalar(13, 100.0, ez4(E_SMOOTH)),
+            key_scalar(35, 100.0, lin),
+            key_scalar(39, 0.0, ez4(E_FASTIN)),
+            key_scalar(150, 0.0, lin),
         ]),
         150,
     );
@@ -187,12 +187,12 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
         front(13.0, 0.0, 12, 24),
         front(25.0, 12.0, 12, 24),
         Animatable::new_animated(vec![
-            k1(0, 0.0, lin),
-            k1(12, 0.0, lin),
-            k1(15, 100.0, ez4(E_SMOOTH)),
-            k1(22, 100.0, lin),
-            k1(26, 0.0, ez4(E_FASTIN)),
-            k1(150, 0.0, lin),
+            key_scalar(0, 0.0, lin),
+            key_scalar(12, 0.0, lin),
+            key_scalar(15, 100.0, ez4(E_SMOOTH)),
+            key_scalar(22, 100.0, lin),
+            key_scalar(26, 0.0, ez4(E_FASTIN)),
+            key_scalar(150, 0.0, lin),
         ]),
         150,
     );
@@ -202,12 +202,12 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
         front(88.0, 77.0, 24, 37),
         front(100.0, 89.0, 24, 37),
         Animatable::new_animated(vec![
-            k1(0, 0.0, lin),
-            k1(23, 0.0, lin),
-            k1(26, 100.0, ez4(E_SMOOTH)),
-            k1(37, 100.0, lin),
-            k1(41, 0.0, ez4(E_FASTIN)),
-            k1(150, 0.0, lin),
+            key_scalar(0, 0.0, lin),
+            key_scalar(23, 0.0, lin),
+            key_scalar(26, 100.0, ez4(E_SMOOTH)),
+            key_scalar(37, 100.0, lin),
+            key_scalar(41, 0.0, ez4(E_FASTIN)),
+            key_scalar(150, 0.0, lin),
         ]),
         150,
     );
@@ -217,52 +217,52 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
         front(20.0, 75.0, 70, 86),
         front(32.0, 87.0, 70, 86),
         Animatable::new_animated(vec![
-            k1(0, 0.0, lin),
-            k1(70, 0.0, lin),
-            k1(73, 85.0, ez4(E_SMOOTH)),
-            k1(84, 85.0, lin),
-            k1(88, 0.0, ez4(E_DRIFT)),
-            k1(150, 0.0, lin),
+            key_scalar(0, 0.0, lin),
+            key_scalar(70, 0.0, lin),
+            key_scalar(73, 85.0, ez4(E_SMOOTH)),
+            key_scalar(84, 85.0, lin),
+            key_scalar(88, 0.0, ez4(E_DRIFT)),
+            key_scalar(150, 0.0, lin),
         ]),
         150,
     );
 
     // comet heads: white-hot cores riding the fronts, then diving to center.
     let comet_keys_l = vec![
-        k2(0, comet_pos(25.0), lin),
-        k2(10, comet_pos(25.0), lin),
-        k2(16, comet_pos(32.0), ez4(E_FASTIN)),
-        k2(22, comet_pos(41.0), ez4(E_FASTIN)),
-        k2(27, comet_pos(52.0), ez4(E_FASTIN)),
-        k2(31, comet_pos(62.0), ez4(E_FASTIN)),
-        k2(34, comet_pos(70.0), ez4(E_FASTIN)),
-        k2(36, comet_pos(75.0), ez4(E_FASTIN)),
-        k2(40, [960.0, 220.0], ez4(E_FASTIN)),
-        k2(44, ctr, ez4(E_SNAP)),
-        k2(150, ctr, lin),
+        key_vec2(0, comet_pos(25.0), lin),
+        key_vec2(10, comet_pos(25.0), lin),
+        key_vec2(16, comet_pos(32.0), ez4(E_FASTIN)),
+        key_vec2(22, comet_pos(41.0), ez4(E_FASTIN)),
+        key_vec2(27, comet_pos(52.0), ez4(E_FASTIN)),
+        key_vec2(31, comet_pos(62.0), ez4(E_FASTIN)),
+        key_vec2(34, comet_pos(70.0), ez4(E_FASTIN)),
+        key_vec2(36, comet_pos(75.0), ez4(E_FASTIN)),
+        key_vec2(40, [960.0, 220.0], ez4(E_FASTIN)),
+        key_vec2(44, ctr, ez4(E_SNAP)),
+        key_vec2(150, ctr, lin),
     ];
     let comet_keys_r = vec![
-        k2(0, comet_pos(25.0), lin),
-        k2(12, comet_pos(25.0), lin),
-        k2(16, comet_pos(20.0), ez4(E_FASTIN)),
-        k2(20, comet_pos(10.0), ez4(E_FASTIN)),
-        k2(23, comet_pos(2.0), ez4(E_FASTIN)),
-        k2(26, comet_pos(94.0), ez4(E_FASTIN)),
-        k2(30, comet_pos(86.0), ez4(E_FASTIN)),
-        k2(34, comet_pos(80.0), ez4(E_FASTIN)),
-        k2(38, comet_pos(77.0), ez4(E_FASTIN)),
-        k2(42, [962.0, 222.0], ez4(E_FASTIN)),
-        k2(46, ctr, ez4(E_SNAP)),
-        k2(150, ctr, lin),
+        key_vec2(0, comet_pos(25.0), lin),
+        key_vec2(12, comet_pos(25.0), lin),
+        key_vec2(16, comet_pos(20.0), ez4(E_FASTIN)),
+        key_vec2(20, comet_pos(10.0), ez4(E_FASTIN)),
+        key_vec2(23, comet_pos(2.0), ez4(E_FASTIN)),
+        key_vec2(26, comet_pos(94.0), ez4(E_FASTIN)),
+        key_vec2(30, comet_pos(86.0), ez4(E_FASTIN)),
+        key_vec2(34, comet_pos(80.0), ez4(E_FASTIN)),
+        key_vec2(38, comet_pos(77.0), ez4(E_FASTIN)),
+        key_vec2(42, [962.0, 222.0], ez4(E_FASTIN)),
+        key_vec2(46, ctr, ez4(E_SNAP)),
+        key_vec2(150, ctr, lin),
     ];
     for (side, keys, d) in [("l", comet_keys_l, 0), ("r", comet_keys_r, 2)] {
         let head_op = Animatable::new_animated(vec![
-            k1(0, 0.0, lin),
-            k1(9 + d, 0.0, lin),
-            k1(12 + d, 100.0, ez4(E_SMOOTH)),
-            k1(42 + d, 100.0, lin),
-            k1(48 + d, 0.0, ez4(E_FASTIN)),
-            k1(150, 0.0, lin),
+            key_scalar(0, 0.0, lin),
+            key_scalar(9 + d, 0.0, lin),
+            key_scalar(12 + d, 100.0, ez4(E_SMOOTH)),
+            key_scalar(42 + d, 100.0, lin),
+            key_scalar(48 + d, 0.0, ez4(E_FASTIN)),
+            key_scalar(150, 0.0, lin),
         ]);
         comp.add_layer(Layer::new(
             format!("comet_{side}"),
@@ -285,12 +285,12 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
         l.transform.position = Animatable::new_animated(keys.clone());
         l.transform.opacity = head_op;
         l.transform.scale = Animatable::new_animated(vec![
-            k2(0, [100.0, 100.0], lin),
-            k2(35 + d, [100.0, 100.0], lin),
-            k2(40 + d, [70.0, 190.0], ez4(E_FASTIN)),
-            k2(45 + d, [110.0, 90.0], ez4(E_SNAP)),
-            k2(50 + d, [100.0, 100.0], ez4(E_SMOOTH)),
-            k2(150, [100.0, 100.0], lin),
+            key_vec2(0, [100.0, 100.0], lin),
+            key_vec2(35 + d, [100.0, 100.0], lin),
+            key_vec2(40 + d, [70.0, 190.0], ez4(E_FASTIN)),
+            key_vec2(45 + d, [110.0, 90.0], ez4(E_SNAP)),
+            key_vec2(50 + d, [100.0, 100.0], ez4(E_SMOOTH)),
+            key_vec2(150, [100.0, 100.0], lin),
         ]);
         halo(
             comp,
@@ -299,14 +299,14 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
             230.0,
             [1.0, 0.72, 0.3, 0.85],
             Animatable::new_animated(keys),
-            c2([100.0, 100.0]),
+            const_vec2([100.0, 100.0]),
             Animatable::new_animated(vec![
-                k1(0, 0.0, lin),
-                k1(9 + d, 0.0, lin),
-                k1(13 + d, 85.0, ez4(E_SMOOTH)),
-                k1(42 + d, 85.0, lin),
-                k1(49 + d, 0.0, ez4(E_FASTIN)),
-                k1(150, 0.0, lin),
+                key_scalar(0, 0.0, lin),
+                key_scalar(9 + d, 0.0, lin),
+                key_scalar(13 + d, 85.0, ez4(E_SMOOTH)),
+                key_scalar(42 + d, 85.0, lin),
+                key_scalar(49 + d, 0.0, ez4(E_FASTIN)),
+                key_scalar(150, 0.0, lin),
             ]),
             150,
         );
@@ -342,12 +342,12 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
         },
         ctr,
         Animatable::new_animated(vec![
-            k1(0, 0.0, lin),
-            k1(33, 0.0, lin),
-            k1(38, 90.0, ez4(E_SMOOTH)),
-            k1(44, 70.0, lin),
-            k1(50, 0.0, ez4(E_FASTIN)),
-            k1(150, 0.0, lin),
+            key_scalar(0, 0.0, lin),
+            key_scalar(33, 0.0, lin),
+            key_scalar(38, 90.0, ez4(E_SMOOTH)),
+            key_scalar(44, 70.0, lin),
+            key_scalar(50, 0.0, ez4(E_FASTIN)),
+            key_scalar(150, 0.0, lin),
         ]),
         150,
     );

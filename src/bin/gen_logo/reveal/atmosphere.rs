@@ -26,22 +26,22 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], _base: f32, lin: Interp
     ));
     {
         let l = comp.layers.last_mut().unwrap();
-        l.transform.position = c2(ctr);
+        l.transform.position = const_vec2(ctr);
         l.transform.opacity = Animatable::new_animated(vec![
-            k1(0, 0.0, lin),
-            k1(8, 0.0, lin),
-            k1(30, 85.0, ez4(E_DRIFT)),
-            k1(44, 85.0, lin),
-            k1(50, 100.0, ez4(E_SNAP)),
-            k1(135, 100.0, lin),
-            k1(150, 0.0, lin),
+            key_scalar(0, 0.0, lin),
+            key_scalar(8, 0.0, lin),
+            key_scalar(30, 85.0, ez4(E_DRIFT)),
+            key_scalar(44, 85.0, lin),
+            key_scalar(50, 100.0, ez4(E_SNAP)),
+            key_scalar(135, 100.0, lin),
+            key_scalar(150, 0.0, lin),
         ]);
         l.transform.scale = Animatable::new_animated(vec![
-            k2(0, [100.0, 100.0], lin),
-            k2(44, [100.0, 100.0], lin),
-            k2(56, [109.0, 109.0], ez4(E_SMOOTH)),
-            k2(80, [100.0, 100.0], ez4(E_DRIFT)),
-            k2(150, [100.0, 100.0], lin),
+            key_vec2(0, [100.0, 100.0], lin),
+            key_vec2(44, [100.0, 100.0], lin),
+            key_vec2(56, [109.0, 109.0], ez4(E_SMOOTH)),
+            key_vec2(80, [100.0, 100.0], ez4(E_DRIFT)),
+            key_vec2(150, [100.0, 100.0], lin),
         ]);
     }
 
@@ -53,14 +53,14 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], _base: f32, lin: Interp
         120.0,
         300.0,
         [0.65, 0.28, 0.08, 0.6],
-        c2([960.0, 430.0]),
-        c2([100.0, 100.0]),
+        const_vec2([960.0, 430.0]),
+        const_vec2([100.0, 100.0]),
         Animatable::new_animated(vec![
-            k1(0, 0.0, lin),
-            k1(46, 0.0, lin),
-            k1(60, 85.0, ez4(E_SMOOTH)),
-            k1(135, 85.0, lin),
-            k1(150, 0.0, lin),
+            key_scalar(0, 0.0, lin),
+            key_scalar(46, 0.0, lin),
+            key_scalar(60, 85.0, ez4(E_SMOOTH)),
+            key_scalar(135, 85.0, lin),
+            key_scalar(150, 0.0, lin),
         ]),
         150,
     );
@@ -72,14 +72,14 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], _base: f32, lin: Interp
         120.0,
         340.0,
         [0.7, 0.3, 0.08, 0.55],
-        c2([960.0, 415.0]),
-        c2([100.0, 100.0]),
+        const_vec2([960.0, 415.0]),
+        const_vec2([100.0, 100.0]),
         Animatable::new_animated(vec![
-            k1(0, 0.0, lin),
-            k1(48, 0.0, lin),
-            k1(62, 55.0, ez4(E_SMOOTH)),
-            k1(135, 55.0, lin),
-            k1(150, 0.0, lin),
+            key_scalar(0, 0.0, lin),
+            key_scalar(48, 0.0, lin),
+            key_scalar(62, 55.0, ez4(E_SMOOTH)),
+            key_scalar(135, 55.0, lin),
+            key_scalar(150, 0.0, lin),
         ]),
         150,
     );
@@ -91,14 +91,14 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], _base: f32, lin: Interp
         30.0,
         150.0,
         [1.0, 0.62, 0.2, 0.9],
-        c2([960.0, 733.0]),
-        c2([100.0, 100.0]),
+        const_vec2([960.0, 733.0]),
+        const_vec2([100.0, 100.0]),
         Animatable::new_animated(vec![
-            k1(0, 0.0, lin),
-            k1(5, 0.0, lin),
-            k1(10, 70.0, ez4(E_SMOOTH)),
-            k1(16, 0.0, ez4(E_FASTIN)),
-            k1(150, 0.0, lin),
+            key_scalar(0, 0.0, lin),
+            key_scalar(5, 0.0, lin),
+            key_scalar(10, 70.0, ez4(E_SMOOTH)),
+            key_scalar(16, 0.0, ez4(E_FASTIN)),
+            key_scalar(150, 0.0, lin),
         ]),
         150,
     );
@@ -123,22 +123,22 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], _base: f32, lin: Interp
     ));
     {
         let l = comp.layers.last_mut().unwrap();
-        l.transform.position = c2(ctr);
+        l.transform.position = const_vec2(ctr);
         l.transform.scale = Animatable::new_animated(vec![
-            k2(0, [0.0, 0.0], lin),
-            k2(43, [0.0, 0.0], lin),
-            k2(46, [30.0, 30.0], ez4(E_SNAP)),
-            k2(54, [36.0, 36.0], ez4(E_SMOOTH)),
-            k2(66, [0.0, 0.0], ez4(E_DRIFT)),
-            k2(150, [0.0, 0.0], lin),
+            key_vec2(0, [0.0, 0.0], lin),
+            key_vec2(43, [0.0, 0.0], lin),
+            key_vec2(46, [30.0, 30.0], ez4(E_SNAP)),
+            key_vec2(54, [36.0, 36.0], ez4(E_SMOOTH)),
+            key_vec2(66, [0.0, 0.0], ez4(E_DRIFT)),
+            key_vec2(150, [0.0, 0.0], lin),
         ]);
         l.transform.opacity = Animatable::new_animated(vec![
-            k1(0, 0.0, lin),
-            k1(43, 0.0, lin),
-            k1(45, 95.0, ez4(E_SNAP)),
-            k1(52, 45.0, ez4(E_SMOOTH)),
-            k1(66, 0.0, ez4(E_DRIFT)),
-            k1(150, 0.0, lin),
+            key_scalar(0, 0.0, lin),
+            key_scalar(43, 0.0, lin),
+            key_scalar(45, 95.0, ez4(E_SNAP)),
+            key_scalar(52, 45.0, ez4(E_SMOOTH)),
+            key_scalar(66, 0.0, ez4(E_DRIFT)),
+            key_scalar(150, 0.0, lin),
         ]);
     }
 
@@ -162,21 +162,21 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], _base: f32, lin: Interp
     ));
     {
         let l = comp.layers.last_mut().unwrap();
-        l.transform.position = c2(ctr);
+        l.transform.position = const_vec2(ctr);
         l.transform.scale = Animatable::new_animated(vec![
-            k2(0, [0.0, 0.0], lin),
-            k2(44, [0.0, 0.0], lin),
-            k2(62, [9.0, 9.0], ez4(E_SMOOTH)),
-            k2(74, [10.0, 10.0], ez4(E_DRIFT)),
-            k2(150, [10.0, 10.0], lin),
+            key_vec2(0, [0.0, 0.0], lin),
+            key_vec2(44, [0.0, 0.0], lin),
+            key_vec2(62, [9.0, 9.0], ez4(E_SMOOTH)),
+            key_vec2(74, [10.0, 10.0], ez4(E_DRIFT)),
+            key_vec2(150, [10.0, 10.0], lin),
         ]);
         l.transform.opacity = Animatable::new_animated(vec![
-            k1(0, 0.0, lin),
-            k1(44, 0.0, lin),
-            k1(46, 100.0, ez4(E_SNAP)),
-            k1(66, 45.0, ez4(E_SMOOTH)),
-            k1(74, 0.0, lin),
-            k1(150, 0.0, lin),
+            key_scalar(0, 0.0, lin),
+            key_scalar(44, 0.0, lin),
+            key_scalar(46, 100.0, ez4(E_SNAP)),
+            key_scalar(66, 45.0, ez4(E_SMOOTH)),
+            key_scalar(74, 0.0, lin),
+            key_scalar(150, 0.0, lin),
         ]);
     }
 
@@ -200,20 +200,20 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], _base: f32, lin: Interp
     ));
     {
         let l = comp.layers.last_mut().unwrap();
-        l.transform.position = c2(ctr);
+        l.transform.position = const_vec2(ctr);
         l.transform.scale = Animatable::new_animated(vec![
-            k2(0, [0.18, 0.18], lin),
-            k2(69, [0.18, 0.18], lin),
-            k2(92, [8.5, 8.5], ez4(E_SMOOTH)),
-            k2(150, [8.5, 8.5], lin),
+            key_vec2(0, [0.18, 0.18], lin),
+            key_vec2(69, [0.18, 0.18], lin),
+            key_vec2(92, [8.5, 8.5], ez4(E_SMOOTH)),
+            key_vec2(150, [8.5, 8.5], lin),
         ]);
         l.transform.opacity = Animatable::new_animated(vec![
-            k1(0, 0.0, lin),
-            k1(69, 0.0, lin),
-            k1(72, 55.0, ez4(E_SNAP)),
-            k1(88, 18.0, ez4(E_SMOOTH)),
-            k1(94, 0.0, lin),
-            k1(150, 0.0, lin),
+            key_scalar(0, 0.0, lin),
+            key_scalar(69, 0.0, lin),
+            key_scalar(72, 55.0, ez4(E_SNAP)),
+            key_scalar(88, 18.0, ez4(E_SMOOTH)),
+            key_scalar(94, 0.0, lin),
+            key_scalar(150, 0.0, lin),
         ]);
     }
 
@@ -224,21 +224,21 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], _base: f32, lin: Interp
         240.0,
         600.0,
         [1.0, 0.98, 0.94, 1.0],
-        c2([960.0, 440.0]),
+        const_vec2([960.0, 440.0]),
         Animatable::new_animated(vec![
-            k2(0, [40.0, 40.0], lin),
-            k2(80, [40.0, 40.0], lin),
-            k2(85, [58.0, 58.0], ez4(E_SNAP)),
-            k2(95, [55.0, 55.0], ez4(E_DRIFT)),
-            k2(150, [55.0, 55.0], lin),
+            key_vec2(0, [40.0, 40.0], lin),
+            key_vec2(80, [40.0, 40.0], lin),
+            key_vec2(85, [58.0, 58.0], ez4(E_SNAP)),
+            key_vec2(95, [55.0, 55.0], ez4(E_DRIFT)),
+            key_vec2(150, [55.0, 55.0], lin),
         ]),
         Animatable::new_animated(vec![
-            k1(0, 0.0, lin),
-            k1(80, 0.0, lin),
-            k1(83, 30.0, ez4(E_SNAP)),
-            k1(89, 14.0, ez4(E_SMOOTH)),
-            k1(94, 0.0, ez4(E_DRIFT)),
-            k1(150, 0.0, lin),
+            key_scalar(0, 0.0, lin),
+            key_scalar(80, 0.0, lin),
+            key_scalar(83, 30.0, ez4(E_SNAP)),
+            key_scalar(89, 14.0, ez4(E_SMOOTH)),
+            key_scalar(94, 0.0, ez4(E_DRIFT)),
+            key_scalar(150, 0.0, lin),
         ]),
         150,
     );

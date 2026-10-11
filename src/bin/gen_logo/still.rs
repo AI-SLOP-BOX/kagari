@@ -2,11 +2,11 @@ use super::geometry::*;
 use kagari_vfx::core::property::Animatable;
 use kagari_vfx::core::timeline::*;
 
-pub fn c2(v: [f32; 2]) -> Animatable<[f32; 2]> {
+pub fn const_vec2(v: [f32; 2]) -> Animatable<[f32; 2]> {
     Animatable::new_constant(v)
 }
 
-pub fn c1(v: f32) -> Animatable<f32> {
+pub fn const_scalar(v: f32) -> Animatable<f32> {
     Animatable::new_constant(v)
 }
 
@@ -115,8 +115,8 @@ pub fn build_still() -> Composition {
         2,
     );
     let ctr = [492.0, 476.0];
-    let s100 = c2([100.0, 100.0]);
-    let o100 = c1(100.0);
+    let s100 = const_vec2([100.0, 100.0]);
+    let o100 = const_scalar(100.0);
 
     comp.add_layer(Layer::new(
         "bg".into(),
@@ -126,7 +126,7 @@ pub fn build_still() -> Composition {
         },
         2,
     ));
-    comp.layers.last_mut().unwrap().transform.position = c2([500.0, 500.0]);
+    comp.layers.last_mut().unwrap().transform.position = const_vec2([500.0, 500.0]);
 
     // cube pedestal (light left face / navy right face)
     let sl = shield_l_pts();
@@ -137,7 +137,7 @@ pub fn build_still() -> Composition {
         sharp(&sl),
         [0.757, 0.722, 0.655, 1.0],
         ShapeFillType::Solid,
-        c2(ctr),
+        const_vec2(ctr),
         s100.clone(),
         o100.clone(),
         2,
@@ -150,7 +150,7 @@ pub fn build_still() -> Composition {
         sharp(&sr),
         [0.122, 0.141, 0.169, 1.0],
         ShapeFillType::Solid,
-        c2(ctr),
+        const_vec2(ctr),
         s100.clone(),
         o100.clone(),
         2,
@@ -165,7 +165,7 @@ pub fn build_still() -> Composition {
         sharp(&wd),
         [0.122, 0.141, 0.169, 1.0],
         ShapeFillType::Solid,
-        c2(ctr),
+        const_vec2(ctr),
         s100.clone(),
         o100.clone(),
         2,
@@ -178,7 +178,7 @@ pub fn build_still() -> Composition {
         sharp(&wdr),
         [0.122, 0.141, 0.169, 1.0],
         ShapeFillType::Solid,
-        c2(ctr),
+        const_vec2(ctr),
         s100.clone(),
         o100.clone(),
         2,
@@ -191,7 +191,7 @@ pub fn build_still() -> Composition {
         sharp(&wb),
         [1.0, 0.973, 0.910, 1.0],
         ShapeFillType::Solid,
-        c2(ctr),
+        const_vec2(ctr),
         s100.clone(),
         o100.clone(),
         2,
@@ -204,7 +204,7 @@ pub fn build_still() -> Composition {
         sharp(&wbr),
         [1.0, 0.973, 0.910, 1.0],
         ShapeFillType::Solid,
-        c2(ctr),
+        const_vec2(ctr),
         s100.clone(),
         o100.clone(),
         2,
@@ -238,8 +238,8 @@ pub fn build_still() -> Composition {
             sc,
             137.5,
             20.0,
-            c1(s),
-            c1(e),
+            const_scalar(s),
+            const_scalar(e),
             [487.7, 476.6],
             s100.clone(),
             o100.clone(),
@@ -257,7 +257,7 @@ pub fn build_still() -> Composition {
         smooth_closed(&fo, &[0, 27]),
         [1.0; 4],
         flame_outer_fill(),
-        c2(ctr),
+        const_vec2(ctr),
         s100.clone(),
         o100.clone(),
         2,
@@ -270,7 +270,7 @@ pub fn build_still() -> Composition {
         smooth_closed(&su, &[0, 11]),
         [1.0; 4],
         shadow_ul_fill(),
-        c2(ctr),
+        const_vec2(ctr),
         s100.clone(),
         o100.clone(),
         2,
@@ -283,7 +283,7 @@ pub fn build_still() -> Composition {
         smooth_closed(&fm, &[0, 10]),
         [1.0; 4],
         flame_mid_fill(),
-        c2(ctr),
+        const_vec2(ctr),
         s100.clone(),
         o100.clone(),
         2,
@@ -296,7 +296,7 @@ pub fn build_still() -> Composition {
         smooth_closed(&fc, &[0, 13]),
         [1.0, 0.973, 0.910, 1.0],
         flame_core_fill(),
-        c2(ctr),
+        const_vec2(ctr),
         s100.clone(),
         o100.clone(),
         2,

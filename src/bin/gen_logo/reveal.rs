@@ -1,5 +1,5 @@
 use super::geometry::*;
-use super::still::{apart, c1, c2, ring_layer};
+use super::still::{apart, const_scalar, const_vec2, ring_layer};
 use kagari_vfx::core::keyframe::*;
 use kagari_vfx::core::particle_system::{EmitterShape, FadeCurve, ParticleEmitter};
 use kagari_vfx::core::property::Animatable;
@@ -29,11 +29,11 @@ pub const E_SNAP: [f32; 4] = [0.3, 0.0, 0.2, 1.0];
 pub const E_HEAVY: [f32; 4] = [0.5, 0.0, 0.3, 1.0];
 pub const E_DRIFT: [f32; 4] = [0.37, 0.0, 0.63, 1.0];
 
-pub fn k1(f: u32, v: f32, e: InterpolationType) -> Keyframe<f32> {
+pub fn key_scalar(f: u32, v: f32, e: InterpolationType) -> Keyframe<f32> {
     Keyframe::new(f, v, e)
 }
 
-pub fn k2(f: u32, v: [f32; 2], e: InterpolationType) -> Keyframe<[f32; 2]> {
+pub fn key_vec2(f: u32, v: [f32; 2], e: InterpolationType) -> Keyframe<[f32; 2]> {
     Keyframe::new(f, v, e)
 }
 
@@ -111,7 +111,7 @@ pub fn pulse_layer(
         dur,
     ));
     let l = comp.layers.last_mut().unwrap();
-    l.transform.position = c2(R_CTR);
+    l.transform.position = const_vec2(R_CTR);
     l.transform.opacity = opacity;
     l.trim_paths = Some(TrimPaths {
         start,
@@ -135,7 +135,7 @@ pub fn particle_layer(
         dur,
     ));
     let l = comp.layers.last_mut().unwrap();
-    l.transform.position = c2(pos);
+    l.transform.position = const_vec2(pos);
     l.transform.opacity = opacity;
 }
 

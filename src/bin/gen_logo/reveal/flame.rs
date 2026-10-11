@@ -3,27 +3,27 @@ use super::*;
 pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: InterpolationType) {
     // flames: anticipation squash -> explosive overshoot -> recoil -> settle
     let flame_op = Animatable::new_animated(vec![
-        k1(0, 0.0, lin),
-        k1(40, 0.0, lin),
-        k1(44, 45.0, ez4(E_SNAP)),
-        k1(48, 100.0, ez4(E_SMOOTH)),
-        k1(135, 100.0, lin),
-        k1(150, 0.0, lin),
+        key_scalar(0, 0.0, lin),
+        key_scalar(40, 0.0, lin),
+        key_scalar(44, 45.0, ez4(E_SNAP)),
+        key_scalar(48, 100.0, ez4(E_SMOOTH)),
+        key_scalar(135, 100.0, lin),
+        key_scalar(150, 0.0, lin),
     ]);
     let burst = |d: u32, over: f32| {
         Animatable::new_animated(vec![
-            k2(0, [0.0, 0.0], lin),
-            k2(40 + d, [0.0, 0.0], lin),
-            k2(44 + d, [base * 0.22, base * 0.13], ez4(E_SNAP)),
-            k2(47 + d, [over, over * 0.96], ez4(E_SNAP)),
-            k2(52 + d, [base * 0.95, base * 1.02], ez4(E_SMOOTH)),
-            k2(58 + d, [base * 1.02, base * 0.99], ez4(E_SMOOTH)),
-            k2(66 + d, [base, base], ez4(E_DRIFT)),
-            k2(78 + d, [base * 1.035, base * 1.015], ez4(E_DRIFT)),
-            k2(86 + d, [base * 0.99, base * 1.0], ez4(E_DRIFT)),
-            k2(94 + d, [base * 1.012, base * 1.005], ez4(E_DRIFT)),
-            k2(104 + d, [base, base], ez4(E_DRIFT)),
-            k2(150, [base, base], lin),
+            key_vec2(0, [0.0, 0.0], lin),
+            key_vec2(40 + d, [0.0, 0.0], lin),
+            key_vec2(44 + d, [base * 0.22, base * 0.13], ez4(E_SNAP)),
+            key_vec2(47 + d, [over, over * 0.96], ez4(E_SNAP)),
+            key_vec2(52 + d, [base * 0.95, base * 1.02], ez4(E_SMOOTH)),
+            key_vec2(58 + d, [base * 1.02, base * 0.99], ez4(E_SMOOTH)),
+            key_vec2(66 + d, [base, base], ez4(E_DRIFT)),
+            key_vec2(78 + d, [base * 1.035, base * 1.015], ez4(E_DRIFT)),
+            key_vec2(86 + d, [base * 0.99, base * 1.0], ez4(E_DRIFT)),
+            key_vec2(94 + d, [base * 1.012, base * 1.005], ez4(E_DRIFT)),
+            key_vec2(104 + d, [base, base], ez4(E_DRIFT)),
+            key_vec2(150, [base, base], lin),
         ])
     };
     let fo = flame_outer_pts();
@@ -34,7 +34,7 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
         smooth_closed(&fo, &[0, 27]),
         [1.0; 4],
         flame_outer_fill(),
-        c2(ctr),
+        const_vec2(ctr),
         burst(0, base * 1.2),
         flame_op.clone(),
         150,
@@ -47,7 +47,7 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
         smooth_closed(&su, &[0, 11]),
         [1.0; 4],
         shadow_ul_fill(),
-        c2(ctr),
+        const_vec2(ctr),
         burst(1, base * 1.2),
         flame_op.clone(),
         150,
@@ -60,7 +60,7 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
         smooth_closed(&fm, &[0, 10]),
         [1.0; 4],
         flame_mid_fill(),
-        c2(ctr),
+        const_vec2(ctr),
         burst(3, base * 1.17),
         flame_op.clone(),
         150,
@@ -73,7 +73,7 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
         smooth_closed(&sh, &[0, 9]),
         [1.0; 4],
         half_light_l_fill(),
-        c2(ctr),
+        const_vec2(ctr),
         burst(2, base * 1.18),
         flame_op.clone(),
         150,
@@ -86,24 +86,24 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
         smooth_closed(&lr, &[0, 9]),
         [1.0; 4],
         half_shade_r_fill(),
-        c2(ctr),
+        const_vec2(ctr),
         burst(2, base * 1.18),
         flame_op.clone(),
         150,
     );
     let core_scale = Animatable::new_animated(vec![
-        k2(0, [0.0, 0.0], lin),
-        k2(46, [0.0, 0.0], lin),
-        k2(50, [base * 0.22, base * 0.13], ez4(E_SNAP)),
-        k2(53, [base * 1.15, base * 1.1], ez4(E_SNAP)),
-        k2(58, [base * 0.95, base * 1.02], ez4(E_SMOOTH)),
-        k2(64, [base, base], ez4(E_SMOOTH)),
-        k2(72, [base, base], ez4(E_DRIFT)),
-        k2(80, [base, base], ez4(E_SNAP)),
-        k2(85, [base * 1.12, base * 1.12], ez4(E_SNAP)),
-        k2(91, [base, base], ez4(E_SMOOTH)),
-        k2(104, [base, base], ez4(E_DRIFT)),
-        k2(150, [base, base], lin),
+        key_vec2(0, [0.0, 0.0], lin),
+        key_vec2(46, [0.0, 0.0], lin),
+        key_vec2(50, [base * 0.22, base * 0.13], ez4(E_SNAP)),
+        key_vec2(53, [base * 1.15, base * 1.1], ez4(E_SNAP)),
+        key_vec2(58, [base * 0.95, base * 1.02], ez4(E_SMOOTH)),
+        key_vec2(64, [base, base], ez4(E_SMOOTH)),
+        key_vec2(72, [base, base], ez4(E_DRIFT)),
+        key_vec2(80, [base, base], ez4(E_SNAP)),
+        key_vec2(85, [base * 1.12, base * 1.12], ez4(E_SNAP)),
+        key_vec2(91, [base, base], ez4(E_SMOOTH)),
+        key_vec2(104, [base, base], ez4(E_DRIFT)),
+        key_vec2(150, [base, base], lin),
     ]);
     let fc = flame_core_pts();
     apart(
@@ -113,7 +113,7 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
         smooth_closed(&fc, &[0, 13]),
         [1.0, 0.973, 0.910, 1.0],
         flame_core_fill(),
-        c2(ctr),
+        const_vec2(ctr),
         core_scale,
         flame_op,
         150,
@@ -144,12 +144,12 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
         },
         ctr,
         Animatable::new_animated(vec![
-            k1(0, 0.0, lin),
-            k1(43, 0.0, lin),
-            k1(45, 100.0, ez4(E_SNAP)),
-            k1(50, 60.0, lin),
-            k1(56, 0.0, ez4(E_SMOOTH)),
-            k1(150, 0.0, lin),
+            key_scalar(0, 0.0, lin),
+            key_scalar(43, 0.0, lin),
+            key_scalar(45, 100.0, ez4(E_SNAP)),
+            key_scalar(50, 60.0, lin),
+            key_scalar(56, 0.0, ez4(E_SMOOTH)),
+            key_scalar(150, 0.0, lin),
         ]),
         150,
     );
@@ -179,12 +179,12 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
         },
         [960.0, 540.0],
         Animatable::new_animated(vec![
-            k1(0, 0.0, lin),
-            k1(46, 0.0, lin),
-            k1(58, 65.0, ez4(E_SMOOTH)),
-            k1(108, 65.0, lin),
-            k1(122, 0.0, ez4(E_DRIFT)),
-            k1(150, 0.0, lin),
+            key_scalar(0, 0.0, lin),
+            key_scalar(46, 0.0, lin),
+            key_scalar(58, 65.0, ez4(E_SMOOTH)),
+            key_scalar(108, 65.0, lin),
+            key_scalar(122, 0.0, ez4(E_DRIFT)),
+            key_scalar(150, 0.0, lin),
         ]),
         150,
     );
@@ -192,20 +192,20 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
     // titles
     let title_rise = |t0: u32, y_end: f32| {
         Animatable::new_animated(vec![
-            k2(0, [960.0, y_end - 200.0], lin),
-            k2(t0, [960.0, y_end - 200.0], lin),
-            k2(t0 + 18, [960.0, y_end + 8.0], ez4(E_SNAP)),
-            k2(t0 + 24, [960.0, y_end], ez4(E_SMOOTH)),
-            k2(150, [960.0, y_end], lin),
+            key_vec2(0, [960.0, y_end - 200.0], lin),
+            key_vec2(t0, [960.0, y_end - 200.0], lin),
+            key_vec2(t0 + 18, [960.0, y_end + 8.0], ez4(E_SNAP)),
+            key_vec2(t0 + 24, [960.0, y_end], ez4(E_SMOOTH)),
+            key_vec2(150, [960.0, y_end], lin),
         ])
     };
     let title_op = |t0: u32| {
         Animatable::new_animated(vec![
-            k1(0, 0.0, lin),
-            k1(t0, 0.0, lin),
-            k1(t0 + 16, 100.0, ez4(E_SMOOTH)),
-            k1(135, 100.0, lin),
-            k1(150, 0.0, lin),
+            key_scalar(0, 0.0, lin),
+            key_scalar(t0, 0.0, lin),
+            key_scalar(t0 + 16, 100.0, ez4(E_SMOOTH)),
+            key_scalar(135, 100.0, lin),
+            key_scalar(150, 0.0, lin),
         ])
     };
     comp.add_layer(Layer::new(
@@ -258,10 +258,10 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
         LayerType::Shape {
             shape_type: ShapeType::Ellipse {
                 width: Animatable::new_animated(vec![
-                    k1(0, 0.0, lin),
-                    k1(106, 0.0, lin),
-                    k1(118, 62.0, ez4(E_SMOOTH)),
-                    k1(150, 62.0, lin),
+                    key_scalar(0, 0.0, lin),
+                    key_scalar(106, 0.0, lin),
+                    key_scalar(118, 62.0, ez4(E_SMOOTH)),
+                    key_scalar(150, 62.0, lin),
                 ]),
                 height: Animatable::new_constant(2.0),
             },
@@ -311,17 +311,17 @@ pub(super) fn add(comp: &mut Composition, ctr: [f32; 2], base: f32, lin: Interpo
     ));
     {
         let l = comp.layers.last_mut().unwrap();
-        l.transform.position = c2([960.0, 540.0]);
+        l.transform.position = const_vec2([960.0, 540.0]);
         l.effects.push(Effect {
             id: "finish_grain".into(),
             name: "Film Grain".into(),
             effect_type: EffectType::FilmGrain {
                 intensity: Animatable::new_animated(vec![
-                    k1(0, 0.0, lin),
-                    k1(40, 0.0, lin),
-                    k1(70, 0.035, ez4(E_SMOOTH)),
-                    k1(135, 0.035, lin),
-                    k1(150, 0.0, lin),
+                    key_scalar(0, 0.0, lin),
+                    key_scalar(40, 0.0, lin),
+                    key_scalar(70, 0.035, ez4(E_SMOOTH)),
+                    key_scalar(135, 0.035, lin),
+                    key_scalar(150, 0.0, lin),
                 ]),
                 grain_size: 1.0,
                 color_film: false,

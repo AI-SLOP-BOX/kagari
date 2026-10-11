@@ -6,13 +6,13 @@ use serde::{Deserialize, Serialize};
 pub enum ExtEffect {
     /// AE Wave Warp (Pro rebuild).
     WaveWarp {
-        #[serde(default = "d50")]
+        #[serde(default = "default_pct_50")]
         wave_height: f32,
-        #[serde(default = "d100")]
+        #[serde(default = "default_pct_100")]
         wave_width: f32,
         #[serde(default)]
         speed: f32,
-        #[serde(default = "d90")]
+        #[serde(default = "default_deg_90")]
         direction_deg: f32,
         /// 0=Sine 1=Triangle 2=Square 3=Sawtooth
         #[serde(default)]
@@ -23,16 +23,16 @@ pub enum ExtEffect {
     },
     /// CC Lens fisheye.
     CcLens {
-        #[serde(default = "d50")]
+        #[serde(default = "default_pct_50")]
         convergence: f32,
-        #[serde(default = "d1")]
+        #[serde(default = "default_unit")]
         zoom: f32,
     },
     /// Polar Coordinates conversion.
     PolarCoordinates {
         #[serde(default)]
         to_polar: bool,
-        #[serde(default = "d100")]
+        #[serde(default = "default_pct_100")]
         interpolation: f32,
     },
     /// Lens distortion compensation.
@@ -41,7 +41,7 @@ pub enum ExtEffect {
         field_of_view_deg: f32,
         #[serde(default)]
         reverse: bool,
-        #[serde(default = "d1")]
+        #[serde(default = "default_unit")]
         zoom: f32,
     },
     /// Spline tone curves. Empty vec = channel untouched.
@@ -63,7 +63,7 @@ pub enum ExtEffect {
         midtones: [f32; 3],
         #[serde(default)]
         highlights: [f32; 3],
-        #[serde(default = "dtrue")]
+        #[serde(default = "default_enabled")]
         preserve_luminosity: bool,
     },
     /// Channel mixer matrix in percent units.
@@ -77,20 +77,20 @@ pub enum ExtEffect {
     LightSweep {
         #[serde(default)]
         direction_deg: f32,
-        #[serde(default = "dhalf")]
+        #[serde(default = "default_half")]
         center: f32,
-        #[serde(default = "dqtr")]
+        #[serde(default = "default_quarter")]
         width: f32,
-        #[serde(default = "dsixty")]
+        #[serde(default = "default_sixty_pct")]
         sweep_intensity: f32,
-        #[serde(default = "dthirty")]
+        #[serde(default = "default_thirty_pct")]
         edge_intensity: f32,
     },
     /// Radial (zoom) fast blur.
     RadialFastBlur {
-        #[serde(default = "dhalf")]
+        #[serde(default = "default_half")]
         amount: f32,
-        #[serde(default = "dsamples")]
+        #[serde(default = "default_sample_count")]
         samples: u32,
     },
     /// Vertical-axis bend between top/bottom offsets (px).
@@ -102,23 +102,23 @@ pub enum ExtEffect {
     },
     /// Tiling with edge mode (0=Repeat 1=Mirror).
     Tiler {
-        #[serde(default = "d200")]
+        #[serde(default = "default_pct_200")]
         scale_percent: f32,
         #[serde(default)]
         mirror: bool,
     },
     /// Threshold bloom glow.
     GlowPro {
-        #[serde(default = "dseventy")]
+        #[serde(default = "default_seventy_pct")]
         threshold: f32,
-        #[serde(default = "dfour")]
+        #[serde(default = "default_count_four")]
         radius: u32,
-        #[serde(default = "d1")]
+        #[serde(default = "default_unit")]
         intensity: f32,
     },
     /// Saturation boost protecting skin tones (−100..100).
     Vibrance {
-        #[serde(default = "dhalf")]
+        #[serde(default = "default_half")]
         amount: f32,
     },
     /// Temperature/Tint white balance (−100..100 each).
@@ -139,43 +139,43 @@ pub enum ExtEffect {
     },
 }
 
-pub fn d50() -> f32 {
+pub fn default_pct_50() -> f32 {
     50.0
 }
-pub fn d100() -> f32 {
+pub fn default_pct_100() -> f32 {
     100.0
 }
-pub fn d90() -> f32 {
+pub fn default_deg_90() -> f32 {
     90.0
 }
-pub fn d1() -> f32 {
+pub fn default_unit() -> f32 {
     1.0
 }
-pub fn dhalf() -> f32 {
+pub fn default_half() -> f32 {
     0.5
 }
-pub fn dqtr() -> f32 {
+pub fn default_quarter() -> f32 {
     0.25
 }
-pub fn dsixty() -> f32 {
+pub fn default_sixty_pct() -> f32 {
     0.6
 }
-pub fn dthirty() -> f32 {
+pub fn default_thirty_pct() -> f32 {
     0.3
 }
-pub fn dsamples() -> u32 {
+pub fn default_sample_count() -> u32 {
     12
 }
-pub fn d200() -> f32 {
+pub fn default_pct_200() -> f32 {
     200.0
 }
-pub fn dseventy() -> f32 {
+pub fn default_seventy_pct() -> f32 {
     0.7
 }
-pub fn dfour() -> u32 {
+pub fn default_count_four() -> u32 {
     4
 }
-pub fn dtrue() -> bool {
+pub fn default_enabled() -> bool {
     true
 }
 pub fn identity_matrix() -> [[f32; 3]; 3] {

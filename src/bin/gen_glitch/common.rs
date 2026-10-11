@@ -10,15 +10,15 @@ pub const FPS: u32 = 30;
 pub const DUR: u32 = 150;
 
 // ─── deterministic build-time hash (splitmix64) ───
-pub fn sh(mut x: u64) -> u64 {
+pub fn splitmix64(mut x: u64) -> u64 {
     x = x.wrapping_add(0x9E37_79B9_7F4A_7C15);
     let mut z = x;
     z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
     z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
     z ^ (z >> 31)
 }
-pub fn bf(a: u64, b: u64) -> f32 {
-    (sh(a.wrapping_mul(0x9E37_79B9).wrapping_add(b)) >> 11) as f32 / (1u64 << 53) as f32
+pub fn hash_to_unit(a: u64, b: u64) -> f32 {
+    (splitmix64(a.wrapping_mul(0x9E37_79B9).wrapping_add(b)) >> 11) as f32 / (1u64 << 53) as f32
 }
 
 pub fn lin() -> InterpolationType {
@@ -27,7 +27,7 @@ pub fn lin() -> InterpolationType {
 pub fn hold() -> InterpolationType {
     InterpolationType::Hold
 }
-pub fn ez(c: [f32; 4]) -> InterpolationType {
+pub fn ease_bezier(c: [f32; 4]) -> InterpolationType {
     InterpolationType::Bezier {
         outgoing: BezierControlPoint {
             influence: 0.33,
@@ -43,25 +43,25 @@ pub fn ez(c: [f32; 4]) -> InterpolationType {
 pub const E_SMOOTH: [f32; 4] = [0.0, 0.0, 0.4, 1.0];
 pub const E_SNAP: [f32; 4] = [0.3, 0.0, 0.2, 1.0];
 
-pub fn k1(f: u32, v: f32, e: InterpolationType) -> Keyframe<f32> {
+pub fn key_scalar(f: u32, v: f32, e: InterpolationType) -> Keyframe<f32> {
     Keyframe::new(f, v, e)
 }
-pub fn k2(f: u32, v: [f32; 2], e: InterpolationType) -> Keyframe<[f32; 2]> {
+pub fn key_vec2(f: u32, v: [f32; 2], e: InterpolationType) -> Keyframe<[f32; 2]> {
     Keyframe::new(f, v, e)
 }
-pub fn c1(v: f32) -> Animatable<f32> {
+pub fn const_scalar(v: f32) -> Animatable<f32> {
     Animatable::new_constant(v)
 }
-pub fn c2(v: [f32; 2]) -> Animatable<[f32; 2]> {
+pub fn const_vec2(v: [f32; 2]) -> Animatable<[f32; 2]> {
     Animatable::new_constant(v)
 }
-pub fn a1(keys: Vec<Keyframe<f32>>) -> Animatable<f32> {
+pub fn anim_scalar(keys: Vec<Keyframe<f32>>) -> Animatable<f32> {
     Animatable::new_animated(keys)
 }
-pub fn a2(keys: Vec<Keyframe<[f32; 2]>>) -> Animatable<[f32; 2]> {
+pub fn anim_vec2(keys: Vec<Keyframe<[f32; 2]>>) -> Animatable<[f32; 2]> {
     Animatable::new_animated(keys)
 }
-pub fn fx(id: &str, name: &str, et: EffectType) -> Effect {
+pub fn make_effect(id: &str, name: &str, et: EffectType) -> Effect {
     Effect {
         id: id.into(),
         name: name.into(),
