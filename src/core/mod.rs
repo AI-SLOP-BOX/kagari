@@ -182,6 +182,7 @@ pub mod dynamic_link_disk_cache;
 pub mod effect_presets;
 pub mod effect_registry_ext;
 pub mod exr_pipeline;
+pub mod exr_writer;
 pub mod icc_color_engine;
 pub mod lightning_beam_engine;
 pub mod mesh_extrusion;

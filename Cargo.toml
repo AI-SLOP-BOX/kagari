@@ -58,6 +58,8 @@ symphonia = { version = "0.5.5", default-features = false, features = [
 clap = { version = "4", features = ["derive"], optional = true }
 # png: headless frame export
 png = { version = "0.17", optional = true }
+# flate2: zlib streams for OpenEXR ZIP compression (headless VFX interchange export)
+flate2 = { version = "1", optional = true }
 # ab_glyph: font loading and glyph rasterization for text layers
 ab_glyph = "0.2"
 # image: loading JPEG/PNG image layers
@@ -74,7 +76,7 @@ pollster = "0.3"
 default = ["gui"]
 gui = ["dep:eframe", "dep:egui_extras", "dep:rfd", "dep:rodio", "dep:egui-phosphor", "dep:choegui", "dep:sys-locale", "wgpu"]
 preview = ["dep:winit", "dep:pollster", "wgpu"]
-cli = ["dep:clap", "dep:png"]
+cli = ["dep:clap", "dep:png", "dep:flate2"]
 cli-gpu = ["cli", "dep:pollster", "wgpu"]
 wgpu = ["dep:wgpu"]
 
