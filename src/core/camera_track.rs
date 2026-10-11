@@ -9,7 +9,7 @@
 //!   "up_axis": "Z",            // "Z" (Blender default) or "Y"
 //!   "scale": 1.0,              // multiply positions (e.g. 0.01 cm→m)
 //!   "frames": [
-//!     {"frame": 0, "pos": [x,y,z], "rot_deg": [rx,ry,rz], "fov": 42.0}
+//!     {"frame": 0, "pos": \[x,y,z], "rot_deg": \[rx,ry,rz], "fov": 42.0}
 //!   ]
 //! }
 use crate::core::keyframe::{InterpolationType, Keyframe};

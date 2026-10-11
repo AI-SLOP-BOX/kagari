@@ -1,5 +1,5 @@
 /// A user-editable tone curve defined by control points in normalized
-/// [0,1]² space. Evaluated with monotone cubic Hermite interpolation
+/// \[0,1]² space. Evaluated with monotone cubic Hermite interpolation
 /// (Fritsch–Carlson) so it never overshoots the control data.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ToneCurve {
@@ -21,7 +21,7 @@ impl ToneCurve {
         }
     }
 
-    /// Build from unsorted points; sorts by x and clamps to [0,1].
+    /// Build from unsorted points; sorts by x and clamps to \[0,1].
     pub fn new(mut points: Vec<[f32; 2]>) -> Self {
         points.retain(|p| p[0].is_finite() && p[1].is_finite());
         for p in &mut points {
