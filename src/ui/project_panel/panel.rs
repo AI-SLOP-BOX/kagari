@@ -9,6 +9,9 @@ use super::asset_row::draw_asset_row;
 use super::media_replace::*;
 use super::preview::draw_metadata_preview;
 
+#[path = "panel_toolbar.rs"]
+mod toolbar;
+
 pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
     // ── Asset Search Filter ──
     ui.add_sized(
@@ -100,96 +103,7 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
         }
     }
 
-    let mut add_comp_requested = false;
-    let mut import_file_requested: Option<std::path::PathBuf> = None;
-    let mut add_folder_requested = false;
-    let mut remove_unused_requested = false;
-    let mut reduce_project_requested = false;
-
-    ui.horizontal(|ui| {
-        if project_icon_action(
-            ui,
-            "project-new-comp",
-            crate::ui::icons::SVG_FILE_PLUS,
-            "新規コンポジションを作成",
-        )
-        .clicked()
-        {
-            add_comp_requested = true;
-        }
-
-        if project_icon_action(
-            ui,
-            "project-import",
-            crate::ui::icons::SVG_IMPORT,
-            "映像・音声を読み込む",
-        )
-        .clicked()
-        {
-            if let Some(path) = rfd::FileDialog::new()
-                .add_filter(
-                    "Media Footage",
-                    &[
-                        "png", "jpg", "jpeg", "webp", "obj", "wav", "mp3", "m4a", "flac", "ogg",
-                        "aiff", "mp4", "mov", "mkv", "webm", "avi", "m4v", "mpeg", "mpg", "ts",
-                        "m2ts", "av1", "ivf",
-                    ],
-                )
-                .pick_file()
-            {
-                import_file_requested = Some(path);
-            }
-        }
-
-        ui.menu_button("...", |ui| {
-            if ui.button("新規フォルダー").clicked() {
-                add_folder_requested = true;
-            }
-
-            if ui
-                .button("未使用素材を削除")
-                .on_hover_text("プロジェクトで使われていない素材を削除します")
-                .clicked()
-            {
-                remove_unused_requested = true;
-            }
-
-            if ui
-                .button("プロジェクトを整理")
-                .on_hover_text("アクティブなコンポジションと参照素材だけを残します")
-                .clicked()
-            {
-                reduce_project_requested = true;
-            }
-        });
-        ui.separator();
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if project_view_toggle(
-                ui,
-                "project-view-list",
-                SVG_LIST_VIEW,
-                !grid_view,
-                "一覧表示",
-            )
-            .clicked()
-            {
-                ui.ctx()
-                    .data_mut(|data| data.insert_temp(grid_view_id, false));
-            }
-            if project_view_toggle(
-                ui,
-                "project-view-grid",
-                crate::ui::icons::SVG_GRID,
-                grid_view,
-                "カード表示",
-            )
-            .clicked()
-            {
-                ui.ctx()
-                    .data_mut(|data| data.insert_temp(grid_view_id, true));
-            }
-        });
-    });
+    let toolbar_actions = toolbar::draw(ui, grid_view, grid_view_id);
 
     ui.add_space(6.0);
     ui.separator();
@@ -601,13 +515,13 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
     apply_project_mutations(
         app,
         ui.ctx(),
-        add_comp_requested,
-        import_file_requested,
-        add_folder_requested,
+        toolbar_actions.add_comp_requested,
+        toolbar_actions.import_file_requested,
+        toolbar_actions.add_folder_requested,
         add_to_timeline_item,
         move_to_folder,
-        remove_unused_requested,
-        reduce_project_requested,
+        toolbar_actions.remove_unused_requested,
+        toolbar_actions.reduce_project_requested,
         replace_info,
     );
 }

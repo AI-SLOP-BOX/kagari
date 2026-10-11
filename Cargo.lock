@@ -2039,6 +2039,7 @@ dependencies = [
  "egui-phosphor",
  "egui_extras",
  "env_logger",
+ "flate2",
  "half",
  "image",
  "libc",

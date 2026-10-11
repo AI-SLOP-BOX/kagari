@@ -1,0 +1,259 @@
+use super::{mocap::parse_point, parse_binding_value, parse_sample_point};
+use clap::{Parser, Subcommand, ValueEnum};
+
+#[derive(Parser)]
+#[command(name = "kagari")]
+#[command(about = "Kagari VFX — Headless compositing & motion-graphics engine", long_about = None)]
+#[command(version)]
+pub(super) struct Cli {
+    #[command(subcommand)]
+    pub(super) command: Commands,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub(super) enum OutputFormat {
+    Png,
+    Mp4,
+    Gif,
+}
+
+#[derive(Subcommand)]
+pub(super) enum Commands {
+    /// Render a composition to PNG sequence or MP4
+    Render {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+
+        /// Composition name or index (default: first)
+        #[arg(short, long)]
+        comp: Option<String>,
+
+        /// Output directory (for PNG sequence) or file path (for MP4)
+        #[arg(short, long, default_value = "./output")]
+        output: String,
+
+        /// Output format: png, mp4, gif
+        #[arg(short, long, default_value = "png", value_enum)]
+        format: OutputFormat,
+
+        /// Start frame (inclusive)
+        #[arg(long, default_value = "0")]
+        from: u32,
+
+        /// End frame (inclusive, default: last frame)
+        #[arg(long)]
+        to: Option<u32>,
+
+        /// Output width (overrides composition size)
+        #[arg(long)]
+        width: Option<u32>,
+
+        /// Output height (overrides composition size)
+        #[arg(long)]
+        height: Option<u32>,
+
+        /// Exposure value for color grading (-5.0 to 5.0)
+        #[arg(long, default_value = "0.0")]
+        exposure: f32,
+
+        /// LUT mode: 0=none, 1=linear, 2=ACES
+        #[arg(long, default_value = "0")]
+        lut: u32,
+
+        /// Live binding values such as audio.bass=0.75; may be repeated
+        #[arg(long = "binding", value_parser = parse_binding_value)]
+        bindings: Vec<(String, f64)>,
+    },
+
+    /// List available effects and their parameters
+    Effects {
+        /// Emit machine-readable JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Show project composition info
+    Info {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+    },
+
+    /// Show unified audio, tempo, and cross-domain binding information
+    ProductionInfo {
+        /// Path to a unified production JSON file
+        #[arg(short, long)]
+        project: String,
+        /// Emit machine-readable JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Evaluate cross-domain automation bindings from source=value pairs
+    Bindings {
+        /// Path to a unified production JSON file
+        #[arg(short, long)]
+        project: String,
+        /// Source values such as audio.bass=0.75; may be repeated
+        #[arg(long = "value", value_parser = parse_binding_value)]
+        values: Vec<(String, f64)>,
+        /// Emit machine-readable JSON
+        #[arg(long)]
+        json: bool,
+        /// Write resolved targets as opacity keyframes at this frame
+        #[arg(long)]
+        apply_frame: Option<u32>,
+        /// Evaluate saved automation curves at this video frame
+        #[arg(long)]
+        frame: Option<u32>,
+        /// Composition name or zero-based index used with --frame
+        #[arg(short, long)]
+        comp: Option<String>,
+    },
+
+    /// Add Logic Pro-style sample-position automation to a production file
+    AddSampleBinding {
+        /// Path to a unified production JSON file
+        #[arg(short, long)]
+        project: String,
+        /// Audio/DAW source endpoint
+        #[arg(long)]
+        source: String,
+        /// VFX target endpoint
+        #[arg(long)]
+        target: String,
+        /// Repeated absolute sample points in `sample=value` form
+        #[arg(long = "sample-point", value_parser = parse_sample_point)]
+        points: Vec<(i64, f64)>,
+        /// Source automation minimum
+        #[arg(long)]
+        input_min: f64,
+        /// Source automation maximum
+        #[arg(long)]
+        input_max: f64,
+        /// VFX target minimum
+        #[arg(long)]
+        output_min: f64,
+        /// VFX target maximum
+        #[arg(long)]
+        output_max: f64,
+    },
+
+    /// Validate a project file
+    Validate {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+    },
+
+    /// Render and analyze a frame for exposure clipping and focus quality
+    Qc {
+        #[arg(short, long)]
+        project: String,
+        /// Composition name or index (default: first)
+        #[arg(short, long)]
+        comp: Option<String>,
+        /// Analyze one frame; overrides --from and --to
+        #[arg(short, long)]
+        frame: Option<u32>,
+        /// First frame for batch analysis
+        #[arg(long, default_value = "0")]
+        from: u32,
+        /// Last frame for batch analysis (default: composition end)
+        #[arg(long)]
+        to: Option<u32>,
+        /// Emit machine-readable JSON
+        #[arg(long)]
+        json: bool,
+        /// Optional report output path; stdout is used when omitted
+        #[arg(short, long)]
+        output: Option<String>,
+        /// Return a failing exit status when any QC warning is found
+        #[arg(long)]
+        fail_on_warnings: bool,
+    },
+
+    /// Render a single frame to PNG (for testing)
+    /// Run an automation script (Rhai) against a project
+    Script {
+        /// Path to project JSON file (created/overwritten by save_project)
+        #[arg(short, long)]
+        project: String,
+
+        /// Path to .rhai script file
+        #[arg(short, long)]
+        file: String,
+    },
+    /// Render a single frame to PNG (convenience shorthand)
+    Frame {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+
+        /// Frame number to render
+        #[arg(short, long, default_value = "0")]
+        frame: u32,
+
+        /// Output PNG path
+        #[arg(short, long, default_value = "./frame.png")]
+        output: String,
+
+        /// Output width
+        #[arg(long)]
+        width: Option<u32>,
+
+        /// Output height
+        #[arg(long)]
+        height: Option<u32>,
+
+        /// Render with the experimental WGPU preview renderer
+        #[arg(long)]
+        gpu: bool,
+    },
+
+    /// Export the project to Lottie / Bodymovin JSON (transforms + keyframes; effects not included)
+    Lottie {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+
+        /// Output JSON path
+        #[arg(short, long, default_value = "./lottie_export.json")]
+        output: String,
+    },
+
+    /// Track points through a PNG frame sequence using markerless optical flow
+    Mocap {
+        /// Directory containing frame_*.png files
+        #[arg(long)]
+        frames: String,
+        /// Initial point as x,y; may be repeated
+        #[arg(long = "point", value_parser = parse_point)]
+        points: Vec<[f32; 2]>,
+        /// Output JSON path
+        #[arg(short, long, default_value = "./mocap.json")]
+        output: String,
+        /// Block matching radius
+        #[arg(long, default_value = "2")]
+        block_radius: i32,
+        /// Search radius in pixels
+        #[arg(long, default_value = "16")]
+        search_radius: i32,
+        /// Discard samples below this confidence
+        #[arg(long, default_value = "0.0")]
+        min_confidence: f32,
+        /// Estimate a 17-joint humanoid pose instead of tracking explicit points
+        #[arg(long)]
+        pose: bool,
+        /// Output frame rate used for BVH frame time
+        #[arg(long, default_value = "30.0")]
+        fps: f32,
+        /// Maximum automatically detected features used for pose estimation
+        #[arg(long, default_value = "64")]
+        max_features: usize,
+        /// Minimum spacing between automatically detected features
+        #[arg(long, default_value = "12")]
+        feature_spacing: u32,
+    },
+}

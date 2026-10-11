@@ -180,16 +180,19 @@ mod documentation_pages;
 mod effect_narrow_pages;
 #[path = "effect_render_pages.rs"]
 mod effect_render_pages;
-#[path = "home_landing_pages.rs"]
-mod home_landing_pages;
+#[path = "landing_pages.rs"]
+mod landing_pages;
 #[path = "project_pages.rs"]
 mod project_pages;
+#[path = "reference_home_pages.rs"]
+mod reference_home_pages;
 #[path = "template_settings_pages.rs"]
 mod template_settings_pages;
 
 pub(super) use documentation_pages::*;
 pub(super) use effect_narrow_pages::*;
 pub(super) use effect_render_pages::*;
-pub(super) use home_landing_pages::*;
+pub(super) use landing_pages::*;
 pub(super) use project_pages::*;
+pub(super) use reference_home_pages::*;
 pub(super) use template_settings_pages::*;

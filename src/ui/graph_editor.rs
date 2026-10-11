@@ -6,7 +6,9 @@ mod camera;
 mod canvas;
 pub(crate) mod channel_ops;
 pub(crate) mod interpolation_ops;
+mod keyframe_access;
 pub(crate) mod property;
+mod sample_data;
 pub(crate) mod toolbar;
 pub(crate) mod velocity_ease;
 pub(crate) mod workspace;
@@ -24,6 +26,7 @@ pub use interpolation_ops::{
     move_effect_scalar_keyframe, remove_effect_channel_at_frame, set_effect_channel_at_frame,
     set_effect_channel_bezier, set_layer_interpolation,
 };
+use keyframe_access::*;
 pub(crate) use property::GraphProperty;
 pub use velocity_ease::{
     compute_velocity_curve, draw_ease_thumbnail, layer_velocity, remove_camera_key,

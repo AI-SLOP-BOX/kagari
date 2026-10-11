@@ -32,130 +32,8 @@ pub fn draw_graph_editor(
                 .unwrap_or(0)
         }) == 0;
 
-        // Sample values along timeline duration for drawing curve (screen-adaptive step)
-        let max_samples = 2000usize;
-        let step = (total_f as usize / max_samples).max(1) as u32;
-        let mut samples = Vec::with_capacity((total_f / step) as usize + 2);
-        let mut f = 0u32;
-        while f <= total_f {
-            let raw_val = match graph_prop.as_str() {
-                "Position X" => layer.transform.position.evaluate(f)[0],
-                "Position Y" => layer.transform.position.evaluate(f)[1],
-                "Scale X" => layer.transform.scale.evaluate(f)[0],
-                "Scale Y" => layer.transform.scale.evaluate(f)[1],
-                "Rotation" => layer.transform.rotation.evaluate(f),
-                "Opacity" => layer.transform.opacity.evaluate(f),
-                p if p.starts_with("3D Position") => {
-                    layer.transform_3d.position.evaluate(f)[axis_3d(p)]
-                }
-                p if p.starts_with("3D Rotation") => {
-                    layer.transform_3d.rotation.evaluate(f)[axis_3d(p)]
-                }
-                p if p.starts_with("3D Scale") => layer.transform_3d.scale.evaluate(f)[axis_3d(p)],
-                p if p.starts_with("PinX:") || p.starts_with("PinY:") => {
-                    let ci = pin_component(p);
-                    let pid = p.split(':').nth(1).unwrap_or("");
-                    layer
-                        .puppet_pins
-                        .iter()
-                        .find(|pp| pp.id == pid)
-                        .map(|pp| pp.position.evaluate(f)[ci])
-                        .unwrap_or(0.0)
-                }
-                p if is_effect_property(p) => effect_parameter_channel_value(layer, p, f),
-                _ => layer.transform.position.evaluate(f)[0],
-            };
-            let val = if raw_val.is_nan() { 0.0 } else { raw_val };
-            samples.push((f, val));
-            if f < total_f && f + step > total_f {
-                f = total_f;
-            } else {
-                f += step;
-            }
-        }
-
-        // Compute per-keyframe velocity when in speed graph mode
-        let keyframes_ref: Vec<(u32, f32)> = match graph_prop.as_str() {
-            "Position X" => layer
-                .transform
-                .position
-                .keyframes()
-                .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value[0])).collect())
-                .unwrap_or_default(),
-            "Position Y" => layer
-                .transform
-                .position
-                .keyframes()
-                .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value[1])).collect())
-                .unwrap_or_default(),
-            "Scale X" => layer
-                .transform
-                .scale
-                .keyframes()
-                .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value[0])).collect())
-                .unwrap_or_default(),
-            "Scale Y" => layer
-                .transform
-                .scale
-                .keyframes()
-                .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value[1])).collect())
-                .unwrap_or_default(),
-            "Rotation" => layer
-                .transform
-                .rotation
-                .keyframes()
-                .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value)).collect())
-                .unwrap_or_default(),
-            "Opacity" => layer
-                .transform
-                .opacity
-                .keyframes()
-                .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value)).collect())
-                .unwrap_or_default(),
-            p if p.starts_with("3D Position") => layer
-                .transform_3d
-                .position
-                .keyframes()
-                .map(|kfs| {
-                    kfs.iter()
-                        .map(|kf| (kf.frame, kf.value[axis_3d(p)]))
-                        .collect()
-                })
-                .unwrap_or_default(),
-            p if p.starts_with("3D Rotation") => layer
-                .transform_3d
-                .rotation
-                .keyframes()
-                .map(|kfs| {
-                    kfs.iter()
-                        .map(|kf| (kf.frame, kf.value[axis_3d(p)]))
-                        .collect()
-                })
-                .unwrap_or_default(),
-            p if p.starts_with("3D Scale") => layer
-                .transform_3d
-                .scale
-                .keyframes()
-                .map(|kfs| {
-                    kfs.iter()
-                        .map(|kf| (kf.frame, kf.value[axis_3d(p)]))
-                        .collect()
-                })
-                .unwrap_or_default(),
-            p if p.starts_with("PinX:") || p.starts_with("PinY:") => {
-                let ci = pin_component(p);
-                let pid = p.split(':').nth(1).unwrap_or("");
-                layer
-                    .puppet_pins
-                    .iter()
-                    .find(|pp| pp.id == pid)
-                    .and_then(|pp| pp.position.keyframes())
-                    .map(|kfs| kfs.iter().map(|kf| (kf.frame, kf.value[ci])).collect())
-                    .unwrap_or_default()
-            }
-            p if is_effect_property(p) => effect_parameter_channel_keyframes(layer, p),
-            _ => vec![],
-        };
+        let (samples, keyframes_ref) =
+            super::sample_data::sample_graph_property(layer, &graph_prop, total_f);
 
         // Allocate drawing region
         let (rect, graph_response) = ui.allocate_exact_size(
@@ -534,84 +412,11 @@ pub fn draw_graph_editor(
         {
             use crate::core::keyframe::{BezierControlPoint, InterpolationType};
 
-            // Mutable access to Vec2-typed keyframe tracks (Position / Scale)
-            fn keyframes_of_vec2<'a>(
-                layer: &'a mut Layer,
-                prop: &str,
-            ) -> Option<&'a mut Vec<crate::core::keyframe::Keyframe<[f32; 2]>>> {
-                use crate::core::property::Animatable;
-                let animated = |a: &'a mut Animatable<[f32; 2]>| match a {
-                    Animatable::Animated(kfs) => Some(kfs),
-                    _ => None,
-                };
-                match prop {
-                    "Position X" | "Position Y" => animated(&mut layer.transform.position),
-                    "Scale X" | "Scale Y" => animated(&mut layer.transform.scale),
-                    _ => None,
-                }
-            }
-
-            // Mutable access to scalar keyframe tracks (Rotation / Opacity)
-            fn keyframes_of_f32<'a>(
-                layer: &'a mut Layer,
-                prop: &str,
-            ) -> Option<&'a mut Vec<crate::core::keyframe::Keyframe<f32>>> {
-                use crate::core::property::Animatable;
-                let animated = |a: &'a mut Animatable<f32>| match a {
-                    Animatable::Animated(kfs) => Some(kfs),
-                    _ => None,
-                };
-                match prop {
-                    "Rotation" => animated(&mut layer.transform.rotation),
-                    "Opacity" => animated(&mut layer.transform.opacity),
-                    _ => None,
-                }
-            }
-
-            fn effect_keyframes_of_f32<'a>(
-                layer: &'a mut Layer,
-                prop: &str,
-            ) -> Option<&'a mut Vec<crate::core::keyframe::Keyframe<f32>>> {
-                let (effect_id, label, component) = parse_effect_property(prop)?;
-                if component.is_some() {
-                    return None;
-                }
-                let effect = layer
-                    .effects
-                    .iter_mut()
-                    .find(|effect| effect.id == effect_id)?;
-                for (name, parameter) in effect.effect_type.animatable_params() {
-                    if name == label {
-                        if let crate::core::effect_params::ParamRef::Scalar(track) = parameter {
-                            return track.keyframes_mut();
-                        }
-                    }
-                }
-                None
-            }
-
-            fn keyframes_of_vec3<'a>(
-                layer: &'a mut Layer,
-                prop: &str,
-            ) -> Option<&'a mut Vec<crate::core::keyframe::Keyframe<[f32; 3]>>> {
-                use crate::core::property::Animatable;
-                let animated = |a: &'a mut Animatable<[f32; 3]>| match a {
-                    Animatable::Animated(kfs) => Some(kfs),
-                    _ => None,
-                };
-                match prop {
-                    p if p.starts_with("3D Position") => animated(&mut layer.transform_3d.position),
-                    p if p.starts_with("3D Rotation") => animated(&mut layer.transform_3d.rotation),
-                    p if p.starts_with("3D Scale") => animated(&mut layer.transform_3d.scale),
-                    _ => None,
-                }
-            }
-
             macro_rules! with_keyframes {
                 ($layer:expr, $prop:expr, $kfs:ident => $body:expr) => {{
                     let prop: String = $prop.clone();
                     if prop.starts_with("3D ") {
-                        if let Some($kfs) = keyframes_of_vec3($layer, &prop) {
+                        if let Some($kfs) = layer_keyframes_of_vec3($layer, &prop) {
                             Some({ $body })
                         } else {
                             None
@@ -620,7 +425,7 @@ pub fn draw_graph_editor(
                         prop.as_str(),
                         "Position X" | "Position Y" | "Scale X" | "Scale Y"
                     ) {
-                        if let Some($kfs) = keyframes_of_vec2($layer, &prop) {
+                        if let Some($kfs) = layer_keyframes_of_vec2($layer, &prop) {
                             Some({ $body })
                         } else {
                             None
@@ -632,7 +437,7 @@ pub fn draw_graph_editor(
                             None
                         }
                     } else {
-                        if let Some($kfs) = keyframes_of_f32($layer, &prop) {
+                        if let Some($kfs) = layer_keyframes_of_f32($layer, &prop) {
                             Some({ $body })
                         } else {
                             None
@@ -648,7 +453,7 @@ pub fn draw_graph_editor(
             // Snapshot keyframe positions first (immutable), then edit mutably on drag
             let kf_positions: Vec<(usize, u32, f32)> = if graph_prop.starts_with("3D ") {
                 let ci = axis_3d(&graph_prop);
-                keyframes_of_vec3(layer, &graph_prop)
+                layer_keyframes_of_vec3(layer, &graph_prop)
                     .map(|kfs| {
                         kfs.iter()
                             .enumerate()
@@ -665,7 +470,7 @@ pub fn draw_graph_editor(
                 } else {
                     0usize
                 };
-                keyframes_of_vec2(layer, &graph_prop)
+                layer_keyframes_of_vec2(layer, &graph_prop)
                     .map(|kfs| {
                         kfs.iter()
                             .enumerate()
@@ -683,7 +488,7 @@ pub fn draw_graph_editor(
                     })
                     .unwrap_or_default()
             } else {
-                keyframes_of_f32(layer, &graph_prop)
+                layer_keyframes_of_f32(layer, &graph_prop)
                     .map(|kfs| {
                         kfs.iter()
                             .enumerate()
@@ -1367,20 +1172,11 @@ pub fn draw_graph_editor(
 
                 // --- Tangent handles: drag to edit custom bezier control points ---
                 // Extract current bezier points (default Easy Ease if linear/hold)
-                fn bezier_pts<T>(kf: &crate::core::keyframe::Keyframe<T>) -> (f32, f32, f32, f32) {
-                    match &kf.interpolation {
-                        InterpolationType::Bezier {
-                            custom_bezier: Some(pts),
-                            ..
-                        } => (pts[0], pts[1], pts[2], pts[3]),
-                        _ => (0.33, 0.0, 0.67, 1.0),
-                    }
-                }
                 let (bx1, by1, bx2, by2): (f32, f32, f32, f32) =
                     with_keyframes!(layer, graph_prop, kfs => {
                         kfs.iter()
                             .find(|key| key.frame == display_frame)
-                            .map(bezier_pts)
+                            .map(bezier_control_points)
                             .unwrap_or((0.33, 0.0, 0.67, 1.0))
                     })
                     .unwrap_or((0.33, 0.0, 0.67, 1.0));

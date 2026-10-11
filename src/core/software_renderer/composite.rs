@@ -4,8 +4,126 @@
 //! blend-mode support, track mattes, composite-time opacity, and
 //! optional linear-light blending.
 
+use super::mask::CpuMaskEntry;
 use crate::core::sdf::{hsb_to_rgb, rgb_to_hsb};
-use crate::core::timeline::{BlendMode, Layer, TrackMatteMode};
+use crate::core::timeline::{BlendMode, Composition, Layer, TrackMatteMode};
+
+pub(crate) struct AdjustmentLayerCtx<'a> {
+    pub comp: &'a Composition,
+    pub layer: &'a Layer,
+    pub sorted_idx: usize,
+    pub source_frame: u32,
+    pub width: u32,
+    pub height: u32,
+    pub opacity: f32,
+    pub masks: &'a [CpuMaskEntry],
+}
+
+pub(crate) fn apply_adjustment_layer(buffer: &mut [u8], ctx: AdjustmentLayerCtx<'_>) {
+    let AdjustmentLayerCtx {
+        comp,
+        layer,
+        sorted_idx,
+        source_frame,
+        width,
+        height,
+        opacity,
+        masks,
+    } = ctx;
+    if !layer.effects_enabled || layer.effects.is_empty() || opacity <= 0.003 {
+        return;
+    }
+    let mut adjusted = buffer.to_vec();
+    crate::core::cpu_effects::apply_layer_effects(
+        Some(comp),
+        Some(sorted_idx),
+        &mut adjusted,
+        width,
+        height,
+        &layer.effects,
+        source_frame,
+        comp.fps,
+    );
+    let use_mask = !masks.is_empty();
+    let adj_blend = layer.blend_mode;
+    for py in 0..height {
+        for px in 0..width {
+            let mut effect_opacity = opacity;
+            if use_mask {
+                let mask_alpha = super::mask::compute_combined_mask_coverage(
+                    px as f32 + 0.5,
+                    py as f32 + 0.5,
+                    masks,
+                );
+                if mask_alpha <= 0.001 {
+                    continue;
+                }
+                effect_opacity *= mask_alpha;
+            }
+            let i = ((py * width + px) * 4) as usize;
+            let src_r = adjusted[i] as f32 / 255.0;
+            let src_g = adjusted[i + 1] as f32 / 255.0;
+            let src_b = adjusted[i + 2] as f32 / 255.0;
+            let dst_r = buffer[i] as f32 / 255.0;
+            let dst_g = buffer[i + 1] as f32 / 255.0;
+            let dst_b = buffer[i + 2] as f32 / 255.0;
+            let (blended_r, blended_g, blended_b) = match adj_blend {
+                BlendMode::Multiply => (src_r * dst_r, src_g * dst_g, src_b * dst_b),
+                BlendMode::Screen => (
+                    1.0 - (1.0 - src_r) * (1.0 - dst_r),
+                    1.0 - (1.0 - src_g) * (1.0 - dst_g),
+                    1.0 - (1.0 - src_b) * (1.0 - dst_b),
+                ),
+                BlendMode::Add => (
+                    (src_r + dst_r).min(1.0),
+                    (src_g + dst_g).min(1.0),
+                    (src_b + dst_b).min(1.0),
+                ),
+                BlendMode::Overlay => (
+                    overlay(src_r, dst_r),
+                    overlay(src_g, dst_g),
+                    overlay(src_b, dst_b),
+                ),
+                BlendMode::SoftLight => (
+                    soft_light(src_r, dst_r),
+                    soft_light(src_g, dst_g),
+                    soft_light(src_b, dst_b),
+                ),
+                _ => (src_r, src_g, src_b),
+            };
+            buffer[i] = ((blended_r * effect_opacity + dst_r * (1.0 - effect_opacity)) * 255.0)
+                .round()
+                .clamp(0.0, 255.0) as u8;
+            buffer[i + 1] = ((blended_g * effect_opacity + dst_g * (1.0 - effect_opacity)) * 255.0)
+                .round()
+                .clamp(0.0, 255.0) as u8;
+            buffer[i + 2] = ((blended_b * effect_opacity + dst_b * (1.0 - effect_opacity)) * 255.0)
+                .round()
+                .clamp(0.0, 255.0) as u8;
+        }
+    }
+}
+
+fn overlay(source: f32, destination: f32) -> f32 {
+    if destination < 0.5 {
+        2.0 * source * destination
+    } else {
+        1.0 - 2.0 * (1.0 - source) * (1.0 - destination)
+    }
+}
+
+fn soft_light(source: f32, destination: f32) -> f32 {
+    if source <= 0.5 {
+        destination - (1.0 - 2.0 * source) * destination * (1.0 - destination)
+    } else {
+        let curve = if destination <= 0.25 {
+            ((16.0 * destination - 12.0) * destination + 4.0) * destination
+        } else {
+            destination.sqrt()
+        };
+        destination + (2.0 * source - 1.0) * (curve - destination)
+    }
+}
 
 /// Everything [`composite_layer_buffer`] needs that is not the two
 /// pixel buffers.
