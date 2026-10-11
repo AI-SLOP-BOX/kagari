@@ -294,6 +294,16 @@ pub enum QuadTrackPurpose {
     PlanarSurface,
 }
 
+/// Result of a background proxy-generation job: the worker renders the
+/// low-resolution media off the UI thread and reports the proxy path back.
+pub struct ProxyJobResult {
+    pub composition_name: String,
+    pub layer_id: String,
+    pub layer_idx: usize,
+    pub resolution: crate::core::proxy::ProxyResolution,
+    pub proxy_path: Result<String, String>,
+}
+
 pub struct QuadTrackJobResult {
     pub purpose: QuadTrackPurpose,
     pub composition_name: String,

@@ -8,6 +8,10 @@ pub(super) fn draw_view_menu_contents(ui: &mut egui::Ui, app: &mut KagariApp) {
     ui.separator();
     ui.collapsing("プレビュー品質", |ui| {
         crate::ui::proxy_panel::draw_proxy_controls(app, ui);
+        if let Some(idx) = app.selection.selected_layer_idx {
+            ui.separator();
+            crate::ui::proxy_panel::draw_layer_proxy(app, ui, idx);
+        }
     });
     let navigator_id = egui::Id::new(crate::ui::viewport_minimap::SHOW_NAVIGATOR_ID);
     let mut show_navigator = ui

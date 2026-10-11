@@ -175,7 +175,187 @@ pub fn draw_layer_proxy(app: &mut KagariApp, ui: &mut egui::Ui, layer_idx: usize
                 });
             }
         }
+
+        ui.separator();
+        draw_proxy_job_controls(app, ui, layer_idx);
     });
+}
+
+/// Background proxy-generation controls: shows Generate while idle, progress +
+/// Cancel while a job runs, and polls the worker channel every frame.
+fn draw_proxy_job_controls(app: &mut KagariApp, ui: &mut egui::Ui, layer_idx: usize) {
+    poll_proxy_job(app, ui.ctx());
+
+    if app.proxy_job_rx.is_some() {
+        let label = app
+            .proxy_job_label
+            .clone()
+            .unwrap_or_else(|| tr("Generating proxy…"));
+        ui.spinner();
+        ui.label(egui::RichText::new(label).small().color(colors::TEXT_MUTED));
+        if ui.small_button(tr("Cancel")).clicked() {
+            if let Some(flag) = app.proxy_job_cancel_flag.as_ref() {
+                flag.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+        }
+        ui.ctx()
+            .request_repaint_after(std::time::Duration::from_millis(100));
+        return;
+    }
+
+    let can_generate = {
+        let comp = app.history.current().active_composition();
+        comp.layers.get(layer_idx).is_some_and(|layer| {
+            matches!(
+                layer.layer_type,
+                crate::core::timeline::LayerType::Image { .. }
+                    | crate::core::timeline::LayerType::Video { .. }
+            )
+        })
+    };
+    if !can_generate {
+        return;
+    }
+    if ui
+        .small_button(tr("Generate proxy"))
+        .on_hover_text(tr(
+            "Render a low-resolution WebP proxy on a background worker",
+        ))
+        .clicked()
+    {
+        start_proxy_job(app, ui.ctx(), layer_idx);
+    }
+}
+
+/// Spawn the background worker for `layer_idx`. Returns false when no layer or
+/// a job is already running.
+pub(crate) fn start_proxy_job(app: &mut KagariApp, ctx: &egui::Context, layer_idx: usize) -> bool {
+    if app.proxy_job_rx.is_some() {
+        return false;
+    }
+    let Some((layer, composition_name, resolution)) = ({
+        let comp = app.history.current().active_composition();
+        let layer = comp.layers.get(layer_idx).cloned();
+        let name = comp.name.clone();
+        layer.map(|layer| {
+            let resolution = layer.proxy.resolution;
+            (layer, name, resolution)
+        })
+    }) else {
+        return false;
+    };
+    if !matches!(
+        layer.layer_type,
+        crate::core::timeline::LayerType::Image { .. }
+            | crate::core::timeline::LayerType::Video { .. }
+    ) {
+        return false;
+    }
+    if resolution == ProxyResolution::Full {
+        app.toasts
+            .info(tr("Set Half, Quarter, or Eighth before generating a proxy"));
+        return false;
+    }
+    let destination =
+        std::env::temp_dir().join(format!("kagari_proxy_{}_{layer_idx}", std::process::id()));
+    let layer_id = layer.id.clone();
+    let label = format!("Generating proxy… {layer_id} ({})", resolution.label());
+    let cancel_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let worker_cancel = cancel_flag.clone();
+    let (tx, rx) = std::sync::mpsc::channel();
+    app.proxy_job_rx = Some(rx);
+    app.proxy_job_cancel_flag = Some(cancel_flag);
+    app.proxy_job_label = Some(label);
+    app.toasts
+        .info(tr("Rendering proxy on a background worker…"));
+    ctx.request_repaint_after(std::time::Duration::from_millis(100));
+
+    std::thread::spawn(move || {
+        if worker_cancel.load(std::sync::atomic::Ordering::Relaxed) {
+            let _ = tx.send(crate::app_state::ProxyJobResult {
+                composition_name,
+                layer_id,
+                layer_idx,
+                resolution,
+                proxy_path: Err("cancelled".to_string()),
+            });
+            return;
+        }
+        let proxy_path =
+            crate::core::proxy::generate_preview_proxy_for_layer(&layer, resolution, &destination);
+        let _ = tx.send(crate::app_state::ProxyJobResult {
+            composition_name,
+            layer_id,
+            layer_idx,
+            resolution,
+            proxy_path,
+        });
+    });
+    true
+}
+
+/// Poll the proxy worker channel; on completion, attach the proxy path to the
+/// matching layer and clear the job state.
+pub(crate) fn poll_proxy_job(app: &mut KagariApp, ctx: &egui::Context) {
+    let Some(rx) = app.proxy_job_rx.as_ref() else {
+        return;
+    };
+    let result = match rx.try_recv() {
+        Ok(result) => Some(result),
+        Err(std::sync::mpsc::TryRecvError::Empty) => {
+            ctx.request_repaint_after(std::time::Duration::from_millis(100));
+            None
+        }
+        Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+            app.proxy_job_rx = None;
+            app.proxy_job_cancel_flag = None;
+            app.proxy_job_label = None;
+            app.toasts.error(tr("Proxy worker stopped unexpectedly"));
+            return;
+        }
+    };
+    let Some(result) = result else { return };
+    app.proxy_job_rx = None;
+    app.proxy_job_cancel_flag = None;
+    app.proxy_job_label = None;
+
+    match result.proxy_path {
+        Ok(path) => {
+            let mut applied = false;
+            app.modify_project(|project| {
+                let comp = project.active_composition_mut();
+                if comp.name != result.composition_name {
+                    return;
+                }
+                let matches = comp
+                    .layers
+                    .get(result.layer_idx)
+                    .is_some_and(|layer| layer.id == result.layer_id);
+                if !matches {
+                    return;
+                }
+                if let Some(layer) = comp.layers.get_mut(result.layer_idx) {
+                    layer.proxy.proxy_path = Some(path.clone());
+                    layer.proxy.enabled = true;
+                    applied = true;
+                }
+            });
+            if applied {
+                crate::core::frame_cache::bump_version();
+                app.toasts
+                    .info(tr("Proxy ready — preview uses the low-resolution media"));
+            } else {
+                app.toasts.error(tr(
+                    "Proxy finished, but the layer changed; result was not applied.",
+                ));
+            }
+        }
+        Err(error) => {
+            if error != "cancelled" {
+                app.toasts.error(error);
+            }
+        }
+    }
 }
 
 #[cfg(test)]

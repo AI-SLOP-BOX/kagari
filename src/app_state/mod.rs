@@ -295,6 +295,11 @@ pub struct KagariApp {
     pub camera_solve_target: Option<(String, u32, u32, f32, usize)>,
     pub quad_track_rx: Option<std::sync::mpsc::Receiver<QuadTrackJobResult>>,
     pub quad_track_cancel_flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    /// Background proxy generation: worker renders low-res media off the UI thread.
+    pub proxy_job_rx: Option<std::sync::mpsc::Receiver<ProxyJobResult>>,
+    pub proxy_job_cancel_flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    /// In-flight proxy job identity (layer id + resolution label) for progress display.
+    pub proxy_job_label: Option<String>,
     /// Path of the most recent export (for the "Reveal in Finder" button).
     #[cfg_attr(not(feature = "gui"), allow(dead_code))]
     pub last_export_path: Option<String>,
