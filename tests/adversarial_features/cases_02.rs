@@ -322,41 +322,41 @@ contract_test!(calculations_nan_opacity_is_safe, {
     assert_eq!(pixel[0], before[0]);
     assert_eq!(pixel[3], before[3]);
 });
-contract_test!(camera_tracker_rejects_zero_dimensions, {
-    let tracks = (0..8)
-        .map(|id| FeatureTrack2D {
-            id,
-            observations: vec![(0, [1.0, 1.0]), (1, [2.0, 2.0])],
+contract_test!(camera_tracker_rejects_insufficient_features, {
+    let features = (0..5)
+        .map(|id| CameraTrackFeaturePoint {
+            id: format!("feat_{id}"),
+            frames: vec![0, 1],
+            coords_2d: vec![[1.0, 1.0], [2.0, 2.0]],
+            world_3d: [0.0, 0.0, 0.0],
+            confidence: 1.0,
         })
         .collect::<Vec<_>>();
-    assert!(matches!(
-        solve_camera_motion_3d(&tracks, 0, 0, None),
-        Err(CameraTrackerError::NotImplemented)
-    ));
+    assert!(solve_3d_camera_from_tracks(&features, 100, 100, 45.0).is_err());
 });
 contract_test!(camera_tracker_rejects_nonfinite_observation, {
-    let tracks = (0..8)
-        .map(|id| FeatureTrack2D {
-            id,
-            observations: vec![(0, [f32::NAN, 1.0]), (1, [2.0, 2.0])],
+    let features = (0..8)
+        .map(|id| CameraTrackFeaturePoint {
+            id: format!("feat_{id}"),
+            frames: vec![0, 1],
+            coords_2d: vec![[f32::NAN, 1.0], [2.0, 2.0]],
+            world_3d: [0.0, 0.0, 0.0],
+            confidence: 1.0,
         })
         .collect::<Vec<_>>();
-    assert!(matches!(
-        solve_camera_motion_3d(&tracks, 100, 100, None),
-        Err(CameraTrackerError::NotImplemented)
-    ));
+    assert!(solve_3d_camera_from_tracks(&features, 100, 100, 45.0).is_err());
 });
-contract_test!(camera_tracker_rejects_unbounded_frame_span, {
-    let tracks = (0..8)
-        .map(|id| FeatureTrack2D {
-            id,
-            observations: vec![(0, [1.0, 1.0]), (u32::MAX, [2.0, 2.0])],
+contract_test!(camera_tracker_rejects_unaligned_frame_span, {
+    let features = (0..8)
+        .map(|id| CameraTrackFeaturePoint {
+            id: format!("feat_{id}"),
+            frames: vec![0],
+            coords_2d: vec![[1.0, 1.0], [2.0, 2.0]],
+            world_3d: [0.0, 0.0, 0.0],
+            confidence: 1.0,
         })
         .collect::<Vec<_>>();
-    assert!(matches!(
-        solve_camera_motion_3d(&tracks, 100, 100, None),
-        Err(CameraTrackerError::NotImplemented)
-    ));
+    assert!(solve_3d_camera_from_tracks(&features, 100, 100, 45.0).is_err());
 });
 contract_test!(cylinder_zero_dimensions_are_safe, {
     let mut out = Vec::new();

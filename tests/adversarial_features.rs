@@ -3,7 +3,7 @@ use kagari_vfx::core::advanced_particles_3d::*;
 use kagari_vfx::core::audio_dsp::*;
 use kagari_vfx::core::bend_warp_engine::*;
 use kagari_vfx::core::calculations_composite::*;
-use kagari_vfx::core::camera_tracker_3d::*;
+use kagari_vfx::core::camera_track::*;
 use kagari_vfx::core::cylinder_sphere_warp::*;
 use kagari_vfx::core::icc_color_engine::*;
 use kagari_vfx::core::lightning_beam_engine::*;
