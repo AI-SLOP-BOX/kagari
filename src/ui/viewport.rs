@@ -602,25 +602,30 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             };
             let pts = std::mem::take(&mut app.pen_points);
             let tangs = std::mem::take(&mut app.pen_tangents);
-            let comp_mut = app.history.current_mut().active_composition_mut();
-            if let Some(layer) = comp_mut.layers.get_mut(target_layer) {
-                let mask_id = layer.masks.len();
-                layer.masks.push(crate::core::mask::Mask {
-                    id: format!("pen_mask_{}_{}", layer.id, mask_id),
-                    name: format!("Mask {}", mask_id + 1),
-                    enabled: true,
-                    mode: crate::core::mask::MaskMode::Add,
-                    path: pen_path(pts.clone(), tangs),
-                    feather: crate::core::property::Animatable::new_constant(0.0),
-                    opacity: crate::core::property::Animatable::new_constant(100.0),
-                    expansion: crate::core::property::Animatable::new_constant(0.0),
-                    inverted: false,
-                    wiggle: None,
+            let mask_data = {
+                let current_comp = app.history.current().active_composition();
+                current_comp.layers.get(target_layer).map(|layer| {
+                    let mask_id = layer.masks.len();
+                    crate::core::mask::Mask {
+                        id: format!("pen_mask_{}_{}", layer.id, mask_id),
+                        name: format!("Mask {}", mask_id + 1),
+                        enabled: true,
+                        mode: crate::core::mask::MaskMode::Add,
+                        path: pen_path(pts.clone(), tangs),
+                        feather: crate::core::property::Animatable::new_constant(0.0),
+                        opacity: crate::core::property::Animatable::new_constant(100.0),
+                        expansion: crate::core::property::Animatable::new_constant(0.0),
+                        inverted: false,
+                        wiggle: None,
+                    }
+                })
+            };
+            if let Some(mask) = mask_data {
+                app.dispatch(crate::app_state::AppCommand::AddMaskToLayer {
+                    layer_idx: target_layer,
+                    mask,
                 });
             }
-            crate::core::frame_cache::bump_version();
-            app.commit_drag();
-            app.autosave.mark_dirty();
             app.toasts.info(format!("Pen mask created ({} points)", pts.len()));
         } else if pen_commit {
             app.pen_points.clear();

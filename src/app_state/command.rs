@@ -95,6 +95,19 @@ pub enum AppCommand {
         frame: u32,
     },
     SplitLayerAtCurrentFrame(usize),
+
+    // ------------------------------------------------------------------------
+    // Composition Settings
+    // ------------------------------------------------------------------------
+    SetBackgroundColor([f32; 4]),
+
+    // ------------------------------------------------------------------------
+    // Masks
+    // ------------------------------------------------------------------------
+    AddMaskToLayer {
+        layer_idx: usize,
+        mask: crate::core::mask::Mask,
+    },
 }
 
 #[cfg(feature = "gui")]
@@ -419,6 +432,23 @@ impl crate::app_state::KagariApp {
                         self.selection.selected_layers.insert(layer_idx + 1);
                         self.notify_project_mutation();
                     }
+                }
+            }
+            AppCommand::SetBackgroundColor(color) => {
+                let mut session =
+                    crate::core::editor::EditorSession::new(&mut self.history, "Change Background Color");
+                session.current_mut().active_composition_mut().background_color = color;
+                session.commit();
+                self.notify_project_mutation();
+            }
+            AppCommand::AddMaskToLayer { layer_idx, mask } => {
+                let mut session =
+                    crate::core::editor::EditorSession::new(&mut self.history, "Add Mask");
+                let comp = session.current_mut().active_composition_mut();
+                if let Some(layer) = comp.layers.get_mut(layer_idx) {
+                    layer.masks.push(mask);
+                    session.commit();
+                    self.notify_project_mutation();
                 }
             }
         }
