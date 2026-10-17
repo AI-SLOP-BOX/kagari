@@ -116,7 +116,10 @@ pub fn draw_recovery_dialog(app: &mut KagariApp, ctx: &egui::Context) {
     // UI thread and delivers on a channel, so the dialog does not parse
     // snapshots while painting. The cached list is released on close.
     if app.recovery_generations.is_none() && app.recovery_generations_rx.is_none() {
-        let (_tx, rx) = app.autosave.fetch_generations_async();
+        let (_tx, rx, handle) = app.autosave.fetch_generations_async();
+        if let Some(h) = handle {
+            app.background_threads.push(h);
+        }
         app.recovery_generations_rx = Some(rx);
     }
 

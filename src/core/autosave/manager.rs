@@ -28,18 +28,19 @@ impl AutosaveManager {
     ) -> (
         std::sync::mpsc::Sender<Vec<RecoveryGeneration>>,
         std::sync::mpsc::Receiver<Vec<RecoveryGeneration>>,
+        Option<std::thread::JoinHandle<()>>,
     ) {
         let (tx, rx) = std::sync::mpsc::channel();
         let tx_clone = tx.clone();
         let paths = self.recovery_paths();
-        std::thread::Builder::new()
+        let handle = std::thread::Builder::new()
             .name("kagari-autosave-list".into())
             .spawn(move || {
                 let generations = Self::list_generations_from_paths(&paths);
                 let _ = tx_clone.send(generations);
             })
             .ok();
-        (tx, rx)
+        (tx, rx, handle)
     }
 }
 
