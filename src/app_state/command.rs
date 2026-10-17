@@ -109,6 +109,14 @@ pub enum AppCommand {
         layer_idx: usize,
         mask: crate::core::mask::Mask,
     },
+
+    // ------------------------------------------------------------------------
+    // Layer Styles
+    // ------------------------------------------------------------------------
+    SetLayerStyle {
+        layer_idx: usize,
+        style: Box<crate::core::timeline::LayerStyle>,
+    },
 }
 
 #[cfg(feature = "gui")]
@@ -455,6 +463,16 @@ impl crate::app_state::KagariApp {
                 let comp = session.current_mut().active_composition_mut();
                 if let Some(layer) = comp.layers.get_mut(layer_idx) {
                     layer.masks.push(mask);
+                    session.commit();
+                    self.notify_project_mutation();
+                }
+            }
+            AppCommand::SetLayerStyle { layer_idx, style } => {
+                let mut session =
+                    crate::core::editor::EditorSession::new(&mut self.history, "Change Layer Style");
+                let comp = session.current_mut().active_composition_mut();
+                if let Some(layer) = comp.layers.get_mut(layer_idx) {
+                    layer.style = *style;
                     session.commit();
                     self.notify_project_mutation();
                 }
