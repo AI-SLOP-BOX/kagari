@@ -36,7 +36,7 @@ pub(crate) fn classify_imported_media(path: &std::path::Path) -> Result<ProjectI
             path: file_path,
             duration_sec: 0.0,
         })
-    } else if extension == "obj" {
+    } else if matches!(extension.as_str(), "obj" | "glb" | "gltf") {
         Ok(ProjectItemType::Model3D { path: file_path })
     } else if matches!(extension.as_str(), "png" | "jpg" | "jpeg" | "webp") {
         let (width, height) = image::image_dimensions(path)
@@ -67,7 +67,7 @@ pub(crate) fn replacement_filter(
             "Audio Footage",
             &["wav", "mp3", "m4a", "aac", "flac", "ogg", "aif", "aiff"],
         )),
-        ProjectItemType::Model3D { .. } => Some(("3D Model", &["obj"])),
+        ProjectItemType::Model3D { .. } => Some(("3D Model", &["obj", "glb", "gltf"])),
         _ => None,
     }
 }

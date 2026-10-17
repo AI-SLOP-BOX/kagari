@@ -312,30 +312,40 @@ fn draw_import_svg(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
 
 fn draw_import_obj(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
     if ui
-        .button("Import OBJ 3D Model...")
-        .on_hover_text("Import a Wavefront OBJ mesh as a camera-rendered 3D layer")
+        .button("Import 3D Model (OBJ / GLB / glTF)...")
+        .on_hover_text("Import a Wavefront OBJ or glTF/GLB 3D mesh as a camera-rendered 3D layer")
         .clicked()
     {
         if let Some(path) = rfd::FileDialog::new()
-            .add_filter("Wavefront OBJ", &["obj"])
+            .add_filter("3D Models (*.obj, *.glb, *.gltf)", &["obj", "glb", "gltf"])
             .pick_file()
         {
-            match crate::core::project_migration::read_bounded_text_file(&path, 128 * 1024 * 1024)
-                .and_then(|obj| {
-                    let mesh = crate::core::obj_loader::parse_obj_str(&obj)?;
+            let res = if path.extension().and_then(|s| s.to_str()) == Some("glb") {
+                std::fs::read(&path)
+                    .map_err(|e| e.to_string())
+                    .and_then(|b| crate::core::gltf_loader::parse_glb(&b))
+            } else if path.extension().and_then(|s| s.to_str()) == Some("gltf") {
+                std::fs::read(&path)
+                    .map_err(|e| e.to_string())
+                    .and_then(|b| crate::core::gltf_loader::parse_gltf_json_with_binary(&b, &[]))
+            } else {
+                crate::core::project_migration::read_bounded_text_file(&path, 128 * 1024 * 1024)
+                    .and_then(|obj| crate::core::obj_loader::parse_obj_str(&obj))
+            };
+
+            match res {
+                Ok(mesh) => {
                     if mesh.vertices.is_empty() || mesh.indices.is_empty() {
-                        return Err("OBJ contains no renderable faces".to_string());
+                        app.toasts.error("3D model contains no renderable faces");
+                    } else {
+                        let name = path
+                            .file_stem()
+                            .map(|v| v.to_string_lossy().into_owned())
+                            .unwrap_or_else(|| "model".into());
+                        import_helpers::insert_imported_model3d(app, path, name);
                     }
-                    Ok(())
-                }) {
-                Ok(()) => {
-                    let name = path
-                        .file_stem()
-                        .map(|v| v.to_string_lossy().into_owned())
-                        .unwrap_or_else(|| "model".into());
-                    import_helpers::insert_imported_model3d(app, path, name);
                 }
-                Err(error) => app.toasts.error(format!("OBJ import failed: {error}")),
+                Err(error) => app.toasts.error(format!("3D Model import failed: {error}")),
             }
         }
         ui.close_menu();

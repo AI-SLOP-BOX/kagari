@@ -32,9 +32,17 @@ fn load_mesh(path: &str) -> Option<Arc<Mesh3D>> {
             }
         }
     }
-    let text =
-        crate::core::project_migration::read_bounded_text_file(source, 128 * 1024 * 1024).ok()?;
-    let mesh = Arc::new(crate::core::obj_loader::parse_obj_str(&text).ok()?);
+    let mesh = if path.ends_with(".glb") {
+        let bytes = std::fs::read(source).ok()?;
+        Arc::new(crate::core::gltf_loader::parse_glb(&bytes).ok()?)
+    } else if path.ends_with(".gltf") {
+        let bytes = std::fs::read(source).ok()?;
+        Arc::new(crate::core::gltf_loader::parse_gltf_json_with_binary(&bytes, &[]).ok()?)
+    } else {
+        let text =
+            crate::core::project_migration::read_bounded_text_file(source, 128 * 1024 * 1024).ok()?;
+        Arc::new(crate::core::obj_loader::parse_obj_str(&text).ok()?)
+    };
     if let Ok(mut cache) = mesh_cache().lock() {
         cache.insert(path.to_string(), (modified, mesh.clone()));
     }

@@ -184,6 +184,7 @@ pub mod exr_pipeline;
 pub mod exr_reader;
 pub mod exr_writer;
 
+pub mod gltf_loader;
 pub mod icc_color_engine;
 pub mod lightning_beam_engine;
 pub mod mesh_extrusion;

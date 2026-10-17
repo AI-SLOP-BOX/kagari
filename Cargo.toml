@@ -141,6 +141,7 @@ spatial_3d = [
     "Z-Sorting & 3D Layer Compositing",
     "Auto-Orient along 3D motion path",
     "Wavefront OBJ 3D Model Loader (Mesh3D, PBR Materials, UV mapping, Normal generation)",
+    "glTF 2.0 & GLB 3D Asset Loader (Binary GLB chunks, JSON accessors, PBR Metallic-Roughness)",
     "C4D 3D Mesh Extrusion (Bevel, Depth, Normals generation)",
 ]
 vector_shapes = [
