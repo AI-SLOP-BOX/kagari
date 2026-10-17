@@ -3,6 +3,10 @@ name = "kagari-vfx"
 version = "0.3.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
+description = "Layer-based motion graphics and compositing engine (After Effects-style workflows in Rust)"
+repository = "https://github.com/AI-SLOP-BOX/kagari"
+keywords = ["vfx", "compositing", "motion-graphics", "video", "rendering"]
+categories = ["multimedia", "graphics"]
 
 [dependencies]
 eframe = { version = "0.29", default-features = false, features = [
@@ -62,8 +66,15 @@ png = { version = "0.17", optional = true }
 flate2 = { version = "1", optional = true }
 # ab_glyph: font loading and glyph rasterization for text layers
 ab_glyph = "0.2"
-# image: loading JPEG/PNG image layers
-image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+# image: loading JPEG/PNG image layers; `exr`/`tiff` keep VFX interchange
+# formats open for import (writer side lives in core::exr_writer)
+image = { version = "0.25", default-features = false, features = [
+    "jpeg",
+    "png",
+    "webp",
+    "exr",
+    "tiff",
+] }
 # libc: disk usage stats (statvfs) for the Home storage panel
 libc = "=0.2.189"
 # naga: runtime WGSL syntax and type validation for custom shader plugins
@@ -99,3 +110,24 @@ required-features = ["preview"]
 name = "gen-splash"
 path = "src/bin/gen_splash/main.rs"
 required-features = ["cli"]
+
+[[bin]]
+name = "gen-glitch"
+path = "src/bin/gen_glitch/main.rs"
+
+[[bin]]
+name = "gen-logo"
+path = "src/bin/gen_logo/main.rs"
+
+# Bridge acceptance gate: verified with mock/fallback pathways when external plugins are not set
+[[test]]
+name = "bridge_acceptance"
+path = "tests/bridge_acceptance.rs"
+test = true
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+

@@ -46,8 +46,8 @@ jobs:
         run: |
           cargo run --features cli --bin kagari -- effects
           cargo run --example gen_test_project
-          cargo run --features cli --bin kagari -- validate --project test_project.json
-          cargo run --features cli --bin kagari -- frame --project test_project.json --frame 5 --output /tmp/smoke.png
+          cargo run --features cli --bin kagari -- validate --project tests/fixtures/test_project.json
+          cargo run --features cli --bin kagari -- frame --project tests/fixtures/test_project.json --frame 5 --output /tmp/smoke.png
 
   package-macos:
     name: Build macOS DMG Bundle
