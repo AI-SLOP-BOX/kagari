@@ -98,9 +98,12 @@ pub(in crate::ui::viewport) fn start_roto_segment_job(
             });
             worker_ctx.request_repaint();
         });
-    if let Err(error) = spawn_result {
-        ctx.data_mut(|data| data.remove::<std::sync::Arc<RotoSegmentJob>>(job_id));
-        return Err(format!("Could not start Roto Brush analysis: {error}"));
+    match spawn_result {
+        Ok(handle) => app.track_background_thread(handle),
+        Err(error) => {
+            ctx.data_mut(|data| data.remove::<std::sync::Arc<RotoSegmentJob>>(job_id));
+            return Err(format!("Could not start Roto Brush analysis: {error}"));
+        }
     }
     Ok(())
 }

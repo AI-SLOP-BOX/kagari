@@ -59,7 +59,7 @@ pub fn draw_file_menu(app: &mut crate::KagariApp, ctx: &egui::Context, ui: &mut 
                 .to_path_buf();
             let (sender, receiver) = std::sync::mpsc::channel();
             app.collect_files_rx = Some(receiver);
-            std::thread::spawn(move || {
+            let handle = std::thread::spawn(move || {
                 let result = crate::core::project_migration::collect_production_document(
                     &document,
                     &folder,
@@ -67,6 +67,7 @@ pub fn draw_file_menu(app: &mut crate::KagariApp, ctx: &egui::Context, ui: &mut 
                 );
                 let _ = sender.send(result);
             });
+            app.track_background_thread(handle);
         }
         ui.close_menu();
     }

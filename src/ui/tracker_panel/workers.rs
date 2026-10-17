@@ -218,7 +218,7 @@ pub(crate) fn start_quad_track(
         .info(tr("Analyzing quad tracking on a background worker…"));
     ctx.request_repaint_after(std::time::Duration::from_millis(100));
 
-    std::thread::spawn(move || {
+    let handle = std::thread::spawn(move || {
         let track = crate::core::tracker_engine::TrackerEngine::analyze_quad_track_cancellable(
             &snapshot,
             layer_idx,
@@ -243,5 +243,6 @@ pub(crate) fn start_quad_track(
         });
         repaint_ctx.request_repaint();
     });
+    app.track_background_thread(handle);
     true
 }

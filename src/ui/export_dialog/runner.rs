@@ -192,7 +192,7 @@ pub fn start_comp_export(app: &mut crate::KagariApp, ctx: &egui::Context, comp_i
                 px
             }
         };
-        std::thread::spawn(move || {
+        let handle = std::thread::spawn(move || {
             let mut config = config;
             if include_audio && has_audio {
                 let audio_path = match crate::core::audio_engine::mix_composition_to_wav(
@@ -254,6 +254,7 @@ pub fn start_comp_export(app: &mut crate::KagariApp, ctx: &egui::Context, comp_i
                 let _ = std::fs::remove_file(path);
             }
         });
+        app.track_background_thread(handle);
     } else {
         // A transform-only preview is not an export. Reporting success here
         // used to leave users with a green toast and no file on disk.

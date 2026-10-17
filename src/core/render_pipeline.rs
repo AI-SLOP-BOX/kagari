@@ -39,6 +39,8 @@ pub struct RenderPipeline {
     result_rx: Receiver<RenderResult>,
     generation: Arc<AtomicU64>,
     command_gate: Mutex<()>,
+    /// Kept so `shutdown()` can join the worker instead of detaching it.
+    worker: Mutex<Option<std::thread::JoinHandle<()>>>,
 }
 
 struct QueuedCommand {
@@ -57,7 +59,7 @@ impl RenderPipeline {
         let generation = Arc::new(AtomicU64::new(1));
         let worker_generation = Arc::clone(&generation);
 
-        thread::Builder::new()
+        let worker = thread::Builder::new()
             .name("render_worker".to_string())
             .spawn(move || {
                 log::info!("[RenderWorker] started");
@@ -94,6 +96,7 @@ impl RenderPipeline {
             result_rx,
             generation,
             command_gate: Mutex::new(()),
+            worker: Mutex::new(Some(worker)),
         }
     }
 
@@ -140,14 +143,23 @@ impl RenderPipeline {
         results
     }
 
-    /// Gracefully shut down the worker thread.
+    /// Gracefully shut down the worker thread and wait for it to exit.
     pub fn shutdown(&self) {
-        let _gate = self.command_gate.lock().unwrap_or_else(|e| e.into_inner());
-        let generation = self.generation.load(Ordering::SeqCst);
-        let _ = self.cmd_tx.send(QueuedCommand {
-            generation,
-            command: RenderCommand::Shutdown,
-        });
+        let handle = {
+            let _gate = self.command_gate.lock().unwrap_or_else(|e| e.into_inner());
+            let generation = self.generation.load(Ordering::SeqCst);
+            let _ = self.cmd_tx.send(QueuedCommand {
+                generation,
+                command: RenderCommand::Shutdown,
+            });
+            self.worker
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .take()
+        };
+        if let Some(handle) = handle {
+            let _ = handle.join();
+        }
     }
 }
 

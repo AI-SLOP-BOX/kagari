@@ -72,7 +72,7 @@ fn begin_recovery_load(
             return;
         }
     };
-    app.background_threads.push(handle);
+    app.track_background_thread(handle);
 }
 
 /// Apply a finished background load. Returns true when the dialog should close.
@@ -118,7 +118,7 @@ pub fn draw_recovery_dialog(app: &mut KagariApp, ctx: &egui::Context) {
     if app.recovery_generations.is_none() && app.recovery_generations_rx.is_none() {
         let (_tx, rx, handle) = app.autosave.fetch_generations_async();
         if let Some(h) = handle {
-            app.background_threads.push(h);
+            app.track_background_thread(h);
         }
         app.recovery_generations_rx = Some(rx);
     }

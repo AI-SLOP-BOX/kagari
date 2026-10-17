@@ -108,13 +108,14 @@ pub(crate) fn draw_camera_tracker_section(app: &mut KagariApp, ui: &mut egui::Ui
                     .info(tr("Solving 3D camera on a background worker…"));
                 ui.ctx()
                     .request_repaint_after(std::time::Duration::from_millis(100));
-                std::thread::spawn(move || {
+                let handle = std::thread::spawn(move || {
                     let result = crate::core::camera_track::solve_3d_camera_from_tracks(
                         &features, width, height, fov,
                     );
                     let _ = tx.send(result);
                     repaint_ctx.request_repaint();
                 });
+                app.track_background_thread(handle);
             }
         });
     });

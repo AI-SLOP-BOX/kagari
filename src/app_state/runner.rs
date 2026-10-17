@@ -103,7 +103,13 @@ impl eframe::App for KagariApp {
         }
         // Join any remaining background threads so detached threads don't
         // outlive the process (recovery load, project open, LUT restore, ...).
-        for handle in self.background_threads.drain(..) {
+        let handles = std::mem::take(
+            &mut *self
+                .background_threads
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        for handle in handles {
             let _ = handle.join();
         }
         if let Some(ref flag) = self.export_cancel_flag {

@@ -242,7 +242,7 @@ pub(crate) fn start_replace_footage_import(
         replacement_item_type,
         imported_video_by_fps: std::collections::HashMap::new(),
     };
-    std::thread::spawn(move || {
+    let handle = std::thread::spawn(move || {
         let result = (|| {
             let mut payload = payload;
             if is_video {
@@ -287,6 +287,7 @@ pub(crate) fn start_replace_footage_import(
         })();
         let _ = tx.send(crate::ui::drop_import::ImportResult::ReplaceFootage(result));
     });
+    app.track_background_thread(handle);
 }
 
 pub(crate) fn complete_replace_footage(

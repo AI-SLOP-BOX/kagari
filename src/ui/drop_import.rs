@@ -90,12 +90,13 @@ pub fn start_image_sequence_import(
     app.toasts
         .info(format!("画像シーケンス「{}」を読み込み中…", name));
     ctx.request_repaint();
-    std::thread::spawn(move || {
+    let handle = std::thread::spawn(move || {
         let result = crate::core::video_import::import_image_sequence(&path, &destination, fps)
             .map(|asset| ImportResult::ImageSequence(asset, name, target))
             .unwrap_or_else(|error| ImportResult::Err(error.to_string(), false));
         let _ = tx.send(result);
     });
+    app.track_background_thread(handle);
 }
 
 fn start_video_import_mode(
@@ -133,13 +134,14 @@ fn start_video_import_mode(
     app.toasts
         .info(format!("「{}」のフレームを読み込み中…", name));
     ctx.request_repaint();
-    std::thread::spawn(move || {
+    let handle = std::thread::spawn(move || {
         let result =
             crate::core::video_import::import_video_with_cancel(&source, &dest, fps, &cancel)
                 .map(|asset| ImportResult::Video(asset, name, tutorial_practice, target))
                 .unwrap_or_else(|error| ImportResult::Err(error.to_string(), tutorial_practice));
         let _ = tx.send(result);
     });
+    app.track_background_thread(handle);
 }
 
 fn insert_layer_into_target(

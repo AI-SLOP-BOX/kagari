@@ -17,7 +17,7 @@ impl Default for KagariApp {
             recovery_load_rx: None,
             recovery_generations_rx: None,
             recovery_load_kind: RecoveryLoadKind::Latest,
-            background_threads: Vec::new(),
+            background_threads: std::sync::Mutex::new(Vec::new()),
             ui_tabs: UiTabsDomainState::default(),
             loop_playback: true,
             playback_speed: 1,

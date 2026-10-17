@@ -738,7 +738,7 @@ pub fn handle_viewport_interaction(
                         let (sender, receiver) = std::sync::mpsc::channel();
                         app.motion_sketch_bake_rx = Some(receiver);
                         app.toasts.info("Motion Sketchをベイクしています…");
-                        std::thread::spawn(move || {
+                        let handle = std::thread::spawn(move || {
                             let keyframes = crate::core::motion_sketch::build_position_keyframes(
                                 &recording,
                                 2.0,
@@ -752,6 +752,7 @@ pub fn handle_viewport_interaction(
                                 keyframes,
                             });
                         });
+                        app.track_background_thread(handle);
                     } else {
                         app.toasts.warning(
                             "Motion Sketchの対象レイヤーが見つかりませんでした。",

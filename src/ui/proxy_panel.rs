@@ -288,7 +288,7 @@ pub(crate) fn start_proxy_job(app: &mut KagariApp, ctx: &egui::Context, layer_id
         .info(tr("Rendering proxy on a background worker…"));
     ctx.request_repaint_after(std::time::Duration::from_millis(100));
 
-    std::thread::spawn(move || {
+    let handle = std::thread::spawn(move || {
         let finish = |proxy_path: Result<String, String>| {
             let _ = tx.send(crate::app_state::ProxyJobMessage::Finished(
                 crate::app_state::ProxyJobResult {
@@ -332,6 +332,7 @@ pub(crate) fn start_proxy_job(app: &mut KagariApp, ctx: &egui::Context, layer_id
         );
         finish(proxy_path);
     });
+    app.track_background_thread(handle);
     true
 }
 

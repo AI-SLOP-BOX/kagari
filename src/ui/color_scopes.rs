@@ -105,7 +105,7 @@ pub fn frame_pixels(app: &KagariApp, ctx: &egui::Context) -> Option<ScopePixels>
     let job_key = key.clone();
     let (sender, receiver) = std::sync::mpsc::channel();
     let repaint = ctx.clone();
-    if std::thread::Builder::new()
+    if let Ok(handle) = std::thread::Builder::new()
         .name("kagari-color-scopes".into())
         .spawn(move || {
             let width = 192;
@@ -126,8 +126,8 @@ pub fn frame_pixels(app: &KagariApp, ctx: &egui::Context) -> Option<ScopePixels>
             });
             repaint.request_repaint();
         })
-        .is_ok()
     {
+        app.track_background_thread(handle);
         ctx.data_mut(|data| {
             data.insert_temp(
                 job_id,

@@ -258,7 +258,7 @@ fn start_console_job(app: &mut KagariApp, command: String, automation: bool, con
     let (tx, rx) = std::sync::mpsc::channel();
     app.script_console_rx = Some(rx);
     app.script_console_cancel = Some(cancel.clone());
-    std::thread::spawn(move || {
+    let handle = std::thread::spawn(move || {
         let start = std::time::Instant::now();
         let result = if automation {
             let Some(project) = project else {
@@ -289,6 +289,7 @@ fn start_console_job(app: &mut KagariApp, command: String, automation: bool, con
             result,
         });
     });
+    app.track_background_thread(handle);
 }
 
 fn poll_console_job(app: &mut KagariApp, ctx: &egui::Context, output: &mut Vec<String>) {

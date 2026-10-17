@@ -181,14 +181,17 @@ fn start_analysis(app: &mut KagariApp, ctx: &egui::Context) -> Result<(), String
             });
             worker_ctx.request_repaint();
         });
-    if let Err(error) = spawn_result {
-        ctx.data_mut(|data| {
-            data.remove_temp::<Option<Arc<QualityCheckJob>>>(egui::Id::new("frame_qc_job"))
-        });
-        return Err(tr_format(
-            "Could not start frame analysis: {}",
-            &[&error.to_string()],
-        ));
+    match spawn_result {
+        Ok(handle) => app.track_background_thread(handle),
+        Err(error) => {
+            ctx.data_mut(|data| {
+                data.remove_temp::<Option<Arc<QualityCheckJob>>>(egui::Id::new("frame_qc_job"))
+            });
+            return Err(tr_format(
+                "Could not start frame analysis: {}",
+                &[&error.to_string()],
+            ));
+        }
     }
     ctx.request_repaint_after(std::time::Duration::from_millis(100));
     Ok(())

@@ -55,7 +55,7 @@ pub fn open_project_from_path(app: &mut KagariApp, path: &std::path::Path) -> Re
             ));
         }
     };
-    app.background_threads.push(handle);
+    app.track_background_thread(handle);
     app.pending_project_load = Some(PendingProjectLoad {
         path,
         receiver,
@@ -147,7 +147,7 @@ pub fn begin_color_lut_restore(app: &mut KagariApp, path: String) {
             }
         }) {
         Ok(handle) => {
-            app.background_threads.push(handle);
+            app.track_background_thread(handle);
             app.color_lut_path = Some(path.clone());
             app.color_lut_mode = 0;
             app.pending_color_lut_load = Some(PendingColorLutLoad {

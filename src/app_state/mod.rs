@@ -135,7 +135,10 @@ pub struct KagariApp {
     ///
     /// Kept (rather than `.spawn().ok()` discarding the handle) so `on_exit()`
     /// can join them and avoid detached threads outliving the process.
-    pub background_threads: Vec<std::thread::JoinHandle<()>>,
+    /// Wrapped in a `Mutex` so spawn sites that only hold `&KagariApp`
+    /// (e.g. Content-Aware Fill / Roto Brush job starters) can still register
+    /// their handles via [`KagariApp::track_background_thread`].
+    pub background_threads: std::sync::Mutex<Vec<std::thread::JoinHandle<()>>>,
     /// Playback domain state (transport, frame, work area, volume)
     pub playback: PlaybackDomainState,
     /// Selection domain state (selected layers, expanded, property)
@@ -417,6 +420,18 @@ pub struct KagariApp {
     /// Guided interactive tutorial modal
     pub show_guided_tutorial: bool,
     pub tutorial_step: usize,
+}
+
+#[cfg(feature = "gui")]
+impl KagariApp {
+    /// Register a background thread handle so `on_exit()` can join it
+    /// instead of letting it run detached past process shutdown.
+    pub fn track_background_thread(&self, handle: std::thread::JoinHandle<()>) {
+        self.background_threads
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(handle);
+    }
 }
 
 #[cfg(feature = "gui")]
