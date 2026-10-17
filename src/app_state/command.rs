@@ -100,6 +100,7 @@ pub enum AppCommand {
     // Composition Settings
     // ------------------------------------------------------------------------
     SetBackgroundColor([f32; 4]),
+    SetMotionBlurShutterAngle(f32),
 
     // ------------------------------------------------------------------------
     // Masks
@@ -438,6 +439,13 @@ impl crate::app_state::KagariApp {
                 let mut session =
                     crate::core::editor::EditorSession::new(&mut self.history, "Change Background Color");
                 session.current_mut().active_composition_mut().background_color = color;
+                session.commit();
+                self.notify_project_mutation();
+            }
+            AppCommand::SetMotionBlurShutterAngle(angle) => {
+                let mut session =
+                    crate::core::editor::EditorSession::new(&mut self.history, "Change Shutter Angle");
+                session.current_mut().active_composition_mut().motion_blur_shutter_angle = angle;
                 session.commit();
                 self.notify_project_mutation();
             }

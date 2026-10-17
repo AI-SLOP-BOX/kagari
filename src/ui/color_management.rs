@@ -6,10 +6,13 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
     app.ensure_panel_edit_snapshot("color_management", ui);
     let active_lut_path = app.color_lut_path.clone();
     let active_lut_mode = app.color_lut_mode;
-    let comp = app.history.current_mut().active_composition_mut();
-    let mut changed = false;
-    let mut project_changed = false;
+    let (comp_bg, comp_shutter, comp_name) = {
+        let comp = app.history.current().active_composition();
+        (comp.background_color, comp.motion_blur_shutter_angle, comp.name.clone())
+    };
     let mut pending_lut_path = None;
+    let mut new_bg = None;
+    let mut new_shutter = None;
 
     crate::ui::kui::section(ui, "Working Color Space");
     let grid = crate::ui::kui::PropertyGrid::new(ui, &["Working Color Space", "Bit Depth"]);
@@ -30,35 +33,33 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
 
     crate::ui::kui::section(ui, "Background");
     let background_grid = crate::ui::kui::PropertyGrid::new(ui, &["Color"]);
-    let c = &mut comp.background_color;
     let mut col = egui::Color32::from_rgba_unmultiplied(
-        (c[0].clamp(0.0, 1.0) * 255.0) as u8,
-        (c[1].clamp(0.0, 1.0) * 255.0) as u8,
-        (c[2].clamp(0.0, 1.0) * 255.0) as u8,
-        (c[3].clamp(0.0, 1.0) * 255.0) as u8,
+        (comp_bg[0].clamp(0.0, 1.0) * 255.0) as u8,
+        (comp_bg[1].clamp(0.0, 1.0) * 255.0) as u8,
+        (comp_bg[2].clamp(0.0, 1.0) * 255.0) as u8,
+        (comp_bg[3].clamp(0.0, 1.0) * 255.0) as u8,
     );
     if background_grid
         .row(ui, "Color", |ui| crate::ui::kui::color(ui, &mut col))
         .changed()
     {
         let [r, g, b, a] = col.to_array();
-        *c = [
+        new_bg = Some([
             r as f32 / 255.0,
             g as f32 / 255.0,
             b as f32 / 255.0,
             a as f32 / 255.0,
-        ];
-        changed = true;
-        project_changed = true;
+        ]);
     }
 
     crate::ui::kui::section(ui, "Motion Blur");
     let motion_grid = crate::ui::kui::PropertyGrid::new(ui, &["Shutter Angle"]);
+    let mut shutter_angle = comp_shutter;
     if motion_grid
         .row(ui, "Shutter Angle", |ui| {
             crate::ui::kui::number(
                 ui,
-                &mut comp.motion_blur_shutter_angle,
+                &mut shutter_angle,
                 0.0..=720.0,
                 1.0,
                 "°",
@@ -66,8 +67,7 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
         })
         .changed()
     {
-        changed = true;
-        project_changed = true;
+        new_shutter = Some(shutter_angle);
     }
 
     ui.add_space(crate::ui::kui::space::XS);
@@ -107,7 +107,7 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
                             config.lut,
                         )));
                         pending_lut_path = Some(lut_path.clone());
-                        changed = true;
+                        crate::core::frame_cache::bump_version();
                         let size = lut_size.to_string();
                         app.toasts.info(tr_format(
                             "Loaded OCIO LUT ({}³): {}",
@@ -152,7 +152,7 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
                         crate::core::ocio_color::set_active_lut(Some(std::sync::Arc::new(lut)));
                         let lut_path = path.to_string_lossy().into_owned();
                         pending_lut_path = Some(lut_path.clone());
-                        changed = true;
+                        crate::core::frame_cache::bump_version();
                         let size = lut_size.to_string();
                         app.toasts.info(tr_format("Loaded {}³ LUT: {}", &[&size, &lut_path]));
                     }
@@ -180,10 +180,10 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
                 if let Some(lut) = active_lut {
                     if let Some(path) = rfd::FileDialog::new()
                         .add_filter("3D LUT", &["cube"])
-                        .set_file_name(format!("{}.cube", comp.name.replace(['\0', '\n', '\r'], "_")))
+                        .set_file_name(format!("{}.cube", comp_name.replace(['\0', '\n', '\r'], "_")))
                         .save_file()
                     {
-                        let title = comp.name.replace(['\0', '\n', '\r', '"'], "_");
+                        let title = comp_name.replace(['\0', '\n', '\r', '"'], "_");
                         let mut content = format!(
                             "# Created by Kagari VFX\nTITLE \"{}\"\nLUT_3D_SIZE {}\nDOMAIN_MIN 0.0 0.0 0.0\nDOMAIN_MAX 1.0 1.0 1.0\n",
                             title, lut.size
@@ -219,22 +219,11 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
         app.persist_color_lut_path(path);
     }
 
-    if project_changed {
-        let pointer_down = ui.input(|input| input.pointer.any_down());
-        if pointer_down {
-            if !app.drag_active() {
-                if let Some(snapshot) = app.take_panel_edit_snapshot("color_management") {
-                    app.begin_drag_with_snapshot(snapshot, "Color Management Edit");
-                }
-            }
-        } else if app.drag_active() {
-            app.commit_drag();
-        } else if let Some(snapshot) = app.take_panel_edit_snapshot("color_management") {
-            app.begin_drag_with_snapshot(snapshot, "Color Management Edit");
-            app.commit_drag();
-        }
-    } else if changed {
-        crate::core::frame_cache::bump_version();
+    if let Some(bg) = new_bg {
+        app.dispatch(crate::app_state::AppCommand::SetBackgroundColor(bg));
+    }
+    if let Some(shutter) = new_shutter {
+        app.dispatch(crate::app_state::AppCommand::SetMotionBlurShutterAngle(shutter));
     }
 }
 
