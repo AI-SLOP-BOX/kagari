@@ -325,6 +325,16 @@ pub fn push_recent(path: &std::path::Path) -> Result<(), String> {
     })
 }
 
+/// Remove path from recents and persist.
+pub fn remove_recent(path: &std::path::Path) -> Result<(), String> {
+    let s = path_key(path);
+    update_prefs(|root| {
+        let mut recents = path_list(root, "recent_projects", 8);
+        recents.retain(|p| p != &s);
+        set_path_list(root, "recent_projects", &recents);
+    })
+}
+
 /// Starred project paths shown in Home > Starred.
 pub fn starred_projects() -> Vec<String> {
     read_prefs().starred_projects

@@ -120,6 +120,17 @@ pub struct KagariApp {
     pub recovery_checked: bool,
     /// Human-readable timestamp of the recovery snapshot (for the dialog)
     pub recovery_snapshot_time: Option<String>,
+    /// Version-history list for the recovery dialog, fetched once per dialog
+    /// open instead of re-reading every snapshot on every frame.
+    pub recovery_generations: Option<Vec<crate::core::autosave::RecoveryGeneration>>,
+    /// In-flight background snapshot load for the recovery dialog.
+    pub recovery_load_rx: Option<std::sync::mpsc::Receiver<RecoveryLoadResult>>,
+    /// Background fetch of the version-history list for the recovery dialog,
+    /// so the UI thread does not JSON-parse snapshots while painting.
+    pub recovery_generations_rx:
+        Option<std::sync::mpsc::Receiver<Vec<crate::core::autosave::RecoveryGeneration>>>,
+    /// Which control started the in-flight recovery load (see [`RecoveryLoadKind`]).
+    pub recovery_load_kind: RecoveryLoadKind,
     /// Playback domain state (transport, frame, work area, volume)
     pub playback: PlaybackDomainState,
     /// Selection domain state (selected layers, expanded, property)
@@ -296,10 +307,12 @@ pub struct KagariApp {
     pub quad_track_rx: Option<std::sync::mpsc::Receiver<QuadTrackJobResult>>,
     pub quad_track_cancel_flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     /// Background proxy generation: worker renders low-res media off the UI thread.
-    pub proxy_job_rx: Option<std::sync::mpsc::Receiver<ProxyJobResult>>,
+    pub proxy_job_rx: Option<std::sync::mpsc::Receiver<ProxyJobMessage>>,
     pub proxy_job_cancel_flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     /// In-flight proxy job identity (layer id + resolution label) for progress display.
     pub proxy_job_label: Option<String>,
+    /// Latest `(done, total)` frame progress reported by the proxy worker.
+    pub proxy_job_progress: Option<(u32, u32)>,
     /// Path of the most recent export (for the "Reveal in Finder" button).
     #[cfg_attr(not(feature = "gui"), allow(dead_code))]
     pub last_export_path: Option<String>,
@@ -349,6 +362,8 @@ pub struct KagariApp {
     pub show_home: bool,
     /// One-shot launch transition for the first rendered frame.
     pub startup_animation: crate::ui::panel_animation::PanelAnimation,
+    /// Asynchronous/transitional project loading animation state: (project_name, progress 0.0..1.0, target_path)
+    pub project_loading: Option<(String, f32, std::path::PathBuf)>,
     pub home_dir: std::path::PathBuf,
     pub home_selected: Option<std::path::PathBuf>,
     pub home_search: String,

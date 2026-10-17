@@ -4,6 +4,8 @@ use super::*;
 /// Returns a Vec of (frame, pixels) in the same order as the input range.
 /// Each frame is rendered independently on a separate CPU core, then the
 /// results are collected sequentially for GPU texture upload.
+/// Honors the global MFR switch: when disabled the range renders sequentially
+/// (identical pixels, single-threaded) so the UI toggle has real effect.
 pub fn render_frame_range_parallel(
     comp: &Composition,
     from: u32,
@@ -16,6 +18,15 @@ pub fn render_frame_range_parallel(
     use rayon::prelude::*;
 
     let frames: Vec<u32> = (from..=to).collect();
+    if !crate::core::parallel_render::mfr_enabled() {
+        return frames
+            .into_iter()
+            .map(|f| {
+                let pixels = render_frame_to_pixels(comp, f, width, height, exposure_ev, lut_mode);
+                (f, pixels)
+            })
+            .collect();
+    }
     frames
         .par_iter()
         .map(|&f| {
@@ -127,4 +138,43 @@ pub fn render_frame_with_deadline(
     let _ = timer.join();
 
     (pixels, timed_out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The global MFR switch must change scheduling only — never pixels.
+    #[test]
+    fn mfr_disabled_range_render_matches_enabled_result() {
+        let mut comp = Composition::new("mfr-parity".into(), "MFR Parity".into(), 8, 8, 24, 3);
+        let mut layer = crate::core::timeline::Layer::new(
+            "mfr-solid".into(),
+            "Solid".into(),
+            crate::core::timeline::LayerType::Solid {
+                color: [0.2, 0.6, 0.9, 1.0],
+            },
+            24,
+        );
+        layer.transform.position =
+            crate::core::property::Animatable::new_constant([4.0, 4.0]);
+        comp.layers.push(layer);
+
+        let saved = crate::core::parallel_render::mfr_enabled();
+        crate::core::parallel_render::set_mfr_enabled(true);
+        let parallel = render_frame_range_parallel(&comp, 0, 2, 8, 8, 0.0, 0);
+        crate::core::parallel_render::set_mfr_enabled(false);
+        let sequential = render_frame_range_parallel(&comp, 0, 2, 8, 8, 0.0, 0);
+        crate::core::parallel_render::set_mfr_enabled(saved);
+
+        assert_eq!(sequential.len(), 3, "frames 0..=2 must render");
+        assert_eq!(
+            parallel, sequential,
+            "MFR toggle must change scheduling only, never pixels"
+        );
+        assert!(
+            sequential.iter().any(|(_, px)| px.iter().any(|&v| v > 0)),
+            "fixture must actually render something"
+        );
+    }
 }

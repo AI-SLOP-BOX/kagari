@@ -15,8 +15,14 @@ pub fn handle_tools_and_playback(
     if allow_single_key && shortcut_pressed(i, ShortcutId::TogglePlayback) {
         if app.playback.is_playing {
             app.playback.stop_playing();
+            if let Some(playback) = &mut app.audio_playback {
+                playback.pause();
+            }
         } else {
             app.playback.start_playing();
+            if let Some(playback) = &mut app.audio_playback {
+                playback.resume();
+            }
         }
         if !app.playback.is_playing && app.motion_sketch_active {
             app.motion_sketch_active = false;

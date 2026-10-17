@@ -17,39 +17,39 @@ pub(crate) fn draw_shape_specs(
         ..
     } = &mut layer.layer_type
     {
-        ui.label(format!("Shape: {:?}", shape_type));
+        ui.label(format!("シェイプ: {:?}", shape_type));
         let mut c_arr = *color;
-        if kui::property(ui, "Fill Color", |ui| kui::color_rgba(ui, &mut c_arr)).changed() {
+        if kui::property(ui, "塗りつぶしの色", |ui| kui::color_rgba(ui, &mut c_arr)).changed() {
             *color = c_arr;
             *project_changed = true;
         }
         let mut sc_arr = *stroke_color;
-        if kui::property(ui, "Stroke Color", |ui| kui::color_rgba(ui, &mut sc_arr)).changed() {
+        if kui::property(ui, "線の色", |ui| kui::color_rgba(ui, &mut sc_arr)).changed() {
             *stroke_color = sc_arr;
             *project_changed = true;
         }
-        *project_changed |= kui::property(ui, "Stroke Width", |ui| {
+        *project_changed |= kui::property(ui, "線幅", |ui| {
             kui::number(ui, stroke_width, 0.0..=50.0, 0.5, " px")
         })
         .changed();
 
         // ── Trim Paths (AE Shape Operator) ──
         ui.add_space(4.0);
-        ui.collapsing("Trim Paths", |ui| {
+        ui.collapsing("パスのトリミング", |ui| {
             let has_trim = layer.trim_paths.is_some();
             if !has_trim {
-                if kui::button(ui, "+ Add Trim Paths", kui::ButtonKind::Default).clicked() {
+                if kui::button(ui, "+ パスのトリミングを追加", kui::ButtonKind::Default).clicked() {
                     layer.trim_paths = Some(crate::core::timeline::TrimPaths::default());
                     *project_changed = true;
                 }
-            } else if kui::button(ui, "Remove", kui::ButtonKind::Quiet).clicked() {
+            } else if kui::button(ui, "削除", kui::ButtonKind::Quiet).clicked() {
                 layer.trim_paths = None;
                 *project_changed = true;
             }
 
             if let Some(ref mut trim) = layer.trim_paths {
                 let mut start_val = trim.start.evaluate(current_frame);
-                if kui::property(ui, "Start", |ui| {
+                if kui::property(ui, "開始", |ui| {
                     kui::slider(ui, &mut start_val, 0.0..=100.0, "%")
                 })
                 .changed()
@@ -59,7 +59,7 @@ pub(crate) fn draw_shape_specs(
                 }
 
                 let mut end_val = trim.end.evaluate(current_frame);
-                if kui::property(ui, "End", |ui| {
+                if kui::property(ui, "終了", |ui| {
                     kui::slider(ui, &mut end_val, 0.0..=100.0, "%")
                 })
                 .changed()
@@ -69,7 +69,7 @@ pub(crate) fn draw_shape_specs(
                 }
 
                 let mut offset_val = trim.offset.evaluate(current_frame);
-                if kui::property(ui, "Offset", |ui| {
+                if kui::property(ui, "オフセット", |ui| {
                     ui.add(kui::drag(&mut offset_val).unit("°"))
                 })
                 .changed()
@@ -81,18 +81,18 @@ pub(crate) fn draw_shape_specs(
         });
 
         // ── Merge Paths & Offset Paths (AE Vector Operators) ──
-        ui.collapsing("Vector Path Operators", |ui| {
+        ui.collapsing("ベクターパス演算", |ui| {
             let mut merge_mode = ui.ctx().data(|d| {
                 d.get_temp::<i32>(egui::Id::new("shape_merge_mode"))
                     .unwrap_or(0)
             });
             let merge_options = [
-                (0, "Add (Union)"),
-                (1, "Subtract (Difference)"),
-                (2, "Intersect"),
-                (3, "Exclude (XOR)"),
+                (0, "追加 (合成)"),
+                (1, "前面オブジェクトで型抜き"),
+                (2, "交差"),
+                (3, "中マド (排他)"),
             ];
-            if kui::property(ui, "Merge Paths Mode", |ui| {
+            if kui::property(ui, "パスの結合モード", |ui| {
                 kui::combo(
                     ui,
                     "shape_merge_mode_combo",
@@ -109,7 +109,7 @@ pub(crate) fn draw_shape_specs(
                 d.get_temp::<f32>(egui::Id::new("shape_offset_path_amt"))
                     .unwrap_or(0.0)
             });
-            if kui::property(ui, "Offset Paths", |ui| {
+            if kui::property(ui, "パスのオフセット", |ui| {
                 kui::number(ui, &mut offset_dist, -100.0..=100.0, 0.5, " px")
             })
             .changed()
@@ -122,12 +122,12 @@ pub(crate) fn draw_shape_specs(
         });
 
         // ── Repeater (AE Shape Modifier) ──
-        ui.collapsing("Repeater", |ui| {
+        ui.collapsing("リピーター", |ui| {
             let mut has_rep = ui.ctx().data(|d| {
                 d.get_temp::<bool>(egui::Id::new("has_shape_repeater"))
                     .unwrap_or(false)
             });
-            if kui::toggle(ui, &mut has_rep, "Enable Repeater").changed() {
+            if kui::toggle(ui, &mut has_rep, "リピーターを有効化").changed() {
                 ui.ctx()
                     .data_mut(|d| d.insert_temp(egui::Id::new("has_shape_repeater"), has_rep));
                 *project_changed = true;

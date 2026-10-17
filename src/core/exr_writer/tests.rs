@@ -164,17 +164,20 @@ fn decode(parsed: &Parsed) -> Vec<Vec<f32>> {
             _ => panic!("compressed EXR decoding requires the cli feature"),
         };
         let mut c = 0usize;
-        for (ci, st) in parsed.types.iter().enumerate() {
-            for _ in 0..(rows * width) {
-                match st {
-                    ExrSampleType::Float => {
-                        let bits = u32_at(&raw, &mut c);
-                        out[ci].push(f32::from_bits(bits));
-                    }
-                    ExrSampleType::Half => {
-                        let bits = u16::from_le_bytes([raw[c], raw[c + 1]]);
-                        c += 2;
-                        out[ci].push(half::f16::from_bits(bits).to_f32());
+        // Scanline-major chunk layout: for each row, each channel's samples.
+        for _ in 0..rows {
+            for (ci, st) in parsed.types.iter().enumerate() {
+                for _ in 0..width {
+                    match st {
+                        ExrSampleType::Float => {
+                            let bits = u32_at(&raw, &mut c);
+                            out[ci].push(f32::from_bits(bits));
+                        }
+                        ExrSampleType::Half => {
+                            let bits = u16::from_le_bytes([raw[c], raw[c + 1]]);
+                            c += 2;
+                            out[ci].push(half::f16::from_bits(bits).to_f32());
+                        }
                     }
                 }
             }
@@ -208,6 +211,22 @@ fn write_to_vec(img: &ExrImage) -> Vec<u8> {
     let mut sink = Cursor::new(Vec::new());
     write_exr(&mut sink, img).expect("write");
     sink.into_inner()
+}
+
+#[test]
+fn test_pixel_type_codes_match_openexr_spec() {
+    // OpenEXR file format spec, "Pixel Types": UINT=0, HALF=1, FLOAT=2.
+    // The roundtrip tests parse with these same constants, so a wrong value
+    // there is self-consistent — assert against the literal spec numbers.
+    assert_eq!(PIXEL_HALF, 1);
+    assert_eq!(PIXEL_FLOAT, 2);
+    assert_eq!(PIXEL_HALF, ExrSampleType::Half.code());
+    assert_eq!(PIXEL_FLOAT, ExrSampleType::Float.code());
+
+    let img = ExrImage::rgba_f32(1, 1, &[0.5, 0.25, 0.125, 1.0]);
+    let bytes = write_to_vec(&img);
+    let p = parse(&bytes);
+    assert_eq!(p.types, vec![ExrSampleType::Float; 4]);
 }
 
 #[test]

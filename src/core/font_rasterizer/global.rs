@@ -12,25 +12,30 @@ pub fn init_font_rasterizer() {
     }));
 }
 
-/// Access the global font rasterizer.
+/// Access the global font rasterizer immutably.
 pub fn with_font_rasterizer<F, R>(f: F) -> R
 where
     F: FnOnce(&FontRasterizer) -> R,
 {
     let rasterizer = GLOBAL_FONT_RASTERIZER.get_or_init(|| {
         let mut r = FontRasterizer::new();
-        for name in &[
-            "Helvetica",
-            "Arial",
-            "DejaVu Sans",
-            "Liberation Sans",
-            "Inter",
-            "Roboto",
-        ] {
-            r.load_system_font(name);
-        }
+        r.load_all_system_fonts();
         std::sync::Mutex::new(r)
     });
-    let lock = rasterizer.lock().unwrap_or_else(|e| e.into_inner());
-    f(&lock)
+    let mut lock = rasterizer.lock().unwrap_or_else(|e| e.into_inner());
+    f(&mut lock)
+}
+
+/// Access the global font rasterizer mutably.
+pub fn with_font_rasterizer_mut<F, R>(f: F) -> R
+where
+    F: FnOnce(&mut FontRasterizer) -> R,
+{
+    let rasterizer = GLOBAL_FONT_RASTERIZER.get_or_init(|| {
+        let mut r = FontRasterizer::new();
+        r.load_all_system_fonts();
+        std::sync::Mutex::new(r)
+    });
+    let mut lock = rasterizer.lock().unwrap_or_else(|e| e.into_inner());
+    f(&mut lock)
 }

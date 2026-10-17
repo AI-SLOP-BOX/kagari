@@ -63,29 +63,31 @@ pub fn draw_section_header_svg(ui: &mut egui::Ui, title: &str, icon: &'static st
     ui.add_space(2.0);
 }
 
-/// Helper: Draw a calm pro tab: plain text with a thin blue underline when
-/// selected. Deliberately no filled background (avoids heavy pill tabs).
+/// Helper: Draw a calm pro tab: plain text with a sleek amber underline when
+/// selected, perfectly matching Kagari's modern design aesthetic.
 pub fn draw_custom_tab(ui: &mut egui::Ui, selected: bool, title: &str) -> egui::Response {
-    let text = egui::RichText::new(title).small().color(if selected {
-        colors::TEXT_PRIMARY
-    } else {
-        colors::TEXT_SECONDARY
-    });
+    let text = egui::RichText::new(title)
+        .size(12.5)
+        .strong()
+        .color(if selected {
+            colors::TEXT_PRIMARY
+        } else {
+            colors::TEXT_SECONDARY
+        });
 
     let response = ui.add(egui::Label::new(text).sense(egui::Sense::click()));
     if selected {
         let rect = response.rect;
         let line_rect = egui::Rect::from_min_max(
-            egui::pos2(rect.left() + 2.0, rect.bottom() - 2.0),
-            egui::pos2(rect.right() - 2.0, rect.bottom()),
+            egui::pos2(rect.left(), rect.bottom() + 3.0),
+            egui::pos2(rect.right(), rect.bottom() + 5.0),
         );
-        ui.painter()
-            .rect_filled(line_rect, 1.0, colors::ACCENT_SELECTION);
+        ui.painter().rect_filled(line_rect, 1.0, colors::ACCENT_BRAND);
     } else if response.hovered() {
         ui.painter().rect_filled(
-            response.rect.expand2(egui::vec2(4.0, 2.0)),
+            response.rect.expand2(egui::vec2(6.0, 3.0)),
             4.0,
-            colors::BG_HOVER.linear_multiply(0.6),
+            colors::BG_HOVER,
         );
     }
     if response.hovered() {
@@ -164,6 +166,13 @@ pub fn side_panel_frame() -> egui::Frame {
 /// - Alt+drag: 0.1x speed (fine control)
 /// - Shift+drag: 10x speed (fast scrub)
 #[allow(dead_code)]
-pub fn ae_drag_value(value: &mut f32) -> egui::DragValue<'_> {
-    egui::DragValue::new(value).speed(1.0)
+pub fn ae_drag_value<'a>(value: &'a mut f32, ctx: &egui::Context) -> egui::DragValue<'a> {
+    let speed_mult = if ctx.input(|i| i.modifiers.shift) {
+        10.0
+    } else if ctx.input(|i| i.modifiers.alt) {
+        0.1
+    } else {
+        1.0
+    };
+    egui::DragValue::new(value).speed(speed_mult)
 }

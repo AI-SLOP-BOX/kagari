@@ -68,34 +68,39 @@ pub(crate) fn render_particle_layer(buffer: &mut [u8], ctx: ParticleLayerCtx<'_>
         let dt = 1.0 / comp.fps.max(1) as f32;
         let depth_enabled = em.depth_enabled;
 
-        let cached = PARTICLE_SIM_CACHE.with(|cache| {
-            cache.borrow().as_ref().and_then(|(v, id, f, bits, ps)| {
-                (*v == sim_key.0 && *id == sim_key.1 && *f == sim_key.2 && *bits == sim_key.3)
-                    .then(|| ps.clone())
-            })
-        });
-
-        let ps = match cached {
-            Some(ps) => ps,
-            None => {
-                let mut ps = crate::core::particle_system::ParticleSystem::new(em);
-                // Cap simulation length for performance on very long compositions
-                let sim_frames = frame.min(2000);
-                for _ in 0..=sim_frames {
-                    ps.update(dt, pos[0], pos[1]);
+        let ps = PARTICLE_SIM_CACHE.with(|cache| {
+            let mut cache_ref = cache.borrow_mut();
+            if let Some((v, ref id, f, ref bits, ref mut cached_ps)) = *cache_ref {
+                if v == sim_key.0 && *id == sim_key.1 && *bits == sim_key.3 {
+                    if f == sim_key.2 {
+                        return cached_ps.clone();
+                    }
+                    // Sequential playback forward: step incrementally from cached frame!
+                    if sim_key.2 > f && sim_key.2 <= f + 30 {
+                        for _ in (f + 1)..=sim_key.2 {
+                            cached_ps.update(dt, pos[0], pos[1]);
+                        }
+                        let updated = cached_ps.clone();
+                        *cache_ref = Some((sim_key.0, sim_key.1.clone(), sim_key.2, sim_key.3, updated.clone()));
+                        return updated;
+                    }
                 }
-                PARTICLE_SIM_CACHE.with(|cache| {
-                    *cache.borrow_mut() = Some((
-                        sim_key.0,
-                        sim_key.1.clone(),
-                        sim_key.2,
-                        sim_key.3,
-                        ps.clone(),
-                    ));
-                });
-                ps
             }
-        };
+            // Fallback: new simulation from frame 0 up to current frame
+            let mut ps = crate::core::particle_system::ParticleSystem::new(em);
+            let sim_frames = frame.min(2000);
+            for _ in 0..=sim_frames {
+                ps.update(dt, pos[0], pos[1]);
+            }
+            *cache_ref = Some((
+                sim_key.0,
+                sim_key.1.clone(),
+                sim_key.2,
+                sim_key.3,
+                ps.clone(),
+            ));
+            ps
+        });
         if depth_enabled {
             // Project particles through the active camera: Z drives
             // screen position and size scaling.

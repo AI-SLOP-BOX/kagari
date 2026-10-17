@@ -13,6 +13,10 @@ impl Default for KagariApp {
             show_recovery_dialog: false,
             recovery_checked: false,
             recovery_snapshot_time: None,
+            recovery_generations: None,
+            recovery_load_rx: None,
+            recovery_generations_rx: None,
+            recovery_load_kind: RecoveryLoadKind::Latest,
             ui_tabs: UiTabsDomainState::default(),
             loop_playback: true,
             playback_speed: 1,
@@ -168,6 +172,7 @@ impl Default for KagariApp {
             renaming_layer: None,
             show_home: true,
             startup_animation: crate::ui::panel_animation::PanelAnimation::new_opening(),
+            project_loading: None,
             home_dir: std::env::var("HOME")
                 .map(std::path::PathBuf::from)
                 .unwrap_or_else(|_| std::env::temp_dir()),
@@ -211,6 +216,7 @@ impl Default for KagariApp {
             proxy_job_rx: None,
             proxy_job_cancel_flag: None,
             proxy_job_label: None,
+            proxy_job_progress: None,
             last_export_path: None,
             command_palette_search: String::new(),
             command_palette_selected_idx: 0,

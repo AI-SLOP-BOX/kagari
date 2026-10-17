@@ -28,7 +28,8 @@ pub(crate) fn draw_planar_tracker_section(
     }
     ui.separator();
     ui.collapsing(tr("☕ Mocha Planar Surface Tracker"), |ui| {
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = egui::vec2(6.0, 3.0);
             ui.label(tr("Track Motion:"));
             let mut track_trans = ui.ctx().data(|d| {
                 d.get_temp::<bool>(egui::Id::new("planar_trans"))
@@ -91,7 +92,8 @@ pub(crate) fn draw_planar_tracker_section(
             }
         });
 
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = egui::vec2(6.0, 3.0);
             if custom_widgets::ae_button_accent(ui, &tr("☕ Track Planar Surface"))
                 .on_hover_text(tr("Track the four surface corners on a background worker"))
                 .clicked()
@@ -337,7 +339,8 @@ pub(crate) fn draw_planar_tracker_section(
             }
         });
     if let Some(target_idx) = app.tracker_apply_target {
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = egui::vec2(6.0, 3.0);
             if custom_widgets::ae_button_accent(ui, &tr("Apply Motion → Target")).clicked() {
                 app.modify_project(|p| {
                     let comp = p.active_composition_mut();

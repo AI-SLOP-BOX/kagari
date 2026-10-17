@@ -18,7 +18,7 @@ cargo clippy --all-features --all-targets
 cargo run --features gui --bin kagari-studio
 
 # Run the CLI tool
-cargo run --features cli --bin kagari -- frame --project test_project.json --frame 0 --output /tmp/test.png
+cargo run --features cli --bin kagari -- frame --project tests/fixtures/test_project.json --frame 0 --output /tmp/test.png
 ```
 
 ## Architecture

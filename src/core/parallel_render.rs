@@ -2,6 +2,22 @@ use rayon::prelude::*;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
+/// Global Multi-Frame Rendering (MFR) switch, toggled from the proxy/timeline
+/// header and read by the processing side (FFmpeg export chunk rendering,
+/// software-renderer frame ranges, parallel export queues) so the UI toggle
+/// changes real behavior instead of only flipping a label.
+static MFR_ENABLED: AtomicBool = AtomicBool::new(true);
+
+/// Whether Multi-Frame Rendering (frame-parallel rayon) is currently enabled.
+pub fn mfr_enabled() -> bool {
+    MFR_ENABLED.load(Ordering::Relaxed)
+}
+
+/// Enable/disable Multi-Frame Rendering for subsequent render jobs.
+pub fn set_mfr_enabled(enabled: bool) {
+    MFR_ENABLED.store(enabled, Ordering::Relaxed);
+}
+
 /// Render queue item representing a composition to be rendered.
 #[derive(Debug, Clone)]
 pub struct RenderQueueItem {

@@ -11,6 +11,25 @@ pub(crate) fn composition_cache_key(comp: &Composition) -> u64 {
 
 pub(crate) fn media_file_revision(path: &std::path::Path) -> u64 {
     use std::hash::{Hash, Hasher};
+    use std::sync::Mutex;
+    use std::time::Instant;
+
+    // Cache filesystem metadata queries for up to 1 second during active playback
+    // to prevent disk I/O thrashing on every tick (30-60 fps).
+    static REVISION_CACHE: std::sync::OnceLock<
+        Mutex<std::collections::HashMap<std::path::PathBuf, (u64, Instant)>>,
+    > = std::sync::OnceLock::new();
+
+    let cache_mutex = REVISION_CACHE.get_or_init(|| Mutex::new(std::collections::HashMap::new()));
+    let now = Instant::now();
+    if let Ok(cache) = cache_mutex.lock() {
+        if let Some((revision, timestamp)) = cache.get(path) {
+            if now.duration_since(*timestamp).as_millis() < 1000 {
+                return *revision;
+            }
+        }
+    }
+
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     path.hash(&mut hasher);
     match std::fs::metadata(path) {
@@ -25,7 +44,17 @@ pub(crate) fn media_file_revision(path: &std::path::Path) -> u64 {
         }
         Err(error) => error.kind().hash(&mut hasher),
     }
-    hasher.finish()
+    let revision = hasher.finish();
+
+    if let Ok(mut cache) = cache_mutex.lock() {
+        // Simple bound to prevent unbounded memory growth
+        if cache.len() > 1000 {
+            cache.clear();
+        }
+        cache.insert(path.to_path_buf(), (revision, now));
+    }
+
+    revision
 }
 
 pub(crate) fn composition_media_revision(comp: &Composition, frame: u32) -> u64 {

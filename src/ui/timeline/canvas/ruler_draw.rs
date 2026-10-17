@@ -63,20 +63,29 @@ pub(super) fn draw_time_ruler(
     let playhead_norm = (current_frame as f32 - start_frame as f32) / zoom_span as f32;
     let playhead_x = ruler_rect.left() + playhead_norm * ruler_rect.width();
     if (0.0..=1.0).contains(&playhead_norm) {
+        // Vertical needle stroke
         ui.painter().line_segment(
             [
-                egui::pos2(playhead_x, ruler_rect.top() + 4.0),
+                egui::pos2(playhead_x, ruler_rect.top() + 10.0),
                 egui::pos2(playhead_x, ruler_rect.bottom()),
             ],
-            egui::Stroke::new(1.5_f32, colors::TIMELINE_PLAYHEAD),
+            egui::Stroke::new(1.8_f32, colors::TIMELINE_PLAYHEAD),
         );
-        let triangle = vec![
-            egui::pos2(playhead_x - 4.0, ruler_rect.top()),
-            egui::pos2(playhead_x + 4.0, ruler_rect.top()),
-            egui::pos2(playhead_x, ruler_rect.top() + 6.0),
+        // Modern playhead head: rounded tab + pointer
+        let head_w = 10.0;
+        let head_h = 7.0;
+        let top_rect = egui::Rect::from_min_size(
+            egui::pos2(playhead_x - head_w * 0.5, ruler_rect.top()),
+            egui::vec2(head_w, head_h),
+        );
+        ui.painter().rect_filled(top_rect, 2.0, colors::TIMELINE_PLAYHEAD);
+        let pointer = vec![
+            egui::pos2(playhead_x - head_w * 0.5, ruler_rect.top() + head_h),
+            egui::pos2(playhead_x + head_w * 0.5, ruler_rect.top() + head_h),
+            egui::pos2(playhead_x, ruler_rect.top() + head_h + 5.0),
         ];
         ui.painter().add(egui::Shape::convex_polygon(
-            triangle,
+            pointer,
             colors::TIMELINE_PLAYHEAD,
             egui::Stroke::NONE,
         ));

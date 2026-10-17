@@ -1,6 +1,7 @@
 use crate::core::timeline::{Layer, LayerType};
 use crate::ui::inspector_property::draw_property_ui;
 use crate::ui::kui;
+use crate::ui::localization::tr;
 use eframe::egui;
 
 pub(crate) fn draw_media_specs(
@@ -14,19 +15,19 @@ pub(crate) fn draw_media_specs(
     match &mut layer.layer_type {
         LayerType::Solid { color } => {
             let val_before = *color;
-            kui::property(ui, "Color", |ui| kui::color_rgba(ui, color));
+            kui::property(ui, &tr("Color"), |ui| kui::color_rgba(ui, color));
             if val_before != *color {
                 *project_changed = true;
             }
         }
         LayerType::Model3D { path } => {
             let before = path.clone();
-            ui.label(egui::RichText::new("3D Model Layer").strong());
+            ui.label(egui::RichText::new("3Dモデルレイヤー").strong());
             kui::property(ui, "OBJ", |ui| kui::text_field(ui, path));
             if !path.is_empty()
                 && ui
-                    .small("Reveal File")
-                    .on_hover_text("Open the OBJ source file location")
+                    .small("ファイルを表示")
+                    .on_hover_text("OBJソースファイルの保存場所を開く")
                     .clicked()
             {
                 crate::ui::project_io::reveal_in_file_manager(std::path::Path::new(path.as_str()));
@@ -36,18 +37,18 @@ pub(crate) fn draw_media_specs(
             }
             ui.label(
                 egui::RichText::new(
-                    "OBJ models use the composition camera and 3D transform controls.",
+                    "OBJモデルはコンポジションカメラと3Dトランスフォーム操作に対応しています。",
                 )
                 .small(),
             );
         }
         LayerType::Image { path } => {
             let val_before = path.clone();
-            kui::property(ui, "Source", |ui| kui::text_field(ui, path));
+            kui::property(ui, "ソース", |ui| kui::text_field(ui, path));
             if !path.is_empty()
                 && ui
-                    .small("Reveal File")
-                    .on_hover_text("Open the source file location in file manager")
+                    .small("ファイルを表示")
+                    .on_hover_text("ソースファイルの保存場所を開く")
                     .clicked()
             {
                 crate::ui::project_io::reveal_in_file_manager(std::path::Path::new(path.as_str()));
@@ -57,9 +58,9 @@ pub(crate) fn draw_media_specs(
             }
 
             // Puppet Mesh & Pins Tool
-            ui.collapsing("Puppet Tool & Mesh Warp", |ui| {
-                if kui::button(ui, "+ Position Pin", kui::ButtonKind::Default)
-                    .on_hover_text("Adds a deformation pin at the layer position")
+            ui.collapsing("パペットツール ＆ メッシュワープ", |ui| {
+                if kui::button(ui, "+ ピンを追加", kui::ButtonKind::Default)
+                    .on_hover_text("レイヤー位置に変形ピンを追加します")
                     .clicked()
                 {
                     let mut index = 1;
@@ -75,7 +76,7 @@ pub(crate) fn draw_media_specs(
                         .puppet_pins
                         .push(crate::core::timeline::PuppetPin::new(
                             id,
-                            format!("Pin {index}"),
+                            format!("ピン {index}"),
                             position,
                         ));
                     *project_changed = true;
@@ -89,7 +90,7 @@ pub(crate) fn draw_media_specs(
                     d.get_temp::<f32>(egui::Id::new("puppet_mesh_exp"))
                         .unwrap_or(5.0)
                 });
-                if kui::property(ui, "Mesh Density", |ui| {
+                if kui::property(ui, "メッシュ密度", |ui| {
                     kui::slider_integer(ui, &mut mesh_density, 10..=100)
                 })
                 .changed()
@@ -99,7 +100,7 @@ pub(crate) fn draw_media_specs(
                     });
                     *project_changed = true;
                 }
-                if kui::property(ui, "Expansion", |ui| {
+                if kui::property(ui, "拡張幅", |ui| {
                     kui::slider(ui, &mut mesh_exp, 0.0..=50.0, " px")
                 })
                 .changed()
@@ -122,51 +123,51 @@ pub(crate) fn draw_media_specs(
             let before_speed = *speed;
             let before_count = *frame_count;
             let before_frame_blending = layer.frame_blending;
-            ui.label(egui::RichText::new("Video Layer").strong());
-            kui::property(ui, "Source", |ui| kui::text_field(ui, source));
+            ui.label(egui::RichText::new("動画レイヤー").strong());
+            kui::property(ui, "ソース", |ui| kui::text_field(ui, source));
             if !source.is_empty()
                 && ui
-                    .small("Reveal File")
-                    .on_hover_text("Open the source file location in file manager")
+                    .small("ファイルを表示")
+                    .on_hover_text("ソースファイルの保存場所を開く")
                     .clicked()
             {
                 crate::ui::project_io::reveal_in_file_manager(std::path::Path::new(
                     source.as_str(),
                 ));
             }
-            kui::property(ui, "Frames dir", |ui| kui::text_field(ui, frames_dir));
+            kui::property(ui, "フレーム連番", |ui| kui::text_field(ui, frames_dir));
             // Playback speed: 1.0 = realtime, 0.5 = half, 2.0 = double
-            kui::property(ui, "Speed", |ui| {
+            kui::property(ui, "再生速度", |ui| {
                 let response = ui.add(kui::drag(speed).range(0.05..=10.0).speed(0.05).unit("x"));
-                if kui::button(ui, "1x", kui::ButtonKind::Quiet)
-                    .on_hover_text("Reset to realtime")
+                if kui::button(ui, "標準 (1x)", kui::ButtonKind::Quiet)
+                    .on_hover_text("等速再生にリセット")
                     .clicked()
                 {
                     *speed = 1.0;
                 }
                 response
             });
-            kui::property(ui, "Frame Blending", |ui| {
+            kui::property(ui, "フレームブレンド", |ui| {
                 kui::toggle(ui, &mut layer.frame_blending, "")
             })
             .on_hover_text(
-                "Blend adjacent source frames for fractional speed and time-remap playback",
+                "低速再生やタイムリマップ時に隣接フレームを滑らかにブレンドします",
             );
-            kui::property(ui, "Frame count", |ui| {
+            kui::property(ui, "総フレーム数", |ui| {
                 ui.add(kui::drag(frame_count).range(1..=100_000))
             });
             ui.label(format!(
-                "Effective duration: {:.1}s at {:.2}x | audio: {}",
+                "再生時間: {:.1}秒 (速度 {:.2}x) | 音声: {}",
                 *frame_count as f32 / comp_fps.max(1.0) / speed.max(0.01),
                 speed,
-                if audio_wav.is_some() { "yes" } else { "no" }
+                if audio_wav.is_some() { "あり" } else { "なし" }
             ));
 
             // Time remap toggle & parameter editing
             {
                 let remap_enabled = layer.time_remap.is_some();
                 let mut new_enabled = remap_enabled;
-                if kui::property(ui, "Time Remap", |ui| kui::toggle(ui, &mut new_enabled, ""))
+                if kui::property(ui, "タイムリマップ", |ui| kui::toggle(ui, &mut new_enabled, ""))
                     .changed()
                 {
                     if new_enabled && !remap_enabled {
@@ -187,7 +188,7 @@ pub(crate) fn draw_media_specs(
             if let Some(remap) = &mut layer.time_remap {
                 let remap_before = remap.clone();
                 if let Some(nf) =
-                    draw_property_ui(current_frame, ui, "Remapped Frame", remap, |ui, val| {
+                    draw_property_ui(current_frame, ui, "リマップフレーム", remap, |ui, val| {
                         ui.add(kui::drag(val).range(0.0..=100_000.0).speed(1.0).unit("f"));
                     })
                 {

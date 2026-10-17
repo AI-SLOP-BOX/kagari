@@ -39,7 +39,7 @@ pub(crate) struct VideoFrameCache {
 }
 
 impl VideoFrameCache {
-    pub(crate) const DEFAULT_MAX_BYTES: usize = 512 * 1024 * 1024;
+    pub(crate) const DEFAULT_MAX_BYTES: usize = 1024 * 1024 * 1024;
 
     pub(crate) fn new() -> Self {
         Self {
@@ -93,17 +93,21 @@ impl VideoFrameCache {
                 last_used: self.clock,
             },
         );
-        while self.current_bytes > self.max_bytes {
-            let Some(oldest) = self
+        if self.current_bytes > self.max_bytes {
+            let mut eviction_candidates: Vec<(VideoFrameKey, u64, usize)> = self
                 .entries
                 .iter()
-                .min_by_key(|(_, entry)| entry.last_used)
-                .map(|(key, _)| key.clone())
-            else {
-                break;
-            };
-            if let Some(removed) = self.entries.remove(&oldest) {
-                self.current_bytes = self.current_bytes.saturating_sub(removed.byte_size);
+                .map(|(key, entry)| (key.clone(), entry.last_used, entry.byte_size))
+                .collect();
+            eviction_candidates.sort_unstable_by_key(|(_, last_used, _)| *last_used);
+
+            for (key, _, byte_size) in eviction_candidates {
+                if self.current_bytes <= self.max_bytes {
+                    break;
+                }
+                if self.entries.remove(&key).is_some() {
+                    self.current_bytes = self.current_bytes.saturating_sub(byte_size);
+                }
             }
         }
     }

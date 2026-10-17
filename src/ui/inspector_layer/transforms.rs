@@ -113,47 +113,20 @@ pub fn draw_layer_transforms(
                 .changed();
             });
         } else {
-            ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new(tr("Transform 2D"))
-                        .strong()
-                        .color(colors::TEXT_PRIMARY),
-                );
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if kui::button(ui, "Reset", kui::ButtonKind::Quiet)
-                        .on_hover_text(
-                            "Reset position, scale, rotation, and anchor point to default values",
-                        )
-                        .clicked()
-                    {
-                        layer.transform = crate::core::timeline::Transform2D::default();
-                        *project_changed = true;
-                    }
-                });
-            });
+            egui::CollapsingHeader::new(
+                egui::RichText::new("トランスフォーム")
+                    .size(13.0)
+                    .strong()
+                    .color(colors::TEXT_PRIMARY),
+            )
+            .default_open(true)
+            .show(ui, |ui| {
 
-            let val_before = layer.transform.anchor_point.clone();
-            if let Some(nf) = draw_property_ui(
-                current_frame,
-                ui,
-                &tr("Anchor Point"),
-                &mut layer.transform.anchor_point,
-                |ui, val| {
-                    kui::vector_axes_unbounded(ui, val, 1.0, "", ["X", "Y"]);
-                },
-            ) {
-                *next_frame = Some(nf);
-            }
-
-            if val_before != layer.transform.anchor_point {
-                *project_changed = true;
-            }
-            ui.add_space(3.0);
             let pos_before = layer.transform.position.clone();
             if let Some(nf) = draw_property_ui(
                 current_frame,
                 ui,
-                &tr("Position"),
+                "位置",
                 &mut layer.transform.position,
                 |ui, val| {
                     kui::vector_axes_unbounded(ui, val, 1.0, "", ["X", "Y"]);
@@ -171,7 +144,7 @@ pub fn draw_layer_transforms(
             if let Some(nf) = draw_property_ui(
                 current_frame,
                 ui,
-                &tr("Scale"),
+                "スケール",
                 &mut layer.transform.scale,
                 |ui, val| {
                     kui::vector_axes_unbounded(ui, val, 0.1, "%", ["X", "Y"]);
@@ -189,7 +162,7 @@ pub fn draw_layer_transforms(
             if let Some(nf) = draw_property_ui(
                 current_frame,
                 ui,
-                &tr("Rotation"),
+                "回転",
                 &mut layer.transform.rotation,
                 |ui, val| {
                     ui.horizontal(|ui| {
@@ -204,6 +177,48 @@ pub fn draw_layer_transforms(
             if rot_before != layer.transform.rotation {
                 *project_changed = true;
             }
+
+            ui.add_space(3.0);
+            let val_before = layer.transform.anchor_point.clone();
+            if let Some(nf) = draw_property_ui(
+                current_frame,
+                ui,
+                "アンカー",
+                &mut layer.transform.anchor_point,
+                |ui, val| {
+                    kui::vector_axes_unbounded(ui, val, 1.0, "", ["X", "Y"]);
+                },
+            ) {
+                *next_frame = Some(nf);
+            }
+
+            if val_before != layer.transform.anchor_point {
+                *project_changed = true;
+            }
+
+            ui.add_space(3.0);
+            let _op_before = layer.transform.opacity.clone();
+            if let Some(nf) = draw_property_ui(
+                current_frame,
+                ui,
+                "不透明度",
+                &mut layer.transform.opacity,
+                |ui, val| {
+                    ui.horizontal(|ui| {
+                        crate::ui::custom_widgets::ae_scrubber(
+                            ui,
+                            val,
+                            1.0,
+                            "%",
+                            Some(0.0..=100.0),
+                        );
+                        kui::slider(ui, val, 0.0..=100.0, "%");
+                    });
+                },
+            ) {
+                *next_frame = Some(nf);
+            }
+            draw_easy_ease_button(ui, &mut layer.transform.opacity, project_changed);
 
             // ── Auto-Orient (AE parity): rotation follows motion path ──
             {
@@ -248,30 +263,6 @@ pub fn draw_layer_transforms(
                     *project_changed = true;
                 }
             }
-
-            ui.add_space(3.0);
-            let _op_before = layer.transform.opacity.clone();
-            if let Some(nf) = draw_property_ui(
-                current_frame,
-                ui,
-                &tr("Opacity"),
-                &mut layer.transform.opacity,
-                |ui, val| {
-                    ui.horizontal(|ui| {
-                        crate::ui::custom_widgets::ae_scrubber(
-                            ui,
-                            val,
-                            1.0,
-                            "%",
-                            Some(0.0..=100.0),
-                        );
-                        kui::slider(ui, val, 0.0..=100.0, "%");
-                    });
-                },
-            ) {
-                *next_frame = Some(nf);
-            }
-            draw_easy_ease_button(ui, &mut layer.transform.opacity, project_changed);
             let has_transform_expression = layer.transform.anchor_point_expression.is_some()
                 || layer.transform.position_expression.is_some()
                 || layer.transform.scale_expression.is_some()
@@ -328,6 +319,8 @@ pub fn draw_layer_transforms(
                     Some(fps),
                 );
             });
+            });
+
             if layer.is_3d {
                 ui.separator();
                 ui.label(

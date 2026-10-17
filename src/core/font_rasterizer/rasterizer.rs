@@ -73,6 +73,11 @@ impl FontRasterizer {
         if self.fonts.contains_key(family_name) {
             return family_name.to_string();
         }
+        // Case-insensitive match among loaded fonts
+        let lower = family_name.to_lowercase().replace(' ', "");
+        if let Some(loaded_name) = self.fonts.keys().find(|k| k.to_lowercase().replace(' ', "") == lower) {
+            return loaded_name.clone();
+        }
         const PREFERRED: &[&str] = &[
             "Helvetica",
             "Helvetica Neue",

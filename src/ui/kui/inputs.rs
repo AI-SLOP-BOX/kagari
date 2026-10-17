@@ -7,12 +7,14 @@ use std::ops::RangeInclusive;
 pub struct NumberField<'a> {
     widget: egui::DragValue<'a>,
     width: Option<f32>,
+    base_speed: Option<f64>,
 }
 
 pub fn drag<N: egui::emath::Numeric>(value: &mut N) -> NumberField<'_> {
     NumberField {
         widget: egui::DragValue::new(value),
         width: None,
+        base_speed: None,
     }
 }
 
@@ -38,14 +40,26 @@ impl NumberField<'_> {
     }
 
     pub fn speed(mut self, speed: f64) -> Self {
-        self.widget = self.widget.speed(speed);
+        self.base_speed = Some(speed);
         self
     }
 }
 
 impl egui::Widget for NumberField<'_> {
-    fn ui(self, ui: &mut egui::Ui) -> egui::Response {
-        field_scope(ui, |ui| {
+    fn ui(mut self, ui: &mut egui::Ui) -> egui::Response {
+        // AE modifier keys: Shift = 10x fast scrub, Alt/Option = 0.1x precision scrub
+        let speed_mult = if ui.input(|i| i.modifiers.shift) {
+            10.0
+        } else if ui.input(|i| i.modifiers.alt) {
+            0.1
+        } else {
+            1.0
+        };
+
+        let effective_speed = self.base_speed.unwrap_or(1.0) * speed_mult;
+        self.widget = self.widget.speed(effective_speed);
+
+        let resp = field_scope(ui, |ui| {
             ui.add_sized(
                 [
                     self.width
@@ -54,7 +68,14 @@ impl egui::Widget for NumberField<'_> {
                 ],
                 self.widget,
             )
-        })
+        });
+
+        // Interactive cursor feedback
+        if resp.hovered() || resp.dragged() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+        }
+
+        resp
     }
 }
 

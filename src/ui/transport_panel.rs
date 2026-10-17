@@ -71,8 +71,14 @@ pub fn draw_transport_panel(
         if custom_widgets::ae_button_accent(ui, play_label).on_hover_text(label).clicked() {
             if app.playback.is_playing {
                 app.playback.stop_playing();
+                if let Some(playback) = &mut app.audio_playback {
+                    playback.pause();
+                }
             } else {
                 app.playback.start_playing();
+                if let Some(playback) = &mut app.audio_playback {
+                    playback.resume();
+                }
             }
         }
 

@@ -15,6 +15,7 @@ pub(crate) fn draw_text_specs(
         text,
         font_size,
         color,
+        font_family,
         tracking,
         leading,
         align,
@@ -26,32 +27,139 @@ pub(crate) fn draw_text_specs(
         let val_before_text = text.clone();
         let val_before_sz = *font_size;
         let val_before_col = *color;
+        let val_before_font = font_family.clone();
         let val_before_tr = *tracking;
         let val_before_ld = *leading;
         let val_before_al = *align;
         let val_before_sc = *stroke_color;
         let val_before_sw = *stroke_width;
 
-        ui.text_edit_multiline(text);
-        kui::property(ui, "Font Size", |ui| {
-            ui.add(kui::drag(font_size).range(8..=256))
+        // Ensure text_formatting exists and stays in sync
+        let formatting = layer
+            .text_formatting
+            .get_or_insert_with(crate::core::timeline::TextFormatting::default);
+
+        // ── Text Content ──
+        ui.add_space(2.0);
+        ui.label(egui::RichText::new("Source Text").small().color(colors::TEXT_MUTED));
+        ui.add(
+            egui::TextEdit::multiline(text)
+                .desired_width(f32::INFINITY)
+                .desired_rows(3)
+                .hint_text("Type text here..."),
+        );
+
+        ui.add_space(4.0);
+
+        // ── Font Family Dropdown (System fonts + common fallbacks) ──
+        kui::property(ui, "Font", |ui| {
+            let mut families = crate::core::font_rasterizer::with_font_rasterizer(|r| r.available_families());
+            if families.is_empty() {
+                families = vec![
+                    "Inter".to_string(),
+                    "Roboto".to_string(),
+                    "Helvetica".to_string(),
+                    "Arial".to_string(),
+                    "Courier New".to_string(),
+                    "Impact".to_string(),
+                    "Times New Roman".to_string(),
+                ];
+            }
+            if !families.contains(font_family) {
+                families.insert(0, font_family.clone());
+            }
+            let options: Vec<(String, &str)> = families.iter().map(|f| (f.clone(), f.as_str())).collect();
+            let changed = kui::combo(ui, format!("text_font_sel_{}", layer.id), font_family, &options);
+            if changed {
+                crate::core::font_rasterizer::with_font_rasterizer_mut(|r| {
+                    r.load_system_font(font_family);
+                });
+                crate::core::frame_cache::bump_version();
+                *project_changed = true;
+            }
+            changed
         });
-        kui::property(ui, "Color", |ui| kui::color_rgba(ui, color));
+
+        // ── Size & Leading ──
+        kui::property(ui, "Size", |ui| {
+            ui.add(kui::drag(font_size).range(6..=300).unit("px"))
+        });
+
         kui::property(ui, "Tracking", |ui| {
             ui.add(
                 kui::drag(tracking)
                     .speed(0.5)
-                    .range(-50.0..=200.0)
+                    .range(-50.0..=300.0)
                     .unit("px"),
             )
         });
+
         kui::property(ui, "Leading", |ui| {
             ui.add(kui::drag(leading).speed(0.05).range(0.5..=3.0).unit("x"))
         });
-        kui::property(ui, "Align", |ui| {
-            let align_options = [(0, "Left"), (1, "Center"), (2, "Right")];
-            kui::combo(ui, "text_align_combo", align, &align_options)
+
+        // ── Faux Style Toolbar (B, I, TT, Tt) ──
+        kui::property(ui, "Style", |ui| {
+            ui.horizontal(|ui| {
+                if kui::tool_button(ui, formatting.faux_bold, "B")
+                    .on_hover_text("Faux Bold (擬似太字)")
+                    .clicked()
+                {
+                    formatting.faux_bold = !formatting.faux_bold;
+                    *project_changed = true;
+                }
+                if kui::tool_button(ui, formatting.faux_italic, "I")
+                    .on_hover_text("Faux Italic (擬似斜体)")
+                    .clicked()
+                {
+                    formatting.faux_italic = !formatting.faux_italic;
+                    *project_changed = true;
+                }
+                if kui::tool_button(ui, formatting.all_caps, "TT")
+                    .on_hover_text("All Caps (すべて大文字)")
+                    .clicked()
+                {
+                    formatting.all_caps = !formatting.all_caps;
+                    if formatting.all_caps {
+                        formatting.small_caps = false;
+                    }
+                    *project_changed = true;
+                }
+                if kui::tool_button(ui, formatting.small_caps, "Tt")
+                    .on_hover_text("Small Caps (スモールキャピタル)")
+                    .clicked()
+                {
+                    formatting.small_caps = !formatting.small_caps;
+                    if formatting.small_caps {
+                        formatting.all_caps = false;
+                    }
+                    *project_changed = true;
+                }
+            })
         });
+
+        // ── Alignment Toolbar (Left, Center, Right) ──
+        kui::property(ui, "Align", |ui| {
+            ui.horizontal(|ui| {
+                for (val, icon, hint) in [
+                    (0, "Left", "左揃え (Left)"),
+                    (1, "Center", "中央揃え (Center)"),
+                    (2, "Right", "右揃え (Right)"),
+                ] {
+                    if kui::tool_button(ui, *align == val, icon)
+                        .on_hover_text(hint)
+                        .clicked()
+                    {
+                        *align = val;
+                        *project_changed = true;
+                    }
+                }
+            })
+        });
+
+        // ── Fill & Stroke Colors ──
+        kui::property(ui, "Fill", |ui| kui::color_rgba(ui, color));
+
         kui::property(ui, "Stroke", |ui| {
             ui.horizontal(|ui| {
                 kui::color_rgba(ui, stroke_color);
@@ -63,17 +171,84 @@ pub(crate) fn draw_text_specs(
                 );
             })
         });
+
+        // Synchronize changes to text_formatting
         if val_before_text != *text
             || val_before_sz != *font_size
             || val_before_col != *color
+            || val_before_font != *font_family
             || val_before_tr != *tracking
             || val_before_ld != *leading
             || val_before_al != *align
             || val_before_sc != *stroke_color
             || val_before_sw != *stroke_width
         {
+            formatting.font_family = font_family.clone();
+            formatting.tracking = *tracking;
+            formatting.leading = *leading;
+            formatting.alignment = *align as u32;
+            formatting.stroke_color = (*stroke_width > 0.0).then_some(*stroke_color);
+            formatting.stroke_width = *stroke_width;
             *project_changed = true;
         }
+
+        // ── Quick Animation & Action Presets (Hotspot Fabric) ──
+        ui.add_space(4.0);
+        ui.horizontal_wrapped(|ui| {
+            kui::svg_hotspot(
+                ui,
+                "text_anim_preset_icon",
+                crate::ui::icons::SVG_EFFECTS,
+                egui::vec2(16.0, 16.0),
+                false,
+                "Text Animation Presets",
+            );
+            if kui::micro_tag(ui, "Typewriter", false, "1クリックでタイプライターアニメーションを追加") {
+                let anim = crate::core::text_animator_advanced::TextAnimatorAdvanced {
+                    opacity: 0.0,
+                    unit: crate::core::text_animator_advanced::SelectorUnit::Characters,
+                    ..Default::default()
+                };
+                let stack = layer.text_animator_stack.get_or_insert_with(Default::default);
+                stack.animators.push(anim);
+                *project_changed = true;
+            }
+            if kui::micro_tag(ui, "Wave In", false, "文字が跳ねるウェーブアニメーションを追加") {
+                let anim = crate::core::text_animator_advanced::TextAnimatorAdvanced {
+                    position: [0.0, -30.0],
+                    unit: crate::core::text_animator_advanced::SelectorUnit::Characters,
+                    ..Default::default()
+                };
+                let stack = layer.text_animator_stack.get_or_insert_with(Default::default);
+                stack.animators.push(anim);
+                *project_changed = true;
+            }
+            if kui::micro_tag(ui, "Word Hop", false, "単語ごとにポップアップするアニメーションを追加") {
+                let anim = crate::core::text_animator_advanced::TextAnimatorAdvanced {
+                    position: [0.0, -40.0],
+                    unit: crate::core::text_animator_advanced::SelectorUnit::Words,
+                    ..Default::default()
+                };
+                let stack = layer.text_animator_stack.get_or_insert_with(Default::default);
+                stack.animators.push(anim);
+                *project_changed = true;
+            }
+            if kui::micro_tag(ui, "Glitch Text", false, "グリッチ・オフセット文字アニメーションを追加") {
+                let advanced = crate::core::text_animator_advanced::AdvancedProperties {
+                    character_offset: 5,
+                    skew: 25.0,
+                    ..Default::default()
+                };
+                let anim = crate::core::text_animator_advanced::TextAnimatorAdvanced {
+                    advanced,
+                    unit: crate::core::text_animator_advanced::SelectorUnit::Characters,
+                    ..Default::default()
+                };
+                let stack = layer.text_animator_stack.get_or_insert_with(Default::default);
+                stack.animators.push(anim);
+                *project_changed = true;
+            }
+        });
 
         ui.separator();
         ui.collapsing("Text Animator", |ui| {

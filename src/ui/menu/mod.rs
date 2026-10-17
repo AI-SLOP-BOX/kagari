@@ -132,8 +132,13 @@ fn draw_studio_header(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         } else {
                             format!("{project_name} / {composition_label}")
                         };
-                        let display_context = if full_project_context.chars().count() > 36 {
-                            let truncated: String = full_project_context.chars().take(33).collect();
+                        let max_chars = if ctx.screen_rect().width() >= 1400.0 {
+                            60
+                        } else {
+                            45
+                        };
+                        let display_context = if full_project_context.chars().count() > max_chars {
+                            let truncated: String = full_project_context.chars().take(max_chars.saturating_sub(3)).collect();
                             format!("{truncated}...")
                         } else {
                             full_project_context.clone()

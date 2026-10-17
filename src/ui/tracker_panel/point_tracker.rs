@@ -119,8 +119,9 @@ pub(crate) fn draw_point_tracker_section(
         });
     }
 
-    ui.horizontal(|ui| {
-                if custom_widgets::ae_button(ui, &tr("Analyze Forward (Work Area)")).on_hover_text(tr("Track the feature through the work area using real SAD matching + subpixel refinement")).clicked() {
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing = egui::vec2(6.0, 3.0);
+        if custom_widgets::ae_button(ui, &tr("Analyze Forward (Work Area)")).on_hover_text(tr("Track the feature through the work area using real SAD matching + subpixel refinement")).clicked() {
                     let wa_out = app.playback.work_area_out.unwrap_or_else(|| {
                         app.history.current().active_composition().duration_frames.saturating_sub(1)
                     });

@@ -304,6 +304,34 @@ pub struct ProxyJobResult {
     pub proxy_path: Result<String, String>,
 }
 
+/// Messages streamed from the proxy worker thread: periodic `(done, total)`
+/// progress updates and exactly one [`ProxyJobMessage::Finished`].
+pub enum ProxyJobMessage {
+    Progress { done: u32, total: u32 },
+    Finished(ProxyJobResult),
+}
+
+/// Which recovery-dialog control started the in-flight snapshot load.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RecoveryLoadKind {
+    /// "復元する" — restore the newest generation, then clear recovery.
+    #[default]
+    Latest,
+    /// A version-history entry — restore that generation but keep the history.
+    Generation,
+}
+
+/// Outcome of a background recovery snapshot load (parsed off the UI thread).
+pub struct RecoveryLoadResult {
+    /// The snapshot file that was read; recorded for `clear_recovery` bookkeeping.
+    pub path: std::path::PathBuf,
+    /// `None` when the file could not be read or failed validation.
+    pub loaded: Option<(
+        crate::core::timeline::Project,
+        Option<crate::core::production_document::ProductionDocument>,
+    )>,
+}
+
 pub struct QuadTrackJobResult {
     pub purpose: QuadTrackPurpose,
     pub composition_name: String,

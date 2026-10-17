@@ -1,5 +1,6 @@
 //! Completion gates: unsupported operations and missing fixtures are failures.
 
+#[allow(unused_imports)]
 use kagari_vfx::core::{
     integration::{DynamicLinkMessage, DynamicLinkServer, OtioTimeline},
     production_document::ProductionDocument,

@@ -19,6 +19,7 @@ pub(crate) struct AdjustmentLayerCtx<'a> {
     pub masks: &'a [CpuMaskEntry],
 }
 
+#[allow(clippy::chunks_exact_to_as_chunks)]
 pub(crate) fn apply_adjustment_layer(buffer: &mut [u8], ctx: AdjustmentLayerCtx<'_>) {
     let AdjustmentLayerCtx {
         comp,
@@ -46,6 +47,63 @@ pub(crate) fn apply_adjustment_layer(buffer: &mut [u8], ctx: AdjustmentLayerCtx<
     );
     let use_mask = !masks.is_empty();
     let adj_blend = layer.blend_mode;
+
+    if !use_mask && (opacity - 1.0).abs() < 0.003 && adj_blend == BlendMode::Normal {
+        for (dst_chunk, src_chunk) in buffer.chunks_exact_mut(4).zip(adjusted.chunks_exact(4)) {
+            dst_chunk[0] = src_chunk[0];
+            dst_chunk[1] = src_chunk[1];
+            dst_chunk[2] = src_chunk[2];
+            // Preserve dst_chunk[3] (the composition alpha) so effects on adjustment layers
+            // do not zero out comp transparency or reveal background checkerboard!
+        }
+        return;
+    }
+
+    if !use_mask {
+        for (dst_chunk, src_chunk) in buffer.chunks_exact_mut(4).zip(adjusted.chunks_exact(4)) {
+            let src_r = src_chunk[0] as f32 / 255.0;
+            let src_g = src_chunk[1] as f32 / 255.0;
+            let src_b = src_chunk[2] as f32 / 255.0;
+            let dst_r = dst_chunk[0] as f32 / 255.0;
+            let dst_g = dst_chunk[1] as f32 / 255.0;
+            let dst_b = dst_chunk[2] as f32 / 255.0;
+            let (blended_r, blended_g, blended_b) = match adj_blend {
+                BlendMode::Multiply => (src_r * dst_r, src_g * dst_g, src_b * dst_b),
+                BlendMode::Screen => (
+                    1.0 - (1.0 - src_r) * (1.0 - dst_r),
+                    1.0 - (1.0 - src_g) * (1.0 - dst_g),
+                    1.0 - (1.0 - src_b) * (1.0 - dst_b),
+                ),
+                BlendMode::Add => (
+                    (src_r + dst_r).min(1.0),
+                    (src_g + dst_g).min(1.0),
+                    (src_b + dst_b).min(1.0),
+                ),
+                BlendMode::Overlay => (
+                    overlay(src_r, dst_r),
+                    overlay(src_g, dst_g),
+                    overlay(src_b, dst_b),
+                ),
+                BlendMode::SoftLight => (
+                    soft_light(src_r, dst_r),
+                    soft_light(src_g, dst_g),
+                    soft_light(src_b, dst_b),
+                ),
+                _ => (src_r, src_g, src_b),
+            };
+            dst_chunk[0] = ((blended_r * opacity + dst_r * (1.0 - opacity)) * 255.0)
+                .round()
+                .clamp(0.0, 255.0) as u8;
+            dst_chunk[1] = ((blended_g * opacity + dst_g * (1.0 - opacity)) * 255.0)
+                .round()
+                .clamp(0.0, 255.0) as u8;
+            dst_chunk[2] = ((blended_b * opacity + dst_b * (1.0 - opacity)) * 255.0)
+                .round()
+                .clamp(0.0, 255.0) as u8;
+        }
+        return;
+    }
+
     for py in 0..height {
         for px in 0..width {
             let mut effect_opacity = opacity;
@@ -157,6 +215,88 @@ pub(crate) fn composite_layer_buffer(buffer: &mut [u8], layer_buf: &[u8], ctx: &
     } = ctx;
     let (min_x, min_y, bw, bh, width, height) = (*min_x, *min_y, *bw, *bh, *width, *height);
     let (blend_linear, l_opacity) = (*blend_linear, *l_opacity);
+
+    // Fast-path for BlendMode::Add without track matte and in non-linear mode
+    if matte.is_none() && !blend_linear && !layer.preserve_transparency && layer.blend_mode == BlendMode::Add {
+        for ly in 0..bh {
+            let py = min_y + ly;
+            let row_idx = ((py * width + min_x) * 4) as usize;
+            let l_row_idx = (ly * bw * 4) as usize;
+            for lx in 0..bw {
+                let lidx = l_row_idx + (lx * 4) as usize;
+                let src_a_byte = layer_buf[lidx + 3];
+                if src_a_byte == 0 {
+                    continue;
+                }
+                let src_a = (src_a_byte as f32 / 255.0) * l_opacity;
+                if src_a <= 0.001 {
+                    continue;
+                }
+                let idx = row_idx + (lx * 4) as usize;
+                if idx + 3 >= buffer.len() {
+                    continue;
+                }
+                let sa_u16 = (src_a * 255.0).round() as u16;
+                let sr_u16 = (layer_buf[lidx] as u16 * sa_u16) / 255;
+                let sg_u16 = (layer_buf[lidx + 1] as u16 * sa_u16) / 255;
+                let sb_u16 = (layer_buf[lidx + 2] as u16 * sa_u16) / 255;
+
+                let dr = buffer[idx] as u16 + sr_u16;
+                let dg = buffer[idx + 1] as u16 + sg_u16;
+                let db = buffer[idx + 2] as u16 + sb_u16;
+                let da = buffer[idx + 3] as u16 + sa_u16;
+
+                buffer[idx] = dr.min(255) as u8;
+                buffer[idx + 1] = dg.min(255) as u8;
+                buffer[idx + 2] = db.min(255) as u8;
+                buffer[idx + 3] = da.min(255) as u8;
+            }
+        }
+        return;
+    }
+
+    // Fast-path for BlendMode::Normal without track matte and in non-linear mode
+    if matte.is_none() && !blend_linear && !layer.preserve_transparency && layer.blend_mode == BlendMode::Normal {
+        for ly in 0..bh {
+            let py = min_y + ly;
+            let row_idx = ((py * width + min_x) * 4) as usize;
+            let l_row_idx = (ly * bw * 4) as usize;
+            for lx in 0..bw {
+                let lidx = l_row_idx + (lx * 4) as usize;
+                let src_a_byte = layer_buf[lidx + 3];
+                if src_a_byte == 0 {
+                    continue;
+                }
+                let src_a = (src_a_byte as f32 / 255.0) * l_opacity;
+                if src_a <= 0.001 {
+                    continue;
+                }
+                let idx = row_idx + (lx * 4) as usize;
+                if idx + 3 >= buffer.len() {
+                    continue;
+                }
+                let dst_a = buffer[idx + 3] as f32 / 255.0;
+                let out_a = src_a + dst_a * (1.0 - src_a);
+                if out_a > 0.0 {
+                    let sr = layer_buf[lidx] as f32;
+                    let sg = layer_buf[lidx + 1] as f32;
+                    let sb = layer_buf[lidx + 2] as f32;
+                    let dr = buffer[idx] as f32;
+                    let dg = buffer[idx + 1] as f32;
+                    let db = buffer[idx + 2] as f32;
+                    let inv_src = 1.0 - src_a;
+                    let dst_factor = dst_a * inv_src;
+
+                    buffer[idx] = ((sr * src_a + dr * dst_factor) / out_a).clamp(0.0, 255.0) as u8;
+                    buffer[idx + 1] = ((sg * src_a + dg * dst_factor) / out_a).clamp(0.0, 255.0) as u8;
+                    buffer[idx + 2] = ((sb * src_a + db * dst_factor) / out_a).clamp(0.0, 255.0) as u8;
+                    buffer[idx + 3] = (out_a * 255.0).clamp(0.0, 255.0) as u8;
+                }
+            }
+        }
+        return;
+    }
+
     for ly in 0..bh {
         for lx in 0..bw {
             let lidx = ((ly * bw + lx) * 4) as usize;

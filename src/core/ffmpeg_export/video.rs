@@ -178,20 +178,25 @@ where
                 }
 
                 let chunk_end = (next_frame + chunk_size).min(config.total_frames);
-                let rendered_frames: Vec<Result<(u32, Vec<u8>), u32>> = (next_frame..chunk_end)
-                    .into_par_iter()
-                    .map(|frame_idx| {
-                        let flag = cancel_flag.clone();
-                        crate::core::software_renderer::set_render_cancel_flag(Some(flag));
-                        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                            render_frame_fn(frame_idx)
-                        }));
-                        crate::core::software_renderer::set_render_cancel_flag(None);
-                        result
-                            .map(|pixels| (frame_idx, pixels))
-                            .map_err(|_| frame_idx)
-                    })
-                    .collect();
+                let render_one = |frame_idx: u32| {
+                    let flag = cancel_flag.clone();
+                    crate::core::software_renderer::set_render_cancel_flag(Some(flag));
+                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        render_frame_fn(frame_idx)
+                    }));
+                    crate::core::software_renderer::set_render_cancel_flag(None);
+                    result
+                        .map(|pixels| (frame_idx, pixels))
+                        .map_err(|_| frame_idx)
+                };
+                // MFR toggle: parallel frame rendering when enabled, sequential
+                // (single-threaded) when disabled. Pixels are identical either way.
+                let rendered_frames: Vec<Result<(u32, Vec<u8>), u32>> =
+                    if crate::core::parallel_render::mfr_enabled() {
+                        (next_frame..chunk_end).into_par_iter().map(&render_one).collect()
+                    } else {
+                        (next_frame..chunk_end).into_iter().map(&render_one).collect()
+                    };
                 let mut frames = Vec::with_capacity(rendered_frames.len());
                 for rendered in rendered_frames {
                     match rendered {

@@ -735,6 +735,17 @@ impl ScrubField {
         format!("{:.*}{}", self.precision, value, self.suffix)
     }
 
+    /// Parse a typed buffer into a raw f32. Only the numeric prefix is read
+    /// (`"12px"` reads as `12.0`); returns `None` when no prefix parses.
+    fn parse_numeric(text: &str) -> Option<f32> {
+        let numeric: String = text
+            .trim()
+            .chars()
+            .take_while(|c| c.is_ascii_digit() || *c == '.' || *c == '-' || *c == '+')
+            .collect();
+        numeric.parse::<f32>().ok()
+    }
+
     fn paint_field(&self, ui: &Ui, rect: Rect, hover: f32, dragging: bool) {
         let painter = ui.painter();
         let radius = self.theme.field_radius as f32;
@@ -769,22 +780,22 @@ impl ScrubField {
 
     /// Draw the field. Returns the response and whether `value` changed this frame.
     pub fn show(&self, ui: &mut Ui, value: &mut f32) -> (Response, bool) {
-        let id = self.id.unwrap_or_else(|| Id::new("choegui_scrub_field"));
+        let size = vec2(self.width, self.theme.field_height);
+        // Always allow drag so the widget keeps a stable auto-assigned id; the
+        // scrub path below is gated on `!editing`, so a drag while typing can
+        // never change the value.
+        let (rect, response) = ui.allocate_exact_size(size, Sense::click_and_drag());
+
+        // Fall back to the auto-assigned widget id. Without this, two unlabeled
+        // fields drawn in the same panel would share one editing buffer.
+        let id = self.id.unwrap_or(response.id);
         let editing = ui
             .data(|data| data.get_temp::<bool>(id.with("editing")))
             .unwrap_or(false);
 
-        let size = vec2(self.width, self.theme.field_height);
-        let sense = if editing {
-            Sense::click()
-        } else {
-            Sense::click_and_drag()
-        };
-        let (rect, response) = ui.allocate_exact_size(size, sense);
-
         let hover = animate_with_policy(
             ui.ctx(),
-            response.id.with("hover"),
+            id.with("hover"),
             f32::from(response.hovered()),
             Spring::new(10.0, 1.0),
             self.theme.motion,
@@ -812,13 +823,9 @@ impl ScrubField {
             ui.data_mut(|data| data.insert_temp(id.with("buffer"), buffer.clone()));
             // Commit when the editor loses focus (Enter or click-away).
             if inner.lost_focus() {
-                let trimmed = buffer.trim();
-                let numeric: String = trimmed
-                    .chars()
-                    .take_while(|c| c.is_ascii_digit() || *c == '.' || *c == '-' || *c == '+')
-                    .collect();
-                if let Ok(parsed) = numeric.parse::<f32>() {
-                    *value = self.clamp(parsed as f64);
+                let parsed = Self::parse_numeric(&buffer);
+                if let Some(raw) = parsed {
+                    *value = self.clamp(raw as f64);
                     changed = true;
                 }
                 self.close_editor(ui, id);
@@ -947,5 +954,21 @@ mod scrub_field_tests {
         let f = field().speed(-1.0).width(-40.0);
         assert_eq!(f.speed, 0.0);
         assert_eq!(f.width, 24.0);
+    }
+
+    #[test]
+    fn test_parse_numeric_reads_numeric_prefix() {
+        assert_eq!(ScrubField::parse_numeric("12px"), Some(12.0));
+        assert_eq!(ScrubField::parse_numeric("  -3.5  "), Some(-3.5));
+        assert_eq!(ScrubField::parse_numeric("+0.25s"), Some(0.25));
+    }
+
+    #[test]
+    fn test_parse_numeric_rejects_unparseable_input() {
+        assert_eq!(ScrubField::parse_numeric(""), None);
+        assert_eq!(ScrubField::parse_numeric("   "), None);
+        assert_eq!(ScrubField::parse_numeric("px"), None);
+        assert_eq!(ScrubField::parse_numeric("1.2.3"), None);
+        assert_eq!(ScrubField::parse_numeric("abc123"), None);
     }
 }

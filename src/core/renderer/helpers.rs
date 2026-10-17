@@ -1,18 +1,35 @@
 use super::*;
 
+/// Precomputed lookup table mapping 0..=255 u8 values to their little-endian f16 bytes (normalized 0.0..1.0).
+static F16_LUT: std::sync::OnceLock<[[u8; 2]; 256]> = std::sync::OnceLock::new();
+
+fn get_f16_lut() -> &'static [[u8; 2]; 256] {
+    F16_LUT.get_or_init(|| {
+        let mut lut = [[0u8; 2]; 256];
+        for (i, entry) in lut.iter_mut().enumerate() {
+            let f = f16::from_f32(i as f32 / 255.0);
+            *entry = f.to_le_bytes();
+        }
+        lut
+    })
+}
+
 /// Convert RGBA8 pixel data to RGBA16Float bytes for HDR texture upload.
 /// Each pixel: 4 channels × 2 bytes (f16) = 8 bytes.
 pub(super) fn rgba8_to_rgba16f_bytes(pixels: &[u8]) -> Vec<u8> {
-    let mut out = Vec::with_capacity(pixels.len() * 2);
-    for chunk in pixels.as_chunks::<4>().0 {
-        let r = f16::from_f32(chunk[0] as f32 / 255.0);
-        let g = f16::from_f32(chunk[1] as f32 / 255.0);
-        let b = f16::from_f32(chunk[2] as f32 / 255.0);
-        let a = f16::from_f32(chunk[3] as f32 / 255.0);
-        out.extend_from_slice(&r.to_le_bytes());
-        out.extend_from_slice(&g.to_le_bytes());
-        out.extend_from_slice(&b.to_le_bytes());
-        out.extend_from_slice(&a.to_le_bytes());
+    let lut = get_f16_lut();
+    let num_pixels = pixels.len() / 4;
+    let mut out = Vec::with_capacity(num_pixels * 8);
+    let chunks = pixels.as_chunks::<4>().0;
+    for chunk in chunks {
+        let r_bytes = lut[chunk[0] as usize];
+        let g_bytes = lut[chunk[1] as usize];
+        let b_bytes = lut[chunk[2] as usize];
+        let a_bytes = lut[chunk[3] as usize];
+        out.extend_from_slice(&r_bytes);
+        out.extend_from_slice(&g_bytes);
+        out.extend_from_slice(&b_bytes);
+        out.extend_from_slice(&a_bytes);
     }
     out
 }

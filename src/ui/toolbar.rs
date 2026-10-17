@@ -21,6 +21,33 @@ pub enum ActiveTool {
     PuppetPin,
 }
 
+impl ActiveTool {
+    /// Tools that directly manipulate layer and mask transforms
+    pub fn is_transform(&self) -> bool {
+        matches!(self, Self::Selection | Self::Rotation | Self::AnchorPoint)
+    }
+
+    /// Navigation tools (Hand / Zoom / Camera3D) that must not move layers or trigger drawing
+    pub fn is_navigation(&self) -> bool {
+        matches!(self, Self::Hand | Self::Zoom | Self::Camera3D)
+    }
+
+    /// Creation / content drawing tools with dedicated creation interactions
+    pub fn is_creation(&self) -> bool {
+        matches!(
+            self,
+            Self::Rectangle
+                | Self::Pen
+                | Self::Text
+                | Self::Brush
+                | Self::CloneStamp
+                | Self::Eraser
+                | Self::RotoBrush
+                | Self::PuppetPin
+        )
+    }
+}
+
 #[derive(Clone, Copy)]
 struct ToolDef {
     tool: ActiveTool,
@@ -222,26 +249,31 @@ pub fn draw_viewer_tool_strip_vertical(app: &mut crate::KagariApp, ui: &mut egui
     use crate::ui::theme::colors;
 
     ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
-        ui.add_space(4.0);
+        ui.add_space(6.0);
         for (index, tool) in VIEWER_TOOLS.iter().copied().enumerate() {
             if index == 3 || index == 7 {
-                ui.add_space(2.0);
-                crate::ui::theme::draw_separator(ui);
-                ui.add_space(2.0);
+                ui.add_space(4.0);
+                let (sep_r, _) = ui.allocate_exact_size(egui::vec2(22.0, 1.0), egui::Sense::hover());
+                ui.painter().rect_filled(sep_r, 0.5, colors::BORDER_SUBTLE);
+                ui.add_space(4.0);
             }
             let definition = tool_definition(tool);
             let selected = app.active_tool == tool;
             let (rect, response) =
-                ui.allocate_exact_size(egui::vec2(24.0, 24.0), egui::Sense::click());
-            if selected || response.hovered() {
-                ui.painter().rect_filled(
+                ui.allocate_exact_size(egui::vec2(28.0, 28.0), egui::Sense::click());
+            if selected {
+                ui.painter().rect_filled(rect, 6.0, colors::BG_ACTIVE);
+                ui.painter().rect_stroke(
                     rect,
-                    3.0,
-                    if selected {
-                        colors::BG_HOVER
-                    } else {
-                        colors::BG_DARK
-                    },
+                    6.0,
+                    egui::Stroke::new(1.0_f32, colors::ACCENT_BRAND.linear_multiply(0.8)),
+                );
+            } else if response.hovered() {
+                ui.painter().rect_filled(rect, 6.0, colors::BG_HOVER);
+                ui.painter().rect_stroke(
+                    rect,
+                    6.0,
+                    egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM),
                 );
             }
             crate::ui::icons::render_svg_at(
@@ -250,7 +282,9 @@ pub fn draw_viewer_tool_strip_vertical(app: &mut crate::KagariApp, ui: &mut egui
                 definition.icon,
                 egui::vec2(16.0, 16.0),
                 if selected {
-                    colors::ACCENT_SELECTION
+                    colors::ACCENT_BRAND
+                } else if response.hovered() {
+                    colors::TEXT_PRIMARY
                 } else {
                     colors::TEXT_SECONDARY
                 },
@@ -260,7 +294,7 @@ pub fn draw_viewer_tool_strip_vertical(app: &mut crate::KagariApp, ui: &mut egui
                 app.active_tool = tool;
             }
             response.on_hover_text(tool_tooltip(definition));
-            ui.add_space(1.0);
+            ui.add_space(3.0);
         }
     });
 }

@@ -42,18 +42,8 @@ pub fn draw_software_canvas(
     // pre-comps while GPU builds display the real image.
     let software_preview_required = comp.width > 0 && comp.height > 0;
     if software_preview_required || lut_mode != 0 {
-        let proxy_factor = crate::core::proxy::composition_preview_scale(comp);
-        let display_px = (draw_w.max(draw_h) * ui.ctx().pixels_per_point()).ceil();
-        let adaptive = app.playback.adaptive_preview_factor;
-        let preview_limit = if app.playback.is_playing {
-            (display_px * adaptive * proxy_factor).round() as u32
-        } else {
-            (display_px * proxy_factor).round() as u32
-        };
-        let proxy_max_dim = preview_limit.clamp(64, 2048);
-        let scale = (proxy_max_dim as f32 / comp.width.max(comp.height) as f32).min(1.0);
-        let render_width = ((comp.width as f32 * scale).round() as u32).max(1);
-        let render_height = ((comp.height as f32 * scale).round() as u32).max(1);
+        let render_width = comp.width;
+        let render_height = comp.height;
         use std::hash::{Hash, Hasher};
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         comp.id.hash(&mut hasher);
@@ -67,14 +57,16 @@ pub fn draw_software_canvas(
         let key = hasher.finish();
         let cache_id = egui::Id::new("software-effect-preview-cache");
         let cache_allowed = !ui.input(|input| input.pointer.any_down());
-        let cached = cache_allowed
-            .then(|| {
-                ui.ctx()
-                    .data(|data| data.get_temp::<SoftwarePreviewTexture>(cache_id))
-            })
-            .flatten();
-        let texture = if let Some(cached) = cached.filter(|cached| cached.key == key) {
-            cached.texture
+        let cached = ui
+            .ctx()
+            .data(|data| data.get_temp::<SoftwarePreviewTexture>(cache_id));
+        let cached_hit = cache_allowed
+            .then_some(cached.as_ref())
+            .flatten()
+            .filter(|c| c.key == key)
+            .map(|c| c.texture.clone());
+        let texture = if let Some(tex) = cached_hit {
+            tex
         } else {
             let pixels = crate::core::software_renderer::render_frame_to_pixels_preview(
                 comp,
@@ -88,11 +80,24 @@ pub fn draw_software_canvas(
                 [render_width as usize, render_height as usize],
                 &pixels,
             );
-            let texture = ui.ctx().load_texture(
-                "software-effect-preview",
-                image,
-                egui::TextureOptions::LINEAR,
-            );
+            let texture = if let Some(mut existing) = cached {
+                if existing.texture.size() == [render_width as usize, render_height as usize] {
+                    existing.texture.set(image, egui::TextureOptions::LINEAR);
+                    existing.texture
+                } else {
+                    ui.ctx().load_texture(
+                        "software-effect-preview",
+                        image,
+                        egui::TextureOptions::LINEAR,
+                    )
+                }
+            } else {
+                ui.ctx().load_texture(
+                    "software-effect-preview",
+                    image,
+                    egui::TextureOptions::LINEAR,
+                )
+            };
             ui.ctx().data_mut(|data| {
                 data.insert_temp(
                     cache_id,

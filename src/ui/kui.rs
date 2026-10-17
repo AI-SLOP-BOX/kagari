@@ -9,9 +9,13 @@
 
 pub mod buttons;
 pub mod color_meters;
+pub mod hotspot;
 pub mod inputs;
 pub mod sliders_vectors;
 pub mod typography_layout;
+
+// Re-export hotspot & micro actions
+pub use hotspot::{hotspot, micro_tag, svg_drag_value, svg_hotspot, HotspotResponse};
 
 // Re-export typography & layout
 pub use typography_layout::{

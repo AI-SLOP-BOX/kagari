@@ -124,6 +124,15 @@ pub(in crate::ui::home_screen) fn draw_reference_new_project_page(
                 } else {
                     ui.add_space(if narrow { 4.0 } else { 14.0 });
                 }
+                let form_margin = if narrow { 8.0 } else { 31.0 };
+                let panel_padding = if narrow { 8.0 } else { 16.0 };
+                let remaining_width = if stacked {
+                    ui.available_width()
+                } else {
+                    (ui.max_rect().right() - ui.cursor().left()).max(0.0)
+                };
+                let form_content_width =
+                    (remaining_width - form_margin - panel_padding * 2.0).clamp(176.0, 760.0);
                 egui::Frame::none()
                     .fill(crate::ui::theme::colors::BG_PANEL_ALT)
                     .stroke(egui::Stroke::new(
@@ -133,149 +142,146 @@ pub(in crate::ui::home_screen) fn draw_reference_new_project_page(
                     .rounding(4.0)
                     .inner_margin(egui::Margin::same(if narrow { 8.0 } else { 16.0 }))
                     .show(ui, |ui| {
-                        let narrow_width = if stacked {
-                            (ui.available_width() - 16.0).max(176.0)
-                        } else {
-                            (ui.available_width() - 12.0).clamp(190.0, 199.0)
-                        };
-                        ui.set_width(if narrow {
-                            narrow_width
-                        } else {
-                            (ui.available_width() - 14.0).max(if medium || compact {
-                                280.0
-                            } else {
-                                420.0
-                            })
-                        });
-                        ui.label(
-                            egui::RichText::new(crate::ui::localization::tr(
-                                "Create a New Project",
-                            ))
-                            .size(if narrow { 11.0 } else { 17.0 })
-                            .strong(),
-                        );
-                        ui.add_space(if narrow { 5.0 } else { 10.0 });
-                        ui.separator();
-                        let name_id = egui::Id::new("reference_new_project_name");
-                        let location_id = egui::Id::new("reference_new_project_location");
-                        let mut name = ctx
-                            .data_mut(|d| d.get_temp::<String>(name_id))
-                            .unwrap_or_else(|| "Untitled Project".to_string());
-                        let mut location = ctx
-                            .data_mut(|d| d.get_temp::<String>(location_id))
-                            .unwrap_or_else(|| "~/Projects".to_string());
-                        ui.add_space(if narrow { 4.0 } else { 8.0 });
-                        ui.label(
-                            egui::RichText::new(crate::ui::localization::tr("Project Name"))
-                                .size(if narrow { 8.0 } else { 11.0 })
-                                .color(colors::TEXT_SECONDARY),
-                        );
-                        ui.add(
-                            egui::TextEdit::singleline(&mut name)
-                                .desired_width(ui.available_width()),
-                        );
-                        ui.add_space(if narrow { 4.0 } else { 8.0 });
-                        ui.label(
-                            egui::RichText::new(crate::ui::localization::tr("Location"))
-                                .size(if narrow { 8.0 } else { 11.0 })
-                                .color(colors::TEXT_SECONDARY),
-                        );
-                        ui.horizontal(|ui| {
-                            ui.add(egui::TextEdit::singleline(&mut location).desired_width(
-                                ui.available_width() - if narrow { 24.0 } else { 30.0 },
-                            ));
-                            reference_icon_button(
-                                ui,
-                                "new-project-location",
-                                crate::ui::icons::SVG_FOLDER,
-                                if narrow { 18.0 } else { 24.0 },
+                        ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+                            ui.set_width(form_content_width);
+                            ui.label(
+                                egui::RichText::new(crate::ui::localization::tr(
+                                    "Create a New Project",
+                                ))
+                                .size(if narrow { 11.0 } else { 17.0 })
+                                .strong(),
                             );
-                        });
-                        ui.add_space(if narrow { 4.0 } else { 8.0 });
-                        for (label, value) in [
-                            ("Frame Rate", "24 fps"),
-                            ("Resolution", "3440 × 2160 (4K UHD)"),
-                            ("Color Space", "Rec.709"),
-                        ] {
+                            ui.add_space(if narrow { 5.0 } else { 10.0 });
+                            ui.separator();
+                            let name_id = egui::Id::new("reference_new_project_name");
+                            let location_id = egui::Id::new("reference_new_project_location");
+                            let mut name = ctx
+                                .data_mut(|d| d.get_temp::<String>(name_id))
+                                .unwrap_or_else(|| "Untitled Project".to_string());
+                            let mut location = ctx
+                                .data_mut(|d| d.get_temp::<String>(location_id))
+                                .unwrap_or_else(|| "~/Projects".to_string());
+                            ui.add_space(if narrow { 4.0 } else { 8.0 });
+                            ui.label(
+                                egui::RichText::new(crate::ui::localization::tr("Project Name"))
+                                    .size(if narrow { 8.0 } else { 11.0 })
+                                    .color(colors::TEXT_SECONDARY),
+                            );
+                            ui.add(
+                                egui::TextEdit::singleline(&mut name)
+                                    .desired_width(ui.available_width()),
+                            );
+                            ui.add_space(if narrow { 4.0 } else { 8.0 });
+                            ui.label(
+                                egui::RichText::new(crate::ui::localization::tr("Location"))
+                                    .size(if narrow { 8.0 } else { 11.0 })
+                                    .color(colors::TEXT_SECONDARY),
+                            );
                             ui.horizontal(|ui| {
-                                ui.label(
-                                    egui::RichText::new(crate::ui::localization::tr(label))
-                                        .size(if narrow { 8.0 } else { 11.0 })
-                                        .color(colors::TEXT_SECONDARY),
+                                ui.add(egui::TextEdit::singleline(&mut location).desired_width(
+                                    ui.available_width() - if narrow { 24.0 } else { 30.0 },
+                                ));
+                                reference_icon_button(
+                                    ui,
+                                    "new-project-location",
+                                    crate::ui::icons::SVG_FOLDER,
+                                    if narrow { 18.0 } else { 24.0 },
                                 );
+                            });
+                            ui.add_space(if narrow { 4.0 } else { 8.0 });
+                            ui.vertical(|ui| {
+                                for (label, value) in [
+                                    ("Frame Rate", "24 fps"),
+                                    ("Resolution", "3440 × 2160 (4K UHD)"),
+                                    ("Color Space", "Rec.709"),
+                                ] {
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            egui::RichText::new(crate::ui::localization::tr(label))
+                                                .size(if narrow { 8.0 } else { 11.0 })
+                                                .color(colors::TEXT_SECONDARY),
+                                        );
+                                        ui.with_layout(
+                                            egui::Layout::right_to_left(egui::Align::Center),
+                                            |ui| {
+                                                reference_select_button(
+                                                    ui,
+                                                    value,
+                                                    if narrow {
+                                                        ui.available_width().min(154.0)
+                                                    } else {
+                                                        210.0
+                                                    },
+                                                    narrow,
+                                                );
+                                            },
+                                        );
+                                    });
+                                    ui.add_space(if narrow { 2.0 } else { 5.0 });
+                                }
+                            });
+                            ui.collapsing(crate::ui::localization::tr("Advanced Settings"), |ui| {
+                                ui.label(
+                                    egui::RichText::new(crate::ui::localization::tr(
+                                        "Project defaults and cache options",
+                                    ))
+                                    .small()
+                                    .color(colors::TEXT_MUTED),
+                                );
+                            });
+                            ui.add_space(if narrow { 6.0 } else { 12.0 });
+                            ui.horizontal(|ui| {
+                                if ui
+                                    .add(
+                                        egui::Button::new(
+                                            egui::RichText::new(crate::ui::localization::tr(
+                                                "Cancel",
+                                            ))
+                                            .size(if narrow { 8.0 } else { 14.0 }),
+                                        )
+                                        .min_size(
+                                            egui::vec2(
+                                                if narrow { 42.0 } else { 76.0 },
+                                                if narrow { 22.0 } else { 28.0 },
+                                            ),
+                                        ),
+                                    )
+                                    .clicked()
+                                {
+                                    set_home_nav(ui.ctx(), HomeNav::Home);
+                                }
                                 ui.with_layout(
                                     egui::Layout::right_to_left(egui::Align::Center),
                                     |ui| {
-                                        reference_select_button(
-                                            ui,
-                                            value,
-                                            if narrow {
-                                                ui.available_width().min(154.0)
-                                            } else {
-                                                210.0
-                                            },
-                                            narrow,
-                                        );
+                                        if ui
+                                            .add(
+                                                egui::Button::new(
+                                                    egui::RichText::new(
+                                                        crate::ui::localization::tr(
+                                                            "Create Project",
+                                                        ),
+                                                    )
+                                                    .size(if narrow { 8.0 } else { 14.0 })
+                                                    .color(egui::Color32::WHITE),
+                                                )
+                                                .fill(colors::ACCENT_BLUE)
+                                                .min_size(egui::vec2(
+                                                    if narrow { 68.0 } else { 112.0 },
+                                                    if narrow { 22.0 } else { 28.0 },
+                                                ))
+                                                .rounding(5.0),
+                                            )
+                                            .clicked()
+                                        {
+                                            enter_studio_new_project(app);
+                                        }
                                     },
                                 );
                             });
-                            ui.add_space(if narrow { 2.0 } else { 5.0 });
-                        }
-                        ui.collapsing(crate::ui::localization::tr("Advanced Settings"), |ui| {
-                            ui.label(
-                                egui::RichText::new(crate::ui::localization::tr(
-                                    "Project defaults and cache options",
-                                ))
-                                .small()
-                                .color(colors::TEXT_MUTED),
-                            );
-                        });
-                        ui.add_space(if narrow { 6.0 } else { 12.0 });
-                        ui.horizontal(|ui| {
-                            if ui
-                                .add(
-                                    egui::Button::new(
-                                        egui::RichText::new(crate::ui::localization::tr("Cancel"))
-                                            .size(if narrow { 8.0 } else { 14.0 }),
-                                    )
-                                    .min_size(egui::vec2(
-                                        if narrow { 42.0 } else { 76.0 },
-                                        if narrow { 22.0 } else { 28.0 },
-                                    )),
-                                )
-                                .clicked()
-                            {
-                                set_home_nav(ui.ctx(), HomeNav::Home);
-                            }
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    if ui
-                                        .add(
-                                            egui::Button::new(
-                                                egui::RichText::new(crate::ui::localization::tr(
-                                                    "Create Project",
-                                                ))
-                                                .size(if narrow { 8.0 } else { 14.0 })
-                                                .color(egui::Color32::WHITE),
-                                            )
-                                            .fill(colors::ACCENT_BLUE)
-                                            .min_size(egui::vec2(
-                                                if narrow { 68.0 } else { 112.0 },
-                                                if narrow { 22.0 } else { 28.0 },
-                                            ))
-                                            .rounding(5.0),
-                                        )
-                                        .clicked()
-                                    {
-                                        enter_studio_new_project(app);
-                                    }
-                                },
-                            );
-                        });
-                        ctx.data_mut(|d| {
-                            d.insert_temp(name_id, name);
-                            d.insert_temp(location_id, location);
+                            ctx.data_mut(|d| {
+                                d.insert_temp(name_id, name);
+                                d.insert_temp(location_id, location);
+                            });
                         });
                     });
             });

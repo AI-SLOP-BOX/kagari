@@ -245,6 +245,7 @@ pub fn draw_new_comp_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                         "Composition \"{}\" created — {}×{} / {}fps ({})",
                         &[&name, &width, &height, &frame_rate, depth],
                     ));
+                    app.show_home = false;
                     keep_open = false;
                 }
                 if ui.button(crate::ui::localization::tr("Cancel")).clicked() {

@@ -79,11 +79,11 @@ impl ToastManager {
         ctx.request_repaint_after(Duration::from_millis(100));
 
         egui::Area::new(egui::Id::new("toast_notification_area"))
-            .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-16.0, -16.0))
+            .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-16.0, 48.0))
             .order(egui::Order::Foreground)
             .show(ctx, |ui| {
-                ui.with_layout(egui::Layout::bottom_up(egui::Align::RIGHT), |ui| {
-                    for toast in self.notifications.iter().rev() {
+                ui.with_layout(egui::Layout::top_down(egui::Align::RIGHT), |ui| {
+                    for toast in self.notifications.iter() {
                         let accent = toast_color(&toast.level);
                         let elapsed = now.duration_since(toast.created_at).as_secs_f32();
                         let visible = now.duration_since(toast.created_at) < toast.duration;

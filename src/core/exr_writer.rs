@@ -18,7 +18,7 @@ use flate2::{write::ZlibEncoder, Compression};
 
 const EXR_MAGIC: u32 = 0x0131_2f76;
 const EXR_VERSION: u32 = 2;
-const PIXEL_HALF: i32 = 1;
+const PIXEL_HALF: i32 = 1; // OpenEXR spec: UINT=0, HALF=1, FLOAT=2
 const PIXEL_FLOAT: i32 = 2;
 const COMP_NONE: u8 = 0;
 const COMP_ZIPS: u8 = 2;
@@ -89,7 +89,7 @@ impl ExrChannel {
         }
     }
 
-    fn validate(&self, expected: usize) -> Result<(), String> {
+    pub fn validate(&self, expected: usize) -> Result<(), String> {
         if self.name.is_empty() {
             return Err("EXR channel name must not be empty".to_string());
         }
@@ -296,12 +296,14 @@ fn box2i_bytes(x_min: u32, y_min: u32, x_max: u32, y_max: u32) -> Vec<u8> {
     out
 }
 
+/// Pack one scanline chunk. OpenEXR layout is scanline-major: for each row in
+/// the block, every channel's samples for that row, channels in header order.
 fn pack_scanline_block(channels: &[&ExrChannel], width: u32, y0: u32, rows: u32) -> Vec<u8> {
     let w = width as usize;
     let mut out = Vec::with_capacity(w * rows as usize * channels.len() * 4);
-    for ch in channels {
-        for row in 0..rows as usize {
-            let base = (y0 as usize + row) * w;
+    for row in 0..rows as usize {
+        let base = (y0 as usize + row) * w;
+        for ch in channels {
             for &v in &ch.data[base..base + w] {
                 match ch.sample_type {
                     ExrSampleType::Half => {
@@ -332,6 +334,7 @@ fn zip_deflate(raw: &[u8]) -> Result<Vec<u8>, String> {
 }
 
 /// OpenEXR ZIP filter: de-interleave even/odd bytes, then apply the delta predictor.
+#[cfg(feature = "cli")]
 fn zip_reorder_predict(raw: &[u8]) -> Vec<u8> {
     if raw.is_empty() {
         return Vec::new();

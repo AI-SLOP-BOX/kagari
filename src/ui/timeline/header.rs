@@ -72,16 +72,86 @@ pub fn draw_transport_controls(
         seconds % 60,
         *current_frame % fps,
     );
-    if crate::ui::kui::button(
-        ui,
-        &format!("TC: {timecode}"),
-        crate::ui::kui::ButtonKind::Quiet,
-    )
-    .clicked()
-    {
-        show_popup = !show_popup;
+
+    // AE-style Scannable / Scrubbable Timecode indicator
+    let tc_text = timecode;
+    let (tc_rect, tc_resp) = ui.allocate_exact_size(
+        egui::vec2(100.0, 22.0),
+        egui::Sense::click_and_drag(),
+    );
+
+    if tc_resp.hovered() || tc_resp.dragged() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+    }
+
+    if tc_resp.dragged() {
+        let speed_mult = if ui.input(|i| i.modifiers.shift) {
+            10.0
+        } else if ui.input(|i| i.modifiers.alt) {
+            0.1
+        } else {
+            1.0
+        };
+        let delta = tc_resp.drag_delta().x * speed_mult * 0.5;
+        let accum_id = ui.make_persistent_id("ae_tc_scrub_accum");
+        let mut accum = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(accum_id, || 0.0_f32));
+        accum += delta;
+        if accum.abs() >= 1.0 {
+            let frames_delta = accum.trunc() as i32;
+            accum -= frames_delta as f32;
+            let next_f = (*current_frame as i32 + frames_delta).clamp(0, total_frames as i32) as u32;
+            *current_frame = next_f;
+        }
+        ui.ctx().data_mut(|d| d.insert_temp(accum_id, accum));
+    } else {
+        let accum_id = ui.make_persistent_id("ae_tc_scrub_accum");
+        ui.ctx().data_mut(|d| d.remove_temp::<f32>(accum_id));
+    }
+
+    let bg_color = if tc_resp.dragged() {
+        crate::ui::theme::colors::BG_ACTIVE
+    } else if tc_resp.hovered() {
+        crate::ui::theme::colors::BG_HOVER
+    } else {
+        crate::ui::theme::colors::BG_SURFACE
+    };
+    ui.painter().rect_filled(tc_rect, 3.0, bg_color);
+    ui.painter().rect_stroke(
+        tc_rect,
+        3.0,
+        egui::Stroke::new(
+            1.0_f32,
+            if tc_resp.dragged() {
+                crate::ui::theme::colors::ACCENT_BRAND
+            } else {
+                crate::ui::theme::colors::BORDER_SUBTLE
+            },
+        ),
+    );
+
+    let text_col = if tc_resp.dragged() {
+        crate::ui::theme::colors::ACCENT_BRAND_HOVER
+    } else if tc_resp.hovered() {
+        crate::ui::theme::colors::ACCENT_BRAND
+    } else {
+        crate::ui::theme::colors::ACCENT_YELLOW
+    };
+
+    ui.painter().text(
+        tc_rect.center(),
+        egui::Align2::CENTER_CENTER,
+        tc_text,
+        egui::FontId::monospace(12.0),
+        text_col,
+    );
+
+    // A click opens frame entry; a drag scrubs without opening it.
+    if tc_resp.clicked() {
+        show_popup = true;
         input = current_frame.to_string();
     }
+    tc_resp.on_hover_text("ドラッグ: フレームスクラブ (Shift: 10倍速, Alt: 精密)\nクリック: フレーム番号を指定");
+
     ui.add_sized(
         egui::vec2(120.0, 20.0),
         egui::Slider::new(current_frame, 0..=total_frames.max(1)).show_value(false),
@@ -135,7 +205,7 @@ pub fn draw_transport_controls(
     }
     if show_popup {
         egui::Area::new(egui::Id::new("ae_tc_goto"))
-            .fixed_pos(ui.cursor().left_top())
+            .fixed_pos(tc_rect.left_bottom() + egui::vec2(0.0, 4.0))
             .order(egui::Order::Foreground)
             .show(ui.ctx(), |ui| {
                 crate::ui::kui::group(ui, "Go to Frame", |ui| {

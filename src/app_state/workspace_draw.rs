@@ -82,17 +82,6 @@ impl KagariApp {
                 ui.horizontal(|ui| {
                     let status_width = ctx.screen_rect().width();
                     ui.style_mut().spacing.item_spacing.x = 6.0;
-                    if !self.history.current().has_pristine_start_composition() {
-                        let fps = self.history.current().active_composition().fps.max(1);
-                        crate::ui::timeline::header::draw_transport_controls(
-                            ui,
-                            &mut current_frame,
-                            total_frames,
-                            fps,
-                            &mut self.playback.is_playing,
-                        );
-                        crate::ui::kui::toolbar_separator(ui);
-                    }
                     if status_width >= 1700.0 {
                         ui.label(
                             egui::RichText::new("フレーム描画時間")

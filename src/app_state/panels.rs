@@ -51,6 +51,101 @@ impl KagariApp {
         );
     }
 
+    pub(super) fn draw_project_loading_animation(&mut self, ctx: &eframe::egui::Context) {
+        let Some((ref name, ref mut progress, ref path)) = self.project_loading else {
+            return;
+        };
+
+        let dt = ctx.input(|i| i.unstable_dt).clamp(0.001, 0.1);
+        *progress = (*progress + dt * 1.8).min(1.0);
+        let cur_progress = *progress;
+        let project_name = name.clone();
+        let project_path = path.clone();
+
+        ctx.request_repaint_after(std::time::Duration::from_millis(16));
+
+        let screen = ctx.screen_rect();
+        let painter = ctx.layer_painter(eframe::egui::LayerId::new(
+            eframe::egui::Order::Foreground,
+            eframe::egui::Id::new("kagari-project-loading-overlay"),
+        ));
+
+        // Dark glassy backdrop veil
+        let veil_alpha = (cur_progress.min(0.2) / 0.2 * 210.0) as u8;
+        painter.rect_filled(
+            screen,
+            0.0,
+            eframe::egui::Color32::from_rgba_unmultiplied(10, 14, 20, veil_alpha),
+        );
+
+        // Glassmorphic Modal Card
+        let card_w = 380.0;
+        let card_h = 160.0;
+        let card_rect = eframe::egui::Rect::from_center_size(
+            screen.center(),
+            eframe::egui::vec2(card_w, card_h),
+        );
+
+        painter.rect_filled(card_rect, 12.0, eframe::egui::Color32::from_rgba_premultiplied(18, 24, 34, 240));
+        painter.rect_stroke(
+            card_rect,
+            12.0,
+            eframe::egui::Stroke::new(1.0_f32, eframe::egui::Color32::from_rgba_premultiplied(255, 120, 20, 100)),
+        );
+
+        // Animated Spinning Glowing Ring
+        let time = ctx.input(|i| i.time);
+        let spinner_center = eframe::egui::pos2(card_rect.center().x, card_rect.top() + 45.0);
+        let spinner_radius = 20.0;
+        let num_dots = 10;
+        for i in 0..num_dots {
+            let angle = (i as f64 / num_dots as f64) * std::f64::consts::TAU + time * 5.0;
+            let dot_x = spinner_center.x + (angle.cos() as f32) * spinner_radius;
+            let dot_y = spinner_center.y + (angle.sin() as f32) * spinner_radius;
+            let dot_alpha = (i as f32 / num_dots as f32).powf(1.8);
+            let color = eframe::egui::Color32::from_rgba_premultiplied(
+                255,
+                (100.0 + dot_alpha * 80.0) as u8,
+                20,
+                (dot_alpha * 240.0) as u8,
+            );
+            painter.circle_filled(eframe::egui::pos2(dot_x, dot_y), 2.8, color);
+        }
+
+        // Text: Project Name & Loading prompt
+        painter.text(
+            eframe::egui::pos2(card_rect.center().x, card_rect.top() + 78.0),
+            eframe::egui::Align2::CENTER_TOP,
+            format!("「{}」を読み込んでいます…", project_name),
+            eframe::egui::FontId::proportional(14.5),
+            eframe::egui::Color32::WHITE,
+        );
+
+        // Sleek Amber Progress Bar
+        let bar_w = 260.0;
+        let bar_h = 4.0;
+        let bar_bg_rect = eframe::egui::Rect::from_center_size(
+            eframe::egui::pos2(card_rect.center().x, card_rect.top() + 118.0),
+            eframe::egui::vec2(bar_w, bar_h),
+        );
+        painter.rect_filled(bar_bg_rect, 2.0, eframe::egui::Color32::from_rgb(30, 38, 50));
+
+        let fill_w = bar_w * cur_progress;
+        let bar_fill_rect = eframe::egui::Rect::from_min_size(
+            bar_bg_rect.min,
+            eframe::egui::vec2(fill_w, bar_h),
+        );
+        painter.rect_filled(bar_fill_rect, 2.0, eframe::egui::Color32::from_rgb(255, 110, 20));
+
+        // When animation completes (progress reaches 1.0), perform actual open
+        if cur_progress >= 1.0 {
+            self.project_loading = None;
+            if let Err(e) = crate::ui::project_io::open_project_from_path(self, &project_path) {
+                self.toasts.error(e);
+            }
+        }
+    }
+
     /// Panel and dialog drawing extracted from [`eframe::App::update`] so the
     /// full UI can run headlessly in tests (`_frame` was unused).
     pub fn update_panels(&mut self, ctx: &eframe::egui::Context) {
@@ -412,5 +507,6 @@ impl KagariApp {
 
         crate::ui::shortcuts::handle_global_shortcuts(self, ctx, &mut current_frame, total_frames);
         self.draw_workspace(ctx, current_frame, total_frames);
+        self.draw_project_loading_animation(ctx);
     }
 }

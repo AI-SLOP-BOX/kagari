@@ -61,6 +61,18 @@ pub(super) fn draw_clip_bar(ui: &mut egui::Ui, params: ClipBarParams<'_>) -> egu
             (color[2].clamp(0.0, 1.0) * 255.0).round() as u8,
             (color[3].clamp(0.0, 1.0) * 255.0).round() as u8,
         ),
+        LayerType::Text { .. } if layer.label == crate::core::timeline::LabelColor::None => {
+            egui::Color32::from_rgb(112, 48, 160)
+        }
+        LayerType::AdjustmentLayer if layer.label == crate::core::timeline::LabelColor::None => {
+            egui::Color32::from_rgb(98, 42, 172)
+        }
+        LayerType::Audio { .. } if layer.label == crate::core::timeline::LabelColor::None => {
+            egui::Color32::from_rgb(18, 92, 84)
+        }
+        LayerType::Video { .. } if layer.label == crate::core::timeline::LabelColor::None => {
+            egui::Color32::from_rgb(28, 56, 108)
+        }
         _ => label_fill,
     };
 
