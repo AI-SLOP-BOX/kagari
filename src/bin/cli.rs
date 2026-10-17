@@ -23,7 +23,7 @@ mod render;
 #[path = "cli/validate.rs"]
 mod validate;
 use bindings::{cmd_add_sample_binding, cmd_bindings, parse_binding_value, parse_sample_point, parse_string_override};
-use edit::{cmd_add_layer, cmd_init};
+use edit::{cmd_add_layer, cmd_animate, cmd_init};
 use frame::{cmd_frame, cmd_lottie};
 use info::{cmd_effects, cmd_info, cmd_production_info};
 
@@ -239,6 +239,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 content.as_deref(),
                 in_frame,
                 out_frame,
+            )?;
+        }
+        Commands::Animate {
+            project,
+            layer,
+            property,
+            keyframes,
+            ease,
+            comp,
+        } => {
+            cmd_animate(
+                &project,
+                &layer,
+                comp.as_deref(),
+                &property,
+                &keyframes,
+                &ease,
             )?;
         }
     }

@@ -164,3 +164,130 @@ fn find_comp_mut<'a>(
         .get_mut(idx)
         .ok_or_else(|| "Project contains no compositions".into())
 }
+
+pub(super) fn cmd_animate(
+    project_path: &str,
+    layer_ref: &str,
+    comp_ref: Option<&str>,
+    property: &str,
+    keyframes_raw: &[String],
+    ease_name: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use kagari_vfx::core::keyframe::{BezierControlPoint, InterpolationType, Keyframe};
+    use kagari_vfx::core::property::Animatable;
+
+    if keyframes_raw.is_empty() {
+        return Err("No keyframes provided. Use --keyframe frame=value".into());
+    }
+
+    let interp = match ease_name.to_lowercase().as_str() {
+        "linear" => InterpolationType::Linear,
+        "hold" => InterpolationType::Hold,
+        "ease-in" => InterpolationType::Bezier {
+            outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
+            incoming: BezierControlPoint { influence: 1.0, speed: 0.0 },
+            custom_bezier: Some([0.42, 0.0, 1.0, 1.0]),
+        },
+        "ease-out" => InterpolationType::Bezier {
+            outgoing: BezierControlPoint { influence: 0.0, speed: 0.0 },
+            incoming: BezierControlPoint { influence: 0.667, speed: 0.0 },
+            custom_bezier: Some([0.0, 0.0, 0.58, 1.0]),
+        },
+        _ => InterpolationType::Bezier {
+            // Default ease-in-out (AE Easy Ease)
+            outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
+            incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
+            custom_bezier: Some([0.42, 0.0, 0.58, 1.0]),
+        },
+    };
+
+    let mut project = load_project(project_path)?;
+    let comp = find_comp_mut(&mut project, comp_ref)?;
+    let layer = comp
+        .layers
+        .iter_mut()
+        .find(|l| l.name == layer_ref || l.id == layer_ref)
+        .ok_or_else(|| format!("Layer '{layer_ref}' not found in composition '{}'", comp.name))?;
+
+    match property.to_lowercase().as_str() {
+        "position" => {
+            let mut kfs = Vec::new();
+            for raw in keyframes_raw {
+                let (f_str, v_str) = raw.split_once('=').ok_or("Keyframe must use frame=x,y")?;
+                let frame: u32 = f_str.trim().parse().map_err(|_| "Invalid frame number")?;
+                let coords: Vec<f32> = v_str
+                    .split(',')
+                    .filter_map(|s| s.trim().parse::<f32>().ok())
+                    .collect();
+                if coords.len() < 2 {
+                    return Err(format!("Position keyframe requires x,y coords: '{raw}'").into());
+                }
+                kfs.push(Keyframe::new(frame, [coords[0], coords[1]], interp));
+            }
+            kfs.sort_by_key(|k| k.frame);
+            layer.transform.position = Animatable::Animated(kfs);
+        }
+        "scale" => {
+            let mut kfs = Vec::new();
+            for raw in keyframes_raw {
+                let (f_str, v_str) = raw.split_once('=').ok_or("Keyframe must use frame=x,y or frame=uniform")?;
+                let frame: u32 = f_str.trim().parse().map_err(|_| "Invalid frame number")?;
+                let coords: Vec<f32> = v_str
+                    .split(',')
+                    .filter_map(|s| s.trim().parse::<f32>().ok())
+                    .collect();
+                let scale = if coords.len() == 1 {
+                    [coords[0], coords[0]]
+                } else if coords.len() >= 2 {
+                    [coords[0], coords[1]]
+                } else {
+                    return Err(format!("Invalid scale keyframe: '{raw}'").into());
+                };
+                kfs.push(Keyframe::new(frame, scale, interp));
+            }
+            kfs.sort_by_key(|k| k.frame);
+            layer.transform.scale = Animatable::Animated(kfs);
+        }
+        "opacity" => {
+            let mut kfs = Vec::new();
+            for raw in keyframes_raw {
+                let (f_str, v_str) = raw.split_once('=').ok_or("Keyframe must use frame=opacity")?;
+                let frame: u32 = f_str.trim().parse().map_err(|_| "Invalid frame number")?;
+                let val: f32 = v_str.trim().parse().map_err(|_| "Invalid opacity value")?;
+                kfs.push(Keyframe::new(frame, val, interp));
+            }
+            kfs.sort_by_key(|k| k.frame);
+            layer.transform.opacity = Animatable::Animated(kfs);
+        }
+        "rotation" => {
+            let mut kfs = Vec::new();
+            for raw in keyframes_raw {
+                let (f_str, v_str) = raw.split_once('=').ok_or("Keyframe must use frame=degrees")?;
+                let frame: u32 = f_str.trim().parse().map_err(|_| "Invalid frame number")?;
+                let val: f32 = v_str.trim().parse().map_err(|_| "Invalid rotation angle")?;
+                kfs.push(Keyframe::new(frame, val, interp));
+            }
+            kfs.sort_by_key(|k| k.frame);
+            layer.transform.rotation = Animatable::Animated(kfs);
+        }
+        other => {
+            return Err(format!(
+                "Unsupported animated property '{}'. Use position, scale, opacity, or rotation.",
+                other
+            )
+            .into())
+        }
+    }
+
+    let json = serde_json::to_string_pretty(&project)?;
+    std::fs::write(project_path, json)?;
+    eprintln!(
+        "Animated '{}.{}' with {} keyframes (easing: {}) in {}",
+        layer_ref,
+        property,
+        keyframes_raw.len(),
+        ease_name,
+        project_path
+    );
+    Ok(())
+}

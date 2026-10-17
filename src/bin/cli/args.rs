@@ -307,4 +307,26 @@ pub(super) enum Commands {
         #[arg(long)]
         out_frame: Option<u32>,
     },
+
+    /// Animate a property of a layer with keyframes
+    Animate {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+        /// Target layer name or ID
+        #[arg(short, long)]
+        layer: String,
+        /// Property to animate: position, scale, opacity, rotation
+        #[arg(long)]
+        property: String,
+        /// Keyframe specification in frame=value form (e.g. 0=0 or 30=960,540); may be repeated
+        #[arg(long = "keyframe")]
+        keyframes: Vec<String>,
+        /// Easing preset: linear, ease-in, ease-out, ease-in-out (default: ease-in-out)
+        #[arg(long, default_value = "ease-in-out")]
+        ease: String,
+        /// Target composition name or index (default: active comp)
+        #[arg(short, long)]
+        comp: Option<String>,
+    },
 }
