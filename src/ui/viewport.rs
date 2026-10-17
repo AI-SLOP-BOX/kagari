@@ -104,8 +104,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                                     let is_active = idx == active_comp_idx;
                                     let c_name = app.history.current().compositions[idx].name.clone();
                                     if crate::ui::theme::draw_custom_tab(ui, is_active, &c_name).clicked() && idx != active_comp_idx {
-                                        app.history.current_mut().active_composition_idx = idx;
-                                        crate::core::frame_cache::bump_version();
+                                        app.dispatch(crate::app_state::AppCommand::SelectComposition(idx));
                                     }
                                 }
                             });

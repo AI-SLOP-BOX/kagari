@@ -8,6 +8,8 @@ pub use crate::core::audio_types::MixerChannel;
 
 mod domain;
 pub use domain::*;
+pub mod command;
+pub use command::*;
 #[cfg(feature = "gui")]
 mod initialization;
 mod panels;
@@ -139,6 +141,14 @@ pub struct KagariApp {
     /// (e.g. Content-Aware Fill / Roto Brush job starters) can still register
     /// their handles via [`KagariApp::track_background_thread`].
     pub background_threads: std::sync::Mutex<Vec<std::thread::JoinHandle<()>>>,
+    /// Cooperative-cancel flags for background jobs, registered at spawn time.
+    ///
+    /// `on_exit()` sets every registered flag **before** joining
+    /// [`KagariApp::background_threads`] so long-running workers (export,
+    /// proxy bake, CAF, roto, …) abort promptly instead of blocking shutdown
+    /// until they finish naturally.
+    pub exit_cancel_flags:
+        std::sync::Mutex<Vec<std::sync::Arc<std::sync::atomic::AtomicBool>>>,
     /// Playback domain state (transport, frame, work area, volume)
     pub playback: PlaybackDomainState,
     /// Selection domain state (selected layers, expanded, property)
@@ -431,6 +441,19 @@ impl KagariApp {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .push(handle);
+    }
+
+    /// Register a cooperative-cancel flag that `on_exit()` flips before
+    /// joining background threads, so long jobs abort instead of hanging
+    /// shutdown.
+    pub fn register_exit_cancel_flag(
+        &self,
+        flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    ) {
+        self.exit_cancel_flags
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(flag);
     }
 }
 
