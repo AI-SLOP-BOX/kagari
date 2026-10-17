@@ -13,5 +13,5 @@ pub use flow_bake::{
 };
 pub use segmentation::{
     apply_roto_refinement, refine_edge_guided_filter, segment_roto_brush, set_roto_matte_keyframe,
-    trace_contour_to_polygon,
+    trace_contour_to_polygon, RotoStroke,
 };
