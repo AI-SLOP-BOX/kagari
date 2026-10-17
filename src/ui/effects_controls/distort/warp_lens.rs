@@ -441,6 +441,60 @@ pub fn draw_warp_lens(
             );
             true
         }
+        EffectType::VRHorizon {
+            pitch_deg,
+            yaw_deg,
+            roll_deg,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Pitch (°)",
+                pitch_deg,
+                |ui, v| {
+                    crate::ui::kui::slider(ui, v, -180.0..=180.0, "°");
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Yaw (°)",
+                yaw_deg,
+                |ui, v| {
+                    crate::ui::kui::slider(ui, v, -180.0..=180.0, "°");
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Roll (°)",
+                roll_deg,
+                |ui, v| {
+                    crate::ui::kui::slider(ui, v, -180.0..=180.0, "°");
+                },
+            );
+            true
+        }
+        EffectType::VRSphericalBlur { radius } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Blur Radius",
+                radius,
+                |ui, v| {
+                    crate::ui::kui::slider(ui, v, 0.0..=100.0, " px");
+                },
+            );
+            true
+        }
         _ => false,
     }
 }

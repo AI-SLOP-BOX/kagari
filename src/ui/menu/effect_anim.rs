@@ -144,6 +144,24 @@ pub fn draw_effect_menu(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
             ui.close_menu();
         }
     });
+    ui.menu_button("Immersive Video (VR 360)", |ui| {
+        if ui
+            .button("VR Horizon")
+            .on_hover_text("3-axis spherical orientation realignment (Pitch, Yaw, Roll)")
+            .clicked()
+        {
+            apply_effect_by_name(app, "VR Horizon");
+            ui.close_menu();
+        }
+        if ui
+            .button("VR Spherical Blur")
+            .on_hover_text("Geodesic latitude-compensated Gaussian blur for 360 equirectangular footage")
+            .clicked()
+        {
+            apply_effect_by_name(app, "VR Spherical Blur");
+            ui.close_menu();
+        }
+    });
     ui.menu_button("Generate", |ui| {
         if ui
             .button("Lightning")

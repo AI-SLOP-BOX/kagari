@@ -127,6 +127,8 @@ pub fn effect_name(effect_type: &EffectType) -> &'static str {
         EffectType::CameraLensBlur { .. } => "Camera Lens Blur",
         EffectType::LinearColorKey { .. } => "Linear Color Key",
         EffectType::ChannelCombiner { .. } => "Channel Combiner",
+        EffectType::VRHorizon { .. } => "VR Horizon",
+        EffectType::VRSphericalBlur { .. } => "VR Spherical Blur",
     }
 }
 
@@ -257,5 +259,7 @@ pub fn effect_type_id(effect_type: &EffectType) -> &'static str {
         EffectType::CameraLensBlur { .. } => "camera_lens_blur",
         EffectType::LinearColorKey { .. } => "linear_color_key",
         EffectType::ChannelCombiner { .. } => "channel_combiner",
+        EffectType::VRHorizon { .. } => "vr_horizon",
+        EffectType::VRSphericalBlur { .. } => "vr_spherical_blur",
     }
 }

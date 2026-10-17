@@ -710,6 +710,16 @@ pub enum EffectType {
         /// Q factor (0.5..12).
         q_factor: Animatable<f32>,
     },
+    /// VR Horizon (3-axis spherical orientation realignment: Pitch, Yaw, Roll).
+    VRHorizon {
+        pitch_deg: Animatable<f32>,
+        yaw_deg: Animatable<f32>,
+        roll_deg: Animatable<f32>,
+    },
+    /// VR Spherical Blur (Geodesic latitude-compensated Gaussian blur for 360 equirectangular footage).
+    VRSphericalBlur {
+        radius: Animatable<f32>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

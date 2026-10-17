@@ -99,7 +99,9 @@ pub fn draw_effect_type_ui(
         | EffectType::RefractionLens { .. }
         | EffectType::GlassEdgeBevel { .. }
         | EffectType::RadialFastBlur { .. }
-        | EffectType::ScanlineGlitch { .. } => {
+        | EffectType::ScanlineGlitch { .. }
+        | EffectType::VRHorizon { .. }
+        | EffectType::VRSphericalBlur { .. } => {
             distort::draw(effect_type, ui, current_frame, project_changed, next_frame);
         }
 

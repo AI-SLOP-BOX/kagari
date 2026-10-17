@@ -241,9 +241,7 @@ interchange = [
 ]
 vr_360 = [
     "VRHorizon (3-axis spherical orientation realignment: Pitch, Yaw, Roll)",
-    "VRSphericalBlur (Geodesic latitude-compensated Gaussian blur)",
-    "VRChromaticAberrations (Spherical optical axis chromatic dispersion)",
-    "VRFisheyeToEquirectangular (Lens unwarping to 360 panorama)",
+    "VRSphericalBlur (Geodesic latitude-compensated Gaussian blur with 360 wrap)",
 ]
 project_workflow = [
     "ProjectHistory & UndoManager (Bounded serialization snapshot stack, multi-branch memory guard)",

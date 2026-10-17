@@ -492,6 +492,24 @@ fn build_effect(
             },
             enabled: true,
         },
+        "VR Horizon" => Effect {
+            id: format!("vrhorizon_{len}"),
+            name: "VR Horizon".into(),
+            effect_type: EffectType::VRHorizon {
+                pitch_deg: Animatable::new_constant(0.0),
+                yaw_deg: Animatable::new_constant(0.0),
+                roll_deg: Animatable::new_constant(0.0),
+            },
+            enabled: true,
+        },
+        "VR Spherical Blur" => Effect {
+            id: format!("vrblur_{len}"),
+            name: "VR Spherical Blur".into(),
+            effect_type: EffectType::VRSphericalBlur {
+                radius: Animatable::new_constant(5.0),
+            },
+            enabled: true,
+        },
         _ => return None,
     };
     Some(e)

@@ -373,6 +373,18 @@ pub fn populate_extended_params_ref<'a>(
             push!("Line Join", line_join, Scalar);
             push!("Miter Limit", miter_limit, Scalar);
         }
+        EffectType::VRHorizon {
+            pitch_deg,
+            yaw_deg,
+            roll_deg,
+        } => {
+            push!("Pitch", pitch_deg, Scalar);
+            push!("Yaw", yaw_deg, Scalar);
+            push!("Roll", roll_deg, Scalar);
+        }
+        EffectType::VRSphericalBlur { radius } => {
+            push!("Blur Radius", radius, Scalar);
+        }
         EffectType::CustomShader { .. } => {}
         #[allow(unreachable_patterns)]
         _ => {}

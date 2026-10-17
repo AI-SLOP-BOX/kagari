@@ -24,6 +24,8 @@ pub(super) fn apply(
             | EffectType::WhiteBalance { .. }
             | EffectType::HslAdjust { .. }
             | EffectType::GlowPro { .. }
+            | EffectType::VRHorizon { .. }
+            | EffectType::VRSphericalBlur { .. }
     ) {
         return false;
     }
@@ -332,6 +334,28 @@ pub(super) fn apply(
                 threshold.evaluate(frame),
                 radius.evaluate(frame).round().clamp(0.0, 128.0) as u32,
                 intensity.evaluate(frame),
+            );
+        }
+        EffectType::VRHorizon {
+            pitch_deg,
+            yaw_deg,
+            roll_deg,
+        } => {
+            crate::core::vr_effects::apply_vr_horizon(
+                pixels,
+                width,
+                height,
+                pitch_deg.evaluate(frame),
+                yaw_deg.evaluate(frame),
+                roll_deg.evaluate(frame),
+            );
+        }
+        EffectType::VRSphericalBlur { radius } => {
+            crate::core::vr_effects::apply_vr_blur(
+                pixels,
+                width,
+                height,
+                radius.evaluate(frame),
             );
         }
         _ => unreachable!(),
