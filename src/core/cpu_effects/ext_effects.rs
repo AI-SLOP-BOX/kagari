@@ -61,7 +61,7 @@ pub(super) fn apply(
                 sp * time,
                 dir,
             ) {
-                use crate::core::ae_effects_pack_v27::{
+                use crate::core::distortion_lens::{
                     apply_wave_warp_pro, PinKind, WaveType, WaveWarpParams,
                 };
                 let params = WaveWarpParams {
@@ -91,7 +91,7 @@ pub(super) fn apply(
             let cv = convergence.evaluate(frame);
             let z = zoom.evaluate(frame);
             if !crate::core::compute_pipeline::try_gpu_cc_lens(pixels, width, height, cv, z) {
-                use crate::core::ae_effects_pack_v27::{apply_cc_lens_pro, CcLensParams};
+                use crate::core::distortion_lens::{apply_cc_lens_pro, CcLensParams};
                 apply_cc_lens_pro(
                     pixels,
                     width,
@@ -110,7 +110,7 @@ pub(super) fn apply(
             if !crate::core::compute_pipeline::try_gpu_polar_coords(
                 pixels, width, height, *to_polar,
             ) {
-                use crate::core::ae_effects_pack_v27::{apply_polar_coordinates_pro, PolarMode};
+                use crate::core::distortion_lens::{apply_polar_coordinates_pro, PolarMode};
                 let mode = if *to_polar {
                     PolarMode::RectToPolar
                 } else {
@@ -134,7 +134,7 @@ pub(super) fn apply(
             if !crate::core::compute_pipeline::try_gpu_optics_comp(
                 pixels, width, height, fov, *reverse,
             ) {
-                use crate::core::ae_effects_pack_v27::{
+                use crate::core::distortion_lens::{
                     apply_optics_compensation, OpticsCompensationParams,
                 };
                 apply_optics_compensation(
@@ -189,7 +189,7 @@ pub(super) fn apply(
             sweep_intensity,
             edge_intensity,
         } => {
-            use crate::core::ae_effects_pack_v28::{apply_light_sweep, LightSweepParams};
+            use crate::core::stylize_advanced::{apply_light_sweep, LightSweepParams};
             apply_light_sweep(
                 pixels,
                 width,
@@ -204,7 +204,7 @@ pub(super) fn apply(
             );
         }
         EffectType::RadialFastBlur { amount, samples } => {
-            use crate::core::ae_effects_pack_v28::apply_radial_fast_blur;
+            use crate::core::stylize_advanced::apply_radial_fast_blur;
             let cx = width as f32 * 0.5;
             let cy = height as f32 * 0.5;
             apply_radial_fast_blur(
@@ -223,7 +223,7 @@ pub(super) fn apply(
             let t = top_offset.evaluate(frame);
             let b = bottom_offset.evaluate(frame);
             if !crate::core::compute_pipeline::try_gpu_bend_it(pixels, width, height, t, b) {
-                use crate::core::ae_effects_pack_v28::apply_cc_bend_it_pro;
+                use crate::core::stylize_advanced::apply_cc_bend_it_pro;
                 apply_cc_bend_it_pro(pixels, width, height, t, b);
             }
         }
@@ -233,7 +233,7 @@ pub(super) fn apply(
         } => {
             let sc = scale_percent.evaluate(frame) / 100.0;
             if !crate::core::compute_pipeline::try_gpu_tiler(pixels, width, height, sc) {
-                use crate::core::ae_effects_pack_v28::{apply_cc_tiler_pro, TileEdgeMode};
+                use crate::core::stylize_advanced::{apply_cc_tiler_pro, TileEdgeMode};
                 let mode = if *mirror {
                     TileEdgeMode::Mirror
                 } else {
@@ -327,7 +327,7 @@ pub(super) fn apply(
             radius,
             intensity,
         } => {
-            use crate::core::ae_effects_pack_v28::apply_glow_pro;
+            use crate::core::stylize_advanced::apply_glow_pro;
             apply_glow_pro(
                 pixels,
                 width,

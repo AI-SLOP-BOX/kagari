@@ -160,6 +160,13 @@ pub mod ae_effects_pack_v3;
 pub mod ae_effects_pack_v30;
 pub mod ae_effects_pack_v4;
 pub mod ae_effects_pack_v5;
+
+// Semantic domain aliases for After Effects effect algorithm suites
+pub use ae_effects_pack_v5 as audio_effects_dsp;
+pub use ae_effects_pack_v27 as distortion_lens;
+pub use ae_effects_pack_v28 as stylize_advanced;
+pub use ae_effects_pack_v30 as glitch_effects;
+
 pub mod animation_presets;
 pub mod bend_warp_engine;
 pub mod calculations_composite;

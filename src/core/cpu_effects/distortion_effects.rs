@@ -112,7 +112,7 @@ pub(super) fn apply(
             green_offset,
             blue_offset,
         } => {
-            use crate::core::ae_effects_pack_v30::apply_rgb_split;
+            use crate::core::glitch_effects::apply_rgb_split;
             apply_rgb_split(
                 pixels,
                 width,
@@ -127,7 +127,7 @@ pub(super) fn apply(
             speed,
             seed,
         } => {
-            use crate::core::ae_effects_pack_v30::apply_flicker;
+            use crate::core::glitch_effects::apply_flicker;
             apply_flicker(
                 pixels,
                 amount.evaluate(frame),
@@ -143,7 +143,7 @@ pub(super) fn apply(
             seed,
             corruption,
         } => {
-            use crate::core::ae_effects_pack_v30::apply_block_glitch;
+            use crate::core::glitch_effects::apply_block_glitch;
             apply_block_glitch(
                 pixels,
                 width,
@@ -161,7 +161,7 @@ pub(super) fn apply(
             seed,
             vertical,
         } => {
-            use crate::core::ae_effects_pack_v30::apply_slice_tear;
+            use crate::core::glitch_effects::apply_slice_tear;
             apply_slice_tear(
                 pixels,
                 width,

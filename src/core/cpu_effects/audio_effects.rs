@@ -30,7 +30,7 @@ pub(super) fn apply(
                 for p in pixels.as_chunks::<4>().0 {
                     luma.push(0.299 * p[0] as f32 + 0.587 * p[1] as f32 + 0.114 * p[2] as f32);
                 }
-                crate::core::ae_effects_pack_v5::apply_bass_treble(
+                crate::core::audio_effects_dsp::apply_bass_treble(
                     &mut luma, 44100.0, bass, treble, cross,
                 );
                 for (px, &lv) in pixels.as_chunks_mut::<4>().0.iter_mut().zip(luma.iter()) {
@@ -63,7 +63,7 @@ pub(super) fn apply(
                 for p in pixels.as_chunks::<4>().0 {
                     luma.push(0.299 * p[0] as f32 + 0.587 * p[1] as f32 + 0.114 * p[2] as f32);
                 }
-                crate::core::ae_effects_pack_v5::apply_flanger(
+                crate::core::audio_effects_dsp::apply_flanger(
                     &mut luma, 44100.0, md, rate, fb, wd,
                 );
                 for (px, &lv) in pixels.as_chunks_mut::<4>().0.iter_mut().zip(luma.iter()) {
@@ -92,7 +92,7 @@ pub(super) fn apply(
                 for p in pixels.as_chunks::<4>().0 {
                     luma.push(0.299 * p[0] as f32 + 0.587 * p[1] as f32 + 0.114 * p[2] as f32);
                 }
-                crate::core::ae_effects_pack_v5::apply_chorus(
+                crate::core::audio_effects_dsp::apply_chorus(
                     &mut luma, 44100.0, dm, dp, rt, vc, fb,
                 );
                 for (px, &lv) in pixels.as_chunks_mut::<4>().0.iter_mut().zip(luma.iter()) {
@@ -117,7 +117,7 @@ pub(super) fn apply(
                 for p in pixels.as_chunks::<4>().0 {
                     luma.push(0.299 * p[0] as f32 + 0.587 * p[1] as f32 + 0.114 * p[2] as f32);
                 }
-                crate::core::ae_effects_pack_v5::apply_parametric_eq_bell(
+                crate::core::audio_effects_dsp::apply_parametric_eq_bell(
                     &mut luma, 44100.0, freq, gain, q,
                 );
                 for (px, &lv) in pixels.as_chunks_mut::<4>().0.iter_mut().zip(luma.iter()) {
