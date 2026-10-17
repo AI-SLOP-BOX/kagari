@@ -140,6 +140,7 @@ spatial_3d = [
     "ShadowMapping (Light shadow darkness, casting & receiving)",
     "Z-Sorting & 3D Layer Compositing",
     "Auto-Orient along 3D motion path",
+    "Wavefront OBJ 3D Model Loader (Mesh3D, PBR Materials, UV mapping, Normal generation)",
     "C4D 3D Mesh Extrusion (Bevel, Depth, Normals generation)",
 ]
 vector_shapes = [
@@ -149,7 +150,9 @@ vector_shapes = [
     "WigglePaths (Procedural shape noise)",
     "ZigzagPaths (Wave / Corner ridges)",
     "MergePaths & OffsetPaths (Boolean operations & stroke offset)",
+    "BezierShapeMorph (Resampling & smooth interpolation across arbitrary knot counts)",
     "AutoTrace (Bitmap edge detection to Bezier Spline paths)",
+    "SVG & Illustrator Importer (Path tokenizer, cubic bezier & arc conversion)",
 ]
 typography = [
     "TextAnimator (Per-character RangeSelector, Wiggly, Ramp, Shape selectors)",
@@ -163,7 +166,7 @@ deformation = [
     "CylinderSphereWarp",
     "PageTurn 3D (Cylindrical paper peel & back-side shading)",
     "TurbulentDisplace (Perlin vector noise warping)",
-    "CornerPin (4-point projective homography warp)",
+    "CornerPin (4-point projective homography DLT warp with bilinear sampling)",
 ]
 tracking = [
     "CameraTracker3D (Optical parallax depth & camera trajectory solve from 2D tracks)",
@@ -178,6 +181,12 @@ video_ai = [
     "ContentAwareFill (Spatio-temporal Fast Marching inpainting for object removal)",
     "RotoBrush (Foreground/Background color modeling, boundary propagation & edge feathering)",
     "OpticalFlowTimewarp (Bidirectional dense optical flow intermediate frame synthesis)",
+    "TemporalDenoise (Spatio-temporal noise reduction across frame buffers)",
+]
+paint_tool = [
+    "VectorPaintPro (32-bit float HDR brush, Gaussian hardness feathering, Pressure dynamics)",
+    "CloneStamp (Source offset sampling & HDR alpha blending)",
+    "EraserMode (Alpha subtraction & edge softness)",
 ]
 simulation = [
     "AdvancedParticles3D (3D emitters, Gravity, Wind, Vortex, Floor bounce, Sprites)",
@@ -188,6 +197,7 @@ compositing = [
     "BlendModes (30+ AE blend modes)",
     "LinearLightComposite (1.0 Gamma compositing toggle)",
     "CollapseTransformations (Nested pre-comp 3D space continuity)",
+    "SubframeMotionBlur (High-precision shutter angle & shutter phase time integration)",
     "SetMatte (Channel copy & composite)",
 ]
 audio = [
@@ -227,3 +237,4 @@ interchange = [
     "Lottie JSON Exporter (Shapes, transforms, keyframes)",
     "OpenEXR (Half-float RGB/RGBA with Zip compression)",
 ]
+
