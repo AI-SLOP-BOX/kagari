@@ -23,12 +23,18 @@ impl WgpuRenderer {
                 matte_textures_owned.push(None);
                 continue;
             }
-            if comp_idx == 0 {
+            let matte_source_idx = if let Some(target_id) = &layer.track_matte_layer_id {
+                comp.layers.iter().position(|l| l.id == *target_id)
+            } else if comp_idx > 0 {
+                Some(comp_idx - 1)
+            } else {
+                None
+            };
+            let Some(matte_source_idx) = matte_source_idx else {
                 matte_bind_groups.push(None);
                 matte_textures_owned.push(None);
                 continue;
-            }
-            let matte_source_idx = comp_idx - 1;
+            };
             let matte_source = &comp.layers[matte_source_idx];
             if !matte_source.is_active(frame) || !matte_source.visible {
                 matte_bind_groups.push(None);

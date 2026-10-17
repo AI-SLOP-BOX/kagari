@@ -114,6 +114,10 @@ pub struct Layer {
 
     pub parent_id: Option<String>,
     pub track_matte: TrackMatteMode,
+    /// Explicit target layer for universal track matting (AE CC 2023+).
+    /// When None, falls back to the adjacent layer above for backward compatibility.
+    #[serde(default)]
+    pub track_matte_layer_id: Option<String>,
     pub solo: bool,
     pub motion_blur: bool,
     pub label: LabelColor,
@@ -284,6 +288,7 @@ impl Layer {
             locked: false,
             parent_id: None,
             track_matte: TrackMatteMode::None,
+            track_matte_layer_id: None,
             solo: false,
             motion_blur: false,
             label: LabelColor::Red,

@@ -18,12 +18,16 @@ pub(crate) fn render_matte_buffer(
     height: u32,
 ) -> Option<Vec<u8>> {
     if layer.track_matte != TrackMatteMode::None {
-        // Find the layer below this one (the matte source)
-        let layer_idx = comp.layers.iter().position(|l| l.id == layer.id);
-        if let Some(idx) = layer_idx {
-            if idx > 0 {
-                let matte_layer = &comp.layers[idx - 1];
-                if matte_layer.is_active(frame) && matte_layer.visible {
+        // Find the matte source layer: explicit track_matte_layer_id or fallback to adjacent layer above (idx - 1)
+        let matte_layer_opt = if let Some(target_id) = &layer.track_matte_layer_id {
+            comp.layers.iter().find(|l| l.id == *target_id)
+        } else {
+            let layer_idx = comp.layers.iter().position(|l| l.id == layer.id);
+            layer_idx.and_then(|idx| if idx > 0 { comp.layers.get(idx - 1) } else { None })
+        };
+
+        if let Some(matte_layer) = matte_layer_opt {
+            if matte_layer.is_active(frame) && matte_layer.visible {
                     let source_frame = matte_layer.effective_render_frame(frame, comp.fps);
                     let (m_pos, m_scale, m_rot, m_opa) =
                         comp.resolve_world_transform(matte_layer, frame);
@@ -335,7 +339,4 @@ pub(crate) fn render_matte_buffer(
         } else {
             None
         }
-    } else {
-        None
-    }
 }

@@ -305,11 +305,18 @@ pub(crate) fn render_frame_to_pixels_filtered(
         if render_cancelled() {
             break;
         }
-        if comp
-            .layers
-            .get(sorted_idx + 1)
-            .is_some_and(|consumer| consumer.track_matte != TrackMatteMode::None)
-        {
+        // If this layer serves as a track matte source for another layer, it should not draw directly to the composition
+        let is_matte_source = comp.layers.iter().any(|consumer| {
+            if consumer.track_matte == TrackMatteMode::None {
+                return false;
+            }
+            if let Some(target_id) = &consumer.track_matte_layer_id {
+                target_id == &layer.id
+            } else {
+                comp.layers.get(sorted_idx + 1).is_some_and(|next| next.id == consumer.id)
+            }
+        });
+        if is_matte_source {
             continue;
         }
         if !layer.is_active(frame) || (has_solo && !layer.solo) || !layer.visible {
