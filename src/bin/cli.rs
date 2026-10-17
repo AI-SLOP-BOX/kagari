@@ -20,7 +20,7 @@ mod info;
 mod render;
 #[path = "cli/validate.rs"]
 mod validate;
-use bindings::{cmd_add_sample_binding, cmd_bindings, parse_binding_value, parse_sample_point};
+use bindings::{cmd_add_sample_binding, cmd_bindings, parse_binding_value, parse_sample_point, parse_string_override};
 use frame::{cmd_frame, cmd_lottie};
 use info::{cmd_effects, cmd_info, cmd_production_info};
 
@@ -41,6 +41,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             exposure,
             lut,
             bindings,
+            overrides,
         } => {
             render::cmd_render(render::RenderArgs {
                 project_path: project,
@@ -54,6 +55,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 exposure,
                 lut,
                 bindings,
+                overrides,
             })?;
         }
         Commands::Effects { json } => {

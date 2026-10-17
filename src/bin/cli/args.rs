@@ -1,4 +1,4 @@
-use super::{mocap::parse_point, parse_binding_value, parse_sample_point};
+use super::{mocap::parse_point, parse_binding_value, parse_sample_point, parse_string_override};
 use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
@@ -64,6 +64,10 @@ pub(super) enum Commands {
         /// Live binding values such as audio.bass=0.75; may be repeated
         #[arg(long = "binding", value_parser = parse_binding_value)]
         bindings: Vec<(String, f64)>,
+
+        /// Dynamic template overrides in LayerName=Value or LayerName.text=Value form; may be repeated
+        #[arg(long = "override", value_parser = parse_string_override)]
+        overrides: Vec<(String, String)>,
     },
 
     /// List available effects and their parameters

@@ -14,6 +14,17 @@ pub(super) fn parse_binding_value(value: &str) -> Result<(String, f64), String> 
     Ok((source.to_string(), number))
 }
 
+pub(super) fn parse_string_override(value: &str) -> Result<(String, String), String> {
+    let (target, raw) = value
+        .split_once('=')
+        .ok_or("override must use target=value (e.g. Title=Hello or Logo=img.png)")?;
+    let target = target.trim();
+    if target.is_empty() {
+        return Err("override target layer/property name cannot be empty".into());
+    }
+    Ok((target.to_string(), raw.to_string()))
+}
+
 pub(super) fn parse_sample_point(value: &str) -> Result<(i64, f64), String> {
     let (sample, raw) = value
         .split_once('=')

@@ -25,6 +25,7 @@ pub(super) struct RenderArgs {
     pub(super) exposure: f32,
     pub(super) lut: u32,
     pub(super) bindings: Vec<(String, f64)>,
+    pub(super) overrides: Vec<(String, String)>,
 }
 
 pub(super) fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Error>> {
@@ -35,11 +36,59 @@ pub(super) fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Err
     .and_then(|json| {
         kagari_vfx::core::production_document::ProductionDocument::from_json(&json).ok()
     });
-    let project = if let Some(document) = production.as_ref() {
+    let mut project = if let Some(document) = production.as_ref() {
         document.project.clone()
     } else {
         load_project(&args.project_path)?
     };
+
+    // Apply template overrides (text replacement, image/video path replacement)
+    for (target, val) in &args.overrides {
+        let (layer_name, prop_name) = match target.split_once('.') {
+            Some((l, p)) => (l.trim(), Some(p.trim())),
+            None => (target.as_str(), None),
+        };
+        let mut matched = false;
+        for c in &mut project.compositions {
+            for layer in &mut c.layers {
+                if layer.name == layer_name || layer.id == layer_name {
+                    matched = true;
+                    match (&mut layer.layer_type, prop_name) {
+                        (kagari_vfx::core::timeline::LayerType::Text { text, .. }, None | Some("text")) => {
+                            *text = val.clone();
+                            eprintln!("Applied override: [{}].text = \"{}\"", layer.name, val);
+                        }
+                        (kagari_vfx::core::timeline::LayerType::Image { path }, None | Some("src" | "path")) => {
+                            *path = val.clone();
+                            eprintln!("Applied override: [{}].path = \"{}\"", layer.name, val);
+                        }
+                        (kagari_vfx::core::timeline::LayerType::Video { source, .. }, None | Some("src" | "source")) => {
+                            *source = val.clone();
+                            eprintln!("Applied override: [{}].source = \"{}\"", layer.name, val);
+                        }
+                        (kagari_vfx::core::timeline::LayerType::Solid { color }, Some("color")) => {
+                            // Parse hex or comma-separated RGBA if provided
+                            let parts: Vec<f32> = val.split(',').filter_map(|s| s.trim().parse::<f32>().ok()).collect();
+                            if parts.len() >= 3 {
+                                color[0] = parts[0];
+                                color[1] = parts[1];
+                                color[2] = parts[2];
+                                if parts.len() >= 4 {
+                                    color[3] = parts[3];
+                                }
+                                eprintln!("Applied override: [{}].color = {:?}", layer.name, color);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        if !matched {
+            eprintln!("Warning: Template override target '{}' not found in any composition", target);
+        }
+    }
+
     let comp = find_comp(&project, args.comp_ref.as_deref())?;
     let comp_index = project
         .compositions
