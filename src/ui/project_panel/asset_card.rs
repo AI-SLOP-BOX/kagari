@@ -154,36 +154,41 @@ pub(crate) fn draw_asset_card(
     selected: bool,
     preview: Option<(egui::TextureId, egui::Vec2)>,
 ) -> egui::Response {
-    let card_size = egui::vec2(width, 68.0);
+    let card_height = (width * 0.58).clamp(72.0, 94.0);
+    let card_size = egui::vec2(width, card_height);
     let (card, response) = ui.allocate_exact_size(card_size, egui::Sense::click());
     let painter = ui.painter().clone();
+    let bg_color = if response.hovered() {
+        colors::BG_HOVER
+    } else {
+        colors::BG_DARKEST
+    };
     painter.rect(
         card,
         6.0,
-        if response.hovered() {
-            colors::BG_HOVER
-        } else {
-            colors::BG_PANEL_BASE
-        },
+        bg_color,
         egui::Stroke::new(
-            if selected { 2.0_f32 } else { 1.0_f32 },
+            if selected { 1.5_f32 } else { 1.0_f32 },
             if selected {
-                colors::ACCENT_SELECTION
+                colors::ACCENT_BRAND
+            } else if response.hovered() {
+                colors::BORDER_MEDIUM
             } else {
                 colors::BORDER_SUBTLE
             },
         ),
     );
+    let cover_h = (card_height * 0.62).round();
     let preview_rect = egui::Rect::from_min_max(
-        card.left_top() + egui::vec2(4.0, 4.0),
-        egui::pos2(card.right() - 4.0, card.top() + 42.0),
+        card.left_top() + egui::vec2(3.0, 3.0),
+        egui::pos2(card.right() - 3.0, card.top() + cover_h),
     );
-    painter.rect_filled(preview_rect, 3.0, colors::BG_SURFACE);
+    painter.rect_filled(preview_rect, 4.0, colors::BG_SURFACE);
     if let Some((texture, texture_size)) = preview {
         let scale =
-            (preview_rect.width() / texture_size.x).min(preview_rect.height() / texture_size.y);
+            (preview_rect.width() / texture_size.x).max(preview_rect.height() / texture_size.y);
         let destination = egui::Rect::from_center_size(preview_rect.center(), texture_size * scale);
-        painter.image(
+        painter.with_clip_rect(preview_rect).image(
             texture,
             destination,
             egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
@@ -201,11 +206,11 @@ pub(crate) fn draw_asset_card(
             ProjectItemType::Folder { .. } => crate::ui::icons::SVG_FOLDER,
         };
         let tint = if response.hovered() {
-            colors::TEXT_PRIMARY
+            colors::ACCENT_BRAND
         } else {
-            colors::TEXT_SECONDARY
+            colors::TEXT_MUTED
         };
-        let icon_size = egui::vec2(25.0, 25.0);
+        let icon_size = egui::vec2(22.0, 22.0);
         crate::ui::icons::render_svg_at(
             ui,
             format!("asset-card-icon-{item_index}"),
@@ -215,14 +220,41 @@ pub(crate) fn draw_asset_card(
             preview_rect.center() - icon_size * 0.5,
         );
     }
+
+    // Duration badge on bottom-right of preview cover (matching ideal e.g. 00:15)
+    let duration_str = match &item.item_type {
+        ProjectItemType::Video { duration_sec, .. } | ProjectItemType::Audio { duration_sec, .. }
+            if duration_sec.is_finite() && *duration_sec > 0.0 =>
+        {
+            let secs = duration_sec.round() as u32;
+            Some(format!("{:02}:{:02}", secs / 60, secs % 60))
+        }
+        _ => None,
+    };
+    if let Some(dur) = duration_str {
+        let badge_rect = egui::Rect::from_min_size(
+            egui::pos2(preview_rect.right() - 32.0, preview_rect.bottom() - 14.0),
+            egui::vec2(30.0, 12.0),
+        );
+        painter.rect_filled(badge_rect, 2.0, egui::Color32::from_black_alpha(170));
+        painter.text(
+            badge_rect.center(),
+            egui::Align2::CENTER_CENTER,
+            dur,
+            egui::FontId::monospace(8.5),
+            egui::Color32::WHITE,
+        );
+    }
+
     ui.put(
         egui::Rect::from_min_max(
-            egui::pos2(card.left() + 6.0, card.top() + 43.0),
-            egui::pos2(card.right() - 5.0, card.top() + 56.0),
+            egui::pos2(card.left() + 6.0, preview_rect.bottom() + 3.0),
+            egui::pos2(card.right() - 5.0, card.bottom() - 14.0),
         ),
         egui::Label::new(
             egui::RichText::new(&item.name)
                 .size(10.5)
+                .strong()
                 .color(colors::TEXT_PRIMARY),
         )
         .truncate(),

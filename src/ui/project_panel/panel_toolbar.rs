@@ -9,11 +9,7 @@ pub(super) struct ProjectToolbarActions {
     pub(super) reduce_project_requested: bool,
 }
 
-pub(super) fn draw(
-    ui: &mut egui::Ui,
-    grid_view: bool,
-    grid_view_id: egui::Id,
-) -> ProjectToolbarActions {
+pub(super) fn draw(ui: &mut egui::Ui) -> ProjectToolbarActions {
     let mut actions = ProjectToolbarActions::default();
     ui.horizontal(|ui| {
         if project_icon_action(
@@ -69,33 +65,6 @@ pub(super) fn draw(
                 .clicked()
             {
                 actions.reduce_project_requested = true;
-            }
-        });
-        ui.separator();
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if project_view_toggle(
-                ui,
-                "project-view-list",
-                SVG_LIST_VIEW,
-                !grid_view,
-                "一覧表示",
-            )
-            .clicked()
-            {
-                ui.ctx()
-                    .data_mut(|data| data.insert_temp(grid_view_id, false));
-            }
-            if project_view_toggle(
-                ui,
-                "project-view-grid",
-                crate::ui::icons::SVG_GRID,
-                grid_view,
-                "カード表示",
-            )
-            .clicked()
-            {
-                ui.ctx()
-                    .data_mut(|data| data.insert_temp(grid_view_id, true));
             }
         });
     });

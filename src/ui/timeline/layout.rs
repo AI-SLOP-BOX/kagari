@@ -4,7 +4,7 @@ pub const COLUMN_HEADER_HEIGHT: f32 = 28.0;
 pub const LAYER_ROW_HEIGHT: f32 = 30.0;
 pub const PROPERTY_ROW_HEIGHT: f32 = 18.0;
 pub const LAYER_NAME_MIN_WIDTH: f32 = 40.0;
-pub const LAYER_NAME_MAX_WIDTH: f32 = 220.0;
+pub const LAYER_NAME_MAX_WIDTH: f32 = 280.0;
 pub const LAYER_SWITCHES_WIDTH: f32 = 82.0;
 pub const LAYER_HIDDEN_SWITCHES_RESERVE: f32 = 112.0;
 
@@ -73,7 +73,7 @@ impl TimelineColumns {
         } else {
             content_width * 0.35
         };
-        let max_left_width = (content_width - min_time_width).clamp(0.0, 280.0);
+        let max_left_width = (content_width - min_time_width).clamp(0.0, 360.0);
         let min_left_width = 180.0_f32.min(max_left_width);
         let requested_left_width = if requested_left_width.is_finite() {
             requested_left_width
@@ -129,8 +129,8 @@ mod tests {
         let narrow = TimelineColumns::new(300.0, 260.0, 4.0);
         assert!(narrow.time_width >= 103.5);
         let wide = TimelineColumns::new(1280.0, 320.0, 4.0);
-        assert_eq!(wide.left_width, 280.0);
-        assert_eq!(wide.time_width, 996.0);
+        assert_eq!(wide.left_width, 320.0);
+        assert_eq!(wide.time_width, 956.0);
     }
 
     #[test]

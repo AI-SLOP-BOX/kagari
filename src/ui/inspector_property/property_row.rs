@@ -2,6 +2,7 @@ use crate::core::keyframe::{BezierControlPoint, InterpolationType, Keyframe};
 use crate::core::property::Animatable;
 use crate::ui::custom_widgets;
 use crate::ui::kui;
+use crate::ui::localization::tr;
 use crate::ui::theme::colors;
 use eframe::egui;
 
@@ -142,8 +143,8 @@ pub fn draw_property_ui<
                     }
                 }
             }
-            kui::menu_button(ui, "Ease", |ui| {
-                if kui::menu_item(ui, "Easy Ease (F9)").clicked() {
+            kui::menu_button(ui, &tr("Ease"), |ui| {
+                if kui::menu_item(ui, &tr("Easy Ease (F9)")).clicked() {
                     if let Animatable::Animated(ref mut kfs) = property {
                         let has_curr = kfs.iter().any(|k| k.frame == current_frame);
                         for kf in kfs {
@@ -164,7 +165,7 @@ pub fn draw_property_ui<
                     }
                     ui.close_menu();
                 }
-                if kui::menu_item(ui, "Ease In (Shift+F9)").clicked() {
+                if kui::menu_item(ui, "イーズイン (Shift+F9)").clicked() {
                     if let Animatable::Animated(ref mut kfs) = property {
                         let has_curr = kfs.iter().any(|k| k.frame == current_frame);
                         for kf in kfs {
@@ -185,7 +186,7 @@ pub fn draw_property_ui<
                     }
                     ui.close_menu();
                 }
-                if kui::menu_item(ui, "Ease Out (Cmd+Shift+F9)").clicked() {
+                if kui::menu_item(ui, "イーズアウト (Cmd+Shift+F9)").clicked() {
                     if let Animatable::Animated(ref mut kfs) = property {
                         let has_curr = kfs.iter().any(|k| k.frame == current_frame);
                         for kf in kfs {
@@ -206,7 +207,7 @@ pub fn draw_property_ui<
                     }
                     ui.close_menu();
                 }
-                if kui::menu_item(ui, "Hold (Cmd+Opt+H)").clicked() {
+                if kui::menu_item(ui, "停止 (Cmd+Opt+H)").clicked() {
                     if let Animatable::Animated(ref mut kfs) = property {
                         let has_curr = kfs.iter().any(|k| k.frame == current_frame);
                         for kf in kfs {
@@ -217,7 +218,7 @@ pub fn draw_property_ui<
                     }
                     ui.close_menu();
                 }
-                if kui::menu_item(ui, "Linear").clicked() {
+                if kui::menu_item(ui, &tr("Linear")).clicked() {
                     if let Animatable::Animated(ref mut kfs) = property {
                         let has_curr = kfs.iter().any(|k| k.frame == current_frame);
                         for kf in kfs {
@@ -232,12 +233,12 @@ pub fn draw_property_ui<
         }
 
         kui::menu_button(ui, "...", |ui| {
-            ui.label(egui::RichText::new("Advanced property actions").strong());
-            if kui::menu_item(ui, "Easy Ease (F9)").clicked() {
+            ui.label(egui::RichText::new("詳細プロパティ操作").strong());
+            if kui::menu_item(ui, &tr("Easy Ease (F9)")).clicked() {
                 property.easy_ease();
                 ui.close_menu();
             }
-            if kui::menu_item(ui, "Sine Wave Ease").clicked() {
+            if kui::menu_item(ui, "サイン波イーズ").clicked() {
                 if let Animatable::Animated(ref mut kfs) = property {
                     for kf in kfs {
                         kf.interpolation = InterpolationType::Bezier {

@@ -189,8 +189,11 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
             let drag_info = app.dragging_effect.clone();
             // Collect pending effect drops to apply after the closure
 
-            let layer_scroll_height = ui.available_height().max(32.0);
-            let _scroll_resp = egui::ScrollArea::vertical().max_height(layer_scroll_height).show(ui, |ui| {
+            let layer_scroll_height = (ui.available_height() - 4.0).max(32.0);
+            let _scroll_resp = egui::ScrollArea::vertical()
+                .max_height(layer_scroll_height)
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
                 let layers_len = comp.layers.len();
                 let comp_w_f = comp.width as f32;
                 let comp_h_f = comp.height.max(1) as f32;
@@ -1421,6 +1424,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                         }
                     }
                 }
+                ui.add_space(48.0);
             });
 
             crate::ui::timeline::pending_actions::apply_deferred(

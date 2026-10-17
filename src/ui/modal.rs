@@ -11,18 +11,18 @@ pub struct DialogWindow<'open> {
 
 pub fn dialog<'open>(title: impl Into<egui::WidgetText>) -> DialogWindow<'open> {
     let glass_frame = egui::Frame::none()
-        .fill(crate::ui::theme::colors::GLASS_SURFACE)
+        .fill(crate::ui::theme::colors::BG_PANEL_DEEP)
         .rounding(egui::Rounding::same(10.0))
         .stroke(egui::Stroke::new(
             1.0_f32,
-            crate::ui::theme::colors::GLASS_BORDER,
+            crate::ui::theme::colors::BORDER_MEDIUM,
         ))
-        .inner_margin(egui::Margin::same(12.0))
+        .inner_margin(egui::Margin::same(14.0))
         .shadow(egui::epaint::Shadow {
-            offset: egui::vec2(0.0, 12.0),
-            blur: 32.0,
-            spread: 0.0,
-            color: egui::Color32::from_black_alpha(180),
+            offset: egui::vec2(0.0, 16.0),
+            blur: 40.0,
+            spread: 2.0,
+            color: egui::Color32::from_black_alpha(220),
         });
 
     DialogWindow {
@@ -72,6 +72,11 @@ impl<'open> DialogWindow<'open> {
 
     pub fn min_size(mut self, size: impl Into<egui::Vec2>) -> Self {
         self.window = self.window.min_size(size);
+        self
+    }
+
+    pub fn max_size(mut self, size: impl Into<egui::Vec2>) -> Self {
+        self.window = self.window.max_size(size);
         self
     }
 

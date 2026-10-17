@@ -32,41 +32,44 @@ pub fn draw_transform_gizmos(
     let ry = origin_y + (pos[1] / comp_h) * draw_h;
     let center = egui::pos2(rx, ry);
 
-    // X-Axis (Red)
-    let x_end = egui::pos2(rx + 65.0, ry);
-    ui.painter()
-        .line_segment([center, x_end], egui::Stroke::new(2.5_f32, colors::GIZMO_X));
-    ui.painter().text(
-        egui::pos2(x_end.x + 8.0, x_end.y),
-        egui::Align2::LEFT_CENTER,
-        "X",
-        egui::FontId::proportional(12.0),
-        colors::GIZMO_X,
-    );
+    // 3D Axis Gizmo (only for 3D layers)
+    if s_layer.is_3d {
+        // X-Axis (Red)
+        let x_end = egui::pos2(rx + 65.0, ry);
+        ui.painter()
+            .line_segment([center, x_end], egui::Stroke::new(2.5_f32, colors::GIZMO_X));
+        ui.painter().text(
+            egui::pos2(x_end.x + 8.0, x_end.y),
+            egui::Align2::LEFT_CENTER,
+            "X",
+            egui::FontId::proportional(12.0),
+            colors::GIZMO_X,
+        );
 
-    // Y-Axis (Green)
-    let y_end = egui::pos2(rx, ry + 65.0);
-    ui.painter()
-        .line_segment([center, y_end], egui::Stroke::new(2.5_f32, colors::GIZMO_Y));
-    ui.painter().text(
-        egui::pos2(y_end.x, y_end.y + 8.0),
-        egui::Align2::CENTER_TOP,
-        "Y",
-        egui::FontId::proportional(12.0),
-        colors::GIZMO_Y,
-    );
+        // Y-Axis (Green)
+        let y_end = egui::pos2(rx, ry + 65.0);
+        ui.painter()
+            .line_segment([center, y_end], egui::Stroke::new(2.5_f32, colors::GIZMO_Y));
+        ui.painter().text(
+            egui::pos2(y_end.x, y_end.y + 8.0),
+            egui::Align2::CENTER_TOP,
+            "Y",
+            egui::FontId::proportional(12.0),
+            colors::GIZMO_Y,
+        );
 
-    // Z-Axis (Blue Diagonal)
-    let z_end = egui::pos2(rx - 45.0, ry + 45.0);
-    ui.painter()
-        .line_segment([center, z_end], egui::Stroke::new(2.5_f32, colors::GIZMO_Z));
-    ui.painter().text(
-        egui::pos2(z_end.x - 8.0, z_end.y + 4.0),
-        egui::Align2::RIGHT_TOP,
-        "Z",
-        egui::FontId::proportional(12.0),
-        colors::GIZMO_Z,
-    );
+        // Z-Axis (Blue Diagonal)
+        let z_end = egui::pos2(rx - 45.0, ry + 45.0);
+        ui.painter()
+            .line_segment([center, z_end], egui::Stroke::new(2.5_f32, colors::GIZMO_Z));
+        ui.painter().text(
+            egui::pos2(z_end.x - 8.0, z_end.y + 4.0),
+            egui::Align2::RIGHT_TOP,
+            "Z",
+            egui::FontId::proportional(12.0),
+            colors::GIZMO_Z,
+        );
+    }
 
     // 8-Point Bounding Box Transform Handles
     let scale = s_layer.transform.scale.evaluate(current_frame);
@@ -181,42 +184,5 @@ pub fn draw_transform_gizmos(
         }
     }
 
-    // Render 3D Vector Spatial Gizmo Overlay if layer is 3D
-    if s_layer.is_3d {
-        let axis_len = 65.0f32;
-        ui.painter().line_segment(
-            [center, egui::pos2(center.x + axis_len, center.y)],
-            egui::Stroke::new(2.5_f32, colors::GIZMO_X),
-        );
-        ui.painter().text(
-            egui::pos2(center.x + axis_len + 8.0, center.y),
-            egui::Align2::LEFT_CENTER,
-            "X",
-            egui::FontId::monospace(11.0),
-            colors::GIZMO_X,
-        );
 
-        ui.painter().line_segment(
-            [center, egui::pos2(center.x, center.y - axis_len)],
-            egui::Stroke::new(2.5_f32, colors::GIZMO_Y),
-        );
-        ui.painter().text(
-            egui::pos2(center.x, center.y - axis_len - 8.0),
-            egui::Align2::CENTER_BOTTOM,
-            "Y",
-            egui::FontId::monospace(11.0),
-            colors::GIZMO_Y,
-        );
-
-        let z_end = egui::pos2(center.x - axis_len * 0.6, center.y + axis_len * 0.6);
-        ui.painter()
-            .line_segment([center, z_end], egui::Stroke::new(2.5_f32, colors::GIZMO_Z));
-        ui.painter().text(
-            egui::pos2(z_end.x - 8.0, z_end.y + 4.0),
-            egui::Align2::RIGHT_TOP,
-            "Z",
-            egui::FontId::monospace(11.0),
-            colors::GIZMO_Z,
-        );
-    }
 }

@@ -97,14 +97,25 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
     }
 
     let mut open = app.export.show_export_dialog;
+    let screen_h = ctx.screen_rect().height();
+    let max_dialog_h = (screen_h * 0.82).clamp(320.0, 700.0);
     crate::ui::modal::dialog(tr("Export Composition Video"))
         .open(&mut open)
         .collapsible(false)
-        .resizable(false)
+        .resizable(true)
+        .default_width(480.0)
+        .default_height(max_dialog_h)
+        .max_size(egui::vec2(600.0, max_dialog_h))
         .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
         .show(ctx, |ui| {
             ui.heading(tr("Render Settings"));
             ui.separator();
+
+            let scroll_h = (ui.available_height() - 56.0).max(180.0);
+            egui::ScrollArea::vertical()
+                .max_height(scroll_h)
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
 
             let comp = app.history.current().active_composition();
             let comp_total = comp.duration_frames;
@@ -220,7 +231,38 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
             ui.horizontal(|ui| {
                 ui.label(tr("Output Path:"));
                 ui.text_edit_singleline(&mut app.export.export_output_path);
+                if ui.button(tr("Browse...")).clicked() {
+                    let mut dialog = rfd::FileDialog::new();
+                    let current_p = std::path::Path::new(&app.export.export_output_path);
+                    if let Some(parent) = current_p.parent().filter(|p| p.is_dir()) {
+                        dialog = dialog.set_directory(parent);
+                    }
+                    if let Some(file_name) = current_p.file_name().and_then(|n| n.to_str()) {
+                        dialog = dialog.set_file_name(file_name);
+                    }
+                    if let Some(picked) = dialog.save_file() {
+                        app.export.export_output_path = picked.to_string_lossy().to_string();
+                    }
+                }
             });
+            let abs_path = std::path::Path::new(&app.export.export_output_path);
+            let display_dir = if abs_path.is_absolute() {
+                abs_path.parent().map(|p| p.to_string_lossy().to_string()).unwrap_or_default()
+            } else if let Ok(cwd) = std::env::current_dir() {
+                cwd.to_string_lossy().to_string()
+            } else {
+                String::new()
+            };
+            if !display_dir.is_empty() {
+                ui.horizontal(|ui| {
+                    ui.add_space(8.0);
+                    ui.label(
+                        egui::RichText::new(format!("📁 {}", display_dir))
+                            .small()
+                            .color(colors::TEXT_MUTED),
+                    );
+                });
+            }
 
             ui.add_space(6.0);
             ui.horizontal(|ui| {
@@ -377,12 +419,18 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         ctx.data_mut(|d| d.insert_temp(egui::Id::new("ae_export_range"), range_mode));
                     }
                 });
+            }
+            });
 
-                ui.horizontal(|ui| {
-                    let active_comp = app.history.current().active_composition();
-                    let active_comp_id = active_comp.id.clone();
-                    let active_comp_name = active_comp.name.clone();
-                    if app.export_format_preset == 3 {
+            ui.add_space(8.0);
+            ui.separator();
+            ui.add_space(4.0);
+
+            ui.horizontal(|ui| {
+                let active_comp = app.history.current().active_composition();
+                let active_comp_id = active_comp.id.clone();
+                let active_comp_name = active_comp.name.clone();
+                if app.export_format_preset == 3 {
                         // Lottie: synchronous JSON write — fast, no ffmpeg required.
                         if ui.button(tr("Export Lottie JSON")).clicked() {
                             let project = app.history.current().clone();
@@ -444,7 +492,6 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                         app.export.show_export_dialog = false;
                     }
                 });
-            }
         });
 
     app.export.show_export_dialog = open;

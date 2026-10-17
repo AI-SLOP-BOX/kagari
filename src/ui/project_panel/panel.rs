@@ -13,102 +13,70 @@ use super::preview::draw_metadata_preview;
 mod toolbar;
 
 pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
-    // ── Asset Search Filter ──
-    ui.add_sized(
-        [ui.available_width(), 26.0],
-        egui::TextEdit::singleline(&mut app.project_search_query)
-            .hint_text("プロジェクト素材を検索"),
-    );
+    // ── Asset Search Filter & View Toggle Row (Matching Ideal Mockup) ──
+    let grid_view_id = egui::Id::new("project_asset_grid_view");
+    let grid_view = ui
+        .ctx()
+        .data(|data| data.get_temp::<bool>(grid_view_id))
+        .unwrap_or(true);
+
+    let row_w = ui.available_width();
+    let toggle_w = 28.0;
+    let s_w = (row_w - toggle_w - 6.0).max(60.0);
+    ui.horizontal(|ui| {
+        let (s_rect, s_resp) = ui.allocate_exact_size(egui::vec2(s_w, 28.0), egui::Sense::click());
+        let border_c = if s_resp.hovered() { colors::BORDER_MEDIUM } else { colors::BORDER_SUBTLE };
+        ui.painter().rect_filled(s_rect, 6.0, colors::BG_SURFACE);
+        ui.painter().rect_stroke(s_rect, 6.0, egui::Stroke::new(1.0_f32, border_c));
+        crate::ui::icons::render_svg_at(
+            ui,
+            "asset-search-icon".into(),
+            crate::ui::icons::SVG_SEARCH,
+            egui::vec2(13.0, 13.0),
+            colors::TEXT_MUTED,
+            egui::pos2(s_rect.left() + 8.0, s_rect.center().y - 6.5),
+        );
+        let mut search_ui = ui.new_child(egui::UiBuilder::new().max_rect(egui::Rect::from_min_max(
+            egui::pos2(s_rect.left() + 26.0, s_rect.top() + 2.0),
+            egui::pos2(s_rect.right() - 6.0, s_rect.bottom() - 2.0),
+        )));
+        search_ui.add(
+            egui::TextEdit::singleline(&mut app.project_search_query)
+                .hint_text(egui::RichText::new("素材を検索...").color(colors::TEXT_MUTED))
+                .frame(false),
+        );
+
+        let toggle_resp = super::asset_card::project_view_toggle(
+            ui,
+            "asset-grid-list-toggle",
+            if grid_view { crate::ui::icons::SVG_GRID } else { super::asset_card::SVG_LIST_VIEW },
+            grid_view,
+            "グリッド / リスト表示切り替え",
+        );
+        if toggle_resp.clicked() {
+            ui.ctx().data_mut(|d| d.insert_temp(grid_view_id, !grid_view));
+        }
+    });
+    ui.add_space(8.0);
 
     let query = app.project_search_query.to_lowercase();
     let grid_view_id = egui::Id::new("project_asset_grid_view");
     let grid_view = ui
         .ctx()
         .data(|data| data.get_temp::<bool>(grid_view_id))
-        .unwrap_or(false);
+        .unwrap_or(true);
 
     // Read current state without cloning upfront
     let current_project = app.history.current();
 
-    // ── AE Top Asset Thumbnail & Meta Box ──
-    let selected_asset_idx: Option<usize> = ui
-        .ctx()
-        .data_mut(|d| d.get_temp(egui::Id::new("selected_project_asset")));
-    if !grid_view {
-        if let Some(idx) = selected_asset_idx {
-            if let Some(item) = current_project.assets.get(idx) {
-                ui.group(|ui| {
-                    ui.horizontal(|ui| {
-                        // Render miniature preview square box
-                        let (thumb_rect, _) =
-                            ui.allocate_exact_size(egui::vec2(44.0, 32.0), egui::Sense::hover());
-                        ui.painter().rect_filled(thumb_rect, 2.0, colors::BG_DARK);
-                        ui.painter().rect_stroke(
-                            thumb_rect,
-                            2.0,
-                            egui::Stroke::new(1.0_f32, colors::BORDER_STRONG),
-                        );
-                        let center = thumb_rect.center();
-                        ui.painter().text(
-                            center,
-                            egui::Align2::CENTER_CENTER,
-                            egui_phosphor::regular::FILM_STRIP,
-                            egui::FontId::monospace(14.0),
-                            colors::TEXT_ACCENT,
-                        );
-
-                        ui.vertical(|ui| {
-                            ui.label(egui::RichText::new(&item.name).strong().size(13.0));
-                            match &item.item_type {
-                                ProjectItemType::Composition { comp_idx } => {
-                                    if let Some(c) = current_project.compositions.get(*comp_idx) {
-                                        ui.small(format!(
-                                            "{} x {} (1.00) | {:.2} fps | {}",
-                                            c.width, c.height, c.fps, c.name
-                                        ));
-                                    }
-                                }
-                                ProjectItemType::Image { width, height, .. } => {
-                                    ui.small(format!("{} x {} px | RGB 8-bpc", width, height));
-                                }
-                                ProjectItemType::Model3D { .. } => {
-                                    ui.small("Wavefront OBJ | 3D Model");
-                                }
-                                ProjectItemType::Video { duration_sec, .. } => {
-                                    if duration_sec.is_finite() && *duration_sec > 0.0 {
-                                        ui.small(format!("Video | {:.1}s", duration_sec));
-                                    } else {
-                                        ui.small("Video | 長さ未取得");
-                                    }
-                                }
-                                ProjectItemType::Audio { duration_sec, .. } => {
-                                    if duration_sec.is_finite() && *duration_sec > 0.0 {
-                                        ui.small(format!("Audio | {:.1}s", duration_sec));
-                                    } else {
-                                        ui.small("Audio | 長さ未取得");
-                                    }
-                                }
-                                ProjectItemType::Solid { .. } => {
-                                    ui.small("Solid Color Layer Footage");
-                                }
-                                ProjectItemType::Folder { .. } => {
-                                    ui.small("Folder Directory Bin");
-                                }
-                            }
-                        });
-                    });
-                });
-                ui.add_space(4.0);
-            }
-        }
-    }
-
-    let toolbar_actions = toolbar::draw(ui, grid_view, grid_view_id);
-
-    ui.add_space(6.0);
-    ui.separator();
+    // Toolbar actions (New comp, import file, folder)
+    let toolbar_actions = toolbar::draw(ui);
 
     // ── Project Items List (Assets & Compositions Bin Tree) ──
+    let selected_asset_idx = ui
+        .ctx()
+        .data(|d| d.get_temp::<Option<usize>>(egui::Id::new("selected_project_asset")))
+        .flatten();
     let mut selected_idx_update: Option<Option<usize>> = None;
     let mut add_to_timeline_item: Option<ProjectItem> = None;
 
@@ -158,11 +126,11 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
                                 && (selected_kind == "all" || asset_kind(item) == selected_kind)
                         })
                         .collect::<Vec<_>>();
-                    let columns = if ui.available_width() >= 132.0 { 2 } else { 1 };
+                    let columns = if ui.available_width() >= 240.0 { 2 } else { 1 };
                     let gap = 6.0;
                     let card_width = ((ui.available_width() - gap * (columns - 1) as f32)
                         / columns as f32)
-                        .max(62.0);
+                        .max(110.0);
                     let row_height = 72.0;
                     let mut replace_footage_req: Option<(usize, std::path::PathBuf)> = None;
                     let thumbs = &mut app.home_thumbs;
@@ -385,7 +353,7 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
 
     if grid_view {
         let kind_id = egui::Id::new("project_asset_kind_filter");
-        let category_width = (ui.available_width() * 0.30).clamp(78.0, 94.0);
+        let category_width = (ui.available_width() * 0.34).clamp(96.0, 108.0);
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 0.0;
             ui.allocate_ui_with_layout(
@@ -401,7 +369,8 @@ pub fn draw(app: &mut KagariApp, ui: &mut egui::Ui) {
                         ("video", "映像", crate::ui::icons::SVG_FILE),
                         ("image", "画像", crate::ui::icons::SVG_SCREEN),
                         ("audio", "オーディオ", crate::ui::icons::SVG_AUDIO),
-                        ("model3d", "3D", crate::ui::icons::SVG_SWITCH_3D),
+                        ("text", "テキスト", crate::ui::icons::SVG_TOOL_TEXT),
+                        ("preset", "プリセット", crate::ui::icons::SVG_EFFECTS),
                     ] {
                         let (row, response) = category_ui.allocate_exact_size(
                             egui::vec2(category_ui.available_width(), 23.0),

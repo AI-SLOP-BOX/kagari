@@ -2,6 +2,7 @@ use crate::core::keyframe::{BezierControlPoint, InterpolationType};
 use crate::core::property::Animatable;
 use crate::ui::custom_widgets;
 use crate::ui::kui;
+use crate::ui::localization::tr;
 use crate::ui::theme::colors;
 use eframe::egui;
 
@@ -11,12 +12,12 @@ pub fn draw_easy_ease_button<T: Clone>(
     property: &mut Animatable<T>,
     project_changed: &mut bool,
 ) {
-    if ui.available_width() < 180.0 {
+    if !matches!(property, Animatable::Animated(_)) || ui.available_width() < 120.0 {
         return;
     }
     ui.horizontal_wrapped(|ui| {
-        ui.add_space(8.0);
-        if custom_widgets::ae_button(ui, "Easy Ease (F9)")
+        ui.spacing_mut().item_spacing = egui::vec2(4.0, 3.0);
+        if custom_widgets::ae_button(ui, &tr("Easy Ease (F9)"))
             .on_hover_text("Symmetrical Bezier Ease (F9)")
             .clicked()
         {
@@ -40,7 +41,8 @@ pub fn draw_easy_ease_button<T: Clone>(
         }
 
         let combo_id = ui.make_persistent_id(("smart_ease_combo", ui.next_auto_id()));
-        kui::combo_popup(ui, combo_id, "Smart Presets...", None, |ui| {
+        let preset_btn_width = (ui.available_width() - 8.0).clamp(110.0, 160.0);
+        kui::combo_popup(ui, combo_id, &tr("Smart Presets..."), Some(preset_btn_width), |ui| {
             for (preset, label, desc) in [
                 (
                     crate::core::keyframe::EasePreset::Standard,
@@ -169,7 +171,7 @@ pub fn draw_easy_ease_button<T: Clone>(
             }
         });
 
-        if custom_widgets::ae_button(ui, "Physics Spring")
+        if custom_widgets::ae_button(ui, &tr("Physics Spring"))
             .on_hover_text("Apply Physics-based Overshoot & Spring Dynamics")
             .clicked()
         {
@@ -192,7 +194,7 @@ pub fn draw_easy_ease_button<T: Clone>(
             }
         }
 
-        if custom_widgets::ae_button(ui, "⏸ Hold")
+        if custom_widgets::ae_button(ui, &tr("⏸ Hold"))
             .on_hover_text(
                 "Toggle Toggle Hold Keyframe (Cmd+Opt+H): Values step discretely at keyframes",
             )
@@ -206,7 +208,7 @@ pub fn draw_easy_ease_button<T: Clone>(
             }
         }
 
-        if custom_widgets::ae_button(ui, "Linear")
+        if custom_widgets::ae_button(ui, &tr("Linear"))
             .on_hover_text("Linear Keyframe: Values interpolate smoothly at constant speed")
             .clicked()
         {
@@ -218,7 +220,7 @@ pub fn draw_easy_ease_button<T: Clone>(
             }
         }
 
-        if custom_widgets::ae_button(ui, "⏩ 2x Speed")
+        if custom_widgets::ae_button(ui, &tr("⏩ 2x Speed"))
             .on_hover_text("Compress keyframe duration by 50%")
             .clicked()
         {
@@ -234,7 +236,7 @@ pub fn draw_easy_ease_button<T: Clone>(
             }
         }
 
-        if custom_widgets::ae_button(ui, "⏪ 0.5x Speed")
+        if custom_widgets::ae_button(ui, &tr("⏪ 0.5x Speed"))
             .on_hover_text("Stretch keyframe duration by 200%")
             .clicked()
         {
