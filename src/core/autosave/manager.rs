@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -10,7 +10,39 @@ use crate::core::timeline::Project;
 /// Number of rotating recovery files kept on disk.
 pub const MAX_AUTOSAVE_SLOTS: usize = 5;
 
-/// Autosave manager: tracks dirty state and writes rotating recovery snapshots.
+/// One recoverable snapshot generation, listed newest-first by the picker.
+#[derive(Debug, Clone)]
+pub struct RecoveryGeneration {
+    pub path: PathBuf,
+    /// Unix seconds of the snapshot write (metadata may be missing on old files).
+    pub saved_at_secs: u64,
+    /// Short provenance label, e.g. "autosave" or "manual".
+    pub label: String,
+}
+
+impl AutosaveManager {
+    /// Fetch the version-history list on a background thread instead of the
+    /// caller's thread, so snapshot JSON parsing does not stall the UI.
+    pub fn fetch_generations_async(
+        &self,
+    ) -> (
+        std::sync::mpsc::Sender<Vec<RecoveryGeneration>>,
+        std::sync::mpsc::Receiver<Vec<RecoveryGeneration>>,
+    ) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let tx_clone = tx.clone();
+        let paths = self.recovery_paths();
+        std::thread::Builder::new()
+            .name("kagari-autosave-list".into())
+            .spawn(move || {
+                let generations = Self::list_generations_from_paths(&paths);
+                let _ = tx_clone.send(generations);
+            })
+            .ok();
+        (tx, rx)
+    }
+}
+
 pub struct AutosaveManager {
     /// Directory where recovery files are written.
     recovery_dir: PathBuf,
@@ -29,6 +61,40 @@ pub struct AutosaveManager {
     loaded_recovery_path: Mutex<Option<PathBuf>>,
     dirty_generation: u64,
     async_write: Option<std::sync::mpsc::Receiver<(u64, std::io::Result<PathBuf>)>>,
+}
+
+/// Read and validate one recovery snapshot file **without touching manager
+/// state**, so callers can parse on a background thread while the UI keeps
+/// running. Returns `(project, production_document)` for both the
+/// `AutosaveSnapshot` format and the legacy bare-`Project` format; `None`
+/// for corrupt or non-recoverable files.
+pub fn load_snapshot_file(path: &Path) -> Option<(Project, Option<ProductionDocument>)> {
+    let json = crate::core::project_migration::read_bounded_text_file(
+        path,
+        crate::core::project_migration::MAX_PROJECT_JSON_BYTES,
+    )
+    .ok()?;
+    // Preferred format: AutosaveSnapshot (project + optional production doc
+    // + generation metadata). Fall back to bare Project JSON for old files.
+    if let Ok(snapshot) = serde_json::from_str::<AutosaveSnapshot>(&json) {
+        if !is_recoverable_project(&snapshot.project) {
+            log::warn!("[Autosave] Skipping invalid project {:?}", path);
+            return None;
+        }
+        let document = snapshot
+            .production_document
+            .map(|metadata| metadata.into_document(snapshot.project.clone()))
+            .filter(|document| document.validate().is_ok());
+        let document = document?;
+        return Some((snapshot.project, Some(document)));
+    }
+    match serde_json::from_str::<Project>(&json) {
+        Ok(project) if is_recoverable_project(&project) => Some((project, None)),
+        _ => {
+            log::warn!("[Autosave] Skipping corrupt snapshot {:?}", path);
+            None
+        }
+    }
 }
 
 impl AutosaveManager {
@@ -121,7 +187,7 @@ impl AutosaveManager {
         {
             return None;
         }
-        let path = self.write_snapshot(project, None);
+        let path = self.write_snapshot(project, None, "autosave");
         match &path {
             Ok(_) => {
                 self.dirty = false;
@@ -140,7 +206,7 @@ impl AutosaveManager {
     /// Forces an immediate snapshot (e.g. on app exit or before risky operations).
     pub fn save_now(&mut self, project: &Project) -> std::io::Result<PathBuf> {
         let _ = self.wait_for_pending();
-        let path = self.write_snapshot(project, None)?;
+        let path = self.write_snapshot(project, None, "manual")?;
         self.dirty = false;
         self.last_save = Instant::now();
         self.retry_at = None;
@@ -154,7 +220,7 @@ impl AutosaveManager {
         document: &ProductionDocument,
     ) -> std::io::Result<PathBuf> {
         let _ = self.wait_for_pending();
-        let path = self.write_snapshot(project, Some(document))?;
+        let path = self.write_snapshot(project, Some(document), "manual")?;
         self.dirty = false;
         self.last_save = Instant::now();
         self.retry_at = None;
@@ -175,7 +241,7 @@ impl AutosaveManager {
         {
             return None;
         }
-        let path = self.write_snapshot(project, Some(document));
+        let path = self.write_snapshot(project, Some(document), "autosave");
         match &path {
             Ok(_) => {
                 self.dirty = false;
@@ -220,7 +286,13 @@ impl AutosaveManager {
         let worker = std::thread::Builder::new()
             .name("kagari-autosave".into())
             .spawn(move || {
-                let result = write_snapshot_file(&recovery_dir, &path, &project, metadata.as_ref());
+                let result = write_snapshot_file(
+                    &recovery_dir,
+                    &path,
+                    &project,
+                    metadata.as_ref(),
+                    "autosave",
+                );
                 let _ = sender.send((generation, result));
             });
         match worker {
@@ -296,11 +368,12 @@ impl AutosaveManager {
         &mut self,
         project: &Project,
         production_document: Option<&ProductionDocument>,
+        label: &str,
     ) -> std::io::Result<PathBuf> {
         let path = self.slot_path(self.next_slot % MAX_AUTOSAVE_SLOTS);
         self.next_slot = (self.next_slot + 1) % MAX_AUTOSAVE_SLOTS;
         let metadata = production_document.map(ProductionDocumentMetadata::from);
-        write_snapshot_file(&self.recovery_dir, &path, project, metadata.as_ref())
+        write_snapshot_file(&self.recovery_dir, &path, project, metadata.as_ref(), label)
     }
 
     /// Loads the newest valid recovery snapshot, if one exists.
@@ -376,6 +449,75 @@ impl AutosaveManager {
     /// True if at least one recovery snapshot exists on disk.
     pub fn has_recovery(&self) -> bool {
         !self.recovery_paths().is_empty()
+    }
+
+    /// Lists every recoverable snapshot newest-first with its generation
+    /// metadata (save time + label), for the version-history picker.
+    pub fn list_generations(&self) -> Vec<RecoveryGeneration> {
+        Self::list_generations_from_paths(&self.recovery_paths())
+    }
+
+    /// Internal helper that parses snapshots from explicit paths off-thread.
+    pub fn list_generations_from_paths(paths: &[PathBuf]) -> Vec<RecoveryGeneration> {
+        let mut generations: Vec<RecoveryGeneration> = paths
+            .iter()
+            .filter_map(|path| {
+                let modified = std::fs::metadata(path)
+                    .ok()
+                    .and_then(|meta| meta.modified().ok())
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
+                // Snapshots are written as AutosaveSnapshot; older files may be
+                // bare Project JSON. Corrupt slots are skipped in both cases.
+                let json = crate::core::project_migration::read_bounded_text_file(
+                    path,
+                    crate::core::project_migration::MAX_PROJECT_JSON_BYTES,
+                )
+                .ok()?;
+                let (saved_at_secs, label) =
+                    if let Ok(snapshot) = serde_json::from_str::<AutosaveSnapshot>(&json) {
+                        if !is_recoverable_project(&snapshot.project) {
+                            return None;
+                        }
+                        (snapshot.saved_at_secs, snapshot.label)
+                    } else if serde_json::from_str::<Project>(&json)
+                        .map(|project| is_recoverable_project(&project))
+                        .unwrap_or(false)
+                    {
+                        (modified, String::new())
+                    } else {
+                        return None;
+                    };
+                Some(RecoveryGeneration {
+                    path: path.clone(),
+                    saved_at_secs: saved_at_secs.max(modified),
+                    label,
+                })
+            })
+            .collect();
+        generations.sort_by_key(|generation| std::cmp::Reverse(generation.saved_at_secs));
+        generations
+    }
+
+    /// Loads the snapshot at an explicit path chosen from `list_generations`.
+    pub fn load_snapshot_at(&self, path: &Path) -> Option<(Project, Option<ProductionDocument>)> {
+        let loaded = load_snapshot_file(path);
+        if loaded.is_some() {
+            self.note_loaded_recovery(path);
+        }
+        loaded
+    }
+
+    /// Remember which snapshot file a restore came from. `clear_recovery` uses
+    /// this to target the matching recovery namespace, and it must be called
+    /// after a background [`load_snapshot_file`] succeeds (the stateless
+    /// loader cannot record it itself).
+    pub fn note_loaded_recovery(&self, path: &Path) {
+        *self
+            .loaded_recovery_path
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(path.to_path_buf());
     }
 
     pub fn latest_recovery_modified(&self) -> Option<std::time::SystemTime> {

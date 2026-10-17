@@ -12,6 +12,7 @@ pub(crate) fn write_snapshot_file(
     path: &Path,
     project: &Project,
     production_document: Option<&ProductionDocumentMetadata>,
+    label: &str,
 ) -> std::io::Result<PathBuf> {
     std::fs::create_dir_all(recovery_dir)?;
     let sequence = AUTOSAVE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
@@ -22,11 +23,17 @@ pub(crate) fn write_snapshot_file(
             .create_new(true)
             .open(&tmp)?;
         let mut file = std::io::BufWriter::new(file);
+        let saved_at_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
         serde_json::to_writer(
             &mut file,
             &AutosaveSnapshotRef {
                 project,
                 production_document,
+                saved_at_secs,
+                label,
             },
         )?;
         use std::io::Write;

@@ -186,6 +186,8 @@ fn invalid_production_snapshot_is_not_returned_as_recovery() {
     let snapshot = AutosaveSnapshot {
         project: sample_project(),
         production_document: Some((&document).into()),
+        saved_at_secs: 0,
+        label: String::new(),
     };
     std::fs::write(
         dir.join("recovery_0.json"),
@@ -261,6 +263,8 @@ fn production_recovery_skips_document_with_invalid_project() {
     let snapshot = AutosaveSnapshot {
         project,
         production_document: Some((&document).into()),
+        saved_at_secs: 0,
+        label: String::new(),
     };
     std::fs::write(
         dir.join("recovery_0.json"),
@@ -378,6 +382,119 @@ fn test_atomic_write_leaves_no_tmp_files() {
     assert_eq!(
         tmp_count, 0,
         "no .tmp files may remain after successful save"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn test_generations_list_newest_first_with_labels() {
+    let dir = std::env::temp_dir().join(format!("kagari_autosave_gen_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut mgr = AutosaveManager::new(&dir).with_interval(Duration::from_secs(0));
+
+    // Manual save → "manual", autosave tick → "autosave".
+    mgr.save_now(&sample_project()).expect("manual save");
+    mgr.mark_dirty();
+    mgr.tick(&sample_project()).expect("autosave tick");
+
+    let gens = mgr.list_generations();
+    assert_eq!(gens.len(), 2, "both generations must be listed");
+    let mut labels: Vec<&str> = gens.iter().map(|g| g.label.as_str()).collect();
+    labels.sort_unstable();
+    assert_eq!(labels, vec!["autosave", "manual"]);
+    assert!(gens.iter().all(|g| g.saved_at_secs > 0));
+    // Newest-first ordering (equal-second ties tolerated by >=).
+    assert!(gens[0].saved_at_secs >= gens[1].saved_at_secs);
+
+    // Every listed generation must actually load.
+    for gen in &gens {
+        let (project, _) = mgr
+            .load_snapshot_at(&gen.path)
+            .expect("listed generation must load");
+        assert_eq!(project.compositions[0].name, "AutoSaveComp");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn test_legacy_snapshot_without_metadata_is_listed_and_loadable() {
+    let dir = std::env::temp_dir().join(format!("kagari_autosave_legacy_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    // Old-format snapshot: project only, no saved_at_secs / label.
+    std::fs::write(
+        dir.join("recovery_0.json"),
+        serde_json::to_string(&sample_project()).unwrap(),
+    )
+    .unwrap();
+
+    let mgr = AutosaveManager::new(&dir);
+    let gens = mgr.list_generations();
+    assert_eq!(gens.len(), 1, "legacy snapshot must still be listed");
+    assert!(gens[0].label.is_empty());
+    assert!(gens[0].saved_at_secs > 0, "falls back to file mtime");
+    assert!(mgr.load_snapshot_at(&gens[0].path).is_some());
+
+    // Corrupt slot must not appear in the generation list.
+    std::fs::write(dir.join("recovery_1.json"), "{\"compositions\": [").unwrap();
+    assert_eq!(mgr.list_generations().len(), 1);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The stateless loader must work without any manager (background-thread
+/// restore path), and `note_loaded_recovery` must scope `clear_recovery` to
+/// exactly the session namespace that was restored.
+#[test]
+fn stateless_load_and_note_scope_recovery_clear_to_one_namespace() {
+    let dir = std::env::temp_dir().join(format!("kagari_autosave_ns_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+
+    let mut first = AutosaveManager::new(&dir)
+        .with_process_namespace(111_111)
+        .with_interval(Duration::from_secs(0));
+    first.save_now(&sample_project()).expect("first session save");
+    let mut second = AutosaveManager::new(&dir)
+        .with_process_namespace(222_222)
+        .with_interval(Duration::from_secs(0));
+    second.save_now(&sample_project()).expect("second session save");
+
+    let gens = second.list_generations();
+    assert_eq!(gens.len(), 2, "both sessions' snapshots must be listed");
+
+    // Stateless load: parses without manager state (what the recovery dialog's
+    // background worker calls).
+    for gen in &gens {
+        let (project, _) = super::manager::load_snapshot_file(&gen.path)
+            .expect("stateless load must parse a valid snapshot");
+        assert_eq!(project.compositions[0].name, "AutoSaveComp");
+    }
+
+    // Restore "second" only: clear must delete second's namespace and leave
+    // first's snapshot untouched.
+    let second_path = gens
+        .iter()
+        .find(|gen| {
+            gen.path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.contains("222222"))
+        })
+        .expect("second session snapshot")
+        .path
+        .clone();
+    second.note_loaded_recovery(&second_path);
+    second.clear_recovery();
+
+    let remaining: Vec<String> = std::fs::read_dir(&dir)
+        .unwrap()
+        .flatten()
+        .filter_map(|entry| entry.file_name().to_str().map(str::to_owned))
+        .filter(|name| name.ends_with(".json"))
+        .collect();
+    assert_eq!(
+        remaining,
+        vec!["recovery_111111_0.json".to_string()],
+        "clear must keep the other session's namespace"
     );
     let _ = std::fs::remove_dir_all(&dir);
 }

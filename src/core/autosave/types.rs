@@ -6,12 +6,20 @@ pub(crate) struct AutosaveSnapshot {
     pub(crate) project: Project,
     #[serde(default)]
     pub(crate) production_document: Option<ProductionDocumentMetadata>,
+    /// Generation metadata for the version-history picker. Defaults keep
+    /// pre-metadata snapshots loadable.
+    #[serde(default)]
+    pub(crate) saved_at_secs: u64,
+    #[serde(default)]
+    pub(crate) label: String,
 }
 
 #[derive(serde::Serialize)]
 pub(crate) struct AutosaveSnapshotRef<'a> {
     pub(crate) project: &'a Project,
     pub(crate) production_document: Option<&'a ProductionDocumentMetadata>,
+    pub(crate) saved_at_secs: u64,
+    pub(crate) label: &'a str,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
