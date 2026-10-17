@@ -12,6 +12,8 @@ use args::{Cli, Commands, OutputFormat};
 use qc::{cmd_qc, QcArgs};
 #[path = "cli/bindings.rs"]
 mod bindings;
+#[path = "cli/edit.rs"]
+mod edit;
 #[path = "cli/frame.rs"]
 mod frame;
 #[path = "cli/info.rs"]
@@ -21,6 +23,7 @@ mod render;
 #[path = "cli/validate.rs"]
 mod validate;
 use bindings::{cmd_add_sample_binding, cmd_bindings, parse_binding_value, parse_sample_point, parse_string_override};
+use edit::{cmd_add_layer, cmd_init};
 use frame::{cmd_frame, cmd_lottie};
 use info::{cmd_effects, cmd_info, cmd_production_info};
 
@@ -207,6 +210,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 fps,
                 max_features,
                 feature_spacing,
+            )?;
+        }
+        Commands::Init {
+            project,
+            name,
+            width,
+            height,
+            fps,
+            duration,
+        } => {
+            cmd_init(&project, &name, width, height, fps, duration)?;
+        }
+        Commands::AddLayer {
+            project,
+            name,
+            comp,
+            kind,
+            content,
+            in_frame,
+            out_frame,
+        } => {
+            cmd_add_layer(
+                &project,
+                &name,
+                comp.as_deref(),
+                &kind,
+                content.as_deref(),
+                in_frame,
+                out_frame,
             )?;
         }
     }

@@ -260,4 +260,51 @@ pub(super) enum Commands {
         #[arg(long, default_value = "12")]
         feature_spacing: u32,
     },
+
+    /// Initialize a new project JSON file
+    Init {
+        /// Output project JSON path
+        #[arg(short, long, default_value = "./project.json")]
+        project: String,
+        /// Composition name
+        #[arg(short, long, default_value = "Main Comp")]
+        name: String,
+        /// Width in pixels
+        #[arg(long, default_value = "1920")]
+        width: u32,
+        /// Height in pixels
+        #[arg(long, default_value = "1080")]
+        height: u32,
+        /// Frame rate (fps)
+        #[arg(long, default_value = "30")]
+        fps: u32,
+        /// Total duration in frames
+        #[arg(long, default_value = "300")]
+        duration: u32,
+    },
+
+    /// Add a layer to an existing project file
+    AddLayer {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+        /// Layer name
+        #[arg(short, long)]
+        name: String,
+        /// Target composition name or index (default: active comp)
+        #[arg(short, long)]
+        comp: Option<String>,
+        /// Layer type: text, image, solid, video
+        #[arg(long, default_value = "text")]
+        kind: String,
+        /// Content value (text string, file path, or RGBA color)
+        #[arg(long)]
+        content: Option<String>,
+        /// In-point frame
+        #[arg(long, default_value = "0")]
+        in_frame: u32,
+        /// Out-point frame (default: composition duration)
+        #[arg(long)]
+        out_frame: Option<u32>,
+    },
 }
