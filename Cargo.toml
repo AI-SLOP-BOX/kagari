@@ -236,5 +236,20 @@ interchange = [
     "MLT Framework XML export",
     "Lottie JSON Exporter (Shapes, transforms, keyframes)",
     "OpenEXR (Half-float RGB/RGBA with Zip compression)",
+    "SubtitleInterchange (SRT / WebVTT parser & bidirectional Text layer sync)",
+]
+vr_360 = [
+    "VRHorizon (3-axis spherical orientation realignment: Pitch, Yaw, Roll)",
+    "VRSphericalBlur (Geodesic latitude-compensated Gaussian blur)",
+    "VRChromaticAberrations (Spherical optical axis chromatic dispersion)",
+    "VRFisheyeToEquirectangular (Lens unwarping to 360 panorama)",
+]
+project_workflow = [
+    "ProjectHistory & UndoManager (Bounded serialization snapshot stack, multi-branch memory guard)",
+    "AutosaveRecovery (Periodic rotating slot snapshots with corrupted file validation)",
+    "LayerAlign & Distribute (AE Align palette parity: 6-way alignment, gap distribution, Fit-to-Comp)",
+    "LayerConstraints (Responsive composition resizing pins: Left, Center, Right, Top, Bottom, Scale)",
+    "SpatialKeyframes (Rove Across Time, cubic Bezier numerical integration velocity smoothing)",
+    "ClipboardSystem (Cross-composition layer, effect, and keyframe copy/paste with ID collision safety)",
 ]
 
