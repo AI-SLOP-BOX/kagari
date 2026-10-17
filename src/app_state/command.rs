@@ -77,6 +77,13 @@ pub enum AppCommand {
     },
 
     // ------------------------------------------------------------------------
+    // Continuous Interactions (Slider Drag, Scrubbing, Gizmo Move)
+    // ------------------------------------------------------------------------
+    BeginInteraction(&'static str),
+    EndInteraction,
+    CancelInteraction,
+
+    // ------------------------------------------------------------------------
     // Timing / In-Out Points
     // ------------------------------------------------------------------------
     SetLayerInFrame {
@@ -113,6 +120,18 @@ impl crate::app_state::KagariApp {
             AppCommand::Redo => {
                 if let Some(restored) = self.history.redo() {
                     let _ = restored;
+                    self.notify_project_mutation();
+                }
+            }
+            AppCommand::BeginInteraction(label) => {
+                self.begin_drag(label);
+            }
+            AppCommand::EndInteraction => {
+                self.commit_drag();
+            }
+            AppCommand::CancelInteraction => {
+                if let Some(tx) = self.drag_tx.take() {
+                    *self.history.current_mut() = tx.snapshot;
                     self.notify_project_mutation();
                 }
             }

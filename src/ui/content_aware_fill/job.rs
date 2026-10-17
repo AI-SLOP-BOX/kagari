@@ -62,6 +62,8 @@ pub fn start_caf_job(
         .map_err(|error| format!("Could not snapshot source layer: {error}"))?;
     let mask = mask.clone();
     let cancelled = Arc::new(AtomicBool::new(false));
+    // Let `on_exit()` cancel this bake before joining the worker.
+    app.register_exit_cancel_flag(cancelled.clone());
     let progress = Arc::new(AtomicU32::new(0));
     let total = end_frame - start_frame + 1;
     let (sender, receiver) = std::sync::mpsc::channel();

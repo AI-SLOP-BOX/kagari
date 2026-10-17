@@ -57,6 +57,8 @@ pub(in crate::ui::viewport) fn start_roto_flow_bake(
     let width = source_comp.width;
     let height = source_comp.height;
     let cancelled = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    // Let `on_exit()` cancel this bake before joining the worker.
+    app.register_exit_cancel_flag(cancelled.clone());
     let (sender, receiver) = std::sync::mpsc::channel();
     let job = std::sync::Arc::new(RotoFlowJob {
         receiver: std::sync::Mutex::new(receiver),

@@ -367,6 +367,34 @@ pub enum LabelColor {
 }
 
 impl LabelColor {
+    pub const ALL: [LabelColor; 10] = [
+        LabelColor::None,
+        LabelColor::Red,
+        LabelColor::Yellow,
+        LabelColor::Aqua,
+        LabelColor::Pink,
+        LabelColor::Lavender,
+        LabelColor::Peach,
+        LabelColor::Sea,
+        LabelColor::Blue,
+        LabelColor::Purple,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            LabelColor::None => "None",
+            LabelColor::Red => "Red",
+            LabelColor::Yellow => "Yellow",
+            LabelColor::Aqua => "Aqua",
+            LabelColor::Pink => "Pink",
+            LabelColor::Lavender => "Lavender",
+            LabelColor::Peach => "Peach",
+            LabelColor::Sea => "Sea",
+            LabelColor::Blue => "Blue",
+            LabelColor::Purple => "Purple",
+        }
+    }
+
     pub fn to_rgb(self) -> [f32; 3] {
         match self {
             LabelColor::None => [0.35, 0.35, 0.35],
@@ -380,6 +408,15 @@ impl LabelColor {
             LabelColor::Blue => [0.35, 0.55, 0.95],
             LabelColor::Purple => [0.70, 0.35, 0.90],
         }
+    }
+
+    pub fn color32(self) -> eframe::egui::Color32 {
+        let [r, g, b] = self.to_rgb();
+        eframe::egui::Color32::from_rgb(
+            (r * 255.0).round() as u8,
+            (g * 255.0).round() as u8,
+            (b * 255.0).round() as u8,
+        )
     }
 }
 

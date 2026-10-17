@@ -15,6 +15,7 @@ pub struct TimelineActions {
     pub pending_layer_marker: Option<usize>,
     pub pending_clear_markers: Option<usize>,
     pub pending_dup_layer: Option<usize>,
+    pub pending_delete_layer: Option<usize>,
     pub pending_split_layer: Option<usize>,
     pub pending_precomp_indices: Option<Vec<usize>>,
     pub pending_create_shapes: Option<usize>,
@@ -177,6 +178,13 @@ pub fn apply(
     toggle_marker_alt_m(app, ui, current_frame, project_changed);
     if let Some(idx) = actions.pending_dup_layer.take() {
         duplicate_layer_at(app, idx, project_changed, "");
+    }
+    if let Some(idx) = actions.pending_delete_layer.take() {
+        app.selection.selected_layers.clear();
+        app.selection.selected_layers.insert(idx);
+        app.selection.selected_layer_idx = Some(idx);
+        app.dispatch(crate::app_state::command::AppCommand::DeleteSelectedLayers);
+        *project_changed = true;
     }
     if let Some(idx) = actions.pending_split_layer.take() {
         split_layer_at(app, idx, current_frame, project_changed);

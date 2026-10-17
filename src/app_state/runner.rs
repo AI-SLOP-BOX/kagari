@@ -69,9 +69,30 @@ impl eframe::App for KagariApp {
     }
 
     fn on_exit(&mut self) {
-        if let Some(cancel) = self.script_console_cancel.as_ref() {
-            cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        // Request cancellation on every cooperative worker *before* joining:
+        // joined threads (export, proxy bake, tracker, CAF, roto, script
+        // console, …) check these flags, so they abort promptly instead of
+        // blocking shutdown until their jobs finish naturally.
+        for flag in [
+            self.export_cancel_flag.as_ref(),
+            self.tracker_cancel_flag.as_ref(),
+            self.quad_track_cancel_flag.as_ref(),
+            self.proxy_job_cancel_flag.as_ref(),
+            self.script_console_cancel.as_ref(),
+        ] {
+            if let Some(flag) = flag {
+                flag.store(true, std::sync::atomic::Ordering::SeqCst);
+            }
         }
+        for flag in self
+            .exit_cancel_flags
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+        {
+            flag.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+        log::info!("Signalled background workers to cancel on exit");
         let mut autosave_succeeded = true;
         if let Some(path) = self.autosave.wait_for_pending() {
             log::info!(
@@ -112,15 +133,6 @@ impl eframe::App for KagariApp {
         for handle in handles {
             let _ = handle.join();
         }
-        if let Some(ref flag) = self.export_cancel_flag {
-            flag.store(true, std::sync::atomic::Ordering::SeqCst);
-        }
-        if let Some(ref flag) = self.tracker_cancel_flag {
-            flag.store(true, std::sync::atomic::Ordering::SeqCst);
-        }
-        if let Some(ref flag) = self.quad_track_cancel_flag {
-            flag.store(true, std::sync::atomic::Ordering::SeqCst);
-        }
-        log::info!("Cleaned up background thread lifecycle flags on exit");
+        log::info!("Joined background threads on exit");
     }
 }
