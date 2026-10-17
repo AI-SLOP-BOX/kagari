@@ -385,6 +385,15 @@ pub fn populate_extended_params<'a>(
         EffectType::VRSphericalBlur { radius } => {
             push!("Blur Radius", radius, Scalar);
         }
+        EffectType::TemporalDenoise {
+            strength,
+            temporal_mix,
+            feature_threshold,
+        } => {
+            push!("Strength", strength, Scalar);
+            push!("Temporal Mix", temporal_mix, Scalar);
+            push!("Feature Threshold", feature_threshold, Scalar);
+        }
         EffectType::CustomShader { .. } => {}
         #[allow(unreachable_patterns)]
         _ => {}

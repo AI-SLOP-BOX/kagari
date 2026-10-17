@@ -68,7 +68,8 @@ pub fn draw_effect_type_ui(
         | EffectType::RadialBlurZoom { .. }
         | EffectType::TiltShift { .. }
         | EffectType::CameraLensBlur { .. }
-        | EffectType::MotionBlur { .. } => {
+        | EffectType::MotionBlur { .. }
+        | EffectType::TemporalDenoise { .. } => {
             blur::draw(effect_type, ui, current_frame, project_changed, next_frame);
         }
 

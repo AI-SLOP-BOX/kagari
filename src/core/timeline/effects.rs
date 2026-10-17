@@ -720,6 +720,12 @@ pub enum EffectType {
     VRSphericalBlur {
         radius: Animatable<f32>,
     },
+    /// Spatio-temporal noise reduction across consecutive frame buffers.
+    TemporalDenoise {
+        strength: Animatable<f32>,
+        temporal_mix: Animatable<f32>,
+        feature_threshold: Animatable<f32>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

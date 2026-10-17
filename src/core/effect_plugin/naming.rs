@@ -129,6 +129,7 @@ pub fn effect_name(effect_type: &EffectType) -> &'static str {
         EffectType::ChannelCombiner { .. } => "Channel Combiner",
         EffectType::VRHorizon { .. } => "VR Horizon",
         EffectType::VRSphericalBlur { .. } => "VR Spherical Blur",
+        EffectType::TemporalDenoise { .. } => "Temporal Denoise",
     }
 }
 
@@ -261,5 +262,6 @@ pub fn effect_type_id(effect_type: &EffectType) -> &'static str {
         EffectType::ChannelCombiner { .. } => "channel_combiner",
         EffectType::VRHorizon { .. } => "vr_horizon",
         EffectType::VRSphericalBlur { .. } => "vr_spherical_blur",
+        EffectType::TemporalDenoise { .. } => "temporal_denoise",
     }
 }

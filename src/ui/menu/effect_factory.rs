@@ -510,6 +510,16 @@ fn build_effect(
             },
             enabled: true,
         },
+        "Temporal Denoise" => Effect {
+            id: format!("temporal_denoise_{len}"),
+            name: "Temporal Denoise".into(),
+            effect_type: EffectType::TemporalDenoise {
+                strength: Animatable::new_constant(0.5),
+                temporal_mix: Animatable::new_constant(0.6),
+                feature_threshold: Animatable::new_constant(0.1),
+            },
+            enabled: true,
+        },
         _ => return None,
     };
     Some(e)

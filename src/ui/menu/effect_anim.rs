@@ -26,6 +26,14 @@ pub fn draw_effect_menu(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
             apply_effect_by_name(app, "Camera Lens Blur");
             ui.close_menu();
         }
+        if ui
+            .button("Temporal Denoise")
+            .on_hover_text("Multi-frame temporal motion-compensated noise reduction")
+            .clicked()
+        {
+            apply_effect_by_name(app, "Temporal Denoise");
+            ui.close_menu();
+        }
     });
     ui.menu_button("Color Correction", |ui| {
         for name in &["Color Tint", "Levels", "Hue/Saturation", "Vibrance"] {

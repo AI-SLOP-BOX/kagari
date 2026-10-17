@@ -227,6 +227,45 @@ pub fn draw(
                 *project_changed = true;
             }
         }
+        EffectType::TemporalDenoise {
+            strength,
+            temporal_mix,
+            feature_threshold,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Strength",
+                strength,
+                |ui, v| {
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Temporal Mix",
+                temporal_mix,
+                |ui, v| {
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Feature Threshold",
+                feature_threshold,
+                |ui, v| {
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
+                },
+            );
+        }
         _ => {}
     }
 }

@@ -26,6 +26,7 @@ pub(super) fn apply(
             | EffectType::GlowPro { .. }
             | EffectType::VRHorizon { .. }
             | EffectType::VRSphericalBlur { .. }
+            | EffectType::TemporalDenoise { .. }
     ) {
         return false;
     }
@@ -357,6 +358,17 @@ pub(super) fn apply(
                 height,
                 radius.evaluate(frame),
             );
+        }
+        EffectType::TemporalDenoise {
+            strength,
+            temporal_mix,
+            feature_threshold,
+        } => {
+            let mut denoiser = crate::core::temporal_denoise::TemporalDenoiser::new();
+            denoiser.set_strength(strength.evaluate(frame));
+            denoiser.set_temporal_mix(temporal_mix.evaluate(frame));
+            denoiser.set_feature_threshold(feature_threshold.evaluate(frame));
+            denoiser.process(pixels, width, height);
         }
         _ => unreachable!(),
     }
