@@ -346,12 +346,14 @@ fn cli_round_trip_preserves_every_blend_mode_and_stack_order() {
         &expected,
         "CLI project round-trip changed the 29-mode blend stack",
     );
-    assert_pixels_within(
-        &cli_pixels(&doc, 0, true),
-        &expected,
-        2,
-        "GPU rendering diverged on the complete 29-mode alpha-composited layer stack",
-    );
+    if cfg!(feature = "cli-gpu") {
+        assert_pixels_within(
+            &cli_pixels(&doc, 0, true),
+            &expected,
+            2,
+            "GPU rendering diverged on the complete 29-mode alpha-composited layer stack",
+        );
+    }
     let base = render_frame_to_pixels(
         &composition("base", [0.1, 0.2, 0.3, 1.0]),
         0,

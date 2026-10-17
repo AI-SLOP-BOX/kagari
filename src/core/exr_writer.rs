@@ -89,7 +89,7 @@ impl ExrChannel {
         }
     }
 
-    pub fn validate(&self, expected: usize) -> Result<(), String> {
+    pub(crate) fn validate(&self, expected: usize) -> Result<(), String> {
         if self.name.is_empty() {
             return Err("EXR channel name must not be empty".to_string());
         }

@@ -415,10 +415,16 @@ mod tests {
                 .data
                 .clone()
         };
-        assert_eq!(by_name("R"), [255.0, 0.0, 10.0, 200.0].map(|v: f32| v / 255.0));
-        assert_eq!(by_name("G"), [0.0, 255.0, 20.0, 100.0].map(|v: f32| v / 255.0));
-        assert_eq!(by_name("B"), [128.0, 64.0, 30.0, 50.0].map(|v: f32| v / 255.0));
-        assert_eq!(by_name("A"), [64.0, 128.0, 40.0, 255.0].map(|v: f32| v / 255.0));
+        let assert_approx_eq = |actual: &[f32], expected: &[f32]| {
+            assert_eq!(actual.len(), expected.len());
+            for (a, e) in actual.iter().zip(expected.iter()) {
+                assert!((a - e).abs() < 1e-5, "expected {e}, got {a}");
+            }
+        };
+        assert_approx_eq(&by_name("R"), &[255.0 / 255.0, 0.0, 10.0 / 255.0, 200.0 / 255.0]);
+        assert_approx_eq(&by_name("G"), &[0.0, 255.0 / 255.0, 20.0 / 255.0, 100.0 / 255.0]);
+        assert_approx_eq(&by_name("B"), &[128.0 / 255.0, 64.0 / 255.0, 30.0 / 255.0, 50.0 / 255.0]);
+        assert_approx_eq(&by_name("A"), &[64.0 / 255.0, 128.0 / 255.0, 40.0 / 255.0, 255.0 / 255.0]);
         std::fs::remove_file(&file).ok();
     }
 

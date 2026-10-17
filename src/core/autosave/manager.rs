@@ -81,12 +81,18 @@ pub fn load_snapshot_file(path: &Path) -> Option<(Project, Option<ProductionDocu
             log::warn!("[Autosave] Skipping invalid project {:?}", path);
             return None;
         }
-        let document = snapshot
-            .production_document
-            .map(|metadata| metadata.into_document(snapshot.project.clone()))
-            .filter(|document| document.validate().is_ok());
-        let document = document?;
-        return Some((snapshot.project, Some(document)));
+        let document = match snapshot.production_document {
+            Some(metadata) => {
+                let doc = metadata.into_document(snapshot.project.clone());
+                if doc.validate().is_ok() {
+                    Some(doc)
+                } else {
+                    return None;
+                }
+            }
+            None => None,
+        };
+        return Some((snapshot.project, document));
     }
     match serde_json::from_str::<Project>(&json) {
         Ok(project) if is_recoverable_project(&project) => Some((project, None)),

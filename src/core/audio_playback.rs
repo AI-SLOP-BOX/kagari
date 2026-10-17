@@ -74,10 +74,9 @@ impl AudioPlayback {
         if let Some(sink) = &mut self.sink {
             if sink.is_paused() {
                 sink.play();
-            } else {
-                sink.stop();
-                sink.play();
             }
+            // Already playing: no-op. `stop()` here would clear the queue and
+            // produce silence, so it must not be called.
         }
     }
 

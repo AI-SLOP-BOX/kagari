@@ -114,10 +114,12 @@ required-features = ["cli"]
 [[bin]]
 name = "gen-glitch"
 path = "src/bin/gen_glitch/main.rs"
+required-features = ["cli"]
 
 [[bin]]
 name = "gen-logo"
 path = "src/bin/gen_logo/main.rs"
+required-features = ["cli"]
 
 # Bridge acceptance gate: verified with mock/fallback pathways when external plugins are not set
 [[test]]
@@ -127,7 +129,4 @@ test = true
 
 [profile.dev]
 opt-level = 1
-
-[profile.dev.package."*"]
-opt-level = 3
 
