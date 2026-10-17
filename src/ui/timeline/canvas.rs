@@ -1,21 +1,23 @@
 use super::{
     draw_layer_waveform, header, layout, media_preview, pending_actions,
-    state::{timeline_derived_data, would_create_parent_cycle, LayerBodyDragState},
+    state::timeline_derived_data,
     waveform_cache, LayerWaveformParams, MAX_TIMELINE_THUMBNAILS_PER_CLIP,
     TIMELINE_THUMBNAIL_WIDTH,
 };
-use crate::core::timeline::{BlendMode, LabelColor, LayerType, TrackMatteMode};
+use crate::core::timeline::LabelColor;
 use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
 use header::draw_timeline_header;
 
 mod clip_draw;
+mod clip_interaction;
 mod dock_state;
 mod graph_mode;
 mod layer_context_menu;
 mod ruler_area;
 mod ruler_draw;
+mod switches_col;
 
 pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, total_frames: u32) {
     let screen_height = ctx.screen_rect().height();
@@ -199,7 +201,6 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32, t
                 let comp_w_f = comp.width as f32;
                 let comp_h_f = comp.height.max(1) as f32;
                 let derived = &derived_timeline;
-                let parent_choices_ref = &derived.parent_choices;
                 let layer_edges = &derived.layer_edges;
                 let all_kf_frames = &derived.keyframe_frames;
                 if layers_len == 0 {
@@ -605,29 +606,7 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                     let click_resp = click_resp.on_hover_text(&layer.name);
 
                                     if app.ui_tabs.show_switches_pane {
-                                        use crate::ui::custom_widgets::ae_svg_toggle;
-                                        use crate::ui::icons::*;
-
-                                        let visibility_icon = if layer.visible { SVG_EYE_OPEN } else { SVG_EYE_CLOSED };
-                                        if ae_svg_toggle(ui, &mut layer.visible, visibility_icon, &format!("row_vis_{i}"), egui::vec2(15.0, 15.0), colors::TEXT_PRIMARY, "表示／非表示 (V)").clicked() {
-                                            project_changed = true;
-                                        }
-                                        let lock_icon = if layer.locked { SVG_LOCK } else { SVG_UNLOCK };
-                                        if ae_svg_toggle(ui, &mut layer.locked, lock_icon, &format!("row_lock_{i}"), egui::vec2(15.0, 15.0), colors::ACCENT_TOGGLE, "ロック (L)").clicked() {
-                                            project_changed = true;
-                                        }
-                                        if ae_svg_toggle(ui, &mut layer.is_shy, SVG_SHY, &format!("row_shy_{i}"), egui::vec2(15.0, 15.0), colors::ACCENT_CYAN, "シャイレイヤー (Shy)").clicked() {
-                                            project_changed = true;
-                                        }
-                                        if ae_svg_toggle(ui, &mut layer.is_collapsed, SVG_COLLAPSE_TRANSFORM, &format!("row_col_{i}"), egui::vec2(15.0, 15.0), colors::ACCENT_ORANGE, "トランスフォームの折りたたみ／コラプス").clicked() {
-                                            project_changed = true;
-                                        }
-                                        if ae_svg_toggle(ui, &mut layer.is_3d, SVG_3D_CUBE, &format!("row_3d_{i}"), egui::vec2(15.0, 15.0), colors::ACCENT_TOGGLE, "3Dレイヤー").clicked() {
-                                            project_changed = true;
-                                        }
-                                        if ae_svg_toggle(ui, &mut layer.motion_blur, SVG_MOTION_BLUR, &format!("row_mb_{i}"), egui::vec2(15.0, 15.0), colors::ACCENT_TOGGLE, "モーションブラー").clicked() {
-                                            project_changed = true;
-                                        }
+                                        switches_col::draw_switches(ui, layer, i, &mut project_changed);
                                     }
 
                                     // ── Pick Whip: clicking a layer in pick mode sets it as parent ──
@@ -736,115 +715,19 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                     });
                                     ui.style_mut().visuals.override_text_color = None;
 
-                                    if !app.ui_tabs.show_switches_pane {
-                                    ui.scope(|ui| {
-                                    let widgets = &mut ui.style_mut().visuals.widgets;
-                                    widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
-                                    widgets.inactive.bg_stroke = egui::Stroke::NONE;
-                                    widgets.inactive.weak_bg_fill = egui::Color32::TRANSPARENT;
-                                    widgets.hovered.bg_fill = colors::BG_HOVER;
-                                    widgets.hovered.bg_stroke = egui::Stroke::NONE;
-                                    widgets.hovered.weak_bg_fill = colors::BG_HOVER;
-                                    ui.menu_button(egui::RichText::new("モード").small(), |ui| {
-                                    // ── Blend Mode Dropdown ──
-                                    let bm_text = format!("{:?}", layer.blend_mode);
-                                    egui::ComboBox::from_id_salt(format!("tl_blend_{}", i))
-                                        .selected_text(format!("Blend: {}", bm_text))
-                                        .show_ui(ui, |ui| {
-                                            for bm in [
-                                                BlendMode::Normal,
-                                                BlendMode::Multiply,
-                                                BlendMode::Screen,
-                                                BlendMode::Overlay,
-                                                BlendMode::Add,
-                                                BlendMode::Darken,
-                                                BlendMode::Lighten,
-                                                BlendMode::SoftLight,
-                                                BlendMode::HardLight,
-                                                BlendMode::Difference,
-                                                BlendMode::Exclusion,
-                                                BlendMode::Divide,
-                                                BlendMode::Subtract,
-                                            ] {
-                                                if ui.selectable_label(layer.blend_mode == bm, format!("{:?}", bm)).clicked() {
-                                                    layer.blend_mode = bm;
-                                                    project_changed = true;
-                                                }
-                                            }
-                                        });
-
-                                    // ── Track Matte Dropdown ──
-                                    let tm_text = match layer.track_matte {
-                                        TrackMatteMode::None => "None",
-                                        TrackMatteMode::AlphaMatte => "Alpha",
-                                        TrackMatteMode::AlphaMatteInverted => "Alpha Inv",
-                                        TrackMatteMode::LumaMatte => "Luma",
-                                        TrackMatteMode::LumaMatteInverted => "Luma Inv",
-                                    };
-                                    egui::ComboBox::from_id_salt(format!("tl_matte_{}", i))
-                                        .selected_text(format!("Matte: {}", tm_text))
-                                        .show_ui(ui, |ui| {
-                                            for (mode, label) in [
-                                                (TrackMatteMode::None, "None"),
-                                                (TrackMatteMode::AlphaMatte, "Alpha Matte"),
-                                                (TrackMatteMode::AlphaMatteInverted, "Alpha Matte Inverted"),
-                                                (TrackMatteMode::LumaMatte, "Luma Matte"),
-                                                (TrackMatteMode::LumaMatteInverted, "Luma Matte Inverted"),
-                                            ] {
-                                                if ui.selectable_label(layer.track_matte == mode, label).clicked() {
-                                                    layer.track_matte = mode;
-                                                    project_changed = true;
-                                                }
-                                            }
-                                        });
-
-                                    // ── Parenting Pick Whip @ & Dropdown ──
-                                    let pw_active = app.pick_whip_mode;
-                                    let pw_btn = ui.selectable_label(pw_active, "@").on_hover_text("Parenting Pick Whip: Click to enter pick mode, then click target layer");
-                                    if pw_btn.clicked() {
-                                        app.pick_whip_mode = !app.pick_whip_mode;
-                                        app.pick_whip_target = None;
-                                        if app.pick_whip_mode {
-                                            app.toasts.info("Pick Whip active: click a layer to set as parent");
-                                        }
-                                    }
-                                    let parent_name_resolved = layer.parent_id.as_deref()
-                                        .and_then(|pid| derived.parent_indices.get(pid))
-                                        .and_then(|index| parent_choices_ref.get(*index))
-                                        .map(|(_, name)| name.as_str())
-                                        .unwrap_or("None");
-                                    let parent_prefix = if layer.is_3d { "Parent (3D)" } else { "Parent" };
-                                    egui::ComboBox::from_id_salt(format!("tl_parent_{}", i))
-                                        .selected_text(format!("{}: {}", parent_prefix, parent_name_resolved))
-                                        .show_ui(ui, |ui| {
-                                            if ui.selectable_label(layer.parent_id.is_none(), "None").clicked() {
-                                                layer.parent_id = None;
-                                                project_changed = true;
-                                            }
-                                            for (p_idx, (p_id, p_name)) in parent_choices_ref.iter().enumerate() {
-                                                if p_idx != i {
-                                                    let is_p = layer.parent_id.as_deref() == Some(p_id);
-                                                    if ui.selectable_label(is_p, p_name).clicked() {
-                                                        let is_cycle = would_create_parent_cycle(
-                                                            &layer.id,
-                                                            p_id,
-                                                            &derived.parents,
-                                                        );
-
-                                                        if is_cycle {
-                                                            app.toasts.warning(format!("Cycle prevented! Cannot parent '{}' to '{}'", layer.name, p_name));
-                                                        } else {
-                                                            layer.parent_id = Some(p_id.clone());
-                                                            project_changed = true;
-                                                            app.toasts.info(format!("Parented '{}' ➔ '{}'", layer.name, p_name));
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        });
-                                    });
-                                    });
-                                    }
+                                    switches_col::draw_modes_and_parenting(
+                                        ui,
+                                        switches_col::SwitchesColParams {
+                                            layer,
+                                            i,
+                                            show_switches_pane: app.ui_tabs.show_switches_pane,
+                                            derived,
+                                            pick_whip_mode: &mut app.pick_whip_mode,
+                                            pick_whip_target: &mut app.pick_whip_target,
+                                            toasts: &mut app.toasts,
+                                        },
+                                        &mut project_changed,
+                                    );
                                 });
                             });
 
@@ -875,277 +758,25 @@ let type_icon = crate::ui::icons::layer_icon(&layer.layer_type);
                                 },
                             );
 
-                            // ── Trim handles: drag bar edges to set in/out points ──
-                            fn handle_rect_of(is_in: bool, lr: &egui::Rect) -> egui::Rect {
-                                const HW: f32 = 6.0;
-                                if is_in {
-                                    egui::Rect::from_min_size(egui::pos2(lr.left() - HW * 0.5, lr.top()), egui::vec2(HW, lr.height()))
-                                } else {
-                                    egui::Rect::from_min_size(egui::pos2(lr.right() - HW * 0.5, lr.top()), egui::vec2(HW, lr.height()))
-                                }
-                            }
-                            const HANDLE_W: f32 = 6.0;
-                            let in_handle = egui::Rect::from_min_size(
-                                egui::pos2(layer_rect.left() - HANDLE_W * 0.5, layer_rect.top()),
-                                egui::vec2(HANDLE_W, layer_rect.height()),
+                            clip_interaction::handle_layer_bar_drag(
+                                ui,
+                                clip_interaction::LayerBarDragParams {
+                                    layer,
+                                    i,
+                                    layers_len,
+                                    layer_rect,
+                                    bar_rect,
+                                    start_frame,
+                                    zoom_span,
+                                    total_frames,
+                                    fps: comp.fps,
+                                    snap_to_keyframes: app.snap_to_keyframes,
+                                    layer_edges,
+                                    current_frame: *current_frame,
+                                },
+                                &mut actions,
+                                &mut project_changed,
                             );
-                            let out_handle = egui::Rect::from_min_size(
-                                egui::pos2(layer_rect.right() - HANDLE_W * 0.5, layer_rect.top()),
-                                egui::vec2(HANDLE_W, layer_rect.height()),
-                            );
-                            let in_resp = ui.interact(in_handle, egui::Id::new(("trim_in", i)), egui::Sense::click_and_drag());
-                            let out_resp = ui.interact(out_handle, egui::Id::new(("trim_out", i)), egui::Sense::click_and_drag());
-
-                            // ── Body drag: slide the whole layer (in/out preserved) ──
-                            {
-                                const HEADER_W: f32 = 6.0;
-                                let body_rect = egui::Rect::from_min_max(
-                                    egui::pos2(layer_rect.left() + HEADER_W, layer_rect.top()),
-                                    egui::pos2(layer_rect.right() - HEADER_W, layer_rect.bottom()),
-                                );
-                                let body_resp = ui.interact(
-                                    body_rect,
-                                    egui::Id::new(("layer_slide", i, layer.id.as_str())),
-                                    egui::Sense::drag(),
-                                );
-                                let body_drag_id = egui::Id::new(("layer_slide_state", layer.id.as_str()));
-                                if body_resp.drag_started() {
-                                    ui.ctx().data_mut(|data| {
-                                        data.insert_temp(body_drag_id, LayerBodyDragState::default());
-                                    });
-                                }
-                                if body_resp.dragged() {
-                                    let total_frame_offset =
-                                        (body_resp.drag_delta().x / bar_rect.width() * zoom_span as f32).round() as i32;
-                                    let mut drag_state = ui.ctx().data(|data| {
-                                        data.get_temp::<LayerBodyDragState>(body_drag_id)
-                                            .unwrap_or_default()
-                                    });
-                                    let delta_frames = total_frame_offset - drag_state.frame_offset;
-                                    drag_state.frame_offset = total_frame_offset;
-                                    // ── Vertical drag → reorder layers in stack ──
-                                    let row_h = layout::LAYER_ROW_HEIGHT;
-                                    let total_y = body_resp.drag_delta().y;
-                                    let incremental_y = total_y - drag_state.previous_y;
-                                    drag_state.previous_y = total_y;
-                                    let new_accum = drag_state.y_remainder + incremental_y;
-                                    let row_offset = (new_accum / row_h).trunc() as i32;
-                                    if row_offset != 0 {
-                                        let target = (i as i32 - row_offset).clamp(0, layers_len as i32 - 1) as usize;
-                                        if target != i {
-                                            actions.swap_request = Some((i, target));
-                                        }
-                                        drag_state.y_remainder = new_accum - row_offset as f32 * row_h;
-                                    } else {
-                                        drag_state.y_remainder = new_accum;
-                                    }
-                                    ui.ctx().data_mut(|data| data.insert_temp(body_drag_id, drag_state));
-                                    if delta_frames != 0 {
-                                        let alt_held = ui.input(|inp| inp.modifiers.alt);
-                                        if alt_held {
-                                            // ── Slip edit: bar stays, content timing shifts ──
-                                            // Keyframes & markers move opposite the drag so a
-                                            // different moment of the source plays at the same time.
-                                            let shift = -delta_frames;
-                                            for kf in layer.transform.position.keyframes_mut().into_iter().flatten() {
-                                                kf.frame = (kf.frame as i64 + shift as i64).clamp(0, u32::MAX as i64) as u32;
-                                            }
-                                            if let Some(kfs) = layer.transform.position.keyframes_mut() { kfs.sort_by_key(|k| k.frame); }
-                                            for kf in layer.transform.scale.keyframes_mut().into_iter().flatten() {
-                                                kf.frame = (kf.frame as i64 + shift as i64).clamp(0, u32::MAX as i64) as u32;
-                                            }
-                                            if let Some(kfs) = layer.transform.scale.keyframes_mut() { kfs.sort_by_key(|k| k.frame); }
-                                            for kf in layer.transform.rotation.keyframes_mut().into_iter().flatten() {
-                                                kf.frame = (kf.frame as i64 + shift as i64).clamp(0, u32::MAX as i64) as u32;
-                                            }
-                                            if let Some(kfs) = layer.transform.rotation.keyframes_mut() { kfs.sort_by_key(|k| k.frame); }
-                                            for kf in layer.transform.opacity.keyframes_mut().into_iter().flatten() {
-                                                kf.frame = (kf.frame as i64 + shift as i64).clamp(0, u32::MAX as i64) as u32;
-                                            }
-                                            if let Some(kfs) = layer.transform.opacity.keyframes_mut() { kfs.sort_by_key(|k| k.frame); }
-                                            for m in layer.markers.iter_mut() {
-                                                m.frame = (m.frame as i64 + shift as i64).clamp(0, u32::MAX as i64) as u32;
-                                            }
-                                            // Slip effect keyframes too
-                                            use crate::core::effect_params::ParamRef;
-                                            for effect in layer.effects.iter_mut() {
-                                                for (_, param) in effect.effect_type.animatable_params() {
-                                                    match param {
-                                                        ParamRef::Scalar(anim) => {
-                                                            if let Some(kfs) = anim.keyframes_mut() {
-                                                                for kf in kfs.iter_mut() {
-                                                                    kf.frame = (kf.frame as i64 + shift as i64).clamp(0, u32::MAX as i64) as u32;
-                                                                }
-                                                                kfs.sort_by_key(|k| k.frame);
-                                                            }
-                                                        }
-                                                        ParamRef::Vec2(anim) => {
-                                                            if let Some(kfs) = anim.keyframes_mut() {
-                                                                for kf in kfs.iter_mut() {
-                                                                    kf.frame = (kf.frame as i64 + shift as i64).clamp(0, u32::MAX as i64) as u32;
-                                                                }
-                                                                kfs.sort_by_key(|k| k.frame);
-                                                            }
-                                                        }
-                                                        ParamRef::Vec3(anim) => {
-                                                            if let Some(kfs) = anim.keyframes_mut() {
-                                                                for kf in kfs.iter_mut() {
-                                                                    kf.frame = (kf.frame as i64 + shift as i64).clamp(0, u32::MAX as i64) as u32;
-                                                                }
-                                                                kfs.sort_by_key(|k| k.frame);
-                                                            }
-                                                        }
-                                                        ParamRef::Vec4Color(anim) => {
-                                                            if let Some(kfs) = anim.keyframes_mut() {
-                                                                for kf in kfs.iter_mut() {
-                                                                    kf.frame = (kf.frame as i64 + shift as i64).clamp(0, u32::MAX as i64) as u32;
-                                                                }
-                                                                kfs.sort_by_key(|k| k.frame);
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        } else {
-                                            // Slide: move the whole bar
-                                            let span = layer.out_frame - layer.in_frame;
-                                            let raw_in = (layer.in_frame as i32 + delta_frames)
-                                                .clamp(0, (total_frames - span) as i32)
-                                                as u32;
-                                            let new_in = if app.snap_to_keyframes {
-                                                crate::ui::timeline::snapping::snap_to_sorted_layer_edges(
-                                                    raw_in,
-                                                    i,
-                                                    layer_edges,
-                                                )
-                                            } else {
-                                                raw_in
-                                            };
-                                            layer.in_frame = new_in;
-                                            layer.out_frame = new_in + span;
-                                        }
-                                        project_changed = true;
-                                    }
-                                }
-                                if body_resp.drag_stopped() {
-                                    ui.ctx().data_mut(|data| data.remove::<LayerBodyDragState>(body_drag_id));
-                                }
-                                if body_resp.hovered() && !in_resp.hovered() && !out_resp.hovered() {
-                                    let alt_held = ui.input(|inp| inp.modifiers.alt);
-                                    ui.ctx().set_cursor_icon(if alt_held { egui::CursorIcon::ResizeHorizontal } else { egui::CursorIcon::Grab });
-                                    body_resp.on_hover_text(format!(
-                                        "{} — In: {} Out: {} ({:.2}s)",
-                                        layer.name,
-                                        layer.in_frame,
-                                        layer.out_frame,
-                                        layer.duration_frames() as f32 / comp.fps.max(1) as f32
-                                    ));
-                                }
-                            }
-
-                            for (resp, is_in) in [(&in_resp, true), (&out_resp, false)] {
-                                if resp.hovered() {
-                                    ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
-                                    ui.painter().rect_filled(handle_rect_of(is_in, &layer_rect), 2.0, colors::HANDLE_HOVER_FILL.linear_multiply(180.0 / 255.0));
-                                }
-                                if resp.dragged() {
-                                    if let Some(pos) = resp.interact_pointer_pos() {
-                                        let norm = ((pos.x - bar_rect.left()) / bar_rect.width()).clamp(0.0, 1.0);
-                                        let frame = (start_frame as f32 + norm * zoom_span as f32).round() as u32;
-                                        let frame = frame.min(total_frames);
-                                        if is_in {
-                                            layer.in_frame = frame.min(layer.out_frame.saturating_sub(1));
-                                        } else {
-                                            let old_out = layer.out_frame;
-                                            layer.out_frame = frame.max(layer.in_frame + 1);
-                                            // ── Shift+drag Out = ripple edit: close gaps for layers below ──
-                                            if ui.input(|inp| inp.modifiers.shift) && layer.out_frame != old_out {
-                                                let shift = layer.out_frame as i64 - old_out as i64;
-                                                actions.pending_ripple = Some((i, old_out, shift));
-                                            }
-                                        }
-                                        project_changed = true;
-                                    }
-                                }
-                            }
-
-                            // ── Layer markers: small triangles on the bar (AE parity) ──
-                            for marker in &layer.markers {
-                                if marker.frame < start_frame || marker.frame > start_frame + zoom_span { continue; }
-                                let norm = (marker.frame - start_frame) as f32 / zoom_span as f32;
-                                let mx = layer_rect.left() + norm * layer_rect.width();
-                                let my = layer_rect.top() + 1.0;
-                                let [r, g, b] = marker.color;
-                                let mcol = egui::Color32::from_rgb((r * 255.0) as u8, (g * 255.0) as u8, (b * 255.0) as u8);
-                                let pts = vec![
-                                    egui::pos2(mx, my + 5.0),
-                                    egui::pos2(mx - 4.0, my),
-                                    egui::pos2(mx + 4.0, my),
-                                ];
-                                ui.painter().add(egui::Shape::convex_polygon(pts, mcol, egui::Stroke::NONE));
-                            }
-
-                            // ── Real waveform for video layers with audio ──
-                            if let LayerType::Video { audio_wav: Some(wav_path), .. } = &layer.layer_type {
-                                if let Some(waveform) = waveform_cache::get(
-                                    ui.ctx(),
-                                    std::path::Path::new(wav_path),
-                                ) {
-                                    draw_layer_waveform(
-                                        &ui.painter().with_clip_rect(layer_rect),
-                                        LayerWaveformParams {
-                                            timeline_rect: bar_rect,
-                                            clip_rect: layer_rect,
-                                            layer,
-                                            waveform: &waveform,
-                                            start_frame,
-                                            visible_span: zoom_span,
-                                            fps: comp.fps,
-                                            color: colors::TIMELINE_WAVEFORM,
-                                        },
-                                    );
-                                }
-                            }
-
-                            if let LayerType::Audio { path, .. } = &layer.layer_type {
-                                if let Some(waveform) = waveform_cache::get(
-                                    ui.ctx(),
-                                    std::path::Path::new(path),
-                                ) {
-                                    draw_layer_waveform(
-                                        &ui.painter().with_clip_rect(layer_rect),
-                                        LayerWaveformParams {
-                                            timeline_rect: bar_rect,
-                                            clip_rect: layer_rect,
-                                            layer,
-                                            waveform: &waveform,
-                                            start_frame,
-                                            visible_span: zoom_span,
-                                            fps: comp.fps,
-                                            color: colors::TIMELINE_WAVEFORM,
-                                        },
-                                    );
-                                }
-                            }
-
-                            let playhead_norm =
-                                (*current_frame as f32 - start_frame as f32) / zoom_span as f32;
-                            if (0.0..=1.0).contains(&playhead_norm) {
-                                let playhead_x =
-                                    bar_rect.left() + playhead_norm * bar_rect.width();
-                                ui.painter()
-                                    .with_clip_rect(bar_rect)
-                                    .line_segment(
-                                        [
-                                            egui::pos2(playhead_x, bar_rect.top()),
-                                            egui::pos2(playhead_x, bar_rect.bottom()),
-                                        ],
-                                        egui::Stroke::new(
-                                            1.5_f32,
-                                            colors::TIMELINE_PLAYHEAD,
-                                        ),
-                                    );
-                            }
                         });
 
                         // ── Expanded waveform lane ──
