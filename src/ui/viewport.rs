@@ -16,12 +16,16 @@ mod puppet_pin;
 use mask_tools::*;
 mod roto_brush;
 use roto_brush::*;
+mod gpu_preview;
 mod inline_text_editor;
 mod interaction;
 mod navigation;
 mod toolbar;
+mod transport_bar;
 mod view_menu;
 use inline_text_editor::{draw_inline_text_editor, InlineTextEditorGeometry};
+use gpu_preview::render_gpu_preview;
+use transport_bar::draw_viewport_transport_bar;
 
 #[derive(Clone, Copy)]
 struct ViewportGeometry {
@@ -201,8 +205,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
                 let live_audio = crate::core::expression_engine::audio_binding_source_values();
                 document.composition_for_frame_with_sources(active_comp_idx, current_frame, &live_audio)
             });
-        let history_comp = app.history.current().active_composition();
-        let comp = binding_snapshot.as_ref().unwrap_or(history_comp);
+        let comp = binding_snapshot.unwrap_or_else(|| app.history.current().active_composition().clone());
         let comp_fps = comp.fps.max(1);
         let comp_duration_frames = comp.duration_frames.max(1);
         let comp_is_empty = comp.layers.is_empty();
@@ -223,7 +226,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             if is_file { None } else { Some(layer.name.clone()) }
         });
         let software_preview_required =
-            crate::ui::viewport_rendering::software_preview_required(comp, current_frame);
+            crate::ui::viewport_rendering::software_preview_required(&comp, current_frame);
         let aspect = comp.width as f32 / comp.height as f32;
 
         // ── One-shot bbox focus request (Shift+Z with selection) ──
@@ -294,9 +297,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
         let wipe_pos = crate::ui::viewport_state::wipe_pos(ctx);
 
         // -- GPU Render Path --
-        #[allow(unused_mut)]
         let mut rendered_gpu = false;
-        #[cfg(feature = "wgpu")]
         if app.color_lut_mode != 3
             && !paint_preview_required
             && !source_map_effect_preview_required
@@ -304,263 +305,18 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             && !software_preview_required
             && !comp_is_empty
         {
-            if let Some(renderer) = &mut app.renderer {
-            if let Some(wgpu_state) = &app.wgpu_state {
-                let exp_id = egui::Id::new("ae_exposure_ev");
-                let exposure_ev = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(exp_id, || 0.0f32));
-                let lut_idx = app.color_lut_mode as usize;
-
-                let snap_id = egui::Id::new(crate::ui::viewport_state::SNAP_FRAME_ID);
-                let is_comparing_id = egui::Id::new(crate::ui::viewport_state::IS_COMPARING_ID);
-                let wipe_id = egui::Id::new(crate::ui::viewport_state::WIPE_POS_ID);
-
-                let snap_frame_opt = ctx.data_mut(|d| d.get_temp::<u32>(snap_id));
-                let is_comparing = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(is_comparing_id, || false));
-                let wipe_pos = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(wipe_id, || 0.5f32));
-
-                // Render at display resolution: a 4K comp shown in an 800px
-                // viewport renders at ~800px wide (4-16x less fill rate).
-                // While playing, the adaptive factor further reduces resolution when
-                // frames exceed the playback budget (AE-style auto quality drop).
-                // While the user is mid-drag (transform/mask/pin handles) we cap at
-                // half resolution so heavy comps stay interactive; idle frames
-                // snap back to full via the drift logic below.
-                let dragging_now = ui.input(|i| i.pointer.any_down())
-                    && (app.viewport_drag_state.is_some()
-                        || app.viewport_multi_drag.is_some()
-                        || app.viewport_mask_drag_state.is_some()
-                        || app.viewport_pos_kf_drag_state.is_some()
-                        || app.viewport_scale_drag.is_some());
-                let effective_factor = if dragging_now {
-                    app.playback.adaptive_preview_factor.min(0.5)
-                } else {
-                    app.playback.adaptive_preview_factor
-                };
-                let proxy_factor = crate::core::proxy::composition_preview_scale(comp);
-                let display_px = (draw_w * ctx.pixels_per_point()).ceil();
-                let preview_px = ((display_px * effective_factor * proxy_factor) as u32)
-                    .clamp(64, 4096);
-                renderer.set_preview_max_width(Some(preview_px));
-
-                // ── RAM preview: incremental pre-pass, a few frames per UI frame ──
-                // Rendering everything up front would freeze the UI on heavy comps;
-                // instead we chip away at the work area while playback runs.
-                const RAM_PREPASS_FRAMES_PER_TICK: u32 = 2;
-                const RAM_PREPASS_MAX_FRAMES: u32 = 300;
-                const RAM_PREVIEW_BUDGET_BYTES: u64 = 256 * 1024 * 1024;
-                if app.playback.is_playing && !app.was_playing_last_frame {
-                    let last_frame = comp.duration_frames.saturating_sub(1);
-                    let wa_in = app.playback.work_area_in.unwrap_or(0).min(last_frame);
-                    let wa_out = app
-                        .playback.work_area_out
-                        .unwrap_or(last_frame)
-                        .min(last_frame)
-                        .max(wa_in);
-                    if app.viewport_texture_id.is_some_and(|current| {
-                        app.ram_texture_ids.iter().any(|(_, id)| *id == current)
-                    }) {
-                        app.viewport_texture_id = None;
-                    }
-                    for (_, id) in app.ram_texture_ids.drain(..) {
-                        wgpu_state.renderer.write().free_texture(&id);
-                    }
-                    let frame_width = comp.width.min(preview_px).max(1);
-                    let frame_height = ((comp.height as u64 * frame_width as u64)
-                        / comp.width.max(1) as u64)
-                        .clamp(1, u32::MAX as u64) as u32;
-                    let bytes_per_frame = frame_width as u64 * frame_height as u64 * 8;
-                    let memory_limited_frames = (RAM_PREVIEW_BUDGET_BYTES / bytes_per_frame.max(1))
-                        .clamp(1, RAM_PREPASS_MAX_FRAMES as u64)
-                        as u32;
-                    if comp.duration_frames == 0 {
-                        app.ram_prepass_cursor = 1;
-                        app.ram_prepass_end = 0;
-                    } else {
-                        app.ram_prepass_cursor = wa_in;
-                        app.ram_prepass_end = wa_in.saturating_add(
-                            wa_out.saturating_sub(wa_in).min(memory_limited_frames - 1),
-                        );
-                    }
-                }
-                // During playback, check if current frame is already cached in RAM preview
-                let ram_id = if app.playback.is_playing {
-                    app.ram_texture_ids
-                        .iter()
-                        .find(|(f, _)| *f == current_frame)
-                        .map(|(_, id)| *id)
-                } else {
-                    None
-                };
-
-                // Only run background RAM prepass if the current frame is already cached
-                // (which means live GPU render is skipped and we have spare frame budget).
-                // If the current frame was NOT in cache, do NOT render extra prepass frames
-                // on the same UI frame, avoiding frame budget overruns that degrade playback.
-                if app.playback.is_playing && ram_id.is_some() && app.ram_prepass_cursor <= app.ram_prepass_end {
-                    let batch_end = app
-                        .ram_prepass_cursor
-                        .saturating_add(RAM_PREPASS_FRAMES_PER_TICK - 1);
-                    let batch_end = batch_end.min(app.ram_prepass_end);
-                    renderer.render_ram_preview_range(
-                        comp,
-                        app.ram_prepass_cursor,
-                        batch_end,
-                        exposure_ev,
-                        lut_idx as u32,
-                        RAM_PREPASS_MAX_FRAMES,
-                    );
-                    for f in app.ram_prepass_cursor..=batch_end {
-                        if !app.ram_texture_ids.iter().any(|(frame, _)| *frame == f) {
-                            if let Some(view) = renderer.ram_frame_view(f) {
-                                let id = wgpu_state.renderer.write().register_native_texture(
-                                    &wgpu_state.device,
-                                    view,
-                                    wgpu::FilterMode::Linear,
-                                );
-                                app.ram_texture_ids.push((f, id));
-                            }
-                        }
-                    }
-                    app.ram_prepass_cursor = batch_end.saturating_add(1);
-
-                    // Prune ancient RAM preview textures (keep at most 90 frames)
-                    const MAX_RAM_CACHE_ENTRIES: usize = 90;
-                    if app.ram_texture_ids.len() > MAX_RAM_CACHE_ENTRIES {
-                        let excess = app.ram_texture_ids.len() - MAX_RAM_CACHE_ENTRIES;
-                        let evicted: Vec<_> = app.ram_texture_ids.drain(0..excess).collect();
-                        for (_, id) in evicted {
-                            if app.viewport_texture_id != Some(id) {
-                                wgpu_state.renderer.write().free_texture(&id);
-                            }
-                        }
-                    }
-                }
-                if !app.playback.is_playing && app.was_playing_last_frame {
-                    // Playback stopped: free ring textures and egui ids
-                    if app.viewport_texture_id.is_some_and(|current| {
-                        app.ram_texture_ids.iter().any(|(_, id)| *id == current)
-                    }) {
-                        app.viewport_texture_id = None;
-                    }
-                    for (_, id) in app.ram_texture_ids.drain(..) {
-                        wgpu_state.renderer.write().free_texture(&id);
-                    }
-                    renderer.clear_ram_preview();
-                }
-                app.was_playing_last_frame = app.playback.is_playing;
-
-                let render_started = std::time::Instant::now();
-                if let Some(id) = ram_id {
-                    // Cached frame: swap the displayed texture, no GPU re-render
-                    if app.viewport_texture_id != Some(id) {
-                        if let Some(old_id) = app.viewport_texture_id {
-                            if !app.ram_texture_ids.iter().any(|(_, cached)| *cached == old_id) {
-                                wgpu_state.renderer.write().free_texture(&old_id);
-                            }
-                        }
-                        app.viewport_texture_id = Some(id);
-                    }
-                    rendered_gpu = true;
-                    app.gpu_rendered = true;
-                }
-                let (texture_view, recreated) = if ram_id.is_some() {
-                    // Skip live rendering entirely this frame
-                    (None, false)
-                } else {
-                    // Shadow map upload for GPU preview parity (CPU Phase 2.72)
-                    if comp.lights.iter().any(|l| l.casts_shadows && l.intensity > 0.0) {
-                        let map = crate::core::software_renderer::build_shadow_map(
-                            comp, current_frame, comp.width.max(1), comp.height.max(1),
-                        );
-                        renderer.update_shadow_map(&map, comp.width.max(1), comp.height.max(1));
-                    } else if renderer.shadow_active() {
-                        renderer.clear_shadow_map();
-                    }
-                    let (view, rec) = renderer.render(comp, current_frame, exposure_ev, lut_idx as u32);
-                    app.gpu_rendered = true;
-                    (Some(view), rec)
-                };
-                let render_ms = render_started.elapsed().as_secs_f32() * 1000.0;
-                app.playback.preview_render_ema_ms = if app.playback.preview_render_ema_ms <= 0.0 {
-                    render_ms
-                } else {
-                    app.playback.preview_render_ema_ms * 0.9 + render_ms * 0.1
-                };
-
-                // Adapt quality only during playback; idle renders restore full quality
-                if app.playback.is_playing {
-                    let budget_ms = 1000.0 / comp.fps.max(1) as f32 * 0.8;
-                    if app.viewport_fast_preview == 0 {
-                        app.playback.adaptive_preview_factor = 1.0;
-                    } else if app.viewport_fast_preview == 2 {
-                        app.playback.adaptive_preview_factor = 0.5;
-                    } else if app.playback.preview_render_ema_ms > budget_ms {
-                        app.playback.adaptive_preview_factor = (app.playback.adaptive_preview_factor * 0.85).max(0.5);
-                    } else if app.playback.preview_render_ema_ms < budget_ms * 0.6 {
-                        app.playback.adaptive_preview_factor = (app.playback.adaptive_preview_factor * 1.1).min(1.0);
-                    }
-                } else {
-                    app.playback.adaptive_preview_factor = 1.0;
-                }
-                if let Some(view) = texture_view {
-                    if app.viewport_texture_id.is_none() || recreated {
-                        if let Some(old_id) = app.viewport_texture_id {
-                            wgpu_state.renderer.write().free_texture(&old_id);
-                        }
-                        let texture_id = wgpu_state.renderer.write().register_native_texture(
-                            &wgpu_state.device,
-                            view,
-                            wgpu::FilterMode::Linear,
-                        );
-                        app.viewport_texture_id = Some(texture_id);
-                    }
-                }
-
-                let mut snap_texture_id_val = None;
-                if is_comparing {
-                    if let Some(snap_frame) = snap_frame_opt {
-                        let (snap_view, snap_recreated) = renderer.render_snapshot_frame(comp, snap_frame, exposure_ev, lut_idx as u32);
-                        if app.viewport_snapshot_texture_id.is_none() || snap_recreated {
-                            if let Some(old_id) = app.viewport_snapshot_texture_id {
-                                wgpu_state.renderer.write().free_texture(&old_id);
-                            }
-                            let texture_id = wgpu_state.renderer.write().register_native_texture(
-                                &wgpu_state.device,
-                                snap_view,
-                                wgpu::FilterMode::Linear,
-                            );
-                            app.viewport_snapshot_texture_id = Some(texture_id);
-                        }
-                        snap_texture_id_val = app.viewport_snapshot_texture_id;
-                    }
-                }
-
-                if let (true, Some(cur_tex), Some(snap_tex)) = (is_comparing, app.viewport_texture_id, snap_texture_id_val) {
-                    // Left Side: Current Frame
-                    let left_rect = egui::Rect::from_min_max(
-                        draw_rect.min,
-                        egui::pos2(draw_rect.min.x + draw_rect.width() * wipe_pos, draw_rect.max.y),
-                    );
-                    let left_img = egui::Image::new(egui::load::SizedTexture::new(cur_tex, left_rect.size()))
-                        .uv(egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(wipe_pos, 1.0)));
-                    ui.put(left_rect, left_img);
-
-                    // Right Side: Snapshot Frame (Compare)
-                    let right_rect = egui::Rect::from_min_max(
-                        egui::pos2(draw_rect.min.x + draw_rect.width() * wipe_pos, draw_rect.min.y),
-                        draw_rect.max,
-                    );
-                    let right_img = egui::Image::new(egui::load::SizedTexture::new(snap_tex, right_rect.size()))
-                        .uv(egui::Rect::from_min_max(egui::pos2(wipe_pos, 0.0), egui::pos2(1.0, 1.0)));
-                    ui.put(right_rect, right_img);
-
-                    rendered_gpu = true;
-                } else if let Some(texture_id) = app.viewport_texture_id {
-                    ui.put(draw_rect, egui::Image::new(egui::load::SizedTexture::new(texture_id, draw_rect.size())));
-                    rendered_gpu = true;
-                }
-            }
-            }
+            rendered_gpu = render_gpu_preview(
+                app,
+                ctx,
+                ui,
+                &comp,
+                current_frame,
+                draw_rect,
+                draw_w,
+                is_comparing,
+                snap_frame_opt,
+                wipe_pos,
+            );
         }
 
         // -- CPU Fallback Render (2D) --
@@ -883,130 +639,13 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
         );
 
         // ── Integrated Viewer Bottom Transport Bar (Matching Mockup) ──
-        ui.add_space(2.0);
-        let b_rect = ui.available_rect_before_wrap();
-        let bar_h = 34.0;
-        let trans_rect = egui::Rect::from_min_size(b_rect.min, egui::vec2(b_rect.width(), bar_h));
-        ui.painter().rect_filled(trans_rect, 0.0, colors::BG_DARKEST);
-        ui.painter().line_segment(
-            [trans_rect.left_top(), trans_rect.right_top()],
-            egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
+        draw_viewport_transport_bar(
+            app,
+            ui,
+            current_frame,
+            comp_fps,
+            comp_duration_frames,
         );
-
-        let mut bottom_ui = ui.new_child(egui::UiBuilder::new().max_rect(trans_rect.shrink2(egui::vec2(16.0, 3.0))));
-        bottom_ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 10.0;
-
-            let fps = comp_fps;
-            let timecode_str = crate::ui::timeline::ruler::format_timecode_label(current_frame, fps);
-
-            ui.label(
-                egui::RichText::new(timecode_str)
-                    .size(13.0)
-                    .strong()
-                    .monospace()
-                    .color(colors::TEXT_PRIMARY),
-            );
-
-            // Sleek orange progress bar / scrubber (matching ideal)
-            let total_f = comp_duration_frames.max(1);
-            let scrubber_w = 120.0_f32;
-            let (scrub_rect, scrub_resp) = ui.allocate_exact_size(egui::vec2(scrubber_w, 16.0), egui::Sense::click_and_drag());
-            let track_rect = egui::Rect::from_center_size(scrub_rect.center(), egui::vec2(scrubber_w, 4.0));
-            ui.painter().rect_filled(track_rect, 2.0, colors::BG_SURFACE);
-            let progress = (current_frame as f32 / total_f as f32).clamp(0.0, 1.0);
-            let filled_rect = egui::Rect::from_min_max(
-                track_rect.left_top(),
-                egui::pos2(track_rect.left() + track_rect.width() * progress, track_rect.bottom()),
-            );
-            ui.painter().rect_filled(filled_rect, 2.0, colors::ACCENT_BRAND);
-            let knob_pos = egui::pos2(track_rect.left() + track_rect.width() * progress, track_rect.center().y);
-            ui.painter().circle_filled(knob_pos, 5.0, colors::ACCENT_BRAND);
-
-            if scrub_resp.clicked() || scrub_resp.dragged() {
-                if let Some(pos) = scrub_resp.interact_pointer_pos() {
-                    let t = ((pos.x - track_rect.left()) / track_rect.width()).clamp(0.0, 1.0);
-                    app.playback.current_frame = (t * total_f as f32).round() as u32;
-                }
-            }
-
-            ui.add_space(6.0);
-
-            // Transport buttons: |<, <, Play/Pause, >, >|
-            if ui.add(egui::Button::new(egui::RichText::new("⏮").size(12.0).color(colors::TEXT_SECONDARY)).frame(false)).clicked() {
-                app.playback.current_frame = 0;
-            }
-            if ui.add(egui::Button::new(egui::RichText::new("◀").size(12.0).color(colors::TEXT_SECONDARY)).frame(false)).clicked() {
-                app.playback.current_frame = current_frame.saturating_sub(1);
-            }
-
-            let play_label = if app.playback.is_playing { "⏸" } else { "▶" };
-            let play_btn = ui.add(
-                egui::Button::new(
-                    egui::RichText::new(play_label)
-                        .size(15.0)
-                        .strong()
-                        .color(egui::Color32::WHITE),
-                )
-                .frame(false),
-            );
-            if play_btn.clicked() {
-                app.playback.is_playing = !app.playback.is_playing;
-            }
-
-            if ui.add(egui::Button::new(egui::RichText::new("▶").size(12.0).color(colors::TEXT_SECONDARY)).frame(false)).clicked() {
-                app.playback.current_frame = (current_frame + 1).min(total_f);
-            }
-            if ui.add(egui::Button::new(egui::RichText::new("⏭").size(12.0).color(colors::TEXT_SECONDARY)).frame(false)).clicked() {
-                app.playback.current_frame = total_f;
-            }
-
-            // Right side: Total Timecode + Quality combo + Fullscreen icon
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let (btn_rect, btn_resp) = ui.allocate_exact_size(egui::vec2(22.0, 22.0), egui::Sense::click());
-                if btn_resp.hovered() {
-                    ui.painter().rect_filled(btn_rect, 3.0, colors::BG_HOVER);
-                }
-                crate::ui::icons::render_svg_at(
-                    ui,
-                    "viewport-bottom-fullscreen".to_string(),
-                    crate::ui::icons::SVG_WINDOW_MAXIMIZE,
-                    egui::vec2(14.0, 14.0),
-                    colors::TEXT_SECONDARY,
-                    btn_rect.center() - egui::vec2(7.0, 7.0),
-                );
-                if btn_resp.clicked() {
-                    app.viewer_maximized = !app.viewer_maximized;
-                }
-
-                ui.add_space(4.0);
-
-                egui::ComboBox::from_id_salt("viewport_transport_quality")
-                    .selected_text(match app.viewport_fast_preview {
-                        0 => "フル",
-                        1 => "適応",
-                        2 => "ドラフト",
-                        _ => "ワイヤー",
-                    })
-                    .width(62.0)
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut app.viewport_fast_preview, 0, "フル");
-                        ui.selectable_value(&mut app.viewport_fast_preview, 1, "適応");
-                        ui.selectable_value(&mut app.viewport_fast_preview, 2, "ドラフト");
-                        ui.selectable_value(&mut app.viewport_fast_preview, 3, "ワイヤー");
-                    });
-
-                ui.add_space(8.0);
-
-                let dur_timecode = crate::ui::timeline::ruler::format_timecode_label(total_f, fps);
-                ui.label(
-                    egui::RichText::new(dur_timecode)
-                        .size(12.5)
-                        .monospace()
-                        .color(colors::TEXT_MUTED),
-                );
-            });
-        });
     });
 }
 
