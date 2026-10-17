@@ -39,7 +39,7 @@ pub(crate) struct VideoFrameCache {
 }
 
 impl VideoFrameCache {
-    pub(crate) const DEFAULT_MAX_BYTES: usize = 1024 * 1024 * 1024;
+    pub(crate) const DEFAULT_MAX_BYTES: usize = 512 * 1024 * 1024;
 
     pub(crate) fn new() -> Self {
         Self {

@@ -101,6 +101,11 @@ impl eframe::App for KagariApp {
         if autosave_succeeded {
             let _ = std::fs::remove_file(dirty_exit_marker_path(std::process::id()));
         }
+        // Join any remaining background threads so detached threads don't
+        // outlive the process (recovery load, project open, LUT restore, ...).
+        for handle in self.background_threads.drain(..) {
+            let _ = handle.join();
+        }
         if let Some(ref flag) = self.export_cancel_flag {
             flag.store(true, std::sync::atomic::Ordering::SeqCst);
         }

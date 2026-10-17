@@ -180,37 +180,47 @@ impl ImageCache {
     }
 
     fn file_revision(path: &str) -> Option<FileRevision> {
-        use std::sync::Mutex;
-        use std::time::Instant;
+        #[cfg(not(test))]
+        {
+            use std::sync::Mutex;
+            use std::time::Instant;
 
-        static REVISION_CACHE: std::sync::OnceLock<
-            Mutex<HashMap<String, (FileRevision, Instant)>>,
-        > = std::sync::OnceLock::new();
+            static REVISION_CACHE: std::sync::OnceLock<
+                Mutex<HashMap<String, (FileRevision, Instant)>>,
+            > = std::sync::OnceLock::new();
 
-        let cache_mutex = REVISION_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-        let now = Instant::now();
-        if let Ok(cache) = cache_mutex.lock() {
-            if let Some((rev, timestamp)) = cache.get(path) {
-                if now.duration_since(*timestamp).as_millis() < 1000 {
-                    return Some(rev.clone());
+            let cache_mutex = REVISION_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+            let now = Instant::now();
+            if let Ok(cache) = cache_mutex.lock() {
+                if let Some((rev, timestamp)) = cache.get(path) {
+                    if now.duration_since(*timestamp).as_millis() < 1000 {
+                        return Some(rev.clone());
+                    }
                 }
             }
-        }
 
-        let metadata = std::fs::metadata(path).ok()?;
-        let rev = FileRevision {
-            len: metadata.len(),
-            modified: metadata.modified().ok(),
-        };
+            let metadata = std::fs::metadata(path).ok()?;
+            let rev = FileRevision {
+                len: metadata.len(),
+                modified: metadata.modified().ok(),
+            };
 
-        if let Ok(mut cache) = cache_mutex.lock() {
-            if cache.len() > 2000 {
-                cache.clear();
+            if let Ok(mut cache) = cache_mutex.lock() {
+                if cache.len() > 2000 {
+                    cache.clear();
+                }
+                cache.insert(path.to_string(), (rev.clone(), now));
             }
-            cache.insert(path.to_string(), (rev.clone(), now));
+            Some(rev)
         }
-
-        Some(rev)
+        #[cfg(test)]
+        {
+            let metadata = std::fs::metadata(path).ok()?;
+            Some(FileRevision {
+                len: metadata.len(),
+                modified: metadata.modified().ok(),
+            })
+        }
     }
 
     /// Get a cached image without loading.

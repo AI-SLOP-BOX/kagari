@@ -59,13 +59,20 @@ fn begin_recovery_load(
     let (tx, rx) = std::sync::mpsc::channel();
     app.recovery_load_rx = Some(rx);
     app.recovery_load_kind = kind;
-    std::thread::Builder::new()
+    let handle = match std::thread::Builder::new()
         .name("kagari-recovery-load".into())
         .spawn(move || {
             let loaded = crate::core::autosave::manager::load_snapshot_file(&path);
             let _ = tx.send(crate::app_state::RecoveryLoadResult { path, loaded });
-        })
-        .ok();
+        }) {
+        Ok(handle) => handle,
+        Err(e) => {
+            log::error!("recovery load thread failed to spawn: {e}");
+            app.recovery_load_rx = None;
+            return;
+        }
+    };
+    app.background_threads.push(handle);
 }
 
 /// Apply a finished background load. Returns true when the dialog should close.
@@ -123,6 +130,7 @@ pub fn draw_recovery_dialog(app: &mut KagariApp, ctx: &egui::Context) {
         }
         Some(Err(std::sync::mpsc::TryRecvError::Disconnected)) => {
             app.recovery_load_rx = None;
+            app.recovery_load_kind = crate::app_state::RecoveryLoadKind::Latest;
             apply_restored_snapshot(app, None);
         }
         Some(Err(std::sync::mpsc::TryRecvError::Empty)) => {
@@ -229,6 +237,7 @@ pub fn draw_recovery_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                     ui.label("復元データを読み込み中…");
                     if custom_widgets::ae_button(ui, "キャンセル").clicked() {
                         app.recovery_load_rx = None;
+                        app.recovery_load_kind = crate::app_state::RecoveryLoadKind::Latest;
                     }
                 });
             } else {

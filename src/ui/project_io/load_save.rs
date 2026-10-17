@@ -39,7 +39,7 @@ pub fn open_project_from_path(app: &mut KagariApp, path: &std::path::Path) -> Re
     let worker_path = path.clone();
     let repaint = app.repaint_context.clone();
     let (sender, receiver) = std::sync::mpsc::channel();
-    std::thread::Builder::new()
+    let handle = match std::thread::Builder::new()
         .name("kagari-project-open".into())
         .spawn(move || {
             let result = load_project_for_open(&worker_path);
@@ -47,8 +47,15 @@ pub fn open_project_from_path(app: &mut KagariApp, path: &std::path::Path) -> Re
             if let Some(context) = repaint {
                 context.request_repaint();
             }
-        })
-        .map_err(|error| format!("プロジェクト読み込みを開始できませんでした: {error}"))?;
+        }) {
+        Ok(handle) => handle,
+        Err(error) => {
+            return Err(format!(
+                "プロジェクト読み込みを開始できませんでした: {error}"
+            ));
+        }
+    };
+    app.background_threads.push(handle);
     app.pending_project_load = Some(PendingProjectLoad {
         path,
         receiver,
@@ -139,7 +146,8 @@ pub fn begin_color_lut_restore(app: &mut KagariApp, path: String) {
                 context.request_repaint();
             }
         }) {
-        Ok(_) => {
+        Ok(handle) => {
+            app.background_threads.push(handle);
             app.color_lut_path = Some(path.clone());
             app.color_lut_mode = 0;
             app.pending_color_lut_load = Some(PendingColorLutLoad {

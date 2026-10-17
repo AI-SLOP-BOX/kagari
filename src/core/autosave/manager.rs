@@ -61,6 +61,9 @@ pub struct AutosaveManager {
     loaded_recovery_path: Mutex<Option<PathBuf>>,
     dirty_generation: u64,
     async_write: Option<std::sync::mpsc::Receiver<(u64, std::io::Result<PathBuf>)>>,
+    /// Join handle for the in-flight async write worker, so `wait_for_pending`
+    /// can join it instead of leaving the thread detached.
+    join_handle: Mutex<Option<std::thread::JoinHandle<()>>>,
 }
 
 /// Read and validate one recovery snapshot file **without touching manager
@@ -117,6 +120,7 @@ impl AutosaveManager {
             loaded_recovery_path: Mutex::new(None),
             dirty_generation: 0,
             async_write: None,
+            join_handle: Mutex::new(None),
         }
     }
 
@@ -302,7 +306,13 @@ impl AutosaveManager {
                 let _ = sender.send((generation, result));
             });
         match worker {
-            Ok(_) => self.async_write = Some(receiver),
+            Ok(handle) => {
+                *self
+                    .join_handle
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(handle);
+                self.async_write = Some(receiver);
+            }
             Err(error) => {
                 self.retry_at = Some(Instant::now() + Duration::from_secs(30));
                 self.last_error = Some(format!("could not start autosave worker: {error}"));
@@ -314,7 +324,18 @@ impl AutosaveManager {
     /// Waits for an in-flight autosave, primarily for orderly application exit.
     pub fn wait_for_pending(&mut self) -> Option<PathBuf> {
         let receiver = self.async_write.take()?;
-        match receiver.recv() {
+        let result = receiver.recv();
+        // Join the worker thread after receiving its result so the autosave
+        // thread does not outlive the process as a detached thread.
+        if let Some(handle) = self
+            .join_handle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+        {
+            let _ = handle.join();
+        }
+        match result {
             Ok((generation, Ok(path))) => {
                 self.last_save = Instant::now();
                 self.retry_at = None;

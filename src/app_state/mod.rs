@@ -131,6 +131,11 @@ pub struct KagariApp {
         Option<std::sync::mpsc::Receiver<Vec<crate::core::autosave::RecoveryGeneration>>>,
     /// Which control started the in-flight recovery load (see [`RecoveryLoadKind`]).
     pub recovery_load_kind: RecoveryLoadKind,
+    /// Join handles for background threads spawned during the session.
+    ///
+    /// Kept (rather than `.spawn().ok()` discarding the handle) so `on_exit()`
+    /// can join them and avoid detached threads outliving the process.
+    pub background_threads: Vec<std::thread::JoinHandle<()>>,
     /// Playback domain state (transport, frame, work area, volume)
     pub playback: PlaybackDomainState,
     /// Selection domain state (selected layers, expanded, property)
