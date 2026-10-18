@@ -442,4 +442,23 @@ pub(super) enum Commands {
         #[arg(short, long)]
         comp: Option<String>,
     },
+
+    /// Apply a transition preset (fade_in, fade_out, cross_dissolve, zoom_out, slide_out) to a layer
+    Transition {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+        /// Target layer name or ID
+        #[arg(short, long)]
+        layer: String,
+        /// Transition type: fade-in, fade-out, zoom-out, slide-out
+        #[arg(long)]
+        kind: String,
+        /// Transition duration in frames (default: 15)
+        #[arg(long, default_value = "15")]
+        duration: u32,
+        /// Target composition name or index (default: active comp)
+        #[arg(short, long)]
+        comp: Option<String>,
+    },
 }

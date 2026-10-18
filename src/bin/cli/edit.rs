@@ -425,3 +425,91 @@ pub(super) fn cmd_trim(
     );
     Ok(())
 }
+
+pub(super) fn cmd_transition(
+    project_path: &str,
+    layer_ref: &str,
+    comp_ref: Option<&str>,
+    kind: &str,
+    duration: u32,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use kagari_vfx::core::keyframe::{BezierControlPoint, InterpolationType, Keyframe};
+    use kagari_vfx::core::property::Animatable;
+
+    let mut project = load_project(project_path)?;
+    let comp = find_comp_mut(&mut project, comp_ref)?;
+    let comp_w = comp.width as f32;
+    let layer = comp
+        .layers
+        .iter_mut()
+        .find(|l| l.name == layer_ref || l.id == layer_ref)
+        .ok_or_else(|| format!("Layer '{layer_ref}' not found in composition '{}'", comp.name))?;
+
+    let dur = duration.max(1);
+    let ease = InterpolationType::Bezier {
+        outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
+        incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
+        custom_bezier: Some([0.42, 0.0, 0.58, 1.0]),
+    };
+
+    match kind.to_lowercase().replace(['-', '_'], "").as_str() {
+        "fadein" => {
+            let start = layer.in_frame;
+            let end = (start + dur).min(layer.out_frame);
+            let kfs = vec![
+                Keyframe::new(start, 0.0, ease),
+                Keyframe::new(end, 100.0, ease),
+            ];
+            layer.transform.opacity = Animatable::Animated(kfs);
+        }
+        "fadeout" => {
+            let end = layer.out_frame;
+            let start = end.saturating_sub(dur).max(layer.in_frame);
+            let kfs = vec![
+                Keyframe::new(start, 100.0, ease),
+                Keyframe::new(end, 0.0, ease),
+            ];
+            layer.transform.opacity = Animatable::Animated(kfs);
+        }
+        "zoomout" => {
+            let end = layer.out_frame;
+            let start = end.saturating_sub(dur).max(layer.in_frame);
+            let base_s = layer.transform.scale.evaluate(start);
+            let target_s = [base_s[0] * 1.8, base_s[1] * 1.8];
+            layer.transform.scale = Animatable::Animated(vec![
+                Keyframe::new(start, base_s, ease),
+                Keyframe::new(end, target_s, ease),
+            ]);
+            layer.transform.opacity = Animatable::Animated(vec![
+                Keyframe::new(start, 100.0, ease),
+                Keyframe::new(end, 0.0, ease),
+            ]);
+        }
+        "slideout" => {
+            let end = layer.out_frame;
+            let start = end.saturating_sub(dur).max(layer.in_frame);
+            let base_p = layer.transform.position.evaluate(start);
+            let target_p = [base_p[0] + comp_w * 0.6, base_p[1]];
+            layer.transform.position = Animatable::Animated(vec![
+                Keyframe::new(start, base_p, ease),
+                Keyframe::new(end, target_p, ease),
+            ]);
+            layer.transform.opacity = Animatable::Animated(vec![
+                Keyframe::new(start, 100.0, ease),
+                Keyframe::new(end, 0.0, ease),
+            ]);
+        }
+        other => {
+            return Err(format!("Unknown transition '{}'. Valid options: fade-in, fade-out, zoom-out, slide-out", other).into());
+        }
+    }
+
+    let layer_name = layer.name.clone();
+    let json = serde_json::to_string_pretty(&project)?;
+    std::fs::write(project_path, json)?;
+    eprintln!(
+        "Applied transition '{}' ({} frames) to layer '{}' in {}",
+        kind, dur, layer_name, project_path
+    );
+    Ok(())
+}

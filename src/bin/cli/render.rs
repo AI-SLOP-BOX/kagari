@@ -564,17 +564,36 @@ fn render_to_mp4(
     let cancel_clone = cancel_flag.clone();
     let (tx, rx) = std::sync::mpsc::channel();
 
-    let audio_wav = comp.layers.iter().find_map(|l| match &l.layer_type {
-        kagari_vfx::core::timeline::LayerType::Video { audio_wav, .. } => audio_wav.clone(),
-        _ => None,
-    });
+    // Composite all audio layers (video audio + dedicated audio layers) into master WAV
+    let audio_wav = {
+        let master_dsp = kagari_vfx::core::audio_engine::MasterDspParams::default();
+        match kagari_vfx::core::audio_engine::mix_composition_to_wav(
+            comp,
+            spec.from,
+            spec.to + 1,
+            48_000,
+            None,
+            &master_dsp,
+        ) {
+            Ok(Some(path)) => {
+                eprintln!("  Mixed master audio track: {:?}", path);
+                Some(path.to_string_lossy().into_owned())
+            }
+            Ok(None) => None,
+            Err(e) => {
+                eprintln!("  Audio mix notice: {}", e);
+                None
+            }
+        }
+    };
+
     let config = ExportConfig {
         output_path: spec.output.to_string(),
         width: spec.w,
         height: spec.h,
         fps: comp.fps,
         total_frames: spec.to.saturating_sub(spec.from) + 1,
-        audio_wav,
+        audio_wav: audio_wav.clone(),
         codec: kagari_vfx::core::ffmpeg_export::VideoCodec::H264,
     };
 
@@ -627,6 +646,12 @@ fn render_to_mp4(
 
     let worker_result = done_rx.recv();
     let worker_join = worker.join();
+
+    // Clean up temporary mixed WAV file
+    if let Some(ref path) = audio_wav {
+        let _ = std::fs::remove_file(path);
+    }
+
     if worker_join.is_err() {
         return Err("FFmpeg export worker panicked".into());
     }
