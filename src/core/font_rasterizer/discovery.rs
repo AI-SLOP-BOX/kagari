@@ -33,6 +33,18 @@ pub fn system_font_paths(family_name: &str) -> Vec<PathBuf> {
             "/System/Library/Fonts/Supplemental/{}.ttc",
             family_name
         )));
+
+        // Japanese macOS system fonts (Hiragino Kaku Gothic, Maru Gothic, Mincho)
+        let lower_clean = family_name.to_lowercase().replace([' ', '-', '_'], "");
+        if lower_clean.contains("hiragino") || lower_clean.contains("ヒラギノ") || lower_clean.contains("japan") || lower_clean.contains("gothic") {
+            for weight in ["W3", "W6", "W4", "W5", "W7", "W8", "W0", "W1", "W2", "W9"] {
+                paths.push(PathBuf::from(format!("/System/Library/Fonts/ヒラギノ角ゴシック {}.ttc", weight)));
+            }
+            paths.push(PathBuf::from("/System/Library/Fonts/ヒラギノ丸ゴ ProN W4.ttc"));
+            paths.push(PathBuf::from("/System/Library/Fonts/ヒラギノ明朝 ProN.ttc"));
+            paths.push(PathBuf::from("/System/Library/Fonts/Hiragino Sans GB.ttc"));
+        }
+
         // Also check ~/Library/Fonts
         if let Some(home) = std::env::var_os("HOME") {
             paths.push(PathBuf::from(home).join(format!("Library/Fonts/{}.ttf", family_name)));
@@ -131,6 +143,9 @@ pub fn discover_system_fonts() -> Vec<(String, String)> {
                             .and_then(|s| s.to_str())
                             .unwrap_or("Unknown")
                             .to_string();
+                        if name.contains("ヒラギノ角ゴシック") || name.contains("ヒラギノ角ゴシック") {
+                            fonts.push(("Hiragino Sans".to_string(), path.to_string_lossy().to_string()));
+                        }
                         fonts.push((name, path.to_string_lossy().to_string()));
                     }
                 }

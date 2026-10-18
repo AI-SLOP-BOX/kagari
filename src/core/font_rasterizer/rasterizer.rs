@@ -74,9 +74,19 @@ impl FontRasterizer {
             return family_name.to_string();
         }
         // Case-insensitive match among loaded fonts
-        let lower = family_name.to_lowercase().replace(' ', "");
-        if let Some(loaded_name) = self.fonts.keys().find(|k| k.to_lowercase().replace(' ', "") == lower) {
+        let lower = family_name.to_lowercase().replace([' ', '-', '_'], "");
+        if let Some(loaded_name) = self.fonts.keys().find(|k| {
+            let k_clean = k.to_lowercase().replace([' ', '-', '_'], "");
+            k_clean == lower || (lower.contains("hiragino") && k.contains("ヒラギノ"))
+        }) {
             return loaded_name.clone();
+        }
+
+        // If requesting Japanese or Hiragino, fallback to any available Japanese font
+        if lower.contains("hiragino") || lower.contains("japan") || lower.contains("gothic") {
+            if let Some(jp) = self.fonts.keys().find(|k| k.contains("ヒラギノ") || k.contains("Hiragino")) {
+                return jp.clone();
+            }
         }
         const PREFERRED: &[&str] = &[
             "Helvetica",
