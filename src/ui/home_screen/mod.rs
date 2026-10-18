@@ -90,8 +90,9 @@ fn thumb_for(
 
 // ── Data model ────────────────────────────────────────────────
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum HomeNav {
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum HomeNav {
+    #[default]
     Home,
     Compositing,
     Graph,
@@ -117,6 +118,13 @@ pub(crate) fn set_home_nav(ctx: &egui::Context, nav: HomeNav) {
         d.insert_temp(egui::Id::new("home_nav"), nav);
         d.insert_temp(egui::Id::new("home_search_reset"), true);
     });
+}
+
+#[allow(dead_code)]
+pub(crate) fn set_app_home_nav(app: &mut KagariApp, ctx: &egui::Context, nav: HomeNav) {
+    app.home_nav = nav;
+    app.home_search.clear();
+    set_home_nav(ctx, nav);
 }
 
 fn target_nav_for_label(label: &str) -> Option<HomeNav> {
@@ -178,6 +186,11 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
     if should_reset_search {
         ctx.data_mut(|d| d.remove::<bool>(search_reset_id));
         app.home_search.clear();
+    }
+    // Bidirectional sync between app.home_nav and context temp storage
+    let current_ctx_nav = home_nav(ctx);
+    if app.home_nav != current_ctx_nav {
+        app.home_nav = current_ctx_nav;
     }
     if matches!(home_nav(ctx), HomeNav::Settings) {
         ctx.data_mut(|data| data.insert_temp(egui::Id::new("ae_prefs_category"), 0usize));

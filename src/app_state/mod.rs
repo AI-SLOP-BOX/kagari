@@ -386,6 +386,8 @@ pub struct KagariApp {
     pub home_dir: std::path::PathBuf,
     pub home_selected: Option<std::path::PathBuf>,
     pub home_search: String,
+    /// Active navigation tab on the Home screen.
+    pub home_nav: crate::ui::home_screen::HomeNav,
     /// Cached recent project summaries loaded asynchronously in the background.
     pub home_recent_projects: Vec<crate::ui::home_screen::RecentProject>,
     /// Receiver for background scan of recent projects.
