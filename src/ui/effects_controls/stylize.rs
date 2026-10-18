@@ -490,6 +490,33 @@ pub fn draw(
                 },
             );
         }
+        EffectType::StrobeLight {
+            interval_frames,
+            strobe_color,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Interval (frames)",
+                interval_frames,
+                |ui, v| {
+                    crate::ui::kui::slider(ui, v, 1.0..=60.0, " frames");
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Strobe Color",
+                strobe_color,
+                |ui, v| {
+                    ui.color_edit_button_rgba_unmultiplied(v);
+                },
+            );
+        }
         _ => {}
     }
 }

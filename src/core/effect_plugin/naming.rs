@@ -130,6 +130,12 @@ pub fn effect_name(effect_type: &EffectType) -> &'static str {
         EffectType::VRHorizon { .. } => "VR Horizon",
         EffectType::VRSphericalBlur { .. } => "VR Spherical Blur",
         EffectType::TemporalDenoise { .. } => "Temporal Denoise",
+        EffectType::GradientRamp { .. } => "Gradient Ramp",
+        EffectType::Checkerboard { .. } => "Checkerboard",
+        EffectType::CCKaleida { .. } => "CC Kaleida",
+        EffectType::StrobeLight { .. } => "Strobe Light",
+        EffectType::CCPixelPolly { .. } => "CC Pixel Polly",
+        EffectType::BilateralFilter { .. } => "Bilateral Filter",
     }
 }
 
@@ -263,5 +269,11 @@ pub fn effect_type_id(effect_type: &EffectType) -> &'static str {
         EffectType::VRHorizon { .. } => "vr_horizon",
         EffectType::VRSphericalBlur { .. } => "vr_spherical_blur",
         EffectType::TemporalDenoise { .. } => "temporal_denoise",
+        EffectType::GradientRamp { .. } => "gradient_ramp",
+        EffectType::Checkerboard { .. } => "checkerboard",
+        EffectType::CCKaleida { .. } => "cc_kaleida",
+        EffectType::StrobeLight { .. } => "strobe_light",
+        EffectType::CCPixelPolly { .. } => "cc_pixel_polly",
+        EffectType::BilateralFilter { .. } => "bilateral_filter",
     }
 }

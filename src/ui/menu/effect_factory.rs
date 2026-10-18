@@ -520,6 +520,61 @@ fn build_effect(
             },
             enabled: true,
         },
+        "Gradient Ramp" => Effect {
+            id: format!("gradient_ramp_{len}"),
+            name: "Gradient Ramp".into(),
+            effect_type: EffectType::GradientRamp {
+                start_color: Animatable::new_constant([0.0, 0.0, 0.0, 1.0]),
+                end_color: Animatable::new_constant([1.0, 1.0, 1.0, 1.0]),
+                is_radial: false,
+            },
+            enabled: true,
+        },
+        "Checkerboard" => Effect {
+            id: format!("checkerboard_{len}"),
+            name: "Checkerboard".into(),
+            effect_type: EffectType::Checkerboard {
+                box_size: Animatable::new_constant(32.0),
+                color_1: Animatable::new_constant([1.0, 1.0, 1.0, 1.0]),
+                color_2: Animatable::new_constant([0.0, 0.0, 0.0, 1.0]),
+            },
+            enabled: true,
+        },
+        "CC Kaleida" => Effect {
+            id: format!("cckaleida_{len}"),
+            name: "CC Kaleida".into(),
+            effect_type: EffectType::CCKaleida {
+                sides: Animatable::new_constant(6.0),
+            },
+            enabled: true,
+        },
+        "Strobe Light" => Effect {
+            id: format!("strobelight_{len}"),
+            name: "Strobe Light".into(),
+            effect_type: EffectType::StrobeLight {
+                interval_frames: Animatable::new_constant(6.0),
+                strobe_color: Animatable::new_constant([1.0, 1.0, 1.0, 1.0]),
+            },
+            enabled: true,
+        },
+        "CC Pixel Polly" => Effect {
+            id: format!("ccpixelpolly_{len}"),
+            name: "CC Pixel Polly".into(),
+            effect_type: EffectType::CCPixelPolly {
+                shatter_progress: Animatable::new_constant(25.0),
+            },
+            enabled: true,
+        },
+        "Bilateral Filter" => Effect {
+            id: format!("bilateral_{len}"),
+            name: "Bilateral Filter".into(),
+            effect_type: EffectType::BilateralFilter {
+                radius: Animatable::new_constant(4.0),
+                spatial_sigma: Animatable::new_constant(3.0),
+                color_sigma: Animatable::new_constant(25.0),
+            },
+            enabled: true,
+        },
         _ => return None,
     };
     Some(e)

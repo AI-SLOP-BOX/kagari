@@ -69,7 +69,8 @@ pub fn draw_effect_type_ui(
         | EffectType::TiltShift { .. }
         | EffectType::CameraLensBlur { .. }
         | EffectType::MotionBlur { .. }
-        | EffectType::TemporalDenoise { .. } => {
+        | EffectType::TemporalDenoise { .. }
+        | EffectType::BilateralFilter { .. } => {
             blur::draw(effect_type, ui, current_frame, project_changed, next_frame);
         }
 
@@ -102,7 +103,9 @@ pub fn draw_effect_type_ui(
         | EffectType::RadialFastBlur { .. }
         | EffectType::ScanlineGlitch { .. }
         | EffectType::VRHorizon { .. }
-        | EffectType::VRSphericalBlur { .. } => {
+        | EffectType::VRSphericalBlur { .. }
+        | EffectType::CCKaleida { .. }
+        | EffectType::CCPixelPolly { .. } => {
             distort::draw(effect_type, ui, current_frame, project_changed, next_frame);
         }
 
@@ -115,7 +118,9 @@ pub fn draw_effect_type_ui(
         | EffectType::PerlinFlow { .. }
         | EffectType::FbmTurbulence { .. }
         | EffectType::LightLeak { .. }
-        | EffectType::GodRays { .. } => {
+        | EffectType::GodRays { .. }
+        | EffectType::GradientRamp { .. }
+        | EffectType::Checkerboard { .. } => {
             generate::draw(effect_type, ui, current_frame, project_changed, next_frame);
         }
 
@@ -131,7 +136,8 @@ pub fn draw_effect_type_ui(
         | EffectType::BevelAlpha { .. }
         | EffectType::LensFlare { .. }
         | EffectType::OpticalFlares { .. }
-        | EffectType::ReflectionMap { .. } => {
+        | EffectType::ReflectionMap { .. }
+        | EffectType::StrobeLight { .. } => {
             stylize::draw(effect_type, ui, current_frame, project_changed, next_frame);
         }
 

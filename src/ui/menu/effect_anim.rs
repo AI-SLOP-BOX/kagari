@@ -34,6 +34,14 @@ pub fn draw_effect_menu(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
             apply_effect_by_name(app, "Temporal Denoise");
             ui.close_menu();
         }
+        if ui
+            .button("Bilateral Filter")
+            .on_hover_text("Edge-preserving spatial-chromatic noise reduction")
+            .clicked()
+        {
+            apply_effect_by_name(app, "Bilateral Filter");
+            ui.close_menu();
+        }
     });
     ui.menu_button("Color Correction", |ui| {
         for name in &["Color Tint", "Levels", "Hue/Saturation", "Vibrance"] {
@@ -115,6 +123,14 @@ pub fn draw_effect_menu(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
             apply_effect_by_name(app, "Optical Flares");
             ui.close_menu();
         }
+        if ui
+            .button("Strobe Light")
+            .on_hover_text("Periodic strobe light flashing")
+            .clicked()
+        {
+            apply_effect_by_name(app, "Strobe Light");
+            ui.close_menu();
+        }
     });
     ui.menu_button("Distort", |ui| {
         for name in &["Twirl", "Bulge", "Mesh Warp", "Chromatic Aberration"] {
@@ -151,6 +167,22 @@ pub fn draw_effect_menu(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
             apply_effect_by_name(app, "Corner Pin");
             ui.close_menu();
         }
+        if ui
+            .button("CC Kaleida")
+            .on_hover_text("Multi-sided kaleidoscope reflection deformation")
+            .clicked()
+        {
+            apply_effect_by_name(app, "CC Kaleida");
+            ui.close_menu();
+        }
+        if ui
+            .button("CC Pixel Polly")
+            .on_hover_text("CC Pixel Polly shatter and disintegration")
+            .clicked()
+        {
+            apply_effect_by_name(app, "CC Pixel Polly");
+            ui.close_menu();
+        }
     });
     ui.menu_button("Immersive Video (VR 360)", |ui| {
         if ui
@@ -185,6 +217,22 @@ pub fn draw_effect_menu(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
             .clicked()
         {
             apply_effect_by_name(app, "Laser Beam");
+            ui.close_menu();
+        }
+        if ui
+            .button("Gradient Ramp")
+            .on_hover_text("Linear or radial 2-color gradient ramp")
+            .clicked()
+        {
+            apply_effect_by_name(app, "Gradient Ramp");
+            ui.close_menu();
+        }
+        if ui
+            .button("Checkerboard")
+            .on_hover_text("2-color procedural checkerboard grid pattern")
+            .clicked()
+        {
+            apply_effect_by_name(app, "Checkerboard");
             ui.close_menu();
         }
     });

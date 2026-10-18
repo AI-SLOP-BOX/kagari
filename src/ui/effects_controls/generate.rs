@@ -462,6 +462,76 @@ pub fn draw(
                 },
             );
         }
+        EffectType::GradientRamp {
+            start_color,
+            end_color,
+            is_radial,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Start Color",
+                start_color,
+                |ui, v| {
+                    ui.color_edit_button_rgba_unmultiplied(v);
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "End Color",
+                end_color,
+                |ui, v| {
+                    ui.color_edit_button_rgba_unmultiplied(v);
+                },
+            );
+            if ui.checkbox(is_radial, "Radial Ramp").changed() {
+                *project_changed = true;
+            }
+        }
+        EffectType::Checkerboard {
+            box_size,
+            color_1,
+            color_2,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Box Size",
+                box_size,
+                |ui, v| {
+                    crate::ui::kui::slider(ui, v, 2.0..=256.0, "px");
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Color 1",
+                color_1,
+                |ui, v| {
+                    ui.color_edit_button_rgba_unmultiplied(v);
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Color 2",
+                color_2,
+                |ui, v| {
+                    ui.color_edit_button_rgba_unmultiplied(v);
+                },
+            );
+        }
         _ => {}
     }
 }

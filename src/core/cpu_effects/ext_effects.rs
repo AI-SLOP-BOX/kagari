@@ -27,6 +27,12 @@ pub(super) fn apply(
             | EffectType::VRHorizon { .. }
             | EffectType::VRSphericalBlur { .. }
             | EffectType::TemporalDenoise { .. }
+            | EffectType::GradientRamp { .. }
+            | EffectType::Checkerboard { .. }
+            | EffectType::CCKaleida { .. }
+            | EffectType::StrobeLight { .. }
+            | EffectType::CCPixelPolly { .. }
+            | EffectType::BilateralFilter { .. }
     ) {
         return false;
     }
@@ -369,6 +375,87 @@ pub(super) fn apply(
             denoiser.set_temporal_mix(temporal_mix.evaluate(frame));
             denoiser.set_feature_threshold(feature_threshold.evaluate(frame));
             denoiser.process(pixels, width, height);
+        }
+        EffectType::GradientRamp {
+            start_color,
+            end_color,
+            is_radial,
+        } => {
+            let sc = start_color.evaluate(frame);
+            let ec = end_color.evaluate(frame);
+            let s_u8 = [
+                (sc[0] * 255.0).clamp(0.0, 255.0) as u8,
+                (sc[1] * 255.0).clamp(0.0, 255.0) as u8,
+                (sc[2] * 255.0).clamp(0.0, 255.0) as u8,
+                (sc[3] * 255.0).clamp(0.0, 255.0) as u8,
+            ];
+            let e_u8 = [
+                (ec[0] * 255.0).clamp(0.0, 255.0) as u8,
+                (ec[1] * 255.0).clamp(0.0, 255.0) as u8,
+                (ec[2] * 255.0).clamp(0.0, 255.0) as u8,
+                (ec[3] * 255.0).clamp(0.0, 255.0) as u8,
+            ];
+            crate::core::legacy_filters_v2::apply_gradient_ramp(
+                pixels, width, height, s_u8, e_u8, *is_radial,
+            );
+        }
+        EffectType::Checkerboard {
+            box_size,
+            color_1,
+            color_2,
+        } => {
+            let bs = box_size.evaluate(frame).round().max(1.0) as u32;
+            let c1 = color_1.evaluate(frame);
+            let c2 = color_2.evaluate(frame);
+            let c1_u8 = [
+                (c1[0] * 255.0).clamp(0.0, 255.0) as u8,
+                (c1[1] * 255.0).clamp(0.0, 255.0) as u8,
+                (c1[2] * 255.0).clamp(0.0, 255.0) as u8,
+                (c1[3] * 255.0).clamp(0.0, 255.0) as u8,
+            ];
+            let c2_u8 = [
+                (c2[0] * 255.0).clamp(0.0, 255.0) as u8,
+                (c2[1] * 255.0).clamp(0.0, 255.0) as u8,
+                (c2[2] * 255.0).clamp(0.0, 255.0) as u8,
+                (c2[3] * 255.0).clamp(0.0, 255.0) as u8,
+            ];
+            crate::core::legacy_filters_v2::apply_checkerboard(
+                pixels, width, height, bs, c1_u8, c2_u8,
+            );
+        }
+        EffectType::CCKaleida { sides } => {
+            let s = sides.evaluate(frame).round().clamp(2.0, 64.0) as u32;
+            crate::core::legacy_filters_v2::apply_cc_kaleida(pixels, width, height, s);
+        }
+        EffectType::StrobeLight {
+            interval_frames,
+            strobe_color,
+        } => {
+            let interval = interval_frames.evaluate(frame).round().max(1.0) as u32;
+            let col = strobe_color.evaluate(frame);
+            let col_u8 = [
+                (col[0] * 255.0).clamp(0.0, 255.0) as u8,
+                (col[1] * 255.0).clamp(0.0, 255.0) as u8,
+                (col[2] * 255.0).clamp(0.0, 255.0) as u8,
+                (col[3] * 255.0).clamp(0.0, 255.0) as u8,
+            ];
+            crate::core::ae_effects_pack_v3::apply_strobe_light(pixels, frame, interval, col_u8);
+        }
+        EffectType::CCPixelPolly { shatter_progress } => {
+            let p = shatter_progress.evaluate(frame).clamp(0.0, 100.0);
+            crate::core::ae_effects_pack_v3::apply_cc_pixel_polly(pixels, width, height, p);
+        }
+        EffectType::BilateralFilter {
+            radius,
+            spatial_sigma,
+            color_sigma,
+        } => {
+            let r = radius.evaluate(frame).round().clamp(1.0, 32.0) as u32;
+            let ss = spatial_sigma.evaluate(frame).max(0.1);
+            let cs = color_sigma.evaluate(frame).max(0.1);
+            crate::core::edge_aware_filters::apply_bilateral_filter(
+                pixels, width, height, r, ss, cs,
+            );
         }
         _ => unreachable!(),
     }

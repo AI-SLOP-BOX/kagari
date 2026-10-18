@@ -394,6 +394,45 @@ pub fn populate_extended_params_ref<'a>(
             push!("Temporal Mix", temporal_mix, Scalar);
             push!("Feature Threshold", feature_threshold, Scalar);
         }
+        EffectType::GradientRamp {
+            start_color,
+            end_color,
+            ..
+        } => {
+            push!("Start Color", start_color, Color);
+            push!("End Color", end_color, Color);
+        }
+        EffectType::Checkerboard {
+            box_size,
+            color_1,
+            color_2,
+        } => {
+            push!("Box Size", box_size, Scalar);
+            push!("Color 1", color_1, Color);
+            push!("Color 2", color_2, Color);
+        }
+        EffectType::CCKaleida { sides } => {
+            push!("Sides", sides, Scalar);
+        }
+        EffectType::StrobeLight {
+            interval_frames,
+            strobe_color,
+        } => {
+            push!("Interval", interval_frames, Scalar);
+            push!("Strobe Color", strobe_color, Color);
+        }
+        EffectType::CCPixelPolly { shatter_progress } => {
+            push!("Shatter Progress", shatter_progress, Scalar);
+        }
+        EffectType::BilateralFilter {
+            radius,
+            spatial_sigma,
+            color_sigma,
+        } => {
+            push!("Radius", radius, Scalar);
+            push!("Spatial Sigma", spatial_sigma, Scalar);
+            push!("Color Sigma", color_sigma, Scalar);
+        }
         EffectType::CustomShader { .. } => {}
         #[allow(unreachable_patterns)]
         _ => {}

@@ -726,6 +726,37 @@ pub enum EffectType {
         temporal_mix: Animatable<f32>,
         feature_threshold: Animatable<f32>,
     },
+    /// Linear or radial gradient color ramp.
+    GradientRamp {
+        start_color: Animatable<[f32; 4]>,
+        end_color: Animatable<[f32; 4]>,
+        is_radial: bool,
+    },
+    /// 2-color checkerboard pattern generator.
+    Checkerboard {
+        box_size: Animatable<f32>,
+        color_1: Animatable<[f32; 4]>,
+        color_2: Animatable<[f32; 4]>,
+    },
+    /// Multi-sided kaleidoscope reflection deformation.
+    CCKaleida {
+        sides: Animatable<f32>,
+    },
+    /// Periodic strobe light flashing.
+    StrobeLight {
+        interval_frames: Animatable<f32>,
+        strobe_color: Animatable<[f32; 4]>,
+    },
+    /// CC Pixel Polly shatter and disintegration.
+    CCPixelPolly {
+        shatter_progress: Animatable<f32>,
+    },
+    /// Edge-preserving bilateral filter noise reduction.
+    BilateralFilter {
+        radius: Animatable<f32>,
+        spatial_sigma: Animatable<f32>,
+        color_sigma: Animatable<f32>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

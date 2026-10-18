@@ -495,6 +495,34 @@ pub fn draw_warp_lens(
             );
             true
         }
+        EffectType::CCKaleida { sides } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Sides",
+                sides,
+                |ui, v| {
+                    crate::ui::kui::slider(ui, v, 2.0..=64.0, "");
+                },
+            );
+            true
+        }
+        EffectType::CCPixelPolly { shatter_progress } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Shatter Progress",
+                shatter_progress,
+                |ui, v| {
+                    crate::ui::kui::slider(ui, v, 0.0..=100.0, "%");
+                },
+            );
+            true
+        }
         _ => false,
     }
 }

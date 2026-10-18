@@ -266,6 +266,45 @@ pub fn draw(
                 },
             );
         }
+        EffectType::BilateralFilter {
+            radius,
+            spatial_sigma,
+            color_sigma,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Radius",
+                radius,
+                |ui, v| {
+                    crate::ui::kui::slider(ui, v, 1.0..=32.0, " px");
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Spatial Sigma",
+                spatial_sigma,
+                |ui, v| {
+                    crate::ui::kui::slider(ui, v, 0.5..=20.0, "");
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Color Sigma",
+                color_sigma,
+                |ui, v| {
+                    crate::ui::kui::slider(ui, v, 1.0..=100.0, "");
+                },
+            );
+        }
         _ => {}
     }
 }
