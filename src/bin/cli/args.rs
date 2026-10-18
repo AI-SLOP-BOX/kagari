@@ -527,4 +527,49 @@ pub(super) enum Commands {
         #[arg(short, long)]
         comp: Option<String>,
     },
+
+    /// Analyze an audio file and output transient beat frames for exact rhythm/cut synchronization
+    Beats {
+        /// Path to audio or video file
+        #[arg(short, long)]
+        file: String,
+        /// Frame rate (fps) for time-to-frame conversion (default: 30.0)
+        #[arg(long, default_value = "30.0")]
+        fps: f32,
+        /// Maximum duration in frames to analyze (default: 3000)
+        #[arg(long, default_value = "3000")]
+        duration: u32,
+        /// Emit machine-readable JSON array of frame indices
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Ultra-fast low-resolution draft preview render for rapid rhythm & motion review
+    Preview {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+        /// Target composition name or index
+        #[arg(short, long)]
+        comp: Option<String>,
+        /// Output preview MP4 path
+        #[arg(short, long, default_value = "./preview.mp4")]
+        output: String,
+        /// Preview scale factor: 0.25 (quarter resolution), 0.5 (half resolution)
+        #[arg(long, default_value = "0.5")]
+        scale: f32,
+        /// Frame step (e.g. 2 = every 2nd frame for 2x faster review)
+        #[arg(long, default_value = "1")]
+        step: u32,
+    },
+
+    /// Collect all project assets (footage, audio, images) into a self-contained bundle directory
+    Bundle {
+        /// Path to source project JSON file
+        #[arg(short, long)]
+        project: String,
+        /// Target destination directory for the bundle
+        #[arg(short, long, default_value = "./project_bundle")]
+        output: String,
+    },
 }

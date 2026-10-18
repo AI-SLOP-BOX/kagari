@@ -837,3 +837,129 @@ pub(super) fn cmd_queue(args: QueueArgs) -> Result<(), Box<dyn std::error::Error
 
     Ok(())
 }
+
+pub(super) fn cmd_beats(file: &str, fps: f32, duration: u32, json: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let path = std::path::Path::new(file);
+    if !path.is_file() {
+        return Err(format!("Audio file '{}' not found", file).into());
+    }
+
+    let beats = kagari_vfx::core::audio_engine::detect_beat_frames(path, duration, fps);
+    if json {
+        let json_str = serde_json::to_string(&beats)?;
+        println!("{}", json_str);
+    } else {
+        println!("Detected {} transient beat onsets in '{}' (fps: {}):", beats.len(), file, fps);
+        for b in &beats {
+            let sec = *b as f32 / fps;
+            println!("  frame {:5}  ({:6.2}s)", b, sec);
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn cmd_preview(
+    project_path: &str,
+    comp_ref: Option<&str>,
+    output: &str,
+    scale: f32,
+    step: u32,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let project = load_project(project_path)?;
+    let comp = find_comp(&project, comp_ref)?;
+    let scale = scale.clamp(0.1, 1.0);
+    let preview_w = ((comp.width as f32 * scale).round() as u32).max(64);
+    let preview_h = ((comp.height as f32 * scale).round() as u32).max(64);
+
+    eprintln!(
+        "Draft Preview: Rendering '{}' at {:.0}% resolution ({}x{}, step={}) → {}",
+        comp.name,
+        scale * 100.0,
+        preview_w,
+        preview_h,
+        step.max(1),
+        output
+    );
+
+    cmd_render(RenderArgs {
+        project_path: project_path.to_string(),
+        comp_ref: comp_ref.map(|s| s.to_string()),
+        output: output.to_string(),
+        format: OutputFormat::Mp4,
+        frames: None,
+        from: 0,
+        to: None,
+        width: Some(preview_w),
+        height: Some(preview_h),
+        exposure: 0.0,
+        lut: 0,
+        color_space: None,
+        step: step.max(1),
+        threads: 0,
+        skip_existing: false,
+        mfr: true,
+        log_format: "standard".to_string(),
+        bindings: Vec::new(),
+        overrides: Vec::new(),
+        expressions: Vec::new(),
+    })
+}
+
+pub(super) fn cmd_bundle(project_path: &str, output_dir: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let mut project = load_project(project_path)?;
+    let bundle_path = std::path::Path::new(output_dir);
+    let assets_dir = bundle_path.join("assets");
+    std::fs::create_dir_all(&assets_dir)?;
+
+    let mut asset_counter = 0;
+    for comp in &mut project.compositions {
+        for layer in &mut comp.layers {
+            match &mut layer.layer_type {
+                kagari_vfx::core::timeline::LayerType::Image { path } => {
+                    let src = std::path::PathBuf::from(&*path);
+                    if src.is_file() {
+                        asset_counter += 1;
+                        let file_name = src.file_name().unwrap_or_default().to_string_lossy();
+                        let target = assets_dir.join(format!("{:03}_{}", asset_counter, file_name));
+                        std::fs::copy(&src, &target)?;
+                        *path = format!("assets/{:03}_{}", asset_counter, file_name);
+                        eprintln!("  Collected Image: {} → {:?}", src.display(), target);
+                    }
+                }
+                kagari_vfx::core::timeline::LayerType::Video { source, .. } => {
+                    let src = std::path::PathBuf::from(&*source);
+                    if src.is_file() {
+                        asset_counter += 1;
+                        let file_name = src.file_name().unwrap_or_default().to_string_lossy();
+                        let target = assets_dir.join(format!("{:03}_{}", asset_counter, file_name));
+                        std::fs::copy(&src, &target)?;
+                        *source = format!("assets/{:03}_{}", asset_counter, file_name);
+                        eprintln!("  Collected Video: {} → {:?}", src.display(), target);
+                    }
+                }
+                kagari_vfx::core::timeline::LayerType::Audio { path, .. } => {
+                    let src = std::path::PathBuf::from(&*path);
+                    if src.is_file() {
+                        asset_counter += 1;
+                        let file_name = src.file_name().unwrap_or_default().to_string_lossy();
+                        let target = assets_dir.join(format!("{:03}_{}", asset_counter, file_name));
+                        std::fs::copy(&src, &target)?;
+                        *path = format!("assets/{:03}_{}", asset_counter, file_name);
+                        eprintln!("  Collected Audio: {} → {:?}", src.display(), target);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let bundle_project_file = bundle_path.join("project.json");
+    let json = serde_json::to_string_pretty(&project)?;
+    std::fs::write(&bundle_project_file, json)?;
+
+    eprintln!(
+        "\nProject Bundle created successfully at '{}' (collected {} external assets)",
+        output_dir, asset_counter
+    );
+    Ok(())
+}

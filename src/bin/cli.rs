@@ -393,6 +393,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 comp.as_deref(),
             )?;
         }
+        Commands::Beats {
+            file,
+            fps,
+            duration,
+            json,
+        } => {
+            render::cmd_beats(&file, fps, duration, json)?;
+        }
+        Commands::Preview {
+            project,
+            comp,
+            output,
+            scale,
+            step,
+        } => {
+            render::cmd_preview(&project, comp.as_deref(), &output, scale, step)?;
+        }
+        Commands::Bundle {
+            project,
+            output,
+        } => {
+            render::cmd_bundle(&project, &output)?;
+        }
     }
 
     Ok(())
