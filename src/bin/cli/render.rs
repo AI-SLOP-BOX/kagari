@@ -1548,3 +1548,265 @@ pub(super) fn cmd_audio_spectrum(
     eprintln!("Updated project file: {}", project_path);
     Ok(())
 }
+
+pub(super) fn cmd_roto(
+    project_path: &str,
+    layer_name: &str,
+    points_str: &str,
+    kind_str: &str,
+    radius: f32,
+    frame: Option<u32>,
+    comp_ref: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut project = load_project(project_path)?;
+    let comp = find_comp_mut(&mut project, comp_ref)?;
+    let layer = comp
+        .layers
+        .iter_mut()
+        .find(|l| l.name == layer_name || l.id == layer_name)
+        .ok_or_else(|| format!("Layer '{layer_name}' not found in composition '{}'", comp.name))?;
+
+    let stroke_type = if kind_str.eq_ignore_ascii_case("bg") || kind_str.eq_ignore_ascii_case("background") {
+        kagari_vfx::core::roto_brush_engine::RotoStrokeType::Background
+    } else {
+        kagari_vfx::core::roto_brush_engine::RotoStrokeType::Foreground
+    };
+
+    let flat: Vec<f32> = points_str
+        .split(',')
+        .filter_map(|s| s.trim().parse().ok())
+        .collect();
+    if flat.len() < 2 {
+        return Err("Roto stroke points must contain at least one x,y pair (e.g. \"960,540\")".into());
+    }
+    let points: Vec<[f32; 2]> = flat.chunks_exact(2).map(|c| [c[0], c[1]]).collect();
+
+    let stroke = kagari_vfx::core::roto_brush_engine::RotoStroke {
+        stroke_type,
+        points,
+        radius: radius.clamp(2.0, 200.0),
+        frame: frame.or(Some(layer.in_frame)),
+    };
+
+    layer.roto_brush_strokes.push(stroke);
+    eprintln!(
+        "Added RotoBrush {:?} stroke ({} points, r={:.1}px) to layer '{}'",
+        stroke_type,
+        flat.len() / 2,
+        radius,
+        layer.name
+    );
+
+    let json = serde_json::to_string_pretty(&project)?;
+    std::fs::write(project_path, json)?;
+    eprintln!("Updated project file: {}", project_path);
+    Ok(())
+}
+
+pub(super) fn cmd_puppet(
+    project_path: &str,
+    layer_name: &str,
+    pin_name: &str,
+    pos_str: Option<&str>,
+    target_str: Option<&str>,
+    frame: Option<u32>,
+    comp_ref: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut project = load_project(project_path)?;
+    let comp = find_comp_mut(&mut project, comp_ref)?;
+    let layer = comp
+        .layers
+        .iter_mut()
+        .find(|l| l.name == layer_name || l.id == layer_name)
+        .ok_or_else(|| format!("Layer '{layer_name}' not found in composition '{}'", comp.name))?;
+
+    let default_pos = [comp.width as f32 / 2.0, comp.height as f32 / 2.0];
+    let pos = if let Some(p) = pos_str {
+        let parts: Vec<f32> = p.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+        if parts.len() >= 2 {
+            [parts[0], parts[1]]
+        } else {
+            default_pos
+        }
+    } else {
+        default_pos
+    };
+
+    let pin_idx = layer.puppet_pins.iter().position(|p| p.name == pin_name || p.id == pin_name);
+    let target_f = frame.unwrap_or(layer.in_frame);
+
+    if let Some(idx) = pin_idx {
+        if let Some(t_str) = target_str {
+            let parts: Vec<f32> = t_str.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+            if parts.len() >= 2 {
+                let target_pos = [parts[0], parts[1]];
+                let pin = &mut layer.puppet_pins[idx];
+                let mut kfs = match &pin.position {
+                    kagari_vfx::core::property::Animatable::Animated(k) => k.clone(),
+                    kagari_vfx::core::property::Animatable::Constant(c) => {
+                        vec![kagari_vfx::core::keyframe::Keyframe::new(layer.in_frame, *c, kagari_vfx::core::keyframe::InterpolationType::Linear)]
+                    }
+                };
+                if let Some(existing_kf) = kfs.iter_mut().find(|k| k.frame == target_f) {
+                    existing_kf.value = target_pos;
+                } else {
+                    kfs.push(kagari_vfx::core::keyframe::Keyframe::new(target_f, target_pos, kagari_vfx::core::keyframe::InterpolationType::Linear));
+                    kfs.sort_by_key(|k| k.frame);
+                }
+                pin.position = kagari_vfx::core::property::Animatable::Animated(kfs);
+                eprintln!("Animated Puppet Pin '{}' to [{:.1}, {:.1}] at frame {}", pin_name, target_pos[0], target_pos[1], target_f);
+            }
+        }
+    } else {
+        let mut pin = kagari_vfx::core::timeline::PuppetPin::new(
+            format!("pin_{}", layer.puppet_pins.len() + 1),
+            pin_name.to_string(),
+            pos,
+        );
+        if let Some(t_str) = target_str {
+            let parts: Vec<f32> = t_str.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+            if parts.len() >= 2 {
+                let target_pos = [parts[0], parts[1]];
+                pin.position = kagari_vfx::core::property::Animatable::Animated(vec![
+                    kagari_vfx::core::keyframe::Keyframe::new(layer.in_frame, pos, kagari_vfx::core::keyframe::InterpolationType::Linear),
+                    kagari_vfx::core::keyframe::Keyframe::new(target_f, target_pos, kagari_vfx::core::keyframe::InterpolationType::Linear),
+                ]);
+            }
+        }
+        layer.puppet_pins.push(pin);
+        eprintln!("Created new Puppet Pin '{}' at [{:.1}, {:.1}] on layer '{}'", pin_name, pos[0], pos[1], layer.name);
+    }
+
+    let json = serde_json::to_string_pretty(&project)?;
+    std::fs::write(project_path, json)?;
+    eprintln!("Updated project file: {}", project_path);
+    Ok(())
+}
+
+pub(super) fn cmd_chroma_key(
+    project_path: &str,
+    layer_name: &str,
+    color_str: &str,
+    gain: f32,
+    clip_black: f32,
+    clip_white: f32,
+    comp_ref: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut project = load_project(project_path)?;
+    let comp = find_comp_mut(&mut project, comp_ref)?;
+    let layer = comp
+        .layers
+        .iter_mut()
+        .find(|l| l.name == layer_name || l.id == layer_name)
+        .ok_or_else(|| format!("Layer '{layer_name}' not found in composition '{}'", comp.name))?;
+
+    let screen_color = match color_str.to_lowercase().as_str() {
+        "green" => [0.0, 1.0, 0.0],
+        "blue" => [0.0, 0.0, 1.0],
+        hex if hex.starts_with('#') && hex.len() == 7 => {
+            let r = u8::from_str_radix(&hex[1..3], 16).unwrap_or(0) as f32 / 255.0;
+            let g = u8::from_str_radix(&hex[3..5], 16).unwrap_or(255) as f32 / 255.0;
+            let b = u8::from_str_radix(&hex[5..7], 16).unwrap_or(0) as f32 / 255.0;
+            [r, g, b]
+        }
+        _ => [0.0, 1.0, 0.0],
+    };
+
+    let effect = kagari_vfx::core::timeline::Effect {
+        id: format!(
+            "chroma_key_{}_{}",
+            layer.effects.len() + 1,
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis())
+                .unwrap_or(0)
+        ),
+        name: "Chroma Key".to_string(),
+        effect_type: kagari_vfx::core::timeline::EffectType::ChromaKey {
+            screen_color: kagari_vfx::core::property::Animatable::new_constant(screen_color),
+            screen_gain: kagari_vfx::core::property::Animatable::new_constant(gain.clamp(0.1, 3.0)),
+            clip_black: kagari_vfx::core::property::Animatable::new_constant(clip_black.clamp(0.0, 1.0)),
+            clip_white: kagari_vfx::core::property::Animatable::new_constant(clip_white.clamp(0.0, 1.0)),
+        },
+        enabled: true,
+    };
+
+    layer.effects.push(effect);
+    eprintln!(
+        "Configured Chroma Key on layer '{}' (screen: [{:.2}, {:.2}, {:.2}], gain: {:.2})",
+        layer.name, screen_color[0], screen_color[1], screen_color[2], gain
+    );
+
+    let json = serde_json::to_string_pretty(&project)?;
+    std::fs::write(project_path, json)?;
+    eprintln!("Updated project file: {}", project_path);
+    Ok(())
+}
+
+pub(super) fn cmd_audio_track(
+    project_path: &str,
+    layer_name: &str,
+    volume_opt: Option<f32>,
+    fade_in: Option<u32>,
+    fade_out: Option<u32>,
+    comp_ref: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut project = load_project(project_path)?;
+    let comp = find_comp_mut(&mut project, comp_ref)?;
+    let layer = comp
+        .layers
+        .iter_mut()
+        .find(|l| l.name == layer_name || l.id == layer_name)
+        .ok_or_else(|| format!("Layer '{layer_name}' not found in composition '{}'", comp.name))?;
+
+    let in_f = layer.in_frame;
+    let out_f = layer.out_frame;
+    let target_vol = volume_opt.unwrap_or(1.0).max(0.0);
+
+    if fade_in.is_some() || fade_out.is_some() {
+        let mut kfs = Vec::new();
+        if let Some(dur_in) = fade_in {
+            let fade_end = (in_f + dur_in).min(out_f);
+            kfs.push(kagari_vfx::core::keyframe::Keyframe::new(in_f, 0.0, kagari_vfx::core::keyframe::InterpolationType::Linear));
+            kfs.push(kagari_vfx::core::keyframe::Keyframe::new(fade_end, target_vol, kagari_vfx::core::keyframe::InterpolationType::Linear));
+        } else {
+            kfs.push(kagari_vfx::core::keyframe::Keyframe::new(in_f, target_vol, kagari_vfx::core::keyframe::InterpolationType::Linear));
+        }
+
+        if let Some(dur_out) = fade_out {
+            let fade_start = out_f.saturating_sub(dur_out).max(in_f);
+            kfs.push(kagari_vfx::core::keyframe::Keyframe::new(fade_start, target_vol, kagari_vfx::core::keyframe::InterpolationType::Linear));
+            kfs.push(kagari_vfx::core::keyframe::Keyframe::new(out_f, 0.0, kagari_vfx::core::keyframe::InterpolationType::Linear));
+        } else {
+            kfs.push(kagari_vfx::core::keyframe::Keyframe::new(out_f, target_vol, kagari_vfx::core::keyframe::InterpolationType::Linear));
+        }
+
+        kfs.sort_by_key(|k| k.frame);
+        kfs.dedup_by_key(|k| k.frame);
+
+        match &mut layer.layer_type {
+            kagari_vfx::core::timeline::LayerType::Audio { volume, .. } => {
+                *volume = kagari_vfx::core::property::Animatable::Animated(kfs);
+                eprintln!("Configured audio volume automation envelope on '{}'", layer.name);
+            }
+            _ => {
+                eprintln!("Applied volume envelope to non-audio layer '{}' (recorded for export mix)", layer.name);
+            }
+        }
+    } else if let Some(vol) = volume_opt {
+        match &mut layer.layer_type {
+            kagari_vfx::core::timeline::LayerType::Audio { volume, .. } => {
+                *volume = kagari_vfx::core::property::Animatable::new_constant(vol);
+                eprintln!("Set constant audio volume to {:.2} on '{}'", vol, layer.name);
+            }
+            _ => {
+                eprintln!("Set volume to {:.2} on layer '{}'", vol, layer.name);
+            }
+        }
+    }
+
+    let json = serde_json::to_string_pretty(&project)?;
+    std::fs::write(project_path, json)?;
+    eprintln!("Updated project file: {}", project_path);
+    Ok(())
+}

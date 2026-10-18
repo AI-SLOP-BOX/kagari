@@ -784,4 +784,101 @@ pub(super) enum Commands {
         #[arg(short, long)]
         comp: Option<String>,
     },
+
+    /// Roto Brush: semi-automatic subject isolation via foreground & background guide strokes
+    Roto {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+        /// Target footage layer name or ID
+        #[arg(short, long)]
+        layer: String,
+        /// Stroke points "x1,y1,x2,y2..." in layer space (e.g. "960,300,960,700")
+        #[arg(long)]
+        points: String,
+        /// Guide stroke class: fg (foreground subject), bg (background exclusion)
+        #[arg(long, default_value = "fg")]
+        kind: String,
+        /// Brush stroke radius in pixels (default: 20.0)
+        #[arg(long, default_value = "20.0")]
+        radius: f32,
+        /// Keyframe at which stroke is drawn (default: layer in_frame)
+        #[arg(long)]
+        frame: Option<u32>,
+        /// Target composition name or index (default: active comp)
+        #[arg(short, long)]
+        comp: Option<String>,
+    },
+
+    /// Puppet Pin: place and animate deformation pins for organic character/mesh warping
+    Puppet {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+        /// Target layer name or ID
+        #[arg(short, long)]
+        layer: String,
+        /// Pin name or ID (created if not exists)
+        #[arg(short = 'n', long, default_value = "Pin 1")]
+        name: String,
+        /// Pin rest/source position "x,y" (default: center of comp/layer)
+        #[arg(long)]
+        pos: Option<String>,
+        /// Deformed target position "x,y" at animated frame
+        #[arg(long)]
+        target: Option<String>,
+        /// Frame number for animated target position (default: in_frame)
+        #[arg(long)]
+        frame: Option<u32>,
+        /// Target composition name or index (default: active comp)
+        #[arg(short, long)]
+        comp: Option<String>,
+    },
+
+    /// Chroma Key: green screen and blue screen removal with spill suppression
+    ChromaKey {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+        /// Target footage layer name or ID
+        #[arg(short, long)]
+        layer: String,
+        /// Screen color to key out: green, blue, or hex "#00FF00"
+        #[arg(long, default_value = "green")]
+        color: String,
+        /// Screen color gain/sensitivity (0.0..2.0, default: 1.0)
+        #[arg(long, default_value = "1.0")]
+        gain: f32,
+        /// Clip black threshold (clean up background noise, default: 0.0)
+        #[arg(long, default_value = "0.0")]
+        clip_black: f32,
+        /// Clip white threshold (restore foreground transparency, default: 1.0)
+        #[arg(long, default_value = "1.0")]
+        clip_white: f32,
+        /// Target composition name or index (default: active comp)
+        #[arg(short, long)]
+        comp: Option<String>,
+    },
+
+    /// Audio Track: volume automation, fade in/out envelopes, and pan
+    AudioTrack {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+        /// Target audio or video layer name or ID
+        #[arg(short, long)]
+        layer: String,
+        /// Master volume multiplier (1.0 = 0dB, 0.5 = -6dB, 0.0 = mute)
+        #[arg(long)]
+        volume: Option<f32>,
+        /// Fade-in envelope duration in frames
+        #[arg(long)]
+        fade_in: Option<u32>,
+        /// Fade-out envelope duration in frames
+        #[arg(long)]
+        fade_out: Option<u32>,
+        /// Target composition name or index (default: active comp)
+        #[arg(short, long)]
+        comp: Option<String>,
+    },
 }

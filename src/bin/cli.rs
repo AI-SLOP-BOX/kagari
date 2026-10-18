@@ -573,6 +573,80 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 comp.as_deref(),
             )?;
         }
+        Commands::Roto {
+            project,
+            layer,
+            points,
+            kind,
+            radius,
+            frame,
+            comp,
+        } => {
+            render::cmd_roto(
+                &project,
+                &layer,
+                &points,
+                &kind,
+                radius,
+                frame,
+                comp.as_deref(),
+            )?;
+        }
+        Commands::Puppet {
+            project,
+            layer,
+            name,
+            pos,
+            target,
+            frame,
+            comp,
+        } => {
+            render::cmd_puppet(
+                &project,
+                &layer,
+                &name,
+                pos.as_deref(),
+                target.as_deref(),
+                frame,
+                comp.as_deref(),
+            )?;
+        }
+        Commands::ChromaKey {
+            project,
+            layer,
+            color,
+            gain,
+            clip_black,
+            clip_white,
+            comp,
+        } => {
+            render::cmd_chroma_key(
+                &project,
+                &layer,
+                &color,
+                gain,
+                clip_black,
+                clip_white,
+                comp.as_deref(),
+            )?;
+        }
+        Commands::AudioTrack {
+            project,
+            layer,
+            volume,
+            fade_in,
+            fade_out,
+            comp,
+        } => {
+            render::cmd_audio_track(
+                &project,
+                &layer,
+                volume,
+                fade_in,
+                fade_out,
+                comp.as_deref(),
+            )?;
+        }
     }
 
     Ok(())
