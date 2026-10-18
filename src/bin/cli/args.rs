@@ -97,6 +97,33 @@ pub(super) enum Commands {
         /// Dynamic template overrides in LayerName=Value or LayerName.text=Value form; may be repeated
         #[arg(long = "override", value_parser = parse_string_override)]
         overrides: Vec<(String, String)>,
+
+        /// Dynamic expression injection in LayerName.property=expression form (e.g. "Logo.rotation=wiggle(3.0, 25.0)" or "Text.opacity=time*50"); may be repeated
+        #[arg(long = "expr", alias = "expression", value_parser = parse_string_override)]
+        expressions: Vec<(String, String)>,
+    },
+
+    /// Batch render all compositions in the project (AE Render Queue equivalent)
+    Queue {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+
+        /// Output root directory where subfolders or files for each comp are written
+        #[arg(short, long, default_value = "./output")]
+        output: String,
+
+        /// Output format: png, exr, mp4, gif
+        #[arg(short, long, default_value = "png", value_enum)]
+        format: OutputFormat,
+
+        /// Number of worker threads for parallel frame rendering (0 = auto CPU cores)
+        #[arg(short = 'j', long, default_value = "0")]
+        threads: usize,
+
+        /// Progress log format: standard or json
+        #[arg(long, default_value = "standard")]
+        log_format: String,
     },
 
     /// List available effects and their parameters

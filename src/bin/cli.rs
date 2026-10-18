@@ -52,6 +52,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             log_format,
             bindings,
             overrides,
+            expressions,
         } => {
             render::cmd_render(render::RenderArgs {
                 project_path: project,
@@ -73,6 +74,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 log_format,
                 bindings,
                 overrides,
+                expressions,
+            })?;
+        }
+        Commands::Queue {
+            project,
+            output,
+            format,
+            threads,
+            log_format,
+        } => {
+            render::cmd_queue(render::QueueArgs {
+                project_path: project,
+                output,
+                format,
+                threads,
+                log_format,
             })?;
         }
         Commands::Effects { json } => {

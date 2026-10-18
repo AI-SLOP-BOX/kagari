@@ -38,6 +38,7 @@ pub(super) struct RenderArgs {
     pub(super) log_format: String,
     pub(super) bindings: Vec<(String, f64)>,
     pub(super) overrides: Vec<(String, String)>,
+    pub(super) expressions: Vec<(String, String)>,
 }
 
 /// Parse AE / Nuke style frame spec like "1-10,15,20-50" into sorted unique u32 frames.
@@ -133,6 +134,68 @@ pub(super) fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Err
         }
         if !matched {
             eprintln!("Warning: Template override target '{}' not found in any composition", target);
+        }
+    }
+
+    // Apply dynamic expressions (e.g. Logo.rotation=wiggle(3.0, 25.0) or Camera.position=wiggle(2.0, 50.0))
+    for (target, expr_str) in &args.expressions {
+        let (layer_name, prop_name) = match target.split_once('.') {
+            Some((l, p)) => (l.trim(), p.trim().to_lowercase()),
+            None => (target.as_str(), "rotation".to_string()),
+        };
+        let expr = if let Some(w) = expr_str.strip_prefix("wiggle(").and_then(|s| s.strip_suffix(')')) {
+            let parts: Vec<f32> = w.split(',').filter_map(|s| s.trim().parse::<f32>().ok()).collect();
+            if parts.len() >= 2 {
+                kagari_vfx::core::timeline::Expression::Wiggle {
+                    frequency: parts[0],
+                    amplitude: parts[1],
+                }
+            } else {
+                kagari_vfx::core::timeline::Expression::Raw(expr_str.clone())
+            }
+        } else if expr_str.eq_ignore_ascii_case("loopout") || expr_str.eq_ignore_ascii_case("loopout()") {
+            kagari_vfx::core::timeline::Expression::LoopOut
+        } else if expr_str.eq_ignore_ascii_case("pingpong") || expr_str.eq_ignore_ascii_case("pingpong()") {
+            kagari_vfx::core::timeline::Expression::PingPong
+        } else {
+            kagari_vfx::core::timeline::Expression::Raw(expr_str.clone())
+        };
+
+        let mut matched = false;
+        for c in &mut project.compositions {
+            for layer in &mut c.layers {
+                if layer.name == layer_name || layer.id == layer_name {
+                    matched = true;
+                    match prop_name.as_str() {
+                        "rotation" | "rot" | "r" => {
+                            layer.transform.rotation_expression = Some(expr.clone());
+                            eprintln!("Injected expression: [{}].rotation = {:?}", layer.name, expr);
+                        }
+                        "position" | "pos" | "p" => {
+                            layer.transform.position_expression = Some(expr.clone());
+                            eprintln!("Injected expression: [{}].position = {:?}", layer.name, expr);
+                        }
+                        "scale" | "s" => {
+                            layer.transform.scale_expression = Some(expr.clone());
+                            eprintln!("Injected expression: [{}].scale = {:?}", layer.name, expr);
+                        }
+                        "opacity" | "alpha" | "o" => {
+                            layer.transform.opacity_expression = Some(expr.clone());
+                            eprintln!("Injected expression: [{}].opacity = {:?}", layer.name, expr);
+                        }
+                        "anchor" | "anchor_point" | "a" => {
+                            layer.transform.anchor_point_expression = Some(expr.clone());
+                            eprintln!("Injected expression: [{}].anchor_point = {:?}", layer.name, expr);
+                        }
+                        other => {
+                            eprintln!("Warning: Unsupported property '{}' for expression on layer '{}'", other, layer.name);
+                        }
+                    }
+                }
+            }
+        }
+        if !matched {
+            eprintln!("Warning: Expression target layer '{}' not found in any composition", layer_name);
         }
     }
 
@@ -603,4 +666,87 @@ fn render_to_gif(
         return Err(error.into());
     }
     worker_result.map_err(|error| error.into())
+}
+
+pub(super) struct QueueArgs {
+    pub(super) project_path: String,
+    pub(super) output: String,
+    pub(super) format: OutputFormat,
+    pub(super) threads: usize,
+    pub(super) log_format: String,
+}
+
+pub(super) fn cmd_queue(args: QueueArgs) -> Result<(), Box<dyn std::error::Error>> {
+    let project = load_project(&args.project_path)?;
+    let log_json = args.log_format.eq_ignore_ascii_case("json");
+
+    if args.threads > 0 {
+        let _ = rayon::ThreadPoolBuilder::new()
+            .num_threads(args.threads)
+            .build_global();
+    }
+
+    if !log_json {
+        eprintln!(
+            "Starting Batch Render Queue for project: {} ({} compositions)",
+            args.project_path,
+            project.compositions.len()
+        );
+    } else {
+        println!(
+            "{{\"event\":\"queue_start\",\"project\":\"{}\",\"total_compositions\":{}}}",
+            args.project_path,
+            project.compositions.len()
+        );
+    }
+
+    for (idx, comp) in project.compositions.iter().enumerate() {
+        let comp_out = match args.format {
+            OutputFormat::Mp4 => format!("{}/{}.mp4", args.output, comp.name),
+            OutputFormat::Gif => format!("{}/{}.gif", args.output, comp.name),
+            OutputFormat::Png | OutputFormat::Exr => format!("{}/{}", args.output, comp.name),
+        };
+
+        if !log_json {
+            eprintln!("\n[{}/{}] Rendering: {}", idx + 1, project.compositions.len(), comp.name);
+        } else {
+            println!(
+                "{{\"event\":\"queue_comp_start\",\"index\":{},\"name\":\"{}\",\"output\":\"{}\"}}",
+                idx + 1,
+                comp.name,
+                comp_out
+            );
+        }
+
+        cmd_render(RenderArgs {
+            project_path: args.project_path.clone(),
+            comp_ref: Some(comp.name.clone()),
+            output: comp_out,
+            format: args.format,
+            frames: None,
+            from: 0,
+            to: None,
+            width: None,
+            height: None,
+            exposure: 0.0,
+            lut: 0,
+            color_space: None,
+            step: 1,
+            threads: args.threads,
+            skip_existing: false,
+            mfr: true,
+            log_format: args.log_format.clone(),
+            bindings: Vec::new(),
+            overrides: Vec::new(),
+            expressions: Vec::new(),
+        })?;
+    }
+
+    if !log_json {
+        eprintln!("\nAll queue compositions completed successfully!");
+    } else {
+        println!("{{\"event\":\"queue_completed\"}}");
+    }
+
+    Ok(())
 }
