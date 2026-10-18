@@ -386,6 +386,10 @@ pub struct KagariApp {
     pub home_dir: std::path::PathBuf,
     pub home_selected: Option<std::path::PathBuf>,
     pub home_search: String,
+    /// Cached recent project summaries loaded asynchronously in the background.
+    pub home_recent_projects: Vec<crate::ui::home_screen::RecentProject>,
+    /// Receiver for background scan of recent projects.
+    pub home_recent_rx: Option<std::sync::mpsc::Receiver<Vec<crate::ui::home_screen::RecentProject>>>,
     /// Cached starred project keys; refreshed only at startup and after a toggle.
     pub home_starred_projects: Vec<String>,
     /// Cached home-screen textures: banner art, file thumbnails, preview.

@@ -180,6 +180,8 @@ impl Default for KagariApp {
                 .unwrap_or_else(|_| std::env::temp_dir()),
             home_selected: None,
             home_search: String::new(),
+            home_recent_projects: Vec::new(),
+            home_recent_rx: None,
             home_starred_projects: crate::ui::project_io::starred_projects(),
             home_banner: None,
             home_thumbs: std::collections::HashMap::new(),

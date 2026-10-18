@@ -1,3 +1,4 @@
+use crate::KagariApp;
 use eframe::egui;
 
 pub(super) fn fmt_age(modified: std::time::SystemTime) -> String {
@@ -39,12 +40,12 @@ pub(super) fn is_image_ext(path: &std::path::Path) -> bool {
     )
 }
 
-#[derive(Clone)]
-pub(super) struct ProjectSummary {
-    pub(super) comp_names: Vec<String>,
-    pub(super) active_idx: usize,
-    pub(super) layers: usize,
-    pub(super) preview_path: Option<String>,
+#[derive(Clone, Debug, Default)]
+pub struct ProjectSummary {
+    pub comp_names: Vec<String>,
+    pub active_idx: usize,
+    pub layers: usize,
+    pub preview_path: Option<String>,
 }
 
 pub(super) fn read_project_json(path: &std::path::Path) -> Option<serde_json::Value> {
@@ -118,31 +119,28 @@ pub(super) fn summarize_value(v: &serde_json::Value) -> Option<ProjectSummary> {
     })
 }
 
-#[derive(Clone)]
-pub(super) struct RecentProject {
-    pub(super) path: std::path::PathBuf,
-    pub(super) name: String,
-    pub(super) modified: Option<std::time::SystemTime>,
-    pub(super) summary: Option<ProjectSummary>,
+#[derive(Clone, Debug)]
+pub struct RecentProject {
+    pub path: std::path::PathBuf,
+    pub name: String,
+    pub modified: Option<std::time::SystemTime>,
+    pub summary: Option<ProjectSummary>,
 }
 
-/// Cached per (path, mtime) so the JSON parse does not repeat every frame.
-pub(super) fn recent_project_entries(ctx: &egui::Context) -> Vec<RecentProject> {
-    project_entries_for_paths(ctx, &crate::ui::project_io::recent_projects(), true)
+/// Query recent project entries. Uses app cached list if available.
+pub(crate) fn recent_project_entries(app: &KagariApp, _ctx: &egui::Context) -> Vec<RecentProject> {
+    if !app.home_recent_projects.is_empty() {
+        return app.home_recent_projects.clone();
+    }
+    // Fallback if background scan has not populated yet
+    scan_recent_projects_sync(&crate::ui::project_io::recent_projects(), true)
 }
 
-pub(super) fn project_entries_for_paths(
-    ctx: &egui::Context,
+/// Synchronous scan for background worker thread or fallback.
+pub fn scan_recent_projects_sync(
     paths: &[String],
     sort_by_modified: bool,
 ) -> Vec<RecentProject> {
-    let cache_id = egui::Id::new("home_proj_cache");
-    type ProjCache = std::collections::HashMap<
-        std::path::PathBuf,
-        (Option<std::time::SystemTime>, Option<ProjectSummary>),
-    >;
-    let mut cache: ProjCache =
-        ctx.data_mut(|d| d.get_temp_mut_or_default::<ProjCache>(cache_id).clone());
     let mut out = Vec::new();
     for path_str in paths {
         let path = crate::ui::project_io::path_from_key(path_str);
@@ -154,14 +152,7 @@ pub(super) fn project_entries_for_paths(
             .ok()
             .and_then(|m| m.modified().ok());
         let summary = if path.is_file() {
-            match cache.get(&path) {
-                Some((cached_mtime, cached)) if cached_mtime == &modified => cached.clone(),
-                _ => {
-                    let parsed = read_project_json(&path).and_then(|v| summarize_value(&v));
-                    cache.insert(path.clone(), (modified, parsed.clone()));
-                    parsed
-                }
-            }
+            read_project_json(&path).and_then(|v| summarize_value(&v))
         } else {
             None
         };
@@ -173,7 +164,6 @@ pub(super) fn project_entries_for_paths(
         });
     }
     if sort_by_modified {
-        // Existing files first (newest first), missing files trail.
         out.sort_by(|a, b| match (&a.modified, &b.modified) {
             (Some(x), Some(y)) => y.cmp(x),
             (Some(_), None) => std::cmp::Ordering::Less,
@@ -181,6 +171,33 @@ pub(super) fn project_entries_for_paths(
             (None, None) => std::cmp::Ordering::Equal,
         });
     }
-    ctx.data_mut(|d| d.insert_temp(cache_id, cache));
     out
+}
+
+/// Spawns an asynchronous background thread to read and summarize recent projects,
+/// avoiding UI thread blocking during frame rendering.
+pub fn trigger_recent_projects_scan(app: &mut KagariApp) {
+    let paths = crate::ui::project_io::recent_projects();
+    let (tx, rx) = std::sync::mpsc::channel();
+    app.home_recent_rx = Some(rx);
+    std::thread::spawn(move || {
+        let results = scan_recent_projects_sync(&paths, true);
+        let _ = tx.send(results);
+    });
+}
+
+/// Polls for completed background recent projects scan.
+pub fn poll_recent_projects(app: &mut KagariApp, ctx: &egui::Context) {
+    if let Some(rx) = app.home_recent_rx.take() {
+        match rx.try_recv() {
+            Ok(results) => {
+                app.home_recent_projects = results;
+                ctx.request_repaint();
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => {
+                app.home_recent_rx = Some(rx);
+            }
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {}
+        }
+    }
 }

@@ -119,7 +119,7 @@ pub(in crate::ui::home_screen) fn draw_reference_continue_details(
     });
     ui.add_space(if compact { 4.0 } else { 13.0 });
     if reference_cta_button(ui, "Resume Composition", compact).clicked() {
-        if let Some(top) = recent_project_entries(ctx)
+        if let Some(top) = recent_project_entries(app, ctx)
             .into_iter()
             .find(|e| e.path.is_file())
         {

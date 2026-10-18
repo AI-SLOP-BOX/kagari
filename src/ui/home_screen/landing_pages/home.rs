@@ -23,7 +23,7 @@ pub(in crate::ui::home_screen) fn draw_landing_home(
     let content_inset = ((width - inner_width) * 0.5).max(margin);
     let density = scale * responsive_scale * (inner_width / max_content_width).clamp(0.68, 1.0);
     let vertical = scale * (height / (993.0 * scale)).clamp(0.68, 1.3);
-    let projects = recent_project_entries(ctx);
+    let projects = recent_project_entries(app, ctx);
     let visible_project_count = projects.len().min(4);
     let card_gap = LANDING_CARD_GAP * density;
     let minimum_card_width = 274.0 * density;

@@ -21,6 +21,9 @@ use render_queue::*;
 use studio_entry::{
     enter_studio_new_project, enter_studio_open_dialog, new_composition, open_project_path,
 };
+pub use project_data::{
+    poll_recent_projects, trigger_recent_projects_scan, ProjectSummary, RecentProject,
+};
 pub(crate) use studio_entry::{
     import_footage_dialog, new_project_from_header, open_project_dialog,
 };

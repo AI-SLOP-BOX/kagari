@@ -78,6 +78,7 @@ fn main() -> eframe::Result<()> {
             }
 
             kagari_vfx::ui::preferences_dialog::apply_loaded(&mut app);
+            kagari_vfx::ui::home_screen::trigger_recent_projects_scan(&mut app);
             kagari_vfx::ui::theme::configure_ae_theme(&cc.egui_ctx);
             kagari_vfx::ui::icons::init_image_loaders(&cc.egui_ctx);
             kagari_vfx::core::font_rasterizer::init_font_rasterizer();

@@ -373,7 +373,7 @@ pub(in crate::ui::home_screen) fn draw_reference_project_browser_page(
             );
             ui.add_space(if compact { 12.0 } else { 22.0 });
             let query = app.home_search.trim().to_ascii_lowercase();
-            let projects = recent_project_entries(ctx)
+            let projects = recent_project_entries(app, ctx)
                 .into_iter()
                 .filter(|project| {
                     query.is_empty() || project.name.to_ascii_lowercase().contains(&query)

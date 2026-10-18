@@ -57,6 +57,7 @@ impl eframe::App for KagariApp {
         }
         crate::ui::project_io::poll_pending_project_load(self, ctx);
         crate::ui::project_io::poll_color_lut_restore(self, ctx);
+        crate::ui::home_screen::poll_recent_projects(self, ctx);
         // Re-assert the dark AE theme every frame (cheap, and guards against
         // eframe's system-theme following resetting visuals)
         crate::ui::theme::configure_ae_theme(ctx);

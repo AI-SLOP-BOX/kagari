@@ -15,7 +15,7 @@ pub(in crate::ui::home_screen) fn draw_reference_project_row(
         });
     });
     ui.add_space(if compact { 7.0 } else { 10.0 });
-    let projects = recent_project_entries(ctx);
+    let projects = recent_project_entries(app, ctx);
     if projects.is_empty() {
         let empty_height = if compact { 154.0 } else { 228.0 };
         let empty = fixed_card_with_inset(
