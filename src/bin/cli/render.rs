@@ -2310,6 +2310,108 @@ pub(super) fn cmd_cinematic(
     Ok(())
 }
 
+/// Parse SRT or LRC timed lyrics into (start_frame, end_frame, text) segments.
+fn parse_timed_lyrics(content: &str, fps: f32, max_frames: u32) -> Vec<(u32, u32, String)> {
+    let mut cues = Vec::new();
+
+    // Check if LRC format: [mm:ss.xx]Text
+    let mut lrc_lines = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') {
+            if let Some(bracket_end) = trimmed.find(']') {
+                let tag = &trimmed[1..bracket_end];
+                let text = trimmed[bracket_end + 1..].trim();
+                if let Some((min_str, sec_str)) = tag.split_once(':') {
+                    if let (Ok(min), Ok(sec)) = (min_str.parse::<f32>(), sec_str.parse::<f32>()) {
+                        let time_sec = min * 60.0 + sec;
+                        let frame = (time_sec * fps).round() as u32;
+                        if !text.is_empty() {
+                            lrc_lines.push((frame, text.to_string()));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if !lrc_lines.is_empty() {
+        lrc_lines.sort_by_key(|&(f, _)| f);
+        for i in 0..lrc_lines.len() {
+            let start = lrc_lines[i].0;
+            let end = if i + 1 < lrc_lines.len() {
+                lrc_lines[i + 1].0.saturating_sub(1).max(start + 1)
+            } else {
+                (start + (fps * 4.0) as u32).min(max_frames)
+            };
+            cues.push((start.min(max_frames), end.min(max_frames), lrc_lines[i].1.clone()));
+        }
+        return cues;
+    }
+
+    // Check if SRT format:
+    // 1
+    // 00:00:01,000 --> 00:00:04,000
+    // Lyric text
+    let parse_srt_time = |t_str: &str| -> Option<f32> {
+        let parts: Vec<&str> = t_str.trim().split(':').collect();
+        if parts.len() == 3 {
+            let hr: f32 = parts[0].parse().ok()?;
+            let min: f32 = parts[1].parse().ok()?;
+            let sec_comma = parts[2].replace(',', ".");
+            let sec: f32 = sec_comma.parse().ok()?;
+            Some(hr * 3600.0 + min * 60.0 + sec)
+        } else {
+            None
+        }
+    };
+
+    let mut current_start: Option<f32> = None;
+    let mut current_end: Option<f32> = None;
+    let mut current_text = Vec::new();
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            if let (Some(s), Some(e)) = (current_start, current_end) {
+                let text = current_text.join(" ");
+                if !text.is_empty() {
+                    cues.push((
+                        (s * fps).round() as u32,
+                        (e * fps).round() as u32,
+                        text,
+                    ));
+                }
+            }
+            current_start = None;
+            current_end = None;
+            current_text.clear();
+        } else if trimmed.contains("-->") {
+            let mut parts = trimmed.split("-->");
+            if let (Some(s_str), Some(e_str)) = (parts.next(), parts.next()) {
+                current_start = parse_srt_time(s_str);
+                current_end = parse_srt_time(e_str);
+            }
+        } else if trimmed.parse::<u32>().is_ok() && current_start.is_none() {
+            // Index number, ignore
+        } else if current_start.is_some() {
+            current_text.push(trimmed.to_string());
+        }
+    }
+    if let (Some(s), Some(e)) = (current_start, current_end) {
+        let text = current_text.join(" ");
+        if !text.is_empty() {
+            cues.push((
+                (s * fps).round() as u32,
+                (e * fps).round() as u32,
+                text,
+            ));
+        }
+    }
+
+    cues
+}
+
 pub(super) fn cmd_mv(
     audio_path: &str,
     lyrics_opt: Option<&str>,
@@ -2337,30 +2439,39 @@ pub(super) fn cmd_mv(
 
     eprintln!("  Analyzed Audio: Found {} transient beat drops across {} frames", detected_beats.len(), max_frames);
 
-    // 2. Parse Lyrics/Text phrases
-    let mut phrases: Vec<String> = Vec::new();
+    // 2. Parse Lyrics / Timed Subtitles
+    let mut timed_cues: Vec<(u32, u32, String)> = Vec::new();
+    let mut raw_phrases: Vec<String> = Vec::new();
+
     if let Some(f_path) = lyrics_file_opt {
         if let Ok(content) = std::fs::read_to_string(f_path) {
-            for line in content.lines() {
-                let trimmed = line.trim();
-                if !trimmed.is_empty() {
-                    phrases.push(trimmed.to_string());
+            let is_timed = f_path.ends_with(".srt") || f_path.ends_with(".lrc") || content.contains("-->") || content.contains("[0");
+            if is_timed {
+                timed_cues = parse_timed_lyrics(&content, fps as f32, max_frames);
+                eprintln!("  Parsed Timed Lyrics (SRT/LRC): {} synchronized cue points", timed_cues.len());
+            }
+            if timed_cues.is_empty() {
+                for line in content.lines() {
+                    let trimmed = line.trim();
+                    if !trimmed.is_empty() {
+                        raw_phrases.push(trimmed.to_string());
+                    }
                 }
             }
         }
     }
-    if phrases.is_empty() {
+    if timed_cues.is_empty() && raw_phrases.is_empty() {
         if let Some(l_str) = lyrics_opt {
             for chunk in l_str.split(&['/', ';', '\n'][..]) {
                 let trimmed = chunk.trim();
                 if !trimmed.is_empty() {
-                    phrases.push(trimmed.to_string());
+                    raw_phrases.push(trimmed.to_string());
                 }
             }
         }
     }
-    if phrases.is_empty() {
-        phrases = vec![
+    if timed_cues.is_empty() && raw_phrases.is_empty() {
+        raw_phrases = vec![
             "YOU ARE ABSOLUTELY RIGHT".to_string(),
             "HALLUCINATING THROUGH THE NOISE".to_string(),
             "LOOKS GOOD TO ME (LGTM)".to_string(),
@@ -2389,7 +2500,7 @@ pub(super) fn cmd_mv(
         _ => ([0.02, 0.01, 0.03, 1.0], [0.0, 0.95, 1.0, 1.0], [1.0, 0.05, 0.6, 1.0], "Outfit"), // Cyberpunk Neon
     };
 
-    // Layer 1: Dark Backdrop
+    // Layer 1: Dark Backdrop with Beat-Synced Camera Shake and Bass Kick
     let mut bg_layer = kagari_vfx::core::timeline::Layer::new(
         "mv_bg".to_string(),
         "Deep Background".to_string(),
@@ -2397,6 +2508,67 @@ pub(super) fn cmd_mv(
         total_frames,
     );
     bg_layer.locked = true;
+
+    // Apply Beat-Synced Bass Kick Pulse & Camera Shake to Background
+    if !detected_beats.is_empty() {
+        let center_x = width as f32 / 2.0;
+        let center_y = height as f32 / 2.0;
+        let mut pos_keys = Vec::new();
+        let mut scale_keys = Vec::new();
+
+        // Baseline key at frame 0
+        pos_keys.push(kagari_vfx::core::keyframe::Keyframe::new(
+            0,
+            [center_x, center_y],
+            kagari_vfx::core::keyframe::InterpolationType::Linear,
+        ));
+        scale_keys.push(kagari_vfx::core::keyframe::Keyframe::new(
+            0,
+            [1.0, 1.0],
+            kagari_vfx::core::keyframe::InterpolationType::Linear,
+        ));
+
+        for &beat_f in &detected_beats {
+            if beat_f >= total_frames {
+                continue;
+            }
+            let time_sec = beat_f as f32 / fps as f32;
+            let shake = kagari_vfx::core::ae_effects_pack::camera_shake(time_sec, 18.0, 12.0, 42);
+
+            // Impact pop
+            pos_keys.push(kagari_vfx::core::keyframe::Keyframe::new(
+                beat_f,
+                [center_x + shake[0], center_y + shake[1]],
+                kagari_vfx::core::keyframe::InterpolationType::Linear,
+            ));
+            scale_keys.push(kagari_vfx::core::keyframe::Keyframe::new(
+                beat_f,
+                [1.04, 1.04],
+                kagari_vfx::core::keyframe::InterpolationType::Linear,
+            ));
+
+            // Settle after 3-5 frames
+            let settle_f = (beat_f + 4).min(total_frames.saturating_sub(1));
+            pos_keys.push(kagari_vfx::core::keyframe::Keyframe::new(
+                settle_f,
+                [center_x, center_y],
+                kagari_vfx::core::keyframe::InterpolationType::Linear,
+            ));
+            scale_keys.push(kagari_vfx::core::keyframe::Keyframe::new(
+                settle_f,
+                [1.0, 1.0],
+                kagari_vfx::core::keyframe::InterpolationType::Linear,
+            ));
+        }
+
+        pos_keys.sort_by_key(|k| k.frame);
+        pos_keys.dedup_by_key(|k| k.frame);
+        scale_keys.sort_by_key(|k| k.frame);
+        scale_keys.dedup_by_key(|k| k.frame);
+
+        bg_layer.transform.position = kagari_vfx::core::property::Animatable::Animated(pos_keys);
+        bg_layer.transform.scale = kagari_vfx::core::property::Animatable::Animated(scale_keys);
+    }
     comp.layers.push(bg_layer);
 
     // Layer 2: Audio Track Layer
@@ -2458,13 +2630,29 @@ pub(super) fn cmd_mv(
     comp.layers.push(particle_layer);
 
     // Layer 5+: Kinetic Beat-Synchronized Typography Layers
-    let phrase_count = phrases.len().max(1);
-    let frames_per_phrase = (total_frames / phrase_count as u32).max(fps);
+    let phrases_data: Vec<(u32, u32, String)> = if !timed_cues.is_empty() {
+        timed_cues
+    } else {
+        let phrase_count = raw_phrases.len().max(1);
+        let frames_per_phrase = (total_frames / phrase_count as u32).max(fps);
+        raw_phrases
+            .into_iter()
+            .enumerate()
+            .map(|(i, phrase)| {
+                let p_start = (i as u32 * frames_per_phrase).min(total_frames.saturating_sub(1));
+                let p_end = (p_start + frames_per_phrase).min(total_frames);
+                (p_start, p_end, phrase)
+            })
+            .collect()
+    };
 
-    for (i, phrase) in phrases.iter().enumerate() {
-        let p_start = (i as u32 * frames_per_phrase).min(total_frames.saturating_sub(1));
-        let p_end = (p_start + frames_per_phrase).min(total_frames);
+    let mut phrase_starts = Vec::new();
+
+    for (i, (p_start, p_end, phrase)) in phrases_data.iter().enumerate() {
+        let p_start = *p_start;
+        let p_end = *p_end;
         let p_dur = p_end.saturating_sub(p_start).max(1);
+        phrase_starts.push(p_start);
 
         let mut text_layer = kagari_vfx::core::timeline::Layer::new(
             format!("kinetic_text_{}", i + 1),
@@ -2541,7 +2729,7 @@ pub(super) fn cmd_mv(
         comp.layers.push(text_layer);
     }
 
-    // Top Master Layer: 35mm Cinema Finish & Glitch
+    // Top Master Layer: 35mm Cinema Finish & Audio Glitch / RGB Split Transitions
     let mut finish_adj = kagari_vfx::core::timeline::Layer::new(
         "mv_finishing".to_string(),
         "35mm Cinema & Lens Finishing".to_string(),
@@ -2559,12 +2747,40 @@ pub(super) fn cmd_mv(
         },
         enabled: true,
     });
+
+    // Dynamic Chromatic Aberration Spike / Glitch at every phrase boundary
+    let mut chroma_r_keys = Vec::new();
+    let mut chroma_b_keys = Vec::new();
+    chroma_r_keys.push(kagari_vfx::core::keyframe::Keyframe::new(0, 2.5, kagari_vfx::core::keyframe::InterpolationType::Linear));
+    chroma_b_keys.push(kagari_vfx::core::keyframe::Keyframe::new(0, -2.5, kagari_vfx::core::keyframe::InterpolationType::Linear));
+
+    for &start_f in &phrase_starts {
+        if start_f == 0 {
+            continue;
+        }
+        let pre_f = start_f.saturating_sub(1);
+        let spike_f = start_f;
+        let post_f = (start_f + 5).min(total_frames.saturating_sub(1));
+
+        chroma_r_keys.push(kagari_vfx::core::keyframe::Keyframe::new(pre_f, 2.5, kagari_vfx::core::keyframe::InterpolationType::Linear));
+        chroma_r_keys.push(kagari_vfx::core::keyframe::Keyframe::new(spike_f, 18.0, kagari_vfx::core::keyframe::InterpolationType::Linear)); // Glitch burst
+        chroma_r_keys.push(kagari_vfx::core::keyframe::Keyframe::new(post_f, 2.5, kagari_vfx::core::keyframe::InterpolationType::Linear));
+
+        chroma_b_keys.push(kagari_vfx::core::keyframe::Keyframe::new(pre_f, -2.5, kagari_vfx::core::keyframe::InterpolationType::Linear));
+        chroma_b_keys.push(kagari_vfx::core::keyframe::Keyframe::new(spike_f, -18.0, kagari_vfx::core::keyframe::InterpolationType::Linear));
+        chroma_b_keys.push(kagari_vfx::core::keyframe::Keyframe::new(post_f, -2.5, kagari_vfx::core::keyframe::InterpolationType::Linear));
+    }
+    chroma_r_keys.sort_by_key(|k| k.frame);
+    chroma_r_keys.dedup_by_key(|k| k.frame);
+    chroma_b_keys.sort_by_key(|k| k.frame);
+    chroma_b_keys.dedup_by_key(|k| k.frame);
+
     finish_adj.effects.push(kagari_vfx::core::timeline::Effect {
         id: "mv_chroma".to_string(),
-        name: "RGB Fringe".to_string(),
+        name: "RGB Fringe & Glitch".to_string(),
         effect_type: kagari_vfx::core::timeline::EffectType::ChromaticAberration {
-            shift_r: kagari_vfx::core::property::Animatable::new_constant(2.8),
-            shift_b: kagari_vfx::core::property::Animatable::new_constant(-2.8),
+            shift_r: kagari_vfx::core::property::Animatable::Animated(chroma_r_keys),
+            shift_b: kagari_vfx::core::property::Animatable::Animated(chroma_b_keys),
             edge_falloff: kagari_vfx::core::property::Animatable::new_constant(1.0),
             iris_linked: true,
         },
