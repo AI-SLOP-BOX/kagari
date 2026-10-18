@@ -36,7 +36,19 @@ pub(in crate::ui::home_screen) fn draw_reference_continue_preview(
     ui: &mut egui::Ui,
     height: f32,
 ) {
-    if let Some(id) = reference_texture(app, ctx, "continue_working_preview.webp") {
+    let top_project = recent_project_entries(app, ctx)
+        .into_iter()
+        .find(|e| e.path.is_file());
+
+    let texture = top_project
+        .as_ref()
+        .and_then(|proj| proj.summary.as_ref())
+        .and_then(|s| s.preview_path.as_deref())
+        .map(std::path::PathBuf::from)
+        .and_then(|path| thumb_for(app, ctx, &path))
+        .or_else(|| reference_texture(app, ctx, "continue_working_preview.webp"));
+
+    if let Some(id) = texture {
         let image_width = ui.available_width().max(1.0);
         egui::Frame::none()
             .stroke(egui::Stroke::new(
@@ -56,8 +68,42 @@ pub(in crate::ui::home_screen) fn draw_reference_continue_details(
     ui: &mut egui::Ui,
     compact: bool,
 ) {
+    let top_project = recent_project_entries(app, ctx)
+        .into_iter()
+        .find(|e| e.path.is_file());
+
+    let (title, comp_name, res_text, frame_text, age_text) = if let Some(ref proj) = top_project {
+        let name = proj.name.as_str();
+        let comp = proj
+            .summary
+            .as_ref()
+            .and_then(|s| s.comp_names.get(s.active_idx))
+            .map(String::as_str)
+            .unwrap_or("Main Comp");
+        let res = proj
+            .summary
+            .as_ref()
+            .map(|s| format!("{} × {}", s.width, s.height))
+            .unwrap_or_else(|| "1920 × 1080".to_string());
+        let frames = proj
+            .summary
+            .as_ref()
+            .map(|s| format!("0 – {} ({} fps)", s.total_frames, s.fps))
+            .unwrap_or_else(|| "0 – 300 (30 fps)".to_string());
+        let age = proj.modified.map(fmt_age).unwrap_or_else(|| "Recently".to_string());
+        (name.to_string(), comp.to_string(), res, frames, age)
+    } else {
+        (
+            "No Recent Project".to_string(),
+            "—".to_string(),
+            "—".to_string(),
+            "—".to_string(),
+            "—".to_string(),
+        )
+    };
+
     ui.label(
-        egui::RichText::new("Eclipse")
+        egui::RichText::new(title)
             .size(if compact { 18.0 } else { 20.0 })
             .strong(),
     );
@@ -71,7 +117,7 @@ pub(in crate::ui::home_screen) fn draw_reference_continue_details(
             crate::ui::theme::colors::TEXT_SECONDARY_BRIGHT,
         );
         ui.label(
-            egui::RichText::new("SH_0140 / portal_final_v18")
+            egui::RichText::new(comp_name)
                 .size(if compact { 11.0 } else { 14.0 })
                 .color(colors::TEXT_SECONDARY),
         );
@@ -85,7 +131,7 @@ pub(in crate::ui::home_screen) fn draw_reference_continue_details(
             crate::ui::theme::colors::TEXT_SECONDARY_BRIGHT,
         );
         ui.label(
-            egui::RichText::new("3840 × 2160")
+            egui::RichText::new(res_text)
                 .size(if compact { 11.0 } else { 14.0 })
                 .color(colors::TEXT_SECONDARY),
         );
@@ -98,7 +144,7 @@ pub(in crate::ui::home_screen) fn draw_reference_continue_details(
             crate::ui::theme::colors::TEXT_SECONDARY_BRIGHT,
         );
         ui.label(
-            egui::RichText::new("1001 – 1148")
+            egui::RichText::new(frame_text)
                 .size(if compact { 11.0 } else { 14.0 })
                 .color(colors::TEXT_SECONDARY),
         );
@@ -112,7 +158,7 @@ pub(in crate::ui::home_screen) fn draw_reference_continue_details(
             crate::ui::theme::colors::TEXT_SECONDARY_BRIGHT,
         );
         ui.label(
-            egui::RichText::new("Edited 18 minutes ago")
+            egui::RichText::new(age_text)
                 .size(if compact { 11.0 } else { 14.0 })
                 .color(colors::TEXT_SECONDARY),
         );

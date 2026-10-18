@@ -46,6 +46,10 @@ pub struct ProjectSummary {
     pub active_idx: usize,
     pub layers: usize,
     pub preview_path: Option<String>,
+    pub width: u32,
+    pub height: u32,
+    pub total_frames: u32,
+    pub fps: u32,
 }
 
 pub(super) fn read_project_json(path: &std::path::Path) -> Option<serde_json::Value> {
@@ -73,8 +77,25 @@ pub(super) fn summarize_value(v: &serde_json::Value) -> Option<ProjectSummary> {
         .get("active_composition_idx")
         .and_then(|i| i.as_u64())
         .unwrap_or(0) as usize;
-    let preview_path = comps
-        .get(active_idx)
+    let active_comp = comps.get(active_idx);
+    let width = active_comp
+        .and_then(|c| c.get("width"))
+        .and_then(|w| w.as_u64())
+        .unwrap_or(1920) as u32;
+    let height = active_comp
+        .and_then(|c| c.get("height"))
+        .and_then(|h| h.as_u64())
+        .unwrap_or(1080) as u32;
+    let total_frames = active_comp
+        .and_then(|c| c.get("total_frames"))
+        .and_then(|f| f.as_u64())
+        .unwrap_or(300) as u32;
+    let fps = active_comp
+        .and_then(|c| c.get("fps"))
+        .and_then(|f| f.as_u64())
+        .unwrap_or(30) as u32;
+
+    let preview_path = active_comp
         .and_then(|comp| comp.get("layers"))
         .and_then(serde_json::Value::as_array)
         .into_iter()
@@ -116,6 +137,10 @@ pub(super) fn summarize_value(v: &serde_json::Value) -> Option<ProjectSummary> {
         active_idx,
         layers,
         preview_path,
+        width,
+        height,
+        total_frames,
+        fps,
     })
 }
 
