@@ -362,25 +362,24 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
                                     * plot_rect.height(),
                         )
                     };
-                    let sampled: Vec<_> = (0..=64)
-                        .filter_map(|sample| {
-                            let normalized = sample as f32 / 64.0;
-                            let time = min_time + normalized * (max_time - min_time);
-                            let rational_time = crate::core::unified_time::Time::new(
-                                (time * 1_000_000.0).round() as i64,
-                                1_000_000,
-                            );
-                            binding
-                                .curve
-                                .sample(rational_time)
-                                .map(|value| to_screen(time, value as f32))
-                        })
-                        .collect();
-                    for segment in sampled.windows(2) {
-                        painter.line_segment(
-                            [segment[0], segment[1]],
-                            egui::Stroke::new(2.0_f32, colors::ACCENT_BLUE),
+                    let stroke = egui::Stroke::new(2.0_f32, colors::ACCENT_BLUE);
+                    let mut prev_pt: Option<egui::Pos2> = None;
+                    for sample in 0..=64 {
+                        let normalized = sample as f32 / 64.0;
+                        let time = min_time + normalized * (max_time - min_time);
+                        let rational_time = crate::core::unified_time::Time::new(
+                            (time * 1_000_000.0).round() as i64,
+                            1_000_000,
                         );
+                        if let Some(value) = binding.curve.sample(rational_time) {
+                            let pt = to_screen(time, value as f32);
+                            if let Some(prev) = prev_pt {
+                                painter.line_segment([prev, pt], stroke);
+                            }
+                            prev_pt = Some(pt);
+                        } else {
+                            prev_pt = None;
+                        }
                     }
                     let key_points: Vec<_> = binding
                         .curve

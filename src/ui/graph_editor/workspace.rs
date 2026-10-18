@@ -386,24 +386,24 @@ pub fn draw_automation_curve(
                 - ((value - min_value) / (max_value - min_value)).clamp(0.0, 1.0) * rect.height(),
         )
     };
-    let points: Vec<_> = (0..=64)
-        .filter_map(|index| {
-            let ratio = index as f32 / 64.0;
-            let time = min_time + ratio * (max_time - min_time);
-            let sample_time = crate::core::unified_time::Time::new(
-                (time * 1_000_000.0).round() as i64,
-                1_000_000,
-            );
-            curve
-                .sample(sample_time)
-                .map(|value| to_screen(time, value as f32))
-        })
-        .collect();
-    for segment in points.windows(2) {
-        painter.line_segment(
-            [segment[0], segment[1]],
-            egui::Stroke::new(2.0_f32, crate::ui::theme::colors::ACCENT_CYAN),
+    let stroke = egui::Stroke::new(2.0_f32, crate::ui::theme::colors::ACCENT_CYAN);
+    let mut prev_pt: Option<egui::Pos2> = None;
+    for index in 0..=64 {
+        let ratio = index as f32 / 64.0;
+        let time = min_time + ratio * (max_time - min_time);
+        let sample_time = crate::core::unified_time::Time::new(
+            (time * 1_000_000.0).round() as i64,
+            1_000_000,
         );
+        if let Some(value) = curve.sample(sample_time) {
+            let pt = to_screen(time, value as f32);
+            if let Some(prev) = prev_pt {
+                painter.line_segment([prev, pt], stroke);
+            }
+            prev_pt = Some(pt);
+        } else {
+            prev_pt = None;
+        }
     }
     for point in &curve.points {
         let time = point.time.numerator as f32 / point.time.denominator as f32;

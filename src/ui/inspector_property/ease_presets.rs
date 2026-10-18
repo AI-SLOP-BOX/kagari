@@ -127,8 +127,9 @@ pub fn draw_easy_ease_button<T: Clone>(
                         rect.bottom() - 2.0 - pts[3] * (rect.height() - 4.0),
                     );
 
-                    let mut curve_pts = Vec::with_capacity(11);
-                    for step in 0..=10 {
+                    let mut prev_pt = p0;
+                    let stroke = egui::Stroke::new(1.5_f32, colors::ACCENT_CYAN);
+                    for step in 1..=10 {
                         let t = step as f32 / 10.0;
                         let inv_t = 1.0 - t;
                         let x = inv_t.powi(3) * p0.x
@@ -139,13 +140,9 @@ pub fn draw_easy_ease_button<T: Clone>(
                             + 3.0 * inv_t.powi(2) * t * p1.y
                             + 3.0 * inv_t * t.powi(2) * p2.y
                             + t.powi(3) * p3.y;
-                        curve_pts.push(egui::pos2(x, y));
-                    }
-                    for window in curve_pts.windows(2) {
-                        ui.painter().line_segment(
-                            [window[0], window[1]],
-                            egui::Stroke::new(1.5_f32, colors::ACCENT_CYAN),
-                        );
+                        let pt = egui::pos2(x, y);
+                        ui.painter().line_segment([prev_pt, pt], stroke);
+                        prev_pt = pt;
                     }
 
                     if kui::menu_item(ui, label).on_hover_text(desc).clicked() {
