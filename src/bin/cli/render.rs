@@ -1,3 +1,4 @@
+use super::edit::find_comp_mut;
 use super::frame::write_png;
 use super::*;
 
@@ -30,6 +31,7 @@ pub(super) struct RenderArgs {
     pub(super) height: Option<u32>,
     pub(super) exposure: f32,
     pub(super) lut: u32,
+    pub(super) lut_file: Option<String>,
     pub(super) color_space: Option<String>,
     pub(super) step: u32,
     pub(super) threads: usize,
@@ -344,8 +346,17 @@ pub(super) fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Err
         )
         .into());
     }
-    if !args.exposure.is_finite() || args.lut > 2 {
-        return Err("Exposure must be finite and LUT mode must be 0, 1, or 2".into());
+    let mut lut_mode = args.lut;
+    if let Some(lut_path) = &args.lut_file {
+        let lut = kagari_vfx::core::ocio_color::Lut3D::load_cube_file(lut_path)
+            .map_err(|e| format!("Failed to load 3D LUT file '{lut_path}': {e}"))?;
+        kagari_vfx::core::ocio_color::set_active_lut(Some(std::sync::Arc::new(lut)));
+        lut_mode = 3;
+        eprintln!("Loaded custom 3D LUT (.cube) from: {}", lut_path);
+    }
+
+    if !args.exposure.is_finite() || lut_mode > 3 {
+        return Err("Exposure must be finite and LUT mode must be 0, 1, 2, or 3".into());
     }
     let spec = RenderSpec {
         output: &args.output,
@@ -356,7 +367,7 @@ pub(super) fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Err
         w: width,
         h: height,
         exposure: args.exposure,
-        lut: args.lut,
+        lut: lut_mode,
         skip_existing: args.skip_existing,
         log_json,
         bindings: &binding_values,
@@ -817,6 +828,7 @@ pub(super) fn cmd_queue(args: QueueArgs) -> Result<(), Box<dyn std::error::Error
             height: None,
             exposure: 0.0,
             lut: 0,
+            lut_file: None,
             color_space: None,
             step: 1,
             threads: args.threads,
@@ -893,6 +905,7 @@ pub(super) fn cmd_preview(
         height: Some(preview_h),
         exposure: 0.0,
         lut: 0,
+        lut_file: None,
         color_space: None,
         step: step.max(1),
         threads: 0,
@@ -961,5 +974,242 @@ pub(super) fn cmd_bundle(project_path: &str, output_dir: &str) -> Result<(), Box
         "\nProject Bundle created successfully at '{}' (collected {} external assets)",
         output_dir, asset_counter
     );
+    Ok(())
+}
+
+pub(super) fn cmd_remap(
+    project_path: &str,
+    layer_name: &str,
+    stretch: Option<f32>,
+    reverse: bool,
+    freeze: Option<u32>,
+    frame_blending: bool,
+    comp_ref: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut project = load_project(project_path)?;
+    let comp = find_comp_mut(&mut project, comp_ref)?;
+    let layer = comp
+        .layers
+        .iter_mut()
+        .find(|l| l.name == layer_name || l.id == layer_name)
+        .ok_or_else(|| format!("Layer '{layer_name}' not found in composition '{}'", comp.name))?;
+
+    if let Some(factor) = stretch {
+        layer.time_stretch(factor);
+        eprintln!("Applied time stretch factor {:.2}x to layer '{}'", factor, layer.name);
+    }
+    if reverse {
+        layer.time_reverse();
+        eprintln!("Applied time-reverse playback to layer '{}'", layer.name);
+    }
+    if let Some(freeze_frame) = freeze {
+        layer.freeze_at(freeze_frame);
+        eprintln!("Applied freeze frame at source frame {} to layer '{}'", freeze_frame, layer.name);
+    }
+    if frame_blending {
+        layer.frame_blending = true;
+        eprintln!("Enabled adjacent frame blending on layer '{}'", layer.name);
+    }
+
+    let json = serde_json::to_string_pretty(&project)?;
+    std::fs::write(project_path, json)?;
+    eprintln!("Updated project file: {}", project_path);
+    Ok(())
+}
+
+pub(super) fn cmd_track(
+    project_path: &str,
+    layer_name: &str,
+    tracker_idx: usize,
+    pos_str: Option<&str>,
+    search_size: f32,
+    apply_to: Option<&str>,
+    apply_pos: bool,
+    apply_rot: bool,
+    comp_ref: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut project = load_project(project_path)?;
+    let comp = find_comp_mut(&mut project, comp_ref)?;
+
+    let (source_layer_idx, in_frame, out_frame) = {
+        let (idx, layer) = comp
+            .layers
+            .iter_mut()
+            .enumerate()
+            .find(|(_, l)| l.name == layer_name || l.id == layer_name)
+            .ok_or_else(|| format!("Source layer '{layer_name}' not found in composition '{}'", comp.name))?;
+
+        if layer.trackers.len() <= tracker_idx {
+            let initial_pos = if let Some(p) = pos_str {
+                let coords: Vec<f32> = p.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+                if coords.len() >= 2 {
+                    [coords[0], coords[1]]
+                } else {
+                    [comp.width as f32 / 2.0, comp.height as f32 / 2.0]
+                }
+            } else {
+                [comp.width as f32 / 2.0, comp.height as f32 / 2.0]
+            };
+            let mut tracker = kagari_vfx::core::timeline::TrackerPoint::new(
+                format!("tracker_{}", tracker_idx + 1),
+                format!("Tracker {}", tracker_idx + 1),
+                initial_pos,
+            );
+            tracker.search_size = search_size.clamp(4.0, 128.0);
+            layer.trackers.push(tracker);
+        } else if let Some(p) = pos_str {
+            let coords: Vec<f32> = p.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+            if coords.len() >= 2 {
+                layer.trackers[tracker_idx].position =
+                    kagari_vfx::core::property::Animatable::new_constant([coords[0], coords[1]]);
+            }
+        }
+        (idx, layer.in_frame, layer.out_frame)
+    };
+
+    eprintln!(
+        "Analyzing motion tracking on '{}' (tracker #{}, frames {}..={})...",
+        layer_name, tracker_idx, in_frame, out_frame
+    );
+    kagari_vfx::core::tracker_engine::TrackerEngine::analyze_track(
+        comp,
+        source_layer_idx,
+        tracker_idx,
+        in_frame,
+        out_frame,
+    );
+
+    if let Some(target_name) = apply_to {
+        let target_layer_idx = comp
+            .layers
+            .iter()
+            .position(|l| l.name == target_name || l.id == target_name)
+            .ok_or_else(|| format!("Target layer '{target_name}' not found in composition '{}'", comp.name))?;
+
+        kagari_vfx::core::tracker_engine::TrackerEngine::apply_tracker_to_target(
+            comp,
+            source_layer_idx,
+            tracker_idx,
+            target_layer_idx,
+            apply_pos,
+            apply_rot,
+        );
+        eprintln!(
+            "Baked and applied motion tracking data to target layer '{}' (pos: {}, rot: {})",
+            target_name, apply_pos, apply_rot
+        );
+    }
+
+    let json = serde_json::to_string_pretty(&project)?;
+    std::fs::write(project_path, json)?;
+    eprintln!("Updated project file: {}", project_path);
+    Ok(())
+}
+
+pub(super) fn cmd_text_anim(
+    project_path: &str,
+    layer_name: &str,
+    preset: &str,
+    duration: u32,
+    start_frame: Option<u32>,
+    shape_str: &str,
+    blur: f32,
+    tracking: f32,
+    comp_ref: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut project = load_project(project_path)?;
+    let comp = find_comp_mut(&mut project, comp_ref)?;
+    let layer = comp
+        .layers
+        .iter_mut()
+        .find(|l| l.name == layer_name || l.id == layer_name)
+        .ok_or_else(|| format!("Layer '{layer_name}' not found in composition '{}'", comp.name))?;
+
+    let shape = match shape_str.to_lowercase().replace('-', "_").as_str() {
+        "square" => kagari_vfx::core::text_animator::SelectorShape::Square,
+        "ramp_up" | "rampup" => kagari_vfx::core::text_animator::SelectorShape::RampUp,
+        "ramp_down" | "rampdown" => kagari_vfx::core::text_animator::SelectorShape::RampDown,
+        "triangle" => kagari_vfx::core::text_animator::SelectorShape::Triangle,
+        "round" => kagari_vfx::core::text_animator::SelectorShape::Round,
+        "smooth" => kagari_vfx::core::text_animator::SelectorShape::Smooth,
+        "wobble" => kagari_vfx::core::text_animator::SelectorShape::Wobble,
+        "random" => kagari_vfx::core::text_animator::SelectorShape::Random,
+        _ => kagari_vfx::core::text_animator::SelectorShape::RampUp,
+    };
+
+    let start_f = start_frame.unwrap_or(layer.in_frame);
+    let end_f = start_f.saturating_add(duration.max(1));
+
+    let mut anim = kagari_vfx::core::text_animator::TextAnimatorSettings {
+        enabled: true,
+        selector: kagari_vfx::core::text_animator::RangeSelector {
+            start: 0.0,
+            end: 100.0,
+            offset: 0.0,
+            shape,
+            ease_high: 20.0,
+            ease_low: 20.0,
+            random_order: false,
+            char_start: -1,
+            char_end: -1,
+            offset_anim: Some(kagari_vfx::core::property::Animatable::Animated(vec![
+                kagari_vfx::core::keyframe::Keyframe::new(
+                    start_f,
+                    -100.0,
+                    kagari_vfx::core::keyframe::InterpolationType::Linear,
+                ),
+                kagari_vfx::core::keyframe::Keyframe::new(
+                    end_f,
+                    100.0,
+                    kagari_vfx::core::keyframe::InterpolationType::Linear,
+                ),
+            ])),
+            expression: None,
+        },
+        position_offset: [0.0, 0.0],
+        scale: [1.0, 1.0],
+        opacity: 0.0,
+        tracking,
+        rotation: 0.0,
+        blur_amount: blur,
+    };
+
+    match preset.to_lowercase().as_str() {
+        "typewriter" => {
+            anim.selector.shape = kagari_vfx::core::text_animator::SelectorShape::Square;
+            anim.position_offset = [0.0, 0.0];
+            anim.opacity = 0.0;
+        }
+        "cascade" | "rise" => {
+            anim.selector.shape = kagari_vfx::core::text_animator::SelectorShape::RampUp;
+            anim.position_offset = [0.0, 50.0];
+            anim.opacity = 0.0;
+            anim.scale = [0.8, 0.8];
+        }
+        "blur-in" | "blur_in" => {
+            anim.selector.shape = kagari_vfx::core::text_animator::SelectorShape::Smooth;
+            anim.blur_amount = if blur > 0.0 { blur } else { 25.0 };
+            anim.opacity = 0.0;
+        }
+        "tracking" | "expand" => {
+            anim.tracking = if tracking != 0.0 { tracking } else { 15.0 };
+            anim.opacity = 0.0;
+        }
+        "wave" => {
+            anim.selector.shape = kagari_vfx::core::text_animator::SelectorShape::Wobble;
+            anim.position_offset = [0.0, -30.0];
+        }
+        _ => {}
+    }
+
+    layer.text_animator = Some(anim);
+    eprintln!(
+        "Configured text animator preset '{}' on layer '{}' (frames {}..={})",
+        preset, layer.name, start_f, end_f
+    );
+
+    let json = serde_json::to_string_pretty(&project)?;
+    std::fs::write(project_path, json)?;
+    eprintln!("Updated project file: {}", project_path);
     Ok(())
 }

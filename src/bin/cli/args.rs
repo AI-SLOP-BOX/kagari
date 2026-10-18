@@ -62,9 +62,13 @@ pub(super) enum Commands {
         #[arg(long, default_value = "0.0")]
         exposure: f32,
 
-        /// LUT mode: 0=none, 1=linear, 2=ACES
+        /// LUT mode: 0=none, 1=linear, 2=ACES, 3=active .cube 3D LUT
         #[arg(long, default_value = "0")]
         lut: u32,
+
+        /// Path to custom .cube 3D LUT file for cinematic color grading (sets lut mode to 3)
+        #[arg(long)]
+        lut_file: Option<String>,
 
         /// Override working color space: rec709, display_p3, rec2020, linear, acescg
         #[arg(long)]
@@ -571,5 +575,92 @@ pub(super) enum Commands {
         /// Target destination directory for the bundle
         #[arg(short, long, default_value = "./project_bundle")]
         output: String,
+    },
+
+    /// Time Remap & Speed Control: stretch, reverse, freeze, or set playback speed
+    Remap {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+        /// Target layer name or ID
+        #[arg(short, long)]
+        layer: String,
+        /// Speed stretch factor (e.g. 2.0 = half speed / slow-motion, 0.5 = 2x fast-forward)
+        #[arg(long)]
+        stretch: Option<f32>,
+        /// Reverse playback of layer's source media
+        #[arg(long)]
+        reverse: bool,
+        /// Freeze frame at specified source frame index
+        #[arg(long)]
+        freeze: Option<u32>,
+        /// Enable adjacent frame blending for smooth speed ramps
+        #[arg(long)]
+        frame_blending: bool,
+        /// Target composition name or index (default: active comp)
+        #[arg(short, long)]
+        comp: Option<String>,
+    },
+
+    /// Motion Tracking: track feature points on footage and apply/bake to transform or target layer
+    Track {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+        /// Source footage layer name or ID to track
+        #[arg(short, long)]
+        layer: String,
+        /// Tracker point index (default: 0)
+        #[arg(long, default_value = "0")]
+        tracker_idx: usize,
+        /// Initial feature center coordinates "x,y" (default: center of comp/layer)
+        #[arg(long)]
+        pos: Option<String>,
+        /// Feature search window size in pixels (default: 24.0)
+        #[arg(long, default_value = "24.0")]
+        search_size: f32,
+        /// Target layer to apply tracked motion data to (e.g. Null or Text layer)
+        #[arg(long)]
+        apply_to: Option<String>,
+        /// Apply to target position
+        #[arg(long, default_value = "true")]
+        apply_pos: bool,
+        /// Apply to target rotation
+        #[arg(long, default_value = "false")]
+        apply_rot: bool,
+        /// Target composition name or index (default: active comp)
+        #[arg(short, long)]
+        comp: Option<String>,
+    },
+
+    /// Text Animator: configure per-character typewriter, cascading blur, scale, or tracking
+    TextAnim {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+        /// Target text layer name or ID
+        #[arg(short, long)]
+        layer: String,
+        /// Animation preset: typewriter, cascade, blur-in, tracking, wave
+        #[arg(long, default_value = "typewriter")]
+        preset: String,
+        /// Duration of text animation sweep in frames (default: 30)
+        #[arg(long, default_value = "30")]
+        duration: u32,
+        /// Start frame of animation sweep (default: layer in_frame)
+        #[arg(long)]
+        start_frame: Option<u32>,
+        /// Selector shape: square, ramp_up, ramp_down, smooth, triangle, wobble, random
+        #[arg(long, default_value = "ramp_up")]
+        shape: String,
+        /// Per-character blur radius (px)
+        #[arg(long, default_value = "0.0")]
+        blur: f32,
+        /// Per-character tracking adjustment
+        #[arg(long, default_value = "0.0")]
+        tracking: f32,
+        /// Target composition name or index (default: active comp)
+        #[arg(short, long)]
+        comp: Option<String>,
     },
 }

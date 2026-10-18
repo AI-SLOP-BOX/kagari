@@ -151,7 +151,7 @@ pub(super) fn cmd_add_layer(
     Ok(())
 }
 
-fn find_comp_mut<'a>(
+pub(crate) fn find_comp_mut<'a>(
     project: &'a mut Project,
     comp_ref: Option<&str>,
 ) -> Result<&'a mut Composition, Box<dyn std::error::Error>> {

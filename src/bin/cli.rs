@@ -44,6 +44,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             height,
             exposure,
             lut,
+            lut_file,
             color_space,
             step,
             threads,
@@ -66,6 +67,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 height,
                 exposure,
                 lut,
+                lut_file,
                 color_space,
                 step,
                 threads,
@@ -415,6 +417,71 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             output,
         } => {
             render::cmd_bundle(&project, &output)?;
+        }
+        Commands::Remap {
+            project,
+            layer,
+            stretch,
+            reverse,
+            freeze,
+            frame_blending,
+            comp,
+        } => {
+            render::cmd_remap(
+                &project,
+                &layer,
+                stretch,
+                reverse,
+                freeze,
+                frame_blending,
+                comp.as_deref(),
+            )?;
+        }
+        Commands::Track {
+            project,
+            layer,
+            tracker_idx,
+            pos,
+            search_size,
+            apply_to,
+            apply_pos,
+            apply_rot,
+            comp,
+        } => {
+            render::cmd_track(
+                &project,
+                &layer,
+                tracker_idx,
+                pos.as_deref(),
+                search_size,
+                apply_to.as_deref(),
+                apply_pos,
+                apply_rot,
+                comp.as_deref(),
+            )?;
+        }
+        Commands::TextAnim {
+            project,
+            layer,
+            preset,
+            duration,
+            start_frame,
+            shape,
+            blur,
+            tracking,
+            comp,
+        } => {
+            render::cmd_text_anim(
+                &project,
+                &layer,
+                &preset,
+                duration,
+                start_frame,
+                &shape,
+                blur,
+                tracking,
+                comp.as_deref(),
+            )?;
         }
     }
 
