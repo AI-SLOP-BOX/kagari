@@ -461,4 +461,39 @@ pub(super) enum Commands {
         #[arg(short, long)]
         comp: Option<String>,
     },
+
+    /// Set layer parenting / hierarchy (Parent Pickwhip equivalent in AE)
+    Parent {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+        /// Child layer name or ID
+        #[arg(short, long)]
+        layer: String,
+        /// Parent layer name or ID (or "none" to unparent)
+        #[arg(long)]
+        parent: String,
+        /// Target composition name or index (default: active comp)
+        #[arg(short, long)]
+        comp: Option<String>,
+    },
+
+    /// Set track matte mode on a layer (alpha, alpha_inv, luma, luma_inv, none)
+    Matte {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+        /// Consumer layer name or ID (the layer to be masked)
+        #[arg(short, long)]
+        layer: String,
+        /// Matte mode: alpha, alpha-inv, luma, luma-inv, none
+        #[arg(long)]
+        mode: String,
+        /// Source matte layer name or ID (default: adjacent layer above)
+        #[arg(long)]
+        source: Option<String>,
+        /// Target composition name or index (default: active comp)
+        #[arg(short, long)]
+        comp: Option<String>,
+    },
 }

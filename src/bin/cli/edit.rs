@@ -513,3 +513,102 @@ pub(super) fn cmd_transition(
     );
     Ok(())
 }
+
+pub(super) fn cmd_parent(
+    project_path: &str,
+    child_ref: &str,
+    parent_ref: &str,
+    comp_ref: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut project = load_project(project_path)?;
+    let comp = find_comp_mut(&mut project, comp_ref)?;
+
+    let child_idx = comp
+        .layers
+        .iter()
+        .position(|l| l.name == child_ref || l.id == child_ref)
+        .ok_or_else(|| format!("Child layer '{child_ref}' not found in composition '{}'", comp.name))?;
+
+    let child_name = comp.layers[child_idx].name.clone();
+
+    if parent_ref.eq_ignore_ascii_case("none") {
+        comp.layers[child_idx].parent_id = None;
+        let json = serde_json::to_string_pretty(&project)?;
+        std::fs::write(project_path, json)?;
+        eprintln!("Unparented layer '{}' in {}", child_name, project_path);
+        return Ok(());
+    }
+
+    let parent_layer = comp
+        .layers
+        .iter()
+        .find(|l| l.name == parent_ref || l.id == parent_ref)
+        .ok_or_else(|| format!("Parent layer '{parent_ref}' not found in composition '{}'", comp.name))?;
+
+    let parent_id = parent_layer.id.clone();
+    let parent_name = parent_layer.name.clone();
+
+    if parent_id == comp.layers[child_idx].id {
+        return Err("A layer cannot be parented to itself".into());
+    }
+
+    comp.layers[child_idx].parent_id = Some(parent_id);
+    let json = serde_json::to_string_pretty(&project)?;
+    std::fs::write(project_path, json)?;
+    eprintln!(
+        "Parented layer '{}' → '{}' in {}",
+        child_name, parent_name, project_path
+    );
+    Ok(())
+}
+
+pub(super) fn cmd_matte(
+    project_path: &str,
+    layer_ref: &str,
+    mode_str: &str,
+    source_ref: Option<&str>,
+    comp_ref: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use kagari_vfx::core::timeline::TrackMatteMode;
+
+    let mut project = load_project(project_path)?;
+    let comp = find_comp_mut(&mut project, comp_ref)?;
+
+    let layer_idx = comp
+        .layers
+        .iter()
+        .position(|l| l.name == layer_ref || l.id == layer_ref)
+        .ok_or_else(|| format!("Layer '{layer_ref}' not found in composition '{}'", comp.name))?;
+
+    let mode = match mode_str.to_lowercase().replace(['-', '_'], "").as_str() {
+        "none" => TrackMatteMode::None,
+        "alpha" | "alphamatte" => TrackMatteMode::AlphaMatte,
+        "alphainv" | "alphamatteinverted" | "alphainverted" => TrackMatteMode::AlphaMatteInverted,
+        "luma" | "lumamatte" => TrackMatteMode::LumaMatte,
+        "lumainv" | "lumamatteinverted" | "lumainverted" => TrackMatteMode::LumaMatteInverted,
+        other => return Err(format!("Unknown matte mode '{other}'. Valid: alpha, alpha-inv, luma, luma-inv, none").into()),
+    };
+
+    let source_id = if let Some(s) = source_ref {
+        let src_layer = comp
+            .layers
+            .iter()
+            .find(|l| l.name == s || l.id == s)
+            .ok_or_else(|| format!("Source matte layer '{s}' not found in composition '{}'", comp.name))?;
+        Some(src_layer.id.clone())
+    } else {
+        None
+    };
+
+    let layer_name = comp.layers[layer_idx].name.clone();
+    comp.layers[layer_idx].track_matte = mode;
+    comp.layers[layer_idx].track_matte_layer_id = source_id.clone();
+
+    let json = serde_json::to_string_pretty(&project)?;
+    std::fs::write(project_path, json)?;
+    eprintln!(
+        "Set Track Matte on '{}': mode={:?}, source={:?} in {}",
+        layer_name, mode, source_id, project_path
+    );
+    Ok(())
+}
