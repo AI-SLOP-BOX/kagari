@@ -121,6 +121,50 @@ pub(super) fn cmd_lottie(
     Ok(())
 }
 
+pub(super) fn cmd_otio(
+    project_path: &str,
+    comp_ref: Option<&str>,
+    output: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let project = load_project(project_path)?;
+    let comp = if let Some(ref_name) = comp_ref {
+        if let Ok(idx) = ref_name.parse::<usize>() {
+            project
+                .compositions
+                .get(idx)
+                .cloned()
+                .ok_or_else(|| format!("Composition index {idx} not found"))?
+        } else {
+            project
+                .compositions
+                .iter()
+                .find(|c| c.name == ref_name || c.id == ref_name)
+                .cloned()
+                .ok_or_else(|| format!("Composition '{ref_name}' not found"))?
+        }
+    } else {
+        let idx = project
+            .active_composition_idx
+            .min(project.compositions.len().saturating_sub(1));
+        project
+            .compositions
+            .get(idx)
+            .cloned()
+            .ok_or("No compositions in project")?
+    };
+
+    let otio = kagari_vfx::core::integration::OtioTimeline::from_composition(&comp);
+    let json = otio.to_json()?;
+    std::fs::write(output, &json)?;
+    eprintln!(
+        "OpenTimelineIO exported: \"{}\" → {} ({} bytes)",
+        comp.name,
+        output,
+        json.len()
+    );
+    Ok(())
+}
+
 pub(super) fn write_png(
     path: &str,
     rgba: &[u8],

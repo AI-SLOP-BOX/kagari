@@ -168,6 +168,9 @@ pub(super) fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Err
                 render_to_png_sequence(comp, &spec)?;
             }
         }
+        OutputFormat::Exr => {
+            render_to_exr_sequence(comp, &spec)?;
+        }
     }
 
     Ok(())
@@ -187,6 +190,40 @@ fn render_to_png_sequence_with_bindings(
         let pixels = render_frame_to_pixels(&comp, frame, spec.w, spec.h, spec.exposure, spec.lut);
         let path = format!("{}/frame_{:05}.png", spec.output, frame);
         write_png(&path, &pixels, spec.w, spec.h)?;
+        let progress = frame.saturating_sub(spec.from) + 1;
+        if progress % 10 == 0 || progress == total {
+            eprint!("\r  Rendered {}/{} frames", progress, total);
+        }
+    }
+    eprintln!("\n  Done! Output: {}/", spec.output);
+    Ok(())
+}
+
+fn render_to_exr_sequence(
+    comp: &Composition,
+    spec: &RenderSpec,
+) -> Result<(), Box<dyn std::error::Error>> {
+    std::fs::create_dir_all(spec.output)?;
+
+    let total = spec.to.saturating_sub(spec.from) + 1;
+    for frame in spec.from..=spec.to {
+        let f32_pixels = kagari_vfx::core::software_renderer::render_frame_to_pixels_f32(
+            comp,
+            frame,
+            spec.w,
+            spec.h,
+            spec.exposure,
+            spec.lut,
+        );
+        let mut flat = Vec::with_capacity(f32_pixels.len() * 4);
+        for px in f32_pixels {
+            flat.extend_from_slice(&px);
+        }
+        let image = kagari_vfx::core::exr_writer::ExrImage::rgba_f32(spec.w, spec.h, &flat);
+        let path = format!("{}/frame_{:05}.exr", spec.output, frame);
+        kagari_vfx::core::exr_writer::write_exr_file(&path, &image)
+            .map_err(|e| format!("EXR write error: {e}"))?;
+
         let progress = frame.saturating_sub(spec.from) + 1;
         if progress % 10 == 0 || progress == total {
             eprint!("\r  Rendered {}/{} frames", progress, total);

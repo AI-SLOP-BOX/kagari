@@ -13,6 +13,7 @@ pub(super) struct Cli {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub(super) enum OutputFormat {
     Png,
+    Exr,
     Mp4,
     Gif,
 }
@@ -224,6 +225,21 @@ pub(super) enum Commands {
 
         /// Output JSON path
         #[arg(short, long, default_value = "./lottie_export.json")]
+        output: String,
+    },
+
+    /// Export composition timeline to OpenTimelineIO (.otio.json)
+    Otio {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+
+        /// Composition name or zero-based index (default: active comp)
+        #[arg(short, long)]
+        comp: Option<String>,
+
+        /// Output OpenTimelineIO JSON path
+        #[arg(short, long, default_value = "./timeline.otio.json")]
         output: String,
     },
 

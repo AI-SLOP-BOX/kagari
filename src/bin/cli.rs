@@ -24,7 +24,7 @@ mod render;
 mod validate;
 use bindings::{cmd_add_sample_binding, cmd_bindings, parse_binding_value, parse_sample_point, parse_string_override};
 use edit::{cmd_add_layer, cmd_animate, cmd_init};
-use frame::{cmd_frame, cmd_lottie};
+use frame::{cmd_frame, cmd_lottie, cmd_otio};
 use info::{cmd_effects, cmd_info, cmd_production_info};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -186,6 +186,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Lottie { project, output } => {
             cmd_lottie(&project, &output)?;
+        }
+        Commands::Otio {
+            project,
+            comp,
+            output,
+        } => {
+            cmd_otio(&project, comp.as_deref(), &output)?;
         }
         Commands::Mocap {
             frames,
