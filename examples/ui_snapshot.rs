@@ -24,7 +24,7 @@ fn main() {
         app.viewer_maximized = mode == "viewer_max";
         app.show_graph_editor = mode == "graph";
         if mode == "expression" {
-            app.ui_tabs.right_tab_idx = 10;
+            app.ui_tabs.right_panel = kagari_vfx::app_state::RightPanel::Expressions;
         }
         if mode == "effects_panel" {
             app.ui_tabs.left_tab_idx = 1;
@@ -80,7 +80,7 @@ fn main() {
                     ui::home_screen::draw(&mut app, ctx);
                 } else if mode == "asset_library" {
                     app.ui_tabs.left_tab_idx = 0;
-                    app.ui_tabs.right_tab_idx = 30;
+                    app.ui_tabs.right_panel = kagari_vfx::app_state::RightPanel::Properties;
                     ctx.data_mut(|data| {
                         data.insert_temp(egui::Id::new("studio_active_workspace"), 3_usize);
                     });
@@ -92,7 +92,7 @@ fn main() {
                     ui::text_workspace::draw(&mut app, ctx);
                 } else if mode == "color" {
                     app.ui_tabs.left_tab_idx = 1;
-                    app.ui_tabs.right_tab_idx = 19;
+                    app.ui_tabs.right_panel = kagari_vfx::app_state::RightPanel::Color;
                     ui::color_workspace::draw(&mut app, ctx);
                 } else if mode == "effects_panel" {
                     ui::effects_workspace::draw(&mut app, ctx);

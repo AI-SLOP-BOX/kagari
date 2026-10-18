@@ -1,35 +1,39 @@
 //! RAM Preview cache bar + comp markers + beat-detection transients.
-use crate::core::timeline::LayerType;
+use crate::core::frame_cache::FrameCache;
+use crate::core::timeline::{Composition, LayerType};
 use crate::ui::theme::colors;
-use crate::KagariApp;
 use eframe::egui;
 
 pub fn draw_ram_ruler(
-    app: &mut KagariApp,
+    frame_cache: &FrameCache,
+    comp_mut: &mut Composition,
     ui: &mut egui::Ui,
-    current_frame: &mut u32,
     total_frames: u32,
+    ruler_rect: egui::Rect,
+    start_frame: u32,
+    visible_span: u32,
 ) {
-    let bar_height = 14.0;
-    let avail_w = ui.available_width();
-    let (bar_rect, bar_response) =
-        ui.allocate_exact_size(egui::vec2(avail_w, bar_height), egui::Sense::click());
+    let bar_height = 3.0;
+    let bar_rect =
+        egui::Rect::from_min_size(ruler_rect.min, egui::vec2(ruler_rect.width(), bar_height));
+    ui.painter().rect_filled(bar_rect, 0.0, colors::BG_DARKEST);
 
-    ui.painter().rect_filled(bar_rect, 2.0, colors::BG_DARKEST);
-
-    if total_frames > 0 {
-        let frame_w = bar_rect.width() / total_frames as f32;
+    let visible_span = visible_span.max(1);
+    let first_frame = start_frame.min(total_frames);
+    let last_frame = first_frame.saturating_add(visible_span).min(total_frames);
+    if last_frame > first_frame {
+        let frame_w = bar_rect.width() / visible_span as f32;
         // Vertex-count safety: coalesce consecutive cached frames
         // into ONE rect per run instead of one painter call per frame
         // (a 10k-frame comp would otherwise emit 10k quads every frame).
         let mut run_start: Option<u32> = None;
-        for f in 0..=total_frames {
-            let cached = f < total_frames && app.frame_cache.is_cached(f);
+        for f in first_frame..=last_frame {
+            let cached = f < last_frame && frame_cache.is_cached(f);
             if cached && run_start.is_none() {
                 run_start = Some(f);
             } else if !cached {
                 if let Some(s) = run_start.take() {
-                    let x = bar_rect.left() + s as f32 * frame_w;
+                    let x = bar_rect.left() + s.saturating_sub(first_frame) as f32 * frame_w;
                     let w = ((f - s) as f32 * frame_w).max(1.0);
                     ui.painter().rect_filled(
                         egui::Rect::from_min_size(
@@ -37,7 +41,7 @@ pub fn draw_ram_ruler(
                             egui::vec2(w, bar_height),
                         ),
                         0.0,
-                        colors::ACCENT_GREEN,
+                        colors::TIMELINE_CACHE,
                     );
                 }
             }
@@ -45,8 +49,6 @@ pub fn draw_ram_ruler(
     }
 
     // Render Timeline Markers & Beat Detection Transients
-    let comp_mut = app.history.current_mut().active_composition_mut();
-
     // Real beat-detection transient lines from the comp's audio
     // sources (energy-flux onsets, cached per audio file).
     let audio_paths: Vec<String> = comp_mut
@@ -86,21 +88,24 @@ pub fn draw_ram_ruler(
         let keep = beat_frames.len() / 200;
         beat_frames = beat_frames.into_iter().step_by(keep).collect();
     }
-    for bf in &beat_frames {
-        let b_norm = *bf as f32 / total_frames.max(1) as f32;
+    for bf in beat_frames
+        .iter()
+        .filter(|frame| **frame >= first_frame && **frame < last_frame)
+    {
+        let b_norm = bf.saturating_sub(first_frame) as f32 / visible_span as f32;
         let bx = bar_rect.left() + b_norm * bar_rect.width();
         ui.painter().line_segment(
             [
                 egui::pos2(bx, bar_rect.top()),
                 egui::pos2(bx, bar_rect.bottom()),
             ],
-            egui::Stroke::new(1.0_f32, colors::ACCENT_YELLOW),
+            egui::Stroke::new(1.0_f32, colors::ACCENT_BEAT_MARKER),
         );
     }
 
     for marker in &comp_mut.markers {
-        if total_frames > 0 {
-            let norm = marker.frame as f32 / total_frames as f32;
+        if marker.frame >= first_frame && marker.frame < last_frame {
+            let norm = marker.frame.saturating_sub(first_frame) as f32 / visible_span as f32;
             let mx = bar_rect.left() + norm * bar_rect.width();
             let m_pts = vec![
                 egui::pos2(mx - 4.0, bar_rect.top()),
@@ -114,13 +119,6 @@ pub fn draw_ram_ruler(
             );
             ui.painter()
                 .add(egui::Shape::convex_polygon(m_pts, mc, egui::Stroke::NONE));
-        }
-    }
-
-    if bar_response.clicked() {
-        if let Some(pos) = bar_response.interact_pointer_pos() {
-            let norm = ((pos.x - bar_rect.left()) / bar_rect.width()).clamp(0.0, 1.0);
-            *current_frame = (norm * total_frames as f32).round() as u32;
         }
     }
 }

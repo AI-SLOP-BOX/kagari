@@ -4,8 +4,7 @@ use eframe::egui;
 
 pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
     let correction_before = app.audio_correction_settings();
-    ui.heading("Multi-Track Audio Mixer");
-    ui.separator();
+    crate::ui::kui::section(ui, "Audio Mixer");
 
     let layer_count = app.history.current().active_composition().layers.len();
 
@@ -17,19 +16,40 @@ pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
     let master_volume_before = app.playback.master_volume;
 
     let comp_name = app.history.current().active_composition().name.clone();
-    ui.label(
-        egui::RichText::new(format!("Composition: {}", comp_name))
-            .small()
-            .color(colors::TEXT_SECONDARY),
+    let audio_track_count = app
+        .history
+        .current()
+        .active_composition()
+        .layers
+        .iter()
+        .filter(|layer| {
+            matches!(
+                layer.layer_type,
+                crate::core::timeline::LayerType::Audio { .. }
+                    | crate::core::timeline::LayerType::Video {
+                        audio_wav: Some(_),
+                        ..
+                    }
+            )
+        })
+        .count();
+    crate::ui::kui::secondary(
+        ui,
+        format!(
+            "{}: {}",
+            crate::ui::localization::tr("Composition"),
+            comp_name
+        ),
     );
 
-    ui.add_space(4.0);
+    ui.add_space(crate::ui::kui::space::XS);
 
     // ── Toolbar: Mute All / Solo All / Reset All ──
     ui.horizontal(|ui| {
-        if ui
-            .small_button("Reset All")
-            .on_hover_text("Reset all channels to defaults")
+        if crate::ui::kui::button(ui, "Reset All", crate::ui::kui::ButtonKind::Quiet)
+            .on_hover_text(crate::ui::localization::tr(
+                "Reset all channels to their defaults",
+            ))
             .clicked()
         {
             for ch in app.audio_mixer_channels.iter_mut() {
@@ -40,34 +60,40 @@ pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
             }
         }
         let has_solo = app.audio_mixer_channels.iter().any(|c| c.solo);
-        if has_solo && ui.small_button("Clear Solo").clicked() {
+        if has_solo
+            && crate::ui::kui::button(ui, "Clear Solo", crate::ui::kui::ButtonKind::Quiet).clicked()
+        {
             for ch in app.audio_mixer_channels.iter_mut() {
                 ch.solo = false;
             }
         }
         let has_mute = app.audio_mixer_channels.iter().any(|c| c.mute);
-        if has_mute && ui.small_button("Clear Mute").clicked() {
+        if has_mute
+            && crate::ui::kui::button(ui, "Clear Mute", crate::ui::kui::ButtonKind::Quiet).clicked()
+        {
             for ch in app.audio_mixer_channels.iter_mut() {
                 ch.mute = false;
             }
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(
-                egui::RichText::new(format!("{} tracks", layer_count))
-                    .small()
-                    .color(colors::TEXT_MUTED),
+            crate::ui::kui::caption(
+                ui,
+                crate::ui::localization::tr_format(
+                    "{} audio tracks",
+                    &[&audio_track_count.to_string()],
+                ),
             );
         });
     });
 
-    ui.add_space(4.0);
+    ui.add_space(crate::ui::kui::space::XS);
 
     // ── Track Strips + Output Meter + Master ──
     egui::ScrollArea::horizontal()
         .max_height(280.0)
         .show(ui, |ui| {
             ui.horizontal(|ui| {
-                let layer_info: Vec<(String, bool, bool)> = app
+                let layer_info: Vec<(String, bool)> = app
                     .history
                     .current()
                     .active_composition()
@@ -82,221 +108,142 @@ pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
                                     ..
                                 }
                         );
-                        let has_video = matches!(
-                            l.layer_type,
-                            crate::core::timeline::LayerType::Video { .. }
-                                | crate::core::timeline::LayerType::Image { .. }
-                                | crate::core::timeline::LayerType::Text { .. }
-                                | crate::core::timeline::LayerType::Shape { .. }
-                                | crate::core::timeline::LayerType::Solid { .. }
-                                | crate::core::timeline::LayerType::PreComp { .. }
-                                | crate::core::timeline::LayerType::Particle { .. }
-                        );
-                        (l.name.clone(), has_audio, has_video)
+                        (l.name.clone(), has_audio)
                     })
                     .collect();
 
-                for (idx, (name, has_audio, _has_video)) in layer_info.iter().enumerate() {
-                    ui.vertical(|ui| {
-                        ui.set_width(76.0);
+                if audio_track_count == 0 {
+                    crate::ui::kui::secondary(ui, "No audio tracks");
+                }
 
-                        // ── Track header: icon + name ──
-                        let type_icon = if *has_audio { "AUD" } else { "—" };
-                        let name_color = if *has_audio {
-                            colors::TEXT_PRIMARY
-                        } else {
-                            colors::TEXT_MUTED
-                        };
-                        ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new(type_icon).small());
-                            ui.label(
-                                egui::RichText::new(format!("{:02}", idx + 1))
-                                    .small()
-                                    .strong()
-                                    .color(colors::TEXT_SECONDARY),
+                for (idx, (name, has_audio)) in layer_info.iter().enumerate() {
+                    if !has_audio {
+                        continue;
+                    }
+                    let strip_width = 116.0 + 18.0;
+                    let divider_width = ui.spacing().item_spacing.x + 1.0;
+                    let strip_probe = egui::Rect::from_min_size(
+                        ui.cursor().min,
+                        egui::vec2(strip_width + divider_width, 280.0),
+                    );
+                    if !ui.is_rect_visible(strip_probe) {
+                        ui.allocate_space(strip_probe.size());
+                        continue;
+                    }
+                    crate::ui::kui::panel(ui, |ui| {
+                        ui.vertical(|ui| {
+                            ui.set_width(116.0);
+
+                            // ── Track header: icon + name ──
+                            let type_icon = "AUD";
+                            ui.horizontal(|ui| {
+                                crate::ui::kui::caption(ui, type_icon);
+                                crate::ui::kui::secondary(ui, format!("{:02}", idx + 1));
+                            });
+                            crate::ui::kui::truncated_secondary(ui, name);
+
+                            ui.add_space(crate::ui::kui::space::XS);
+
+                            // ── Mute / Solo / Reset ──
+                            let ch = &mut app.audio_mixer_channels[idx];
+                            ui.horizontal(|ui| {
+                                let mute = crate::ui::kui::icon_button(
+                                    ui,
+                                    "M",
+                                    "Mute track",
+                                    ch.mute,
+                                    26.0,
+                                );
+                                if mute.clicked() || mute.changed() {
+                                    ch.mute = !ch.mute;
+                                }
+                                let solo = crate::ui::kui::icon_button(
+                                    ui,
+                                    "S",
+                                    "Solo track",
+                                    ch.solo,
+                                    26.0,
+                                );
+                                if solo.clicked() || solo.changed() {
+                                    ch.solo = !ch.solo;
+                                }
+                                let reset = crate::ui::kui::icon_button(
+                                    ui,
+                                    "R",
+                                    "Reset track settings",
+                                    false,
+                                    26.0,
+                                );
+                                if reset.clicked() || reset.changed() {
+                                    ch.gain_db = 0.0;
+                                    ch.pan = 0.0;
+                                }
+                            });
+
+                            ui.add_space(crate::ui::kui::space::XS);
+
+                            // Keep the fader and its post-fader meter together as one channel strip.
+                            let gain_text = if ch.gain_db <= -60.0 {
+                                "−∞ dB".to_owned()
+                            } else {
+                                format!("{:.1} dB", ch.gain_db)
+                            };
+                            crate::ui::kui::readout(ui, gain_text, colors::TEXT_SECONDARY);
+                            ui.horizontal(|ui| {
+                                crate::ui::kui::vertical_fader(
+                                    ui,
+                                    &mut ch.gain_db,
+                                    -60.0..=12.0,
+                                    108.0,
+                                );
+
+                                let level = if !ch.mute {
+                                    let (left, right) = app
+                                        .audio_track_meters
+                                        .get(idx)
+                                        .copied()
+                                        .unwrap_or((0.0, 0.0));
+                                    left.max(right).clamp(0.0, 1.0)
+                                } else {
+                                    0.0
+                                };
+                                crate::ui::kui::vertical_meter(ui, "", level, 12.0, 108.0);
+                            });
+
+                            // ── Pan knob (horizontal) with L/C/R labels ──
+                            let pan_label = if ch.pan < -10.0 {
+                                format!("L{:.0}", ch.pan.abs())
+                            } else if ch.pan > 10.0 {
+                                format!("R{:.0}", ch.pan)
+                            } else {
+                                "C".into()
+                            };
+                            crate::ui::kui::slider_step_without_value(
+                                ui,
+                                &mut ch.pan,
+                                -100.0..=100.0,
+                                1.0,
+                            );
+                            crate::ui::kui::secondary(
+                                ui,
+                                format!("{} {}", crate::ui::localization::tr("Pan"), pan_label),
                             );
                         });
-                        ui.label(egui::RichText::new(name).small().color(name_color));
-
-                        ui.add_space(4.0);
-
-                        // ── Mute / Solo / Reset ──
-                        let ch = &mut app.audio_mixer_channels[idx];
-                        ui.horizontal(|ui| {
-                            let mute_color = if ch.mute {
-                                colors::ACCENT_RED
-                            } else {
-                                colors::TEXT_MUTED
-                            };
-                            if ui
-                                .add(
-                                    egui::Button::new(
-                                        egui::RichText::new("M").strong().color(mute_color),
-                                    )
-                                    .min_size(egui::vec2(22.0, 16.0)),
-                                )
-                                .clicked()
-                            {
-                                ch.mute = !ch.mute;
-                            }
-                            let solo_color = if ch.solo {
-                                colors::ACCENT_YELLOW
-                            } else {
-                                colors::TEXT_MUTED
-                            };
-                            if ui
-                                .add(
-                                    egui::Button::new(
-                                        egui::RichText::new("S").strong().color(solo_color),
-                                    )
-                                    .min_size(egui::vec2(22.0, 16.0)),
-                                )
-                                .clicked()
-                            {
-                                ch.solo = !ch.solo;
-                            }
-                            let reset_btn = ui.add(
-                                egui::Button::new(
-                                    egui::RichText::new("R").small().color(colors::TEXT_MUTED),
-                                )
-                                .min_size(egui::vec2(18.0, 16.0)),
-                            );
-                            if reset_btn.on_hover_text("Reset to defaults").clicked() {
-                                ch.gain_db = 0.0;
-                                ch.pan = 0.0;
-                            }
-                        });
-
-                        ui.add_space(4.0);
-
-                        // ── Gain fader (vertical) with dB readout ──
-                        ui.add(
-                            egui::Slider::new(&mut ch.gain_db, -60.0..=12.0)
-                                .vertical()
-                                .step_by(0.5)
-                                .custom_formatter(|v, _| {
-                                    if v <= -60.0 {
-                                        "-∞ dB".into()
-                                    } else {
-                                        format!("{:.1} dB", v)
-                                    }
-                                }),
-                        );
-
-                        ui.add_space(2.0);
-
-                        // ── Pan knob (horizontal) with L/C/R labels ──
-                        let pan_label = if ch.pan < -10.0 {
-                            format!("L{:.0}", ch.pan.abs())
-                        } else if ch.pan > 10.0 {
-                            format!("R{:.0}", ch.pan)
-                        } else {
-                            "C".into()
-                        };
-                        ui.add(
-                            egui::Slider::new(&mut ch.pan, -100.0..=100.0)
-                                .step_by(1.0)
-                                .show_value(false),
-                        );
-                        ui.label(
-                            egui::RichText::new(format!("Pan {}", pan_label))
-                                .small()
-                                .color(colors::TEXT_SECONDARY),
-                        );
-
-                        // ── Mini VU meter (per-track) ──
-                        // The audio engine reports each layer's post-fader peak,
-                        // so a loud track no longer makes every strip look active.
-                        let level = if *has_audio && !ch.mute {
-                            let (left, right) = app
-                                .audio_track_meters
-                                .get(idx)
-                                .copied()
-                                .unwrap_or((0.0, 0.0));
-                            left.max(right).clamp(0.0, 1.0)
-                        } else {
-                            0.0
-                        };
-                        let (m_h, m_w) = (60.0, 8.0);
-                        let (rect, _) =
-                            ui.allocate_exact_size(egui::vec2(m_w, m_h), egui::Sense::hover());
-                        ui.painter().rect_filled(rect, 2.0, colors::BG_DEEPEST);
-                        let filled = (rect.height() * level).min(rect.height());
-                        let bar = egui::Rect::from_min_size(
-                            egui::pos2(rect.left(), rect.bottom() - filled),
-                            egui::vec2(rect.width(), filled),
-                        );
-                        let color = if level > 0.95 {
-                            colors::ACCENT_RED
-                        } else if level > 0.7 {
-                            colors::ACCENT_YELLOW
-                        } else {
-                            colors::ACCENT_GREEN
-                        };
-                        ui.painter().rect_filled(bar, 1.0, color);
                     });
-                    ui.separator();
+                    crate::ui::kui::toolbar_separator(ui);
                 }
 
                 // ── Output Meters (L/R) ──
                 ui.vertical(|ui| {
                     ui.set_width(60.0);
-                    ui.label(
-                        egui::RichText::new("OUT")
-                            .strong()
-                            .small()
-                            .color(colors::TEXT_SECONDARY),
-                    );
+                    crate::ui::kui::section_title(ui, "Output");
                     let (meter_h, meter_w) = (140.0, 16.0);
                     ui.horizontal(|ui| {
                         for (label, level) in [("L", app.audio_meter.0), ("R", app.audio_meter.1)] {
                             ui.vertical(|ui| {
-                                let (rect, _) = ui.allocate_exact_size(
-                                    egui::vec2(meter_w, meter_h),
-                                    egui::Sense::hover(),
-                                );
-                                ui.painter().rect_filled(rect, 2.0, colors::BG_DEEPEST);
+                                crate::ui::kui::vertical_meter(ui, label, level, meter_w, meter_h);
 
-                                // Segment lines
-                                for seg in 0..12 {
-                                    let y = rect.top() + rect.height() * (seg as f32 / 12.0);
-                                    ui.painter().line_segment(
-                                        [egui::pos2(rect.left(), y), egui::pos2(rect.right(), y)],
-                                        egui::Stroke::new(0.5_f32, colors::BORDER_SUBTLE),
-                                    );
-                                }
-
-                                let filled =
-                                    (rect.height() * level.clamp(0.0, 1.0)).min(rect.height());
-                                let bar = egui::Rect::from_min_size(
-                                    egui::pos2(rect.left(), rect.bottom() - filled),
-                                    egui::vec2(rect.width(), filled),
-                                );
-                                let color = if level > 0.95 {
-                                    colors::ACCENT_RED
-                                } else if level > 0.7 {
-                                    colors::ACCENT_YELLOW
-                                } else {
-                                    colors::ACCENT_GREEN
-                                };
-                                ui.painter().rect_filled(bar, 1.0, color);
-
-                                // Peak dot
-                                let peak_y = rect.bottom() - filled;
-                                ui.painter().rect_filled(
-                                    egui::Rect::from_min_size(
-                                        egui::pos2(rect.left(), peak_y - 2.0),
-                                        egui::vec2(rect.width(), 2.0),
-                                    ),
-                                    0.0,
-                                    color,
-                                );
-
-                                ui.label(
-                                    egui::RichText::new(label)
-                                        .small()
-                                        .color(colors::TEXT_SECONDARY),
-                                );
+                                crate::ui::kui::caption(ui, label);
                             });
                         }
                     });
@@ -311,35 +258,34 @@ pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
                     } else {
                         -96.0
                     };
-                    ui.label(
-                        egui::RichText::new(format!("{:.0} / {:.0} dB", db_l, db_r))
-                            .small()
-                            .monospace()
-                            .color(colors::TEXT_SECONDARY),
+                    crate::ui::kui::readout(
+                        ui,
+                        format!("{:.0} / {:.0} dB", db_l, db_r),
+                        colors::TEXT_SECONDARY,
                     );
                 });
-                ui.separator();
+                crate::ui::kui::toolbar_separator(ui);
 
                 // ── Master Channel Strip ──
                 ui.vertical(|ui| {
                     ui.set_width(80.0);
-                    ui.label(
-                        egui::RichText::new("MASTER")
-                            .strong()
-                            .small()
-                            .color(colors::ACCENT_BLUE),
-                    );
-                    ui.add_space(4.0);
+                    crate::ui::kui::section_title(ui, "Master");
+                    ui.add_space(crate::ui::kui::space::XS);
 
                     // Master volume fader
-                    ui.add(
-                        egui::Slider::new(&mut app.playback.master_volume, 0.0..=1.0)
-                            .vertical()
-                            .step_by(0.01)
-                            .custom_formatter(|v, _| format!("{:.0}%", v * 100.0)),
+                    crate::ui::kui::readout(
+                        ui,
+                        format!("{:.0}%", app.playback.master_volume * 100.0),
+                        colors::TEXT_SECONDARY,
+                    );
+                    crate::ui::kui::vertical_fader(
+                        ui,
+                        &mut app.playback.master_volume,
+                        0.0..=1.0,
+                        108.0,
                     );
 
-                    ui.add_space(2.0);
+                    ui.add_space(crate::ui::kui::space::XS);
 
                     // dB readout
                     let master_db = if app.playback.master_volume > 0.0 {
@@ -354,51 +300,39 @@ pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
                     } else {
                         colors::ACCENT_RED
                     };
-                    ui.label(
-                        egui::RichText::new(format!("{:.1} dB", master_db))
-                            .small()
-                            .monospace()
-                            .color(db_color),
-                    );
+                    crate::ui::kui::readout(ui, format!("{:.1} dB", master_db), db_color);
 
-                    ui.add_space(4.0);
-                    ui.label(
-                        egui::RichText::new("Vol")
-                            .small()
-                            .color(colors::TEXT_SECONDARY),
-                    );
+                    ui.add_space(crate::ui::kui::space::XS);
+                    crate::ui::kui::caption(ui, "Volume");
                 });
             });
         });
 
     // ── Voice correction: the same non-destructive chain is used by preview
     // and export. Advanced controls stay collapsed for first-time users.
-    ui.add_space(8.0);
-    ui.separator();
-    ui.horizontal(|ui| {
-        ui.strong("Voice Correction");
-        ui.label(
-            egui::RichText::new("Natural speech enhancement")
-                .small()
-                .color(colors::TEXT_MUTED),
-        );
-        ui.checkbox(&mut app.master_dsp_enabled, "Enabled");
+    ui.add_space(crate::ui::kui::space::SM);
+    crate::ui::kui::separator(ui);
+    crate::ui::kui::section(ui, "Voice Correction");
+    ui.horizontal_wrapped(|ui| {
+        crate::ui::kui::toggle(ui, &mut app.master_dsp_enabled, "Enable Correction");
         let compare_label = if app.master_dsp_bypass {
-            "Use Correction"
+            "Apply Correction"
         } else {
-            "Compare Original"
+            "Compare to Original"
         };
-        if ui
-            .button(compare_label)
-            .on_hover_text("A/B compare the unprocessed mix with the current correction")
+        if crate::ui::kui::button(ui, compare_label, crate::ui::kui::ButtonKind::Default)
+            .on_hover_text(crate::ui::localization::tr(
+                "Switch between the unprocessed mix and corrected audio",
+            ))
             .clicked()
         {
             app.master_dsp_bypass = !app.master_dsp_bypass;
             app.playback.cached_audio_key = 0;
         }
-        if ui
-            .small_button("Reset")
-            .on_hover_text("Restore the conservative voice-correction defaults")
+        if crate::ui::kui::button(ui, "Restore Defaults", crate::ui::kui::ButtonKind::Quiet)
+            .on_hover_text(crate::ui::localization::tr(
+                "Restore the default subtle voice correction settings",
+            ))
             .clicked()
         {
             app.apply_audio_correction_settings(
@@ -408,159 +342,162 @@ pub fn draw_audio_mixer(app: &mut KagariApp, ui: &mut egui::Ui) {
             app.playback.cached_audio_key = 0;
         }
     });
-    ui.horizontal(|ui| {
-        ui.vertical(|ui| {
-            ui.label(
-                egui::RichText::new("Basic")
-                    .small()
-                    .strong()
-                    .color(colors::ACCENT_BLUE),
-            );
-            ui.checkbox(&mut app.master_auto_gain, "Auto level");
-            ui.add(
-                egui::Slider::new(&mut app.master_target_level_db, -30.0..=-6.0)
-                    .text("Target dB")
-                    .clamping(egui::SliderClamping::Always),
-            );
-            ui.add(
-                egui::Slider::new(&mut app.master_wet_dry, 0.0..=1.0)
-                    .text("Correction mix")
-                    .show_value(false),
-            );
-        });
-        ui.separator();
-        ui.vertical(|ui| {
-            ui.label(
-                egui::RichText::new("Safety")
-                    .small()
-                    .strong()
-                    .color(colors::ACCENT_BLUE),
-            );
-            ui.checkbox(&mut app.master_limiter_enabled, "Limiter");
-            ui.add(
-                egui::Slider::new(&mut app.master_limiter_ceiling_db, -6.0..=-0.1)
-                    .text("Ceiling dB"),
-            );
-        });
-    });
 
-    ui.collapsing("Detailed voice shaping", |ui| {
-        ui.horizontal(|ui| {
-            ui.vertical(|ui| {
-                ui.label(
-                    egui::RichText::new("Clarity EQ")
-                        .small()
-                        .strong()
-                        .color(colors::ACCENT_BLUE),
-                );
-                ui.add(
-                    egui::Slider::new(&mut app.master_eq_highpass, 20.0..=500.0)
-                        .text("Low cut Hz")
-                        .logarithmic(true),
-                );
-                ui.add(
-                    egui::Slider::new(&mut app.master_eq_lowpass, 2_000.0..=20_000.0)
-                        .text("High cut Hz")
-                        .logarithmic(true),
-                );
-                ui.add(
-                    egui::Slider::new(&mut app.master_eq_mid_gain, -12.0..=12.0)
-                        .text("Presence dB"),
-                );
-                ui.add(
-                    egui::Slider::new(&mut app.master_eq_mid_freq, 200.0..=8_000.0)
-                        .text("Presence Hz")
-                        .logarithmic(true),
-                );
-            });
-            ui.separator();
-            ui.vertical(|ui| {
-                ui.label(
-                    egui::RichText::new("Dynamics")
-                        .small()
-                        .strong()
-                        .color(colors::ACCENT_BLUE),
-                );
-                ui.add(
-                    egui::Slider::new(&mut app.master_comp_threshold, -40.0..=0.0)
-                        .text("Threshold dB"),
-                );
-                ui.add(egui::Slider::new(&mut app.master_comp_ratio, 1.0..=20.0).text("Ratio"));
-                ui.add(
-                    egui::Slider::new(&mut app.master_comp_attack, 0.1..=50.0).text("Attack ms"),
-                );
-                ui.add(
-                    egui::Slider::new(&mut app.master_comp_release, 10.0..=500.0)
-                        .text("Release ms"),
-                );
-                ui.add(
-                    egui::Slider::new(&mut app.master_comp_makeup, 0.0..=24.0).text("Makeup dB"),
-                );
-            });
-        });
-    });
-
-    ui.add_space(4.0);
-    ui.collapsing("Audio to Keyframes", |ui| {
-        ui.label(
-            egui::RichText::new("Extract motion reactivity by frequency band.")
-                .small()
-                .color(colors::TEXT_MUTED),
+    ui.columns(2, |columns| {
+        crate::ui::kui::section(&mut columns[0], "Basic Correction");
+        let grid = crate::ui::kui::PropertyGrid::new(
+            &columns[0],
+            &["Auto Level", "Target Level", "Correction Amount"],
         );
-        let mut band_sel = ui.ctx().data(|d| {
-            d.get_temp::<i32>(egui::Id::new("audio_crossover_band"))
-                .unwrap_or(0)
+        grid.row(&mut columns[0], "Auto Level", |ui| {
+            crate::ui::kui::toggle(ui, &mut app.master_auto_gain, "")
         });
-        ui.horizontal(|ui| {
-            ui.selectable_value(&mut band_sel, 0, "All");
-            ui.selectable_value(&mut band_sel, 1, "Bass");
-            ui.selectable_value(&mut band_sel, 2, "Mid");
-            ui.selectable_value(&mut band_sel, 3, "High");
+        grid.row(&mut columns[0], "Target Level", |ui| {
+            crate::ui::kui::slider(ui, &mut app.master_target_level_db, -30.0..=-6.0, " dB")
         });
-        ui.ctx()
-            .data_mut(|d| d.insert_temp(egui::Id::new("audio_crossover_band"), band_sel));
-        if ui.button("Bake Audio to Null Controller").clicked() {
-            let source = app
-                .history
-                .current()
-                .active_composition()
-                .layers
-                .iter()
-                .find_map(|layer| match &layer.layer_type {
-                    crate::core::timeline::LayerType::Audio { path, .. } => Some(path.clone()),
-                    crate::core::timeline::LayerType::Video {
-                        audio_wav: Some(path),
-                        ..
-                    } => Some(path.clone()),
-                    _ => None,
-                });
-            let Some(source) = source else {
-                app.toasts
-                    .error("Add an Audio or Video-with-Audio layer first");
-                return;
-            };
-            let band = match band_sel {
-                1 => crate::core::audio_dsp::AudioExtractBand::Bass,
-                2 => crate::core::audio_dsp::AudioExtractBand::Mid,
-                3 => crate::core::audio_dsp::AudioExtractBand::Treble,
-                _ => crate::core::audio_dsp::AudioExtractBand::Master,
-            };
-            let mut project = app.history.current().clone();
-            match crate::core::audio_to_keyframes::convert_selected_band_to_keyframes(
-                project.active_composition_mut(),
-                &source,
-                band,
-            ) {
-                Ok(name) => {
-                    app.commit_project(project);
-                    app.toasts.info(format!(
-                        "Created '{name}' with animated Slider Control keyframes"
-                    ));
-                }
-                Err(error) => app.toasts.error(error),
-            }
-        }
+        grid.row(&mut columns[0], "Correction Amount", |ui| {
+            crate::ui::kui::slider(ui, &mut app.master_wet_dry, 0.0..=1.0, " mix")
+        });
+
+        crate::ui::kui::section(&mut columns[1], "Peak Protection");
+        let grid = crate::ui::kui::PropertyGrid::new(&columns[1], &["Limiter", "Ceiling"]);
+        grid.row(&mut columns[1], "Limiter", |ui| {
+            crate::ui::kui::toggle(ui, &mut app.master_limiter_enabled, "")
+        });
+        grid.row(&mut columns[1], "Ceiling", |ui| {
+            crate::ui::kui::slider(ui, &mut app.master_limiter_ceiling_db, -6.0..=-0.1, " dB")
+        });
     });
+
+    crate::ui::kui::collapsing_section(
+        ui,
+        "audio_advanced_voice",
+        "Advanced Voice Tuning",
+        false,
+        |ui| {
+            ui.columns(2, |columns| {
+                crate::ui::kui::section(&mut columns[0], "Clarity EQ");
+                let grid = crate::ui::kui::PropertyGrid::new(
+                    &columns[0],
+                    &["High-Pass Cut", "Low-Pass Cut", "Presence", "Frequency"],
+                );
+                grid.row(&mut columns[0], "High-Pass Cut", |ui| {
+                    crate::ui::kui::slider(ui, &mut app.master_eq_highpass, 20.0..=500.0, " Hz")
+                });
+                grid.row(&mut columns[0], "Low-Pass Cut", |ui| {
+                    crate::ui::kui::slider(
+                        ui,
+                        &mut app.master_eq_lowpass,
+                        2_000.0..=20_000.0,
+                        " Hz",
+                    )
+                });
+                grid.row(&mut columns[0], "Presence", |ui| {
+                    crate::ui::kui::slider(ui, &mut app.master_eq_mid_gain, -12.0..=12.0, " dB")
+                });
+                grid.row(&mut columns[0], "Frequency", |ui| {
+                    crate::ui::kui::slider(ui, &mut app.master_eq_mid_freq, 200.0..=8_000.0, " Hz")
+                });
+
+                crate::ui::kui::section(&mut columns[1], "Dynamics");
+                let grid = crate::ui::kui::PropertyGrid::new(
+                    &columns[1],
+                    &["Threshold", "Ratio", "Attack", "Release", "Makeup Gain"],
+                );
+                grid.row(&mut columns[1], "Threshold", |ui| {
+                    crate::ui::kui::slider(ui, &mut app.master_comp_threshold, -40.0..=0.0, " dB")
+                });
+                grid.row(&mut columns[1], "Ratio", |ui| {
+                    crate::ui::kui::slider(ui, &mut app.master_comp_ratio, 1.0..=20.0, ":1")
+                });
+                grid.row(&mut columns[1], "Attack", |ui| {
+                    crate::ui::kui::slider(ui, &mut app.master_comp_attack, 0.1..=50.0, " ms")
+                });
+                grid.row(&mut columns[1], "Release", |ui| {
+                    crate::ui::kui::slider(ui, &mut app.master_comp_release, 10.0..=500.0, " ms")
+                });
+                grid.row(&mut columns[1], "Makeup Gain", |ui| {
+                    crate::ui::kui::slider(ui, &mut app.master_comp_makeup, 0.0..=24.0, " dB")
+                });
+            });
+        },
+    );
+
+    ui.add_space(crate::ui::kui::space::XS);
+    crate::ui::kui::collapsing_section(
+        ui,
+        "audio_keyframe_generation",
+        "Generate Keyframes from Audio",
+        false,
+        |ui| {
+            crate::ui::kui::caption(
+                ui,
+                "Create animation keyframes from the volume of each frequency band.",
+            );
+            let mut band_sel = ui.ctx().data(|d| {
+                d.get_temp::<i32>(egui::Id::new("audio_crossover_band"))
+                    .unwrap_or(0)
+            });
+            ui.horizontal_wrapped(|ui| {
+                for (value, label) in [(0, "Full Mix"), (1, "Bass"), (2, "Mids"), (3, "Treble")] {
+                    if crate::ui::kui::tool_button(ui, band_sel == value, label).clicked() {
+                        band_sel = value;
+                    }
+                }
+            });
+            ui.ctx()
+                .data_mut(|d| d.insert_temp(egui::Id::new("audio_crossover_band"), band_sel));
+            if crate::ui::kui::button(
+                ui,
+                "Bake to Null Controller",
+                crate::ui::kui::ButtonKind::Accent,
+            )
+            .clicked()
+            {
+                let source = app
+                    .history
+                    .current()
+                    .active_composition()
+                    .layers
+                    .iter()
+                    .find_map(|layer| match &layer.layer_type {
+                        crate::core::timeline::LayerType::Audio { path, .. } => Some(path.clone()),
+                        crate::core::timeline::LayerType::Video {
+                            audio_wav: Some(path),
+                            ..
+                        } => Some(path.clone()),
+                        _ => None,
+                    });
+                let Some(source) = source else {
+                    app.toasts.error(crate::ui::localization::tr(
+                        "Add an audio layer or a video layer with audio first",
+                    ));
+                    return;
+                };
+                let band = match band_sel {
+                    1 => crate::core::audio_dsp::AudioExtractBand::Bass,
+                    2 => crate::core::audio_dsp::AudioExtractBand::Mid,
+                    3 => crate::core::audio_dsp::AudioExtractBand::Treble,
+                    _ => crate::core::audio_dsp::AudioExtractBand::Master,
+                };
+                let mut project = app.history.current().clone();
+                match crate::core::audio_to_keyframes::convert_selected_band_to_keyframes(
+                    project.active_composition_mut(),
+                    &source,
+                    band,
+                ) {
+                    Ok(name) => {
+                        app.commit_project(project);
+                        app.toasts.info(crate::ui::localization::tr_format(
+                            "Created Slider Control keyframes on {}",
+                            &[&name],
+                        ));
+                    }
+                    Err(error) => app.toasts.error(error),
+                }
+            }
+        },
+    );
 
     if correction_before != app.audio_correction_settings()
         || channels_before != app.audio_mixer_channels

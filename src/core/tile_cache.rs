@@ -137,13 +137,13 @@ impl TileCache {
             .is_none_or(|total| total > self.max_memory)
             && !self.tiles.is_empty()
         {
-            if let Some((worst_key, worst_entry)) = self
+            if let Some((worst_key, worst_bytes)) = self
                 .tiles
                 .iter()
                 .min_by_key(|(_, e)| e.lru_stamp)
-                .map(|(k, e)| (*k, e.clone()))
+                .map(|(k, entry)| (*k, entry.pixels.len()))
             {
-                self.current_memory -= worst_entry.pixels.len();
+                self.current_memory = self.current_memory.saturating_sub(worst_bytes);
                 self.tiles.remove(&worst_key);
             } else {
                 break;

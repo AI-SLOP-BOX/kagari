@@ -1,0 +1,300 @@
+use super::*;
+
+impl GpuComputeContext {
+    pub fn gpu_directional_sharpen(
+        &self,
+        p: &mut [u8],
+        w: u32,
+        h: u32,
+        angle: f32,
+        strength: f32,
+    ) -> bool {
+        self.dispatch_fx(
+            p,
+            w,
+            h,
+            ParamsUniform {
+                width: w,
+                height: h,
+                radius: 0,
+                mode: 50,
+                angle: 0.0,
+                brightness: angle,
+                contrast: strength,
+                saturation: 1.0,
+                hue_shift: 0.0,
+                param_f3: 0.0,
+                param_f4: 0.0,
+                param_f5: 0.0,
+                param_f6: 0.0,
+                param_f7: 0.0,
+                param_f8: 0.0,
+                _pad: 0.0,
+            },
+            "gpu_dsh",
+        )
+    }
+    pub fn gpu_halftone(&self, p: &mut [u8], w: u32, h: u32, cell_size: f32) -> bool {
+        self.dispatch_fx(
+            p,
+            w,
+            h,
+            ParamsUniform {
+                width: w,
+                height: h,
+                radius: 0,
+                mode: 51,
+                angle: 0.0,
+                brightness: cell_size,
+                contrast: 1.0,
+                saturation: 1.0,
+                hue_shift: 0.0,
+                param_f3: 0.0,
+                param_f4: 0.0,
+                param_f5: 0.0,
+                param_f6: 0.0,
+                param_f7: 0.0,
+                param_f8: 0.0,
+                _pad: 0.0,
+            },
+            "gpu_ht",
+        )
+    }
+    pub fn gpu_mosaic(&self, p: &mut [u8], w: u32, h: u32, bw: f32, bh: f32) -> bool {
+        self.dispatch_fx(
+            p,
+            w,
+            h,
+            ParamsUniform {
+                width: w,
+                height: h,
+                radius: 0,
+                mode: 52,
+                angle: 0.0,
+                brightness: bw,
+                contrast: bh,
+                saturation: 1.0,
+                hue_shift: 0.0,
+                param_f3: 0.0,
+                param_f4: 0.0,
+                param_f5: 0.0,
+                param_f6: 0.0,
+                param_f7: 0.0,
+                param_f8: 0.0,
+                _pad: 0.0,
+            },
+            "gpu_mos",
+        )
+    }
+    pub fn gpu_crosshatch(&self, p: &mut [u8], w: u32, h: u32, gap: f32, threshold: f32) -> bool {
+        self.dispatch_fx(
+            p,
+            w,
+            h,
+            ParamsUniform {
+                width: w,
+                height: h,
+                radius: 0,
+                mode: 53,
+                angle: 0.0,
+                brightness: gap,
+                contrast: threshold,
+                saturation: 1.0,
+                hue_shift: 0.0,
+                param_f3: 0.0,
+                param_f4: 0.0,
+                param_f5: 0.0,
+                param_f6: 0.0,
+                param_f7: 0.0,
+                param_f8: 0.0,
+                _pad: 0.0,
+            },
+            "gpu_ch",
+        )
+    }
+    pub fn gpu_bevel_alpha(&self, p: &mut [u8], w: u32, h: u32, depth: f32, angle: f32) -> bool {
+        self.dispatch_fx(
+            p,
+            w,
+            h,
+            ParamsUniform {
+                width: w,
+                height: h,
+                radius: 0,
+                mode: 55,
+                angle: 0.0,
+                brightness: depth,
+                contrast: angle,
+                saturation: 1.0,
+                hue_shift: 0.0,
+                param_f3: 0.0,
+                param_f4: 0.0,
+                param_f5: 0.0,
+                param_f6: 0.0,
+                param_f7: 0.0,
+                param_f8: 0.0,
+                _pad: 0.0,
+            },
+            "gpu_bv",
+        )
+    }
+    pub fn gpu_film_grain(&self, p: &mut [u8], w: u32, h: u32, intensity: f32, seed: f32) -> bool {
+        self.dispatch_fx(
+            p,
+            w,
+            h,
+            ParamsUniform {
+                width: w,
+                height: h,
+                radius: 0,
+                mode: 58,
+                angle: 0.0,
+                brightness: intensity,
+                contrast: 1.0,
+                saturation: 1.0,
+                hue_shift: 0.0,
+                param_f3: 0.0,
+                param_f4: 0.0,
+                param_f5: seed,
+                param_f6: 0.0,
+                param_f7: 0.0,
+                param_f8: 0.0,
+                _pad: 0.0,
+            },
+            "gpu_fg",
+        )
+    }
+    pub fn gpu_fractal_noise(
+        &self,
+        p: &mut [u8],
+        w: u32,
+        h: u32,
+        scale: f32,
+        evolution: f32,
+        blend: f32,
+    ) -> bool {
+        self.dispatch_fx(
+            p,
+            w,
+            h,
+            ParamsUniform {
+                width: w,
+                height: h,
+                radius: 0,
+                mode: 59,
+                angle: 0.0,
+                brightness: scale,
+                contrast: evolution,
+                saturation: blend,
+                hue_shift: 0.0,
+                param_f3: 0.0,
+                param_f4: 0.0,
+                param_f5: 0.0,
+                param_f6: 0.0,
+                param_f7: 0.0,
+                param_f8: 0.0,
+                _pad: 0.0,
+            },
+            "gpu_fn",
+        )
+    }
+    pub fn gpu_glitch_displacement(
+        &self,
+        p: &mut [u8],
+        w: u32,
+        h: u32,
+        amount: f32,
+        seed: f32,
+    ) -> bool {
+        self.dispatch_fx(
+            p,
+            w,
+            h,
+            ParamsUniform {
+                width: w,
+                height: h,
+                radius: 0,
+                mode: 60,
+                angle: 0.0,
+                brightness: amount,
+                contrast: 1.0,
+                saturation: 1.0,
+                hue_shift: 0.0,
+                param_f3: 0.0,
+                param_f4: 0.0,
+                param_f5: seed,
+                param_f6: 0.0,
+                param_f7: 0.0,
+                param_f8: 0.0,
+                _pad: 0.0,
+            },
+            "gpu_gd",
+        )
+    }
+    pub fn gpu_scanline_glitch(
+        &self,
+        p: &mut [u8],
+        w: u32,
+        h: u32,
+        amount: f32,
+        seed: f32,
+    ) -> bool {
+        self.dispatch_fx(
+            p,
+            w,
+            h,
+            ParamsUniform {
+                width: w,
+                height: h,
+                radius: 0,
+                mode: 61,
+                angle: 0.0,
+                brightness: amount,
+                contrast: 1.0,
+                saturation: 1.0,
+                hue_shift: 0.0,
+                param_f3: 0.0,
+                param_f4: 0.0,
+                param_f5: seed,
+                param_f6: 0.0,
+                param_f7: 0.0,
+                param_f8: 0.0,
+                _pad: 0.0,
+            },
+            "gpu_sg",
+        )
+    }
+    pub fn gpu_crt_scanlines(
+        &self,
+        p: &mut [u8],
+        w: u32,
+        h: u32,
+        spacing: f32,
+        intensity: f32,
+    ) -> bool {
+        self.dispatch_fx(
+            p,
+            w,
+            h,
+            ParamsUniform {
+                width: w,
+                height: h,
+                radius: 0,
+                mode: 33,
+                angle: 0.0,
+                brightness: spacing,
+                contrast: intensity,
+                saturation: 1.0,
+                hue_shift: 0.0,
+                param_f3: 0.0,
+                param_f4: 0.0,
+                param_f5: 0.0,
+                param_f6: 0.0,
+                param_f7: 0.0,
+                param_f8: 0.0,
+                _pad: 0.0,
+            },
+            "gpu_crt",
+        )
+    }
+}

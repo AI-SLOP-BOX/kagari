@@ -30,7 +30,7 @@ pub fn draw(
                 "Bands",
                 bands,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 1.0..=5.0));
+                    crate::ui::kui::slider(ui, v, 1.0..=5.0, "");
                 },
             );
             draw_prop(
@@ -41,7 +41,7 @@ pub fn draw(
                 "Opacity",
                 opacity,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
                 },
             );
             draw_prop(
@@ -52,7 +52,7 @@ pub fn draw(
                 "Position X",
                 position_x,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
                 },
             );
             draw_prop(
@@ -63,7 +63,7 @@ pub fn draw(
                 "Position Y",
                 position_y,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
                 },
             );
             draw_prop(
@@ -74,7 +74,7 @@ pub fn draw(
                 "Width",
                 spec_w,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.01..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.01..=1.0, "");
                 },
             );
             draw_prop(
@@ -85,7 +85,7 @@ pub fn draw(
                 "Height",
                 spec_h,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.01..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.01..=1.0, "");
                 },
             );
         }
@@ -94,7 +94,6 @@ pub fn draw(
             treble_gain,
             crossover_freq,
         } => {
-            ui.label("Bass & Treble");
             draw_prop(
                 ui,
                 current_frame,
@@ -103,7 +102,7 @@ pub fn draw(
                 "Bass (dB)",
                 bass_gain,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, -24.0..=24.0));
+                    crate::ui::kui::slider(ui, v, -24.0..=24.0, "");
                 },
             );
             draw_prop(
@@ -114,7 +113,7 @@ pub fn draw(
                 "Treble (dB)",
                 treble_gain,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, -24.0..=24.0));
+                    crate::ui::kui::slider(ui, v, -24.0..=24.0, "");
                 },
             );
             draw_prop(
@@ -125,7 +124,7 @@ pub fn draw(
                 "Crossover (Hz)",
                 crossover_freq,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 80.0..=5000.0));
+                    crate::ui::kui::slider(ui, v, 80.0..=5000.0, "");
                 },
             );
         }
@@ -135,7 +134,6 @@ pub fn draw(
             feedback,
             wet_dry,
         } => {
-            ui.label("Flanger");
             draw_prop(
                 ui,
                 current_frame,
@@ -144,7 +142,7 @@ pub fn draw(
                 "Max Delay (ms)",
                 max_delay_ms,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 1.0..=10.0));
+                    crate::ui::kui::slider(ui, v, 1.0..=10.0, "");
                 },
             );
             draw_prop(
@@ -155,7 +153,7 @@ pub fn draw(
                 "LFO Rate (Hz)",
                 lfo_rate,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.1..=10.0));
+                    crate::ui::kui::slider(ui, v, 0.1..=10.0, "");
                 },
             );
             draw_prop(
@@ -166,7 +164,7 @@ pub fn draw(
                 "Feedback",
                 feedback,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=0.95));
+                    crate::ui::kui::slider(ui, v, 0.0..=0.95, "");
                 },
             );
             draw_prop(
@@ -177,7 +175,7 @@ pub fn draw(
                 "Wet/Dry",
                 wet_dry,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
                 },
             );
         }
@@ -188,7 +186,6 @@ pub fn draw(
             voices,
             feedback,
         } => {
-            ui.label("Chorus");
             draw_prop(
                 ui,
                 current_frame,
@@ -197,7 +194,7 @@ pub fn draw(
                 "Delay (ms)",
                 delay_ms,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 1.0..=30.0));
+                    crate::ui::kui::slider(ui, v, 1.0..=30.0, "");
                 },
             );
             draw_prop(
@@ -208,7 +205,7 @@ pub fn draw(
                 "Depth (ms)",
                 depth_ms,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.5..=10.0));
+                    crate::ui::kui::slider(ui, v, 0.5..=10.0, "");
                 },
             );
             draw_prop(
@@ -219,7 +216,7 @@ pub fn draw(
                 "Rate (Hz)",
                 rate_hz,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.1..=6.0));
+                    crate::ui::kui::slider(ui, v, 0.1..=6.0, "");
                 },
             );
             draw_prop(
@@ -230,7 +227,7 @@ pub fn draw(
                 "Voices",
                 voices,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 2.0..=8.0));
+                    crate::ui::kui::slider(ui, v, 2.0..=8.0, "");
                 },
             );
             draw_prop(
@@ -241,7 +238,7 @@ pub fn draw(
                 "Feedback",
                 feedback,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=0.9));
+                    crate::ui::kui::slider(ui, v, 0.0..=0.9, "");
                 },
             );
         }
@@ -250,7 +247,6 @@ pub fn draw(
             gain_db,
             q_factor,
         } => {
-            ui.label("Parametric EQ");
             draw_prop(
                 ui,
                 current_frame,
@@ -259,7 +255,7 @@ pub fn draw(
                 "Frequency (Hz)",
                 freq_hz,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 60.0..=18000.0));
+                    crate::ui::kui::slider(ui, v, 60.0..=18000.0, "");
                 },
             );
             draw_prop(
@@ -270,7 +266,7 @@ pub fn draw(
                 "Gain (dB)",
                 gain_db,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, -24.0..=24.0));
+                    crate::ui::kui::slider(ui, v, -24.0..=24.0, "");
                 },
             );
             draw_prop(
@@ -281,7 +277,7 @@ pub fn draw(
                 "Q Factor",
                 q_factor,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.5..=12.0));
+                    crate::ui::kui::slider(ui, v, 0.5..=12.0, "");
                 },
             );
         }
@@ -292,7 +288,6 @@ pub fn draw(
             decay,
             operator,
         } => {
-            ui.label("⏱️ Echo");
             draw_prop(
                 ui,
                 current_frame,
@@ -301,14 +296,15 @@ pub fn draw(
                 "Echo Time (s)",
                 echo_time_seconds,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, -2.0..=2.0).suffix(" s"));
+                    crate::ui::kui::slider(ui, v, -2.0..=2.0, " s");
                 },
             );
             ui.horizontal(|ui| {
-                ui.label("Number of Echoes:");
-                let mut n_i32 = *num_echoes as i32;
-                if ui.add(egui::Slider::new(&mut n_i32, 1..=30)).changed() {
-                    *num_echoes = n_i32.max(1) as u32;
+                if crate::ui::kui::property(ui, "Number of Echoes", |ui| {
+                    crate::ui::kui::slider_integer(ui, num_echoes, 1..=30)
+                })
+                .changed()
+                {
                     *project_changed = true;
                 }
             });
@@ -320,7 +316,7 @@ pub fn draw(
                 "Starting Intensity",
                 starting_intensity,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=2.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=2.0, "");
                 },
             );
             draw_prop(
@@ -331,31 +327,27 @@ pub fn draw(
                 "Decay",
                 decay,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
                 },
             );
-            ui.horizontal(|ui| {
-                ui.label("Echo Operator:");
-                egui::ComboBox::from_id_salt("echo_operator")
-                    .selected_text(format!("{:?}", operator))
-                    .show_ui(ui, |ui| {
-                        for op in [
-                            crate::core::echo_effect::EchoOperator::Add,
-                            crate::core::echo_effect::EchoOperator::Screen,
-                            crate::core::echo_effect::EchoOperator::Maximum,
-                            crate::core::echo_effect::EchoOperator::Minimum,
-                            crate::core::echo_effect::EchoOperator::CompositeInBack,
-                            crate::core::echo_effect::EchoOperator::CompositeInFront,
-                            crate::core::echo_effect::EchoOperator::Blend,
-                        ] {
-                            if ui
-                                .selectable_value(operator, op, format!("{:?}", op))
-                                .changed()
-                            {
-                                *project_changed = true;
-                            }
-                        }
-                    });
+            let operators = [
+                (crate::core::echo_effect::EchoOperator::Add, "Add"),
+                (crate::core::echo_effect::EchoOperator::Screen, "Screen"),
+                (crate::core::echo_effect::EchoOperator::Maximum, "Maximum"),
+                (crate::core::echo_effect::EchoOperator::Minimum, "Minimum"),
+                (
+                    crate::core::echo_effect::EchoOperator::CompositeInBack,
+                    "Composite In Back",
+                ),
+                (
+                    crate::core::echo_effect::EchoOperator::CompositeInFront,
+                    "Composite In Front",
+                ),
+                (crate::core::echo_effect::EchoOperator::Blend, "Blend"),
+            ];
+            let grid = crate::ui::kui::PropertyGrid::new(ui, &["Echo Operator"]);
+            *project_changed |= grid.row(ui, "Echo Operator", |ui| {
+                crate::ui::kui::combo(ui, "echo_operator", operator, &operators)
             });
         }
         _ => {}

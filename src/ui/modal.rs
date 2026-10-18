@@ -10,10 +10,26 @@ pub struct DialogWindow<'open> {
 }
 
 pub fn dialog<'open>(title: impl Into<egui::WidgetText>) -> DialogWindow<'open> {
+    let glass_frame = egui::Frame::none()
+        .fill(crate::ui::theme::colors::BG_PANEL_DEEP)
+        .rounding(egui::Rounding::same(10.0))
+        .stroke(egui::Stroke::new(
+            1.0_f32,
+            crate::ui::theme::colors::BORDER_MEDIUM,
+        ))
+        .inner_margin(egui::Margin::same(14.0))
+        .shadow(egui::epaint::Shadow {
+            offset: egui::vec2(0.0, 16.0),
+            blur: 40.0,
+            spread: 2.0,
+            color: egui::Color32::from_black_alpha(220),
+        });
+
     DialogWindow {
         window: egui::Window::new(title)
             .collapsible(false)
-            .order(egui::Order::Foreground),
+            .order(egui::Order::Foreground)
+            .frame(glass_frame),
         open: None,
     }
 }
@@ -59,6 +75,11 @@ impl<'open> DialogWindow<'open> {
         self
     }
 
+    pub fn max_size(mut self, size: impl Into<egui::Vec2>) -> Self {
+        self.window = self.window.max_size(size);
+        self
+    }
+
     pub fn min_width(mut self, width: f32) -> Self {
         self.window = self.window.min_width(width);
         self
@@ -91,9 +112,7 @@ impl<'open> DialogWindow<'open> {
     ) -> Option<egui::InnerResponse<Option<R>>> {
         let text_input_focused = crate::ui::focus::is_text_input_focused(ctx);
         let escape_pressed = !text_input_focused
-            && ctx.input_mut(|input| {
-                input.consume_key(egui::Modifiers::NONE, egui::Key::Escape)
-            });
+            && ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
         if escape_pressed {
             if let Some(open) = self.open.as_deref_mut() {
                 *open = false;

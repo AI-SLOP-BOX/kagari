@@ -18,12 +18,16 @@ pub(crate) fn render_matte_buffer(
     height: u32,
 ) -> Option<Vec<u8>> {
     if layer.track_matte != TrackMatteMode::None {
-        // Find the layer below this one (the matte source)
-        let layer_idx = comp.layers.iter().position(|l| l.id == layer.id);
-        if let Some(idx) = layer_idx {
-            if idx > 0 {
-                let matte_layer = &comp.layers[idx - 1];
-                if matte_layer.is_active(frame) && matte_layer.visible {
+        // Find the matte source layer: explicit track_matte_layer_id or fallback to adjacent layer above (idx - 1)
+        let matte_layer_opt = if let Some(target_id) = &layer.track_matte_layer_id {
+            comp.layers.iter().find(|l| l.id == *target_id)
+        } else {
+            let layer_idx = comp.layers.iter().position(|l| l.id == layer.id);
+            layer_idx.and_then(|idx| if idx > 0 { comp.layers.get(idx - 1) } else { None })
+        };
+
+        if let Some(matte_layer) = matte_layer_opt {
+            if matte_layer.is_active(frame) && matte_layer.visible {
                     let source_frame = matte_layer.effective_render_frame(frame, comp.fps);
                     let (m_pos, m_scale, m_rot, m_opa) =
                         comp.resolve_world_transform(matte_layer, frame);
@@ -202,75 +206,68 @@ pub(crate) fn render_matte_buffer(
                                 }
                                 _ => unreachable!(),
                             };
-                            with_image_cache(|cache| {
-                                if let Some(image) = cache.load_image(&image_path).cloned() {
-                                    let next_image = next_image_path
-                                        .as_deref()
-                                        .filter(|path| *path != image_path && blend_t > 0.0)
-                                        .and_then(|path| cache.load_image(path).cloned())
-                                        .filter(|next| {
-                                            next.width == image.width && next.height == image.height
-                                        });
-                                    let iw = image.width as f32;
-                                    let ih = image.height as f32;
-                                    let cos_r = m_rot.to_radians().cos();
-                                    let sin_r = m_rot.to_radians().sin();
-                                    let half_w =
-                                        (comp.width as f32 * (m_scale[0].abs() / 100.0) * 0.5)
-                                            .max(0.001);
-                                    let half_h =
-                                        (comp.height as f32 * (m_scale[1].abs() / 100.0) * 0.5)
-                                            .max(0.001);
-                                    for py in 0..m_bh {
-                                        for px in 0..m_bw {
-                                            let dx = px as f32 + 0.5 - m_cx;
-                                            let dy = py as f32 + 0.5 - m_cy;
-                                            let lx = dx * cos_r + dy * sin_r;
-                                            let ly = -dx * sin_r + dy * cos_r;
-                                            let u = lx / (half_w * 2.0) + 0.5;
-                                            let v = ly / (half_h * 2.0) + 0.5;
-                                            if !(0.0..1.0).contains(&u) || !(0.0..1.0).contains(&v)
-                                            {
-                                                continue;
-                                            }
-                                            let sx = ((u * iw) as u32).min(image.width - 1);
-                                            let sy = ((v * ih) as u32).min(image.height - 1);
-                                            let sidx = ((sy * image.width + sx) * 4) as usize;
-                                            let didx = ((py * m_bw + px) * 4) as usize;
-                                            if sidx + 3 < image.pixels.len()
-                                                && didx + 3 < m_buf.len()
-                                            {
-                                                let sample = |channel: usize| -> u8 {
-                                                    let a = image.pixels[sidx + channel] as f32;
-                                                    let b = next_image
-                                                        .as_ref()
-                                                        .and_then(|next| {
-                                                            let next_idx = ((sy * next.width + sx)
-                                                                * 4)
-                                                                as usize;
-                                                            next.pixels
-                                                                .get(next_idx + channel)
-                                                                .copied()
-                                                        })
-                                                        .map(f32::from)
-                                                        .unwrap_or(a);
-                                                    (a + (b - a) * blend_t)
-                                                        .round()
-                                                        .clamp(0.0, 255.0)
-                                                        as u8
-                                                };
-                                                m_buf[didx] = sample(0);
-                                                m_buf[didx + 1] = sample(1);
-                                                m_buf[didx + 2] = sample(2);
-                                                m_buf[didx + 3] = (sample(3) as f32 * m_opacity)
-                                                    .round()
-                                                    .clamp(0.0, 255.0)
-                                                    as u8;
-                                            }
+                            let images = with_image_cache(|cache| {
+                                let image = cache.load_image(&image_path).cloned()?;
+                                let next_image = next_image_path
+                                    .as_deref()
+                                    .filter(|path| *path != image_path && blend_t > 0.0)
+                                    .and_then(|path| cache.load_image(path).cloned())
+                                    .filter(|next| {
+                                        next.width == image.width && next.height == image.height
+                                    });
+                                Some((image, next_image))
+                            });
+                            if let Some((image, next_image)) = images {
+                                let iw = image.width as f32;
+                                let ih = image.height as f32;
+                                let cos_r = m_rot.to_radians().cos();
+                                let sin_r = m_rot.to_radians().sin();
+                                let half_w = (comp.width as f32 * (m_scale[0].abs() / 100.0) * 0.5)
+                                    .max(0.001);
+                                let half_h =
+                                    (comp.height as f32 * (m_scale[1].abs() / 100.0) * 0.5)
+                                        .max(0.001);
+                                for py in 0..m_bh {
+                                    for px in 0..m_bw {
+                                        let dx = px as f32 + 0.5 - m_cx;
+                                        let dy = py as f32 + 0.5 - m_cy;
+                                        let lx = dx * cos_r + dy * sin_r;
+                                        let ly = -dx * sin_r + dy * cos_r;
+                                        let u = lx / (half_w * 2.0) + 0.5;
+                                        let v = ly / (half_h * 2.0) + 0.5;
+                                        if !(0.0..1.0).contains(&u) || !(0.0..1.0).contains(&v) {
+                                            continue;
+                                        }
+                                        let sx = ((u * iw) as u32).min(image.width - 1);
+                                        let sy = ((v * ih) as u32).min(image.height - 1);
+                                        let sidx = ((sy * image.width + sx) * 4) as usize;
+                                        let didx = ((py * m_bw + px) * 4) as usize;
+                                        if sidx + 3 < image.pixels.len() && didx + 3 < m_buf.len() {
+                                            let sample = |channel: usize| -> u8 {
+                                                let a = image.pixels[sidx + channel] as f32;
+                                                let b = next_image
+                                                    .as_ref()
+                                                    .and_then(|next| {
+                                                        let next_idx =
+                                                            ((sy * next.width + sx) * 4) as usize;
+                                                        next.pixels.get(next_idx + channel).copied()
+                                                    })
+                                                    .map(f32::from)
+                                                    .unwrap_or(a);
+                                                (a + (b - a) * blend_t).round().clamp(0.0, 255.0)
+                                                    as u8
+                                            };
+                                            m_buf[didx] = sample(0);
+                                            m_buf[didx + 1] = sample(1);
+                                            m_buf[didx + 2] = sample(2);
+                                            m_buf[didx + 3] = (sample(3) as f32 * m_opacity)
+                                                .round()
+                                                .clamp(0.0, 255.0)
+                                                as u8;
                                         }
                                     }
                                 }
-                            });
+                            }
                         }
                         LayerType::PreComp { comp_id } => {
                             // Render the nested composition as the matte source
@@ -342,7 +339,4 @@ pub(crate) fn render_matte_buffer(
         } else {
             None
         }
-    } else {
-        None
-    }
 }

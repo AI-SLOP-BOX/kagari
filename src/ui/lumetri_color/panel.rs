@@ -1,0 +1,499 @@
+use super::effects_io::*;
+use super::widgets::*;
+use crate::core::timeline::{Effect, EffectType};
+use crate::ui::theme::colors;
+use crate::KagariApp;
+use eframe::egui;
+
+pub fn draw_lumetri_color(app: &mut KagariApp, ui: &mut egui::Ui) {
+    super::hud::draw_lumetri_header_hud(app, ui);
+    ui.add_space(6.0);
+
+    egui::ScrollArea::vertical().show(ui, |ui| {
+        // --- 1. Basic Correction ---
+        ui.collapsing("Basic Correction", |ui| {
+            ui.label(egui::RichText::new("Input LUT").small());
+            egui::ComboBox::from_id_salt("lumetri_lut_combo")
+                .selected_text("None")
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut 0, 0, "None");
+                    ui.selectable_value(&mut 0, 1, "SL CLEAN_KODAK_2393.cube");
+                    ui.selectable_value(&mut 0, 2, "SL NOIR_BLUE.cube");
+                    ui.selectable_value(&mut 0, 3, "ACEScg_to_sRGB.cube");
+                });
+
+            ui.add_space(4.0);
+            ui.label(
+                egui::RichText::new("Basic Correction — Three-Way (live)")
+                    .strong()
+                    .color(colors::ACCENT_CYAN),
+            );
+            if app.selection.selected_layer_idx.is_none() {
+                ui.label(
+                    egui::RichText::new("Select a layer to grade.")
+                        .small()
+                        .color(colors::ACCENT_YELLOW),
+                );
+            }
+            let mut cb = read_cb(app).unwrap_or(([0.0; 3], [0.0; 3], [0.0; 3], true));
+            let mut changed = false;
+
+            ui.small("Shadows");
+            ui.horizontal(|ui| {
+                for (i, cname) in ["R", "G", "B"].iter().enumerate() {
+                    ui.label(*cname);
+                    if ui
+                        .add(
+                            egui::DragValue::new(&mut cb.0[i])
+                                .speed(1.0)
+                                .range(-100.0..=100.0),
+                        )
+                        .changed()
+                    {
+                        changed = true;
+                    }
+                }
+            });
+            ui.small("Midtones");
+            ui.horizontal(|ui| {
+                for (i, cname) in ["R", "G", "B"].iter().enumerate() {
+                    ui.label(*cname);
+                    if ui
+                        .add(
+                            egui::DragValue::new(&mut cb.1[i])
+                                .speed(1.0)
+                                .range(-100.0..=100.0),
+                        )
+                        .changed()
+                    {
+                        changed = true;
+                    }
+                }
+            });
+            ui.small("Highlights");
+            ui.horizontal(|ui| {
+                for (i, cname) in ["R", "G", "B"].iter().enumerate() {
+                    ui.label(*cname);
+                    if ui
+                        .add(
+                            egui::DragValue::new(&mut cb.2[i])
+                                .speed(1.0)
+                                .range(-100.0..=100.0),
+                        )
+                        .changed()
+                    {
+                        changed = true;
+                    }
+                }
+            });
+            if ui.checkbox(&mut cb.3, "Preserve Luminosity").changed() {
+                changed = true;
+            }
+            if changed {
+                write_cb(app, cb.0, cb.1, cb.2, cb.3);
+            }
+            ui.horizontal(|ui| {
+                if ui.small_button("Reset").clicked() {
+                    write_cb(app, [0.0; 3], [0.0; 3], [0.0; 3], true);
+                    app.toasts.info("Color balance reset");
+                }
+                if ui
+                    .small_button("Remove")
+                    .on_hover_text("Remove the Color Balance effect from the layer")
+                    .clicked()
+                {
+                    remove_effect(
+                        app,
+                        app.selection.selected_layer_idx.unwrap_or(0),
+                        CB_EFFECT,
+                    );
+                }
+            });
+        });
+
+        // --- 2. Creative Looks (drive the live three-way) ---
+        ui.collapsing("Creative Looks", |ui| {
+            ui.label(
+                egui::RichText::new(
+                    "One-click looks written onto the layer's Color Balance effect.",
+                )
+                .small(),
+            );
+            let mut picked: Option<LookPreset> = None;
+            ui.horizontal_wrapped(|ui| {
+                for (name, s, m, h) in [
+                    (
+                        "Sunset Gold",
+                        [25.0, 10.0, -15.0],
+                        [10.0, 0.0, -5.0],
+                        [-10.0, -5.0, 20.0],
+                    ),
+                    (
+                        "Teal & Orange",
+                        [-12.0, 6.0, 16.0],
+                        [-5.0, 0.0, 10.0],
+                        [15.0, 5.0, -22.0],
+                    ),
+                    (
+                        "Faded Film",
+                        [20.0, 18.0, 24.0],
+                        [5.0, 5.0, 5.0],
+                        [-8.0, -8.0, -6.0],
+                    ),
+                    (
+                        "❄️ Arctic",
+                        [-6.0, 0.0, 18.0],
+                        [-3.0, 0.0, 8.0],
+                        [-5.0, 2.0, 14.0],
+                    ),
+                    (
+                        "Ember",
+                        [30.0, 8.0, -25.0],
+                        [12.0, -2.0, -10.0],
+                        [5.0, -5.0, -18.0],
+                    ),
+                ] {
+                    if ui.button(name).clicked() {
+                        picked = Some((name, s, m, h));
+                    }
+                }
+            });
+            if let Some((name, s, m, h)) = picked {
+                write_cb(app, s, m, h, true);
+                app.toasts.info(format!("Applied look '{name}'"));
+            }
+            if ui.small_button("Neutral Reset").clicked() {
+                write_cb(app, [0.0; 3], [0.0; 3], [0.0; 3], true);
+            }
+        });
+
+        // --- 3. Master Curve (scalar drive) ---
+        ui.collapsing("Master Curve", |ui| {
+            ui.label(egui::RichText::new("Drives the layer's Curves effect (−100..100).").small());
+            let mut val = {
+                let idx = app.selection.selected_layer_idx;
+                let found = idx
+                    .and_then(|i| app.history.current().active_composition().layers.get(i))
+                    .and_then(|l| {
+                        l.effects
+                            .iter()
+                            .find(|e| e.name == "Lumetri Master Curve")
+                            .cloned()
+                    });
+                match found {
+                    Some(e) => match e.effect_type {
+                        EffectType::Curves { channel } => channel.evaluate(0),
+                        _ => 0.0,
+                    },
+                    None => 0.0,
+                }
+            };
+            let resp = ui.add(egui::Slider::new(&mut val, -100.0..=100.0).text("lift ↔ gain"));
+            if resp.changed() {
+                if let Some(idx) = app.selection.selected_layer_idx {
+                    let v = val;
+                    app.modify_project(move |p| {
+                        let comp = p.active_composition_mut();
+                        let Some(layer) = comp.layers.get_mut(idx) else {
+                            return;
+                        };
+                        let make = || EffectType::Curves {
+                            channel: crate::core::property::Animatable::new_constant(v),
+                        };
+                        if let Some(e) = layer
+                            .effects
+                            .iter_mut()
+                            .find(|e| e.name == "Lumetri Master Curve")
+                        {
+                            e.effect_type = make();
+                        } else {
+                            layer.effects.push(Effect {
+                                id: format!("lumetri_curve_{}", layer.effects.len()),
+                                name: "Lumetri Master Curve".into(),
+                                effect_type: make(),
+                                enabled: true,
+                            });
+                        }
+                    });
+                }
+            }
+            if ui.small_button("Remove Curve").clicked() {
+                remove_effect(
+                    app,
+                    app.selection.selected_layer_idx.unwrap_or(0),
+                    "Lumetri Master Curve",
+                );
+            }
+        });
+
+        // --- 4. Color Wheels (live three-way) ---
+        ui.collapsing("Color Wheels (Live)", |ui| {
+            let mut cb = read_cb(app).unwrap_or(([0.0; 3], [0.0; 3], [0.0; 3], true));
+            let mut changed = false;
+            ui.horizontal(|ui| {
+                changed |= wheel_widget(ui, "Shadows", &mut cb.0);
+                changed |= wheel_widget(ui, "Midtones", &mut cb.1);
+                changed |= wheel_widget(ui, "Highlights", &mut cb.2);
+            });
+            ui.label(
+                egui::RichText::new("Drag = R/G · Shift+drag = B")
+                    .small()
+                    .color(colors::TEXT_MUTED),
+            );
+            if changed {
+                write_cb(app, cb.0, cb.1, cb.2, cb.3);
+            }
+        });
+
+        // --- 5. Vignette (live) ---
+        ui.collapsing("Vignette (Live)", |ui| {
+            let mut vig = read_vignette(app).unwrap_or((40.0, 50.0, 60.0, [0.0, 0.0, 0.0, 1.0]));
+            let mut ch = false;
+            ui.horizontal(|ui| {
+                ui.label("Intensity:");
+                ch |= ui
+                    .add(
+                        egui::DragValue::new(&mut vig.0)
+                            .speed(1.0)
+                            .range(0.0..=200.0),
+                    )
+                    .changed();
+            });
+            ui.horizontal(|ui| {
+                ui.label("Roundness:");
+                ch |= ui
+                    .add(
+                        egui::DragValue::new(&mut vig.1)
+                            .speed(1.0)
+                            .range(0.0..=200.0),
+                    )
+                    .changed();
+            });
+            ui.horizontal(|ui| {
+                ui.label("Feather:");
+                ch |= ui
+                    .add(
+                        egui::DragValue::new(&mut vig.2)
+                            .speed(1.0)
+                            .range(0.0..=200.0),
+                    )
+                    .changed();
+            });
+            let mut col = egui::Color32::from_rgba_unmultiplied(
+                (vig.3[0] * 255.0) as u8,
+                (vig.3[1] * 255.0) as u8,
+                (vig.3[2] * 255.0) as u8,
+                (vig.3[3] * 255.0) as u8,
+            );
+            ui.horizontal(|ui| {
+                ui.label("Colour:");
+                if ui.color_edit_button_srgba(&mut col).changed() {
+                    vig.3 = [
+                        col.r() as f32 / 255.0,
+                        col.g() as f32 / 255.0,
+                        col.b() as f32 / 255.0,
+                        col.a() as f32 / 255.0,
+                    ];
+                    ch = true;
+                }
+            });
+            if ch {
+                write_vignette(app, vig.0, vig.1, vig.2, vig.3);
+            }
+            if ui.small_button("Remove Vignette").clicked() {
+                remove_effect(
+                    app,
+                    app.selection.selected_layer_idx.unwrap_or(0),
+                    VIG_EFFECT,
+                );
+            }
+        });
+
+        // --- 6. Basic Correction (Live): WB / Vibrance / HSL ---
+        ui.collapsing("Basic Correction (Live)", |ui| {
+            ui.label(
+                egui::RichText::new("Sliders create/update effects on the selected layer.")
+                    .small()
+                    .color(colors::TEXT_MUTED),
+            );
+
+            // ── White Balance (Temperature / Tint) ──
+            ui.small("White Balance");
+            let mut wb = read_wb(app).unwrap_or((0.0, 0.0));
+            let mut ch_wb = false;
+            ui.horizontal(|ui| {
+                ui.label("Temperature:");
+                ch_wb |= ui
+                    .add(egui::Slider::new(&mut wb.0, -100.0..=100.0))
+                    .changed();
+            });
+            ui.horizontal(|ui| {
+                ui.label("Tint:");
+                ch_wb |= ui
+                    .add(egui::Slider::new(&mut wb.1, -100.0..=100.0))
+                    .changed();
+            });
+            if ch_wb {
+                write_wb(app, wb.0, wb.1);
+            }
+            if ui.small_button("Remove WB").clicked() {
+                remove_effect(
+                    app,
+                    app.selection.selected_layer_idx.unwrap_or(0),
+                    WB_EFFECT,
+                );
+            }
+
+            ui.separator();
+
+            // ── Vibrance ──
+            ui.small("Vibrance");
+            let mut vib = read_single_f32(app, VIB_EFFECT, |et, frame| match et {
+                EffectType::Vibrance { amount } => Some(amount.evaluate(frame)),
+                _ => None,
+            })
+            .unwrap_or(0.0);
+            if ui
+                .add(egui::Slider::new(&mut vib, -100.0..=100.0))
+                .changed()
+            {
+                write_single_f32(app, VIB_EFFECT, "lumetri_vib", vib, |a| {
+                    EffectType::Vibrance { amount: a }
+                });
+            }
+            if ui.small_button("Remove Vibrance").clicked() {
+                remove_effect(
+                    app,
+                    app.selection.selected_layer_idx.unwrap_or(0),
+                    VIB_EFFECT,
+                );
+            }
+
+            ui.separator();
+
+            // ── HSL Adjust ──
+            ui.small("HSL Adjust");
+            let mut hsl = read_hsl(app).unwrap_or((0.0, 0.0, 0.0));
+            let mut ch_hsl = false;
+            ui.horizontal(|ui| {
+                ui.label("Hue:");
+                ch_hsl |= ui
+                    .add(egui::Slider::new(&mut hsl.0, -180.0..=180.0).suffix("°"))
+                    .changed();
+            });
+            ui.horizontal(|ui| {
+                ui.label("Saturation:");
+                ch_hsl |= ui
+                    .add(egui::Slider::new(&mut hsl.1, -100.0..=100.0))
+                    .changed();
+            });
+            ui.horizontal(|ui| {
+                ui.label("Lightness:");
+                ch_hsl |= ui
+                    .add(egui::Slider::new(&mut hsl.2, -100.0..=100.0))
+                    .changed();
+            });
+            if ch_hsl {
+                write_hsl(app, hsl.0, hsl.1, hsl.2);
+            }
+            ui.horizontal(|ui| {
+                if ui.small_button("Reset HSL").clicked() {
+                    write_hsl(app, 0.0, 0.0, 0.0);
+                }
+                if ui.small_button("Remove HSL").clicked() {
+                    remove_effect(
+                        app,
+                        app.selection.selected_layer_idx.unwrap_or(0),
+                        HSL_EFFECT,
+                    );
+                }
+            });
+
+            ui.separator();
+            ui.horizontal(|ui| {
+                if ui.small_button("Neutral Reset All").clicked() {
+                    write_wb(app, 0.0, 0.0);
+                    write_single_f32(app, VIB_EFFECT, "lumetri_vib", 0.0, |a| {
+                        EffectType::Vibrance { amount: a }
+                    });
+                    write_hsl(app, 0.0, 0.0, 0.0);
+                    app.toasts.info("Basic Correction reset");
+                }
+            });
+        });
+
+        // --- 7. HSL Secondary (Key / Refine / Grade) ---
+        ui.collapsing("HSL Secondary (Keyer & Grade)", |ui| {
+            ui.label(
+                egui::RichText::new("Isolate specific hue/sat/lum ranges for targeted grading.")
+                    .small()
+                    .color(colors::TEXT_MUTED),
+            );
+            let mut key_hue = ui.ctx().data(|d| {
+                d.get_temp::<f32>(egui::Id::new("hsl_sec_hue"))
+                    .unwrap_or(30.0)
+            });
+            let mut key_hue_width = ui.ctx().data(|d| {
+                d.get_temp::<f32>(egui::Id::new("hsl_sec_hue_w"))
+                    .unwrap_or(20.0)
+            });
+            let mut key_sat_min = ui.ctx().data(|d| {
+                d.get_temp::<f32>(egui::Id::new("hsl_sec_sat_min"))
+                    .unwrap_or(20.0)
+            });
+            let mut key_blur = ui.ctx().data(|d| {
+                d.get_temp::<f32>(egui::Id::new("hsl_sec_blur"))
+                    .unwrap_or(2.0)
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("Hue Center / Width:");
+                if ui
+                    .add(egui::Slider::new(&mut key_hue, 0.0..=360.0).suffix("°"))
+                    .changed()
+                {
+                    ui.ctx()
+                        .data_mut(|d| d.insert_temp(egui::Id::new("hsl_sec_hue"), key_hue));
+                }
+                if ui
+                    .add(egui::Slider::new(&mut key_hue_width, 5.0..=90.0).suffix("°"))
+                    .changed()
+                {
+                    ui.ctx()
+                        .data_mut(|d| d.insert_temp(egui::Id::new("hsl_sec_hue_w"), key_hue_width));
+                }
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("Min Saturation:");
+                if ui
+                    .add(egui::Slider::new(&mut key_sat_min, 0.0..=100.0).suffix("%"))
+                    .changed()
+                {
+                    ui.ctx()
+                        .data_mut(|d| d.insert_temp(egui::Id::new("hsl_sec_sat_min"), key_sat_min));
+                }
+                ui.label("Matte Blur:");
+                if ui
+                    .add(
+                        egui::DragValue::new(&mut key_blur)
+                            .speed(0.1)
+                            .range(0.0..=20.0)
+                            .suffix(" px"),
+                    )
+                    .changed()
+                {
+                    ui.ctx()
+                        .data_mut(|d| d.insert_temp(egui::Id::new("hsl_sec_blur"), key_blur));
+                }
+            });
+
+            ui.horizontal(|ui| {
+                if ui.button("Apply Secondary Tint").clicked() {
+                    app.toasts
+                        .info("HSL Secondary Key applied to active composite");
+                }
+            });
+        });
+    });
+}

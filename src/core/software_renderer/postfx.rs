@@ -195,7 +195,7 @@ pub(crate) fn apply_post_fx(ctx: PostFxCtx<'_>) {
         shade_b += mat.emission;
         let shade_avg = ((shade_r + shade_g + shade_b) / 3.0).clamp(0.0, 3.0);
         if (shade_avg - 1.0).abs() > 0.01 {
-            for px_chunk in layer_buf.chunks_exact_mut(4) {
+            for px_chunk in layer_buf.as_chunks_mut::<4>().0 {
                 px_chunk[0] = ((px_chunk[0] as f32 * shade_r.clamp(0.0, 3.0)).min(255.0)) as u8;
                 px_chunk[1] = ((px_chunk[1] as f32 * shade_g.clamp(0.0, 3.0)).min(255.0)) as u8;
                 px_chunk[2] = ((px_chunk[2] as f32 * shade_b.clamp(0.0, 3.0)).min(255.0)) as u8;

@@ -1,25 +1,25 @@
+use crate::ui::kui;
 use crate::KagariApp;
 use eframe::egui;
 
 pub fn draw_camera_dof_hud(app: &mut KagariApp, ui: &mut egui::Ui) {
     let mut project_changed = false;
     let current_f = app.playback.current_frame;
-    let pre_snapshot = if !app.drag_active() {
-        Some(app.history.current().clone())
-    } else {
-        None
-    };
+    app.ensure_panel_edit_snapshot("camera_dof_hud", ui);
 
     {
-        ui.horizontal(|ui| {
-            ui.style_mut().spacing.item_spacing.x = 4.0;
-            ui.small("3D DoF:");
+        ui.vertical(|ui| {
+            kui::section(ui, "3D DoF");
+            let grid = kui::PropertyGrid::new(ui, &["DoF", "Aperture", "Iris", "Focus"]);
 
             let selected_idx = app.selection.selected_layer_idx;
 
             // 1. Auto-Focus to Selected Layer Button
             if ui
-                .button("Focus to Layer")
+                .add_enabled_ui(selected_idx.is_some(), |ui| {
+                    kui::button(ui, "Focus to Layer", kui::ButtonKind::Default)
+                })
+                .inner
                 .on_hover_text("Auto-calculate Focus Distance to selected 3D Layer")
                 .clicked()
             {
@@ -64,66 +64,41 @@ pub fn draw_camera_dof_hud(app: &mut KagariApp, ui: &mut egui::Ui) {
             // 2. DoF Enabled Checkbox
             let comp = app.history.current_mut().active_composition_mut();
             let cam = comp.resolve_camera_mut();
-            if ui.checkbox(&mut cam.dof_enabled, "DoF").changed() {
-                project_changed = true;
-            }
-
-            ui.label(egui::RichText::new("Aperture:").small());
-            if ui
-                .add(
-                    egui::Slider::new(&mut cam.aperture, 0.0..=150.0)
-                        .suffix(" px")
-                        .show_value(true),
-                )
+            if grid
+                .row(ui, "DoF", |ui| kui::toggle(ui, &mut cam.dof_enabled, ""))
                 .changed()
             {
                 project_changed = true;
             }
 
-            ui.label(egui::RichText::new("Iris:").small());
-            egui::ComboBox::from_id_salt("bokeh_shape_combo")
-                .selected_text(match cam.dof_iris_sides {
-                    3 => "3-Blade (Triangle)",
-                    5 => "5-Blade (Pentagon)",
-                    6 => "6-Blade (Hexagon)",
-                    8 => "8-Blade (Octagon)",
-                    _ => "Round (Circular)",
+            if grid
+                .row(ui, "Aperture", |ui| {
+                    kui::parameter_slider(ui, &mut cam.aperture, 0.0..=150.0, " px")
                 })
-                .show_ui(ui, |ui| {
-                    if ui
-                        .selectable_value(&mut cam.dof_iris_sides, 0, "Round (Circular)")
-                        .clicked()
-                    {
-                        project_changed = true;
-                    }
-                    if ui
-                        .selectable_value(&mut cam.dof_iris_sides, 5, "5-Blade (Pentagon)")
-                        .clicked()
-                    {
-                        project_changed = true;
-                    }
-                    if ui
-                        .selectable_value(&mut cam.dof_iris_sides, 6, "6-Blade (Hexagon)")
-                        .clicked()
-                    {
-                        project_changed = true;
-                    }
-                    if ui
-                        .selectable_value(&mut cam.dof_iris_sides, 8, "8-Blade (Octagon)")
-                        .clicked()
-                    {
-                        project_changed = true;
-                    }
-                });
+                .changed()
+            {
+                project_changed = true;
+            }
 
-            ui.label(egui::RichText::new("Focus:").small());
-            if ui
-                .add(
-                    egui::DragValue::new(&mut cam.focus_distance)
-                        .range(10.0..=10000.0)
-                        .speed(5.0)
-                        .suffix(" px"),
+            project_changed |= grid.row(ui, "Iris", |ui| {
+                kui::combo(
+                    ui,
+                    "bokeh_shape_combo",
+                    &mut cam.dof_iris_sides,
+                    &[
+                        (0, "Round (Circular)"),
+                        (3, "3-Blade (Triangle)"),
+                        (5, "5-Blade (Pentagon)"),
+                        (6, "6-Blade (Hexagon)"),
+                        (8, "8-Blade (Octagon)"),
+                    ],
                 )
+            });
+
+            if grid
+                .row(ui, "Focus", |ui| {
+                    kui::number(ui, &mut cam.focus_distance, 10.0..=10000.0, 5.0, " px")
+                })
                 .changed()
             {
                 project_changed = true;
@@ -135,13 +110,13 @@ pub fn draw_camera_dof_hud(app: &mut KagariApp, ui: &mut egui::Ui) {
         let pointer_down = ui.input(|input| input.pointer.any_down());
         if pointer_down {
             if !app.drag_active() {
-                if let Some(snapshot) = pre_snapshot {
+                if let Some(snapshot) = app.take_panel_edit_snapshot("camera_dof_hud") {
                     app.begin_drag_with_snapshot(snapshot, "Camera Depth of Field Edit");
                 }
             }
         } else if app.drag_active() {
             app.commit_drag();
-        } else if let Some(snapshot) = pre_snapshot {
+        } else if let Some(snapshot) = app.take_panel_edit_snapshot("camera_dof_hud") {
             app.begin_drag_with_snapshot(snapshot, "Camera Depth of Field Edit");
             app.commit_drag();
         }

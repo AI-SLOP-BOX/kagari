@@ -42,11 +42,13 @@ impl Default for ImageCache {
 }
 
 impl ImageCache {
+    const DEFAULT_MAX_BYTES: usize = 1024 * 1024 * 1024;
+
     pub fn new() -> Self {
         Self {
             cache: HashMap::new(),
             current_bytes: 0,
-            max_bytes: 256 * 1024 * 1024, // 256 MB default
+            max_bytes: Self::DEFAULT_MAX_BYTES,
             lru_clock: 0,
         }
     }
@@ -97,7 +99,7 @@ impl ImageCache {
             return self.cache.get(path).map(|cached| &cached.image);
         }
 
-        let img = match Self::decode_image_file(path) {
+        let img = match Self::decode_image_file(path, self.max_bytes) {
             Some(image) => image,
             None => {
                 if let Some(removed) = self.cache.remove(path) {
@@ -131,7 +133,7 @@ impl ImageCache {
     pub const MAX_IMAGE_PIXELS: u64 = 16384 * 16384;
 
     /// Decode an image file to RGBA pixels.
-    fn decode_image_file(path: &str) -> Option<CachedImage> {
+    fn decode_image_file(path: &str, max_bytes: usize) -> Option<CachedImage> {
         // Check declared dimensions BEFORE decoding to avoid huge allocations
         let reader = image::ImageReader::open(path).ok()?;
         let (declared_w, declared_h) = reader.into_dimensions().ok()?;
@@ -143,6 +145,16 @@ impl ImageCache {
                 declared_w,
                 declared_h,
                 total
+            );
+            return None;
+        }
+        let declared_bytes = total.checked_mul(4)?;
+        if declared_bytes > max_bytes as u64 {
+            log::warn!(
+                "[ImageCache] Rejecting image {} with {} RGBA bytes (cache limit {} bytes)",
+                path,
+                declared_bytes,
+                max_bytes
             );
             return None;
         }
@@ -168,11 +180,47 @@ impl ImageCache {
     }
 
     fn file_revision(path: &str) -> Option<FileRevision> {
-        let metadata = std::fs::metadata(path).ok()?;
-        Some(FileRevision {
-            len: metadata.len(),
-            modified: metadata.modified().ok(),
-        })
+        #[cfg(not(test))]
+        {
+            use std::sync::Mutex;
+            use std::time::Instant;
+
+            static REVISION_CACHE: std::sync::OnceLock<
+                Mutex<HashMap<String, (FileRevision, Instant)>>,
+            > = std::sync::OnceLock::new();
+
+            let cache_mutex = REVISION_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+            let now = Instant::now();
+            if let Ok(cache) = cache_mutex.lock() {
+                if let Some((rev, timestamp)) = cache.get(path) {
+                    if now.duration_since(*timestamp).as_millis() < 1000 {
+                        return Some(rev.clone());
+                    }
+                }
+            }
+
+            let metadata = std::fs::metadata(path).ok()?;
+            let rev = FileRevision {
+                len: metadata.len(),
+                modified: metadata.modified().ok(),
+            };
+
+            if let Ok(mut cache) = cache_mutex.lock() {
+                if cache.len() > 2000 {
+                    cache.clear();
+                }
+                cache.insert(path.to_string(), (rev.clone(), now));
+            }
+            Some(rev)
+        }
+        #[cfg(test)]
+        {
+            let metadata = std::fs::metadata(path).ok()?;
+            Some(FileRevision {
+                len: metadata.len(),
+                modified: metadata.modified().ok(),
+            })
+        }
     }
 
     /// Get a cached image without loading.

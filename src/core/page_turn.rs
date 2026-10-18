@@ -146,8 +146,8 @@ pub fn apply_page_turn(src: &[u8], width: u32, height: u32, params: &PageTurnPar
                 // Lighting highlight on ridge
                 let highlight = (theta - std::f32::consts::FRAC_PI_2).abs();
                 let shade = (1.0 - (highlight / std::f32::consts::FRAC_PI_2).clamp(0.0, 1.0)) * 0.4;
-                for c in 0..3 {
-                    pixel[c] = ((pixel[c] as f32 + shade * 255.0).clamp(0.0, 255.0)) as u8;
+                for channel in pixel.iter_mut().take(3) {
+                    *channel = ((*channel as f32 + shade * 255.0).clamp(0.0, 255.0)) as u8;
                 }
 
                 dst[d_idx..d_idx + 4].copy_from_slice(&pixel);

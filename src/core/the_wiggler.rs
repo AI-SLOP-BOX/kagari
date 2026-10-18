@@ -19,9 +19,21 @@ pub enum WiggleDimension {
     AllIndependent,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WiggleSettings {
+    pub start_frame: u32,
+    pub end_frame: u32,
+    pub fps: u32,
+    pub frequency: f32,
+    pub magnitude: f32,
+    pub noise_type: WiggleNoiseType,
+    pub seed: u32,
+}
+
 /// Generate 2D vector wiggle keyframes over a dynamic base trajectory (additive blend)
+#[allow(clippy::too_many_arguments)]
 pub fn generate_wiggle_vec2_additive<F>(
-    mut base_fn: F,
+    base_fn: F,
     start_frame: u32,
     end_frame: u32,
     fps: u32,
@@ -34,6 +46,38 @@ pub fn generate_wiggle_vec2_additive<F>(
 where
     F: FnMut(u32) -> [f32; 2],
 {
+    generate_wiggle_vec2_additive_with_settings(
+        base_fn,
+        WiggleSettings {
+            start_frame,
+            end_frame,
+            fps,
+            frequency,
+            magnitude,
+            noise_type,
+            seed,
+        },
+        dimensions,
+    )
+}
+
+pub fn generate_wiggle_vec2_additive_with_settings<F>(
+    mut base_fn: F,
+    settings: WiggleSettings,
+    dimensions: WiggleDimension,
+) -> Vec<Keyframe<[f32; 2]>>
+where
+    F: FnMut(u32) -> [f32; 2],
+{
+    let WiggleSettings {
+        start_frame,
+        end_frame,
+        fps,
+        frequency,
+        magnitude,
+        noise_type,
+        seed,
+    } = settings;
     let mut keyframes = Vec::new();
     let frame_interval = (fps as f32 / frequency.max(0.1)).round().max(1.0) as u32;
 
@@ -99,6 +143,7 @@ where
 }
 
 /// Generate 2D vector wiggle keyframes with static base value
+#[allow(clippy::too_many_arguments)]
 pub fn generate_wiggle_vec2(
     base_val: [f32; 2],
     start_frame: u32,
@@ -110,22 +155,33 @@ pub fn generate_wiggle_vec2(
     dimensions: WiggleDimension,
     seed: u32,
 ) -> Vec<Keyframe<[f32; 2]>> {
-    generate_wiggle_vec2_additive(
-        |_| base_val,
-        start_frame,
-        end_frame,
-        fps,
-        frequency,
-        magnitude,
-        noise_type,
+    generate_wiggle_vec2_with_settings(
+        base_val,
+        WiggleSettings {
+            start_frame,
+            end_frame,
+            fps,
+            frequency,
+            magnitude,
+            noise_type,
+            seed,
+        },
         dimensions,
-        seed,
     )
 }
 
+pub fn generate_wiggle_vec2_with_settings(
+    base_val: [f32; 2],
+    settings: WiggleSettings,
+    dimensions: WiggleDimension,
+) -> Vec<Keyframe<[f32; 2]>> {
+    generate_wiggle_vec2_additive_with_settings(|_| base_val, settings, dimensions)
+}
+
 /// Generate 1D scalar wiggle keyframes over a dynamic base trajectory (additive blend)
+#[allow(clippy::too_many_arguments)]
 pub fn generate_wiggle_scalar_additive<F>(
-    mut base_fn: F,
+    base_fn: F,
     start_frame: u32,
     end_frame: u32,
     fps: u32,
@@ -137,6 +193,36 @@ pub fn generate_wiggle_scalar_additive<F>(
 where
     F: FnMut(u32) -> f32,
 {
+    generate_wiggle_scalar_additive_with_settings(
+        base_fn,
+        WiggleSettings {
+            start_frame,
+            end_frame,
+            fps,
+            frequency,
+            magnitude,
+            noise_type,
+            seed,
+        },
+    )
+}
+
+pub fn generate_wiggle_scalar_additive_with_settings<F>(
+    mut base_fn: F,
+    settings: WiggleSettings,
+) -> Vec<Keyframe<f32>>
+where
+    F: FnMut(u32) -> f32,
+{
+    let WiggleSettings {
+        start_frame,
+        end_frame,
+        fps,
+        frequency,
+        magnitude,
+        noise_type,
+        seed,
+    } = settings;
     let mut keyframes = Vec::new();
     let frame_interval = (fps as f32 / frequency.max(0.1)).round().max(1.0) as u32;
 
@@ -180,6 +266,7 @@ where
 }
 
 /// Generate 1D scalar wiggle keyframes with static base value
+#[allow(clippy::too_many_arguments)]
 pub fn generate_wiggle_scalar(
     base_val: f32,
     start_frame: u32,
@@ -190,16 +277,25 @@ pub fn generate_wiggle_scalar(
     noise_type: WiggleNoiseType,
     seed: u32,
 ) -> Vec<Keyframe<f32>> {
-    generate_wiggle_scalar_additive(
-        |_| base_val,
-        start_frame,
-        end_frame,
-        fps,
-        frequency,
-        magnitude,
-        noise_type,
-        seed,
+    generate_wiggle_scalar_with_settings(
+        base_val,
+        WiggleSettings {
+            start_frame,
+            end_frame,
+            fps,
+            frequency,
+            magnitude,
+            noise_type,
+            seed,
+        },
     )
+}
+
+pub fn generate_wiggle_scalar_with_settings(
+    base_val: f32,
+    settings: WiggleSettings,
+) -> Vec<Keyframe<f32>> {
+    generate_wiggle_scalar_additive_with_settings(|_| base_val, settings)
 }
 
 #[cfg(test)]
@@ -208,16 +304,18 @@ mod tests {
 
     #[test]
     fn test_wiggler_generates_bounded_keyframes() {
-        let kfs = generate_wiggle_vec2(
+        let kfs = generate_wiggle_vec2_with_settings(
             [100.0, 200.0],
-            0,
-            60,
-            30,
-            5.0,
-            20.0,
-            WiggleNoiseType::Smooth,
+            WiggleSettings {
+                start_frame: 0,
+                end_frame: 60,
+                fps: 30,
+                frequency: 5.0,
+                magnitude: 20.0,
+                noise_type: WiggleNoiseType::Smooth,
+                seed: 42,
+            },
             WiggleDimension::AllIndependent,
-            42,
         );
 
         assert!(!kfs.is_empty());
@@ -230,16 +328,18 @@ mod tests {
     #[test]
     fn test_wiggler_preserves_moving_trajectory() {
         // Base is moving from [0, 0] to [300, 300]
-        let kfs = generate_wiggle_vec2_additive(
+        let kfs = generate_wiggle_vec2_additive_with_settings(
             |f| [f as f32 * 10.0, f as f32 * 10.0],
-            0,
-            30,
-            30,
-            5.0,
-            5.0,
-            WiggleNoiseType::Smooth,
+            WiggleSettings {
+                start_frame: 0,
+                end_frame: 30,
+                fps: 30,
+                frequency: 5.0,
+                magnitude: 5.0,
+                noise_type: WiggleNoiseType::Smooth,
+                seed: 123,
+            },
             WiggleDimension::AllIndependent,
-            123,
         );
 
         assert_eq!(kfs.first().unwrap().frame, 0);

@@ -52,7 +52,8 @@ impl VfxGraphCompiler {
         }
 
         // ── 1. Build Adjacency Matrix & In-Degree Map ──
-        let mut adj: HashMap<usize, Vec<usize>> = HashMap::new();
+        let mut adj: Vec<Vec<usize>> = vec![Vec::new(); num_layers];
+        let mut dependencies_by_node: Vec<Vec<usize>> = vec![Vec::new(); num_layers];
         let mut in_degree: Vec<usize> = vec![0; num_layers];
 
         let id_to_idx: HashMap<&str, usize> = comp
@@ -68,7 +69,6 @@ impl VfxGraphCompiler {
             .any(|l| l.is_active(current_frame) && l.solo);
 
         let mut active_nodes = HashSet::new();
-
         for (idx, layer) in comp.layers.iter().enumerate() {
             if !layer.is_active(current_frame) {
                 continue;
@@ -78,48 +78,72 @@ impl VfxGraphCompiler {
             }
 
             active_nodes.insert(idx);
-
-            // A) Parenting dependency
-            if let Some(ref parent_id) = layer.parent_id {
-                if let Some(&parent_idx) = id_to_idx.get(parent_id.as_str()) {
-                    if parent_idx < num_layers {
-                        adj.entry(parent_idx).or_default().push(idx);
-                        in_degree[idx] += 1;
-                        active_nodes.insert(parent_idx);
-                    }
-                }
-            }
-
-            // B) Track Matte dependency
             if layer.track_matte != TrackMatteMode::None && idx > 0 {
-                let matte_idx = idx - 1;
-                if matte_idx < num_layers {
-                    adj.entry(matte_idx).or_default().push(idx);
-                    in_degree[idx] += 1;
-                    active_nodes.insert(matte_idx);
+                active_nodes.insert(idx - 1);
+            }
+        }
+
+        // Include every ancestor needed to evaluate transforms, even when a
+        // parent itself is outside its active range or hidden by solo mode.
+        let mut pending: Vec<usize> = active_nodes.iter().copied().collect();
+        while let Some(child_idx) = pending.pop() {
+            let layer = &comp.layers[child_idx];
+            if let Some(parent_idx) = layer
+                .parent_id
+                .as_deref()
+                .and_then(|id| id_to_idx.get(id).copied())
+            {
+                if active_nodes.insert(parent_idx) {
+                    pending.push(parent_idx);
                 }
             }
         }
 
+        let mut edges = HashSet::new();
+        for &node_idx in &active_nodes {
+            let layer = &comp.layers[node_idx];
+            if let Some(parent_idx) = layer
+                .parent_id
+                .as_deref()
+                .and_then(|id| id_to_idx.get(id).copied())
+                .filter(|parent| active_nodes.contains(parent))
+            {
+                edges.insert((parent_idx, node_idx));
+            }
+            if layer.track_matte != TrackMatteMode::None && node_idx > 0 {
+                let matte_idx = node_idx - 1;
+                if active_nodes.contains(&matte_idx) {
+                    edges.insert((matte_idx, node_idx));
+                }
+            }
+        }
+        let mut edges = edges.into_iter().collect::<Vec<_>>();
+        edges.sort_unstable();
+        for (from, to) in edges {
+            adj[from].push(to);
+            dependencies_by_node[to].push(from);
+            in_degree[to] += 1;
+        }
+
         // ── 2. Topological Sort (Kahn's Algorithm) ──
         let mut queue = VecDeque::new();
-        for &node_idx in &active_nodes {
-            if in_degree[node_idx] == 0 {
+        for (node_idx, degree) in in_degree.iter().enumerate().take(num_layers) {
+            if active_nodes.contains(&node_idx) && *degree == 0 {
                 queue.push_back(node_idx);
             }
         }
 
         let mut sorted_order = Vec::new();
+        let mut scheduled = vec![false; num_layers];
         while let Some(u) = queue.pop_front() {
             sorted_order.push(u);
+            scheduled[u] = true;
 
-            if let Some(neighbors) = adj.get(&u) {
-                for &v in neighbors {
-                    if in_degree[v] > 0 {
-                        in_degree[v] -= 1;
-                        if in_degree[v] == 0 {
-                            queue.push_back(v);
-                        }
+            for &v in &adj[u] {
+                if in_degree[v] > 0 {
+                    in_degree[v] -= 1;
+                    if in_degree[v] == 0 {
+                        queue.push_back(v);
                     }
                 }
             }
@@ -131,8 +155,8 @@ impl VfxGraphCompiler {
                 "VfxGraphCompiler: Parent or Matte cyclic dependency detected in Composition '{}'!",
                 comp.name
             );
-            for &idx in &active_nodes {
-                if !sorted_order.contains(&idx) {
+            for (idx, is_scheduled) in scheduled.iter().enumerate().take(num_layers) {
+                if active_nodes.contains(&idx) && !is_scheduled {
                     sorted_order.push(idx);
                 }
             }
@@ -163,18 +187,10 @@ impl VfxGraphCompiler {
                 }
             };
 
-            let deps: Vec<usize> = comp
-                .layers
-                .iter()
-                .enumerate()
-                .filter(|(dep_idx, _)| adj.get(dep_idx).is_some_and(|list| list.contains(&idx)))
-                .map(|(dep_idx, _)| dep_idx)
-                .collect();
-
             self.steps.push(ExecutionStep {
                 step_id: step_id_counter,
                 op,
-                dependencies: deps,
+                dependencies: dependencies_by_node[idx].clone(),
             });
         }
     }

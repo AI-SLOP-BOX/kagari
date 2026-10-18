@@ -6,6 +6,12 @@ use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
 
+#[derive(Clone)]
+struct SoftwarePreviewTexture {
+    key: u64,
+    texture: egui::TextureHandle,
+}
+
 pub fn draw_software_canvas(
     ui: &mut egui::Ui,
     app: &KagariApp,
@@ -25,40 +31,84 @@ pub fn draw_software_canvas(
     }
 
     let comp = app.history.current().active_composition();
-    let custom_lut_active = ui
+    let lut_mode = app.color_lut_mode;
+    let exposure_ev = ui
         .ctx()
-        .data(|d| d.get_temp::<usize>(egui::Id::new("ae_colorspace_lut")))
-        .unwrap_or(0)
-        == 3;
+        .data(|d| d.get_temp::<f32>(egui::Id::new("ae_exposure_ev")))
+        .unwrap_or(0.0);
     // This function is the CPU fallback for the Viewer. It must show the
     // rendered composition rather than the editor's schematic layer cards;
     // otherwise CPU-only builds silently display placeholders for footage and
     // pre-comps while GPU builds display the real image.
     let software_preview_required = comp.width > 0 && comp.height > 0;
-    if software_preview_required || custom_lut_active {
-        let max_preview_dim = 2048u32;
-        let proxy_factor = crate::core::proxy::composition_preview_scale(comp);
-        let proxy_max_dim = ((max_preview_dim as f32 * proxy_factor).round() as u32).max(64);
-        let scale = (proxy_max_dim as f32 / comp.width.max(comp.height) as f32).min(1.0);
-        let render_width = ((comp.width as f32 * scale).round() as u32).max(1);
-        let render_height = ((comp.height as f32 * scale).round() as u32).max(1);
-        let pixels = crate::core::software_renderer::render_frame_to_pixels_preview(
-            comp,
-            current_frame,
-            render_width,
-            render_height,
-            0.0,
-            if custom_lut_active { 3 } else { 0 },
-        );
-        let image = egui::ColorImage::from_rgba_unmultiplied(
-            [render_width as usize, render_height as usize],
-            &pixels,
-        );
-        let texture = ui.ctx().load_texture(
-            "software-effect-preview",
-            image,
-            egui::TextureOptions::LINEAR,
-        );
+    if software_preview_required || lut_mode != 0 {
+        let render_width = comp.width;
+        let render_height = comp.height;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        comp.id.hash(&mut hasher);
+        app.history.generation().hash(&mut hasher);
+        crate::core::frame_cache::current_version().hash(&mut hasher);
+        current_frame.hash(&mut hasher);
+        render_width.hash(&mut hasher);
+        render_height.hash(&mut hasher);
+        exposure_ev.to_bits().hash(&mut hasher);
+        lut_mode.hash(&mut hasher);
+        let key = hasher.finish();
+        let cache_id = egui::Id::new("software-effect-preview-cache");
+        let cache_allowed = !ui.input(|input| input.pointer.any_down());
+        let cached = ui
+            .ctx()
+            .data(|data| data.get_temp::<SoftwarePreviewTexture>(cache_id));
+        let cached_hit = cache_allowed
+            .then_some(cached.as_ref())
+            .flatten()
+            .filter(|c| c.key == key)
+            .map(|c| c.texture.clone());
+        let texture = if let Some(tex) = cached_hit {
+            tex
+        } else {
+            let pixels = crate::core::software_renderer::render_frame_to_pixels_preview(
+                comp,
+                current_frame,
+                render_width,
+                render_height,
+                exposure_ev,
+                lut_mode,
+            );
+            let image = egui::ColorImage::from_rgba_unmultiplied(
+                [render_width as usize, render_height as usize],
+                &pixels,
+            );
+            let texture = if let Some(mut existing) = cached {
+                if existing.texture.size() == [render_width as usize, render_height as usize] {
+                    existing.texture.set(image, egui::TextureOptions::LINEAR);
+                    existing.texture
+                } else {
+                    ui.ctx().load_texture(
+                        "software-effect-preview",
+                        image,
+                        egui::TextureOptions::LINEAR,
+                    )
+                }
+            } else {
+                ui.ctx().load_texture(
+                    "software-effect-preview",
+                    image,
+                    egui::TextureOptions::LINEAR,
+                )
+            };
+            ui.ctx().data_mut(|data| {
+                data.insert_temp(
+                    cache_id,
+                    SoftwarePreviewTexture {
+                        key,
+                        texture: texture.clone(),
+                    },
+                )
+            });
+            texture
+        };
         ui.put(
             draw_rect,
             egui::Image::new(egui::load::SizedTexture::new(

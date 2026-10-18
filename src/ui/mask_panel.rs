@@ -45,13 +45,19 @@ fn remove_vertex_from_track(
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
     use crate::core::keyframe::{InterpolationType, Keyframe};
     use crate::core::property::Animatable;
 
     fn polygon(offset: f32) -> Vec<[f32; 2]> {
-        vec![[offset, 0.0], [offset + 10.0, 0.0], [offset + 10.0, 10.0], [offset, 10.0]]
+        vec![
+            [offset, 0.0],
+            [offset + 10.0, 0.0],
+            [offset + 10.0, 10.0],
+            [offset, 10.0],
+        ]
     }
 
     #[test]
@@ -79,9 +85,17 @@ mod tests {
             Keyframe::new(10, polygon(100.0), InterpolationType::Linear),
         ]);
         add_vertex_to_track(&mut track);
-        assert!(track.keyframes().unwrap().iter().all(|key| key.value.len() == 5));
+        assert!(track
+            .keyframes()
+            .unwrap()
+            .iter()
+            .all(|key| key.value.len() == 5));
         remove_vertex_from_track(&mut track, 2);
-        assert!(track.keyframes().unwrap().iter().all(|key| key.value.len() == 4));
+        assert!(track
+            .keyframes()
+            .unwrap()
+            .iter()
+            .all(|key| key.value.len() == 4));
     }
 }
 use eframe::egui;
@@ -92,11 +106,7 @@ pub fn draw_mask_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
 
     let selected_layer_idx = app.selection.selected_layer_idx;
     let project_changed_flag = &mut false;
-    let pre_snapshot = if !app.drag_active() {
-        Some(app.history.current().clone())
-    } else {
-        None
-    };
+    app.ensure_panel_edit_snapshot("mask_panel", ui);
 
     {
         let temp_proj = app.history.current_mut();
@@ -341,44 +351,49 @@ pub fn draw_mask_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
 
                                         let mut to_delete = None;
                                         let can_delete = verts.len() > 3;
-                                        egui::ScrollArea::vertical()
-                                            .max_height(160.0)
-                                            .show_rows(ui, 24.0, verts.len(), |ui, rows| {
+                                        egui::ScrollArea::vertical().max_height(160.0).show_rows(
+                                            ui,
+                                            24.0,
+                                            verts.len(),
+                                            |ui, rows| {
                                                 for vi in rows {
-                                            ui.horizontal(|ui| {
-                                                ui.label(format!("#{}:", vi + 1));
-                                                let mut x = verts[vi][0];
-                                                let mut y = verts[vi][1];
-                                                if ui
-                                                    .add(
-                                                        egui::DragValue::new(&mut x)
-                                                            .speed(1.0)
-                                                            .prefix("X: "),
-                                                    )
-                                                    .changed()
-                                                {
-                                                    verts[vi][0] = x;
-                                                    *project_changed_flag = true;
-                                                    path_vertices_changed = true;
+                                                    ui.horizontal(|ui| {
+                                                        ui.label(format!("#{}:", vi + 1));
+                                                        let mut x = verts[vi][0];
+                                                        let mut y = verts[vi][1];
+                                                        if ui
+                                                            .add(
+                                                                egui::DragValue::new(&mut x)
+                                                                    .speed(1.0)
+                                                                    .prefix("X: "),
+                                                            )
+                                                            .changed()
+                                                        {
+                                                            verts[vi][0] = x;
+                                                            *project_changed_flag = true;
+                                                            path_vertices_changed = true;
+                                                        }
+                                                        if ui
+                                                            .add(
+                                                                egui::DragValue::new(&mut y)
+                                                                    .speed(1.0)
+                                                                    .prefix("Y: "),
+                                                            )
+                                                            .changed()
+                                                        {
+                                                            verts[vi][1] = y;
+                                                            *project_changed_flag = true;
+                                                            path_vertices_changed = true;
+                                                        }
+                                                        if can_delete
+                                                            && ui.small_button("✕").clicked()
+                                                        {
+                                                            to_delete = Some(vi);
+                                                        }
+                                                    });
                                                 }
-                                                if ui
-                                                    .add(
-                                                        egui::DragValue::new(&mut y)
-                                                            .speed(1.0)
-                                                            .prefix("Y: "),
-                                                    )
-                                                    .changed()
-                                                {
-                                                    verts[vi][1] = y;
-                                                    *project_changed_flag = true;
-                                                    path_vertices_changed = true;
-                                                }
-                                                if can_delete && ui.small_button("✕").clicked() {
-                                                    to_delete = Some(vi);
-                                                }
-                                            });
-                                                }
-                                            });
+                                            },
+                                        );
                                         if let Some(d) = to_delete {
                                             verts.remove(d);
                                             remove_vertex_from_track(&mut mask.path.vertices, d);
@@ -455,13 +470,13 @@ pub fn draw_mask_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
         let pointer_down = ui.input(|input| input.pointer.any_down());
         if pointer_down {
             if !app.drag_active() {
-                if let Some(snapshot) = pre_snapshot {
+                if let Some(snapshot) = app.take_panel_edit_snapshot("mask_panel") {
                     app.begin_drag_with_snapshot(snapshot, "Mask Edit");
                 }
             }
         } else if app.drag_active() {
             app.commit_drag();
-        } else if let Some(snapshot) = pre_snapshot {
+        } else if let Some(snapshot) = app.take_panel_edit_snapshot("mask_panel") {
             app.begin_drag_with_snapshot(snapshot, "Mask Edit");
             app.commit_drag();
         }

@@ -94,7 +94,7 @@ pub fn apply_flicker(pixels: &mut [u8], amount: f32, speed: f32, seed: u32, fram
     if factor >= 0.9999 {
         return;
     }
-    for chunk in pixels.chunks_exact_mut(4) {
+    for chunk in pixels.as_chunks_mut::<4>().0 {
         chunk[0] = (chunk[0] as f32 * factor) as u8;
         chunk[1] = (chunk[1] as f32 * factor) as u8;
         chunk[2] = (chunk[2] as f32 * factor) as u8;
@@ -110,6 +110,7 @@ pub fn apply_flicker(pixels: &mut [u8], amount: f32, speed: f32, seed: u32, fram
 /// swapped when a second hash falls below `corruption`. Block copies move
 /// full RGBA quads so straight-alpha data stays valid.
 /// Zero amount is a byte-identical no-op.
+#[allow(clippy::too_many_arguments)]
 pub fn apply_block_glitch(
     pixels: &mut [u8],
     width: u32,
@@ -181,6 +182,7 @@ pub fn apply_block_glitch(
 /// Each of `slices` bands gets a hashed position, thickness and offset up
 /// to ±`max_offset` px. Source rows/columns clamp at the edges.
 /// Fewer than 1 slice or sub-pixel max offset is a byte-identical no-op.
+#[allow(clippy::too_many_arguments)]
 pub fn apply_slice_tear(
     pixels: &mut [u8],
     width: u32,
@@ -294,7 +296,7 @@ mod tests {
         assert_eq!(a, b);
         assert_ne!(a, base);
         // Alpha channel untouched.
-        for chunk in a.chunks_exact(4) {
+        for chunk in a.as_chunks::<4>().0 {
             assert_eq!(chunk[3], 255);
         }
     }

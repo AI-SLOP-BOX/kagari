@@ -1,3 +1,4 @@
+use crate::ui::kui::{self, ButtonKind};
 use crate::KagariApp;
 use eframe::egui;
 
@@ -10,7 +11,7 @@ pub fn draw_sequence_layers_dialog(app: &mut KagariApp, ctx: &egui::Context) {
     }
 
     let mut open = app.show_sequence_layers;
-    crate::ui::modal::window("Sequence Layers")
+    crate::ui::modal::window(crate::ui::localization::tr("Sequence Layers"))
         .open(&mut open)
         .collapsible(false)
         .resizable(false)
@@ -23,36 +24,42 @@ pub fn draw_sequence_layers_dialog(app: &mut KagariApp, ctx: &egui::Context) {
             };
 
             if selected.len() < 2 {
-                ui.label("Select at least 2 layers to sequence.");
-                ui.separator();
-                if ui.button("Close").clicked() {
+                kui::empty_state(
+                    ui,
+                    &crate::ui::localization::tr("Select at least 2 layers to sequence."),
+                    64.0,
+                );
+                kui::separator(ui);
+                if kui::button(ui, "Close", ButtonKind::Default).clicked() {
                     app.show_sequence_layers = false;
                 }
                 return;
             }
 
-            ui.label(format!("{} layers selected", selected.len()));
-            ui.add_space(4.0);
+            kui::secondary(
+                ui,
+                crate::ui::localization::tr_format(
+                    "{} layers selected",
+                    &[&selected.len().to_string()],
+                ),
+            );
+            ui.add_space(kui::space::XS);
 
             let overlap_id = egui::Id::new("ae_seq_layers_overlap");
             let mut overlap = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(overlap_id, || 0i32));
-            ui.horizontal(|ui| {
-                ui.label("Overlap:");
-                ui.add(
-                    egui::DragValue::new(&mut overlap)
-                        .range(-300..=300)
-                        .suffix(" frames"),
-                )
-                .on_hover_text(
-                    "Negative = gap between layers, 0 = butt-jointed, positive = crossfade zone",
-                );
-                if overlap != 0 {
-                    ui.ctx().data_mut(|d| d.insert_temp(overlap_id, overlap));
-                }
+            let overlap_label = crate::ui::localization::tr("Overlap");
+            let grid = kui::PropertyGrid::new(ui, &[&overlap_label]);
+            grid.row(ui, &overlap_label, |ui| {
+                let unit = crate::ui::localization::tr(" frames");
+                ui.add(kui::drag(&mut overlap).range(-300..=300).unit(&unit))
+                    .on_hover_text(crate::ui::localization::tr(
+                        "Negative = gap between layers, 0 = butt-jointed, positive = crossfade zone",
+                    ))
             });
+            ui.ctx().data_mut(|d| d.insert_temp(overlap_id, overlap));
 
             // Preview of resulting schedule
-            ui.add_space(6.0);
+            ui.add_space(kui::space::SM);
             {
                 let comp = app.history.current().active_composition();
                 let mut cursor: Option<u32> = None;
@@ -73,9 +80,9 @@ pub fn draw_sequence_layers_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                 }
             }
 
-            ui.separator();
+            kui::separator(ui);
             ui.horizontal(|ui| {
-                if ui.button("Apply Sequence").clicked() {
+                if kui::button(ui, "Apply Sequence", ButtonKind::Accent).clicked() {
                     let overlap_f = overlap;
                     let mut temp_proj = app.history.current().clone();
                     let comp_mut = temp_proj.active_composition_mut();
@@ -98,14 +105,13 @@ pub fn draw_sequence_layers_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                             (cursor as i64 + span.max(1) as i64 - overlap_f as i64).max(0) as u32;
                     }
                     app.commit_project(temp_proj);
-                    app.toasts.info(format!(
+                    app.toasts.info(crate::ui::localization::tr_format(
                         "Sequenced {} layers (overlap {}f)",
-                        selected.len(),
-                        overlap
+                        &[&selected.len().to_string(), &overlap.to_string()],
                     ));
                     app.show_sequence_layers = false;
                 }
-                if ui.button("Cancel").clicked() {
+                if kui::button(ui, "Cancel", ButtonKind::Quiet).clicked() {
                     app.show_sequence_layers = false;
                 }
             });

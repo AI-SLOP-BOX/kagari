@@ -1,11 +1,11 @@
 use crate::core::timeline::EffectType;
-use crate::ui::inspector_property::draw_property_ui;
 use eframe::egui;
 
 use super::common::draw_prop;
 
 pub fn draw(
     effect_type: &mut EffectType,
+    effect_id: &str,
     ui: &mut egui::Ui,
     current_frame: u32,
     project_changed: &mut bool,
@@ -21,7 +21,7 @@ pub fn draw(
                 "Value",
                 value,
                 |ui, v| {
-                    ui.add(egui::DragValue::new(v).speed(0.1));
+                    ui.add(crate::ui::kui::drag(v).speed(0.1));
                 },
             );
         }
@@ -34,23 +34,22 @@ pub fn draw(
                 "Angle",
                 angle_degrees,
                 |ui, v| {
-                    ui.add(egui::DragValue::new(v).speed(1.0).suffix("°"));
+                    ui.add(crate::ui::kui::drag(v).speed(1.0).unit("°"));
                 },
             );
         }
         EffectType::PointControl { point } => {
-            let p_before = point.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Point", point, |ui, val| {
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
-                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
-                });
-            }) {
-                *next_frame = Some(nf);
-            }
-            if p_before != *point {
-                *project_changed = true;
-            }
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Point",
+                point,
+                |ui, val| {
+                    crate::ui::kui::vector(ui, val, f32::MIN..=f32::MAX, 1.0, "");
+                },
+            );
         }
         EffectType::Letterbox { frac } => {
             draw_prop(
@@ -61,52 +60,49 @@ pub fn draw(
                 "Bars (frame frac)",
                 frac,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=0.45));
+                    crate::ui::kui::slider(ui, v, 0.0..=0.45, "");
                 },
             );
         }
         EffectType::ColorControl { color } => {
-            let c_before = color.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Color", color, |ui, val| {
-                ui.color_edit_button_rgba_unmultiplied(val);
-            }) {
-                *next_frame = Some(nf);
-            }
-            if c_before != *color {
-                *project_changed = true;
-            }
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Color",
+                color,
+                |ui, val| {
+                    crate::ui::kui::color_rgba(ui, val);
+                },
+            );
         }
         EffectType::CheckboxControl { checked } => {
-            if ui.checkbox(checked, "Enabled").changed() {
+            if crate::ui::kui::toggle(ui, checked, "Enabled").changed() {
                 *project_changed = true;
             }
         }
         EffectType::DropdownControl { value, options } => {
-            let id = egui::Id::new(("dropdown_ctrl", value as *const i32 as usize));
-            egui::ComboBox::from_id_salt(id)
-                .selected_text(options.get(*value as usize).cloned().unwrap_or_default())
-                .show_ui(ui, |ui| {
-                    for (i, opt) in options.iter().enumerate() {
-                        if ui.selectable_value(value, i as i32, opt).clicked() {
-                            *project_changed = true;
-                        }
-                    }
-                });
+            let id = ui.make_persistent_id((effect_id, "dropdown_ctrl"));
+            let values = options
+                .iter()
+                .enumerate()
+                .map(|(index, option)| (index as i32, option.as_str()))
+                .collect::<Vec<_>>();
+            *project_changed |= crate::ui::kui::combo(ui, id, value, &values);
         }
         EffectType::Point3DControl { point } => {
-            let p_before = point.clone();
-            if let Some(nf) = draw_property_ui(current_frame, ui, "Point 3D", point, |ui, val| {
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X: "));
-                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y: "));
-                    ui.add(egui::DragValue::new(&mut val[2]).speed(1.0).prefix("Z: "));
-                });
-            }) {
-                *next_frame = Some(nf);
-            }
-            if p_before != *point {
-                *project_changed = true;
-            }
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Point 3D",
+                point,
+                |ui, val| {
+                    crate::ui::kui::vector(ui, val, f32::MIN..=f32::MAX, 1.0, "");
+                },
+            );
         }
         _ => {}
     }

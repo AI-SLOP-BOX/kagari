@@ -24,10 +24,19 @@ pub fn draw(
                 current_frame,
                 project_changed,
                 next_frame,
-                "Type (0=Fbm,1=Turb,2=Dyn,3=Ridge)",
+                "Fractal Type",
                 fractal_type,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=3.0));
+                    let options = [
+                        (0.0_f32, "Fractal (fBm)"),
+                        (1.0, "Turbulent"),
+                        (2.0, "Dynamic"),
+                        (3.0, "Ridge"),
+                    ];
+                    let mut selected = v.round().clamp(0.0, 3.0);
+                    if crate::ui::kui::combo(ui, "fractal_noise_type", &mut selected, &options) {
+                        *v = selected;
+                    }
                 },
             );
             draw_prop(
@@ -38,7 +47,7 @@ pub fn draw(
                 "Contrast",
                 contrast,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=200.0).suffix("%"));
+                    crate::ui::kui::slider(ui, v, 0.0..=200.0, "%");
                 },
             );
             draw_prop(
@@ -49,7 +58,7 @@ pub fn draw(
                 "Brightness",
                 brightness,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, -100.0..=100.0).suffix("%"));
+                    crate::ui::kui::slider(ui, v, -100.0..=100.0, "%");
                 },
             );
             draw_prop(
@@ -60,7 +69,7 @@ pub fn draw(
                 "Complexity",
                 complexity,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 1.0..=10.0));
+                    crate::ui::kui::slider(ui, v, 1.0..=10.0, "");
                 },
             );
             draw_prop(
@@ -71,7 +80,7 @@ pub fn draw(
                 "Evolution",
                 evolution,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°"));
+                    crate::ui::kui::slider(ui, v, 0.0..=360.0, "°");
                 },
             );
         }
@@ -90,7 +99,7 @@ pub fn draw(
                 "Sun X",
                 sun_x,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
                 },
             );
             draw_prop(
@@ -101,7 +110,7 @@ pub fn draw(
                 "Sun Y",
                 sun_y,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
                 },
             );
             draw_prop(
@@ -112,7 +121,7 @@ pub fn draw(
                 "Samples",
                 samples,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 1.0..=64.0));
+                    crate::ui::kui::slider(ui, v, 1.0..=64.0, "");
                 },
             );
             draw_prop(
@@ -123,7 +132,7 @@ pub fn draw(
                 "Decay",
                 decay,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.5..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.5..=1.0, "");
                 },
             );
             draw_prop(
@@ -134,7 +143,7 @@ pub fn draw(
                 "Weight",
                 weight,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=2.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=2.0, "");
                 },
             );
         }
@@ -150,7 +159,7 @@ pub fn draw(
                 "Stars",
                 num_stars,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 1.0..=2000.0));
+                    crate::ui::kui::slider(ui, v, 1.0..=2000.0, "");
                 },
             );
             draw_prop(
@@ -161,7 +170,7 @@ pub fn draw(
                 "Depth Speed",
                 depth_speed,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=10.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=10.0, "");
                 },
             );
         }
@@ -181,7 +190,7 @@ pub fn draw(
                 "Start X",
                 start_x,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
                 },
             );
             draw_prop(
@@ -192,7 +201,7 @@ pub fn draw(
                 "Start Y",
                 start_y,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
                 },
             );
             draw_prop(
@@ -203,7 +212,7 @@ pub fn draw(
                 "End X",
                 end_x,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
                 },
             );
             draw_prop(
@@ -214,7 +223,7 @@ pub fn draw(
                 "End Y",
                 end_y,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
                 },
             );
             draw_prop(
@@ -225,7 +234,7 @@ pub fn draw(
                 "Seed",
                 seed,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=9999.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=9999.0, "");
                 },
             );
             draw_prop(
@@ -236,7 +245,7 @@ pub fn draw(
                 "Glow",
                 glow,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=5.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=5.0, "");
                 },
             );
         }
@@ -260,7 +269,7 @@ pub fn draw(
                 "Start X",
                 start_x,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
                 },
             );
             draw_prop(
@@ -271,7 +280,7 @@ pub fn draw(
                 "Start Y",
                 start_y,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
                 },
             );
             draw_prop(
@@ -282,7 +291,7 @@ pub fn draw(
                 "End X",
                 end_x,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
                 },
             );
             draw_prop(
@@ -293,7 +302,7 @@ pub fn draw(
                 "End Y",
                 end_y,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
                 },
             );
             draw_prop(
@@ -304,7 +313,7 @@ pub fn draw(
                 "Progress",
                 progress,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
                 },
             );
             draw_prop(
@@ -315,7 +324,7 @@ pub fn draw(
                 "Length %",
                 length,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 1.0..=100.0));
+                    crate::ui::kui::slider(ui, v, 1.0..=100.0, "");
                 },
             );
             draw_prop(
@@ -326,7 +335,7 @@ pub fn draw(
                 "Start Thickness",
                 starting_thickness,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.5..=50.0));
+                    crate::ui::kui::slider(ui, v, 0.5..=50.0, "");
                 },
             );
             draw_prop(
@@ -337,13 +346,13 @@ pub fn draw(
                 "End Thickness",
                 ending_thickness,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.5..=50.0));
+                    crate::ui::kui::slider(ui, v, 0.5..=50.0, "");
                 },
             );
             let c_before = core_color.clone();
             if let Some(nf) =
                 draw_property_ui(current_frame, ui, "Core Color", core_color, |ui, val| {
-                    ui.color_edit_button_rgba_unmultiplied(val);
+                    crate::ui::kui::color_rgba(ui, val);
                 })
             {
                 *next_frame = Some(nf);
@@ -355,7 +364,7 @@ pub fn draw(
             let g_before = glow_color.clone();
             if let Some(nf) =
                 draw_property_ui(current_frame, ui, "Glow Color", glow_color, |ui, val| {
-                    ui.color_edit_button_rgba_unmultiplied(val);
+                    crate::ui::kui::color_rgba(ui, val);
                 })
             {
                 *next_frame = Some(nf);
@@ -373,7 +382,7 @@ pub fn draw(
                 "Intensity",
                 intensity,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=10.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=10.0, "");
                 },
             );
         }
@@ -390,7 +399,7 @@ pub fn draw(
                 "Position X",
                 pos_x,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
                 },
             );
             draw_prop(
@@ -401,7 +410,7 @@ pub fn draw(
                 "Position Y",
                 pos_y,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
                 },
             );
             draw_prop(
@@ -412,7 +421,7 @@ pub fn draw(
                 "Intensity",
                 intensity,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=3.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=3.0, "");
                 },
             );
         }
@@ -425,7 +434,7 @@ pub fn draw(
                 "Scale",
                 scale,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.5..=20.0));
+                    crate::ui::kui::slider(ui, v, 0.5..=20.0, "");
                 },
             );
         }
@@ -438,7 +447,7 @@ pub fn draw(
                 "Octaves",
                 octaves,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 1.0..=8.0));
+                    crate::ui::kui::slider(ui, v, 1.0..=8.0, "");
                 },
             );
             draw_prop(
@@ -449,7 +458,77 @@ pub fn draw(
                 "Amplitude",
                 amplitude,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=255.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=255.0, "");
+                },
+            );
+        }
+        EffectType::GradientRamp {
+            start_color,
+            end_color,
+            is_radial,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Start Color",
+                start_color,
+                |ui, v| {
+                    ui.color_edit_button_rgba_unmultiplied(v);
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "End Color",
+                end_color,
+                |ui, v| {
+                    ui.color_edit_button_rgba_unmultiplied(v);
+                },
+            );
+            if ui.checkbox(is_radial, "Radial Ramp").changed() {
+                *project_changed = true;
+            }
+        }
+        EffectType::Checkerboard {
+            box_size,
+            color_1,
+            color_2,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Box Size",
+                box_size,
+                |ui, v| {
+                    crate::ui::kui::slider(ui, v, 2.0..=256.0, "px");
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Color 1",
+                color_1,
+                |ui, v| {
+                    ui.color_edit_button_rgba_unmultiplied(v);
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Color 2",
+                color_2,
+                |ui, v| {
+                    ui.color_edit_button_rgba_unmultiplied(v);
                 },
             );
         }

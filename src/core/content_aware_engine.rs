@@ -190,9 +190,8 @@ pub fn generate_content_aware_fill_frame(
     match method {
         FillMethod::Object => {}
         FillMethod::Surface if boundary_pixel_count > 0 => {
-            let surface = boundary_color_sum.map(|sum| {
-                (sum as f64 / boundary_pixel_count as f64).round() as u8
-            });
+            let surface = boundary_color_sum
+                .map(|sum| (sum as f64 / boundary_pixel_count as f64).round() as u8);
             for (index, masked) in is_masked.iter().copied().enumerate() {
                 if masked {
                     out_buffer[index * 4..index * 4 + 4].copy_from_slice(&surface);
@@ -222,8 +221,7 @@ pub fn generate_content_aware_fill_frame(
                                 let weight = if dx == 0 && dy == 0 { 4 } else { 1 };
                                 let neighbor = ((ny * w + nx) as usize) * 4;
                                 for channel in 0..4 {
-                                    weighted[channel] +=
-                                        source[neighbor + channel] as u32 * weight;
+                                    weighted[channel] += source[neighbor + channel] as u32 * weight;
                                 }
                                 weight_sum += weight;
                             }

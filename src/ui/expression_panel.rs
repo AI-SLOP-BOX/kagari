@@ -119,14 +119,27 @@ pub fn draw_expression_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
             .desired_width(ui.available_width()),
     );
 
-    // Live syntax check (compile only — no execution)
-    let syntax_status: Result<(), String> = if script.trim().is_empty() {
-        Ok(())
-    } else {
-        crate::core::expression_engine::build_engine()
-            .compile(&script)
-            .map(|_| ())
-            .map_err(|e| e.to_string())
+    // Scope the syntax cache to the specific layer and property to prevent cross-property pollution.
+    let syntax_cache_id = egui::Id::new(("expression_syntax_cache", layer_idx, selected_prop));
+    let syntax_status = ui
+        .ctx()
+        .data(|data| data.get_temp::<(String, Result<(), String>)>(syntax_cache_id));
+    let syntax_status = match syntax_status {
+        Some((cached_script, result)) if cached_script == script => result,
+        _ => {
+            let result = if script.trim().is_empty() {
+                Ok(())
+            } else {
+                crate::core::expression_engine::build_engine()
+                    .compile(&script)
+                    .map(|_| ())
+                    .map_err(|e| e.to_string())
+            };
+            ui.ctx().data_mut(|data| {
+                data.insert_temp(syntax_cache_id, (script.clone(), result.clone()));
+            });
+            result
+        }
     };
     match &syntax_status {
         Ok(()) => {}

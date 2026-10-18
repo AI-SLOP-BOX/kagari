@@ -1,10 +1,12 @@
 #![allow(clippy::field_reassign_with_default)]
 
 use crate::core::timeline::{Composition, LayerType};
-use crate::ui::custom_widgets;
-use crate::ui::theme::colors;
+use crate::ui::kui::{self, ButtonKind};
 use crate::KagariApp;
 use eframe::egui;
+
+pub mod presets;
+pub use presets::{apply_text_preset, draw_animation_presets};
 
 pub fn draw_character_panel(
     app: &mut KagariApp,
@@ -16,15 +18,7 @@ pub fn draw_character_panel(
     let sel_idx = app.selection.selected_layer_idx;
 
     ui.vertical(|ui| {
-        ui.horizontal(|ui| {
-            ui.label(
-                egui::RichText::new("Character & Paragraph")
-                    .strong()
-                    .color(colors::ACCENT_YELLOW),
-            );
-            ui.weak("— AE Text Formatting");
-        });
-        ui.separator();
+        kui::section(ui, "文字・段落");
 
         if let Some(idx) = sel_idx {
             if idx < comp.layers.len() {
@@ -42,151 +36,66 @@ pub fn draw_character_panel(
                     text_on_path: _,
                 } = &mut layer.layer_type
                 {
-                    ui.group(|ui| {
-                        ui.label(egui::RichText::new("Character Properties").strong());
-                        ui.add_space(4.0);
-
-                        // Text content
-                        ui.horizontal(|ui| {
-                            ui.label("Text:");
-                            let txt_before = text.clone();
-                            ui.text_edit_singleline(text);
-                            if txt_before != *text { project_changed = true; }
+                    kui::panel(ui, |ui| {
+                        kui::section(ui, "文字プロパティ");
+                        let grid = kui::PropertyGrid::new(ui, &["テキスト", "フォント", "サイズ", "トラッキング", "行送り", "塗り", "境界線", "境界色"]);
+                        project_changed |= grid.row(ui, "テキスト", |ui| kui::text_field(ui, text)).changed();
+                        grid.row(ui, "フォント", |ui| {
+                            let custom_font = font_family.clone();
+                            let names = ["Inter", "Roboto", "Helvetica", "Arial", "Courier New", "Impact", "Times New Roman"];
+                            let mut options: Vec<(String, &str)> = names.iter().map(|name| ((*name).to_owned(), *name)).collect();
+                            if !names.contains(&custom_font.as_str()) { options.push((custom_font.clone(), custom_font.as_str())); }
+                            project_changed |= kui::combo(ui, "ae_text_font_family", font_family, &options);
                         });
+                        project_changed |= grid.row(ui, "サイズ", |ui| ui.add(kui::drag(font_size).range(6..=300).unit(" px"))).changed();
+                        project_changed |= grid.row(ui, "トラッキング", |ui| ui.add(kui::drag(tracking).speed(1.0).range(-100.0..=500.0).unit(" VA"))).changed();
+                        project_changed |= grid.row(ui, "行送り", |ui| ui.add(kui::drag(leading).speed(0.05).range(0.5..=3.0).unit(" em"))).changed();
+                        kui::section(ui, "カラー・境界線");
+                        project_changed |= grid.row(ui, "塗り", |ui| kui::color_rgba(ui, color)).changed();
+                        project_changed |= grid.row(ui, "境界線の幅", |ui| ui.add(kui::drag(stroke_width).speed(0.5).range(0.0..=50.0).unit(" px"))).changed();
+                        if *stroke_width > 0.0 {
+                            project_changed |= grid.row(ui, "境界線の色", |ui| kui::color_rgba(ui, stroke_color)).changed();
+                        }
 
-                        // Font Family
-                        ui.horizontal(|ui| {
-                            ui.label("Font Family:");
-                            egui::ComboBox::from_id_salt("ae_text_font_family")
-                                .selected_text(font_family.as_str())
-                                .show_ui(ui, |ui| {
-                                    for name in ["Inter", "Roboto", "Helvetica", "Arial",
-                                                 "Courier New", "Impact", "Times New Roman"] {
-                                        if ui.selectable_label(*font_family == name, name).clicked() {
-                                            *font_family = name.to_string();
-                                            project_changed = true;
-                                        }
-                                    }
-                                });
-                        });
-
-                        // Font Size
-                        ui.horizontal(|ui| {
-                            ui.label("Font Size:");
-                            let fs_before = *font_size;
-                            ui.add(egui::DragValue::new(font_size).range(6..=300).suffix(" px"));
-                            if fs_before != *font_size { project_changed = true; }
-                        });
-
-                        // Tracking
-                        ui.horizontal(|ui| {
-                            ui.label("Tracking:");
-                            if ui.add(egui::DragValue::new(tracking)
-                                .speed(1.0).range(-100.0..=500.0).suffix(" VA"))
-                                .changed() { project_changed = true; }
-                        });
-
-                        // Kerning (Metrics / Optical)
-                        ui.horizontal(|ui| {
-                            ui.label("Kerning:");
-                            let mut kern_mode = ui.ctx().data(|d| d.get_temp::<i32>(egui::Id::new("ae_kerning_mode")).unwrap_or(0));
-                            egui::ComboBox::from_id_salt("ae_kerning_mode_combo")
-                                .selected_text(match kern_mode {
-                                    0 => "Metrics (Auto)",
-                                    1 => "Optical",
-                                    _ => "Manual",
-                                })
-                                .show_ui(ui, |ui| {
-                                    if ui.selectable_value(&mut kern_mode, 0, "Metrics (Font Built-in)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ae_kerning_mode"), 0)); project_changed = true; }
-                                    if ui.selectable_value(&mut kern_mode, 1, "Optical (Visual Spacing)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("ae_kerning_mode"), 1)); project_changed = true; }
-                                });
-                        });
-
-                        // Leading
-                        ui.horizontal(|ui| {
-                            ui.label("Leading:");
-                            if ui.add(egui::DragValue::new(leading)
-                                .speed(0.05).range(0.5..=3.0).suffix(" em"))
-                                .changed() { project_changed = true; }
-                        });
-
-                        ui.separator();
-                        ui.label(egui::RichText::new("Color & Stroke").strong());
-
-                        // Fill Color
-                        ui.horizontal(|ui| {
-                            ui.label("Fill Color:");
-                            let col_before = *color;
-                            ui.color_edit_button_rgba_unmultiplied(color);
-                            if col_before != *color { project_changed = true; }
-                        });
-
-                        // Stroke Width & Color
-                        ui.horizontal(|ui| {
-                            ui.label("Stroke Width:");
-                            if ui.add(egui::DragValue::new(stroke_width)
-                                .speed(0.5).range(0.0..=50.0).suffix(" px"))
-                                .changed() { project_changed = true; }
-                            if *stroke_width > 0.0
-                                && ui.color_edit_button_rgba_unmultiplied(stroke_color).changed() {
-                                    project_changed = true;
-                                }
-                        });
-
-                        // Variable Font Axes
-                        ui.separator();
-                        ui.collapsing("Variable Font Axes", |ui| {
-                            let mut vf_weight = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("vf_weight")).unwrap_or(400.0));
-                            let mut vf_width = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("vf_width")).unwrap_or(100.0));
-                            let mut vf_slant = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("vf_slant")).unwrap_or(0.0));
-
-                            ui.horizontal(|ui| {
-                                ui.label("Weight (wght):");
-                                if ui.add(egui::Slider::new(&mut vf_weight, 100.0..=900.0).step_by(10.0)).changed() {
-                                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("vf_weight"), vf_weight));
-                                    project_changed = true;
-                                }
-                            });
-                            ui.horizontal(|ui| {
-                                ui.label("Width (wdth):");
-                                if ui.add(egui::Slider::new(&mut vf_width, 50.0..=150.0).suffix(" %")).changed() {
-                                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("vf_width"), vf_width));
-                                    project_changed = true;
-                                }
-                            });
-                            ui.horizontal(|ui| {
-                                ui.label("Slant (slnt):");
-                                if ui.add(egui::Slider::new(&mut vf_slant, -15.0..=15.0).suffix("°")).changed() {
-                                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("vf_slant"), vf_slant));
-                                    project_changed = true;
-                                }
-                            });
+                        kui::collapsing_section(ui, "character_font_features", "フォント機能", false, |ui| {
+                            kui::secondary(ui, "可変フォント軸とオプティカルカーニングは、現在のテキスト描画では未対応です。");
                         });
                     });
 
-                    ui.add_space(6.0);
-                    ui.group(|ui| {
-                        ui.label(egui::RichText::new("Paragraph Alignment").strong());
+                    ui.add_space(kui::space::SM);
+                    kui::panel(ui, |ui| {
+                        kui::section(ui, "段落の配置");
                         ui.horizontal(|ui| {
-                            if ui.selectable_label(*align == 0, "[Left]").clicked()   { *align = 0; project_changed = true; }
-                            if ui.selectable_label(*align == 1, "[Center]").clicked() { *align = 1; project_changed = true; }
-                            if ui.selectable_label(*align == 2, "[Right]").clicked()  { *align = 2; project_changed = true; }
+                            for (value, glyph, hint) in [
+                                (0, "☰", "左揃え"),
+                                (1, "≡", "中央揃え"),
+                                (2, "☷", "右揃え"),
+                            ] {
+                                if kui::tool_button(ui, *align == value, glyph)
+                                    .on_hover_text(hint)
+                                    .clicked()
+                                {
+                                    *align = value;
+                                    project_changed = true;
+                                }
+                            }
                         });
                     });
 
                     // ── 〰 Path Options (Text on Path) ──
-                    ui.add_space(6.0);
-                    ui.collapsing("〰 Path Options (Text on Path)", |ui| {
+                    ui.add_space(kui::space::SM);
+                    kui::collapsing_section(ui, "character_text_on_path", "パスに沿ったテキスト", false, |ui| {
                         let mut path_idx = ui.ctx().data(|d| d.get_temp::<i32>(egui::Id::new("top_path_idx")).unwrap_or(0));
-                        ui.horizontal(|ui| {
-                            ui.label("Path Mask:");
-                            egui::ComboBox::from_id_salt("top_path_combo")
-                                .selected_text(if path_idx == 0 { "None" } else { "Mask 1 (Bezier)" })
-                                .show_ui(ui, |ui| {
-                                    if ui.selectable_value(&mut path_idx, 0, "None").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("top_path_idx"), 0)); project_changed = true; }
-                                    if ui.selectable_value(&mut path_idx, 1, "Mask 1 (Bezier)").clicked() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("top_path_idx"), 1)); project_changed = true; }
-                                });
-                        });
+                        let path_options = [(0_i32, "なし"), (1, "マスク1（ベジェ）")];
+                        let path_grid = kui::PropertyGrid::new(ui, &["パスマスク"]);
+                        if path_grid.row(ui, "パスマスク", |ui| {
+                            kui::combo(ui, "top_path_combo", &mut path_idx, &path_options)
+                        }) {
+                            ui.ctx().data_mut(|d| {
+                                d.insert_temp(egui::Id::new("top_path_idx"), path_idx)
+                            });
+                            project_changed = true;
+                        }
 
                         if path_idx > 0 {
                             let mut rev = ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::new("top_rev_path")).unwrap_or(false));
@@ -196,33 +105,34 @@ pub fn draw_character_panel(
                             let mut last_margin = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("top_last_margin")).unwrap_or(0.0));
 
                             ui.horizontal(|ui| {
-                                if ui.checkbox(&mut rev, "Reverse Path").changed() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("top_rev_path"), rev)); project_changed = true; }
-                                if ui.checkbox(&mut perp, "Perpendicular").changed() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("top_perp_path"), perp)); project_changed = true; }
-                                if ui.checkbox(&mut force, "Force Align").changed() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("top_force_align"), force)); project_changed = true; }
+                                if kui::toggle(ui, &mut rev, "パスを反転").changed() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("top_rev_path"), rev)); project_changed = true; }
+                                if kui::toggle(ui, &mut perp, "垂直方向に配置").changed() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("top_perp_path"), perp)); project_changed = true; }
+                                if kui::toggle(ui, &mut force, "強制整列").changed() { ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("top_force_align"), force)); project_changed = true; }
                             });
 
-                            ui.horizontal(|ui| {
-                                ui.label("First Margin:");
-                                if ui.add(egui::DragValue::new(&mut first_margin).speed(1.0).suffix(" px")).changed() {
+                            let margin_grid = kui::PropertyGrid::new(ui, &["開始マージン", "終了マージン"]);
+                            if margin_grid.row(ui, "開始マージン", |ui| {
+                                ui.add(kui::drag(&mut first_margin).speed(1.0).unit(" px"))
+                            }).changed() {
                                     ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("top_first_margin"), first_margin));
                                     project_changed = true;
-                                }
-                                ui.label("Last Margin:");
-                                if ui.add(egui::DragValue::new(&mut last_margin).speed(1.0).suffix(" px")).changed() {
+                            }
+                            if margin_grid.row(ui, "終了マージン", |ui| {
+                                ui.add(kui::drag(&mut last_margin).speed(1.0).unit(" px"))
+                            }).changed() {
                                     ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("top_last_margin"), last_margin));
                                     project_changed = true;
-                                }
-                            });
+                            }
                         }
                     });
 
-                    ui.add_space(6.0);
+                    ui.add_space(kui::space::SM);
                     // ── AE Multi-Animator Stack (Layered Animators) ──
-                    ui.group(|ui| {
+                    kui::panel(ui, |ui| {
                         let has_stack = layer.text_animator_stack.is_some();
                         ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("Animators Stack").strong().color(colors::ACCENT_CYAN));
-                            if ui.button("+ Add Animator").on_hover_text("Add another layered text animator").clicked() {
+                            kui::section_title(ui, "テキストアニメーター");
+                            if kui::button(ui, "＋ 追加", kui::ButtonKind::Accent).on_hover_text("テキストアニメーターを追加").clicked() {
                                 if layer.text_animator_stack.is_none() {
                                     layer.text_animator_stack = Some(crate::core::text_animator_advanced::AnimatorStack::default());
                                 }
@@ -231,15 +141,15 @@ pub fn draw_character_panel(
                                 }
                                 project_changed = true;
                             }
-                            if has_stack && ui.small_button("Clear Stack").clicked() {
+                            if has_stack && kui::button(ui, "スタックを消去", kui::ButtonKind::Quiet).clicked() {
                                 layer.text_animator_stack = None;
                                 project_changed = true;
                             }
                         });
 
                         ui.horizontal_wrapped(|ui| {
-                            ui.label(egui::RichText::new("Presets:").small().color(colors::TEXT_SECONDARY));
-                            if ui.small_button("Typewriter").clicked() {
+                            kui::caption(ui, "プリセット");
+                            if kui::tool_button(ui, false, "タイプライター").clicked() {
                                 let mut anim = crate::core::text_animator_advanced::TextAnimatorAdvanced::default();
                                 anim.opacity = 0.0;
                                 anim.unit = crate::core::text_animator_advanced::SelectorUnit::Characters;
@@ -247,7 +157,7 @@ pub fn draw_character_panel(
                                 if let Some(ref mut st) = layer.text_animator_stack { st.animators.push(anim); }
                                 project_changed = true;
                             }
-                            if ui.small_button("Char Wave").clicked() {
+                            if kui::tool_button(ui, false, "文字ウェーブ").clicked() {
                                 let mut anim = crate::core::text_animator_advanced::TextAnimatorAdvanced::default();
                                 anim.position = [0.0, -30.0];
                                 anim.unit = crate::core::text_animator_advanced::SelectorUnit::Characters;
@@ -255,7 +165,7 @@ pub fn draw_character_panel(
                                 if let Some(ref mut st) = layer.text_animator_stack { st.animators.push(anim); }
                                 project_changed = true;
                             }
-                            if ui.small_button("Word Hop").clicked() {
+                            if kui::tool_button(ui, false, "単語ホップ").clicked() {
                                 let mut anim = crate::core::text_animator_advanced::TextAnimatorAdvanced::default();
                                 anim.position = [0.0, -50.0];
                                 anim.unit = crate::core::text_animator_advanced::SelectorUnit::Words;
@@ -269,107 +179,144 @@ pub fn draw_character_panel(
                             let mut to_remove = None;
                             for (ai, anim) in stack.animators.iter_mut().enumerate() {
                                 ui.push_id(ai, |ui| {
-                                    ui.collapsing(format!("Animator {}", ai + 1), |ui| {
+                                    kui::collapsing_section(ui, ("character_animator", ai), &format!("アニメーター {}", ai + 1), false, |ui| {
                                         ui.horizontal(|ui| {
-                                            if ui.checkbox(&mut anim.enabled, "Enabled").changed() { project_changed = true; }
-                                            ui.label("Based On:");
+                                            if kui::toggle(ui, &mut anim.enabled, "有効").changed() { project_changed = true; }
+                                            kui::caption(ui, "対象単位:");
                                             let mut unit_idx = match anim.unit {
-                                                crate::core::text_animator_advanced::SelectorUnit::Characters => 0,
+                                                crate::core::text_animator_advanced::SelectorUnit::Characters => 0_usize,
                                                 crate::core::text_animator_advanced::SelectorUnit::Words => 1,
                                                 crate::core::text_animator_advanced::SelectorUnit::Lines => 2,
                                             };
-                                            egui::ComboBox::from_id_salt("anim_unit")
-                                                .selected_text(match anim.unit {
-                                                    crate::core::text_animator_advanced::SelectorUnit::Characters => "Characters",
-                                                    crate::core::text_animator_advanced::SelectorUnit::Words => "Words",
-                                                    crate::core::text_animator_advanced::SelectorUnit::Lines => "Lines",
-                                                })
-                                                .show_ui(ui, |ui| {
-                                                    if ui.selectable_value(&mut unit_idx, 0, "Characters").clicked() { anim.unit = crate::core::text_animator_advanced::SelectorUnit::Characters; project_changed = true; }
-                                                    if ui.selectable_value(&mut unit_idx, 1, "Words").clicked() { anim.unit = crate::core::text_animator_advanced::SelectorUnit::Words; project_changed = true; }
-                                                    if ui.selectable_value(&mut unit_idx, 2, "Lines").clicked() { anim.unit = crate::core::text_animator_advanced::SelectorUnit::Lines; project_changed = true; }
-                                                });
-                                            if ui.small_button("×").clicked() { to_remove = Some(ai); }
+                                            let unit_options = [(0_usize, "文字"), (1, "単語"), (2, "行")];
+                                            if kui::combo(ui, "anim_unit", &mut unit_idx, &unit_options) {
+                                                anim.unit = match unit_idx {
+                                                    1 => crate::core::text_animator_advanced::SelectorUnit::Words,
+                                                    2 => crate::core::text_animator_advanced::SelectorUnit::Lines,
+                                                    _ => crate::core::text_animator_advanced::SelectorUnit::Characters,
+                                                };
+                                                project_changed = true;
+                                            }
+                                            if kui::button(ui, "削除", kui::ButtonKind::Quiet).clicked() { to_remove = Some(ai); }
                                         });
 
                                         // Range Selector
-                                        ui.collapsing("Range Selector", |ui| {
+                                        kui::collapsing_section(ui, "character_animator_range", "範囲セレクター", false, |ui| {
                                             let sel = &mut anim.selector;
-                                            ui.horizontal(|ui| {
-                                                ui.label("Start / End:");
-                                                if ui.add(egui::Slider::new(&mut sel.start, 0.0..=100.0).suffix("%")).changed() { project_changed = true; }
-                                                if ui.add(egui::Slider::new(&mut sel.end, 0.0..=100.0).suffix("%")).changed() { project_changed = true; }
-                                            });
-                                            ui.horizontal(|ui| {
-                                                ui.label("Offset:");
-                                                if ui.add(egui::Slider::new(&mut sel.offset, -100.0..=100.0).suffix("%")).changed() { project_changed = true; }
-                                            });
-                                            ui.horizontal(|ui| {
-                                                ui.label("Shape:");
-                                                let mut shape_idx = match sel.shape {
-                                                    crate::core::text_animator::SelectorShape::Square => 0,
-                                                    crate::core::text_animator::SelectorShape::RampUp => 1,
-                                                    crate::core::text_animator::SelectorShape::RampDown => 2,
-                                                    crate::core::text_animator::SelectorShape::Triangle => 3,
-                                                    crate::core::text_animator::SelectorShape::Round => 4,
-                                                    crate::core::text_animator::SelectorShape::Smooth => 5,
-                                                    crate::core::text_animator::SelectorShape::Wobble => 6,
-                                                    crate::core::text_animator::SelectorShape::Random => 7,
-                                                    crate::core::text_animator::SelectorShape::Expression => 8,
+                                            let range_grid = kui::PropertyGrid::new(
+                                                ui,
+                                                &["開始", "終了", "オフセット", "形状"],
+                                            );
+                                            if range_grid
+                                                .row(ui, "開始", |ui| {
+                                                    kui::slider(ui, &mut sel.start, 0.0..=100.0, "%")
+                                                })
+                                                .changed()
+                                            {
+                                                project_changed = true;
+                                            }
+                                            if range_grid
+                                                .row(ui, "終了", |ui| {
+                                                    kui::slider(ui, &mut sel.end, 0.0..=100.0, "%")
+                                                })
+                                                .changed()
+                                            {
+                                                project_changed = true;
+                                            }
+                                            if range_grid
+                                                .row(ui, "オフセット", |ui| {
+                                                    kui::slider(ui, &mut sel.offset, -100.0..=100.0, "%")
+                                                })
+                                                .changed()
+                                            {
+                                                project_changed = true;
+                                            }
+                                            let mut shape_idx = match sel.shape {
+                                                crate::core::text_animator::SelectorShape::Square => 0_usize,
+                                                crate::core::text_animator::SelectorShape::RampUp => 1,
+                                                crate::core::text_animator::SelectorShape::RampDown => 2,
+                                                crate::core::text_animator::SelectorShape::Triangle => 3,
+                                                crate::core::text_animator::SelectorShape::Round => 4,
+                                                crate::core::text_animator::SelectorShape::Smooth => 5,
+                                                crate::core::text_animator::SelectorShape::Wobble => 6,
+                                                crate::core::text_animator::SelectorShape::Random => 7,
+                                                crate::core::text_animator::SelectorShape::Expression => 8,
+                                            };
+                                            let shape_options = [
+                                                (0_usize, "スクエア"), (1, "ランプ上昇"), (2, "ランプ下降"),
+                                                (3, "三角"), (4, "ラウンド"), (5, "スムーズ"),
+                                                (6, "揺らぎ"), (7, "ランダム"), (8, "エクスプレッション"),
+                                            ];
+                                            if range_grid
+                                                .row(ui, "形状", |ui| {
+                                                    kui::combo(ui, "anim_shape", &mut shape_idx, &shape_options)
+                                                })
+                                            {
+                                                sel.shape = match shape_idx {
+                                                    1 => crate::core::text_animator::SelectorShape::RampUp,
+                                                    2 => crate::core::text_animator::SelectorShape::RampDown,
+                                                    3 => crate::core::text_animator::SelectorShape::Triangle,
+                                                    4 => crate::core::text_animator::SelectorShape::Round,
+                                                    5 => crate::core::text_animator::SelectorShape::Smooth,
+                                                    6 => crate::core::text_animator::SelectorShape::Wobble,
+                                                    7 => crate::core::text_animator::SelectorShape::Random,
+                                                    8 => crate::core::text_animator::SelectorShape::Expression,
+                                                    _ => crate::core::text_animator::SelectorShape::Square,
                                                 };
-                                                egui::ComboBox::from_id_salt("anim_shape")
-                                                    .selected_text(match sel.shape {
-                                                        crate::core::text_animator::SelectorShape::Square => "Square",
-                                                        crate::core::text_animator::SelectorShape::RampUp => "Ramp Up",
-                                                        crate::core::text_animator::SelectorShape::RampDown => "Ramp Down",
-                                                        crate::core::text_animator::SelectorShape::Triangle => "Triangle",
-                                                        crate::core::text_animator::SelectorShape::Round => "Round",
-                                                        crate::core::text_animator::SelectorShape::Smooth => "Smooth",
-                                                        crate::core::text_animator::SelectorShape::Wobble => "Wobble",
-                                                        crate::core::text_animator::SelectorShape::Random => "Random",
-                                                        crate::core::text_animator::SelectorShape::Expression => "Expression",
-                                                    })
-                                                    .show_ui(ui, |ui| {
-                                                        if ui.selectable_value(&mut shape_idx, 0, "Square").clicked() { sel.shape = crate::core::text_animator::SelectorShape::Square; project_changed = true; }
-                                                        if ui.selectable_value(&mut shape_idx, 1, "Ramp Up").clicked() { sel.shape = crate::core::text_animator::SelectorShape::RampUp; project_changed = true; }
-                                                        if ui.selectable_value(&mut shape_idx, 2, "Ramp Down").clicked() { sel.shape = crate::core::text_animator::SelectorShape::RampDown; project_changed = true; }
-                                                        if ui.selectable_value(&mut shape_idx, 3, "Triangle").clicked() { sel.shape = crate::core::text_animator::SelectorShape::Triangle; project_changed = true; }
-                                                        if ui.selectable_value(&mut shape_idx, 4, "Round").clicked() { sel.shape = crate::core::text_animator::SelectorShape::Round; project_changed = true; }
-                                                        if ui.selectable_value(&mut shape_idx, 5, "Smooth").clicked() { sel.shape = crate::core::text_animator::SelectorShape::Smooth; project_changed = true; }
-                                                        if ui.selectable_value(&mut shape_idx, 6, "Wobble").clicked() { sel.shape = crate::core::text_animator::SelectorShape::Wobble; project_changed = true; }
-                                                        if ui.selectable_value(&mut shape_idx, 7, "Random").clicked() { sel.shape = crate::core::text_animator::SelectorShape::Random; project_changed = true; }
-                                                        if ui.selectable_value(&mut shape_idx, 8, "Expression").clicked() { sel.shape = crate::core::text_animator::SelectorShape::Expression; project_changed = true; }
-                                                    });
-                                            });
+                                                project_changed = true;
+                                            }
                                             ui.horizontal(|ui| {
-                                                if ui.checkbox(&mut sel.random_order, "Randomize Order").changed() { project_changed = true; }
+                                                if kui::toggle(ui, &mut sel.random_order, "順序をランダム化").changed() { project_changed = true; }
                                             });
                                         });
 
                                         // Property targets
-                                        ui.collapsing("Transform & Advanced Properties", |ui| {
-                                            ui.horizontal(|ui| {
-                                                ui.label("Position:");
-                                                if ui.add(egui::DragValue::new(&mut anim.position[0]).prefix("X: ")).changed() { project_changed = true; }
-                                                if ui.add(egui::DragValue::new(&mut anim.position[1]).prefix("Y: ")).changed() { project_changed = true; }
-                                            });
-                                            ui.horizontal(|ui| {
-                                                ui.label("Rotation / Opacity:");
-                                                if ui.add(egui::DragValue::new(&mut anim.rotation).suffix("°")).changed() { project_changed = true; }
-                                                if ui.add(egui::Slider::new(&mut anim.opacity, 0.0..=1.0)).changed() { project_changed = true; }
-                                            });
-                                            ui.horizontal(|ui| {
-                                                ui.label("Blur:");
-                                                if ui.add(egui::DragValue::new(&mut anim.blur).range(0.0..=100.0).suffix(" px")).changed() { project_changed = true; }
-                                                ui.label("Tracking:");
-                                                if ui.add(egui::DragValue::new(&mut anim.tracking).suffix(" px")).changed() { project_changed = true; }
-                                            });
-                                            ui.horizontal(|ui| {
-                                                ui.label("Skew:");
-                                                if ui.add(egui::DragValue::new(&mut anim.advanced.skew).suffix("°")).changed() { project_changed = true; }
-                                                ui.label("Char Offset:");
-                                                if ui.add(egui::DragValue::new(&mut anim.advanced.character_offset)).changed() { project_changed = true; }
-                                            });
+                                        kui::collapsing_section(ui, "character_animator_transform", "変形・詳細プロパティ", false, |ui| {
+                                            let grid = kui::PropertyGrid::new(
+                                                ui,
+                                                &["位置", "回転", "不透明度", "ぼかし", "字間", "傾斜", "文字オフセット"],
+                                            );
+                                            if grid.row(ui, "位置", |ui| {
+                                                kui::vector_axes_unbounded(
+                                                    ui,
+                                                    &mut anim.position,
+                                                    1.0,
+                                                    "",
+                                                    ["X", "Y"],
+                                                )
+                                            }).changed() {
+                                                project_changed = true;
+                                            }
+                                            if grid.row(ui, "回転", |ui| {
+                                                ui.add(kui::drag(&mut anim.rotation).unit("°"))
+                                            }).changed() {
+                                                project_changed = true;
+                                            }
+                                            if grid.row(ui, "不透明度", |ui| {
+                                                kui::slider(ui, &mut anim.opacity, 0.0..=1.0, "")
+                                            }).changed() {
+                                                project_changed = true;
+                                            }
+                                            if grid.row(ui, "ぼかし", |ui| {
+                                                kui::number(ui, &mut anim.blur, 0.0..=100.0, 0.1, " px")
+                                            }).changed() {
+                                                project_changed = true;
+                                            }
+                                            if grid.row(ui, "字間", |ui| {
+                                                ui.add(kui::drag(&mut anim.tracking).unit(" px"))
+                                            }).changed() {
+                                                project_changed = true;
+                                            }
+                                            if grid.row(ui, "傾斜", |ui| {
+                                                ui.add(kui::drag(&mut anim.advanced.skew).unit("°"))
+                                            }).changed() {
+                                                project_changed = true;
+                                            }
+                                            if grid.row(ui, "文字オフセット", |ui| {
+                                                ui.add(kui::drag(&mut anim.advanced.character_offset).speed(1.0))
+                                            }).changed() {
+                                                project_changed = true;
+                                            }
                                         });
                                     });
                                 });
@@ -381,11 +328,11 @@ pub fn draw_character_panel(
                         }
                     });
 
-                    ui.add_space(6.0);
-                    ui.group(|ui| {
-                        ui.label(egui::RichText::new("One-Tap Motion Presets").strong().color(colors::ACCENT_CYAN));
+                    ui.add_space(kui::space::SM);
+                    kui::panel(ui, |ui| {
+                        kui::section_title(ui, "モーションプリセット");
                         ui.horizontal(|ui| {
-                            if custom_widgets::ae_button(ui, "Typewriter").on_hover_text("Reveal characters one by one").clicked() {
+                            if kui::button(ui, "タイプライター", ButtonKind::Default).on_hover_text("文字を順番に表示").clicked() {
                                 let mut anim = crate::core::text_animator::TextAnimatorSettings::default();
                                 anim.enabled = true;
                                 anim.opacity = 0.0;
@@ -395,7 +342,7 @@ pub fn draw_character_panel(
                                 layer.text_animator = Some(anim);
                                 project_changed = true;
                             }
-                            if custom_widgets::ae_button(ui, "Word Pop").on_hover_text("Bounce text up character by character").clicked() {
+                            if kui::button(ui, "ワードポップ", ButtonKind::Default).on_hover_text("文字を順番に弾ませて表示").clicked() {
                                 let mut anim = crate::core::text_animator::TextAnimatorSettings::default();
                                 anim.enabled = true;
                                 anim.position_offset = [0.0, 50.0];
@@ -406,7 +353,7 @@ pub fn draw_character_panel(
                             }
                         });
                         ui.horizontal(|ui| {
-                            if custom_widgets::ae_button(ui, "Wave Tracking").on_hover_text("Expand text letter-spacing smoothly").clicked() {
+                            if kui::button(ui, "トラッキングウェーブ", ButtonKind::Default).on_hover_text("文字間隔を滑らかに広げる").clicked() {
                                 let mut anim = crate::core::text_animator::TextAnimatorSettings::default();
                                 anim.enabled = true;
                                 anim.tracking = 25.0;
@@ -414,7 +361,7 @@ pub fn draw_character_panel(
                                 layer.text_animator = Some(anim);
                                 project_changed = true;
                             }
-                            if custom_widgets::ae_button(ui, "Neon Pulse").on_hover_text("Pulsating opacity and tracking wave").clicked() {
+                            if kui::button(ui, "ネオンパルス", ButtonKind::Default).on_hover_text("不透明度と文字間隔を波状に変化").clicked() {
                                 let mut anim = crate::core::text_animator::TextAnimatorSettings::default();
                                 anim.enabled = true;
                                 anim.opacity = 0.2;
@@ -426,13 +373,13 @@ pub fn draw_character_panel(
                         });
                     });
                 } else {
-                    ui.weak("Select a Text Layer to edit character formatting.");
+                    kui::secondary(ui, "テキストレイヤーを選択すると文字設定を編集できます。");
                 }
             } else {
-                ui.weak("Select a Text Layer to edit character formatting.");
+                kui::secondary(ui, "テキストレイヤーを選択すると文字設定を編集できます。");
             }
         } else {
-            ui.weak("Select a Text Layer to edit character formatting.");
+            kui::secondary(ui, "Select a Text Layer to edit character formatting.");
         }
     });
 
@@ -479,126 +426,4 @@ pub fn draw_character_panel(
     }
 
     project_changed
-}
-
-/// Applies a text animation preset to the selected layer's position/opacity.
-pub fn apply_text_preset(
-    app: &mut KagariApp,
-    preset: &str,
-    layer_idx: usize,
-    current_frame: u32,
-    duration_frames: u32,
-) {
-    use crate::core::keyframe::{InterpolationType, Keyframe};
-    use crate::core::property::Animatable;
-
-    let dur = if duration_frames > 0 {
-        duration_frames
-    } else {
-        30
-    }; // default: 1s at 30fps
-    let ease = InterpolationType::Bezier {
-        outgoing: crate::core::keyframe::BezierControlPoint {
-            influence: 0.33,
-            speed: 0.0,
-        },
-        incoming: crate::core::keyframe::BezierControlPoint {
-            influence: 0.33,
-            speed: 0.0,
-        },
-        custom_bezier: Some([0.25, 0.1, 0.25, 1.0]), // Easy Ease
-    };
-
-    app.modify_project(|p| {
-        let comp = p.active_composition_mut();
-        let Some(layer) = comp.layers.get_mut(layer_idx) else {
-            return;
-        };
-
-        let base_pos = layer.transform.position.evaluate(current_frame);
-        let end_frame = current_frame + dur;
-
-        match preset {
-            "Fade In" => {
-                layer.transform.opacity = Animatable::new_animated(vec![
-                    Keyframe::new(current_frame, 0.0, ease),
-                    Keyframe::new(end_frame, 100.0, ease),
-                ]);
-            }
-            "Slide In Left" => {
-                layer.transform.position = Animatable::new_animated(vec![
-                    Keyframe::new(current_frame, [base_pos[0] - 200.0, base_pos[1]], ease),
-                    Keyframe::new(end_frame, base_pos, ease),
-                ]);
-                layer.transform.opacity = Animatable::new_animated(vec![
-                    Keyframe::new(current_frame, 0.0, ease),
-                    Keyframe::new(end_frame, 100.0, ease),
-                ]);
-            }
-            "Slide In Right" => {
-                layer.transform.position = Animatable::new_animated(vec![
-                    Keyframe::new(current_frame, [base_pos[0] + 200.0, base_pos[1]], ease),
-                    Keyframe::new(end_frame, base_pos, ease),
-                ]);
-                layer.transform.opacity = Animatable::new_animated(vec![
-                    Keyframe::new(current_frame, 0.0, ease),
-                    Keyframe::new(end_frame, 100.0, ease),
-                ]);
-            }
-            "Slide In Up" => {
-                layer.transform.position = Animatable::new_animated(vec![
-                    Keyframe::new(current_frame, [base_pos[0], base_pos[1] + 150.0], ease),
-                    Keyframe::new(end_frame, base_pos, ease),
-                ]);
-                layer.transform.opacity = Animatable::new_animated(vec![
-                    Keyframe::new(current_frame, 0.0, ease),
-                    Keyframe::new(end_frame, 100.0, ease),
-                ]);
-            }
-            "Scale Up" => {
-                layer.transform.scale = Animatable::new_animated(vec![
-                    Keyframe::new(current_frame, [0.0, 0.0], ease),
-                    Keyframe::new(end_frame, [100.0, 100.0], ease),
-                ]);
-                layer.transform.opacity = Animatable::new_animated(vec![
-                    Keyframe::new(current_frame, 0.0, ease),
-                    Keyframe::new(end_frame, 100.0, ease),
-                ]);
-            }
-            _ => {}
-        }
-    });
-}
-
-/// Text animation presets section — adds to the bottom of the panel.
-pub fn draw_animation_presets(
-    app: &mut KagariApp,
-    ui: &mut egui::Ui,
-    current_frame: u32,
-    duration_frames: u32,
-) {
-    ui.separator();
-    ui.label("Text Animation Presets:");
-    let presets = [
-        "Fade In",
-        "Slide In Left",
-        "Slide In Right",
-        "Slide In Up",
-        "Scale Up",
-    ];
-    ui.horizontal_wrapped(|ui| {
-        for preset in presets {
-            if custom_widgets::ae_button(ui, preset).clicked() {
-                if let Some(idx) = app.selection.selected_layer_idx {
-                    crate::ui::character_panel::apply_text_preset(
-                        app,
-                        preset,
-                        idx,
-                        current_frame,
-                        duration_frames,
-                    );
-                }
-            }
-        }
-    });
 }

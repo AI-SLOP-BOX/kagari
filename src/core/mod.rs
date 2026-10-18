@@ -1,7 +1,5 @@
 pub mod aces;
 pub mod aegp_sdk_bridge;
-pub mod aep_parser;
-pub mod ai_runtime_bridge;
 pub mod audio_dsp;
 pub mod audio_engine;
 #[cfg(feature = "gui")]
@@ -14,7 +12,6 @@ pub mod auto_trace;
 pub mod automation;
 pub mod automation_binding;
 pub mod autosave;
-pub mod c4d_extrusion_engine;
 pub mod camera_chan_importer;
 pub mod camera_dof;
 pub mod camera_lens_blur;
@@ -25,6 +22,10 @@ pub mod clipboard;
 pub mod color;
 pub mod color_science;
 pub mod colorama;
+#[cfg(feature = "wgpu")]
+pub mod compute_pipeline;
+#[cfg(not(feature = "wgpu"))]
+#[path = "compute_pipeline_stub.rs"]
 pub mod compute_pipeline;
 pub mod content_aware_engine;
 pub mod continuous_rasterizer;
@@ -51,6 +52,8 @@ pub mod font_rasterizer;
 pub mod frame_blending;
 pub mod frame_cache;
 pub mod hdr_dither;
+#[cfg(feature = "cli-gpu")]
+pub mod headless_gpu;
 pub mod history;
 pub mod image_cache;
 pub mod integration;
@@ -67,7 +70,6 @@ pub mod merkle_frame_cache;
 pub mod mlt_export;
 pub mod motion_sketch;
 pub mod motion_tile;
-pub mod obj_parser;
 pub mod ocio_color;
 pub mod openfx_bridge;
 pub mod page_turn;
@@ -87,10 +89,10 @@ pub mod project;
 pub mod project_migration;
 pub mod property;
 pub mod proxy;
-pub mod puppet_tool_engine;
 pub mod puppet_warp;
+pub mod render_capability;
 pub mod render_pipeline;
-pub mod render_queue;
+#[cfg(feature = "wgpu")]
 pub mod renderer;
 pub mod rive_runtime;
 pub mod roto_assist;
@@ -102,13 +104,11 @@ pub mod shape_repeater;
 pub mod software_renderer;
 pub mod spatial_keyframe;
 pub mod spherize;
-pub mod sql_timeline_db;
 pub mod stabilizer;
 pub mod stroke_modifier;
 pub mod subtitles;
 pub mod supersample;
 pub mod svg_ai_importer;
-pub mod team_projects_sync;
 pub mod text_animator;
 pub mod text_animator_advanced;
 pub mod text_layout;
@@ -116,6 +116,7 @@ pub mod text_to_shapes;
 pub mod the_smoother;
 pub mod the_wiggler;
 pub mod tile_cache;
+pub mod time_remap;
 pub mod timeline;
 pub mod tracker_engine;
 pub mod transform_effect;
@@ -130,11 +131,14 @@ pub mod wiggle_paths;
 // progressively wired into the render pipeline via `core::cpu_effects`; until a
 // given kernel is referenced it is intentionally allowed to be unused rather
 // than deleted, so the library stays available for future effects.
-pub mod advanced_3d_engine;
+// NOTE: `advanced_3d_engine` was retired 2026-10-11: its thin-lens CoC formula
+// survives as `camera_dof::calculate_circle_of_confusion_thin_lens`; the
+// TwoNode/OneNode camera, physical light falloff and HDRI sampler had no
+// callers (the live 3D path is `timeline::{Camera3D, Light3D}` +
+// `software_renderer::model3d_raster`).
 pub mod advanced_motion_blur;
 pub mod advanced_particles_3d;
 pub mod ae_effects_pack;
-pub mod ae_effects_pack_v10;
 pub mod ae_effects_pack_v11;
 pub mod ae_effects_pack_v12;
 pub mod ae_effects_pack_v13;
@@ -148,26 +152,34 @@ pub mod ae_effects_pack_v2;
 pub mod ae_effects_pack_v20;
 pub mod ae_effects_pack_v21;
 pub mod ae_effects_pack_v22;
-pub mod ae_effects_pack_v23;
 pub mod ae_effects_pack_v24;
 pub mod ae_effects_pack_v25;
-pub mod ae_effects_pack_v26;
 pub mod ae_effects_pack_v27;
 pub mod ae_effects_pack_v28;
-pub mod ae_effects_pack_v29;
 pub mod ae_effects_pack_v3;
 pub mod ae_effects_pack_v30;
 pub mod ae_effects_pack_v4;
 pub mod ae_effects_pack_v5;
-pub mod ae_effects_pack_v6;
-pub mod ae_effects_pack_v7;
-pub mod ae_effects_pack_v8;
-pub mod ae_effects_pack_v9;
-pub mod ae_sdk_host;
+
+// Semantic domain aliases for After Effects effect algorithm suites
+pub use ae_effects_pack_v2 as legacy_filters_v2;
+pub use ae_effects_pack_v5 as audio_effects_dsp;
+pub use ae_effects_pack_v12 as physical_wave_effects;
+pub use ae_effects_pack_v13 as geometric_distortion;
+pub use ae_effects_pack_v14 as photo_stylize;
+pub use ae_effects_pack_v15 as lighting_polar_effects;
+pub use ae_effects_pack_v16 as noise_and_keying;
+pub use ae_effects_pack_v17 as edge_aware_filters;
+pub use ae_effects_pack_v18 as simulation_procedural;
+pub use ae_effects_pack_v19 as frequency_composite;
+pub use ae_effects_pack_v21 as warp_geometry_suite;
+pub use ae_effects_pack_v27 as distortion_lens;
+pub use ae_effects_pack_v28 as stylize_advanced;
+pub use ae_effects_pack_v30 as glitch_effects;
+
 pub mod animation_presets;
 pub mod bend_warp_engine;
 pub mod calculations_composite;
-pub mod camera_tracker_3d;
 pub mod color_correction;
 pub mod content_aware_fill;
 pub mod cylinder_sphere_warp;
@@ -175,12 +187,15 @@ pub mod dynamic_link_disk_cache;
 pub mod effect_presets;
 pub mod effect_registry_ext;
 pub mod exr_pipeline;
+pub mod exr_reader;
+pub mod exr_writer;
+
+pub mod gltf_loader;
 pub mod icc_color_engine;
 pub mod lightning_beam_engine;
 pub mod mesh_extrusion;
 pub mod mogrt_engine;
 pub mod obj_loader;
-pub mod ofx_host;
 pub mod optical_flare;
 pub mod optical_flow_timewarp;
 pub mod particle_forces;

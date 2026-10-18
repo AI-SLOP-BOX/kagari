@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 const MAX_OCIO_CONFIG_BYTES: u64 = 64 * 1024 * 1024;
@@ -202,6 +203,25 @@ pub struct Lut3D {
 }
 
 impl Lut3D {
+    pub fn load_cube_file(path: impl AsRef<Path>) -> Result<Self, String> {
+        let path = path.as_ref();
+        let metadata = std::fs::metadata(path)
+            .map_err(|error| format!("could not access LUT file: {error}"))?;
+        if metadata.len() > MAX_OCIO_CONFIG_BYTES {
+            return Err(".cube LUT exceeds the 64 MiB size limit".into());
+        }
+        let mut text = String::new();
+        std::fs::File::open(path)
+            .map_err(|error| format!("could not open LUT file: {error}"))?
+            .take(MAX_OCIO_CONFIG_BYTES + 1)
+            .read_to_string(&mut text)
+            .map_err(|error| format!("could not read LUT file: {error}"))?;
+        if text.len() as u64 > MAX_OCIO_CONFIG_BYTES {
+            return Err(".cube LUT exceeds the 64 MiB size limit".into());
+        }
+        Self::parse_cube(&text)
+    }
+
     /// Tetrahedral interpolation: highest-quality trilinear alternative,
     /// branch-light in the hot loop.
     pub fn apply(&self, r: f32, g: f32, b: f32) -> (f32, f32, f32) {
@@ -337,20 +357,31 @@ impl Lut3D {
     }
 }
 
-thread_local! {
-    static ACTIVE_LUT: std::cell::RefCell<Option<std::sync::Arc<Lut3D>>> =
-        const { std::cell::RefCell::new(None) };
+static ACTIVE_LUT: std::sync::OnceLock<std::sync::RwLock<Option<std::sync::Arc<Lut3D>>>> =
+    std::sync::OnceLock::new();
+
+fn active_lut_lock() -> &'static std::sync::RwLock<Option<std::sync::Arc<Lut3D>>> {
+    ACTIVE_LUT.get_or_init(|| std::sync::RwLock::new(None))
 }
 
-/// Sets the globally active LUT used by renderers when lut_mode == 3.
+/// Sets the active LUT used by CPU renderers when lut_mode == 3.
 pub fn set_active_lut(lut: Option<std::sync::Arc<Lut3D>>) {
-    ACTIVE_LUT.with(|l| *l.borrow_mut() = lut);
+    *active_lut_lock()
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = lut;
+}
+
+/// Takes one immutable LUT snapshot for a render, safe to share with worker threads.
+pub fn active_lut() -> Option<std::sync::Arc<Lut3D>> {
+    active_lut_lock()
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone()
 }
 
 /// Per-pixel LUT application for float pipelines; identity when no LUT loaded.
 pub fn apply_lut_pixel(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
-    let applied = ACTIVE_LUT.with(|l| l.borrow().clone());
-    match applied {
+    match active_lut() {
         Some(lut) => {
             let (nr, ng, nb) = lut.apply(r.clamp(0.0, 1.0), g.clamp(0.0, 1.0), b.clamp(0.0, 1.0));
             (nr.clamp(0.0, 1.0), ng.clamp(0.0, 1.0), nb.clamp(0.0, 1.0))
@@ -361,10 +392,9 @@ pub fn apply_lut_pixel(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
 
 /// Applies the active LUT in place to an RGBA u8 buffer (if one is loaded).
 pub fn apply_active_lut(pixels: &mut [u8]) -> bool {
-    let applied = ACTIVE_LUT.with(|l| l.borrow().clone());
-    match applied {
+    match active_lut() {
         Some(lut) => {
-            for p in pixels.chunks_exact_mut(4) {
+            for p in pixels.as_chunks_mut::<4>().0 {
                 let r = p[0] as f32 / 255.0;
                 let g = p[1] as f32 / 255.0;
                 let b = p[2] as f32 / 255.0;
@@ -382,6 +412,8 @@ pub fn apply_active_lut(pixels: &mut [u8]) -> bool {
 #[cfg(test)]
 mod lut_tests {
     use super::*;
+
+    static ACTIVE_LUT_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     /// Builds a size-2 identity-ish LUT where out == in.
     fn identity_lut(size: usize) -> Lut3D {
@@ -450,6 +482,9 @@ DOMAIN_MAX 1 1 1
 
     #[test]
     fn test_apply_active_lut_to_buffer() {
+        let _guard = ACTIVE_LUT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         // Warm tint: red up, blue down everywhere
         let mut data = Vec::new();
         for b in 0..2usize {
@@ -473,6 +508,9 @@ DOMAIN_MAX 1 1 1
 
     #[test]
     fn test_apply_without_lut_is_noop_false() {
+        let _guard = ACTIVE_LUT_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         set_active_lut(None);
         let mut px = vec![10u8, 20, 30, 255];
         assert!(!apply_active_lut(&mut px));

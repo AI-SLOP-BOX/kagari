@@ -4,20 +4,15 @@ use crate::core::physics::{
     RigidBodyType,
 };
 use crate::core::property::Animatable;
-use crate::ui::custom_widgets;
-use crate::ui::theme::colors;
+use crate::ui::kui::{self, ButtonKind};
 use crate::KagariApp;
 use eframe::egui;
 
 /// 2D Rigid Body Physics & Spring Dynamics Panel for AE Motion Graphics.
 pub fn draw_physics_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
-    ui.heading("⚛ Physics & Dynamics");
-    ui.label(
-        egui::RichText::new("2D Rigid Body Collision Simulation & Keyframe Baker")
-            .small()
-            .color(colors::TEXT_SECONDARY),
-    );
-    ui.separator();
+    kui::section(ui, "⚛ Physics & Dynamics");
+    kui::secondary(ui, "2D Rigid Body Collision Simulation & Keyframe Baker");
+    kui::separator(ui);
 
     let gravity_id = egui::Id::new("ae_physics_gravity_y");
     let mut gravity_y: f32 = ui
@@ -44,71 +39,56 @@ pub fn draw_physics_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
         .ctx()
         .data_mut(|d| *d.get_temp_mut_or_insert_with(collider_shape_id, || 0));
 
-    ui.horizontal(|ui| {
-        ui.label("Gravity Y:");
-        if ui
-            .add(egui::Slider::new(&mut gravity_y, -2000.0..=3000.0).suffix(" px/s²"))
-            .changed()
-        {
-            ui.ctx().data_mut(|d| d.insert_temp(gravity_id, gravity_y));
-        }
-    });
-
-    ui.add_space(4.0);
-    ui.horizontal(|ui| {
-        ui.label("Bounciness:");
-        if ui
-            .add(
-                egui::Slider::new(&mut bounciness, 0.0..=1.0)
-                    .custom_formatter(|v, _| format!("{:.0}%", v * 100.0)),
-            )
-            .changed()
-        {
-            ui.ctx()
-                .data_mut(|d| d.insert_temp(bounciness_id, bounciness));
-        }
-    });
-
-    ui.add_space(4.0);
-    ui.horizontal(|ui| {
-        ui.label("Friction:");
-        if ui
-            .add(egui::Slider::new(&mut friction, 0.0..=1.0))
-            .changed()
-        {
-            ui.ctx().data_mut(|d| d.insert_temp(friction_id, friction));
-        }
-    });
-
-    ui.add_space(4.0);
-    ui.horizontal(|ui| {
-        ui.label("Collider Shape:");
-        if ui
-            .selectable_value(&mut collider_shape_idx, 0, "Box")
-            .clicked()
-        {
-            ui.ctx()
-                .data_mut(|d| d.insert_temp(collider_shape_id, collider_shape_idx));
-        }
-        if ui
-            .selectable_value(&mut collider_shape_idx, 1, "⚪ Circle")
-            .clicked()
-        {
-            ui.ctx()
-                .data_mut(|d| d.insert_temp(collider_shape_id, collider_shape_idx));
-        }
-    });
-
-    ui.add_space(4.0);
-    if ui
-        .checkbox(&mut floor_enabled, "Floor Boundary at Bottom of Comp")
+    let mut bounciness_percent = bounciness * 100.0;
+    let mut friction_percent = friction * 100.0;
+    let grid = kui::PropertyGrid::new(
+        ui,
+        &["Gravity Y", "Bounciness", "Friction", "Collider Shape"],
+    );
+    if grid
+        .row(ui, "Gravity Y", |ui| {
+            kui::slider(ui, &mut gravity_y, -2000.0..=3000.0, " px/s²")
+        })
         .changed()
     {
+        ui.ctx().data_mut(|d| d.insert_temp(gravity_id, gravity_y));
+    }
+    if grid
+        .row(ui, "Bounciness", |ui| {
+            kui::slider(ui, &mut bounciness_percent, 0.0..=100.0, "%")
+        })
+        .changed()
+    {
+        bounciness = bounciness_percent / 100.0;
+        ui.ctx()
+            .data_mut(|d| d.insert_temp(bounciness_id, bounciness));
+    }
+    if grid
+        .row(ui, "Friction", |ui| {
+            kui::slider(ui, &mut friction_percent, 0.0..=100.0, "%")
+        })
+        .changed()
+    {
+        friction = friction_percent / 100.0;
+        ui.ctx().data_mut(|d| d.insert_temp(friction_id, friction));
+    }
+    if grid.row(ui, "Collider Shape", |ui| {
+        kui::combo(
+            ui,
+            collider_shape_id,
+            &mut collider_shape_idx,
+            &[(0, "Box"), (1, "⚪ Circle")],
+        )
+    }) {
+        ui.ctx()
+            .data_mut(|d| d.insert_temp(collider_shape_id, collider_shape_idx));
+    }
+    if kui::toggle(ui, &mut floor_enabled, "Floor Boundary at Bottom of Comp").changed() {
         ui.ctx()
             .data_mut(|d| d.insert_temp(floor_id, floor_enabled));
     }
 
-    ui.separator();
+    kui::separator(ui);
 
     let comp = app.history.current().active_composition();
     let comp_w = comp.width as f32;
@@ -119,18 +99,22 @@ pub fn draw_physics_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
         app.selection.selected_layers.iter().copied().collect();
 
     if selected_layer_indices.is_empty() {
-        ui.colored_label(
-            colors::TEXT_SECONDARY,
+        kui::empty_state(
+            ui,
             "Select one or more layers in the Timeline to simulate.",
+            64.0,
         );
     } else {
-        ui.label(format!(
-            "{} layer(s) selected for physics simulation",
-            selected_layer_indices.len()
-        ));
+        kui::secondary(
+            ui,
+            crate::ui::localization::tr_format(
+                "{} layer(s) selected for physics simulation",
+                &[&selected_layer_indices.len().to_string()],
+            ),
+        );
 
-        ui.add_space(8.0);
-        if custom_widgets::ae_button(ui, "Simulate & Bake to Keyframes").clicked() {
+        ui.add_space(kui::space::SM);
+        if kui::button(ui, "Simulate & Bake to Keyframes", ButtonKind::Accent).clicked() {
             let mut temp_proj = app.history.current().clone();
             let active_comp = temp_proj.active_composition_mut();
 
@@ -195,15 +179,25 @@ pub fn draw_physics_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
             }
 
             app.commit_project(temp_proj);
-            app.toasts.info("Physics simulation baked to keyframes!");
+            app.toasts.info(crate::ui::localization::tr(
+                "Physics simulation baked to keyframes!",
+            ));
         }
     }
 
-    ui.separator();
-    ui.label(egui::RichText::new("Inertia / Bounce Dynamic Keyframes").strong());
-    if custom_widgets::ae_button(ui, "Bake Inertial Bounce on Scale").clicked() {
+    kui::separator(ui);
+    kui::section_title(ui, "Inertia / Bounce Dynamic Keyframes");
+    if kui::button_enabled(
+        ui,
+        "Bake Inertial Bounce on Scale",
+        ButtonKind::Default,
+        !selected_layer_indices.is_empty(),
+    )
+    .clicked()
+    {
         if selected_layer_indices.is_empty() {
-            app.toasts.error("Select a layer first");
+            app.toasts
+                .error(crate::ui::localization::tr("Select a layer first"));
             return;
         }
 
@@ -227,6 +221,8 @@ pub fn draw_physics_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
         }
 
         app.commit_project(temp_proj);
-        app.toasts.info("Baked inertial bounce keyframes to Scale!");
+        app.toasts.info(crate::ui::localization::tr(
+            "Baked inertial bounce keyframes to Scale!",
+        ));
     }
 }

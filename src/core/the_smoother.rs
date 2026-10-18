@@ -89,11 +89,11 @@ pub fn simplify_rdp_vec2(
         let mut max_dist = 0.0f32;
         let mut max_idx = start;
 
-        for i in (start + 1)..end {
+        for (i, keyframe) in kfs.iter().enumerate().take(end).skip(start + 1) {
             let p = [
-                kfs[i].frame as f32 * time_scale,
-                kfs[i].value[0],
-                kfs[i].value[1],
+                keyframe.frame as f32 * time_scale,
+                keyframe.value[0],
+                keyframe.value[1],
             ];
             let d = point_to_segment_dist_3d(p, a, b);
             if d > max_dist {
@@ -167,8 +167,8 @@ pub fn simplify_rdp_scalar(keyframes: &[Keyframe<f32>], tolerance: f32) -> Vec<K
         let mut max_dist = 0.0f32;
         let mut max_idx = start;
 
-        for i in (start + 1)..end {
-            let p = [kfs[i].frame as f32, kfs[i].value];
+        for (i, keyframe) in kfs.iter().enumerate().take(end).skip(start + 1) {
+            let p = [keyframe.frame as f32, keyframe.value];
             let d = point_to_segment_dist_2d(p, a, b);
             if d > max_dist {
                 max_dist = d;

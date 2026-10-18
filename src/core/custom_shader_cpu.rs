@@ -3,6 +3,57 @@
 //! Arbitrary WGSL still requires a GPU pipeline. The built-in templates have
 //! equivalent CPU kernels so previews and exports do not silently diverge.
 
+pub const CRT_TEMPLATE: &str = r#"// CRT Scanlines Shader
+@group(0) @binding(0) var t_diffuse: texture_2d<f32>;
+@group(0) @binding(1) var s_diffuse: sampler;
+@group(0) @binding(2) var<uniform> u_params: vec4<f32>; // x: density, y: opacity
+
+@fragment
+fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
+    var color = textureSample(t_diffuse, s_diffuse, uv);
+    let scanline = sin(uv.y * (u_params.x * 400.0 + 100.0)) * 0.5 + 0.5;
+    color = vec4<f32>(color.rgb * mix(1.0, scanline, u_params.y), color.a);
+    return color;
+}"#;
+
+pub const CHROMATIC_TWIST_TEMPLATE: &str = r#"// Chromatic Twist Shader
+@group(0) @binding(0) var t_diffuse: texture_2d<f32>;
+@group(0) @binding(1) var s_diffuse: sampler;
+@group(0) @binding(2) var<uniform> u_params: vec4<f32>; // x: strength, y: radius
+
+@fragment
+fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
+    let center = vec2<f32>(0.5, 0.5);
+    let delta = uv - center;
+    let dist = length(delta);
+    let angle = atan2(delta.y, delta.x) + (1.0 - smoothstep(0.0, u_params.y, dist)) * u_params.x;
+    let twisted_uv = center + vec2<f32>(cos(angle), sin(angle)) * dist;
+    return textureSample(t_diffuse, s_diffuse, clamp(twisted_uv, vec2<f32>(0.0), vec2<f32>(1.0)));
+}"#;
+
+pub const NEON_EDGE_TEMPLATE: &str = r#"// Neon Edge Glow
+@group(0) @binding(0) var t_diffuse: texture_2d<f32>;
+@group(0) @binding(1) var s_diffuse: sampler;
+@group(0) @binding(2) var<uniform> u_params: vec4<f32>; // x: edge_thresh, y: intensity
+
+@fragment
+fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
+    let col = textureSample(t_diffuse, s_diffuse, uv);
+    let right = textureSample(t_diffuse, s_diffuse, uv + vec2<f32>(0.002, 0.0));
+    let down = textureSample(t_diffuse, s_diffuse, uv + vec2<f32>(0.0, 0.002));
+    let diff = length(col.rgb - right.rgb) + length(col.rgb - down.rgb);
+    let neon = smoothstep(u_params.x * 0.1, 0.5, diff) * u_params.y * vec3<f32>(0.1, 0.9, 1.0);
+    return vec4<f32>(col.rgb + neon, col.a);
+}"#;
+
+pub const DEFAULT_TEMPLATE_SOURCE: &str = r#"// Custom WGSL VFX Shader Template
+// Available: src (input color vec4), uv (vec2), u.time, u.p0..p3
+let t = u.time;
+let dist = distance(uv, vec2<f32>(0.5, 0.5));
+let wave = sin(dist * 20.0 - t * 4.0) * 0.5 + 0.5;
+let tint = vec4<f32>(wave * u.p0, (1.0 - wave) * u.p1, wave * u.p2, 1.0);
+return mix(src, tint, u.p3);"#;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum BuiltinShader {
     CrtScanlines,
@@ -12,13 +63,13 @@ enum BuiltinShader {
 }
 
 fn builtin_shader(source: &str) -> Option<BuiltinShader> {
-    if source.contains("CRT Scanlines Shader") {
+    if source == CRT_TEMPLATE || source == "// CRT Scanlines Shader" {
         Some(BuiltinShader::CrtScanlines)
-    } else if source.contains("Chromatic Twist Shader") {
+    } else if source == CHROMATIC_TWIST_TEMPLATE || source == "// Chromatic Twist Shader" {
         Some(BuiltinShader::ChromaticTwist)
-    } else if source.contains("Neon Edge Glow") {
+    } else if source == NEON_EDGE_TEMPLATE || source == "// Neon Edge Glow" {
         Some(BuiltinShader::NeonEdge)
-    } else if source.contains("Custom WGSL VFX Shader Template") {
+    } else if source == DEFAULT_TEMPLATE_SOURCE || source == "// Custom WGSL VFX Shader Template" {
         Some(BuiltinShader::DefaultTemplate)
     } else {
         None

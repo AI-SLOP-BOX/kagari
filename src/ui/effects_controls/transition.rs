@@ -20,7 +20,7 @@ pub fn draw(
                 "Completion",
                 completion,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%"));
+                    crate::ui::kui::slider(ui, v, 0.0..=100.0, "%");
                 },
             );
             draw_prop(
@@ -31,7 +31,7 @@ pub fn draw(
                 "Wipe Angle",
                 angle,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°"));
+                    crate::ui::kui::slider(ui, v, 0.0..=360.0, "°");
                 },
             );
         }
@@ -44,7 +44,7 @@ pub fn draw(
                 "Completion",
                 completion,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%"));
+                    crate::ui::kui::slider(ui, v, 0.0..=100.0, "%");
                 },
             );
         }
@@ -57,7 +57,7 @@ pub fn draw(
                 "Completion",
                 completion,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%"));
+                    crate::ui::kui::slider(ui, v, 0.0..=100.0, "%");
                 },
             );
         }
@@ -70,7 +70,7 @@ pub fn draw(
                 "Completion",
                 completion,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%"));
+                    crate::ui::kui::slider(ui, v, 0.0..=100.0, "%");
                 },
             );
             draw_prop(
@@ -81,19 +81,36 @@ pub fn draw(
                 "Width",
                 width,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 2.0..=100.0).suffix(" px"));
+                    crate::ui::kui::slider(ui, v, 2.0..=100.0, " px");
                 },
             );
         }
         EffectType::PageTurn {
-            fold_position: _,
+            fold_position,
             fold_radius,
             fold_direction_deg,
             light_direction_deg,
             back_opacity,
-            back_color: _,
+            back_color,
         } => {
-            ui.label("CC Page Turn");
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Fold Position",
+                fold_position,
+                |ui, value| {
+                    let _ = crate::ui::kui::vector_axes(
+                        ui,
+                        value,
+                        -10000.0..=10000.0,
+                        1.0,
+                        " px",
+                        ["X", "Y"],
+                    );
+                },
+            );
             draw_prop(
                 ui,
                 current_frame,
@@ -102,7 +119,7 @@ pub fn draw(
                 "Fold Radius",
                 fold_radius,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 10.0..=500.0).suffix(" px"));
+                    crate::ui::kui::slider(ui, v, 10.0..=500.0, " px");
                 },
             );
             draw_prop(
@@ -113,7 +130,7 @@ pub fn draw(
                 "Fold Angle",
                 fold_direction_deg,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, -180.0..=180.0).suffix(" °"));
+                    crate::ui::kui::slider(ui, v, -180.0..=180.0, " °");
                 },
             );
             draw_prop(
@@ -124,7 +141,7 @@ pub fn draw(
                 "Light Direction",
                 light_direction_deg,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, -180.0..=180.0).suffix(" °"));
+                    crate::ui::kui::slider(ui, v, -180.0..=180.0, " °");
                 },
             );
             draw_prop(
@@ -135,7 +152,18 @@ pub fn draw(
                 "Back Opacity",
                 back_opacity,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=100.0).suffix(" %"));
+                    crate::ui::kui::slider(ui, v, 0.0..=100.0, " %");
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Back Color",
+                back_color,
+                |ui, value| {
+                    let _ = crate::ui::kui::color_rgba(ui, value);
                 },
             );
         }
@@ -153,7 +181,7 @@ pub fn draw(
                 "Direction",
                 direction_deg,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°"));
+                    crate::ui::kui::slider(ui, v, 0.0..=360.0, "°");
                 },
             );
             draw_prop(
@@ -164,7 +192,7 @@ pub fn draw(
                 "Sweep Intensity",
                 sweep_intensity,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
                 },
             );
             draw_prop(
@@ -175,7 +203,7 @@ pub fn draw(
                 "Edge Intensity",
                 edge_intensity,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
                 },
             );
         }

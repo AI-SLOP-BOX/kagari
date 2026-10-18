@@ -21,7 +21,7 @@ pub fn draw(
                 "Direction",
                 angle,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°"));
+                    crate::ui::kui::slider(ui, v, 0.0..=360.0, "°");
                 },
             );
             draw_prop(
@@ -32,7 +32,7 @@ pub fn draw(
                 "Length",
                 length,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=100.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=100.0, "");
                 },
             );
         }
@@ -45,7 +45,7 @@ pub fn draw(
                 "Radial Amount",
                 amount,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, -100.0..=100.0));
+                    crate::ui::kui::slider(ui, v, -100.0..=100.0, "");
                 },
             );
         }
@@ -61,7 +61,7 @@ pub fn draw(
                 "Source Layer ID",
                 source_layer,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=10.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=10.0, "");
                 },
             );
             draw_prop(
@@ -72,7 +72,7 @@ pub fn draw(
                 "Max Blur",
                 max_blur,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=100.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=100.0, "");
                 },
             );
         }
@@ -85,7 +85,7 @@ pub fn draw(
                 "Amount",
                 amount,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=100.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=100.0, "");
                 },
             );
         }
@@ -102,7 +102,7 @@ pub fn draw(
                 "Focus Y",
                 focus_y,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
                 },
             );
             draw_prop(
@@ -113,7 +113,7 @@ pub fn draw(
                 "Band Height",
                 focus_height,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.02..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.02..=1.0, "");
                 },
             );
             draw_prop(
@@ -124,7 +124,7 @@ pub fn draw(
                 "Max Blur",
                 max_blur,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=32.0).suffix(" px"));
+                    crate::ui::kui::slider(ui, v, 0.0..=32.0, " px");
                 },
             );
         }
@@ -136,7 +136,6 @@ pub fn draw(
             highlight_gain,
             highlight_threshold,
         } => {
-            ui.label("Camera Lens Blur");
             draw_prop(
                 ui,
                 current_frame,
@@ -144,15 +143,14 @@ pub fn draw(
                 next_frame,
                 "Blur Radius",
                 blur_radius,
-                |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=100.0).suffix(" px"));
+                |ui, value| {
+                    crate::ui::kui::slider(ui, value, 0.0..=100.0, " px");
                 },
             );
-            ui.horizontal(|ui| {
-                ui.label("Iris Blades:");
-                let mut b_i32 = *iris_blades as i32;
-                if ui.add(egui::Slider::new(&mut b_i32, 3..=16)).changed() {
-                    *iris_blades = b_i32.clamp(3, 16) as u32;
+            crate::ui::kui::property(ui, "Iris Blades", |ui| {
+                let mut b_i32 = *iris_blades;
+                if crate::ui::kui::slider_integer(ui, &mut b_i32, 3..=16).changed() {
+                    *iris_blades = b_i32.clamp(3, 16);
                     *project_changed = true;
                 }
             });
@@ -164,7 +162,7 @@ pub fn draw(
                 "Iris Rotation",
                 iris_rotation_deg,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°"));
+                    crate::ui::kui::slider(ui, v, 0.0..=360.0, "°");
                 },
             );
             draw_prop(
@@ -175,7 +173,7 @@ pub fn draw(
                 "Iris Roundness",
                 iris_roundness,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=100.0).suffix("%"));
+                    crate::ui::kui::slider(ui, v, 0.0..=100.0, "%");
                 },
             );
             draw_prop(
@@ -186,7 +184,7 @@ pub fn draw(
                 "Highlight Gain",
                 highlight_gain,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=5.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=5.0, "");
                 },
             );
             draw_prop(
@@ -197,7 +195,7 @@ pub fn draw(
                 "Highlight Threshold",
                 highlight_threshold,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
                 },
             );
         }
@@ -212,7 +210,7 @@ pub fn draw(
                 "Shutter Angle",
                 shutter_angle,
                 |ui, val| {
-                    ui.add(egui::Slider::new(val, 0.0..=360.0).suffix("°"));
+                    crate::ui::kui::slider(ui, val, 0.0..=360.0, "°");
                 },
             ) {
                 *next_frame = Some(nf);
@@ -221,14 +219,91 @@ pub fn draw(
                 *project_changed = true;
             }
 
-            ui.horizontal(|ui| {
-                ui.label("Samples:");
-                let before_s = *samples;
-                ui.add(egui::DragValue::new(samples).range(2..=16));
-                if before_s != *samples {
-                    *project_changed = true;
-                }
-            });
+            if crate::ui::kui::property(ui, "Samples", |ui| {
+                ui.add(crate::ui::kui::drag(samples).range(2..=16))
+            })
+            .changed()
+            {
+                *project_changed = true;
+            }
+        }
+        EffectType::TemporalDenoise {
+            strength,
+            temporal_mix,
+            feature_threshold,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Strength",
+                strength,
+                |ui, v| {
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Temporal Mix",
+                temporal_mix,
+                |ui, v| {
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Feature Threshold",
+                feature_threshold,
+                |ui, v| {
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
+                },
+            );
+        }
+        EffectType::BilateralFilter {
+            radius,
+            spatial_sigma,
+            color_sigma,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Radius",
+                radius,
+                |ui, v| {
+                    crate::ui::kui::slider(ui, v, 1.0..=32.0, " px");
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Spatial Sigma",
+                spatial_sigma,
+                |ui, v| {
+                    crate::ui::kui::slider(ui, v, 0.5..=20.0, "");
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Color Sigma",
+                color_sigma,
+                |ui, v| {
+                    crate::ui::kui::slider(ui, v, 1.0..=100.0, "");
+                },
+            );
         }
         _ => {}
     }

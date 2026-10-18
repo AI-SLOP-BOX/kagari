@@ -11,8 +11,8 @@ pub enum ToastLevel {
 
 pub fn toast_color(level: &ToastLevel) -> egui::Color32 {
     match level {
-        ToastLevel::Info => colors::ACCENT_BLUE,
-        ToastLevel::Warning => colors::ACCENT_ORANGE,
+        ToastLevel::Info => colors::ACCENT_INFORMATION,
+        ToastLevel::Warning => colors::ACCENT_WARNING,
         ToastLevel::Error => colors::ACCENT_RED,
     }
 }
@@ -70,7 +70,7 @@ impl ToastManager {
     pub fn draw(&mut self, ctx: &egui::Context) {
         let now = Instant::now();
         self.notifications
-            .retain(|t| now.duration_since(t.created_at) < t.duration);
+            .retain(|t| now.duration_since(t.created_at) < t.duration + Duration::from_millis(220));
 
         if self.notifications.is_empty() {
             return;
@@ -79,13 +79,21 @@ impl ToastManager {
         ctx.request_repaint_after(Duration::from_millis(100));
 
         egui::Area::new(egui::Id::new("toast_notification_area"))
-            .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-16.0, -16.0))
+            .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-16.0, 48.0))
             .order(egui::Order::Foreground)
             .show(ctx, |ui| {
-                ui.with_layout(egui::Layout::bottom_up(egui::Align::RIGHT), |ui| {
-                    for toast in self.notifications.iter().rev() {
+                ui.with_layout(egui::Layout::top_down(egui::Align::RIGHT), |ui| {
+                    for toast in self.notifications.iter() {
                         let accent = toast_color(&toast.level);
                         let elapsed = now.duration_since(toast.created_at).as_secs_f32();
+                        let visible = now.duration_since(toast.created_at) < toast.duration;
+                        let opacity = choegui::animated_visibility_with_policy(
+                            ctx,
+                            egui::Id::new(("toast-visibility", toast.id)),
+                            visible,
+                            choegui::Spring::new(9.0, 1.0),
+                            choegui::MotionPolicy::Full,
+                        );
                         let remaining_ratio =
                             (1.0 - elapsed / toast.duration.as_secs_f32()).clamp(0.0, 1.0);
 
@@ -94,6 +102,7 @@ impl ToastManager {
                             .stroke(egui::Stroke::new(1.0_f32, accent))
                             .rounding(egui::Rounding::same(4.0))
                             .inner_margin(egui::Margin::symmetric(12.0, 8.0))
+                            .multiply_with_opacity(opacity)
                             .show(ui, |ui| {
                                 ui.set_max_width(320.0);
                                 ui.horizontal(|ui| {

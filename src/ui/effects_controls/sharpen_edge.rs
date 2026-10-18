@@ -20,12 +20,12 @@ pub fn draw(
                 "Sharpen Amount",
                 amount,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=100.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=100.0, "");
                 },
             );
         }
         EffectType::SobelEdges { invert } => {
-            if ui.checkbox(invert, "Invert").changed() {
+            if crate::ui::kui::toggle(ui, invert, "Invert").changed() {
                 *project_changed = true;
             }
         }
@@ -41,7 +41,7 @@ pub fn draw(
                 "Angle",
                 angle_deg,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=360.0).suffix("°"));
+                    crate::ui::kui::slider(ui, v, 0.0..=360.0, "°");
                 },
             );
             draw_prop(
@@ -52,7 +52,7 @@ pub fn draw(
                 "Strength",
                 strength,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=5.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=5.0, "");
                 },
             );
         }
@@ -65,7 +65,7 @@ pub fn draw(
                 "Block Width",
                 block_w,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 1.0..=128.0).suffix(" px"));
+                    crate::ui::kui::slider(ui, v, 1.0..=128.0, " px");
                 },
             );
             draw_prop(
@@ -76,7 +76,7 @@ pub fn draw(
                 "Block Height",
                 block_h,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 1.0..=128.0).suffix(" px"));
+                    crate::ui::kui::slider(ui, v, 1.0..=128.0, " px");
                 },
             );
         }
@@ -89,13 +89,12 @@ pub fn draw(
                 "Radius",
                 radius,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 1.0..=16.0).suffix(" px"));
+                    crate::ui::kui::slider(ui, v, 1.0..=16.0, " px");
                 },
             );
         }
         EffectType::FindEdges { invert } => {
-            ui.label("✏️ Find Edges");
-            if ui.checkbox(invert, "Invert").changed() {
+            if crate::ui::kui::toggle(ui, invert, "Invert").changed() {
                 *project_changed = true;
             }
         }
@@ -105,10 +104,14 @@ pub fn draw(
                 current_frame,
                 project_changed,
                 next_frame,
-                "Operation (0=Min,1=Max)",
+                "Operation",
                 operation,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=1.0));
+                    let options = [(0.0_f32, "Minimum"), (1.0, "Maximum")];
+                    let mut selected = v.round().clamp(0.0, 1.0);
+                    if crate::ui::kui::combo(ui, "minimax_operation", &mut selected, &options) {
+                        *v = selected;
+                    }
                 },
             );
             draw_prop(
@@ -119,7 +122,7 @@ pub fn draw(
                 "Radius",
                 radius,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 1.0..=50.0));
+                    crate::ui::kui::slider(ui, v, 1.0..=50.0, "");
                 },
             );
         }

@@ -20,7 +20,7 @@ pub fn draw(
                 "Cell Size",
                 cell_size,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 2.0..=64.0).suffix(" px"));
+                    crate::ui::kui::slider(ui, v, 2.0..=64.0, " px");
                 },
             );
         }
@@ -33,7 +33,7 @@ pub fn draw(
                 "Threshold",
                 threshold,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=255.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=255.0, "");
                 },
             );
         }
@@ -46,7 +46,7 @@ pub fn draw(
                 "Threshold",
                 threshold,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=255.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=255.0, "");
                 },
             );
         }
@@ -62,7 +62,7 @@ pub fn draw(
                 "Line Gap",
                 line_gap,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 2.0..=32.0).suffix(" px"));
+                    crate::ui::kui::slider(ui, v, 2.0..=32.0, " px");
                 },
             );
             draw_prop(
@@ -73,7 +73,7 @@ pub fn draw(
                 "Threshold",
                 threshold,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=255.0));
+                    crate::ui::kui::slider(ui, v, 0.0..=255.0, "");
                 },
             );
         }
@@ -86,7 +86,7 @@ pub fn draw(
                 "Dot Size",
                 dot_size,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 2.0..=32.0).suffix(" px"));
+                    crate::ui::kui::slider(ui, v, 2.0..=32.0, " px");
                 },
             );
         }

@@ -1,7 +1,10 @@
 use crate::core::editor_assist::{analyze_exposure_clipping, sharpness_score};
+use crate::ui::kui::{self, ButtonKind, StatusKind};
+use crate::ui::localization::{tr, tr_format};
 use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
 pub struct QualityCheckResult {
@@ -13,43 +16,62 @@ pub struct QualityCheckResult {
     pub height: u32,
 }
 
+struct QualityCheckCompletion {
+    session_id: u64,
+    generation: u64,
+    composition_id: String,
+    frame: u32,
+    result: Result<QualityCheckResult, String>,
+}
+
+struct QualityCheckJob {
+    receiver: Mutex<std::sync::mpsc::Receiver<QualityCheckCompletion>>,
+}
+
 pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
+    poll_analysis(app, ctx);
     if !app.show_quality_check_panel {
         return;
     }
     let mut open = app.show_quality_check_panel;
-    crate::ui::modal::window("Analyze / Quality Check")
+    crate::ui::modal::window(tr("Analyze / Quality Check"))
         .open(&mut open)
         .default_width(380.0)
         .default_height(440.0)
         .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-12.0, 48.0))
         .show(ctx, |ui| {
             draw_header(ui);
-            ui.add_space(6.0);
-            if ui
-                .add_sized(
-                    [ui.available_width(), 30.0],
-                    egui::Button::new("▶ Analyze Current Frame"),
-                )
-                .on_hover_text("Analyze the currently cached preview frame")
-                .clicked()
+            ui.add_space(kui::space::XS);
+            let analyzing = current_job(ctx).is_some();
+            let analyze_button_size = egui::vec2(ui.available_width(), 30.0);
+            if kui::button_enabled_min_size(
+                ui,
+                if analyzing {
+                    "Analyzing current frame…"
+                } else {
+                    "▶ Analyze Current Frame"
+                },
+                ButtonKind::Accent,
+                !analyzing,
+                analyze_button_size,
+            )
+            .on_hover_text(tr(
+                "Render and analyze the full-resolution frame in the background",
+            ))
+            .clicked()
             {
-                analyze_current_frame(app);
+                if let Err(error) = start_analysis(app, ctx) {
+                    app.toasts.error(tr(&error));
+                }
             }
-            ui.add_space(8.0);
+            ui.add_space(kui::space::SM);
             if let Some(result) = app.quality_check_result.clone() {
                 draw_result(app, ui, &result);
             } else {
-                ui.label(
-                    egui::RichText::new("Preview a frame, then run Analyze.")
-                        .color(colors::TEXT_SECONDARY),
-                );
-                ui.label(
-                    egui::RichText::new(
-                        "The check uses the rendered preview cache and does not re-render while idle.",
-                    )
-                    .small()
-                    .color(colors::TEXT_MUTED),
+                kui::empty_state(ui, &tr("Run Analyze to render the current frame."), 72.0);
+                kui::caption(
+                    ui,
+                    "Rendering runs in the background at composition resolution.",
                 );
             }
         });
@@ -58,76 +80,192 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
 
 fn draw_header(ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
-        ui.heading("Frame QC");
+        kui::section_title(ui, "Frame QC");
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(
-                egui::RichText::new("NON-DESTRUCTIVE")
-                    .small()
-                    .strong()
-                    .color(colors::ACCENT_BLUE),
-            );
+            kui::badge(ui, "NON-DESTRUCTIVE", colors::ACCENT_INFORMATION);
         });
     });
-    ui.label(
-        egui::RichText::new("Exposure clipping and focus diagnostics")
-            .small()
-            .color(colors::TEXT_SECONDARY),
-    );
+    kui::caption(ui, "Exposure clipping and focus diagnostics");
 }
 
-fn analyze_current_frame(app: &mut KagariApp) {
+fn current_job(ctx: &egui::Context) -> Option<Arc<QualityCheckJob>> {
+    ctx.data(|data| {
+        data.get_temp::<Option<Arc<QualityCheckJob>>>(egui::Id::new("frame_qc_job"))
+            .flatten()
+    })
+}
+
+fn start_analysis(app: &mut KagariApp, ctx: &egui::Context) -> Result<(), String> {
+    if current_job(ctx).is_some() {
+        return Err(tr("A frame quality check is already running"));
+    }
     let frame = app.playback.current_frame;
-    let layer_indices = {
-        let comp = app.history.current().active_composition();
-        comp.layers
-            .iter()
-            .enumerate()
-            .filter(|(_, layer)| layer.is_active(frame))
-            .map(|(index, _)| index)
-            .collect::<Vec<_>>()
-    };
-    let Some(entry) = app.frame_cache.get_with_layers(frame, &layer_indices) else {
-        app.toasts
-            .warning("Current frame is not cached yet — preview it first");
-        return;
-    };
-    let Some(exposure) =
-        analyze_exposure_clipping(&entry.pixels, entry.width, entry.height, 4, 250)
-    else {
-        app.toasts.error("Could not analyze the cached frame");
-        return;
-    };
-    let sharpness = sharpness_score(&entry.pixels, entry.width, entry.height).unwrap_or(0.0);
-    app.quality_check_result = Some(QualityCheckResult {
-        frame,
-        shadow_clipping: exposure.shadow_clipped_fraction,
-        highlight_clipping: exposure.highlight_clipped_fraction,
-        sharpness,
-        width: entry.width,
-        height: entry.height,
+    let composition_index = app.history.current().active_composition_idx;
+    let composition = if app.doc_sync_generation == app.history.generation() {
+        app.production_document
+            .as_ref()
+            .and_then(|document| document.composition_for_frame(composition_index, frame))
+            .or_else(|| {
+                app.history
+                    .current()
+                    .compositions
+                    .get(composition_index)
+                    .cloned()
+            })
+    } else {
+        app.history
+            .current()
+            .compositions
+            .get(composition_index)
+            .cloned()
+    }
+    .ok_or_else(|| tr("Active composition is unavailable"))?;
+    let byte_size =
+        crate::core::software_renderer::rgba_buffer_size(composition.width, composition.height)
+            .ok_or_else(|| tr("Composition frame exceeds the 512 MiB render limit"))?;
+    let composition_id = composition.id.clone();
+    let session_id = app.project_session_id;
+    let generation = app.history.generation();
+    app.quality_check_result = None;
+    let exposure_ev = ctx
+        .data(|data| data.get_temp::<f32>(egui::Id::new("ae_exposure_ev")))
+        .unwrap_or(0.0);
+    let lut_mode = app.color_lut_mode;
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let job = Arc::new(QualityCheckJob {
+        receiver: Mutex::new(receiver),
     });
-    app.toasts
-        .info(format!("Frame {frame} quality check complete"));
+    ctx.data_mut(|data| data.insert_temp(egui::Id::new("frame_qc_job"), Some(job)));
+    let worker_ctx = ctx.clone();
+    let spawn_result = std::thread::Builder::new()
+        .name("kagari-frame-qc".into())
+        .spawn(move || {
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let pixels = crate::core::software_renderer::render_frame_to_pixels(
+                    &composition,
+                    frame,
+                    composition.width,
+                    composition.height,
+                    exposure_ev,
+                    lut_mode,
+                );
+                if pixels.len() != byte_size {
+                    return Err(tr("Frame renderer returned an incomplete image"));
+                }
+                let exposure = analyze_exposure_clipping(
+                    &pixels,
+                    composition.width,
+                    composition.height,
+                    4,
+                    250,
+                )
+                .ok_or_else(|| tr("Could not analyze the rendered frame"))?;
+                let sharpness = sharpness_score(&pixels, composition.width, composition.height)
+                    .ok_or_else(|| tr("Could not measure frame sharpness"))?;
+                Ok(QualityCheckResult {
+                    frame,
+                    shadow_clipping: exposure.shadow_clipped_fraction,
+                    highlight_clipping: exposure.highlight_clipped_fraction,
+                    sharpness,
+                    width: composition.width,
+                    height: composition.height,
+                })
+            }))
+            .unwrap_or_else(|_| Err(tr("Frame quality analysis failed unexpectedly")));
+            let _ = sender.send(QualityCheckCompletion {
+                session_id,
+                generation,
+                composition_id,
+                frame,
+                result,
+            });
+            worker_ctx.request_repaint();
+        });
+    match spawn_result {
+        Ok(handle) => app.track_background_thread(handle),
+        Err(error) => {
+            ctx.data_mut(|data| {
+                data.remove_temp::<Option<Arc<QualityCheckJob>>>(egui::Id::new("frame_qc_job"))
+            });
+            return Err(tr_format(
+                "Could not start frame analysis: {}",
+                &[&error.to_string()],
+            ));
+        }
+    }
+    ctx.request_repaint_after(std::time::Duration::from_millis(100));
+    Ok(())
+}
+
+fn poll_analysis(app: &mut KagariApp, ctx: &egui::Context) {
+    let Some(job) = current_job(ctx) else {
+        return;
+    };
+    let completion = job
+        .receiver
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .try_recv();
+    match completion {
+        Ok(completion) => {
+            ctx.data_mut(|data| {
+                data.remove_temp::<Option<Arc<QualityCheckJob>>>(egui::Id::new("frame_qc_job"))
+            });
+            let Some(current_comp) = app
+                .history
+                .current()
+                .compositions
+                .get(app.history.current().active_composition_idx)
+            else {
+                return;
+            };
+            if completion.session_id != app.project_session_id
+                || completion.generation != app.history.generation()
+                || completion.composition_id != current_comp.id
+                || completion.frame != app.playback.current_frame
+            {
+                app.toasts.warning(tr(
+                    "Frame analysis was discarded because the project or frame changed",
+                ));
+                return;
+            }
+            match completion.result {
+                Ok(result) => {
+                    app.quality_check_result = Some(result);
+                    app.toasts.info(tr_format(
+                        "Frame {} quality check complete",
+                        &[&completion.frame.to_string()],
+                    ));
+                }
+                Err(error) => app.toasts.error(tr(&error)),
+            }
+        }
+        Err(std::sync::mpsc::TryRecvError::Empty) => {
+            ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        }
+        Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+            ctx.data_mut(|data| {
+                data.remove_temp::<Option<Arc<QualityCheckJob>>>(egui::Id::new("frame_qc_job"))
+            });
+            app.toasts
+                .error(tr("Frame analysis worker stopped unexpectedly"));
+        }
+    }
 }
 
 fn draw_result(app: &mut KagariApp, ui: &mut egui::Ui, result: &QualityCheckResult) {
     ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new(format!("FRAME {}", result.frame))
-                .monospace()
-                .strong()
-                .color(colors::ACCENT_YELLOW),
+        kui::readout(
+            ui,
+            tr_format("FRAME {}", &[&result.frame.to_string()]),
+            colors::TIMELINE_PLAYHEAD,
         );
-        ui.label(
-            egui::RichText::new(format!("{} × {}", result.width, result.height))
-                .small()
-                .color(colors::TEXT_MUTED),
-        );
-        if ui.small_button("Go to frame").clicked() {
+        kui::caption(ui, format!("{} × {}", result.width, result.height));
+        if kui::button(ui, "Go to frame", ButtonKind::Quiet).clicked() {
             app.playback.current_frame = result.frame;
         }
     });
-    ui.separator();
+    kui::separator(ui);
     metric_row(ui, "Shadow clipping", result.shadow_clipping, 0.02, true);
     metric_row(
         ui,
@@ -136,29 +274,20 @@ fn draw_result(app: &mut KagariApp, ui: &mut egui::Ui, result: &QualityCheckResu
         0.02,
         true,
     );
-    ui.add_space(8.0);
+    ui.add_space(kui::space::SM);
     let focus_color = if result.sharpness < 20.0 {
-        colors::ACCENT_ORANGE
+        colors::ACCENT_WARNING
     } else {
-        colors::ACCENT_BLUE
+        colors::ACCENT_INFORMATION
     };
     ui.horizontal(|ui| {
-        ui.label("Sharpness");
+        kui::secondary(ui, "Sharpness");
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(
-                egui::RichText::new(format!("{:.1}", result.sharpness))
-                    .monospace()
-                    .strong()
-                    .color(focus_color),
-            );
+            kui::readout(ui, format!("{:.1}", result.sharpness), focus_color);
         });
     });
     if result.sharpness < 20.0 {
-        ui.label(
-            egui::RichText::new("⚠ Possible soft-focus frame")
-                .small()
-                .color(colors::ACCENT_ORANGE),
-        );
+        kui::status(ui, StatusKind::Warning, "⚠ Possible soft-focus frame");
     }
 }
 
@@ -169,28 +298,19 @@ fn metric_row(ui: &mut egui::Ui, label: &str, fraction: f32, warning: f32, lower
         fraction < warning
     };
     let color = if warned {
-        colors::ACCENT_ORANGE
+        colors::ACCENT_WARNING
     } else {
-        colors::ACCENT_BLUE
+        colors::ACCENT_INFORMATION
     };
     ui.horizontal(|ui| {
-        ui.label(label);
+        kui::secondary(ui, label);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(
-                egui::RichText::new(format!("{:.2}%", fraction * 100.0))
-                    .monospace()
-                    .strong()
-                    .color(color),
-            );
+            kui::readout(ui, format!("{:.2}%", fraction * 100.0), color);
         });
     });
-    ui.add(egui::ProgressBar::new(fraction.clamp(0.0, 1.0)).desired_width(ui.available_width()));
+    kui::progress_bar(ui, fraction.clamp(0.0, 1.0), None);
     if warned {
-        ui.label(
-            egui::RichText::new("⚠ Above recommended 2% threshold")
-                .small()
-                .color(colors::ACCENT_ORANGE),
-        );
+        kui::status(ui, StatusKind::Warning, "⚠ Above recommended 2% threshold");
     }
-    ui.add_space(5.0);
+    ui.add_space(kui::space::XS);
 }

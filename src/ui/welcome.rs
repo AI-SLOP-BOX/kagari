@@ -4,8 +4,7 @@ use eframe::egui;
 
 fn ensure_composition(app: &mut KagariApp) {
     if app.history.current().compositions.is_empty() {
-        app.history =
-            crate::core::history::ProjectHistory::new(crate::core::timeline::Project::default());
+        app.replace_project_history(crate::core::timeline::Project::default());
     }
 }
 
@@ -16,13 +15,11 @@ fn open_project_dialog(app: &mut KagariApp) {
     {
         if let Err(e) = crate::ui::project_io::open_project_from_path(app, &path) {
             app.toasts.error(e);
-        } else {
-            app.show_welcome = false;
         }
     }
 }
 
-fn import_media_dialog(app: &mut KagariApp) {
+fn import_media_dialog(app: &mut KagariApp, ctx: &egui::Context) {
     let Some(path) = rfd::FileDialog::new()
         .add_filter(
             "Media",
@@ -79,35 +76,12 @@ fn import_media_dialog(app: &mut KagariApp) {
             app.show_welcome = false;
         }
         "mp4" | "mov" | "mkv" | "avi" | "webm" | "av1" => {
-            let fps = app.history.current().active_composition().fps as f32;
-            let dest = std::env::temp_dir().join("kagari_media").join(&name);
-            match crate::core::video_import::import_video(&src, &dest, fps) {
-                Ok(asset) => {
-                    let frame_count = asset.frame_count;
-                    app.modify_project(|p| {
-                        let comp = p.active_composition_mut();
-                        let layer = crate::core::timeline::Layer::new(
-                            format!("video_{}", name),
-                            name.clone(),
-                            crate::core::timeline::LayerType::Video {
-                                source: src.clone(),
-                                frames_dir: asset.frames_dir.clone(),
-                                frame_count: asset.frame_count,
-                                audio_wav: asset.audio_wav.clone(),
-                                speed: 1.0,
-                            },
-                            comp.duration_frames,
-                        );
-                        comp.layers.push(layer);
-                    });
-                    app.toasts
-                        .info(format!("Imported video: {} ({} frames)", name, frame_count));
-                    app.show_welcome = false;
-                }
-                Err(err) => {
-                    app.toasts.error(format!("Video import failed: {}", err));
-                }
+            if !crate::core::video_import::ffmpeg_available() {
+                app.toasts.error("Video import needs ffmpeg on PATH");
+                return;
             }
+            crate::ui::drop_import::start_video_import(app, ctx, path, name);
+            app.show_welcome = false;
         }
         _ => {
             app.toasts.error(format!("Unsupported file type: .{}", ext));
@@ -165,7 +139,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
                     .max_height(120.0)
                     .show(ui, |ui| {
                         for path_str in &starred {
-                            let path = std::path::PathBuf::from(path_str);
+                            let path = crate::ui::project_io::path_from_key(path_str);
                             let display = path
                                 .file_name()
                                 .map(|s| s.to_string_lossy().to_string())
@@ -174,7 +148,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
                                 ui.add_space(8.0);
                                 let resp = ui
                                     .selectable_label(false, format!("★ {}", display))
-                                    .on_hover_text(path_str.clone());
+                                    .on_hover_text(path.display().to_string());
                                 if resp.clicked() {
                                     recent_to_open = Some(path.clone());
                                 }
@@ -202,7 +176,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
                     .max_height(160.0)
                     .show(ui, |ui| {
                         for path_str in &recent {
-                            let path = std::path::PathBuf::from(path_str);
+                            let path = crate::ui::project_io::path_from_key(path_str);
                             let display = path
                                 .file_name()
                                 .map(|s| s.to_string_lossy().to_string())
@@ -211,7 +185,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
                                 ui.add_space(8.0);
                                 let resp = ui
                                     .selectable_label(false, &display)
-                                    .on_hover_text(path_str.clone());
+                                    .on_hover_text(path.display().to_string());
                                 if resp.clicked() {
                                     recent_to_open = Some(path.clone());
                                 }
@@ -284,7 +258,9 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
                         .clicked()
                     {
                         app.show_welcome = false;
-                        crate::ui::project_io::set_welcome_on_startup(false);
+                        if let Err(error) = crate::ui::project_io::set_welcome_on_startup(false) {
+                            app.toasts.error(error);
+                        }
                     }
                 });
             });
@@ -293,8 +269,6 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
     if let Some(path) = recent_to_open {
         if let Err(e) = crate::ui::project_io::open_project_from_path(app, &path) {
             app.toasts.error(e);
-        } else {
-            app.show_welcome = false;
         }
     }
 
@@ -305,7 +279,7 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context) {
                 app.show_new_comp_dialog = true;
             }
             "Open Project" => open_project_dialog(app),
-            "Import Media" => import_media_dialog(app),
+            "Import Media" => import_media_dialog(app, ctx),
             "Load Demo Scene" => {
                 crate::ui::demo_scene::build(app);
                 app.show_welcome = false;

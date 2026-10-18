@@ -3,12 +3,50 @@ use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
 
+fn alignment_selector(ui: &mut egui::Ui, value: &mut u32) -> bool {
+    let options = [
+        (TextAlign::Left, "L", "Align left"),
+        (TextAlign::Center, "C", "Align center"),
+        (TextAlign::Right, "R", "Align right"),
+        (TextAlign::Justify, "J", "Justify text"),
+    ];
+    let mut changed = false;
+    let columns = if ui.available_width() >= 240.0 { 4 } else { 2 };
+    let rows = options.len().div_ceil(columns);
+    for row in 0..rows {
+        ui.horizontal(|ui| {
+            for column in 0..columns {
+                let index = row * columns + column;
+                let Some((mode, label, tooltip)) = options.get(index).copied() else {
+                    continue;
+                };
+                if crate::ui::kui::tool_button(ui, *value == mode as u32, label)
+                    .on_hover_text(tooltip)
+                    .clicked()
+                {
+                    *value = mode as u32;
+                    changed = true;
+                }
+            }
+        });
+    }
+    changed
+}
+
 pub fn draw_paragraph_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
-    let pre_snapshot = if !app.drag_active() {
-        Some(app.history.current().clone())
-    } else {
-        None
-    };
+    let selected_text_layer = app
+        .selection
+        .selected_layer_idx
+        .and_then(|index| app.history.current().active_composition().layers.get(index))
+        .is_some_and(|layer| {
+            matches!(
+                &layer.layer_type,
+                crate::core::timeline::LayerType::Text { .. }
+            )
+        });
+    if selected_text_layer {
+        app.ensure_panel_edit_snapshot("paragraph", ui);
+    }
     let comp = app.history.current_mut().active_composition_mut();
 
     let layer_idx = match app.selection.selected_layer_idx {
@@ -39,6 +77,7 @@ pub fn draw_paragraph_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
 
     // Ensure text_formatting exists, preserving the legacy LayerType values
     // when opening an older text layer for the first time.
+    let mut migrated_formatting = false;
     if layer.text_formatting.is_none() {
         let initial = match &layer.layer_type {
             crate::core::timeline::LayerType::Text {
@@ -61,6 +100,7 @@ pub fn draw_paragraph_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
             _ => crate::core::timeline::TextFormatting::default(),
         };
         layer.text_formatting = Some(initial);
+        migrated_formatting = true;
     }
     let Some(fmt) = (match layer.text_formatting {
         Some(_) => layer.text_formatting.as_mut(),
@@ -70,228 +110,90 @@ pub fn draw_paragraph_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     };
     let mut changed = false;
 
-    // ── Alignment ──
-    crate::ui::custom_widgets::ae_section_header(ui, "Paragraph", "📝");
-    ui.label(
-        egui::RichText::new("Alignment")
-            .small()
-            .color(colors::TEXT_SECONDARY),
+    let grid = crate::ui::kui::PropertyGrid::new(
+        ui,
+        &[
+            "Alignment",
+            "Width",
+            "Height",
+            "Tracking",
+            "Leading",
+            "Enabled",
+            "Stroke Width",
+            "Stroke Color",
+        ],
     );
-    ui.horizontal(|ui| {
-        let aligns = [
-            (TextAlign::Left, "Left"),
-            (TextAlign::Center, "Center"),
-            (TextAlign::Right, "Right"),
-            (TextAlign::Justify, "Justify"),
-        ];
-        for (mode, label) in aligns {
-            let is_selected = fmt.alignment == mode as u32;
-            if ui
-                .selectable_label(
-                    is_selected,
-                    egui::RichText::new(label).small().color(if is_selected {
-                        colors::ACCENT_CYAN
-                    } else {
-                        colors::TEXT_PRIMARY
-                    }),
-                )
-                .clicked()
-            {
-                fmt.alignment = mode as u32;
-                changed = true;
-            }
-        }
+
+    crate::ui::kui::section(ui, "Paragraph");
+    changed |= grid.row(ui, "Alignment", |ui| {
+        alignment_selector(ui, &mut fmt.alignment)
     });
 
-    ui.add_space(4.0);
-
-    // ── Text Box Dimensions ──
-    crate::ui::custom_widgets::ae_section_header(ui, "Text Box", "📦");
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("Width")
-                .small()
-                .color(colors::TEXT_SECONDARY),
-        );
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(egui::RichText::new("px").small().color(colors::TEXT_MUTED));
-            if ui
-                .add(
-                    egui::DragValue::new(&mut fmt.box_width)
-                        .speed(1.0)
-                        .range(0.0..=10000.0),
-                )
-                .changed()
-            {
-                changed = true;
-            }
-        });
+    crate::ui::kui::section(ui, "Text Box");
+    changed |= grid.row(ui, "Width", |ui| {
+        ui.add(
+            crate::ui::kui::drag(&mut fmt.box_width)
+                .range(0.0..=10000.0)
+                .speed(1.0)
+                .unit(" px"),
+        )
+        .changed()
     });
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("Height")
-                .small()
-                .color(colors::TEXT_SECONDARY),
-        );
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(egui::RichText::new("px").small().color(colors::TEXT_MUTED));
-            if ui
-                .add(
-                    egui::DragValue::new(&mut fmt.box_height)
-                        .speed(1.0)
-                        .range(0.0..=10000.0),
-                )
-                .changed()
-            {
-                changed = true;
-            }
-        });
+    changed |= grid.row(ui, "Height", |ui| {
+        ui.add(
+            crate::ui::kui::drag(&mut fmt.box_height)
+                .range(0.0..=10000.0)
+                .speed(1.0)
+                .unit(" px"),
+        )
+        .changed()
     });
 
-    ui.add_space(4.0);
-
-    // ── Spacing ──
-    crate::ui::custom_widgets::ae_section_header(ui, "Spacing", "↔");
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("Tracking")
-                .small()
-                .color(colors::TEXT_SECONDARY),
-        );
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(egui::RichText::new("px").small().color(colors::TEXT_MUTED));
-            if ui
-                .add(
-                    egui::DragValue::new(&mut fmt.tracking)
-                        .speed(0.1)
-                        .range(-100.0..=1000.0),
-                )
-                .changed()
-            {
-                changed = true;
-            }
-        });
+    crate::ui::kui::section(ui, "Spacing");
+    changed |= grid.row(ui, "Tracking", |ui| {
+        ui.add(
+            crate::ui::kui::drag(&mut fmt.tracking)
+                .range(-100.0..=1000.0)
+                .speed(0.1)
+                .unit(" px"),
+        )
+        .changed()
     });
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("Leading")
-                .small()
-                .color(colors::TEXT_SECONDARY),
-        );
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui
-                .add(
-                    egui::DragValue::new(&mut fmt.leading)
-                        .speed(0.01)
-                        .range(0.1..=10.0),
-                )
-                .changed()
-            {
-                changed = true;
-            }
-        });
+    changed |= grid.row(ui, "Leading", |ui| {
+        ui.add(
+            crate::ui::kui::drag(&mut fmt.leading)
+                .range(0.1..=10.0)
+                .speed(0.01),
+        )
+        .changed()
     });
 
-    ui.add_space(4.0);
-
-    // ── Stroke ──
-    crate::ui::custom_widgets::ae_section_header(ui, "Stroke", "✏");
+    crate::ui::kui::section(ui, "Stroke");
     let mut stroke_enabled = fmt.stroke_color.is_some();
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("Enabled")
-                .small()
-                .color(colors::TEXT_SECONDARY),
-        );
-        if ui.checkbox(&mut stroke_enabled, "").changed() {
-            if stroke_enabled {
-                fmt.stroke_color = Some([0.0, 0.0, 0.0, 1.0]);
-            } else {
-                fmt.stroke_color = None;
-            }
-            changed = true;
-        }
+    changed |= grid.row(ui, "Enabled", |ui| {
+        crate::ui::kui::toggle(ui, &mut stroke_enabled, "Enabled").changed()
     });
+    if stroke_enabled != fmt.stroke_color.is_some() {
+        if stroke_enabled {
+            fmt.stroke_color = Some([0.0, 0.0, 0.0, 1.0]);
+        } else {
+            fmt.stroke_color = None;
+        }
+        changed = true;
+    }
 
     if let Some(ref mut stroke_color) = fmt.stroke_color {
-        ui.horizontal(|ui| {
-            ui.label(
-                egui::RichText::new("Width")
-                    .small()
-                    .color(colors::TEXT_SECONDARY),
-            );
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(egui::RichText::new("px").small().color(colors::TEXT_MUTED));
-                if ui
-                    .add(
-                        egui::DragValue::new(&mut fmt.stroke_width)
-                            .speed(0.1)
-                            .range(0.0..=100.0),
-                    )
-                    .changed()
-                {
-                    changed = true;
-                }
-            });
+        changed |= grid.row(ui, "Stroke Width", |ui| {
+            ui.add(
+                crate::ui::kui::drag(&mut fmt.stroke_width)
+                    .range(0.0..=100.0)
+                    .speed(0.1)
+                    .unit(" px"),
+            )
+            .changed()
         });
-
-        ui.horizontal(|ui| {
-            ui.label(
-                egui::RichText::new("Color")
-                    .small()
-                    .color(colors::TEXT_SECONDARY),
-            );
-            let r = (stroke_color[0] * 255.0) as u8;
-            let g = (stroke_color[1] * 255.0) as u8;
-            let b = (stroke_color[2] * 255.0) as u8;
-            let a = (stroke_color[3] * 255.0) as u8;
-
-            // Show color swatch and individual channel drag values
-            let swatch_rect = ui.allocate_space(egui::vec2(16.0, 16.0)).1;
-            ui.painter().rect_filled(
-                swatch_rect,
-                2.0,
-                egui::Color32::from_rgba_premultiplied(r, g, b, a),
-            );
-            ui.painter().rect_stroke(
-                swatch_rect,
-                2.0,
-                egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM),
-            );
-
-            if ui
-                .add(
-                    egui::DragValue::new(&mut stroke_color[0])
-                        .speed(0.01)
-                        .range(0.0..=1.0)
-                        .prefix("R "),
-                )
-                .changed()
-            {
-                changed = true;
-            }
-            if ui
-                .add(
-                    egui::DragValue::new(&mut stroke_color[1])
-                        .speed(0.01)
-                        .range(0.0..=1.0)
-                        .prefix("G "),
-                )
-                .changed()
-            {
-                changed = true;
-            }
-            if ui
-                .add(
-                    egui::DragValue::new(&mut stroke_color[2])
-                        .speed(0.01)
-                        .range(0.0..=1.0)
-                        .prefix("B "),
-                )
-                .changed()
-            {
-                changed = true;
-            }
+        changed |= grid.row(ui, "Stroke Color", |ui| {
+            crate::ui::kui::color_rgba(ui, stroke_color).changed()
         });
     }
 
@@ -321,15 +223,16 @@ pub fn draw_paragraph_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
         let pointer_down = ui.input(|input| input.pointer.any_down());
         if pointer_down {
             if !app.drag_active() {
-                if let Some(snapshot) = pre_snapshot {
+                if let Some(snapshot) = app.take_panel_edit_snapshot("paragraph") {
                     app.begin_drag_with_snapshot(snapshot, "Paragraph Edit");
                 }
             }
         } else if app.drag_active() {
             app.commit_drag();
-        } else if let Some(snapshot) = pre_snapshot {
+        } else if let Some(snapshot) = app.take_panel_edit_snapshot("paragraph") {
             app.begin_drag_with_snapshot(snapshot, "Paragraph Edit");
             app.commit_drag();
         }
+    } else if migrated_formatting {
     }
 }

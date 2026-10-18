@@ -247,15 +247,19 @@ mod tests {
 
     #[test]
     fn test_shape_repeater_zero_copies_is_empty() {
-        let mut options = ShapeRepeaterOptions::default();
-        options.copies = 0;
+        let options = ShapeRepeaterOptions {
+            copies: 0,
+            ..Default::default()
+        };
         assert!(evaluate_shape_repeater(&options).is_empty());
     }
 
     #[test]
     fn test_shape_repeater_caps_pathological_copy_count() {
-        let mut options = ShapeRepeaterOptions::default();
-        options.copies = u32::MAX;
+        let options = ShapeRepeaterOptions {
+            copies: u32::MAX,
+            ..Default::default()
+        };
         let instances = evaluate_shape_repeater(&options);
         assert_eq!(instances.len(), 4096);
         assert_eq!(instances[0].copy_index, 0);

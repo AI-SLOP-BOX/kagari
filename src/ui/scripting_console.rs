@@ -5,6 +5,7 @@ use rhai::Dynamic;
 
 /// Immutable snapshot of the context expressions need, taken before any
 /// mutable borrows so automation runs can coexist with the console UI.
+#[derive(Clone)]
 struct ConsoleCtx {
     frame: f64,
     fps: f64,
@@ -30,6 +31,7 @@ pub fn draw_scripting_console(app: &mut KagariApp, ui: &mut egui::Ui) {
     // Take owned copies to avoid borrow conflicts with automation runs
     let mut output = app.script_console_output.take().unwrap_or_default();
     let mut history = app.script_console_history.take().unwrap_or_default();
+    poll_console_job(app, ui.ctx(), &mut output);
 
     let ctx_data = {
         let comp = app.history.current().active_composition();
@@ -91,8 +93,27 @@ pub fn draw_scripting_console(app: &mut KagariApp, ui: &mut egui::Ui) {
     let run_requested = ui
         .horizontal(|ui| {
             let mut run = false;
-            if crate::ui::custom_widgets::ae_button(ui, "▶ Run Script").clicked() {
+            let response = ui
+                .add_enabled_ui(app.script_console_rx.is_none(), |ui| {
+                    crate::ui::custom_widgets::ae_button(ui, "▶ Run Script")
+                })
+                .inner;
+            if response.clicked() {
                 run = true;
+            }
+            if let Some(token) = app.script_console_cancel.as_ref() {
+                if token.load(std::sync::atomic::Ordering::Relaxed) {
+                    ui.label(
+                        egui::RichText::new("中断中…")
+                            .small()
+                            .color(colors::TEXT_MUTED),
+                    );
+                } else if crate::ui::custom_widgets::ae_button(ui, "■ Cancel")
+                    .on_hover_text("スクリプト実行を中断します")
+                    .clicked()
+                {
+                    token.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
             }
             if crate::ui::custom_widgets::ae_button(ui, "Clear").clicked() {
                 output.clear();
@@ -102,25 +123,11 @@ pub fn draw_scripting_console(app: &mut KagariApp, ui: &mut egui::Ui) {
         })
         .inner;
 
-    // ── Execute (single mutable pass over app) ──
+    // ── Queue execution away from the UI thread ──
     if run_requested && !app.script_console_command.trim().is_empty() {
         let cmd = std::mem::take(&mut app.script_console_command);
-        let start = std::time::Instant::now();
-        let result: Result<String, String> = if automation_mode {
-            run_automation(app, &cmd).map(|lines| lines.join("\n"))
-        } else {
-            evaluate_script(&cmd, &ctx_data)
-        };
-        let elapsed = start.elapsed().as_secs_f64();
-
         history.push(cmd.clone());
-        match result {
-            Ok(val) => output.push(format!("[OK] {} → {} ({:.4}s)", cmd, val, elapsed)),
-            Err(e) => output.push(format!("[ERR] {} → {} ({:.4}s)", cmd, e, elapsed)),
-        }
-        if output.len() > 200 {
-            output.drain(0..50);
-        }
+        start_console_job(app, cmd, automation_mode, ctx_data.clone());
     }
 
     // ── Output ──
@@ -144,6 +151,22 @@ pub fn draw_scripting_console(app: &mut KagariApp, ui: &mut egui::Ui) {
                 ui.label(egui::RichText::new(line).small().monospace().color(color));
             }
         });
+    if app.script_console_rx.is_some() {
+        let message = if app
+            .script_console_cancel
+            .as_ref()
+            .is_some_and(|token| token.load(std::sync::atomic::Ordering::Relaxed))
+        {
+            "中断中…"
+        } else {
+            "実行中…"
+        };
+        ui.label(
+            egui::RichText::new(message)
+                .small()
+                .color(colors::TEXT_MUTED),
+        );
+    }
 
     ui.add_space(4.0);
     ui.separator();
@@ -197,23 +220,11 @@ pub fn draw_scripting_console(app: &mut KagariApp, ui: &mut egui::Ui) {
     }
     let enter_run = response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
 
-    if enter_run && !app.script_console_command.trim().is_empty() {
+    if enter_run && app.script_console_rx.is_none() && !app.script_console_command.trim().is_empty()
+    {
         let cmd = std::mem::take(&mut app.script_console_command);
-        let start = std::time::Instant::now();
-        let result: Result<String, String> = if automation_mode {
-            run_automation(app, &cmd).map(|lines| lines.join("\n"))
-        } else {
-            evaluate_script(&cmd, &ctx_data)
-        };
-        let elapsed = start.elapsed().as_secs_f64();
         history.push(cmd.clone());
-        match result {
-            Ok(val) => output.push(format!("[OK] {} → {} ({:.4}s)", cmd, val, elapsed)),
-            Err(e) => output.push(format!("[ERR] {} → {} ({:.4}s)", cmd, e, elapsed)),
-        }
-        if output.len() > 200 {
-            output.drain(0..50);
-        }
+        start_console_job(app, cmd, automation_mode, ctx_data.clone());
     }
 
     // ── History ──
@@ -236,8 +247,126 @@ pub fn draw_scripting_console(app: &mut KagariApp, ui: &mut egui::Ui) {
     app.script_console_history = Some(history);
 }
 
-fn evaluate_script(script: &str, c: &ConsoleCtx) -> Result<String, String> {
-    let engine = crate::core::expression_engine::build_engine();
+fn start_console_job(app: &mut KagariApp, command: String, automation: bool, context: ConsoleCtx) {
+    if app.script_console_rx.is_some() {
+        return;
+    }
+    let session_id = app.project_session_id;
+    let history_generation = app.history.generation();
+    let project = automation.then(|| app.history.current().clone());
+    let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let (tx, rx) = std::sync::mpsc::channel();
+    app.script_console_rx = Some(rx);
+    app.script_console_cancel = Some(cancel.clone());
+    let handle = std::thread::spawn(move || {
+        let start = std::time::Instant::now();
+        let result = if automation {
+            let Some(project) = project else {
+                let _ = tx.send(crate::app_state::ScriptConsoleCompletion {
+                    command,
+                    project_session_id: session_id,
+                    history_generation,
+                    elapsed: start.elapsed(),
+                    result: Err("Project snapshot is unavailable".to_string()),
+                });
+                return;
+            };
+            match crate::core::automation::run_script_owned(project, &command, cancel.clone()) {
+                Ok((project, logs)) => {
+                    Ok(crate::app_state::ScriptConsoleJobOutput::Automation { project, logs })
+                }
+                Err(error) => Err(error),
+            }
+        } else {
+            evaluate_script(&command, &context, cancel.clone())
+                .map(crate::app_state::ScriptConsoleJobOutput::Expression)
+        };
+        let _ = tx.send(crate::app_state::ScriptConsoleCompletion {
+            command,
+            project_session_id: session_id,
+            history_generation,
+            elapsed: start.elapsed(),
+            result,
+        });
+    });
+    app.track_background_thread(handle);
+}
+
+fn poll_console_job(app: &mut KagariApp, ctx: &egui::Context, output: &mut Vec<String>) {
+    use std::sync::mpsc::TryRecvError;
+    let completion = match app.script_console_rx.as_ref() {
+        Some(receiver) => match receiver.try_recv() {
+            Ok(completion) => Some(Ok(completion)),
+            Err(TryRecvError::Disconnected) => Some(Err(())),
+            Err(TryRecvError::Empty) => None,
+        },
+        None => None,
+    };
+    match completion {
+        Some(Ok(completion)) => {
+            let cancellation_requested = app
+                .script_console_cancel
+                .as_ref()
+                .is_some_and(|cancel| cancel.load(std::sync::atomic::Ordering::Relaxed));
+            app.script_console_rx = None;
+            app.script_console_cancel = None;
+            let valid_snapshot = completion.project_session_id == app.project_session_id
+                && completion.history_generation == app.history.generation();
+            let result = if cancellation_requested {
+                Err("Script cancelled; result discarded".to_string())
+            } else if valid_snapshot {
+                match completion.result {
+                    Ok(crate::app_state::ScriptConsoleJobOutput::Expression(value)) => Ok(value),
+                    Ok(crate::app_state::ScriptConsoleJobOutput::Automation { project, logs }) => {
+                        app.history.commit_action(project, "Run automation script");
+                        app.autosave.mark_dirty();
+                        app.frame_cache.collect_garbage();
+                        Ok(logs.join("\n"))
+                    }
+                    Err(error) => Err(error),
+                }
+            } else {
+                Err("Project changed while the script was running; result discarded".to_string())
+            };
+            let elapsed = completion.elapsed.as_secs_f64();
+            match result {
+                Ok(value) => output.push(format!(
+                    "[OK] {} → {} ({:.4}s)",
+                    completion.command, value, elapsed
+                )),
+                Err(error) => output.push(format!(
+                    "[ERR] {} → {} ({:.4}s)",
+                    completion.command, error, elapsed
+                )),
+            }
+        }
+        Some(Err(())) => {
+            app.script_console_rx = None;
+            app.script_console_cancel = None;
+            output.push("[ERR] Script worker stopped unexpectedly".to_string());
+        }
+        None => {
+            if app.script_console_rx.is_some() {
+                ctx.request_repaint_after(std::time::Duration::from_millis(32));
+            }
+        }
+    }
+    if output.len() > 200 {
+        output.drain(0..50);
+    }
+}
+
+fn evaluate_script(
+    script: &str,
+    c: &ConsoleCtx,
+    cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+) -> Result<String, String> {
+    let mut engine = crate::core::expression_engine::build_engine();
+    engine.on_progress(move |_| {
+        cancel
+            .load(std::sync::atomic::Ordering::Relaxed)
+            .then(|| "Script cancelled".into())
+    });
     let mut scope = rhai::Scope::new();
     scope.push("time", c.time);
     scope.push("frame", c.frame);
@@ -268,18 +397,4 @@ fn evaluate_script(script: &str, c: &ConsoleCtx) -> Result<String, String> {
         }
         Err(e) => Err(format!("{}", e)),
     }
-}
-
-/// Execute an automation snippet against the live project.
-fn run_automation(app: &mut KagariApp, source: &str) -> Result<Vec<String>, String> {
-    // Keep the whole script as one history transaction.  The automation core
-    // already rolls its working copy back when evaluation fails; keeping the
-    // copy here also prevents a successful script from bypassing undo/redo.
-    let mut next_project = app.history.current().clone();
-    let logs = crate::core::automation::run_script(&mut next_project, source)?;
-    app.history
-        .commit_action(next_project, "Run automation script");
-    app.autosave.mark_dirty();
-    app.frame_cache.collect_garbage();
-    Ok(logs)
 }

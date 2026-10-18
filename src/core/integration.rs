@@ -2,408 +2,10 @@
 use crate::core::timeline::{Composition, Layer, LayerType};
 use serde::{Deserialize, Serialize};
 
-// --- 1. OpenTimelineIO (OTIO) / MLT Interoperability ---
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OtioItem {
-    pub name: String,
-    pub source_range: [u32; 2], // [start_frame, duration]
-    pub media_reference: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OtioTrack {
-    pub name: String,
-    pub kind: String, // "video" or "audio"
-    pub items: Vec<OtioItem>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OtioTimeline {
-    pub name: String,
-    pub global_start_time: u32,
-    pub fps: f64,
-    /// Kagari's native dimensions. External OTIO files may omit these fields;
-    /// the import path then falls back to a standard HD composition.
-    #[serde(default = "default_otio_width")]
-    pub width: u32,
-    #[serde(default = "default_otio_height")]
-    pub height: u32,
-    #[serde(default = "default_otio_duration")]
-    pub duration_frames: u32,
-    pub tracks: Vec<OtioTrack>,
-}
-
-fn default_otio_width() -> u32 {
-    1920
-}
-
-fn default_otio_height() -> u32 {
-    1080
-}
-
-fn default_otio_duration() -> u32 {
-    300
-}
-
-impl OtioTimeline {
-    /// Convert our Composition model into an OpenTimelineIO-compatible data structure
-    pub fn from_composition(comp: &Composition) -> Self {
-        let mut video_track = OtioTrack {
-            name: "Video Track 1".to_string(),
-            kind: "video".to_string(),
-            items: Vec::new(),
-        };
-
-        let mut audio_track = OtioTrack {
-            name: "Audio Track 1".to_string(),
-            kind: "audio".to_string(),
-            items: Vec::new(),
-        };
-
-        for layer in &comp.layers {
-            let media_ref = match &layer.layer_type {
-                LayerType::Image { path } => Some(path.clone()),
-                LayerType::Model3D { path } => Some(format!("model3d:{path}")),
-                LayerType::Video {
-                    source,
-                    frames_dir,
-                    frame_count,
-                    audio_wav,
-                    ..
-                } => Some(format!(
-                    "video:{}:{}:{}:{}",
-                    source,
-                    frames_dir,
-                    frame_count,
-                    audio_wav.as_deref().unwrap_or("")
-                )),
-                LayerType::Solid { .. } => Some("color_solid".to_string()),
-                LayerType::Text { text, .. } => Some(format!("text:{}", text)),
-                LayerType::Shape { .. } => Some("vector_shape".to_string()),
-                LayerType::Null => None,
-                LayerType::PreComp { comp_id } => Some(format!("precomp:{}", comp_id)),
-                LayerType::Audio { path, .. } => Some(format!("audio:{}", path)),
-                LayerType::AdjustmentLayer => Some("adjustment_layer".to_string()),
-                LayerType::Particle { .. } => Some("particle_emitter".to_string()),
-            };
-
-            let item = OtioItem {
-                name: layer.name.clone(),
-                // Use saturating_sub to guard against u32 underflow when out_frame < in_frame
-                source_range: [
-                    layer.in_frame,
-                    layer.out_frame.saturating_sub(layer.in_frame),
-                ],
-                media_reference: media_ref,
-            };
-
-            if matches!(&layer.layer_type, LayerType::Audio { .. }) {
-                audio_track.items.push(item);
-            } else {
-                video_track.items.push(item);
-            }
-        }
-
-        let mut tracks = vec![video_track];
-        if !audio_track.items.is_empty() {
-            tracks.push(audio_track);
-        }
-
-        Self {
-            name: comp.name.clone(),
-            global_start_time: 0,
-            fps: comp.fps as f64,
-            width: comp.width,
-            height: comp.height,
-            duration_frames: comp.duration_frames,
-            tracks,
-        }
-    }
-
-    /// Import and create a Composition model from an OTIO Timeline structure
-    pub fn to_composition(&self) -> Composition {
-        let mut comp = Composition::new(
-            self.name.clone(),
-            self.name.clone(),
-            self.width.max(1),
-            self.height.max(1),
-            self.fps.round().max(1.0) as u32,
-            self.duration_frames.max(1),
-        );
-
-        let mut layer_idx = 0;
-        for track in &self.tracks {
-            for item in &track.items {
-                let layer_type = match (&track.kind[..], &item.media_reference) {
-                    ("audio", Some(ref_str)) if ref_str.starts_with("audio:") => LayerType::Audio {
-                        path: ref_str["audio:".len()..].to_string(),
-                        volume: crate::core::property::Animatable::new_constant(1.0),
-                    },
-                    (_, Some(ref_str)) if ref_str.starts_with("video:") => {
-                        let mut parts = ref_str.splitn(5, ':');
-                        let _ = parts.next();
-                        let source = parts.next().unwrap_or_default().to_string();
-                        let frames_dir = parts.next().unwrap_or_default().to_string();
-                        let frame_count = parts
-                            .next()
-                            .and_then(|value| value.parse::<u32>().ok())
-                            .unwrap_or_default();
-                        let audio_wav = parts
-                            .next()
-                            .filter(|value| !value.is_empty())
-                            .map(str::to_string);
-                        LayerType::Video {
-                            source,
-                            frames_dir,
-                            frame_count,
-                            audio_wav,
-                            speed: 1.0,
-                        }
-                    }
-                    (_, Some(ref_str)) if ref_str.starts_with("model3d:") => {
-                        LayerType::Model3D {
-                            path: ref_str["model3d:".len()..].to_string(),
-                        }
-                    }
-                    (_, Some(ref_str)) if ref_str.starts_with("text:") => {
-                        LayerType::new_text(&ref_str["text:".len()..], 48, [1.0, 1.0, 1.0, 1.0])
-                    }
-                    (_, Some(ref_str)) if ref_str.starts_with("precomp:") => LayerType::PreComp {
-                        comp_id: ref_str["precomp:".len()..].to_string(),
-                    },
-                    (_, Some(ref_str)) if ref_str == "color_solid" => LayerType::Solid {
-                        color: [0.2, 0.5, 0.8, 1.0],
-                    },
-                    (_, Some(ref_str)) if ref_str == "vector_shape" => LayerType::Shape {
-                        shape_type: crate::core::timeline::ShapeType::Rectangle {
-                            width: crate::core::property::Animatable::new_constant(100.0),
-                            height: crate::core::property::Animatable::new_constant(100.0),
-                            corner_radius: crate::core::property::Animatable::new_constant(0.0),
-                        },
-                        color: [0.3, 0.6, 1.0, 1.0],
-                        stroke_color: [0.0, 0.0, 0.0, 1.0],
-                        stroke_width: 0.0,
-                        fill_type: Default::default(),
-                        extrusion_depth: 0.0,
-                        bevel_depth: 0.0,
-                    },
-                    (_, Some(ref_str)) if ref_str == "adjustment_layer" => {
-                        LayerType::AdjustmentLayer
-                    }
-                    (_, Some(ref_str)) if ref_str == "particle_emitter" => LayerType::Particle {
-                        emitter: crate::core::particle_system::ParticleEmitter::default(),
-                    },
-                    (_, Some(path)) => LayerType::Image { path: path.clone() },
-                    (_, None) => LayerType::Null,
-                };
-
-                let mut layer = Layer::new(
-                    format!("otio_layer_{}", layer_idx),
-                    item.name.clone(),
-                    layer_type,
-                    item.source_range[1],
-                );
-                layer.in_frame = item.source_range[0];
-                layer.out_frame = item.source_range[0] + item.source_range[1];
-                comp.add_layer(layer);
-                layer_idx += 1;
-            }
-        }
-
-        comp
-    }
-
-    /// Serialize to JSON string for sending to Kdenlive / Shotcut (OTIO import)
-    pub fn to_json(&self) -> Result<String, serde_json::Error> {
-        serde_json::to_string_pretty(self)
-    }
-
-    /// Deserialize from JSON string (OTIO export from Kdenlive / Shotcut)
-    pub fn from_json(json_str: &str) -> Result<Self, serde_json::Error> {
-        serde_json::from_str(json_str)
-    }
-}
-
-// --- 2. Dynamic Link Server (Real-time synchronization protocol) ---
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum DynamicLinkMessage {
-    /// Synchronize playhead position
-    SyncPlayhead {
-        frame: u32,
-    },
-    /// Notify or request asset addition
-    AddAsset {
-        name: String,
-        path: String,
-    },
-    /// Trigger frame render request from external NLE
-    TriggerRender {
-        comp_id: String,
-        frame: u32,
-    },
-    /// Connection handshake / status
-    Handshake {
-        client_name: String,
-        protocol_version: String,
-    },
-    Ping,
-    Pong,
-}
-
-pub struct DynamicLinkServer {
-    pub is_connected: bool,
-    pub connected_app: Option<String>, // e.g. "Kdenlive" or "Shotcut"
-    pub sync_port: u16,
-}
-
-impl Default for DynamicLinkServer {
-    fn default() -> Self {
-        Self {
-            is_connected: false,
-            connected_app: None,
-            sync_port: 8080,
-        }
-    }
-}
-
-impl DynamicLinkServer {
-    pub fn new(port: u16) -> Self {
-        Self {
-            is_connected: false,
-            connected_app: None,
-            sync_port: port,
-        }
-    }
-
-    /// Process an incoming message from the WebSocket link and return a response message if necessary
-    pub fn handle_message(&mut self, raw_msg: &str) -> Option<DynamicLinkMessage> {
-        let msg: Result<DynamicLinkMessage, serde_json::Error> = serde_json::from_str(raw_msg);
-
-        match msg {
-            Ok(DynamicLinkMessage::Handshake { client_name, .. }) => {
-                self.is_connected = true;
-                self.connected_app = Some(client_name.clone());
-                Some(DynamicLinkMessage::Handshake {
-                    client_name: "Kagari VFX".to_string(),
-                    protocol_version: "1.0.0".to_string(),
-                })
-            }
-            Ok(DynamicLinkMessage::Ping) => Some(DynamicLinkMessage::Pong),
-            Ok(DynamicLinkMessage::SyncPlayhead { .. }) => {
-                // Return None, application layer will handle playhead update
-                None
-            }
-            _ => None,
-        }
-    }
-}
-
-/// Spawns a background thread running a TCP synchronization server.
-pub fn start_sync_server(
-    port: u16,
-    frame_tx: std::sync::mpsc::Sender<u32>,
-    connection_tx: std::sync::mpsc::Sender<Option<String>>,
-) -> Result<u16, std::io::Error> {
-    use std::io::{BufRead, BufReader, Read, Write};
-    use std::net::TcpListener;
-    use std::thread;
-    const MAX_MESSAGE_BYTES: usize = 65_536;
-
-    let listener = TcpListener::bind(format!("127.0.0.1:{}", port))?;
-    let bound_port = listener.local_addr()?.port();
-    log::info!("Dynamic Link Sync Server listening on port {}", bound_port);
-
-    thread::spawn(move || {
-        for stream in listener.incoming() {
-            let stream = match stream {
-                Ok(s) => s,
-                Err(_) => continue,
-            };
-
-            let stream_clone = match stream.try_clone() {
-                Ok(s) => s,
-                Err(_) => continue,
-            };
-            let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(10)));
-            let mut reader = BufReader::new(stream_clone);
-            let mut writer = stream;
-
-            let mut line = Vec::with_capacity(MAX_MESSAGE_BYTES.min(4096));
-            loop {
-                line.clear();
-                let read_result = reader
-                    .by_ref()
-                    .take((MAX_MESSAGE_BYTES + 1) as u64)
-                    .read_until(b'\n', &mut line);
-                match read_result {
-                    Ok(0) => {
-                        // EOF - Connection closed
-                        break;
-                    }
-                    Ok(_) => {
-                        if line.len() > MAX_MESSAGE_BYTES {
-                            log::warn!("TCP line limit exceeded ({} bytes). Closing connection to prevent memory exhaustion.", line.len());
-                            break;
-                        }
-                        let trimmed = match std::str::from_utf8(&line) {
-                            Ok(value) => value.trim(),
-                            Err(_) => {
-                                log::warn!("Dynamic Link message was not valid UTF-8");
-                                continue;
-                            }
-                        };
-                        if trimmed.is_empty() {
-                            continue;
-                        }
-
-                        // Try to parse DynamicLinkMessage
-                        if let Ok(msg) = serde_json::from_str::<DynamicLinkMessage>(trimmed) {
-                            match msg {
-                                DynamicLinkMessage::Handshake { client_name, .. } => {
-                                    connection_tx.send(Some(client_name.clone())).ok();
-
-                                    let resp = DynamicLinkMessage::Handshake {
-                                        client_name: "Kagari VFX".to_string(),
-                                        protocol_version: "1.0.0".to_string(),
-                                    };
-                                    if let Ok(resp_json) = serde_json::to_string(&resp) {
-                                        writer.write_all(resp_json.as_bytes()).ok();
-                                        writer.write_all(b"\n").ok();
-                                        writer.flush().ok();
-                                    }
-                                }
-                                DynamicLinkMessage::Ping => {
-                                    let resp = DynamicLinkMessage::Pong;
-                                    if let Ok(resp_json) = serde_json::to_string(&resp) {
-                                        writer.write_all(resp_json.as_bytes()).ok();
-                                        writer.write_all(b"\n").ok();
-                                        writer.flush().ok();
-                                    }
-                                }
-                                DynamicLinkMessage::SyncPlayhead { frame } => {
-                                    frame_tx.send(frame).ok();
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                    Err(_) => {
-                        // Connection lost or read error
-                        break;
-                    }
-                }
-            }
-
-            // Connection lost
-            connection_tx.send(None).ok();
-        }
-    });
-
-    Ok(bound_port)
-}
+mod dynamic_link;
+pub use dynamic_link::*;
+mod otio;
+pub use otio::*;
 
 #[cfg(test)]
 mod tests {
@@ -437,9 +39,111 @@ mod tests {
         let parsed_otio = OtioTimeline::from_json(&json).unwrap();
         assert_eq!(parsed_otio.name, "test_comp");
 
-        let parsed_comp = parsed_otio.to_composition();
+        let parsed_comp = parsed_otio.to_composition().unwrap();
         assert_eq!(parsed_comp.layers.len(), 1);
         assert_eq!(parsed_comp.layers[0].name, "Solid Layer");
+    }
+
+    #[test]
+    fn otio_clip_v2_resolves_only_its_active_media_reference() {
+        let mut document = serde_json::json!({
+            "OTIO_SCHEMA": "Timeline.1",
+            "name": "Clip v2",
+            "global_start_time": {
+                "OTIO_SCHEMA": "RationalTime.1",
+                "value": 0,
+                "rate": 24
+            },
+            "tracks": {
+                "OTIO_SCHEMA": "Stack.1",
+                "children": [{
+                    "OTIO_SCHEMA": "Track.1",
+                    "name": "V1",
+                    "kind": "Video",
+                    "children": [{
+                        "OTIO_SCHEMA": "Clip.2",
+                        "name": "Shot A",
+                        "source_range": {
+                            "OTIO_SCHEMA": "TimeRange.1",
+                            "start_time": {"OTIO_SCHEMA": "RationalTime.1", "value": 0, "rate": 24},
+                            "duration": {"OTIO_SCHEMA": "RationalTime.1", "value": 24, "rate": 24}
+                        },
+                        "active_media_reference_key": "proxy",
+                        "media_references": {
+                            "DEFAULT_MEDIA": {"OTIO_SCHEMA": "MissingReference.1"},
+                            "proxy": {
+                                "OTIO_SCHEMA": "ExternalReference.1",
+                                "target_url": "file:///tmp/shot-a.png",
+                                "available_range": {
+                                    "OTIO_SCHEMA": "TimeRange.1",
+                                    "start_time": {"OTIO_SCHEMA": "RationalTime.1", "value": 0, "rate": 24},
+                                    "duration": {"OTIO_SCHEMA": "RationalTime.1", "value": 48, "rate": 24}
+                                }
+                            }
+                        }
+                    }]
+                }]
+            }
+        });
+        document["tracks"]["children"][0]["children"][0]["source_range"] = serde_json::Value::Null;
+
+        let timeline = OtioTimeline::from_json(&document.to_string()).unwrap();
+        assert_eq!(
+            timeline.tracks[0].items[0].media_reference.as_deref(),
+            Some("/tmp/shot-a.png")
+        );
+        assert_eq!(timeline.tracks[0].items[0].source_range, [0, 48]);
+        let composition = timeline.to_composition().unwrap();
+        assert!(matches!(
+            &composition.layers[0].layer_type,
+            LayerType::Image { path } if path == "/tmp/shot-a.png"
+        ));
+
+        document["tracks"]["children"][0]["children"][0]["active_media_reference_key"] =
+            serde_json::json!("missing");
+        let error = OtioTimeline::from_json(&document.to_string()).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("active media reference 'missing'"));
+    }
+
+    #[test]
+    fn otio_clip_without_any_time_range_is_rejected() {
+        let mut document = serde_json::json!({
+            "OTIO_SCHEMA": "Timeline.1",
+            "name": "Missing range",
+            "tracks": {
+                "OTIO_SCHEMA": "Stack.1",
+                "children": [{
+                    "OTIO_SCHEMA": "Track.1",
+                    "name": "V1",
+                    "kind": "Video",
+                    "children": [{
+                        "OTIO_SCHEMA": "Clip.2",
+                        "name": "Shot without range",
+                        "active_media_reference_key": "DEFAULT_MEDIA",
+                        "media_references": {
+                            "DEFAULT_MEDIA": {
+                                "OTIO_SCHEMA": "ExternalReference.1",
+                                "target_url": "file:///tmp/shot.png"
+                            }
+                        }
+                    }]
+                }]
+            }
+        });
+
+        let error = OtioTimeline::from_json(&document.to_string()).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("OTIO clip 'Shot without range' has no source start time"));
+
+        document["tracks"]["children"][0]["children"][0]["OTIO_SCHEMA"] =
+            serde_json::json!("Gap.1");
+        let error = OtioTimeline::from_json(&document.to_string()).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("OTIO gap on track 'V1' has no duration"));
     }
 
     #[test]
@@ -459,6 +163,60 @@ mod tests {
         } else {
             panic!("Expected handshake response");
         }
+    }
+
+    #[test]
+    fn otio_rejects_overflowing_source_range() {
+        let timeline = OtioTimeline {
+            name: "overflow".into(),
+            global_start_time: 0,
+            fps: 30.0,
+            width: 1920,
+            height: 1080,
+            duration_frames: 300,
+            tracks: vec![OtioTrack {
+                name: "V1".into(),
+                kind: "video".into(),
+                items: vec![OtioItem {
+                    name: "bad range".into(),
+                    source_range: [u32::MAX, 1],
+                    timeline_start_frame: None,
+                    native_layer: None,
+                    media_reference: None,
+                }],
+            }],
+        };
+
+        let error = timeline.to_composition().unwrap_err();
+        assert!(error.contains("bad range"));
+        assert!(error.contains("source range"));
+    }
+
+    #[test]
+    fn otio_rejects_corrupt_kagari_video_reference() {
+        let timeline = OtioTimeline {
+            name: "corrupt media".into(),
+            global_start_time: 0,
+            fps: 30.0,
+            width: 1920,
+            height: 1080,
+            duration_frames: 300,
+            tracks: vec![OtioTrack {
+                name: "V1".into(),
+                kind: "video".into(),
+                items: vec![OtioItem {
+                    name: "broken clip".into(),
+                    source_range: [0, 30],
+                    timeline_start_frame: None,
+                    native_layer: None,
+                    media_reference: Some("video-json:{broken".into()),
+                }],
+            }],
+        };
+
+        let error = timeline.to_composition().unwrap_err();
+        assert!(error.contains("broken clip"));
+        assert!(error.contains("invalid Kagari video reference"));
     }
 
     #[test]
@@ -498,7 +256,7 @@ mod tests {
         assert_eq!(otio.tracks[0].kind, "video");
         assert_eq!(otio.tracks[1].kind, "audio");
 
-        let round_tripped = otio.to_composition();
+        let round_tripped = otio.to_composition().unwrap();
         assert_eq!(round_tripped.width, 1280);
         assert_eq!(round_tripped.height, 720);
         assert_eq!(round_tripped.duration_frames, 240);
@@ -559,7 +317,7 @@ mod tests {
 
         let json = otio.to_json().unwrap();
         let parsed = OtioTimeline::from_json(&json).unwrap();
-        let round_tripped = parsed.to_composition();
+        let round_tripped = parsed.to_composition().unwrap();
         assert!(matches!(
             &round_tripped.layers[0].layer_type,
             LayerType::Model3D { path } if path == "/assets/hero.obj"
@@ -570,10 +328,9 @@ mod tests {
     fn test_real_tcp_server_sync() {
         use std::io::{BufRead, BufReader, Write};
         use std::net::TcpStream;
-        use std::sync::mpsc::channel;
-
-        let (frame_tx, frame_rx) = channel();
-        let (conn_tx, conn_rx) = channel();
+        let (frame_tx, frame_rx) = latest_frame_channel();
+        let (conn_tx, conn_rx) =
+            std::sync::mpsc::sync_channel(DYNAMIC_LINK_CONNECTION_QUEUE_CAPACITY);
 
         // Start server on dynamic OS port 0
         let port = match start_sync_server(0, frame_tx, conn_tx) {
@@ -606,6 +363,18 @@ mod tests {
         let conn_state = conn_rx.recv().unwrap();
         assert_eq!(conn_state, Some("Kdenlive".to_string()));
 
+        // Repeated handshakes from one connected client must not queue redundant UI events.
+        stream.write_all(handshake_req.as_bytes()).unwrap();
+        stream.write_all(b"\n").unwrap();
+        stream.flush().unwrap();
+        line.clear();
+        reader.read_line(&mut line).unwrap();
+        assert!(line.contains("Kagari VFX"));
+        assert!(matches!(
+            conn_rx.try_recv(),
+            Err(std::sync::mpsc::TryRecvError::Empty)
+        ));
+
         // Send Playhead Sync
         let sync_msg = r#"{"type":"sync_playhead","frame":123}"#;
         stream.write_all(sync_msg.as_bytes()).unwrap();
@@ -613,7 +382,31 @@ mod tests {
         stream.flush().unwrap();
 
         // Verify frame sync channel
-        let frame = frame_rx.recv().unwrap();
+        let frame = frame_rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .unwrap();
         assert_eq!(frame, 123);
+
+        drop(reader);
+        drop(stream);
+        assert_eq!(
+            conn_rx
+                .recv_timeout(std::time::Duration::from_secs(2))
+                .unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn latest_frame_mailbox_coalesces_updates_without_stale_queue_growth() {
+        let (tx, rx) = latest_frame_channel();
+        for frame in 0..10_000 {
+            tx.publish(frame);
+        }
+        assert_eq!(rx.try_recv(), Ok(9_999));
+        assert!(matches!(
+            rx.try_recv(),
+            Err(std::sync::mpsc::TryRecvError::Empty)
+        ));
     }
 }

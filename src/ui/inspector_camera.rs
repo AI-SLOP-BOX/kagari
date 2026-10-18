@@ -1,5 +1,6 @@
 use crate::core::timeline::Composition;
 use crate::ui::inspector_property::draw_property_ui;
+use crate::ui::kui;
 use crate::ui::theme::colors;
 use eframe::egui;
 
@@ -22,43 +23,37 @@ pub fn draw_camera_settings(
     ui.collapsing("Active Camera Settings", |ui| {
         let duration_frames = comp.duration_frames;
         let cam = comp.resolve_camera_mut();
-        ui.checkbox(&mut cam.active, "Camera Active");
+        kui::toggle(ui, &mut cam.active, "Camera Active");
 
-        ui.horizontal(|ui| {
-            ui.label("Field of View:");
+        let (changed, key, remove, fov_value) = kui::property(ui, "Field of View", |ui| {
             let mut fov_value = cam.fov_at(current_frame);
-            let changed = ui
-                .add(egui::Slider::new(&mut fov_value, 10.0..=120.0).suffix("°"))
-                .changed();
-            let key = ui.button("◆").clicked();
-            let remove = ui
-                .button("×")
+            let changed = kui::slider(ui, &mut fov_value, 10.0..=120.0, "°").changed();
+            let key = kui::button(ui, "◆", kui::ButtonKind::Quiet).clicked();
+            let remove = kui::button(ui, "×", kui::ButtonKind::Quiet)
                 .on_hover_text("Remove FOV keyframe at current frame")
                 .clicked();
-            if remove {
-                remove_key_at(&mut cam.fov_animation, current_frame);
-                *project_changed = true;
-            } else if changed || key {
-                cam.set_fov_at(current_frame, fov_value);
-                *project_changed = true;
-            }
+            (changed, key, remove, fov_value)
         });
+        if remove {
+            remove_key_at(&mut cam.fov_animation, current_frame);
+            *project_changed = true;
+        } else if changed || key {
+            cam.set_fov_at(current_frame, fov_value);
+            *project_changed = true;
+        }
 
-        ui.horizontal(|ui| {
-            ui.label("Focus Distance:");
+        let (changed, key, remove, focus_value) = kui::property(ui, "Focus Distance", |ui| {
             let mut focus_value = cam.focus_distance_at(current_frame);
             let changed = ui
-                .add(
-                    egui::DragValue::new(&mut focus_value)
-                        .speed(10.0)
-                        .suffix(" mm"),
-                )
+                .add(kui::drag(&mut focus_value).speed(10.0).unit(" mm"))
                 .changed();
-            let key = ui.button("◆").clicked();
-            let remove = ui
-                .button("×")
+            let key = kui::button(ui, "◆", kui::ButtonKind::Quiet).clicked();
+            let remove = kui::button(ui, "×", kui::ButtonKind::Quiet)
                 .on_hover_text("Remove focus-distance keyframe at current frame")
                 .clicked();
+            (changed, key, remove, focus_value)
+        });
+        {
             if remove {
                 remove_key_at(&mut cam.focus_distance_animation, current_frame);
                 *project_changed = true;
@@ -66,19 +61,18 @@ pub fn draw_camera_settings(
                 cam.set_focus_distance_at(current_frame, focus_value);
                 *project_changed = true;
             }
-        });
+        }
 
-        ui.horizontal(|ui| {
-            ui.label("Aperture:");
+        let (changed, key, remove, aperture_value) = kui::property(ui, "Aperture f/", |ui| {
             let mut aperture_value = cam.aperture_at(current_frame);
-            let changed = ui
-                .add(egui::Slider::new(&mut aperture_value, 0.95..=22.0).prefix("f/"))
-                .changed();
-            let key = ui.button("◆").clicked();
-            let remove = ui
-                .button("×")
+            let changed = kui::slider(ui, &mut aperture_value, 0.95..=22.0, "").changed();
+            let key = kui::button(ui, "◆", kui::ButtonKind::Quiet).clicked();
+            let remove = kui::button(ui, "×", kui::ButtonKind::Quiet)
                 .on_hover_text("Remove aperture keyframe at current frame")
                 .clicked();
+            (changed, key, remove, aperture_value)
+        });
+        {
             if remove {
                 remove_key_at(&mut cam.aperture_animation, current_frame);
                 *project_changed = true;
@@ -86,7 +80,7 @@ pub fn draw_camera_settings(
                 cam.set_aperture_at(current_frame, aperture_value);
                 *project_changed = true;
             }
-        });
+        }
 
         let lens_tracks = [
             ("FOV", cam.fov_animation.as_ref()),
@@ -179,24 +173,25 @@ pub fn draw_camera_settings(
                 .color(colors::ACCENT_CYAN),
         );
 
-        ui.horizontal(|ui| {
-            ui.label("DOF Enabled:");
-            let mut enabled = cam.dof_enabled_at(current_frame);
-            if ui.checkbox(&mut enabled, "").changed() {
-                cam.set_dof_enabled_at(current_frame, enabled);
-                *project_changed = true;
-            }
-        });
+        let mut enabled = cam.dof_enabled_at(current_frame);
+        if kui::property(ui, "Depth of Field", |ui| {
+            kui::toggle(ui, &mut enabled, "Enabled")
+        })
+        .changed()
+        {
+            cam.set_dof_enabled_at(current_frame, enabled);
+            *project_changed = true;
+        }
 
         if cam.dof_enabled_at(current_frame) {
-            ui.horizontal(|ui| {
-                ui.label("Max Blur Radius:");
+            let (changed, key, remove, blur) = kui::property(ui, "Max Blur Radius", |ui| {
                 let mut blur = cam.dof_max_blur_at(current_frame);
-                let changed = ui
-                    .add(egui::Slider::new(&mut blur, 1.0..=64.0).suffix(" px"))
-                    .changed();
-                let key = ui.button("◆").clicked();
-                let remove = ui.button("×").clicked();
+                let changed = kui::slider(ui, &mut blur, 1.0..=64.0, " px").changed();
+                let key = kui::button(ui, "◆", kui::ButtonKind::Quiet).clicked();
+                let remove = kui::button(ui, "×", kui::ButtonKind::Quiet).clicked();
+                (changed, key, remove, blur)
+            });
+            {
                 if remove {
                     remove_key_at(&mut cam.dof_max_blur_animation, current_frame);
                     *project_changed = true;
@@ -204,31 +199,24 @@ pub fn draw_camera_settings(
                     cam.set_dof_max_blur_at(current_frame, blur);
                     *project_changed = true;
                 }
-            });
+            }
 
-            ui.horizontal(|ui| {
-                ui.label("Iris Shape:");
-                let iris_before = cam.dof_iris_sides;
-                egui::ComboBox::from_id_salt("iris_shape")
-                    .selected_text(match cam.dof_iris_sides {
-                        0 => "Circle",
-                        3 => "Triangle",
-                        5 => "Pentagon",
-                        6 => "Hexagon",
-                        8 => "Octagon",
-                        _ => "Circle",
-                    })
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut cam.dof_iris_sides, 0, "Circle");
-                        ui.selectable_value(&mut cam.dof_iris_sides, 3, "Triangle");
-                        ui.selectable_value(&mut cam.dof_iris_sides, 5, "Pentagon");
-                        ui.selectable_value(&mut cam.dof_iris_sides, 6, "Hexagon");
-                        ui.selectable_value(&mut cam.dof_iris_sides, 8, "Octagon");
-                    });
-                if iris_before != cam.dof_iris_sides {
-                    *project_changed = true;
-                }
-            });
+            if kui::property(ui, "Iris Shape", |ui| {
+                kui::combo(
+                    ui,
+                    "iris_shape",
+                    &mut cam.dof_iris_sides,
+                    &[
+                        (0, "Circle"),
+                        (3, "Triangle"),
+                        (5, "Pentagon"),
+                        (6, "Hexagon"),
+                        (8, "Octagon"),
+                    ],
+                )
+            }) {
+                *project_changed = true;
+            }
         }
 
         ui.label("Camera Transform:");
@@ -239,11 +227,7 @@ pub fn draw_camera_settings(
             "  Pos",
             &mut cam.transform.position,
             |ui, val| {
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("X:"));
-                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y:"));
-                    ui.add(egui::DragValue::new(&mut val[2]).speed(1.0).prefix("Z:"));
-                });
+                kui::vector(ui, val, f32::NEG_INFINITY..=f32::INFINITY, 1.0, "");
             },
         ) {
             *next_frame = Some(nf);
@@ -259,11 +243,14 @@ pub fn draw_camera_settings(
             "  Rot",
             &mut cam.transform.rotation,
             |ui, val| {
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut val[0]).speed(1.0).prefix("P:"));
-                    ui.add(egui::DragValue::new(&mut val[1]).speed(1.0).prefix("Y:"));
-                    ui.add(egui::DragValue::new(&mut val[2]).speed(1.0).prefix("R:"));
-                });
+                kui::vector_axes(
+                    ui,
+                    val,
+                    f32::NEG_INFINITY..=f32::INFINITY,
+                    1.0,
+                    "",
+                    ["P", "Y", "R"],
+                );
             },
         ) {
             *next_frame = Some(nf);

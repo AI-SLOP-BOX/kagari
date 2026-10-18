@@ -29,6 +29,7 @@ pub fn get_all_effect_presets() -> &'static [EffectPreset] {
 
 pub fn draw_effect_type_ui(
     effect_type: &mut EffectType,
+    effect_id: &str,
     ui: &mut egui::Ui,
     current_frame: u32,
     project_changed: &mut bool,
@@ -67,7 +68,9 @@ pub fn draw_effect_type_ui(
         | EffectType::RadialBlurZoom { .. }
         | EffectType::TiltShift { .. }
         | EffectType::CameraLensBlur { .. }
-        | EffectType::MotionBlur { .. } => {
+        | EffectType::MotionBlur { .. }
+        | EffectType::TemporalDenoise { .. }
+        | EffectType::BilateralFilter { .. } => {
             blur::draw(effect_type, ui, current_frame, project_changed, next_frame);
         }
 
@@ -98,7 +101,11 @@ pub fn draw_effect_type_ui(
         | EffectType::RefractionLens { .. }
         | EffectType::GlassEdgeBevel { .. }
         | EffectType::RadialFastBlur { .. }
-        | EffectType::ScanlineGlitch { .. } => {
+        | EffectType::ScanlineGlitch { .. }
+        | EffectType::VRHorizon { .. }
+        | EffectType::VRSphericalBlur { .. }
+        | EffectType::CCKaleida { .. }
+        | EffectType::CCPixelPolly { .. } => {
             distort::draw(effect_type, ui, current_frame, project_changed, next_frame);
         }
 
@@ -111,7 +118,9 @@ pub fn draw_effect_type_ui(
         | EffectType::PerlinFlow { .. }
         | EffectType::FbmTurbulence { .. }
         | EffectType::LightLeak { .. }
-        | EffectType::GodRays { .. } => {
+        | EffectType::GodRays { .. }
+        | EffectType::GradientRamp { .. }
+        | EffectType::Checkerboard { .. } => {
             generate::draw(effect_type, ui, current_frame, project_changed, next_frame);
         }
 
@@ -127,7 +136,10 @@ pub fn draw_effect_type_ui(
         | EffectType::BevelAlpha { .. }
         | EffectType::LensFlare { .. }
         | EffectType::OpticalFlares { .. }
-        | EffectType::ReflectionMap { .. } => {
+        | EffectType::ReflectionMap { .. }
+        | EffectType::StrobeLight { .. }
+        | EffectType::SSAO { .. }
+        | EffectType::ZDepthFog { .. } => {
             stylize::draw(effect_type, ui, current_frame, project_changed, next_frame);
         }
 
@@ -201,7 +213,14 @@ pub fn draw_effect_type_ui(
         | EffectType::CheckboxControl { .. }
         | EffectType::DropdownControl { .. }
         | EffectType::Point3DControl { .. } => {
-            expression_controls::draw(effect_type, ui, current_frame, project_changed, next_frame);
+            expression_controls::draw(
+                effect_type,
+                effect_id,
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+            );
         }
 
         // ── Path / Shape ──
@@ -217,6 +236,12 @@ pub fn draw_effect_type_ui(
         // ── Channel Utilities ──
         EffectType::ChannelCombiner { .. } => {
             channel_util::draw(effect_type, ui, current_frame, project_changed, next_frame);
+        }
+
+        // ── 3rd-Party Native / Custom Plugin ──
+        EffectType::CustomPlugin { plugin_id } => {
+            ui.label(format!("Plugin ID: {plugin_id}"));
+            ui.label("Managed by Native Plugin Host");
         }
     }
 }

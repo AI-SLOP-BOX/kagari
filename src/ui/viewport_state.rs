@@ -4,6 +4,42 @@ pub const SNAP_FRAME_ID: &str = "ae_viewport_snap_a";
 pub const IS_COMPARING_ID: &str = "ae_viewport_comparing";
 pub const WIPE_POS_ID: &str = "ae_viewport_wipe_pos";
 
+#[derive(Debug, Clone, Copy)]
+pub struct ViewportTransform {
+    pub comp_rect: egui::Rect,
+    pub screen_rect: egui::Rect,
+}
+
+impl ViewportTransform {
+    pub fn new(screen_rect: egui::Rect, comp_width: f32, comp_height: f32) -> Self {
+        let safe_width = comp_width.max(f32::EPSILON);
+        let safe_height = comp_height.max(f32::EPSILON);
+        Self {
+            comp_rect: egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(safe_width, safe_height),
+            ),
+            screen_rect,
+        }
+    }
+
+    pub fn comp_to_screen(self, point: [f32; 2]) -> egui::Pos2 {
+        egui::pos2(
+            self.screen_rect.left() + point[0] / self.comp_rect.width() * self.screen_rect.width(),
+            self.screen_rect.top() + point[1] / self.comp_rect.height() * self.screen_rect.height(),
+        )
+    }
+
+    pub fn screen_to_comp(self, point: egui::Pos2) -> [f32; 2] {
+        [
+            (point.x - self.screen_rect.left()) / self.screen_rect.width().max(f32::EPSILON)
+                * self.comp_rect.width(),
+            (point.y - self.screen_rect.top()) / self.screen_rect.height().max(f32::EPSILON)
+                * self.comp_rect.height(),
+        ]
+    }
+}
+
 pub fn snap_frame(ctx: &egui::Context) -> Option<u32> {
     ctx.data(|d| d.get_temp(egui::Id::new(SNAP_FRAME_ID)))
 }

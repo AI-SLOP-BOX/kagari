@@ -2,21 +2,26 @@ use crate::KagariApp;
 use eframe::egui;
 
 pub fn draw_flowchart_inspector(app: &mut KagariApp, ui: &mut egui::Ui) {
-    ui.heading("Composition Flowchart & Hierarchy");
-    ui.separator();
+    crate::ui::kui::section(ui, "Composition Flowchart & Hierarchy");
 
     let comp = app.history.current().active_composition();
-    ui.label(format!("Root Composition: {}", comp.name));
-    ui.label(format!("Total Layers: {}", comp.layers.len()));
+    crate::ui::kui::secondary(
+        ui,
+        crate::ui::localization::tr_format("Root Composition: {}", &[&comp.name]),
+    );
+    crate::ui::kui::secondary(
+        ui,
+        crate::ui::localization::tr_format("Total Layers: {}", &[&comp.layers.len().to_string()]),
+    );
 
-    ui.add_space(8.0);
-    ui.separator();
+    ui.add_space(crate::ui::kui::space::SM);
+    crate::ui::kui::separator(ui);
 
-    ui.label("Composition Dependency Graph (DAG):");
+    crate::ui::kui::caption(ui, "Composition Dependency Graph (DAG):");
     egui::ScrollArea::vertical()
         .max_height(200.0)
         .show(ui, |ui| {
-            ui.monospace("[Comp 1] (Active Root)");
+            crate::ui::kui::truncated_secondary(ui, "[Comp 1] (Active Root)");
             ui.indent("comp_root_indent", |ui| {
                 for (i, layer) in comp.layers.iter().enumerate() {
                     let icon = match layer.layer_type {
@@ -33,17 +38,21 @@ pub fn draw_flowchart_inspector(app: &mut KagariApp, ui: &mut egui::Ui) {
                         crate::core::timeline::LayerType::Particle { .. } => "Particle",
                     };
                     let parent_info = if let Some(ref p_id) = layer.parent_id {
-                        format!(" Parent: {}", p_id)
+                        format!(
+                            " {}",
+                            crate::ui::localization::tr_format("Parent: {}", &[p_id])
+                        )
                     } else {
                         "".to_string()
                     };
-                    ui.label(format!(
+                    let label = format!(
                         "└─ {:02}. {} {}{}",
                         i + 1,
-                        icon,
+                        crate::ui::localization::tr(icon),
                         layer.name,
                         parent_info
-                    ));
+                    );
+                    crate::ui::kui::truncated_secondary(ui, &label);
                 }
             });
         });

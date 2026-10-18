@@ -20,7 +20,16 @@ pub fn draw(
                 "Operation",
                 operation,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=3.0).text("0=Add 1=Sub 2=Int 3=Exc"));
+                    let options = [
+                        (0.0_f32, "Add"),
+                        (1.0, "Subtract"),
+                        (2.0, "Intersect"),
+                        (3.0, "Exclude"),
+                    ];
+                    let mut selected = v.round().clamp(0.0, 3.0);
+                    if crate::ui::kui::combo(ui, "merge_paths_operation", &mut selected, &options) {
+                        *v = selected;
+                    }
                 },
             );
         }
@@ -37,7 +46,7 @@ pub fn draw(
                 "Amount",
                 amount,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, -100.0..=100.0).text("Amount (px)"));
+                    crate::ui::kui::slider(ui, v, -100.0..=100.0, " px");
                 },
             );
             draw_prop(
@@ -48,7 +57,11 @@ pub fn draw(
                 "Line Join",
                 line_join,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 0.0..=2.0).text("Line Join"));
+                    let options = [(0.0_f32, "Miter"), (1.0, "Round"), (2.0, "Bevel")];
+                    let mut selected = v.round().clamp(0.0, 2.0);
+                    if crate::ui::kui::combo(ui, "offset_path_line_join", &mut selected, &options) {
+                        *v = selected;
+                    }
                 },
             );
             draw_prop(
@@ -59,7 +72,7 @@ pub fn draw(
                 "Miter Limit",
                 miter_limit,
                 |ui, v| {
-                    ui.add(egui::Slider::new(v, 1.0..=100.0).text("Miter Limit"));
+                    crate::ui::kui::slider(ui, v, 1.0..=100.0, "");
                 },
             );
         }

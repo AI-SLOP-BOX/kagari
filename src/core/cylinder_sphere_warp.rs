@@ -288,7 +288,7 @@ mod tests {
         assert!(dst[c_idx] > 0);
 
         // Far edge pixel (0, 16) must be empty (dist 16 > radius 10)
-        let edge_idx = (16 * 32 + 0) * 4;
+        let edge_idx = 16 * 32 * 4;
         assert_eq!(dst[edge_idx + 3], 0);
     }
 }

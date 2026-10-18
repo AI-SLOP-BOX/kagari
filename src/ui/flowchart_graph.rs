@@ -1,23 +1,51 @@
-use crate::core::timeline::{Composition, LayerType, TrackMatteMode};
+use crate::core::timeline::{Composition, LayerType};
+use crate::ui::flow_graph_model::FlowGraphModel;
+use crate::ui::kui;
 use crate::ui::theme::colors;
 use eframe::egui;
 
-fn compute_parent_depth(
-    comp: &Composition,
-    layer_idx: usize,
-    visited: &mut std::collections::HashSet<usize>,
-) -> usize {
-    if visited.contains(&layer_idx) || layer_idx >= comp.layers.len() {
-        return 0;
-    }
-    visited.insert(layer_idx);
+#[cfg(test)]
+#[allow(clippy::items_after_test_module)]
+mod tests {
+    use super::*;
 
-    if let Some(ref pid) = comp.layers[layer_idx].parent_id {
-        if let Some(parent_idx) = comp.layers.iter().position(|l| &l.id == pid) {
-            return 1 + compute_parent_depth(comp, parent_idx, visited);
+    fn shape_count(layer_count: usize) -> usize {
+        let mut comp = Composition::new("comp".into(), "Graph".into(), 1920, 1080, 30, 300);
+        for index in 0..layer_count {
+            comp.layers.push(crate::core::timeline::Layer::new_null(
+                format!("layer-{index}"),
+                format!("Long layer name {index} in the dependency graph"),
+                300,
+            ));
         }
+        let ctx = egui::Context::default();
+        let mut selected = None;
+        let mut selection = std::collections::HashSet::new();
+        let mut open = true;
+        let output = ctx.run(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(600.0, 360.0),
+                )),
+                ..Default::default()
+            },
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    draw_node_graph_panel(ui, &comp, &mut selected, &mut selection, &mut open);
+                });
+            },
+        );
+        assert!(open && selected.is_none() && selection.is_empty());
+        output.shapes.len()
     }
-    0
+
+    #[test]
+    fn offscreen_nodes_do_not_grow_the_paint_list() {
+        let short = shape_count(300);
+        let long = shape_count(5000);
+        assert!(long <= short + 10, "short={short}, long={long}");
+    }
 }
 
 pub fn draw_node_graph_panel(
@@ -38,7 +66,8 @@ pub fn draw_node_graph_panel(
             ui.with_layout(
                 egui::Layout::right_to_left(egui::Align::Center),
                 |ui: &mut egui::Ui| {
-                    if ui.button("❌ Close Node View (Tab)").clicked() {
+                    if kui::button(ui, "Close Node View (Tab)", kui::ButtonKind::Default).clicked()
+                    {
                         *show_graph_editor = false;
                     }
                 },
@@ -47,6 +76,7 @@ pub fn draw_node_graph_panel(
         ui.separator();
 
         let layers_count = comp.layers.len();
+        let graph = FlowGraphModel::build_structure(comp);
 
         if layers_count == 0 {
             ui.centered_and_justified(|ui| {
@@ -62,16 +92,7 @@ pub fn draw_node_graph_panel(
         let row_spacing = 52.0;
 
         let total_h = (layers_count as f32 * row_spacing + 60.0).max(220.0);
-        let max_depth = comp
-            .layers
-            .iter()
-            .enumerate()
-            .map(|(idx, _)| {
-                let mut visited = std::collections::HashSet::new();
-                compute_parent_depth(comp, idx, &mut visited)
-            })
-            .max()
-            .unwrap_or(0);
+        let max_depth = graph.nodes.iter().map(|node| node.depth).max().unwrap_or(0);
 
         let total_w = (max_depth as f32 * col_spacing + 300.0).max(ui.available_width());
 
@@ -92,49 +113,57 @@ pub fn draw_node_graph_panel(
                     egui::Stroke::new(1.0_f32, colors::BORDER_MEDIUM),
                 );
 
+                let visible = rect.intersect(ui.clip_rect());
                 let grid_size = 24.0;
-                let mut gx = rect.left();
-                while gx < rect.right() {
+                let mut gx =
+                    rect.left() + ((visible.left() - rect.left()) / grid_size).ceil() * grid_size;
+                while gx < visible.right() {
                     ui.painter().line_segment(
-                        [egui::pos2(gx, rect.top()), egui::pos2(gx, rect.bottom())],
+                        [
+                            egui::pos2(gx, visible.top()),
+                            egui::pos2(gx, visible.bottom()),
+                        ],
                         egui::Stroke::new(0.5_f32, colors::GRID_LINE),
                     );
                     gx += grid_size;
                 }
-                let mut gy = rect.top();
-                while gy < rect.bottom() {
+                let mut gy =
+                    rect.top() + ((visible.top() - rect.top()) / grid_size).ceil() * grid_size;
+                while gy < visible.bottom() {
                     ui.painter().line_segment(
-                        [egui::pos2(rect.left(), gy), egui::pos2(rect.right(), gy)],
+                        [
+                            egui::pos2(visible.left(), gy),
+                            egui::pos2(visible.right(), gy),
+                        ],
                         egui::Stroke::new(0.5_f32, colors::GRID_LINE),
                     );
                     gy += grid_size;
                 }
 
-                let mut node_positions = Vec::with_capacity(layers_count);
-
-                for (idx, _) in comp.layers.iter().enumerate() {
-                    let mut visited = std::collections::HashSet::new();
-                    let depth = compute_parent_depth(comp, idx, &mut visited);
-                    let nx = rect.left() + 30.0 + depth as f32 * col_spacing;
-                    let ny = rect.top() + 24.0 + idx as f32 * row_spacing;
-                    node_positions.push(egui::pos2(nx, ny));
-                }
+                let node_positions = graph.positions(
+                    egui::pos2(rect.left() + 30.0, rect.top() + 24.0),
+                    col_spacing,
+                    row_spacing,
+                );
 
                 // 1. Draw Connecting Wires (Parent-Child Blue & Track Matte Amber)
-                for (idx, layer) in comp.layers.iter().enumerate() {
+                for idx in 0..layers_count {
                     let child_pos = node_positions[idx];
                     let child_input = egui::pos2(child_pos.x, child_pos.y + node_h * 0.5);
 
                     // Parent Connection Wire (Blue Curve)
-                    if let Some(ref pid) = layer.parent_id {
-                        if let Some(parent_idx) = comp.layers.iter().position(|l| &l.id == pid) {
-                            let parent_pos = node_positions[parent_idx];
-                            let parent_output =
-                                egui::pos2(parent_pos.x + node_w, parent_pos.y + node_h * 0.5);
+                    if let Some(parent_idx) = graph.nodes[idx].parent_index {
+                        let parent_pos = node_positions[parent_idx];
+                        let parent_output =
+                            egui::pos2(parent_pos.x + node_w, parent_pos.y + node_h * 0.5);
 
-                            let ctrl1 = egui::pos2(parent_output.x + 40.0, parent_output.y);
-                            let ctrl2 = egui::pos2(child_input.x - 40.0, child_input.y);
+                        let ctrl1 = egui::pos2(parent_output.x + 40.0, parent_output.y);
+                        let ctrl2 = egui::pos2(child_input.x - 40.0, child_input.y);
 
+                        if egui::Rect::from_points(&[parent_output, ctrl1, ctrl2, child_input])
+                            .expand(2.0)
+                            .intersects(visible)
+                        {
                             let mut wire_pts = Vec::with_capacity(16);
                             for step in 0..=15 {
                                 let t = step as f32 / 15.0;
@@ -160,8 +189,7 @@ pub fn draw_node_graph_panel(
                     }
 
                     // Track Matte Connection Wire (Amber/Orange Curve)
-                    if layer.track_matte != TrackMatteMode::None && idx > 0 {
-                        let matte_idx = idx - 1;
+                    if let Some(matte_idx) = graph.nodes[idx].matte_index {
                         let matte_pos = node_positions[matte_idx];
                         let matte_output =
                             egui::pos2(matte_pos.x + node_w, matte_pos.y + node_h * 0.5);
@@ -169,26 +197,34 @@ pub fn draw_node_graph_panel(
                         let ctrl1 = egui::pos2(matte_output.x + 30.0, matte_output.y);
                         let ctrl2 = egui::pos2(child_input.x - 30.0, child_input.y);
 
-                        let mut wire_pts = Vec::with_capacity(16);
-                        for step in 0..=15 {
-                            let t = step as f32 / 15.0;
-                            let inv_t = 1.0 - t;
-                            let wx = inv_t.powi(3) * matte_output.x
-                                + 3.0 * inv_t.powi(2) * t * ctrl1.x
-                                + 3.0 * inv_t * t.powi(2) * ctrl2.x
-                                + t.powi(3) * child_input.x;
-                            let wy = inv_t.powi(3) * matte_output.y
-                                + 3.0 * inv_t.powi(2) * t * ctrl1.y
-                                + 3.0 * inv_t * t.powi(2) * ctrl2.y
-                                + t.powi(3) * child_input.y;
-                            wire_pts.push(egui::pos2(wx, wy));
-                        }
+                        if egui::Rect::from_points(&[matte_output, ctrl1, ctrl2, child_input])
+                            .expand(2.0)
+                            .intersects(visible)
+                        {
+                            let mut wire_pts = Vec::with_capacity(16);
+                            for step in 0..=15 {
+                                let t = step as f32 / 15.0;
+                                let inv_t = 1.0 - t;
+                                let wx = inv_t.powi(3) * matte_output.x
+                                    + 3.0 * inv_t.powi(2) * t * ctrl1.x
+                                    + 3.0 * inv_t * t.powi(2) * ctrl2.x
+                                    + t.powi(3) * child_input.x;
+                                let wy = inv_t.powi(3) * matte_output.y
+                                    + 3.0 * inv_t.powi(2) * t * ctrl1.y
+                                    + 3.0 * inv_t * t.powi(2) * ctrl2.y
+                                    + t.powi(3) * child_input.y;
+                                wire_pts.push(egui::pos2(wx, wy));
+                            }
 
-                        for win in wire_pts.windows(2) {
-                            ui.painter().line_segment(
-                                [win[0], win[1]],
-                                egui::Stroke::new(1.5_f32, egui::Color32::from_rgb(245, 158, 11)),
-                            );
+                            for win in wire_pts.windows(2) {
+                                ui.painter().line_segment(
+                                    [win[0], win[1]],
+                                    egui::Stroke::new(
+                                        1.5_f32,
+                                        egui::Color32::from_rgb(245, 158, 11),
+                                    ),
+                                );
+                            }
                         }
                     }
                 }
@@ -201,10 +237,19 @@ pub fn draw_node_graph_panel(
 
                     let node_rect = egui::Rect::from_min_size(pos, egui::vec2(node_w, node_h));
 
-                    let bg_c = if is_selected {
-                        colors::BG_ACTIVE
-                    } else {
-                        colors::BG_DARK
+                    if !ui.is_rect_visible(node_rect) {
+                        continue;
+                    }
+                    let node_response = ui.interact(
+                        node_rect,
+                        ui.id().with(("node_click", idx)),
+                        egui::Sense::click(),
+                    );
+                    let bg_c = match (is_selected, node_response.hovered()) {
+                        (true, true) => colors::BG_ACTIVE,
+                        (true, false) => colors::BG_SELECTION,
+                        (false, true) => colors::BG_HOVER,
+                        (false, false) => colors::BG_DARK,
                     };
 
                     let stroke_c = if is_selected {
@@ -246,29 +291,29 @@ pub fn draw_node_graph_panel(
                     };
 
                     let title_text = format!("{} {}", icon, layer.name);
-                    ui.painter().text(
-                        egui::pos2(pos.x + 16.0, pos.y + node_h * 0.5),
-                        egui::Align2::LEFT_CENTER,
-                        title_text,
+                    let mut job = egui::text::LayoutJob::simple_singleline(
+                        title_text.clone(),
                         egui::FontId::proportional(11.0),
                         if is_selected {
-                            colors::HANDLE_NORMAL
-                        } else {
                             colors::TEXT_PRIMARY
+                        } else {
+                            colors::TEXT_SECONDARY
                         },
                     );
-
-                    // Handle Node Click Selection
-                    let node_response = ui.interact(
-                        node_rect,
-                        ui.id().with(format!("node_click_{}", idx)),
-                        egui::Sense::click(),
-                    );
+                    job.wrap.max_width = node_w - 24.0;
+                    job.wrap.max_rows = 1;
+                    let galley = ui.fonts(|fonts| fonts.layout_job(job));
+                    let text_pos =
+                        egui::pos2(pos.x + 16.0, node_rect.center().y - galley.size().y * 0.5);
+                    ui.painter()
+                        .with_clip_rect(node_rect.intersect(ui.clip_rect()))
+                        .galley(text_pos, galley, colors::TEXT_PRIMARY);
                     if node_response.clicked() {
                         selected_layers.clear();
                         selected_layers.insert(idx);
                         *selected_layer_idx = Some(idx);
                     }
+                    node_response.on_hover_text(title_text);
                 }
             });
     });
