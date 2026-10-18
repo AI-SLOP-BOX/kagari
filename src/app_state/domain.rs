@@ -246,6 +246,8 @@ pub struct UiTabsDomainState {
     pub global_shy_active: bool,
     pub layer_filter_text: String,
     pub effects_search_query: String,
+    pub flowchart_pan: eframe::egui::Vec2,
+    pub flowchart_zoom: f32,
 }
 
 impl Default for UiTabsDomainState {
@@ -261,6 +263,8 @@ impl Default for UiTabsDomainState {
             global_shy_active: false,
             layer_filter_text: String::new(),
             effects_search_query: String::new(),
+            flowchart_pan: eframe::egui::Vec2::ZERO,
+            flowchart_zoom: 1.0,
         }
     }
 }

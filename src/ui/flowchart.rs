@@ -33,30 +33,23 @@ pub fn draw_flowchart_view(app: &mut KagariApp, ui: &mut egui::Ui, comp: &Compos
             egui::Sense::click_and_drag(),
         );
 
-        let pan_id = egui::Id::new("flowchart_canvas_pan");
-        let zoom_id = egui::Id::new("flowchart_canvas_zoom");
-
-        let mut pan = ui
-            .ctx()
-            .data(|d| d.get_temp::<egui::Vec2>(pan_id).unwrap_or(egui::Vec2::ZERO));
-        let mut zoom = ui.ctx().data(|d| d.get_temp::<f32>(zoom_id).unwrap_or(1.0));
-
         if response.hovered() {
             let scroll = ui.input(|i| i.raw_scroll_delta.y);
             if scroll != 0.0 {
                 let factor = if scroll > 0.0 { 1.1 } else { 1.0 / 1.1 };
-                zoom = (zoom * factor).clamp(0.2, 3.0);
-                ui.ctx().data_mut(|d| d.insert_temp(zoom_id, zoom));
+                app.ui_tabs.flowchart_zoom = (app.ui_tabs.flowchart_zoom * factor).clamp(0.2, 3.0);
             }
         }
 
         if response.dragged() {
-            pan += response.drag_delta();
-            ui.ctx().data_mut(|d| d.insert_temp(pan_id, pan));
+            app.ui_tabs.flowchart_pan += response.drag_delta();
             ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Grabbing);
         } else if response.hovered() {
             ui.output_mut(|o| o.cursor_icon = egui::CursorIcon::Grab);
         }
+
+        let pan = app.ui_tabs.flowchart_pan;
+        let zoom = app.ui_tabs.flowchart_zoom;
 
         let painter = ui.painter().with_clip_rect(rect);
         painter.rect_filled(rect, 4.0, colors::BG_DEEPEST);
@@ -182,24 +175,23 @@ pub fn draw_flowchart_view(app: &mut KagariApp, ui: &mut egui::Ui, comp: &Compos
             let control1 = egui::pos2(root_pos.x + 80.0, root_pos.y);
             let control2 = egui::pos2(npos.x - 80.0, npos.y);
             let points = [root_pos, control1, control2, npos];
-            let curve_pts: Vec<egui::Pos2> = (0..=20)
-                .map(|t| {
-                    let u = t as f32 / 20.0;
-                    let u1 = 1.0 - u;
-                    let x = u1 * u1 * u1 * points[0].x
-                        + 3.0 * u1 * u1 * u * points[1].x
-                        + 3.0 * u1 * u * u * points[2].x
-                        + u * u * u * points[3].x;
-                    let y = u1 * u1 * u1 * points[0].y
-                        + 3.0 * u1 * u1 * u * points[1].y
-                        + 3.0 * u1 * u * u * points[2].y
-                        + u * u * u * points[3].y;
-                    egui::pos2(x, y)
-                })
-                .collect();
+            let mut curve_pts = [egui::Pos2::ZERO; 11];
+            for step in 0..=10 {
+                let u = step as f32 / 10.0;
+                let u1 = 1.0 - u;
+                let x = u1 * u1 * u1 * points[0].x
+                    + 3.0 * u1 * u1 * u * points[1].x
+                    + 3.0 * u1 * u * u * points[2].x
+                    + u * u * u * points[3].x;
+                let y = u1 * u1 * u1 * points[0].y
+                    + 3.0 * u1 * u1 * u * points[1].y
+                    + 3.0 * u1 * u * u * points[2].y
+                    + u * u * u * points[3].y;
+                curve_pts[step] = egui::pos2(x, y);
+            }
 
             painter.add(egui::Shape::line(
-                curve_pts,
+                curve_pts.to_vec(),
                 egui::Stroke::new(1.2_f32, colors::MOTION_PATH.linear_multiply(140.0 / 255.0)),
             ));
 
