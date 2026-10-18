@@ -152,13 +152,9 @@ impl KagariApp {
         self.ui_ctx = Some(ctx.clone());
         crate::ui::project_io::poll_collect_files(self, ctx);
         crate::ui::workspace_manager::restore_pending_workspace(ctx);
-        let assets_workspace = ctx.data(|data| {
-            data.get_temp::<usize>(eframe::egui::Id::new("studio_active_workspace"))
-                == Some(crate::ui::menu::ASSETS_WORKSPACE_INDEX)
-        });
-        let compact_inspector_drawer = ctx
-            .data(|data| data.get_temp::<bool>(eframe::egui::Id::new("compact_inspector_drawer")))
-            .unwrap_or(false);
+        let assets_workspace =
+            self.ui_tabs.active_workspace == crate::ui::menu::ASSETS_WORKSPACE_INDEX;
+        let compact_inspector_drawer = self.ui_tabs.compact_inspector_drawer;
         let scripting_console_visible = !self.show_home
             && !self.show_guided_tutorial
             && !(self.ui_tabs.left_tab_idx == 1

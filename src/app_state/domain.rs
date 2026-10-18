@@ -248,6 +248,8 @@ pub struct UiTabsDomainState {
     pub effects_search_query: String,
     pub flowchart_pan: eframe::egui::Vec2,
     pub flowchart_zoom: f32,
+    pub active_workspace: usize,
+    pub compact_inspector_drawer: bool,
 }
 
 impl Default for UiTabsDomainState {
@@ -265,6 +267,8 @@ impl Default for UiTabsDomainState {
             effects_search_query: String::new(),
             flowchart_pan: eframe::egui::Vec2::ZERO,
             flowchart_zoom: 1.0,
+            active_workspace: 1,
+            compact_inspector_drawer: false,
         }
     }
 }

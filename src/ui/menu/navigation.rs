@@ -40,6 +40,7 @@ pub fn activate_workspace(
     nav: crate::ui::home_screen::HomeNav,
 ) {
     *active_workspace = workspace_index;
+    app.ui_tabs.active_workspace = workspace_index;
     ctx.data_mut(|data| data.insert_temp(workspace_id, workspace_index));
     apply_workspace_nav(app, ctx, &nav);
 }
@@ -129,7 +130,7 @@ pub(crate) fn apply_workspace_nav(
     }
 }
 
-pub(crate) fn active_workspace_index(app: &crate::KagariApp, ctx: &egui::Context) -> usize {
+pub(crate) fn active_workspace_index(app: &crate::KagariApp, _ctx: &egui::Context) -> usize {
     if app.show_home {
         0
     } else if app.ui_tabs.bottom_dock_tab == 1 {
@@ -154,10 +155,7 @@ pub(crate) fn active_workspace_index(app: &crate::KagariApp, ctx: &egui::Context
         3
     } else if app.ui_tabs.left_tab_idx == 0
         && app.ui_tabs.right_panel == crate::app_state::RightPanel::Properties
-        && ctx.data(|data| {
-            data.get_temp::<usize>(egui::Id::new("studio_active_workspace"))
-                == Some(ASSETS_WORKSPACE_INDEX)
-        })
+        && app.ui_tabs.active_workspace == ASSETS_WORKSPACE_INDEX
     {
         7
     } else {
@@ -179,6 +177,9 @@ pub fn draw_compact_drawers(ctx: &egui::Context, app: &mut crate::KagariApp, ui:
     };
     if ui.small_button(drawer_label).clicked() {
         let next_open = !drawer_open;
+        if next_open {
+            app.ui_tabs.compact_inspector_drawer = false;
+        }
         ctx.data_mut(|data| {
             data.insert_temp(drawer_id, next_open);
             if next_open {
@@ -188,9 +189,7 @@ pub fn draw_compact_drawers(ctx: &egui::Context, app: &mut crate::KagariApp, ui:
     }
     if ctx.screen_rect().width() < crate::ui::theme::layout::DOCKED_PANELS_MIN_WIDTH {
         let inspector_id = egui::Id::new("compact_inspector_drawer");
-        let inspector_open = ctx
-            .data(|data| data.get_temp::<bool>(inspector_id))
-            .unwrap_or(false);
+        let inspector_open = app.ui_tabs.compact_inspector_drawer;
         let inspector_label = if inspector_open {
             "インスペクターを閉じる"
         } else {
@@ -198,6 +197,7 @@ pub fn draw_compact_drawers(ctx: &egui::Context, app: &mut crate::KagariApp, ui:
         };
         if ui.small_button(inspector_label).clicked() {
             let next_open = !inspector_open;
+            app.ui_tabs.compact_inspector_drawer = next_open;
             ctx.data_mut(|data| {
                 data.insert_temp(inspector_id, next_open);
                 if next_open {

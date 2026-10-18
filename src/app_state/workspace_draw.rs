@@ -39,10 +39,7 @@ impl KagariApp {
             self.playback.current_frame = current_frame;
             return;
         }
-        let assets_workspace = ctx.data_mut(|data| {
-            data.get_temp::<usize>(egui::Id::new("studio_active_workspace"))
-                == Some(crate::ui::menu::ASSETS_WORKSPACE_INDEX)
-        });
+        let assets_workspace = self.ui_tabs.active_workspace == crate::ui::menu::ASSETS_WORKSPACE_INDEX;
         if assets_workspace
             && self.ui_tabs.left_tab_idx == 0
             && self.ui_tabs.right_panel == crate::app_state::RightPanel::Properties
