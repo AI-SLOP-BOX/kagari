@@ -10,23 +10,24 @@ pub(in crate::ui::home_screen) fn draw_landing_hero(ui: &mut egui::Ui, rect: egu
     let width_scale = (rect.width() / (1217.0 * scale)).max(0.45);
     let height_scale = (rect.height() / (300.0 * scale)).max(0.5);
     let painter = ui.painter().with_clip_rect(rect);
-    let curve = |start: egui::Pos2, c1: egui::Pos2, c2: egui::Pos2, end: egui::Pos2| {
-        (0..=48)
-            .map(move |index| {
-                let t = index as f32 / 48.0;
-                let u = 1.0 - t;
-                egui::pos2(
-                    u * u * u * start.x
-                        + 3.0 * u * u * t * c1.x
-                        + 3.0 * u * t * t * c2.x
-                        + t * t * t * end.x,
-                    u * u * u * start.y
-                        + 3.0 * u * u * t * c1.y
-                        + 3.0 * u * t * t * c2.y
-                        + t * t * t * end.y,
-                )
-            })
-            .collect::<Vec<_>>()
+    let draw_curve = |painter: &egui::Painter, start: egui::Pos2, c1: egui::Pos2, c2: egui::Pos2, end: egui::Pos2, stroke: egui::Stroke| {
+        let mut prev_pt = start;
+        for index in 1..=48 {
+            let t = index as f32 / 48.0;
+            let u = 1.0 - t;
+            let curr_pt = egui::pos2(
+                u * u * u * start.x
+                    + 3.0 * u * u * t * c1.x
+                    + 3.0 * u * t * t * c2.x
+                    + t * t * t * end.x,
+                u * u * u * start.y
+                    + 3.0 * u * u * t * c1.y
+                    + 3.0 * u * t * t * c2.y
+                    + t * t * t * end.y,
+            );
+            painter.line_segment([prev_pt, curr_pt], stroke);
+            prev_pt = curr_pt;
+        }
     };
     let start = egui::pos2(
         rect.left() + rect.width() * 0.405,
@@ -49,7 +50,12 @@ pub(in crate::ui::home_screen) fn draw_landing_hero(ui: &mut egui::Ui, rect: egu
             egui::Color32::from_rgb(255, 79, 22),
         ),
     ] {
-        let points = curve(
+        let stroke = egui::Stroke::new(
+            width * scale * width_scale * height_scale,
+            color.linear_multiply(0.72),
+        );
+        draw_curve(
+            &painter,
             egui::pos2(start.x - delta, start.y),
             egui::pos2(
                 rect.left() + rect.width() * 0.64 - delta,
@@ -60,13 +66,7 @@ pub(in crate::ui::home_screen) fn draw_landing_hero(ui: &mut egui::Ui, rect: egu
                 rect.top() + rect.height() * 0.143,
             ),
             egui::pos2(end.x - delta * 0.16, end.y),
+            stroke,
         );
-        painter.add(egui::Shape::line(
-            points,
-            egui::Stroke::new(
-                width * scale * width_scale * height_scale,
-                color.linear_multiply(0.72),
-            ),
-        ));
     }
 }
