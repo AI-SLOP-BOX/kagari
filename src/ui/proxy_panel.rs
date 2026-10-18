@@ -277,6 +277,10 @@ pub(crate) fn start_proxy_job(app: &mut KagariApp, ctx: &egui::Context, layer_id
         std::env::temp_dir().join(format!("kagari_proxy_{}_{layer_idx}", std::process::id()));
     let layer_id = layer.id.clone();
     let label = format!("Generating proxy… {layer_id} ({})", resolution.label());
+    let job_id = {
+        app.proxy_job_id = app.proxy_job_id.wrapping_add(1);
+        app.proxy_job_id
+    };
     let cancel_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let worker_cancel = cancel_flag.clone();
     let (tx, rx) = std::sync::mpsc::channel();
@@ -292,6 +296,7 @@ pub(crate) fn start_proxy_job(app: &mut KagariApp, ctx: &egui::Context, layer_id
         let finish = |proxy_path: Result<String, String>| {
             let _ = tx.send(crate::app_state::ProxyJobMessage::Finished(
                 crate::app_state::ProxyJobResult {
+                    job_id,
                     composition_name,
                     layer_id,
                     layer_idx,
@@ -318,6 +323,7 @@ pub(crate) fn start_proxy_job(app: &mut KagariApp, ctx: &egui::Context, layer_id
             if due {
                 last_sent.set(Some(now));
                 let _ = tx_progress.send(crate::app_state::ProxyJobMessage::Progress {
+                    job_id,
                     done,
                     total,
                 });
@@ -340,17 +346,22 @@ pub(crate) fn start_proxy_job(app: &mut KagariApp, ctx: &egui::Context, layer_id
 /// final message attaches the proxy path to the matching layer (unless the
 /// user requested cancel — that always wins over a racing completion).
 pub(crate) fn poll_proxy_job(app: &mut KagariApp, ctx: &egui::Context) {
+    let current_job_id = app.proxy_job_id;
     loop {
         let message = match app.proxy_job_rx.as_ref() {
             Some(rx) => rx.try_recv(),
             None => return,
         };
         match message {
-            Ok(crate::app_state::ProxyJobMessage::Progress { done, total }) => {
-                app.proxy_job_progress = Some((done, total));
+            Ok(crate::app_state::ProxyJobMessage::Progress { job_id, done, total }) => {
+                if job_id == current_job_id {
+                    app.proxy_job_progress = Some((done, total));
+                }
             }
             Ok(crate::app_state::ProxyJobMessage::Finished(result)) => {
-                handle_proxy_job_finished(app, result);
+                if result.job_id == current_job_id {
+                    handle_proxy_job_finished(app, result);
+                }
                 return;
             }
             Err(std::sync::mpsc::TryRecvError::Empty) => {
@@ -472,6 +483,7 @@ mod tests {
 
     fn finished_message(comp_name: String, layer_id: String) -> crate::app_state::ProxyJobMessage {
         crate::app_state::ProxyJobMessage::Finished(crate::app_state::ProxyJobResult {
+            job_id: 0,
             composition_name: comp_name,
             layer_id,
             layer_idx: 0,
@@ -534,6 +546,7 @@ mod tests {
         let mut app = KagariApp::default();
         let (tx, rx) = std::sync::mpsc::channel();
         tx.send(crate::app_state::ProxyJobMessage::Progress {
+            job_id: 0,
             done: 5,
             total: 10,
         })

@@ -297,6 +297,7 @@ pub enum QuadTrackPurpose {
 /// Result of a background proxy-generation job: the worker renders the
 /// low-resolution media off the UI thread and reports the proxy path back.
 pub struct ProxyJobResult {
+    pub job_id: u64,
     pub composition_name: String,
     pub layer_id: String,
     pub layer_idx: usize,
@@ -307,7 +308,7 @@ pub struct ProxyJobResult {
 /// Messages streamed from the proxy worker thread: periodic `(done, total)`
 /// progress updates and exactly one [`ProxyJobMessage::Finished`].
 pub enum ProxyJobMessage {
-    Progress { done: u32, total: u32 },
+    Progress { job_id: u64, done: u32, total: u32 },
     Finished(ProxyJobResult),
 }
 

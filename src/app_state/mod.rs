@@ -325,6 +325,7 @@ pub struct KagariApp {
     pub quad_track_rx: Option<std::sync::mpsc::Receiver<QuadTrackJobResult>>,
     pub quad_track_cancel_flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     /// Background proxy generation: worker renders low-res media off the UI thread.
+    pub proxy_job_id: u64,
     pub proxy_job_rx: Option<std::sync::mpsc::Receiver<ProxyJobMessage>>,
     pub proxy_job_cancel_flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     /// In-flight proxy job identity (layer id + resolution label) for progress display.

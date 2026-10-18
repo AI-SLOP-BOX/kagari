@@ -215,6 +215,7 @@ impl Default for KagariApp {
             camera_solve_target: None,
             quad_track_rx: None,
             quad_track_cancel_flag: None,
+            proxy_job_id: 0,
             proxy_job_rx: None,
             proxy_job_cancel_flag: None,
             proxy_job_label: None,

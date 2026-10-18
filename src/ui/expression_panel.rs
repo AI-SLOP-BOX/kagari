@@ -119,9 +119,8 @@ pub fn draw_expression_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
             .desired_width(ui.available_width()),
     );
 
-    // The panel displays one expression at a time, so a single-entry cache
-    // keeps compilation tied to source edits without growing with project size.
-    let syntax_cache_id = egui::Id::new("expression_syntax_cache");
+    // Scope the syntax cache to the specific layer and property to prevent cross-property pollution.
+    let syntax_cache_id = egui::Id::new(("expression_syntax_cache", layer_idx, selected_prop));
     let syntax_status = ui
         .ctx()
         .data(|data| data.get_temp::<(String, Result<(), String>)>(syntax_cache_id));
