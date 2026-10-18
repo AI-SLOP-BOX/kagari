@@ -575,6 +575,25 @@ fn build_effect(
             },
             enabled: true,
         },
+        "SSAO" => Effect {
+            id: format!("ssao_{len}"),
+            name: "SSAO".into(),
+            effect_type: EffectType::SSAO {
+                radius: Animatable::new_constant(8.0),
+                strength: Animatable::new_constant(1.5),
+            },
+            enabled: true,
+        },
+        "Z-Depth Fog" => Effect {
+            id: format!("z_fog_{len}"),
+            name: "Z-Depth Fog".into(),
+            effect_type: EffectType::ZDepthFog {
+                fog_color: Animatable::new_constant([0.7, 0.75, 0.85, 1.0]),
+                fog_near: Animatable::new_constant(0.1),
+                fog_far: Animatable::new_constant(0.9),
+            },
+            enabled: true,
+        },
         _ => return None,
     };
     Some(e)

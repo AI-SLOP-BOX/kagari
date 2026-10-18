@@ -517,6 +517,69 @@ pub fn draw(
                 },
             );
         }
+        EffectType::SSAO { radius, strength } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Sampling Radius",
+                radius,
+                |ui, v| {
+                    crate::ui::kui::slider(ui, v, 1.0..=64.0, " px");
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Occlusion Strength",
+                strength,
+                |ui, v| {
+                    crate::ui::kui::slider(ui, v, 0.0..=5.0, "");
+                },
+            );
+        }
+        EffectType::ZDepthFog {
+            fog_color,
+            fog_near,
+            fog_far,
+        } => {
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Fog Color",
+                fog_color,
+                |ui, v| {
+                    ui.color_edit_button_rgba_unmultiplied(v);
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Near Distance",
+                fog_near,
+                |ui, v| {
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
+                },
+            );
+            draw_prop(
+                ui,
+                current_frame,
+                project_changed,
+                next_frame,
+                "Far Distance",
+                fog_far,
+                |ui, v| {
+                    crate::ui::kui::slider(ui, v, 0.0..=1.0, "");
+                },
+            );
+        }
         _ => {}
     }
 }

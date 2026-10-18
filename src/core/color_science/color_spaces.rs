@@ -9,6 +9,26 @@ pub enum WorkingColorSpace {
     AcesCG,
 }
 
+impl WorkingColorSpace {
+    pub const ALL: [WorkingColorSpace; 5] = [
+        WorkingColorSpace::Rec709,
+        WorkingColorSpace::DisplayP3,
+        WorkingColorSpace::Rec2020,
+        WorkingColorSpace::LinearSRGB,
+        WorkingColorSpace::AcesCG,
+    ];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            WorkingColorSpace::Rec709 => "Rec.709 / sRGB",
+            WorkingColorSpace::DisplayP3 => "Display P3",
+            WorkingColorSpace::Rec2020 => "Rec.2020 (UHDTV)",
+            WorkingColorSpace::LinearSRGB => "Linear sRGB",
+            WorkingColorSpace::AcesCG => "ACEScg (AP1)",
+        }
+    }
+}
+
 /// Converts sRGB Gamma (2.2 / standard transfer) to Linear RGB.
 pub fn srgb_to_linear(v: f32) -> f32 {
     let v = v.clamp(0.0, 1.0);

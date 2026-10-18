@@ -33,6 +33,8 @@ pub(super) fn apply(
             | EffectType::StrobeLight { .. }
             | EffectType::CCPixelPolly { .. }
             | EffectType::BilateralFilter { .. }
+            | EffectType::SSAO { .. }
+            | EffectType::ZDepthFog { .. }
     ) {
         return false;
     }
@@ -456,6 +458,43 @@ pub(super) fn apply(
             crate::core::edge_aware_filters::apply_bilateral_filter(
                 pixels, width, height, r, ss, cs,
             );
+        }
+        EffectType::SSAO { radius, strength } => {
+            let r = radius.evaluate(frame).round().clamp(1.0, 64.0) as u32;
+            let s = strength.evaluate(frame).clamp(0.0, 5.0);
+            // Construct luminance-based depth buffer approximation if explicit z-buffer isn't attached
+            let mut depth_buf = vec![128u8; pixels.len()];
+            for (px, d) in pixels.as_chunks::<4>().0.iter().zip(depth_buf.as_chunks_mut::<4>().0.iter_mut()) {
+                let lum = (px[0] as u32 * 54 + px[1] as u32 * 183 + px[2] as u32 * 19) >> 8;
+                d[0] = lum as u8;
+                d[1] = lum as u8;
+                d[2] = lum as u8;
+                d[3] = 255;
+            }
+            crate::core::ae_effects_pack_v25::apply_ssao_approx(pixels, width, height, &depth_buf, r, s);
+        }
+        EffectType::ZDepthFog {
+            fog_color,
+            fog_near,
+            fog_far,
+        } => {
+            let col = fog_color.evaluate(frame);
+            let fog_rgb = [
+                (col[0] * 255.0).clamp(0.0, 255.0) as u8,
+                (col[1] * 255.0).clamp(0.0, 255.0) as u8,
+                (col[2] * 255.0).clamp(0.0, 255.0) as u8,
+            ];
+            let near = fog_near.evaluate(frame).clamp(0.0, 1.0);
+            let far = fog_far.evaluate(frame).clamp(near + 0.001, 1.0);
+            let mut depth_buf = vec![128u8; pixels.len()];
+            for (px, d) in pixels.as_chunks::<4>().0.iter().zip(depth_buf.as_chunks_mut::<4>().0.iter_mut()) {
+                let lum = (px[0] as u32 * 54 + px[1] as u32 * 183 + px[2] as u32 * 19) >> 8;
+                d[0] = lum as u8;
+                d[1] = lum as u8;
+                d[2] = lum as u8;
+                d[3] = 255;
+            }
+            crate::core::ae_effects_pack_v25::apply_z_depth_fog(pixels, &depth_buf, fog_rgb, near, far);
         }
         _ => unreachable!(),
     }

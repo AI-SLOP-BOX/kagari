@@ -6,30 +6,86 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
     app.ensure_panel_edit_snapshot("color_management", ui);
     let active_lut_path = app.color_lut_path.clone();
     let active_lut_mode = app.color_lut_mode;
-    let (comp_bg, comp_shutter, comp_name) = {
+    let (comp_bg, comp_shutter, comp_name, comp_space, comp_depth) = {
         let comp = app.history.current().active_composition();
-        (comp.background_color, comp.motion_blur_shutter_angle, comp.name.clone())
+        (
+            comp.background_color,
+            comp.motion_blur_shutter_angle,
+            comp.name.clone(),
+            comp.working_color_space,
+            comp.bit_depth,
+        )
     };
     let mut pending_lut_path = None;
     let mut new_bg = None;
     let mut new_shutter = None;
+    let mut new_space = None;
+    let mut new_depth = None;
 
     crate::ui::kui::section(ui, "Working Color Space");
     let grid = crate::ui::kui::PropertyGrid::new(ui, &["Working Color Space", "Bit Depth"]);
     grid.row(ui, "Working Color Space", |ui| {
-        crate::ui::kui::secondary(ui, "Not applied (color transform not implemented)");
+        let mut current_space = comp_space;
+        egui::ComboBox::from_id_salt("comp_working_color_space")
+            .selected_text(current_space.label())
+            .show_ui(ui, |ui| {
+                for space in crate::core::color_science::WorkingColorSpace::ALL {
+                    if ui.selectable_value(&mut current_space, space, space.label()).clicked() {
+                        new_space = Some(current_space);
+                    }
+                }
+            });
     });
 
     grid.row(ui, "Bit Depth", |ui| {
-        crate::ui::kui::secondary(ui, "8-bit output (16/32-bit processing unsupported)");
+        let mut current_depth = comp_depth;
+        egui::ComboBox::from_id_salt("comp_bit_depth")
+            .selected_text(current_depth.label())
+            .show_ui(ui, |ui| {
+                for depth in [
+                    crate::core::color_science::BitDepth::EightBit,
+                    crate::core::color_science::BitDepth::SixteenBit,
+                    crate::core::color_science::BitDepth::ThirtyTwoBitFloat,
+                ] {
+                    if ui.selectable_value(&mut current_depth, depth, depth.label()).clicked() {
+                        new_depth = Some(current_depth);
+                    }
+                }
+            });
     });
 
     crate::ui::kui::section(ui, "Display");
     let display_grid = crate::ui::kui::PropertyGrid::new(ui, &["Display Simulation"]);
     display_grid.row(ui, "Display Simulation", |ui| {
-        crate::ui::kui::secondary(ui, "Unsupported");
+        let mut lut_mode = active_lut_mode;
+        egui::ComboBox::from_id_salt("display_simulation_mode")
+            .selected_text(match lut_mode {
+                0 => "Standard (sRGB Display)",
+                1 => "Gamma 2.2 Curve",
+                2 => "ACES RRT+ODT Film Tonemap",
+                3 => "Custom 3D LUT / OCIO",
+                _ => "Custom",
+            })
+            .show_ui(ui, |ui| {
+                if ui.selectable_value(&mut lut_mode, 0, "Standard (sRGB Display)").clicked() {
+                    app.color_lut_mode = 0;
+                    crate::core::frame_cache::bump_version();
+                }
+                if ui.selectable_value(&mut lut_mode, 1, "Gamma 2.2 Curve").clicked() {
+                    app.color_lut_mode = 1;
+                    crate::core::frame_cache::bump_version();
+                }
+                if ui.selectable_value(&mut lut_mode, 2, "ACES RRT+ODT Film Tonemap").clicked() {
+                    app.color_lut_mode = 2;
+                    crate::core::frame_cache::bump_version();
+                }
+                if ui.selectable_value(&mut lut_mode, 3, "Custom 3D LUT / OCIO").clicked() {
+                    app.color_lut_mode = 3;
+                    crate::core::frame_cache::bump_version();
+                }
+            });
     });
-    crate::ui::kui::caption(ui, "Color space conversion and display simulation are not applied yet. Only the loaded LUT affects the preview.");
+    crate::ui::kui::caption(ui, "Working color space converts scene pixels into the monitor display profile. ACES filmic tonemapping provides film highlight roll-off.");
 
     crate::ui::kui::section(ui, "Background");
     let background_grid = crate::ui::kui::PropertyGrid::new(ui, &["Color"]);
@@ -76,11 +132,46 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
     crate::ui::kui::panel(ui, |ui| {
         let grid = crate::ui::kui::PropertyGrid::new(ui, &["Input Transform (IDT)"]);
         grid.row(ui, "Input Transform (IDT)", |ui| {
-            crate::ui::kui::secondary(ui, "Unsupported");
+            let mut current_space = comp_space;
+            egui::ComboBox::from_id_salt("ocio_idt_select")
+                .selected_text(current_space.label())
+                .show_ui(ui, |ui| {
+                    for space in crate::core::color_science::WorkingColorSpace::ALL {
+                        if ui.selectable_value(&mut current_space, space, space.label()).clicked() {
+                            new_space = Some(current_space);
+                        }
+                    }
+                });
         });
         let grid = crate::ui::kui::PropertyGrid::new(ui, &["Output Transform (ODT)"]);
         grid.row(ui, "Output Transform (ODT)", |ui| {
-            crate::ui::kui::secondary(ui, "Unsupported");
+            let mut lut_mode = active_lut_mode;
+            egui::ComboBox::from_id_salt("ocio_odt_select")
+                .selected_text(match lut_mode {
+                    0 => "Rec.709 / sRGB (Standard Display)",
+                    1 => "Gamma 2.2 Output",
+                    2 => "ACES RRT+ODT Filmic",
+                    3 => "Custom 3D LUT / OCIO Display",
+                    _ => "Custom",
+                })
+                .show_ui(ui, |ui| {
+                    if ui.selectable_value(&mut lut_mode, 0, "Rec.709 / sRGB (Standard Display)").clicked() {
+                        app.color_lut_mode = 0;
+                        crate::core::frame_cache::bump_version();
+                    }
+                    if ui.selectable_value(&mut lut_mode, 1, "Gamma 2.2 Output").clicked() {
+                        app.color_lut_mode = 1;
+                        crate::core::frame_cache::bump_version();
+                    }
+                    if ui.selectable_value(&mut lut_mode, 2, "ACES RRT+ODT Filmic").clicked() {
+                        app.color_lut_mode = 2;
+                        crate::core::frame_cache::bump_version();
+                    }
+                    if ui.selectable_value(&mut lut_mode, 3, "Custom 3D LUT / OCIO Display").clicked() {
+                        app.color_lut_mode = 3;
+                        crate::core::frame_cache::bump_version();
+                    }
+                });
         });
 
         ui.horizontal(|ui| {
@@ -224,6 +315,12 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
     }
     if let Some(shutter) = new_shutter {
         app.dispatch(crate::app_state::AppCommand::SetMotionBlurShutterAngle(shutter));
+    }
+    if let Some(space) = new_space {
+        app.dispatch(crate::app_state::AppCommand::SetWorkingColorSpace(space));
+    }
+    if let Some(depth) = new_depth {
+        app.dispatch(crate::app_state::AppCommand::SetBitDepth(depth));
     }
 }
 

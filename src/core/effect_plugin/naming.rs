@@ -136,6 +136,8 @@ pub fn effect_name(effect_type: &EffectType) -> &'static str {
         EffectType::StrobeLight { .. } => "Strobe Light",
         EffectType::CCPixelPolly { .. } => "CC Pixel Polly",
         EffectType::BilateralFilter { .. } => "Bilateral Filter",
+        EffectType::SSAO { .. } => "SSAO",
+        EffectType::ZDepthFog { .. } => "Z-Depth Fog",
     }
 }
 
@@ -275,5 +277,7 @@ pub fn effect_type_id(effect_type: &EffectType) -> &'static str {
         EffectType::StrobeLight { .. } => "strobe_light",
         EffectType::CCPixelPolly { .. } => "cc_pixel_polly",
         EffectType::BilateralFilter { .. } => "bilateral_filter",
+        EffectType::SSAO { .. } => "ssao",
+        EffectType::ZDepthFog { .. } => "z_depth_fog",
     }
 }

@@ -158,6 +158,7 @@ pub fn draw_file_menu(app: &mut crate::KagariApp, ctx: &egui::Context, ui: &mut 
         app.export.show_export_dialog = true;
         ui.close_menu();
     }
+    draw_export_exr(app, ui);
     if ui
         .button("Quick Export Active Comp")
         .on_hover_text("Export the active composition to MP4 with current settings (no dialog)")
@@ -392,6 +393,56 @@ fn draw_export_mlt(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
                         .error(format!("Failed to save MLT file: {}", err)),
                 },
                 Err(err) => app.toasts.error(err),
+            }
+        }
+        ui.close_menu();
+    }
+}
+
+fn draw_export_exr(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
+    if ui
+        .button("Export Frame as OpenEXR (.exr)...")
+        .on_hover_text("Export the current frame as a 32-bit linear floating point OpenEXR image")
+        .clicked()
+    {
+        let comp = app.history.current().active_composition();
+        let frame = app.playback.current_frame.clamp(0, comp.duration_frames.saturating_sub(1));
+        let default_name = format!("{}_frame_{:05}.exr", comp.name, frame);
+        if let Some(path) = rfd::FileDialog::new()
+            .add_filter("OpenEXR High Dynamic Range Image", &["exr"])
+            .set_file_name(default_name)
+            .save_file()
+        {
+            let width = comp.width;
+            let height = comp.height;
+            let f32_pixels = crate::core::software_renderer::render_frame_to_pixels_f32(
+                comp,
+                frame,
+                width,
+                height,
+                0.0,
+                app.color_lut_mode,
+            );
+            if f32_pixels.is_empty() {
+                app.toasts.error("Frame render failed: empty buffer");
+            } else {
+                let mut flat_rgba = Vec::with_capacity(f32_pixels.len() * 4);
+                for px in f32_pixels {
+                    flat_rgba.extend_from_slice(&px);
+                }
+                let image = crate::core::exr_writer::ExrImage::rgba_f32(width, height, &flat_rgba);
+                match crate::core::exr_writer::write_exr_file(&path, &image) {
+                    Ok(()) => {
+                        app.toasts.info(format!(
+                            "Exported OpenEXR frame {}: {}",
+                            frame,
+                            path.file_name().unwrap_or_default().to_string_lossy()
+                        ));
+                    }
+                    Err(err) => {
+                        app.toasts.error(format!("Failed to write EXR file: {}", err));
+                    }
+                }
             }
         }
         ui.close_menu();

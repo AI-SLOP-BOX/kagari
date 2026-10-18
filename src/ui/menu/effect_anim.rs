@@ -131,6 +131,22 @@ pub fn draw_effect_menu(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
             apply_effect_by_name(app, "Strobe Light");
             ui.close_menu();
         }
+        if ui
+            .button("SSAO")
+            .on_hover_text("Screen-Space Ambient Occlusion contact shadows")
+            .clicked()
+        {
+            apply_effect_by_name(app, "SSAO");
+            ui.close_menu();
+        }
+        if ui
+            .button("Z-Depth Fog")
+            .on_hover_text("Atmospheric depth haze and distance fog")
+            .clicked()
+        {
+            apply_effect_by_name(app, "Z-Depth Fog");
+            ui.close_menu();
+        }
     });
     ui.menu_button("Distort", |ui| {
         for name in &["Twirl", "Bulge", "Mesh Warp", "Chromatic Aberration"] {

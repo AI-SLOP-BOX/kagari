@@ -433,6 +433,19 @@ pub fn populate_extended_params_ref<'a>(
             push!("Spatial Sigma", spatial_sigma, Scalar);
             push!("Color Sigma", color_sigma, Scalar);
         }
+        EffectType::SSAO { radius, strength } => {
+            push!("Radius", radius, Scalar);
+            push!("Strength", strength, Scalar);
+        }
+        EffectType::ZDepthFog {
+            fog_color,
+            fog_near,
+            fog_far,
+        } => {
+            push!("Fog Color", fog_color, Color);
+            push!("Near Distance", fog_near, Scalar);
+            push!("Far Distance", fog_far, Scalar);
+        }
         EffectType::CustomShader { .. } => {}
         #[allow(unreachable_patterns)]
         _ => {}

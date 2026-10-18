@@ -101,6 +101,9 @@ pub struct Composition {
     /// Composition color depth: 8bpc integer, 16bpc float, or 32bpc scene-linear float.
     #[serde(default)]
     pub bit_depth: crate::core::color_science::BitDepth,
+    /// Composition working color space (Rec.709, Display P3, Rec.2020, Linear sRGB, ACEScg).
+    #[serde(default)]
+    pub working_color_space: crate::core::color_science::WorkingColorSpace,
     /// Composition-level proxy settings for preview speed.
     #[serde(default)]
     pub comp_proxy: crate::core::proxy::CompProxy,
@@ -136,6 +139,7 @@ impl Composition {
 
             dither_output: false,
             bit_depth: crate::core::color_science::BitDepth::EightBit,
+            working_color_space: crate::core::color_science::WorkingColorSpace::Rec709,
             comp_proxy: crate::core::proxy::CompProxy::default(),
         }
     }

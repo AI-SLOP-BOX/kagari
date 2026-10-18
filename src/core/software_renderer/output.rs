@@ -19,6 +19,17 @@ pub(super) fn apply_output_transform(
             let mut green = pixel[1] as f32 / 255.0 * exposure_multiplier;
             let mut blue = pixel[2] as f32 / 255.0 * exposure_multiplier;
 
+            if comp.working_color_space != crate::core::color_science::WorkingColorSpace::Rec709 {
+                let converted = crate::core::color_science::convert_color_space(
+                    [red, green, blue],
+                    comp.working_color_space,
+                    crate::core::color_science::WorkingColorSpace::Rec709,
+                );
+                red = converted[0];
+                green = converted[1];
+                blue = converted[2];
+            }
+
             if lut_mode == 1 {
                 red = red.powf(2.2);
                 green = green.powf(2.2);

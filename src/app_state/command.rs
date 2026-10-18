@@ -101,6 +101,8 @@ pub enum AppCommand {
     // ------------------------------------------------------------------------
     SetBackgroundColor([f32; 4]),
     SetMotionBlurShutterAngle(f32),
+    SetWorkingColorSpace(crate::core::color_science::WorkingColorSpace),
+    SetBitDepth(crate::core::color_science::BitDepth),
 
     // ------------------------------------------------------------------------
     // Masks
@@ -455,6 +457,22 @@ impl crate::app_state::KagariApp {
                     crate::core::editor::EditorSession::new(&mut self.history, "Change Shutter Angle");
                 session.current_mut().active_composition_mut().motion_blur_shutter_angle = angle;
                 session.commit();
+                self.notify_project_mutation();
+            }
+            AppCommand::SetWorkingColorSpace(space) => {
+                let mut session =
+                    crate::core::editor::EditorSession::new(&mut self.history, "Change Working Color Space");
+                session.current_mut().active_composition_mut().working_color_space = space;
+                session.commit();
+                crate::core::frame_cache::bump_version();
+                self.notify_project_mutation();
+            }
+            AppCommand::SetBitDepth(depth) => {
+                let mut session =
+                    crate::core::editor::EditorSession::new(&mut self.history, "Change Bit Depth");
+                session.current_mut().active_composition_mut().bit_depth = depth;
+                session.commit();
+                crate::core::frame_cache::bump_version();
                 self.notify_project_mutation();
             }
             AppCommand::AddMaskToLayer { layer_idx, mask } => {

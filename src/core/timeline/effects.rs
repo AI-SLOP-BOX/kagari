@@ -757,6 +757,17 @@ pub enum EffectType {
         spatial_sigma: Animatable<f32>,
         color_sigma: Animatable<f32>,
     },
+    /// Screen-Space Ambient Occlusion (SSAO) contact shadows.
+    SSAO {
+        radius: Animatable<f32>,
+        strength: Animatable<f32>,
+    },
+    /// Atmospheric depth haze and distance fog based on luminance/depth.
+    ZDepthFog {
+        fog_color: Animatable<[f32; 4]>,
+        fog_near: Animatable<f32>,
+        fog_far: Animatable<f32>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

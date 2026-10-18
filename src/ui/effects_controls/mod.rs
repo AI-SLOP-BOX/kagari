@@ -137,7 +137,9 @@ pub fn draw_effect_type_ui(
         | EffectType::LensFlare { .. }
         | EffectType::OpticalFlares { .. }
         | EffectType::ReflectionMap { .. }
-        | EffectType::StrobeLight { .. } => {
+        | EffectType::StrobeLight { .. }
+        | EffectType::SSAO { .. }
+        | EffectType::ZDepthFog { .. } => {
             stylize::draw(effect_type, ui, current_frame, project_changed, next_frame);
         }
 
