@@ -647,6 +647,63 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 comp.as_deref(),
             )?;
         }
+        Commands::Story {
+            project,
+            title,
+            subtitle,
+            audio,
+            footage,
+            width,
+            height,
+            fps,
+            duration_sec,
+            theme,
+        } => {
+            render::cmd_story(
+                &project,
+                &title,
+                &subtitle,
+                audio.as_deref(),
+                footage.as_deref(),
+                width,
+                height,
+                fps,
+                duration_sec,
+                &theme,
+            )?;
+        }
+        Commands::Critique {
+            project,
+            comp,
+            sample_step,
+            json,
+        } => {
+            render::cmd_critique(
+                &project,
+                comp.as_deref(),
+                sample_step,
+                json,
+            )?;
+        }
+        Commands::Cinematic {
+            project,
+            preset,
+            grain,
+            letterbox,
+            aberration,
+            vignette,
+            comp,
+        } => {
+            render::cmd_cinematic(
+                &project,
+                &preset,
+                grain,
+                letterbox,
+                aberration,
+                vignette,
+                comp.as_deref(),
+            )?;
+        }
     }
 
     Ok(())

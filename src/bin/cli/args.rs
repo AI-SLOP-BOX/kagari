@@ -881,4 +881,79 @@ pub(super) enum Commands {
         #[arg(short, long)]
         comp: Option<String>,
     },
+
+    /// Procedural Story & Scene Director: auto-compose full video scenes (intro, title, climax, outro) from music & narrative
+    Story {
+        /// Path to project JSON file (created if not exists)
+        #[arg(short, long)]
+        project: String,
+        /// Project / video production title
+        #[arg(short = 't', long, default_value = "Masterpiece")]
+        title: String,
+        /// Subtitle or narrative logline
+        #[arg(long, default_value = "A Cinematic Vision")]
+        subtitle: String,
+        /// Background music or soundtrack file
+        #[arg(short = 'a', long)]
+        audio: Option<String>,
+        /// Primary video / image footage media path
+        #[arg(short = 'f', long)]
+        footage: Option<String>,
+        /// Composition width (default: 1920)
+        #[arg(long, default_value = "1920")]
+        width: u32,
+        /// Composition height (default: 1080)
+        #[arg(long, default_value = "1080")]
+        height: u32,
+        /// Frame rate fps (default: 30)
+        #[arg(long, default_value = "30")]
+        fps: u32,
+        /// Total duration in seconds (default: 15)
+        #[arg(short = 'd', long, default_value = "15")]
+        duration_sec: u32,
+        /// Visual theme: cyberpunk, cinematic, anime, corporate, minimal
+        #[arg(long, default_value = "cinematic")]
+        theme: String,
+    },
+
+    /// Autonomous Visual & Rhythm Critique: inspect frames for contrast, clipping, sharpness, audio sync, and emit actionable tuning suggestions
+    Critique {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+        /// Target composition name or index (default: active comp)
+        #[arg(short, long)]
+        comp: Option<String>,
+        /// Sample frame interval for critique inspection (default: 15)
+        #[arg(long, default_value = "15")]
+        sample_step: u32,
+        /// Emit machine-readable JSON critique report with specific tuning scores
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Cinematic Composite Finishing: add 35mm film grain, anamorphic letterbox, lens chromatic aberration, and vignette
+    Cinematic {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+        /// Preset style: 35mm, vintage, modern-action, anamorphic, noir
+        #[arg(long, default_value = "35mm")]
+        preset: String,
+        /// Physical 35mm film grain intensity (0.0..1.0, default: 0.15)
+        #[arg(long, default_value = "0.15")]
+        grain: f32,
+        /// Anamorphic 2.39:1 letterbox aspect ratio
+        #[arg(long, default_value = "true")]
+        letterbox: bool,
+        /// Lens chromatic aberration fringe offset in pixels (default: 2.5)
+        #[arg(long, default_value = "2.5")]
+        aberration: f32,
+        /// Lens edge vignette darkening intensity (0.0..1.0, default: 0.35)
+        #[arg(long, default_value = "0.35")]
+        vignette: f32,
+        /// Target composition name or index (default: active comp)
+        #[arg(short, long)]
+        comp: Option<String>,
+    },
 }
