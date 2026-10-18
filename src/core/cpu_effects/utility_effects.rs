@@ -11,6 +11,7 @@ pub(super) fn apply(
             | EffectType::CustomShader { .. }
             | EffectType::MergePaths { .. }
             | EffectType::OffsetPath { .. }
+            | EffectType::CustomPlugin { .. }
     ) {
         return false;
     }
@@ -80,6 +81,11 @@ pub(super) fn apply(
             if offset != 0.0 {
                 crate::core::ae_effects_pack::apply_simple_choker(pixels, offset);
             }
+        }
+        EffectType::CustomPlugin { plugin_id } => {
+            let time_sec = if fps > 0 { frame as f32 / fps as f32 } else { 0.0 };
+            crate::core::effect_plugin::registry::global_custom_plugins()
+                .process_layer(plugin_id, pixels, width, height, frame, time_sec);
         }
         _ => unreachable!(),
     }

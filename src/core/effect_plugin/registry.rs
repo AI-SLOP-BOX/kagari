@@ -58,6 +58,12 @@ pub struct CustomPluginRegistry {
     plugins: RwLock<HashMap<String, Box<dyn CustomPixelEffectPlugin>>>,
 }
 
+static GLOBAL_CUSTOM_PLUGINS: std::sync::OnceLock<CustomPluginRegistry> = std::sync::OnceLock::new();
+
+pub fn global_custom_plugins() -> &'static CustomPluginRegistry {
+    GLOBAL_CUSTOM_PLUGINS.get_or_init(CustomPluginRegistry::new)
+}
+
 impl Default for CustomPluginRegistry {
     fn default() -> Self {
         Self::new()

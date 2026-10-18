@@ -237,5 +237,11 @@ pub fn draw_effect_type_ui(
         EffectType::ChannelCombiner { .. } => {
             channel_util::draw(effect_type, ui, current_frame, project_changed, next_frame);
         }
+
+        // ── 3rd-Party Native / Custom Plugin ──
+        EffectType::CustomPlugin { plugin_id } => {
+            ui.label(format!("Plugin ID: {plugin_id}"));
+            ui.label("Managed by Native Plugin Host");
+        }
     }
 }

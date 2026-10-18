@@ -768,6 +768,10 @@ pub enum EffectType {
         fog_near: Animatable<f32>,
         fog_far: Animatable<f32>,
     },
+    /// Dynamic 3rd-party C++ / AE / native plugin effect.
+    CustomPlugin {
+        plugin_id: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

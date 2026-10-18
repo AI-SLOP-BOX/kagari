@@ -138,6 +138,7 @@ pub fn effect_name(effect_type: &EffectType) -> &'static str {
         EffectType::BilateralFilter { .. } => "Bilateral Filter",
         EffectType::SSAO { .. } => "SSAO",
         EffectType::ZDepthFog { .. } => "Z-Depth Fog",
+        EffectType::CustomPlugin { .. } => "Custom Plugin",
     }
 }
 
@@ -279,5 +280,6 @@ pub fn effect_type_id(effect_type: &EffectType) -> &'static str {
         EffectType::BilateralFilter { .. } => "bilateral_filter",
         EffectType::SSAO { .. } => "ssao",
         EffectType::ZDepthFog { .. } => "z_depth_fog",
+        EffectType::CustomPlugin { .. } => "custom_plugin",
     }
 }

@@ -99,9 +99,20 @@ pub fn draw_comp_settings_dialog(app: &mut KagariApp, ctx: &egui::Context) {
             kui::collapsing_section(ui, "comp_settings_color_management", "Color Management & Working Space", false, |ui| {
                 let color_grid = kui::PropertyGrid::new(ui, &["Working Color Space", "Depth"]);
                 color_grid.row(ui, "Working Color Space", |ui| {
-                    kui::secondary(ui, "Not applied yet");
+                    let before_space = comp.working_color_space;
+                    let options = [
+                        (crate::core::color_science::WorkingColorSpace::Rec709, "Rec.709 / sRGB"),
+                        (crate::core::color_science::WorkingColorSpace::DisplayP3, "Display P3"),
+                        (crate::core::color_science::WorkingColorSpace::Rec2020, "Rec.2020 (UHDTV)"),
+                        (crate::core::color_science::WorkingColorSpace::LinearSRGB, "Linear sRGB"),
+                        (crate::core::color_science::WorkingColorSpace::AcesCG, "ACEScg (AP1)"),
+                    ];
+                    kui::combo(ui, "comp_working_color_space_select", &mut comp.working_color_space, &options);
+                    if comp.working_color_space != before_space {
+                        crate::core::frame_cache::bump_version();
+                    }
                 });
-                kui::caption(ui, "Color-space conversion is not implemented. This control will be enabled when the render pipeline applies the selected transform.");
+                kui::caption(ui, "Working color space converts scene pixels into the target color gamut and monitor display profile.");
 
                 color_grid.row(ui, "Depth", |ui| {
                     let before_depth = comp.bit_depth;

@@ -113,8 +113,7 @@ pub fn apply_mesh_warp(
 /// This is a placeholder - in production, source_layer would be a reference to another layer's rendered pixels.
 /// Here we apply a simple horizontal/vertical displacement based on luminance.
 /// Apply displacement map warp.
-/// source_layer: layer ID used as displacement source (placeholder).
-/// max_horizontal/max_vertical: max displacement in pixels.
+/// Uses the actual professional displacement map kernel with luminance reference channel.
 pub fn apply_displacement_map(
     pixels: &mut [u8],
     width: u32,
@@ -123,44 +122,20 @@ pub fn apply_displacement_map(
     max_horizontal: f32,
     max_vertical: f32,
 ) {
-    // For now, use a procedural displacement pattern
+    let options = crate::core::displacement_map::DisplacementMapOptions {
+        max_horizontal_displacement: max_horizontal,
+        max_vertical_displacement: max_vertical,
+        horizontal_channel: crate::core::displacement_map::DisplacementChannel::Luminance,
+        vertical_channel: crate::core::displacement_map::DisplacementChannel::Luminance,
+        wrap_pixels: false,
+    };
     let orig = pixels.to_vec();
-    let w = width as f32;
-    let h = height as f32;
-
-    for py in 0..height {
-        for px in 0..width {
-            let idx = ((py * width + px) * 4) as usize;
-            if idx + 3 >= orig.len() {
-                continue;
-            }
-
-            // Generate a simple displacement pattern (sine wave)
-            let disp_x = ((px as f32 / w * std::f32::consts::TAU
-                + py as f32 / h * std::f32::consts::PI)
-                .sin()
-                * 0.5
-                + 0.5)
-                * max_horizontal;
-            let disp_y = ((py as f32 / h * std::f32::consts::TAU
-                + px as f32 / w * std::f32::consts::PI)
-                .cos()
-                * 0.5
-                + 0.5)
-                * max_vertical;
-
-            let src_x = (px as f32 - disp_x).round() as i32;
-            let src_y = (py as f32 - disp_y).round() as i32;
-
-            if src_x >= 0 && src_x < width as i32 && src_y >= 0 && src_y < height as i32 {
-                let sidx = ((src_y as u32 * width + src_x as u32) * 4) as usize;
-                if sidx + 3 < orig.len() {
-                    pixels[idx] = orig[sidx];
-                    pixels[idx + 1] = orig[sidx + 1];
-                    pixels[idx + 2] = orig[sidx + 2];
-                    pixels[idx + 3] = orig[sidx + 3];
-                }
-            }
-        }
-    }
+    let displaced = crate::core::displacement_map::apply_displacement_map(
+        &orig,
+        &orig,
+        width,
+        height,
+        &options,
+    );
+    pixels.copy_from_slice(&displaced);
 }
