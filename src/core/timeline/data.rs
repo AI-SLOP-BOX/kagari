@@ -409,16 +409,6 @@ impl LabelColor {
             LabelColor::Purple => [0.70, 0.35, 0.90],
         }
     }
-
-    #[cfg(feature = "gui")]
-    pub fn color32(self) -> eframe::egui::Color32 {
-        let [r, g, b] = self.to_rgb();
-        eframe::egui::Color32::from_rgb(
-            (r * 255.0).round() as u8,
-            (g * 255.0).round() as u8,
-            (b * 255.0).round() as u8,
-        )
-    }
 }
 
 // ─── Expression Engine ─────────────────────────────────────────────────────

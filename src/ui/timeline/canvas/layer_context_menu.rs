@@ -64,7 +64,12 @@ pub fn draw_layer_context_menu(
     // ── Label Color Picker ──
     ui.menu_button("Label Color", |ui| {
         for label_col in LabelColor::ALL {
-            let col = label_col.color32();
+            let [r, g, b] = label_col.to_rgb();
+            let col = egui::Color32::from_rgb(
+                (r * 255.0).round() as u8,
+                (g * 255.0).round() as u8,
+                (b * 255.0).round() as u8,
+            );
             let is_cur = layer.label == label_col;
             let (rect, resp) = ui.allocate_exact_size(egui::vec2(120.0, 18.0), egui::Sense::click());
             if resp.hovered() {
