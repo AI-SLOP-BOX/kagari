@@ -37,6 +37,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             comp,
             output,
             format,
+            frames,
             from,
             to,
             width,
@@ -48,6 +49,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             threads,
             skip_existing,
             mfr,
+            log_format,
             bindings,
             overrides,
         } => {
@@ -56,6 +58,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 comp_ref: comp,
                 output,
                 format,
+                frames,
                 from,
                 to,
                 width,
@@ -67,6 +70,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 threads,
                 skip_existing,
                 mfr,
+                log_format,
                 bindings,
                 overrides,
             })?;

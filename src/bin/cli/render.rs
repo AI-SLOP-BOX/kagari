@@ -4,14 +4,17 @@ use super::*;
 /// Bundled render parameters shared by all export backends.
 struct RenderSpec<'a> {
     output: &'a str,
+    frames: Vec<u32>,
     from: u32,
     to: u32,
+    #[allow(dead_code)]
     step: u32,
     w: u32,
     h: u32,
     exposure: f32,
     lut: u32,
     skip_existing: bool,
+    log_json: bool,
     bindings: &'a std::collections::HashMap<String, f64>,
 }
 
@@ -20,6 +23,7 @@ pub(super) struct RenderArgs {
     pub(super) comp_ref: Option<String>,
     pub(super) output: String,
     pub(super) format: OutputFormat,
+    pub(super) frames: Option<String>,
     pub(super) from: u32,
     pub(super) to: Option<u32>,
     pub(super) width: Option<u32>,
@@ -31,8 +35,44 @@ pub(super) struct RenderArgs {
     pub(super) threads: usize,
     pub(super) skip_existing: bool,
     pub(super) mfr: bool,
+    pub(super) log_format: String,
     pub(super) bindings: Vec<(String, f64)>,
     pub(super) overrides: Vec<(String, String)>,
+}
+
+/// Parse AE / Nuke style frame spec like "1-10,15,20-50" into sorted unique u32 frames.
+fn parse_frame_list(s: &str, max_frame: u32, step: u32) -> Result<Vec<u32>, String> {
+    let mut result = std::collections::BTreeSet::new();
+    let step = step.max(1) as usize;
+    for chunk in s.split(',') {
+        let chunk = chunk.trim();
+        if chunk.is_empty() {
+            continue;
+        }
+        if let Some((start_s, end_s)) = chunk.split_once('-') {
+            let start: u32 = start_s.trim().parse().map_err(|_| format!("Invalid frame number: '{start_s}'"))?;
+            let end: u32 = end_s.trim().parse().map_err(|_| format!("Invalid frame number: '{end_s}'"))?;
+            if start > end {
+                return Err(format!("Invalid range: {start}-{end}"));
+            }
+            if end > max_frame {
+                return Err(format!("Frame {end} exceeds composition duration ({max_frame})"));
+            }
+            for f in (start..=end).step_by(step) {
+                result.insert(f);
+            }
+        } else {
+            let f: u32 = chunk.parse().map_err(|_| format!("Invalid frame number: '{chunk}'"))?;
+            if f > max_frame {
+                return Err(format!("Frame {f} exceeds composition duration ({max_frame})"));
+            }
+            result.insert(f);
+        }
+    }
+    if result.is_empty() {
+        return Err("No frames specified in frame list".to_string());
+    }
+    Ok(result.into_iter().collect())
 }
 
 pub(super) fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Error>> {
@@ -135,21 +175,33 @@ pub(super) fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Err
         .iter()
         .cloned()
         .collect::<std::collections::HashMap<_, _>>();
-    let to = args.to.unwrap_or(comp.duration_frames.saturating_sub(1));
-    if comp.duration_frames == 0 {
-        return Err(format!("Composition '{}' has no frames", comp.name).into());
-    }
-    if args.from > to {
-        return Err(format!("Invalid render range: from {} is after to {to}", args.from).into());
-    }
-    if to >= comp.duration_frames {
-        return Err(format!(
-            "Render frame {to} is outside composition '{}' (0..{})",
-            comp.name,
-            comp.duration_frames - 1
-        )
-        .into());
-    }
+    let max_frame = comp.duration_frames.saturating_sub(1);
+    let step = args.step.max(1);
+    let frames = if let Some(ref s) = args.frames {
+        parse_frame_list(s, max_frame, step)?
+    } else {
+        let to = args.to.unwrap_or(max_frame);
+        if comp.duration_frames == 0 {
+            return Err(format!("Composition '{}' has no frames", comp.name).into());
+        }
+        if args.from > to {
+            return Err(format!("Invalid render range: from {} is after to {to}", args.from).into());
+        }
+        if to >= comp.duration_frames {
+            return Err(format!(
+                "Render frame {to} is outside composition '{}' (0..{})",
+                comp.name,
+                comp.duration_frames - 1
+            )
+            .into());
+        }
+        (args.from..=to).step_by(step as usize).collect()
+    };
+
+    let from = frames.first().copied().unwrap_or(0);
+    let to = frames.last().copied().unwrap_or(0);
+    let log_json = args.log_format.eq_ignore_ascii_case("json");
+
     let width = args.width.unwrap_or(comp.width);
     let height = args.height.unwrap_or(comp.height);
     let max_dimension = kagari_vfx::core::software_renderer::MAX_RENDER_DIMENSION;
@@ -172,27 +224,31 @@ pub(super) fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Err
     }
     let spec = RenderSpec {
         output: &args.output,
-        from: args.from,
+        frames: frames.clone(),
+        from,
         to,
-        step: args.step.max(1),
+        step,
         w: width,
         h: height,
         exposure: args.exposure,
         lut: args.lut,
         skip_existing: args.skip_existing,
+        log_json,
         bindings: &binding_values,
     };
     let format = args.format;
 
-    eprintln!("Rendering composition: {}", comp.name);
-    eprintln!("  Size: {}x{}", spec.w, spec.h);
-    eprintln!(
-        "  Frames: {}..={} ({} frames)",
-        spec.from,
-        spec.to,
-        spec.to.saturating_sub(spec.from) + 1
-    );
-    eprintln!("  Format: {:?}", format);
+    if !log_json {
+        eprintln!("Rendering composition: {}", comp.name);
+        eprintln!("  Size: {}x{}", spec.w, spec.h);
+        eprintln!("  Frames: {} selected (range {}..={})", spec.frames.len(), spec.from, spec.to);
+        eprintln!("  Format: {:?}", format);
+    } else {
+        println!(
+            "{{\"event\":\"start\",\"composition\":\"{}\",\"width\":{},\"height\":{},\"total_frames\":{}}}",
+            comp.name, spec.w, spec.h, spec.frames.len()
+        );
+    }
 
     match format {
         OutputFormat::Mp4 => render_to_mp4(comp, &spec, production.as_ref(), comp_index)?,
@@ -218,26 +274,39 @@ fn render_to_png_sequence_with_bindings(
     spec: &RenderSpec,
 ) -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(spec.output)?;
-    let step = spec.step.max(1) as usize;
-    let frames: Vec<u32> = (spec.from..=spec.to).step_by(step).collect();
-    let total = frames.len();
-    for (idx, &frame) in frames.iter().enumerate() {
+    let total = spec.frames.len();
+    for (idx, &frame) in spec.frames.iter().enumerate() {
         let path = format!("{}/frame_{:05}.png", spec.output, frame);
         if spec.skip_existing && std::path::Path::new(&path).is_file() {
-            eprintln!("  Skipping existing frame {:05} ({})", frame, path);
+            if spec.log_json {
+                println!("{{\"event\":\"skip\",\"frame\":{},\"path\":\"{}\"}}", frame, path);
+            } else {
+                eprintln!("  Skipping existing frame {:05} ({})", frame, path);
+            }
             continue;
         }
+        let t0 = std::time::Instant::now();
         let comp = document
             .composition_for_frame_with_sources(composition_index, frame, spec.bindings)
             .ok_or("composition index out of range")?;
         let pixels = render_frame_to_pixels(&comp, frame, spec.w, spec.h, spec.exposure, spec.lut);
         write_png(&path, &pixels, spec.w, spec.h)?;
+        let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
         let progress = idx + 1;
-        if progress % 10 == 0 || progress == total {
+        if spec.log_json {
+            println!(
+                "{{\"event\":\"frame_done\",\"frame\":{},\"index\":{},\"total\":{},\"duration_ms\":{:.1},\"path\":\"{}\"}}",
+                frame, progress, total, elapsed_ms, path
+            );
+        } else if progress % 10 == 0 || progress == total {
             eprint!("\r  Rendered {}/{} frames", progress, total);
         }
     }
-    eprintln!("\n  Done! Output: {}/", spec.output);
+    if spec.log_json {
+        println!("{{\"event\":\"completed\",\"output\":\"{}\"}}", spec.output);
+    } else {
+        eprintln!("\n  Done! Output: {}/", spec.output);
+    }
     Ok(())
 }
 
@@ -246,15 +315,18 @@ fn render_to_exr_sequence(
     spec: &RenderSpec,
 ) -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(spec.output)?;
-    let step = spec.step.max(1) as usize;
-    let frames: Vec<u32> = (spec.from..=spec.to).step_by(step).collect();
-    let total = frames.len();
-    for (idx, &frame) in frames.iter().enumerate() {
+    let total = spec.frames.len();
+    for (idx, &frame) in spec.frames.iter().enumerate() {
         let path = format!("{}/frame_{:05}.exr", spec.output, frame);
         if spec.skip_existing && std::path::Path::new(&path).is_file() {
-            eprintln!("  Skipping existing frame {:05} ({})", frame, path);
+            if spec.log_json {
+                println!("{{\"event\":\"skip\",\"frame\":{},\"path\":\"{}\"}}", frame, path);
+            } else {
+                eprintln!("  Skipping existing frame {:05} ({})", frame, path);
+            }
             continue;
         }
+        let t0 = std::time::Instant::now();
         let f32_pixels = kagari_vfx::core::software_renderer::render_frame_to_pixels_f32(
             comp,
             frame,
@@ -271,12 +343,22 @@ fn render_to_exr_sequence(
         kagari_vfx::core::exr_writer::write_exr_file(&path, &image)
             .map_err(|e| format!("EXR write error: {e}"))?;
 
+        let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
         let progress = idx + 1;
-        if progress % 10 == 0 || progress == total {
+        if spec.log_json {
+            println!(
+                "{{\"event\":\"frame_done\",\"frame\":{},\"index\":{},\"total\":{},\"duration_ms\":{:.1},\"path\":\"{}\"}}",
+                frame, progress, total, elapsed_ms, path
+            );
+        } else if progress % 10 == 0 || progress == total {
             eprint!("\r  Rendered {}/{} frames", progress, total);
         }
     }
-    eprintln!("\n  Done! Output: {}/", spec.output);
+    if spec.log_json {
+        println!("{{\"event\":\"completed\",\"output\":\"{}\"}}", spec.output);
+    } else {
+        eprintln!("\n  Done! Output: {}/", spec.output);
+    }
     Ok(())
 }
 
@@ -285,24 +367,37 @@ fn render_to_png_sequence(
     spec: &RenderSpec,
 ) -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(spec.output)?;
-    let step = spec.step.max(1) as usize;
-    let frames: Vec<u32> = (spec.from..=spec.to).step_by(step).collect();
-    let total = frames.len();
-    for (idx, &frame) in frames.iter().enumerate() {
+    let total = spec.frames.len();
+    for (idx, &frame) in spec.frames.iter().enumerate() {
         let path = format!("{}/frame_{:05}.png", spec.output, frame);
         if spec.skip_existing && std::path::Path::new(&path).is_file() {
-            eprintln!("  Skipping existing frame {:05} ({})", frame, path);
+            if spec.log_json {
+                println!("{{\"event\":\"skip\",\"frame\":{},\"path\":\"{}\"}}", frame, path);
+            } else {
+                eprintln!("  Skipping existing frame {:05} ({})", frame, path);
+            }
             continue;
         }
+        let t0 = std::time::Instant::now();
         let pixels = render_frame_to_pixels(comp, frame, spec.w, spec.h, spec.exposure, spec.lut);
         write_png(&path, &pixels, spec.w, spec.h)?;
 
+        let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
         let progress = idx + 1;
-        if progress % 10 == 0 || progress == total {
+        if spec.log_json {
+            println!(
+                "{{\"event\":\"frame_done\",\"frame\":{},\"index\":{},\"total\":{},\"duration_ms\":{:.1},\"path\":\"{}\"}}",
+                frame, progress, total, elapsed_ms, path
+            );
+        } else if progress % 10 == 0 || progress == total {
             eprint!("\r  Rendered {}/{} frames", progress, total);
         }
     }
-    eprintln!("\n  Done! Output: {}/", spec.output);
+    if spec.log_json {
+        println!("{{\"event\":\"completed\",\"output\":\"{}\"}}", spec.output);
+    } else {
+        eprintln!("\n  Done! Output: {}/", spec.output);
+    }
     Ok(())
 }
 

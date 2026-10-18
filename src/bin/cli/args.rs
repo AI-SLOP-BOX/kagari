@@ -38,12 +38,16 @@ pub(super) enum Commands {
         #[arg(short, long, default_value = "png", value_enum)]
         format: OutputFormat,
 
-        /// Start frame (inclusive)
-        #[arg(long, default_value = "0")]
+        /// Frame range or list (e.g. "1-10,15,20-50" or "0-100"). Overrides from/to if set.
+        #[arg(long)]
+        frames: Option<String>,
+
+        /// Start frame (inclusive, AE alias: -s)
+        #[arg(short = 's', long, default_value = "0")]
         from: u32,
 
-        /// End frame (inclusive, default: last frame)
-        #[arg(long)]
+        /// End frame (inclusive, AE alias: -e, default: last frame)
+        #[arg(short = 'e', long)]
         to: Option<u32>,
 
         /// Output width (overrides composition size)
@@ -81,6 +85,10 @@ pub(super) enum Commands {
         /// Enable Multi-Frame Rendering (MFR) across CPU cores
         #[arg(long, default_value = "true")]
         mfr: bool,
+
+        /// Progress log format: standard (interactive terminal) or json (for render farm controllers/Deadline)
+        #[arg(long, default_value = "standard")]
+        log_format: String,
 
         /// Live binding values such as audio.bass=0.75; may be repeated
         #[arg(long = "binding", value_parser = parse_binding_value)]
