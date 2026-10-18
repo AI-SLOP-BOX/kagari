@@ -1,5 +1,5 @@
 use crate::core::expression_engine;
-use crate::core::property::Animatable;
+pub use crate::core::property::Animatable;
 use crate::core::text_animator_advanced::AnimatorStack;
 use serde::{Deserialize, Serialize};
 

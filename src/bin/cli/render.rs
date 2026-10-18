@@ -129,6 +129,68 @@ pub(super) fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Err
                         }
                         _ => {}
                     }
+
+                    // Direct transform overrides (e.g. Logo.opacity=50 or Text.rotation=45)
+                    if let Some(prop) = prop_name {
+                        match prop.to_lowercase().as_str() {
+                            "opacity" | "alpha" => {
+                                if let Ok(v) = val.parse::<f32>() {
+                                    layer.transform.opacity = kagari_vfx::core::timeline::Animatable::new_constant(v);
+                                    eprintln!("Applied override: [{}].opacity = {}", layer.name, v);
+                                }
+                            }
+                            "rotation" | "rot" => {
+                                if let Ok(v) = val.parse::<f32>() {
+                                    layer.transform.rotation = kagari_vfx::core::timeline::Animatable::new_constant(v);
+                                    eprintln!("Applied override: [{}].rotation = {}", layer.name, v);
+                                }
+                            }
+                            "scale" => {
+                                if let Ok(v) = val.parse::<f32>() {
+                                    layer.transform.scale = kagari_vfx::core::timeline::Animatable::new_constant([v, v]);
+                                    eprintln!("Applied override: [{}].scale = [{}, {}]", layer.name, v, v);
+                                }
+                            }
+                            "visible" => {
+                                if let Ok(v) = val.parse::<bool>() {
+                                    layer.visible = v;
+                                    eprintln!("Applied override: [{}].visible = {}", layer.name, v);
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    // Effect overrides (e.g. Logo.GaussianBlur.radius=15.0 or Background.Glow.intensity=2.0)
+                    if let Some(sub) = prop_name {
+                        if let Some((eff_name, eff_param)) = sub.split_once('.') {
+                            for effect in &mut layer.effects {
+                                if effect.name.eq_ignore_ascii_case(eff_name) || format!("{:?}", effect.effect_type).to_lowercase().starts_with(&eff_name.to_lowercase()) {
+                                    match (&mut effect.effect_type, eff_param.to_lowercase().as_str()) {
+                                        (kagari_vfx::core::timeline::EffectType::GaussianBlur { blur_radius }, "radius" | "blur_radius") => {
+                                            if let Ok(v) = val.parse::<f32>() {
+                                                *blur_radius = kagari_vfx::core::timeline::Animatable::new_constant(v);
+                                                eprintln!("Applied override: [{}.{}].{} = {}", layer.name, effect.name, eff_param, v);
+                                            }
+                                        }
+                                        (kagari_vfx::core::timeline::EffectType::Glow { intensity, .. }, "intensity") => {
+                                            if let Ok(v) = val.parse::<f32>() {
+                                                *intensity = kagari_vfx::core::timeline::Animatable::new_constant(v);
+                                                eprintln!("Applied override: [{}.{}].intensity = {}", layer.name, effect.name, v);
+                                            }
+                                        }
+                                        (kagari_vfx::core::timeline::EffectType::Glow { radius, .. }, "radius") => {
+                                            if let Ok(v) = val.parse::<f32>() {
+                                                *radius = kagari_vfx::core::timeline::Animatable::new_constant(v);
+                                                eprintln!("Applied override: [{}.{}].radius = {}", layer.name, effect.name, v);
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
