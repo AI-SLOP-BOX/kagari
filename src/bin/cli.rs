@@ -483,6 +483,96 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 comp.as_deref(),
             )?;
         }
+        Commands::Camera {
+            project,
+            pos,
+            rot,
+            fov,
+            focus_dist,
+            aperture,
+            dof,
+            max_blur,
+            iris_sides,
+            comp,
+        } => {
+            render::cmd_camera(
+                &project,
+                pos.as_deref(),
+                rot.as_deref(),
+                fov,
+                focus_dist,
+                aperture,
+                dof,
+                max_blur,
+                iris_sides,
+                comp.as_deref(),
+            )?;
+        }
+        Commands::ShapeAnim {
+            project,
+            layer,
+            trim_start,
+            trim_end,
+            trim_duration,
+            repeater_copies,
+            repeater_offset,
+            repeater_rotation,
+            repeater_scale,
+            comp,
+        } => {
+            render::cmd_shape_anim(
+                &project,
+                &layer,
+                trim_start,
+                trim_end,
+                trim_duration,
+                repeater_copies,
+                repeater_offset.as_deref(),
+                repeater_rotation,
+                repeater_scale.as_deref(),
+                comp.as_deref(),
+            )?;
+        }
+        Commands::Particle {
+            project,
+            layer,
+            preset,
+            rate,
+            max_particles,
+            pos,
+            comp,
+        } => {
+            render::cmd_particle(
+                &project,
+                &layer,
+                &preset,
+                rate,
+                max_particles,
+                pos.as_deref(),
+                comp.as_deref(),
+            )?;
+        }
+        Commands::AudioSpectrum {
+            project,
+            layer,
+            audio_file,
+            bands,
+            min_freq,
+            max_freq,
+            max_height,
+            comp,
+        } => {
+            render::cmd_audio_spectrum(
+                &project,
+                &layer,
+                &audio_file,
+                bands,
+                min_freq,
+                max_freq,
+                max_height,
+                comp.as_deref(),
+            )?;
+        }
     }
 
     Ok(())

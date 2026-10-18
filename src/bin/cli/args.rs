@@ -663,4 +663,125 @@ pub(super) enum Commands {
         #[arg(short, long)]
         comp: Option<String>,
     },
+
+    /// 3D Camera & Depth of Field: configure focal length, aperture, and cinematic bokeh
+    Camera {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+        /// Camera position "x,y,z" (e.g. "960,540,-1500")
+        #[arg(long)]
+        pos: Option<String>,
+        /// Camera rotation in degrees "rx,ry,rz" (e.g. "10,-15,0")
+        #[arg(long)]
+        rot: Option<String>,
+        /// Field of View (FOV) in degrees (default: 50.0)
+        #[arg(long)]
+        fov: Option<f32>,
+        /// Focus distance in scene units (default: 1000.0)
+        #[arg(long)]
+        focus_dist: Option<f32>,
+        /// Lens aperture f-stop (e.g. 1.4, 2.8, 5.6)
+        #[arg(long)]
+        aperture: Option<f32>,
+        /// Enable cinematic Depth of Field (DOF) bokeh blur
+        #[arg(long)]
+        dof: bool,
+        /// Maximum DOF bokeh blur radius in pixels (default: 24.0)
+        #[arg(long)]
+        max_blur: Option<f32>,
+        /// Iris diaphragm blade count (0=circular, 5=pentagon, 6=hexagon, 8=octagon)
+        #[arg(long)]
+        iris_sides: Option<u32>,
+        /// Target composition name or index (default: active comp)
+        #[arg(short, long)]
+        comp: Option<String>,
+    },
+
+    /// Shape Animator: configure Trim Paths (stroke trimming) and Repeater (geometric duplication)
+    ShapeAnim {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+        /// Target shape layer name or ID
+        #[arg(short, long)]
+        layer: String,
+        /// Trim Paths animated sweep start percentage (0.0..100.0)
+        #[arg(long)]
+        trim_start: Option<f32>,
+        /// Trim Paths animated sweep end percentage (0.0..100.0)
+        #[arg(long)]
+        trim_end: Option<f32>,
+        /// Trim Paths sweep duration in frames (animates trim_end from 0 to 100)
+        #[arg(long)]
+        trim_duration: Option<u32>,
+        /// Repeater copy count
+        #[arg(long)]
+        repeater_copies: Option<u32>,
+        /// Repeater position offset per copy "x,y" (e.g. "80,0" or "0,60")
+        #[arg(long)]
+        repeater_offset: Option<String>,
+        /// Repeater rotation offset per copy in degrees (e.g. "15" or "30" for radial arrays)
+        #[arg(long)]
+        repeater_rotation: Option<f32>,
+        /// Repeater scale multiplier per copy "sx,sy" (e.g. "0.9,0.9")
+        #[arg(long)]
+        repeater_scale: Option<String>,
+        /// Target composition name or index (default: active comp)
+        #[arg(short, long)]
+        comp: Option<String>,
+    },
+
+    /// Particle System: emit sparks, dust, smoke, or fire particles
+    Particle {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+        /// Particle layer name (created if not exists)
+        #[arg(short, long, default_value = "Particles")]
+        layer: String,
+        /// Particle emission preset: sparks, dust, fire, smoke, snow, explosion
+        #[arg(long, default_value = "sparks")]
+        preset: String,
+        /// Emission rate (particles per second)
+        #[arg(long)]
+        rate: Option<f32>,
+        /// Maximum alive particle count
+        #[arg(long)]
+        max_particles: Option<u32>,
+        /// Emitter position "x,y" (default: composition center)
+        #[arg(long)]
+        pos: Option<String>,
+        /// Target composition name or index (default: active comp)
+        #[arg(short, long)]
+        comp: Option<String>,
+    },
+
+    /// Audio Spectrum Visualizer: generate frequency bars or waveforms from an audio file
+    AudioSpectrum {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+        /// Audio spectrum visualizer layer name
+        #[arg(short, long, default_value = "Audio Spectrum")]
+        layer: String,
+        /// Source audio file for frequency spectrum analysis
+        #[arg(short, long)]
+        audio_file: String,
+        /// Number of frequency bands / bars (default: 64)
+        #[arg(long, default_value = "64")]
+        bands: usize,
+        /// Frequency range minimum Hz (default: 20.0)
+        #[arg(long, default_value = "20.0")]
+        min_freq: f32,
+        /// Frequency range maximum Hz (default: 16000.0)
+        #[arg(long, default_value = "16000.0")]
+        max_freq: f32,
+        /// Height multiplier scale for spectrum bars
+        #[arg(long, default_value = "250.0")]
+        max_height: f32,
+        /// Target composition name or index (default: active comp)
+        #[arg(short, long)]
+        comp: Option<String>,
+    },
 }

@@ -1213,3 +1213,338 @@ pub(super) fn cmd_text_anim(
     eprintln!("Updated project file: {}", project_path);
     Ok(())
 }
+
+pub(super) fn cmd_camera(
+    project_path: &str,
+    pos_str: Option<&str>,
+    rot_str: Option<&str>,
+    fov: Option<f32>,
+    focus_dist: Option<f32>,
+    aperture: Option<f32>,
+    dof: bool,
+    max_blur: Option<f32>,
+    iris_sides: Option<u32>,
+    comp_ref: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut project = load_project(project_path)?;
+    let comp = find_comp_mut(&mut project, comp_ref)?;
+    let cam = comp.resolve_camera_mut();
+
+    if let Some(p) = pos_str {
+        let parts: Vec<f32> = p.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+        if parts.len() >= 3 {
+            cam.transform.position = kagari_vfx::core::property::Animatable::new_constant([parts[0], parts[1], parts[2]]);
+            eprintln!("Set camera position: [{:.1}, {:.1}, {:.1}]", parts[0], parts[1], parts[2]);
+        }
+    }
+    if let Some(r) = rot_str {
+        let parts: Vec<f32> = r.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+        if parts.len() >= 3 {
+            cam.transform.rotation = kagari_vfx::core::property::Animatable::new_constant([parts[0], parts[1], parts[2]]);
+            eprintln!("Set camera rotation: [{:.1}°, {:.1}°, {:.1}°]", parts[0], parts[1], parts[2]);
+        }
+    }
+    if let Some(f) = fov {
+        cam.fov_degrees = f.clamp(5.0, 160.0);
+        eprintln!("Set camera FOV: {:.1}°", cam.fov_degrees);
+    }
+    if let Some(fd) = focus_dist {
+        cam.focus_distance = fd.max(10.0);
+        eprintln!("Set camera focus distance: {:.1}", cam.focus_distance);
+    }
+    if let Some(ap) = aperture {
+        cam.aperture = ap.max(0.5);
+        eprintln!("Set camera aperture: f/{:.1}", cam.aperture);
+    }
+    if dof {
+        cam.dof_enabled = true;
+        eprintln!("Enabled cinematic Depth of Field (bokeh)");
+    }
+    if let Some(mb) = max_blur {
+        cam.dof_max_blur = mb.clamp(1.0, 64.0);
+        eprintln!("Set camera max bokeh blur: {:.1}px", cam.dof_max_blur);
+    }
+    if let Some(sides) = iris_sides {
+        cam.dof_iris_sides = sides;
+        eprintln!("Set camera iris blade count: {}", sides);
+    }
+
+    let json = serde_json::to_string_pretty(&project)?;
+    std::fs::write(project_path, json)?;
+    eprintln!("Updated project file: {}", project_path);
+    Ok(())
+}
+
+pub(super) fn cmd_shape_anim(
+    project_path: &str,
+    layer_name: &str,
+    trim_start: Option<f32>,
+    trim_end: Option<f32>,
+    trim_duration: Option<u32>,
+    repeater_copies: Option<u32>,
+    repeater_offset: Option<&str>,
+    repeater_rotation: Option<f32>,
+    repeater_scale: Option<&str>,
+    comp_ref: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut project = load_project(project_path)?;
+    let comp = find_comp_mut(&mut project, comp_ref)?;
+    let layer = comp
+        .layers
+        .iter_mut()
+        .find(|l| l.name == layer_name || l.id == layer_name)
+        .ok_or_else(|| format!("Layer '{layer_name}' not found in composition '{}'", comp.name))?;
+
+    if trim_start.is_some() || trim_end.is_some() || trim_duration.is_some() {
+        let mut trim = layer.trim_paths.take().unwrap_or_default();
+        if let Some(dur) = trim_duration {
+            let start_f = layer.in_frame;
+            let end_f = start_f.saturating_add(dur.max(1));
+            trim.start = kagari_vfx::core::property::Animatable::new_constant(trim_start.unwrap_or(0.0));
+            trim.end = kagari_vfx::core::property::Animatable::Animated(vec![
+                kagari_vfx::core::keyframe::Keyframe::new(start_f, 0.0, kagari_vfx::core::keyframe::InterpolationType::Linear),
+                kagari_vfx::core::keyframe::Keyframe::new(end_f, 100.0, kagari_vfx::core::keyframe::InterpolationType::Linear),
+            ]);
+            eprintln!("Configured animated trim paths sweep on '{}' (frames {}..={})", layer.name, start_f, end_f);
+        } else {
+            if let Some(s) = trim_start {
+                trim.start = kagari_vfx::core::property::Animatable::new_constant(s.clamp(0.0, 100.0));
+            }
+            if let Some(e) = trim_end {
+                trim.end = kagari_vfx::core::property::Animatable::new_constant(e.clamp(0.0, 100.0));
+            }
+            eprintln!("Configured static trim paths on '{}'", layer.name);
+        }
+        layer.trim_paths = Some(trim);
+    }
+
+    if repeater_copies.is_some() || repeater_offset.is_some() || repeater_rotation.is_some() || repeater_scale.is_some() {
+        let mut rep = layer.shape_repeater.take().unwrap_or_default();
+        if let Some(copies) = repeater_copies {
+            rep.copies = copies.max(1);
+            eprintln!("Set shape repeater copies: {}", rep.copies);
+        }
+        if let Some(off_str) = repeater_offset {
+            let parts: Vec<f32> = off_str.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+            if parts.len() >= 2 {
+                rep.position_offset = [parts[0], parts[1]];
+                eprintln!("Set shape repeater position offset: [{:.1}, {:.1}]", parts[0], parts[1]);
+            }
+        }
+        if let Some(rot) = repeater_rotation {
+            rep.rotation_offset_deg = rot;
+            eprintln!("Set shape repeater rotation offset: {:.1}°", rot);
+        }
+        if let Some(sc_str) = repeater_scale {
+            let parts: Vec<f32> = sc_str.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+            if parts.len() >= 2 {
+                rep.scale_offset = [parts[0], parts[1]];
+                eprintln!("Set shape repeater scale offset: [{:.2}, {:.2}]", parts[0], parts[1]);
+            }
+        }
+        layer.shape_repeater = Some(rep);
+    }
+
+    let json = serde_json::to_string_pretty(&project)?;
+    std::fs::write(project_path, json)?;
+    eprintln!("Updated project file: {}", project_path);
+    Ok(())
+}
+
+pub(super) fn cmd_particle(
+    project_path: &str,
+    layer_name: &str,
+    preset: &str,
+    rate: Option<f32>,
+    max_particles: Option<u32>,
+    pos_str: Option<&str>,
+    comp_ref: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut project = load_project(project_path)?;
+    let comp = find_comp_mut(&mut project, comp_ref)?;
+
+    let mut emitter = kagari_vfx::core::particle_system::ParticleEmitter::default();
+    match preset.to_lowercase().as_str() {
+        "sparks" => {
+            emitter.rate = 120.0;
+            emitter.lifetime = 0.8;
+            emitter.speed = 280.0;
+            emitter.spread_degrees = 360.0;
+            emitter.gravity = [0.0, 300.0];
+            emitter.color_start = [1.0, 0.85, 0.2, 1.0];
+            emitter.color_end = [1.0, 0.2, 0.0, 0.0];
+            emitter.size_start = 4.0;
+            emitter.size_end = 1.0;
+        }
+        "dust" => {
+            emitter.rate = 35.0;
+            emitter.lifetime = 4.0;
+            emitter.speed = 25.0;
+            emitter.spread_degrees = 360.0;
+            emitter.gravity = [0.0, -10.0];
+            emitter.color_start = [0.9, 0.9, 1.0, 0.4];
+            emitter.color_end = [0.8, 0.8, 0.9, 0.0];
+            emitter.size_start = 2.5;
+            emitter.size_end = 5.0;
+        }
+        "fire" => {
+            emitter.rate = 180.0;
+            emitter.lifetime = 0.7;
+            emitter.speed = 150.0;
+            emitter.spread_degrees = 45.0;
+            emitter.gravity = [0.0, -250.0];
+            emitter.color_start = [1.0, 0.9, 0.1, 0.9];
+            emitter.color_end = [0.9, 0.1, 0.0, 0.0];
+            emitter.size_start = 18.0;
+            emitter.size_end = 2.0;
+        }
+        "smoke" => {
+            emitter.rate = 40.0;
+            emitter.lifetime = 2.5;
+            emitter.speed = 60.0;
+            emitter.spread_degrees = 60.0;
+            emitter.gravity = [0.0, -80.0];
+            emitter.color_start = [0.3, 0.3, 0.35, 0.5];
+            emitter.color_end = [0.1, 0.1, 0.1, 0.0];
+            emitter.size_start = 8.0;
+            emitter.size_end = 35.0;
+        }
+        "snow" => {
+            emitter.rate = 75.0;
+            emitter.lifetime = 5.0;
+            emitter.speed = 80.0;
+            emitter.spread_degrees = 30.0;
+            emitter.gravity = [10.0, 120.0];
+            emitter.shape = kagari_vfx::core::particle_system::EmitterShape::Box;
+            emitter.emitter_size = [comp.width as f32, 20.0];
+            emitter.color_start = [0.95, 0.98, 1.0, 0.8];
+            emitter.color_end = [0.9, 0.95, 1.0, 0.2];
+            emitter.size_start = 3.0;
+            emitter.size_end = 2.0;
+        }
+        _ => {}
+    }
+
+    if let Some(r) = rate {
+        emitter.rate = r.max(1.0);
+    }
+    if let Some(m) = max_particles {
+        emitter.max_particles = m.max(10);
+    }
+
+    let emitter_pos = if let Some(p) = pos_str {
+        let parts: Vec<f32> = p.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+        if parts.len() >= 2 {
+            [parts[0], parts[1]]
+        } else {
+            [comp.width as f32 / 2.0, comp.height as f32 / 2.0]
+        }
+    } else {
+        [comp.width as f32 / 2.0, comp.height as f32 / 2.0]
+    };
+
+    if let Some(layer) = comp.layers.iter_mut().find(|l| l.name == layer_name || l.id == layer_name) {
+        layer.layer_type = kagari_vfx::core::timeline::LayerType::Particle { emitter };
+        layer.transform.position = kagari_vfx::core::property::Animatable::new_constant(emitter_pos);
+        eprintln!("Updated existing layer '{}' with particle preset '{}'", layer.name, preset);
+    } else {
+        let mut new_layer = kagari_vfx::core::timeline::Layer::new(
+            format!("particle_{}", comp.layers.len() + 1),
+            layer_name.to_string(),
+            kagari_vfx::core::timeline::LayerType::Particle { emitter },
+            comp.duration_frames,
+        );
+        new_layer.transform.position = kagari_vfx::core::property::Animatable::new_constant(emitter_pos);
+        comp.layers.push(new_layer);
+        eprintln!("Created new particle layer '{}' with preset '{}'", layer_name, preset);
+    }
+
+    let json = serde_json::to_string_pretty(&project)?;
+    std::fs::write(project_path, json)?;
+    eprintln!("Updated project file: {}", project_path);
+    Ok(())
+}
+
+pub(super) fn cmd_audio_spectrum(
+    project_path: &str,
+    layer_name: &str,
+    audio_file: &str,
+    bands: usize,
+    _min_freq: f32,
+    _max_freq: f32,
+    max_height: f32,
+    comp_ref: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut project = load_project(project_path)?;
+    let comp = find_comp_mut(&mut project, comp_ref)?;
+
+    let height_norm = (max_height / comp.height as f32).clamp(0.05, 1.0);
+    let effect_id = format!(
+        "audio_spectrum_{}_{}",
+        comp.layers.len(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0)
+    );
+    let effect = kagari_vfx::core::timeline::Effect {
+        id: effect_id,
+        name: "Audio Spectrum".to_string(),
+        effect_type: kagari_vfx::core::timeline::EffectType::AudioSpectrum {
+            enabled: kagari_vfx::core::property::Animatable::new_constant(1.0),
+            bands: kagari_vfx::core::property::Animatable::new_constant(bands.clamp(8, 256) as f32),
+            opacity: kagari_vfx::core::property::Animatable::new_constant(1.0),
+            color_start: [0.2, 0.8, 1.0, 1.0],
+            color_end: [0.9, 0.2, 0.9, 1.0],
+            position_x: kagari_vfx::core::property::Animatable::new_constant(0.05),
+            position_y: kagari_vfx::core::property::Animatable::new_constant(0.2),
+            width: kagari_vfx::core::property::Animatable::new_constant(0.9),
+            height: kagari_vfx::core::property::Animatable::new_constant(height_norm),
+        },
+        enabled: true,
+    };
+
+    if let Some(layer) = comp.layers.iter_mut().find(|l| l.name == layer_name || l.id == layer_name) {
+        layer.effects.push(effect);
+        eprintln!("Added AudioSpectrum effect to layer '{}'", layer.name);
+    } else {
+        let mut solid = kagari_vfx::core::timeline::Layer::new(
+            format!("audio_vis_{}", comp.layers.len() + 1),
+            layer_name.to_string(),
+            kagari_vfx::core::timeline::LayerType::Solid {
+                color: [0.0, 0.0, 0.0, 0.0],
+            },
+            comp.duration_frames,
+        );
+        solid.effects.push(effect);
+        comp.layers.push(solid);
+        eprintln!("Created visualizer layer '{}' with AudioSpectrum effect", layer_name);
+    }
+
+    let audio_layer_exists = comp.layers.iter().any(|l| {
+        if let kagari_vfx::core::timeline::LayerType::Audio { path, .. } = &l.layer_type {
+            path == audio_file
+        } else {
+            false
+        }
+    });
+
+    if !audio_layer_exists && std::path::Path::new(audio_file).is_file() {
+        let audio_layer = kagari_vfx::core::timeline::Layer::new(
+            format!("audio_src_{}", comp.layers.len() + 1),
+            "BGM Source".to_string(),
+            kagari_vfx::core::timeline::LayerType::Audio {
+                path: audio_file.to_string(),
+                volume: kagari_vfx::core::property::Animatable::new_constant(1.0),
+            },
+            comp.duration_frames,
+        );
+        comp.layers.insert(0, audio_layer);
+        eprintln!("Added audio source layer for '{}'", audio_file);
+    }
+
+    let json = serde_json::to_string_pretty(&project)?;
+    std::fs::write(project_path, json)?;
+    eprintln!("Updated project file: {}", project_path);
+    Ok(())
+}
