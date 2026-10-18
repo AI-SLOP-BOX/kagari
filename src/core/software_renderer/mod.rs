@@ -106,6 +106,11 @@ pub fn set_render_cancel_flag(flag: Option<std::sync::Arc<std::sync::atomic::Ato
     RENDER_CANCEL.with(|f| *f.borrow_mut() = flag);
 }
 
+/// Retrieves a clone of the currently installed cancellation flag for the current thread, if any.
+pub fn get_render_cancel_flag() -> Option<std::sync::Arc<std::sync::atomic::AtomicBool>> {
+    RENDER_CANCEL.with(|f| f.borrow().clone())
+}
+
 /// True if the installed flag has been set (or no flag — never cancelled).
 #[inline]
 fn render_cancelled() -> bool {

@@ -27,10 +27,17 @@ pub fn render_frame_range_parallel(
             })
             .collect();
     }
+    let cancel_flag = get_render_cancel_flag();
     frames
         .par_iter()
         .map(|&f| {
+            if let Some(ref flag) = cancel_flag {
+                set_render_cancel_flag(Some(flag.clone()));
+            }
             let pixels = render_frame_to_pixels(comp, f, width, height, exposure_ev, lut_mode);
+            if cancel_flag.is_some() {
+                set_render_cancel_flag(None);
+            }
             (f, pixels)
         })
         .collect()
