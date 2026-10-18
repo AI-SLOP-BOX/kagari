@@ -397,9 +397,15 @@ pub(super) enum Commands {
         /// Keyframe specification in frame=value form (e.g. 0=0 or 30=960,540); may be repeated
         #[arg(long = "keyframe")]
         keyframes: Vec<String>,
-        /// Easing preset: linear, ease-in, ease-out, ease-in-out (default: ease-in-out)
+        /// Easing preset: linear, hold, ease-in, ease-out, ease-in-out (default: ease-in-out)
         #[arg(long, default_value = "ease-in-out")]
         ease: String,
+        /// Custom cubic bezier curve in "x1,y1,x2,y2" form (e.g. "0.17,0.67,0.83,0.67" or "0.05,0.9,0.1,1.0")
+        #[arg(long)]
+        bezier: Option<String>,
+        /// AE velocity influence (0.0 to 1.0) applied to incoming/outgoing keyframe handles
+        #[arg(long)]
+        influence: Option<f32>,
         /// Target composition name or index (default: active comp)
         #[arg(short, long)]
         comp: Option<String>,
@@ -492,6 +498,31 @@ pub(super) enum Commands {
         /// Source matte layer name or ID (default: adjacent layer above)
         #[arg(long)]
         source: Option<String>,
+        /// Target composition name or index (default: active comp)
+        #[arg(short, long)]
+        comp: Option<String>,
+    },
+
+    /// Add or modify a bezier mask on a layer (rect, ellipse, or closed polygon vertices)
+    Mask {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+        /// Target layer name or ID
+        #[arg(short, long)]
+        layer: String,
+        /// Mask shape type: rect, ellipse, or polygon
+        #[arg(long, default_value = "rect")]
+        shape: String,
+        /// Comma-separated parameters: for rect: "x,y,w,h"; for ellipse: "cx,cy,rx,ry"; for polygon: "x1,y1,x2,y2,x3,y3..."
+        #[arg(long)]
+        coords: String,
+        /// Mask edge feather radius in pixels
+        #[arg(long, default_value = "0.0")]
+        feather: f32,
+        /// Invert the mask
+        #[arg(long)]
+        inverted: bool,
         /// Target composition name or index (default: active comp)
         #[arg(short, long)]
         comp: Option<String>,

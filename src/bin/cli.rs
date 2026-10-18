@@ -23,7 +23,7 @@ mod render;
 #[path = "cli/validate.rs"]
 mod validate;
 use bindings::{cmd_add_sample_binding, cmd_bindings, parse_binding_value, parse_sample_point, parse_string_override};
-use edit::{cmd_add_effect, cmd_add_layer, cmd_animate, cmd_init, cmd_matte, cmd_parent, cmd_transition, cmd_trim};
+use edit::{cmd_add_effect, cmd_add_layer, cmd_animate, cmd_init, cmd_mask, cmd_matte, cmd_parent, cmd_transition, cmd_trim};
 use frame::{cmd_frame, cmd_lottie, cmd_otio};
 use info::{cmd_effects, cmd_info, cmd_production_info};
 
@@ -286,6 +286,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             property,
             keyframes,
             ease,
+            bezier,
+            influence,
             comp,
         } => {
             cmd_animate(
@@ -295,6 +297,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 &property,
                 &keyframes,
                 &ease,
+                bezier.as_deref(),
+                influence,
             )?;
         }
         Commands::AddEffect {
@@ -367,6 +371,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 &layer,
                 &mode,
                 source.as_deref(),
+                comp.as_deref(),
+            )?;
+        }
+        Commands::Mask {
+            project,
+            layer,
+            shape,
+            coords,
+            feather,
+            inverted,
+            comp,
+        } => {
+            cmd_mask(
+                &project,
+                &layer,
+                &shape,
+                &coords,
+                feather,
+                inverted,
                 comp.as_deref(),
             )?;
         }

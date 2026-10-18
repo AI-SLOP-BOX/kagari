@@ -114,7 +114,21 @@ pub(super) fn cmd_add_layer(
             }
             LayerType::Solid { color: col }
         }
-        other => return Err(format!("Unsupported layer kind '{}'. Use text, image, solid, or video.", other).into()),
+        "null" => LayerType::Null,
+        "precomp" | "comp" => {
+            let target_comp = content.ok_or("PreComp layer requires --content <comp_name_or_id>")?;
+            LayerType::PreComp {
+                comp_id: target_comp.to_string(),
+            }
+        }
+        "audio" => {
+            let path_val = content.ok_or("Audio layer requires --content <audio_file_path>")?;
+            LayerType::Audio {
+                path: path_val.to_string(),
+                volume: kagari_vfx::core::property::Animatable::new_constant(1.0),
+            }
+        }
+        other => return Err(format!("Unsupported layer kind '{}'. Use text, image, solid, video, null, precomp, or audio.", other).into()),
     };
 
     let mut layer = Layer::new(layer_id, name.to_string(), layer_type, dur);
@@ -172,6 +186,8 @@ pub(super) fn cmd_animate(
     property: &str,
     keyframes_raw: &[String],
     ease_name: &str,
+    custom_bezier_str: Option<&str>,
+    influence_opt: Option<f32>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     use kagari_vfx::core::keyframe::{BezierControlPoint, InterpolationType, Keyframe};
     use kagari_vfx::core::property::Animatable;
@@ -180,25 +196,46 @@ pub(super) fn cmd_animate(
         return Err("No keyframes provided. Use --keyframe frame=value".into());
     }
 
-    let interp = match ease_name.to_lowercase().as_str() {
-        "linear" => InterpolationType::Linear,
-        "hold" => InterpolationType::Hold,
-        "ease-in" => InterpolationType::Bezier {
-            outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
-            incoming: BezierControlPoint { influence: 1.0, speed: 0.0 },
-            custom_bezier: Some([0.42, 0.0, 1.0, 1.0]),
-        },
-        "ease-out" => InterpolationType::Bezier {
-            outgoing: BezierControlPoint { influence: 0.0, speed: 0.0 },
-            incoming: BezierControlPoint { influence: 0.667, speed: 0.0 },
-            custom_bezier: Some([0.0, 0.0, 0.58, 1.0]),
-        },
-        _ => InterpolationType::Bezier {
-            // Default ease-in-out (AE Easy Ease)
-            outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
-            incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
-            custom_bezier: Some([0.42, 0.0, 0.58, 1.0]),
-        },
+    let custom_bezier = if let Some(b_str) = custom_bezier_str {
+        let parts: Vec<f32> = b_str.split(',').filter_map(|s| s.trim().parse::<f32>().ok()).collect();
+        if parts.len() == 4 {
+            Some([parts[0], parts[1], parts[2], parts[3]])
+        } else {
+            return Err("Custom bezier must be specified as 'x1,y1,x2,y2' with 4 numbers".into());
+        }
+    } else {
+        None
+    };
+
+    let influence = influence_opt.unwrap_or(0.333).clamp(0.0, 1.0);
+
+    let interp = if let Some(bezier) = custom_bezier {
+        InterpolationType::Bezier {
+            outgoing: BezierControlPoint { influence, speed: 0.0 },
+            incoming: BezierControlPoint { influence, speed: 0.0 },
+            custom_bezier: Some(bezier),
+        }
+    } else {
+        match ease_name.to_lowercase().as_str() {
+            "linear" => InterpolationType::Linear,
+            "hold" => InterpolationType::Hold,
+            "ease-in" => InterpolationType::Bezier {
+                outgoing: BezierControlPoint { influence, speed: 0.0 },
+                incoming: BezierControlPoint { influence: 1.0, speed: 0.0 },
+                custom_bezier: Some([0.42, 0.0, 1.0, 1.0]),
+            },
+            "ease-out" => InterpolationType::Bezier {
+                outgoing: BezierControlPoint { influence: 0.0, speed: 0.0 },
+                incoming: BezierControlPoint { influence, speed: 0.0 },
+                custom_bezier: Some([0.0, 0.0, 0.58, 1.0]),
+            },
+            _ => InterpolationType::Bezier {
+                // Default ease-in-out (AE Easy Ease)
+                outgoing: BezierControlPoint { influence, speed: 0.0 },
+                incoming: BezierControlPoint { influence, speed: 0.0 },
+                custom_bezier: Some([0.42, 0.0, 0.58, 1.0]),
+            },
+        }
     };
 
     let mut project = load_project(project_path)?;
@@ -609,6 +646,72 @@ pub(super) fn cmd_matte(
     eprintln!(
         "Set Track Matte on '{}': mode={:?}, source={:?} in {}",
         layer_name, mode, source_id, project_path
+    );
+    Ok(())
+}
+
+pub(super) fn cmd_mask(
+    project_path: &str,
+    layer_ref: &str,
+    shape: &str,
+    coords: &str,
+    feather: f32,
+    inverted: bool,
+    comp_ref: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use kagari_vfx::core::mask::Mask;
+    use kagari_vfx::core::property::Animatable;
+
+    let mut project = load_project(project_path)?;
+    let comp = find_comp_mut(&mut project, comp_ref)?;
+
+    let layer = comp
+        .layers
+        .iter_mut()
+        .find(|l| l.name == layer_ref || l.id == layer_ref)
+        .ok_or_else(|| format!("Layer '{layer_ref}' not found in composition '{}'", comp.name))?;
+
+    let parts: Vec<f32> = coords.split(',').filter_map(|s| s.trim().parse::<f32>().ok()).collect();
+    let mask_id = format!("mask_{}", layer.masks.len());
+    let mask_name = format!("Mask {}", layer.masks.len() + 1);
+
+    let mut mask = match shape.to_lowercase().as_str() {
+        "rect" | "rectangle" => {
+            if parts.len() < 4 {
+                return Err("Rect mask requires coords 'x,y,w,h'".into());
+            }
+            Mask::new_rect(mask_id, mask_name, parts[0], parts[1], parts[2], parts[3])
+        }
+        "ellipse" | "circle" => {
+            if parts.len() < 4 {
+                return Err("Ellipse mask requires coords 'cx,cy,rx,ry'".into());
+            }
+            Mask::new_ellipse(mask_id, mask_name, parts[0], parts[1], parts[2], parts[3])
+        }
+        "polygon" | "poly" | "path" => {
+            if parts.len() < 6 || parts.len() % 2 != 0 {
+                return Err("Polygon mask requires at least 3 points 'x1,y1,x2,y2,x3,y3...'".into());
+            }
+            let mut verts = Vec::with_capacity(parts.len() / 2);
+            for chunk in parts.chunks_exact(2) {
+                verts.push([chunk[0], chunk[1]]);
+            }
+            Mask::new_closed(mask_id, mask_name, verts)
+        }
+        other => return Err(format!("Unknown mask shape '{}'. Valid: rect, ellipse, polygon", other).into()),
+    };
+
+    mask.feather = Animatable::new_constant(feather.max(0.0));
+    mask.inverted = inverted;
+
+    let layer_name = layer.name.clone();
+    layer.masks.push(mask);
+
+    let json = serde_json::to_string_pretty(&project)?;
+    std::fs::write(project_path, json)?;
+    eprintln!(
+        "Added {} mask (feather: {}px, inverted: {}) to layer '{}' in {}",
+        shape, feather, inverted, layer_name, project_path
     );
     Ok(())
 }
