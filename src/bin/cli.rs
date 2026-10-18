@@ -23,7 +23,7 @@ mod render;
 #[path = "cli/validate.rs"]
 mod validate;
 use bindings::{cmd_add_sample_binding, cmd_bindings, parse_binding_value, parse_sample_point, parse_string_override};
-use edit::{cmd_add_layer, cmd_animate, cmd_init};
+use edit::{cmd_add_effect, cmd_add_layer, cmd_animate, cmd_init, cmd_trim};
 use frame::{cmd_frame, cmd_lottie, cmd_otio};
 use info::{cmd_effects, cmd_info, cmd_production_info};
 
@@ -222,8 +222,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             project,
             comp,
             output,
+            import,
         } => {
-            cmd_otio(&project, comp.as_deref(), &output)?;
+            cmd_otio(&project, comp.as_deref(), &output, import)?;
         }
         Commands::Mocap {
             frames,
@@ -294,6 +295,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 &property,
                 &keyframes,
                 &ease,
+            )?;
+        }
+        Commands::AddEffect {
+            project,
+            layer,
+            kind,
+            param,
+            comp,
+        } => {
+            cmd_add_effect(
+                &project,
+                &layer,
+                comp.as_deref(),
+                &kind,
+                param,
+            )?;
+        }
+        Commands::Trim {
+            project,
+            layer,
+            in_frame,
+            out_frame,
+            comp,
+        } => {
+            cmd_trim(
+                &project,
+                &layer,
+                comp.as_deref(),
+                in_frame,
+                out_frame,
             )?;
         }
     }

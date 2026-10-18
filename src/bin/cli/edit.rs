@@ -291,3 +291,137 @@ pub(super) fn cmd_animate(
     );
     Ok(())
 }
+
+pub(super) fn cmd_add_effect(
+    project_path: &str,
+    layer_ref: &str,
+    comp_ref: Option<&str>,
+    kind: &str,
+    param: Option<f32>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use kagari_vfx::core::property::Animatable;
+    use kagari_vfx::core::timeline::{Effect, EffectType};
+
+    let mut project = load_project(project_path)?;
+    let comp = find_comp_mut(&mut project, comp_ref)?;
+    let layer = comp
+        .layers
+        .iter_mut()
+        .find(|l| l.name == layer_ref || l.id == layer_ref)
+        .ok_or_else(|| format!("Layer '{layer_ref}' not found in composition '{}'", comp.name))?;
+
+    let effect_id = format!("eff_{}_{}", layer.effects.len(), kind);
+    let val = param.unwrap_or(10.0);
+
+    let (name, effect_type) = match kind.to_lowercase().replace(['-', '_'], "").as_str() {
+        "blur" | "gaussianblur" => (
+            "Gaussian Blur".to_string(),
+            EffectType::GaussianBlur {
+                blur_radius: Animatable::new_constant(val),
+            },
+        ),
+        "glow" => (
+            "Glow".to_string(),
+            EffectType::Glow {
+                threshold: Animatable::new_constant(0.6),
+                radius: Animatable::new_constant(val.max(1.0)),
+                intensity: Animatable::new_constant(1.5),
+                color: Animatable::new_constant([1.0, 1.0, 1.0, 1.0]),
+            },
+        ),
+        "dropshadow" | "shadow" => (
+            "Drop Shadow".to_string(),
+            EffectType::DropShadow {
+                color: Animatable::new_constant([0.0, 0.0, 0.0, 1.0]),
+                opacity: Animatable::new_constant(75.0),
+                direction: Animatable::new_constant(135.0),
+                distance: Animatable::new_constant(val),
+                softness: Animatable::new_constant(10.0),
+            },
+        ),
+        "vignette" => (
+            "Vignette".to_string(),
+            EffectType::Vignette {
+                intensity: Animatable::new_constant(val),
+                roundness: Animatable::new_constant(50.0),
+                feather: Animatable::new_constant(50.0),
+                color: Animatable::new_constant([0.0, 0.0, 0.0, 1.0]),
+            },
+        ),
+        "tint" | "colortint" => (
+            "Color Tint".to_string(),
+            EffectType::ColorTint {
+                color: Animatable::new_constant([1.0, 0.8, 0.4, 1.0]),
+                intensity: Animatable::new_constant(val / 100.0),
+            },
+        ),
+        "chromaticaberration" | "aberration" => (
+            "Chromatic Aberration".to_string(),
+            EffectType::ChromaticAberration {
+                shift_r: Animatable::new_constant(val),
+                shift_b: Animatable::new_constant(-val),
+                edge_falloff: Animatable::new_constant(1.0),
+                iris_linked: true,
+            },
+        ),
+        other => {
+            return Err(format!("Unknown effect kind '{}'. Valid: blur, glow, shadow, vignette, tint, chromatic_aberration", other).into());
+        }
+    };
+
+    let effect = Effect {
+        id: effect_id,
+        name,
+        effect_type,
+        enabled: true,
+    };
+    let effect_name = effect.name.clone();
+    let layer_name = layer.name.clone();
+    layer.effects.push(effect);
+
+    let json = serde_json::to_string_pretty(&project)?;
+    std::fs::write(project_path, json)?;
+    eprintln!(
+        "Added effect '{}' ({}) to layer '{}' in {}",
+        effect_name,
+        kind,
+        layer_name,
+        project_path
+    );
+    Ok(())
+}
+
+pub(super) fn cmd_trim(
+    project_path: &str,
+    layer_ref: &str,
+    comp_ref: Option<&str>,
+    in_frame: Option<u32>,
+    out_frame: Option<u32>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut project = load_project(project_path)?;
+    let comp = find_comp_mut(&mut project, comp_ref)?;
+    let layer = comp
+        .layers
+        .iter_mut()
+        .find(|l| l.name == layer_ref || l.id == layer_ref)
+        .ok_or_else(|| format!("Layer '{layer_ref}' not found in composition '{}'", comp.name))?;
+
+    if let Some(inf) = in_frame {
+        layer.in_frame = inf;
+    }
+    if let Some(outf) = out_frame {
+        layer.out_frame = outf;
+    }
+
+    let layer_name = layer.name.clone();
+    let in_f = layer.in_frame;
+    let out_f = layer.out_frame;
+
+    let json = serde_json::to_string_pretty(&project)?;
+    std::fs::write(project_path, json)?;
+    eprintln!(
+        "Trimmed layer '{}' span to {}..={} in {}",
+        layer_name, in_f, out_f, project_path
+    );
+    Ok(())
+}

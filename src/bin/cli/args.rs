@@ -283,7 +283,7 @@ pub(super) enum Commands {
         output: String,
     },
 
-    /// Export composition timeline to OpenTimelineIO (.otio.json)
+    /// Export or Import composition timeline to/from OpenTimelineIO (.otio.json) for Kdenlive, DaVinci, Premiere
     Otio {
         /// Path to project JSON file
         #[arg(short, long)]
@@ -293,9 +293,13 @@ pub(super) enum Commands {
         #[arg(short, long)]
         comp: Option<String>,
 
-        /// Output OpenTimelineIO JSON path
+        /// OpenTimelineIO JSON path (exported to or imported from)
         #[arg(short, long, default_value = "./timeline.otio.json")]
         output: String,
+
+        /// Import the OTIO file into the project instead of exporting
+        #[arg(long)]
+        import: bool,
     },
 
     /// Track points through a PNG frame sequence using markerless optical flow
@@ -396,6 +400,44 @@ pub(super) enum Commands {
         /// Easing preset: linear, ease-in, ease-out, ease-in-out (default: ease-in-out)
         #[arg(long, default_value = "ease-in-out")]
         ease: String,
+        /// Target composition name or index (default: active comp)
+        #[arg(short, long)]
+        comp: Option<String>,
+    },
+
+    /// Add an effect to a layer (e.g. GaussianBlur, Glow, DropShadow, Levels, Vignette)
+    AddEffect {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+        /// Target layer name or ID
+        #[arg(short, long)]
+        layer: String,
+        /// Effect type: blur, glow, shadow, levels, vignette, tint, chromatic_aberration
+        #[arg(long)]
+        kind: String,
+        /// Initial parameter value (e.g. radius for blur, intensity for glow)
+        #[arg(long)]
+        param: Option<f32>,
+        /// Target composition name or index (default: active comp)
+        #[arg(short, long)]
+        comp: Option<String>,
+    },
+
+    /// Trim in-point and out-point of a layer (like [ and ] in AE)
+    Trim {
+        /// Path to project JSON file
+        #[arg(short, long)]
+        project: String,
+        /// Target layer name or ID
+        #[arg(short, long)]
+        layer: String,
+        /// In-point frame
+        #[arg(long)]
+        in_frame: Option<u32>,
+        /// Out-point frame
+        #[arg(long)]
+        out_frame: Option<u32>,
         /// Target composition name or index (default: active comp)
         #[arg(short, long)]
         comp: Option<String>,

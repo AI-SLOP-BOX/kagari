@@ -125,8 +125,26 @@ pub(super) fn cmd_otio(
     project_path: &str,
     comp_ref: Option<&str>,
     output: &str,
+    import: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let project = load_project(project_path)?;
+    let mut project = load_project(project_path)?;
+
+    if import {
+        let json = std::fs::read_to_string(output)?;
+        let otio = kagari_vfx::core::integration::OtioTimeline::from_json(&json)?;
+        let imported_comp = otio.to_composition()?;
+        let comp_name = imported_comp.name.clone();
+        project.compositions.push(imported_comp);
+        project.active_composition_idx = project.compositions.len() - 1;
+        let out_json = serde_json::to_string_pretty(&project)?;
+        std::fs::write(project_path, out_json)?;
+        eprintln!(
+            "Imported OTIO timeline '{}' from {} into {} (active comp index: {})",
+            comp_name, output, project_path, project.active_composition_idx
+        );
+        return Ok(());
+    }
+
     let comp = if let Some(ref_name) = comp_ref {
         if let Ok(idx) = ref_name.parse::<usize>() {
             project
