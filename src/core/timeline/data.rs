@@ -410,6 +410,7 @@ impl LabelColor {
         }
     }
 
+    #[cfg(feature = "gui")]
     pub fn color32(self) -> eframe::egui::Color32 {
         let [r, g, b] = self.to_rgb();
         eframe::egui::Color32::from_rgb(

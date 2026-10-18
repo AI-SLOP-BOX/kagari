@@ -62,22 +62,35 @@ pub(super) fn cmd_frame(
         frame, comp.name, w, h
     );
 
-    #[cfg(feature = "cli-gpu")]
-    let pixels = if gpu {
-        if kagari_vfx::core::render_capability::software_preview_required(&comp, frame) {
-            eprintln!("Composition uses effects or features unsupported by GPU; falling back to software renderer");
-            render_frame_to_pixels(&comp, frame, w, h, 0.0, 0)
-        } else {
-            eprintln!("Using the experimental WGPU preview renderer");
-            kagari_vfx::core::headless_gpu::HeadlessGpuRenderer::new()?
-                .render_rgba8(&comp, frame, 0.0, 0)?
+    if output.to_lowercase().ends_with(".exr") {
+        let f32_pixels = kagari_vfx::core::software_renderer::render_frame_to_pixels_f32(
+            &comp, frame, w, h, 0.0, 0,
+        );
+        let mut flat = Vec::with_capacity(f32_pixels.len() * 4);
+        for px in f32_pixels {
+            flat.extend_from_slice(&px);
         }
+        let image = kagari_vfx::core::exr_writer::ExrImage::rgba_f32(w, h, &flat);
+        kagari_vfx::core::exr_writer::write_exr_file(output, &image)
+            .map_err(|e| format!("EXR write error: {e}"))?;
     } else {
-        render_frame_to_pixels(&comp, frame, w, h, 0.0, 0)
-    };
-    #[cfg(not(feature = "cli-gpu"))]
-    let pixels = render_frame_to_pixels(&comp, frame, w, h, 0.0, 0);
-    write_png(output, &pixels, w, h)?;
+        #[cfg(feature = "cli-gpu")]
+        let pixels = if gpu {
+            if kagari_vfx::core::render_capability::software_preview_required(&comp, frame) {
+                eprintln!("Composition uses effects or features unsupported by GPU; falling back to software renderer");
+                render_frame_to_pixels(&comp, frame, w, h, 0.0, 0)
+            } else {
+                eprintln!("Using the experimental WGPU preview renderer");
+                kagari_vfx::core::headless_gpu::HeadlessGpuRenderer::new()?
+                    .render_rgba8(&comp, frame, 0.0, 0)?
+            }
+        } else {
+            render_frame_to_pixels(&comp, frame, w, h, 0.0, 0)
+        };
+        #[cfg(not(feature = "cli-gpu"))]
+        let pixels = render_frame_to_pixels(&comp, frame, w, h, 0.0, 0);
+        write_png(output, &pixels, w, h)?;
+    }
 
     eprintln!("Saved: {}", output);
     Ok(())
