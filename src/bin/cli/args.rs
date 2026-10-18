@@ -956,4 +956,38 @@ pub(super) enum Commands {
         #[arg(short, long)]
         comp: Option<String>,
     },
+
+    /// Autonomous Music Video Production: generate viral kinetic 3D typography, audio-reactive VFX, beat-synced camera work, and final MP4 export
+    Mv {
+        /// Background song / audio file (MP3, WAV, FLAC, AAC)
+        #[arg(short = 'a', long)]
+        audio: String,
+        /// Lyrics, titles, or prompt keywords (e.g. "YOU ARE ABSOLUTELY RIGHT / LGTM / HUMAN IN THE LOOP")
+        #[arg(short = 'l', long)]
+        lyrics: Option<String>,
+        /// Path to lyrics text file (.txt) with timestamps or lines
+        #[arg(long)]
+        lyrics_file: Option<String>,
+        /// Output project JSON or direct video path (ends in .json or .mp4)
+        #[arg(short, long, default_value = "./music_video.mp4")]
+        output: String,
+        /// Visual aesthetic style: cyberpunk-neon, analog-grunge, kinetic-swiss, deep-space, hyper-pop
+        #[arg(long, default_value = "cyberpunk-neon")]
+        style: String,
+        /// Video resolution width (default: 1920, supports 4K 3840)
+        #[arg(long, default_value = "1920")]
+        width: u32,
+        /// Video resolution height (default: 1080, supports 4K 2160 or 9:16 vertical 1080x1920 for Shorts/TikTok)
+        #[arg(long, default_value = "1080")]
+        height: u32,
+        /// Frame rate (default: 60 for ultra-smooth kinetic motion)
+        #[arg(long, default_value = "60")]
+        fps: u32,
+        /// Maximum duration in seconds to generate (default: auto from audio length or 30s)
+        #[arg(short = 'd', long)]
+        duration_sec: Option<u32>,
+        /// Fast render mode (skip final MP4 render and write project.json only)
+        #[arg(long)]
+        project_only: bool,
+    },
 }

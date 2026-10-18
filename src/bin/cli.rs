@@ -704,6 +704,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 comp.as_deref(),
             )?;
         }
+        Commands::Mv {
+            audio,
+            lyrics,
+            lyrics_file,
+            output,
+            style,
+            width,
+            height,
+            fps,
+            duration_sec,
+            project_only,
+        } => {
+            render::cmd_mv(
+                &audio,
+                lyrics.as_deref(),
+                lyrics_file.as_deref(),
+                &output,
+                &style,
+                width,
+                height,
+                fps,
+                duration_sec,
+                project_only,
+            )?;
+        }
     }
 
     Ok(())
