@@ -6,10 +6,12 @@ struct RenderSpec<'a> {
     output: &'a str,
     from: u32,
     to: u32,
+    step: u32,
     w: u32,
     h: u32,
     exposure: f32,
     lut: u32,
+    skip_existing: bool,
     bindings: &'a std::collections::HashMap<String, f64>,
 }
 
@@ -24,6 +26,11 @@ pub(super) struct RenderArgs {
     pub(super) height: Option<u32>,
     pub(super) exposure: f32,
     pub(super) lut: u32,
+    pub(super) color_space: Option<String>,
+    pub(super) step: u32,
+    pub(super) threads: usize,
+    pub(super) skip_existing: bool,
+    pub(super) mfr: bool,
     pub(super) bindings: Vec<(String, f64)>,
     pub(super) overrides: Vec<(String, String)>,
 }
@@ -89,6 +96,33 @@ pub(super) fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Err
         }
     }
 
+    if let Some(cs_str) = &args.color_space {
+        let cs = match cs_str.to_lowercase().replace(['-', '_', '.'], "").as_str() {
+            "rec709" | "srgb" => kagari_vfx::core::color_science::WorkingColorSpace::Rec709,
+            "displayp3" | "p3" => kagari_vfx::core::color_science::WorkingColorSpace::DisplayP3,
+            "rec2020" | "bt2020" => kagari_vfx::core::color_science::WorkingColorSpace::Rec2020,
+            "linear" | "linearsrgb" => kagari_vfx::core::color_science::WorkingColorSpace::LinearSRGB,
+            "acescg" | "aces" | "ap1" => kagari_vfx::core::color_science::WorkingColorSpace::AcesCG,
+            unknown => {
+                return Err(format!("Unknown color space '{}'. Valid options: rec709, display_p3, rec2020, linear, acescg", unknown).into());
+            }
+        };
+        for c in &mut project.compositions {
+            c.working_color_space = cs;
+        }
+        eprintln!("Applied working color space override: {:?}", cs);
+    }
+
+    if args.threads > 0 {
+        let _ = rayon::ThreadPoolBuilder::new()
+            .num_threads(args.threads)
+            .build_global();
+        eprintln!("Configured worker thread pool to {} threads", args.threads);
+    }
+
+    kagari_vfx::core::parallel_render::set_mfr_enabled(args.mfr);
+    eprintln!("Multi-Frame Rendering (MFR): {}", if args.mfr { "ENABLED" } else { "DISABLED" });
+
     let comp = find_comp(&project, args.comp_ref.as_deref())?;
     let comp_index = project
         .compositions
@@ -140,10 +174,12 @@ pub(super) fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Err
         output: &args.output,
         from: args.from,
         to,
+        step: args.step.max(1),
         w: width,
         h: height,
         exposure: args.exposure,
         lut: args.lut,
+        skip_existing: args.skip_existing,
         bindings: &binding_values,
     };
     let format = args.format;
@@ -182,15 +218,21 @@ fn render_to_png_sequence_with_bindings(
     spec: &RenderSpec,
 ) -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(spec.output)?;
-    let total = spec.to.saturating_sub(spec.from) + 1;
-    for frame in spec.from..=spec.to {
+    let step = spec.step.max(1) as usize;
+    let frames: Vec<u32> = (spec.from..=spec.to).step_by(step).collect();
+    let total = frames.len();
+    for (idx, &frame) in frames.iter().enumerate() {
+        let path = format!("{}/frame_{:05}.png", spec.output, frame);
+        if spec.skip_existing && std::path::Path::new(&path).is_file() {
+            eprintln!("  Skipping existing frame {:05} ({})", frame, path);
+            continue;
+        }
         let comp = document
             .composition_for_frame_with_sources(composition_index, frame, spec.bindings)
             .ok_or("composition index out of range")?;
         let pixels = render_frame_to_pixels(&comp, frame, spec.w, spec.h, spec.exposure, spec.lut);
-        let path = format!("{}/frame_{:05}.png", spec.output, frame);
         write_png(&path, &pixels, spec.w, spec.h)?;
-        let progress = frame.saturating_sub(spec.from) + 1;
+        let progress = idx + 1;
         if progress % 10 == 0 || progress == total {
             eprint!("\r  Rendered {}/{} frames", progress, total);
         }
@@ -204,9 +246,15 @@ fn render_to_exr_sequence(
     spec: &RenderSpec,
 ) -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(spec.output)?;
-
-    let total = spec.to.saturating_sub(spec.from) + 1;
-    for frame in spec.from..=spec.to {
+    let step = spec.step.max(1) as usize;
+    let frames: Vec<u32> = (spec.from..=spec.to).step_by(step).collect();
+    let total = frames.len();
+    for (idx, &frame) in frames.iter().enumerate() {
+        let path = format!("{}/frame_{:05}.exr", spec.output, frame);
+        if spec.skip_existing && std::path::Path::new(&path).is_file() {
+            eprintln!("  Skipping existing frame {:05} ({})", frame, path);
+            continue;
+        }
         let f32_pixels = kagari_vfx::core::software_renderer::render_frame_to_pixels_f32(
             comp,
             frame,
@@ -220,11 +268,10 @@ fn render_to_exr_sequence(
             flat.extend_from_slice(&px);
         }
         let image = kagari_vfx::core::exr_writer::ExrImage::rgba_f32(spec.w, spec.h, &flat);
-        let path = format!("{}/frame_{:05}.exr", spec.output, frame);
         kagari_vfx::core::exr_writer::write_exr_file(&path, &image)
             .map_err(|e| format!("EXR write error: {e}"))?;
 
-        let progress = frame.saturating_sub(spec.from) + 1;
+        let progress = idx + 1;
         if progress % 10 == 0 || progress == total {
             eprint!("\r  Rendered {}/{} frames", progress, total);
         }
@@ -238,14 +285,19 @@ fn render_to_png_sequence(
     spec: &RenderSpec,
 ) -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(spec.output)?;
-
-    let total = spec.to.saturating_sub(spec.from) + 1;
-    for frame in spec.from..=spec.to {
-        let pixels = render_frame_to_pixels(comp, frame, spec.w, spec.h, spec.exposure, spec.lut);
+    let step = spec.step.max(1) as usize;
+    let frames: Vec<u32> = (spec.from..=spec.to).step_by(step).collect();
+    let total = frames.len();
+    for (idx, &frame) in frames.iter().enumerate() {
         let path = format!("{}/frame_{:05}.png", spec.output, frame);
+        if spec.skip_existing && std::path::Path::new(&path).is_file() {
+            eprintln!("  Skipping existing frame {:05} ({})", frame, path);
+            continue;
+        }
+        let pixels = render_frame_to_pixels(comp, frame, spec.w, spec.h, spec.exposure, spec.lut);
         write_png(&path, &pixels, spec.w, spec.h)?;
 
-        let progress = frame.saturating_sub(spec.from) + 1;
+        let progress = idx + 1;
         if progress % 10 == 0 || progress == total {
             eprint!("\r  Rendered {}/{} frames", progress, total);
         }

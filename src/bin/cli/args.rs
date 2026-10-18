@@ -62,6 +62,26 @@ pub(super) enum Commands {
         #[arg(long, default_value = "0")]
         lut: u32,
 
+        /// Override working color space: rec709, display_p3, rec2020, linear, acescg
+        #[arg(long)]
+        color_space: Option<String>,
+
+        /// Frame step / cadence (e.g. 2 renders every second frame like AE)
+        #[arg(long, default_value = "1")]
+        step: u32,
+
+        /// Number of worker threads for parallel frame rendering (0 = auto CPU cores)
+        #[arg(short = 'j', long, default_value = "0")]
+        threads: usize,
+
+        /// Skip already rendered frames on disk (for distributed rendering / render farms)
+        #[arg(long)]
+        skip_existing: bool,
+
+        /// Enable Multi-Frame Rendering (MFR) across CPU cores
+        #[arg(long, default_value = "true")]
+        mfr: bool,
+
         /// Live binding values such as audio.bass=0.75; may be repeated
         #[arg(long = "binding", value_parser = parse_binding_value)]
         bindings: Vec<(String, f64)>,

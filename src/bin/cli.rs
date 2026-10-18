@@ -43,6 +43,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             height,
             exposure,
             lut,
+            color_space,
+            step,
+            threads,
+            skip_existing,
+            mfr,
             bindings,
             overrides,
         } => {
@@ -57,6 +62,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 height,
                 exposure,
                 lut,
+                color_space,
+                step,
+                threads,
+                skip_existing,
+                mfr,
                 bindings,
                 overrides,
             })?;
