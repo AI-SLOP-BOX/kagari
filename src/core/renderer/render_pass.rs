@@ -223,6 +223,7 @@ impl WgpuRenderer {
                     let effective_align =
                         formatting.map(|tf| tf.alignment as usize).unwrap_or(*align);
                     let effective_box_width = formatting.map(|tf| tf.box_width).unwrap_or(0.0);
+                    let effective_box_height = formatting.map(|tf| tf.box_height).unwrap_or(0.0);
                     let effective_stroke_color = formatting
                         .map(|tf| tf.stroke_color.unwrap_or([0.0, 0.0, 0.0, 0.0]))
                         .unwrap_or(*stroke_color);
@@ -252,6 +253,7 @@ impl WgpuRenderer {
                         leading: effective_leading,
                         align: effective_align,
                         box_width: effective_box_width,
+                        box_height: effective_box_height,
                         stroke_color: effective_stroke_color,
                         stroke_width: effective_stroke_width,
                         faux_style,

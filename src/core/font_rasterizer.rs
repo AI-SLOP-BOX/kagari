@@ -12,13 +12,41 @@ pub mod types;
 
 pub use animator::{rasterize_text_animated, rasterize_text_animated_stack};
 pub use discovery::{discover_system_fonts, system_font_paths};
-pub use global::{init_font_rasterizer, with_font_rasterizer, with_font_rasterizer_mut, GLOBAL_FONT_RASTERIZER};
+pub use global::{
+    init_font_rasterizer, with_font_rasterizer, with_font_rasterizer_mut, GLOBAL_FONT_RASTERIZER,
+};
 pub use glyph::{rasterize_glyph_uncached, GLYPH_CACHE_BUDGET_BYTES, MAX_GLYPH_BITMAP_BYTES};
 pub use rasterizer::FontRasterizer;
 pub use types::{
     apply_faux_bitmap_style, parse_font, styled_text_input, FauxTextStyle, GlyphCache,
     RasterizedGlyph,
 };
+
+/// Clip a rasterized text bitmap to a centered paragraph box height.
+/// A height of zero or less leaves the bitmap unchanged.
+pub(crate) fn clip_text_bitmap_height(
+    (width, height, pixels): (u32, u32, Vec<u8>),
+    box_height: f32,
+) -> (u32, u32, Vec<u8>) {
+    if !box_height.is_finite() || box_height <= 0.0 || width == 0 || height == 0 {
+        return (width, height, pixels);
+    }
+    let clipped_height = (box_height.ceil() as u32).clamp(1, height);
+    if clipped_height == height {
+        return (width, height, pixels);
+    }
+    let first_row = (height - clipped_height) / 2;
+    let start = (first_row as usize)
+        .saturating_mul(width as usize)
+        .saturating_mul(4)
+        .min(pixels.len());
+    let byte_count = (clipped_height as usize)
+        .saturating_mul(width as usize)
+        .saturating_mul(4)
+        .min(pixels.len().saturating_sub(start));
+    let cropped = pixels[start..start + byte_count].to_vec();
+    (width, clipped_height, cropped)
+}
 
 #[cfg(test)]
 mod tests {

@@ -5,10 +5,10 @@
 //! optional linear-light blending.
 
 mod blend_modes;
-use blend_modes::{evaluate_blend_mode, overlay, soft_light};
-use rayon::prelude::*;
 use super::mask::CpuMaskEntry;
 use crate::core::timeline::{BlendMode, Composition, Layer, TrackMatteMode};
+use blend_modes::{evaluate_blend_mode, overlay, soft_light};
+use rayon::prelude::*;
 
 pub(crate) struct AdjustmentLayerCtx<'a> {
     pub comp: &'a Composition,
@@ -159,19 +159,21 @@ pub(crate) fn apply_adjustment_layer(buffer: &mut [u8], ctx: AdjustmentLayerCtx<
                     ),
                     _ => (src_r, src_g, src_b),
                 };
-                dst_row[offset] = ((blended_r * effect_opacity + dst_r * (1.0 - effect_opacity)) * 255.0)
+                dst_row[offset] = ((blended_r * effect_opacity + dst_r * (1.0 - effect_opacity))
+                    * 255.0)
                     .round()
                     .clamp(0.0, 255.0) as u8;
-                dst_row[offset + 1] = ((blended_g * effect_opacity + dst_g * (1.0 - effect_opacity)) * 255.0)
-                    .round()
-                    .clamp(0.0, 255.0) as u8;
-                dst_row[offset + 2] = ((blended_b * effect_opacity + dst_b * (1.0 - effect_opacity)) * 255.0)
-                    .round()
-                    .clamp(0.0, 255.0) as u8;
+                dst_row[offset + 1] =
+                    ((blended_g * effect_opacity + dst_g * (1.0 - effect_opacity)) * 255.0)
+                        .round()
+                        .clamp(0.0, 255.0) as u8;
+                dst_row[offset + 2] =
+                    ((blended_b * effect_opacity + dst_b * (1.0 - effect_opacity)) * 255.0)
+                        .round()
+                        .clamp(0.0, 255.0) as u8;
             }
         });
 }
-
 
 /// Everything [`composite_layer_buffer`] needs that is not the two
 /// pixel buffers.
@@ -215,7 +217,11 @@ pub(crate) fn composite_layer_buffer(buffer: &mut [u8], layer_buf: &[u8], ctx: &
     let target_slice = &mut buffer[sub_start..sub_start + sub_len];
 
     // Fast-path for BlendMode::Add without track matte and in non-linear mode
-    if matte.is_none() && !blend_linear && !layer.preserve_transparency && layer.blend_mode == BlendMode::Add {
+    if matte.is_none()
+        && !blend_linear
+        && !layer.preserve_transparency
+        && layer.blend_mode == BlendMode::Add
+    {
         target_slice
             .par_chunks_exact_mut(row_stride)
             .enumerate()
@@ -256,7 +262,11 @@ pub(crate) fn composite_layer_buffer(buffer: &mut [u8], layer_buf: &[u8], ctx: &
     }
 
     // Fast-path for BlendMode::Normal without track matte and in non-linear mode
-    if matte.is_none() && !blend_linear && !layer.preserve_transparency && layer.blend_mode == BlendMode::Normal {
+    if matte.is_none()
+        && !blend_linear
+        && !layer.preserve_transparency
+        && layer.blend_mode == BlendMode::Normal
+    {
         target_slice
             .par_chunks_exact_mut(row_stride)
             .enumerate()
@@ -289,9 +299,12 @@ pub(crate) fn composite_layer_buffer(buffer: &mut [u8], layer_buf: &[u8], ctx: &
                         let inv_src = 1.0 - src_a;
                         let dst_factor = dst_a * inv_src;
 
-                        dst_row[idx] = ((sr * src_a + dr * dst_factor) / out_a).clamp(0.0, 255.0) as u8;
-                        dst_row[idx + 1] = ((sg * src_a + dg * dst_factor) / out_a).clamp(0.0, 255.0) as u8;
-                        dst_row[idx + 2] = ((sb * src_a + db * dst_factor) / out_a).clamp(0.0, 255.0) as u8;
+                        dst_row[idx] =
+                            ((sr * src_a + dr * dst_factor) / out_a).clamp(0.0, 255.0) as u8;
+                        dst_row[idx + 1] =
+                            ((sg * src_a + dg * dst_factor) / out_a).clamp(0.0, 255.0) as u8;
+                        dst_row[idx + 2] =
+                            ((sb * src_a + db * dst_factor) / out_a).clamp(0.0, 255.0) as u8;
                         dst_row[idx + 3] = (out_a * 255.0).clamp(0.0, 255.0) as u8;
                     }
                 }

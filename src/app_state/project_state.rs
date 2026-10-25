@@ -110,6 +110,8 @@ impl KagariApp {
             || self.show_welcome
             || self.show_new_comp_dialog
             || self.show_preferences
+            || self.show_exit_confirmation
+            || self.show_close_project_confirmation
     }
 
     pub fn master_dsp_params(&self) -> crate::core::audio_engine::MasterDspParams {

@@ -12,5 +12,5 @@ pub mod types;
 #[cfg(test)]
 mod tests;
 
-pub use manager::{AutosaveManager, RecoveryGeneration, MAX_AUTOSAVE_SLOTS};
+pub use manager::{AutosaveManager, RecoveryGeneration, MAX_AUTOSAVE_SLOTS, MAX_RECOVERY_SLOTS};
 pub use snapshot_writer::is_valid_project_file;

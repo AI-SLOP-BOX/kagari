@@ -289,8 +289,21 @@ pub fn clear_namespace(namespace: u128) {
     }
 }
 
-/// Clean up all cached files.
+/// Remove cache frames without deleting the user-selected cache directory or
+/// any unrelated files that happen to be stored beside the frames.
 pub fn clear_all() {
     let dir = cache_dir();
-    let _ = std::fs::remove_dir_all(&dir);
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.starts_with("frame_")
+            && (name.ends_with(".rgba") || name.contains(".rgba.tmp."))
+            && entry.file_type().is_ok_and(|kind| kind.is_file())
+        {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
 }

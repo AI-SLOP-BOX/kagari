@@ -21,7 +21,7 @@ fn main() -> eframe::Result<()> {
 
     let mut viewport = egui::ViewportBuilder::default()
         .with_inner_size([1240.0, 780.0])
-        .with_min_inner_size([960.0, 620.0])
+        .with_min_inner_size([480.0, 320.0])
         .with_decorations(true)
         .with_title("Kagari VFX");
     if let Some(icon) = kagari_app_icon() {
@@ -47,7 +47,11 @@ fn main() -> eframe::Result<()> {
             );
             let mut dynamic_link_port = None;
             for candidate_port in 9000..=9010 {
-                match kagari_vfx::core::integration::start_sync_server(candidate_port, frame_tx.clone(), conn_tx.clone()) {
+                match kagari_vfx::core::integration::start_sync_server(
+                    candidate_port,
+                    frame_tx.clone(),
+                    conn_tx.clone(),
+                ) {
                     Ok(port) => {
                         dynamic_link_port = Some(port);
                         break;
@@ -78,7 +82,7 @@ fn main() -> eframe::Result<()> {
             }
 
             kagari_vfx::ui::preferences_dialog::apply_loaded(&mut app);
-            kagari_vfx::ui::home_screen::trigger_recent_projects_scan(&mut app);
+            kagari_vfx::ui::home_screen::trigger_recent_projects_scan(&mut app, &cc.egui_ctx);
             kagari_vfx::ui::theme::configure_ae_theme(&cc.egui_ctx);
             kagari_vfx::ui::icons::init_image_loaders(&cc.egui_ctx);
             kagari_vfx::core::font_rasterizer::init_font_rasterizer();

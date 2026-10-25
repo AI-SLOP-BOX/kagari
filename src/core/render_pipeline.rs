@@ -152,10 +152,7 @@ impl RenderPipeline {
                 generation,
                 command: RenderCommand::Shutdown,
             });
-            self.worker
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .take()
+            self.worker.lock().unwrap_or_else(|e| e.into_inner()).take()
         };
         if let Some(handle) = handle {
             let _ = handle.join();

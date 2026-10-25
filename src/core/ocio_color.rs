@@ -13,7 +13,7 @@ pub enum OcioColorSpace {
     DciP3,
 }
 
-/// OpenColorIO (OCIO) / ACES 32-bit Float Color Management Engine.
+/// OpenColorIO (OCIO) / ACES color conversion subset (parses .cube LUTs and AP1/sRGB matrices).
 pub struct OcioColorEngine;
 
 impl OcioColorEngine {

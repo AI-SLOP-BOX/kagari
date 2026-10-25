@@ -48,6 +48,7 @@ pub mod expression_engine;
 pub mod ffmpeg_export;
 pub mod fft;
 pub mod find_edges;
+pub mod flow_graph_model;
 pub mod font_rasterizer;
 pub mod frame_blending;
 pub mod frame_cache;
@@ -161,9 +162,13 @@ pub mod ae_effects_pack_v30;
 pub mod ae_effects_pack_v4;
 pub mod ae_effects_pack_v5;
 
-// Semantic domain aliases for After Effects effect algorithm suites
+// Semantic domain aliases for After Effects effect algorithm suites (categorized domain exports)
+pub use ae_effects_pack as core_blur_sharpen;
 pub use ae_effects_pack_v2 as legacy_filters_v2;
+pub use ae_effects_pack_v3 as simulation_kernels_v3;
+pub use ae_effects_pack_v4 as color_and_distortion_v4;
 pub use ae_effects_pack_v5 as audio_effects_dsp;
+pub use ae_effects_pack_v11 as optical_motion_blur;
 pub use ae_effects_pack_v12 as physical_wave_effects;
 pub use ae_effects_pack_v13 as geometric_distortion;
 pub use ae_effects_pack_v14 as photo_stylize;
@@ -172,7 +177,11 @@ pub use ae_effects_pack_v16 as noise_and_keying;
 pub use ae_effects_pack_v17 as edge_aware_filters;
 pub use ae_effects_pack_v18 as simulation_procedural;
 pub use ae_effects_pack_v19 as frequency_composite;
+pub use ae_effects_pack_v20 as color_grading_film;
 pub use ae_effects_pack_v21 as warp_geometry_suite;
+pub use ae_effects_pack_v22 as matte_tools_alpha;
+pub use ae_effects_pack_v24 as cinematic_framing;
+pub use ae_effects_pack_v25 as environment_3d_render;
 pub use ae_effects_pack_v27 as distortion_lens;
 pub use ae_effects_pack_v28 as stylize_advanced;
 pub use ae_effects_pack_v30 as glitch_effects;

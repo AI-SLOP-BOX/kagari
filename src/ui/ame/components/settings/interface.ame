@@ -1,0 +1,3 @@
+component SettingsInterfacePage() {
+VStack(spacing: 10) { Text("インターフェース", size: 18) Caption("現在の画面表示について") Card { Padding(14) { VStack(spacing: 10) { Text("Kagari Dark") Caption("ダークテーマ · 日本語") Caption("テーマと言語の切り替えは現在未対応です。") } } } }
+}

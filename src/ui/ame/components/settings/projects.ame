@@ -1,0 +1,12 @@
+component SettingsProjectsPage() {
+VStack(spacing: 10) {
+                        Text("プロジェクト", size: 18)
+                        Caption("プロジェクトと作業環境を管理します。")
+                        Card { Padding(14) { VStack(spacing: 8) {
+                          Text("現在のプロジェクト", size: 16)
+                          Caption("コンポジションの解像度・フレームレート・長さは、新規プロジェクト設定で指定します。")
+                          HStack(spacing: 8) { Caption("現在の設定") Spacer Caption("{status_resolution} · {fps_label} · {duration_label}") }
+                          Checkbox("未保存の変更があるプロジェクトを切り替える前に確認", confirm_close_project, action: setting_confirm_close_changed)
+                        } } }
+                      }
+}

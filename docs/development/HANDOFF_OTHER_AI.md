@@ -1,12 +1,14 @@
 # Handoff: Antigravity → Other AI (2026-08-23)
 
+> Historical handoff for the legacy egui implementation. The main `kagari-studio` target now uses AmeUI; use `src/bin/ame_studio.rs`, `src/ui/ame/kagari_studio.ame`, and its `components/` directory for Studio work. Legacy egui source is retained under `src/legacy_egui/`; the interaction notes below apply only to `kagari-studio-egui`.
+
 ## What Antigravity Just Completed
 
 ### 1. 3D Material Options (Phong Shading)
 **Files:**
 - `src/core/timeline.rs` — `MaterialOptions` struct (lines 630-662), added to `Layer.material` field (line 975)
 - `src/core/software_renderer.rs` — Phong shading with specular highlights (lines 1125-1160)
-- `src/ui/inspector_layer.rs` — Material UI sliders (Ambient/Diffuse/Specular/SpecularExp/Emission/Metalness) in the 3D Spatial Transform section
+- `src/legacy_egui/inspector_layer.rs` — Material UI sliders (Ambient/Diffuse/Specular/SpecularExp/Emission/Metalness) in the 3D Spatial Transform section
 
 **What changed:** The old 3D lighting was hardcoded Lambertian with 0.35 ambient. Now it uses the layer's `MaterialOptions` for full Phong shading: ambient + diffuse + Blinn-Phong specular + emission. The UI shows 6 sliders when a layer is toggled to 3D.
 
@@ -16,7 +18,7 @@
 
 ### 2. Inline Expression Editor
 **Files:**
-- `src/ui/inspector_property.rs` — `draw_expression_selector` rewritten (lines 149-230)
+- `src/legacy_egui/inspector_property.rs` — `draw_expression_selector` rewritten (lines 149-230)
 
 **What changed:** The expression selector now has:
 - "Custom Script..." option in the combo box
@@ -32,7 +34,7 @@
 **Files:**
 - `src/app_state.rs` — `MixerChannel` struct (lines 8-27), `audio_mixer_channels: Vec<MixerChannel>` (line 270)
 - `src/core/audio_engine.rs` — `mix_audio_sources_for_frame` accepts `Option<&[MixerChannel]>` (line 349), applies mute/solo logic (lines 387-398)
-- `src/ui/audio_mixer.rs` — M (Mute, red) and S (Solo, yellow) buttons per track (lines 38-58)
+- `src/legacy_egui/audio_mixer.rs` — M (Mute, red) and S (Solo, yellow) buttons per track (lines 38-58)
 
 **What changed:** Each mixer channel now has `gain_db`, `pan`, `mute`, `solo` fields. M button mutes the track (red highlight). S button solos (yellow highlight). Solo logic: if any channel is soloed, only soloed channels are heard.
 
@@ -45,8 +47,8 @@
 ### 4. Drag-to-Apply Effects from Library
 **Files:**
 - `src/app_state.rs` — `dragging_effect: Option<(String, usize)>` field (line 189)
-- `src/ui/effects_library.rs` — Draggable effect buttons with ⠿ prefix, visual drag feedback, drop zone in Effect Controls panel (lines 270-310, 72-103)
-- `src/ui/timeline/mod.rs` — Drop zone on layer rows with blue glow indicator, deferred application to avoid borrow conflicts (lines 666-694, 1110-1126)
+- `src/legacy_egui/effects_library.rs` — Draggable effect buttons with ⠿ prefix, visual drag feedback, drop zone in Effect Controls panel (lines 270-310, 72-103)
+- `src/legacy_egui/timeline/mod.rs` — Drop zone on layer rows with blue glow indicator, deferred application to avoid borrow conflicts (lines 666-694, 1110-1126)
 
 **What changed:** Effect buttons in "Effects & Presets" are now draggable. When dragged:
 - Button shows blue highlight while dragging
@@ -64,7 +66,7 @@
 ### 5. Effect Preset Save/Load System
 **Files:**
 - `src/core/effect_presets.rs` — NEW: `EffectPreset` struct (JSON-serializable), save/load/discover functions (112 lines)
-- `src/ui/effects_library.rs` — "Save as Preset" button per effect, "Load Preset" button, preset browser in Effect Controls panel
+- `src/legacy_egui/effects_library.rs` — "Save as Preset" button per effect, "Load Preset" button, preset browser in Effect Controls panel
 
 **What changed:** Users can now save any applied effect as a JSON preset and reload it later.
 - **Save:** Each effect in the Effect Controls panel has a "💾 Save as Preset" button
@@ -76,7 +78,7 @@
 
 ### 6. Professional Dark Theme (AE Color Accuracy)
 **Files:**
-- `src/ui/theme.rs` — Complete rewrite with accurate AE CC 2024 color palette
+- `src/legacy_egui/theme.rs` — Complete rewrite with accurate AE CC 2024 color palette
 
 **What changed:** UI now uses pixel-accurate AE colors instead of generic dark theme.
 - **Backgrounds:** 7-tier depth system (BG_DEEPEST → BG_ELEVATED)
@@ -128,7 +130,7 @@
 1. **frame_blending.rs** — You have uncommitted changes in Pixel Motion interpolation. Don't let Antigravity touch this file.
 2. **Clippy** — Must be zero warnings before commit. Run `cargo clippy --all-features`.
 3. **Tests** — Must all pass. Run `cargo test --all-features`.
-4. **Default fonts** — NEVER remove `default_fonts` from eframe features.
+4. **Primary Studio UI** — `kagari-studio` is the AmeUI binary (`src/bin/ame_studio.rs` + `src/ui/ame/kagari_studio.ame`). The eframe `default_fonts` requirement applies only to the optional legacy `kagari-studio-egui` binary.
 5. **Deterministic rendering** — All renders must be byte-identical for same input. No pointer hashing.
 
 ---
@@ -140,18 +142,18 @@
 | `src/core/timeline.rs` | Added `MaterialOptions` struct, `Layer.material` field, Camera3D DOF fields |
 | `src/core/software_renderer.rs` | Phong shading with material properties |
 | `src/core/audio_engine.rs` | MixerChannel-based mute/solo support |
-| `src/ui/inspector_layer.rs` | Material options UI for 3D layers |
-| `src/ui/inspector_property.rs` | Inline expression script editor |
-| `src/ui/audio_mixer.rs` | Mute/Solo buttons, MixerChannel access |
+| `src/legacy_egui/inspector_layer.rs` | Material options UI for 3D layers |
+| `src/legacy_egui/inspector_property.rs` | Inline expression script editor |
+| `src/legacy_egui/audio_mixer.rs` | Mute/Solo buttons, MixerChannel access |
 | `src/app_state.rs` | MixerChannel struct, audio_mixer_channels type, dragging_effect field |
-| `src/ui/effects_library.rs` | Drag-to-apply effect buttons, drop zone in Effect Controls, preset save/load UI |
-| `src/ui/timeline/mod.rs` | Effect drop zone on layer rows, playhead/work area colors |
+| `src/legacy_egui/effects_library.rs` | Drag-to-apply effect buttons, drop zone in Effect Controls, preset save/load UI |
+| `src/legacy_egui/timeline/mod.rs` | Effect drop zone on layer rows, playhead/work area colors |
 | `src/core/effect_presets.rs` | NEW: EffectPreset system (save/load/discover JSON presets) |
-| `src/ui/theme.rs` | Complete AE color palette rewrite, helper functions, viewport overlay colors |
-| `src/ui/viewport_overlays.rs` | Viewport overlay colors replaced (35+ instances) |
-| `src/ui/timeline/utils.rs` | Keyframe tick colors replaced |
-| `src/ui/graph_editor.rs` | Graph editor colors replaced |
-| `src/ui/toolbar.rs` | Toolbar colors replaced |
+| `src/legacy_egui/theme.rs` | Complete AE color palette rewrite, helper functions, viewport overlay colors |
+| `src/legacy_egui/viewport_overlays.rs` | Viewport overlay colors replaced (35+ instances) |
+| `src/legacy_egui/timeline/utils.rs` | Keyframe tick colors replaced |
+| `src/legacy_egui/graph_editor.rs` | Graph editor colors replaced |
+| `src/legacy_egui/toolbar.rs` | Toolbar colors replaced |
 
 ---
 
@@ -160,33 +162,33 @@
 ### New Features Added
 | Feature | Location |
 |---------|----------|
-| Tool shortcuts V/H/Z/Y/Q/G/C, Cmd+T | `src/ui/shortcuts.rs` |
-| Effect menu applies 17 effects | `src/ui/menu.rs` (`apply_effect_by_name`) |
-| Layer bars use label colors | `src/ui/timeline/mod.rs` |
-| Timecode ruler + overlap thinning | `src/ui/timeline/mod.rs` |
+| Tool shortcuts V/H/Z/Y/Q/G/C, Cmd+T | `src/legacy_egui/shortcuts.rs` |
+| Effect menu applies 17 effects | `src/legacy_egui/menu.rs` (`apply_effect_by_name`) |
+| Layer bars use label colors | `src/legacy_egui/timeline/mod.rs` |
+| Timecode ruler + overlap thinning | `src/legacy_egui/timeline/mod.rs` |
 | Cmd+N new comp, Cmd+S save | shortcuts + menu |
 | Pixel color sampling in status bar | `src/app_state.rs` |
-| Draggable work-area handles | `src/ui/timeline/mod.rs` |
-| Graph editor click-to-create KF | `src/ui/graph_editor.rs` |
-| Motion path eased sampling | `src/ui/viewport_overlays.rs` |
-| Render queue sequential FFmpeg batch | `src/ui/render_queue.rs`, `export_dialog.rs` (`start_comp_export`) |
-| Duplicate/Split context menu fixes | `src/ui/timeline/mod.rs` (pending_* pattern) |
-| U/UU/A reveal filtering works | `src/ui/timeline/mod.rs` |
-| Time Stretch real impl | `src/ui/time_remap_panel.rs` |
+| Draggable work-area handles | `src/legacy_egui/timeline/mod.rs` |
+| Graph editor click-to-create KF | `src/legacy_egui/graph_editor.rs` |
+| Motion path eased sampling | `src/legacy_egui/viewport_overlays.rs` |
+| Render queue sequential FFmpeg batch | `src/legacy_egui/render_queue.rs`, `export_dialog.rs` (`start_comp_export`) |
+| Duplicate/Split context menu fixes | `src/legacy_egui/timeline/mod.rs` (pending_* pattern) |
+| U/UU/A reveal filtering works | `src/legacy_egui/timeline/mod.rs` |
+| Time Stretch real impl | `src/legacy_egui/time_remap_panel.rs` |
 | Keyframe right-click menu | `layers.rs` on_menu cb, `utils.rs` RightClicked |
 | Shift+drag marquee select | `layers.rs` on_box_select cb |
 | Selected-KF group move | `layers.rs` on_group_move cb |
-| Viewport scale handles | `src/ui/viewport.rs` (`viewport_scale_drag`) |
-| Sequence Layers assistant | NEW `src/ui/sequence_layers_dialog.rs` |
+| Viewport scale handles | `src/legacy_egui/viewport.rs` (`viewport_scale_drag`) |
+| Sequence Layers assistant | NEW `src/legacy_egui/sequence_layers_dialog.rs` |
 | Text dbl-click viewport edit | `viewport.rs` (`inline_text_edit_layer`) |
 | Layer markers + Alt+M | `timeline.rs` Layer.markers |
-| Hand pans / Zoom clicks | `src/ui/viewport.rs` |
-| Save Frame As PNG | `src/ui/menu.rs` |
-| Slip edit Alt+drag, ripple Shift+trim | `src/ui/timeline/mod.rs` |
-| Import Image menu | `src/ui/menu.rs` |
-| Q creates rectangle, T creates text | `src/ui/viewport.rs` drag_stopped |
-| Ruler context menu | `src/ui/timeline/mod.rs` |
-| PreComp dbl-click opens nested comp | `src/ui/timeline/mod.rs` |
+| Hand pans / Zoom clicks | `src/legacy_egui/viewport.rs` |
+| Save Frame As PNG | `src/legacy_egui/menu.rs` |
+| Slip edit Alt+drag, ripple Shift+trim | `src/legacy_egui/timeline/mod.rs` |
+| Import Image menu | `src/legacy_egui/menu.rs` |
+| Q creates rectangle, T creates text | `src/legacy_egui/viewport.rs` drag_stopped |
+| Ruler context menu | `src/legacy_egui/timeline/mod.rs` |
+| PreComp dbl-click opens nested comp | `src/legacy_egui/timeline/mod.rs` |
 
 ### Coordination Notes
 - **J/K/L semantics changed**: J=prev KF, K=next KF, L=play forward. Don't re-add shuttle J/K.
@@ -250,11 +252,11 @@
 - Status bar pixel color sampling from frame cache
 
 **Files the other AI should NOT touch (Antigravity-owned):**
-- `src/ui/shortcuts.rs`, `src/ui/menu.rs`, `src/ui/viewport.rs`, `src/ui/viewport_overlays.rs`
-- `src/ui/timeline/` (all files), `src/ui/graph_editor.rs`
-- `src/ui/transport_panel.rs`, `src/ui/inspector.rs`, `src/ui/inspector_layer.rs`
-- `src/ui/render_queue.rs`, `src/ui/export_dialog.rs`, `src/ui/shortcuts_dialog.rs`
-- `src/ui/command_palette.rs`, `src/ui/sequence_layers_dialog.rs`
+- `src/legacy_egui/shortcuts.rs`, `src/legacy_egui/menu.rs`, `src/legacy_egui/viewport.rs`, `src/legacy_egui/viewport_overlays.rs`
+- `src/legacy_egui/timeline/` (all files), `src/legacy_egui/graph_editor.rs`
+- `src/legacy_egui/transport_panel.rs`, `src/legacy_egui/inspector.rs`, `src/legacy_egui/inspector_layer.rs`
+- `src/legacy_egui/render_queue.rs`, `src/legacy_egui/export_dialog.rs`, `src/legacy_egui/shortcuts_dialog.rs`
+- `src/legacy_egui/command_palette.rs`, `src/legacy_egui/sequence_layers_dialog.rs`
 - `src/app_state.rs`, `src/core/mask.rs`, `src/core/effect_params.rs`
 
 ### Remaining Gaps (Priority Order)

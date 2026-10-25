@@ -278,7 +278,7 @@ pub(crate) fn render_frame_to_pixels_filtered(
     let any_shadow_light = comp
         .lights
         .iter()
-        .any(|l| l.casts_shadows && l.intensity > 0.0);
+        .any(|l| l.casts_shadows && l.intensity_at(frame) > 0.0);
     let shadow_map: Vec<f32> = if any_shadow_light {
         build_shadow_map(comp, frame, width, height)
     } else {
@@ -318,7 +318,9 @@ pub(crate) fn render_frame_to_pixels_filtered(
             if let Some(target_id) = &consumer.track_matte_layer_id {
                 target_id == &layer.id
             } else {
-                comp.layers.get(sorted_idx + 1).is_some_and(|next| next.id == consumer.id)
+                comp.layers
+                    .get(sorted_idx + 1)
+                    .is_some_and(|next| next.id == consumer.id)
             }
         });
         if is_matte_source {

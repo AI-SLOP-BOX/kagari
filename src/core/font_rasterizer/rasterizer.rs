@@ -84,7 +84,11 @@ impl FontRasterizer {
 
         // If requesting Japanese or Hiragino, fallback to any available Japanese font
         if lower.contains("hiragino") || lower.contains("japan") || lower.contains("gothic") {
-            if let Some(jp) = self.fonts.keys().find(|k| k.contains("ヒラギノ") || k.contains("Hiragino")) {
+            if let Some(jp) = self
+                .fonts
+                .keys()
+                .find(|k| k.contains("ヒラギノ") || k.contains("Hiragino"))
+            {
                 return jp.clone();
             }
         }

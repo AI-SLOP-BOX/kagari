@@ -299,46 +299,50 @@ pub fn evaluate_effects(effects: &[crate::core::timeline::Effect], frame: u32) -
     params
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum GpuEffectSlot {
+    // Execution order in fs_main:
+    // 0. Spatial UV distortion (sample_layer_color line 359)
+    Distortion = 0,
+    // 1. ColorTint (line 777)
+    ColorTint = 1,
+    // 2. Levels (line 868)
+    Levels = 2,
+    // 3. Invert (line 930)
+    Invert = 3,
+    // 4. Posterize (line 940)
+    Posterize = 4,
+    // LensFlare is handled as additive lighting pass
+    LensFlare = 5,
+}
+
+impl GpuEffectSlot {
+    /// Returns the execution order in the GPU fragment shader.
+    pub fn execution_order(self) -> u32 {
+        self as u32
+    }
+}
+
 /// Returns whether the realtime GPU preview can represent this effect without
 /// silently dropping parameters.
 pub fn gpu_preview_effect_supported(effect: &EffectType) -> bool {
+    gpu_preview_effect_slot(effect).is_some()
+}
+
+/// Returns the specific GPU shader pipeline slot for an effect, or None if unsupported on GPU preview.
+pub fn gpu_preview_effect_slot(effect: &EffectType) -> Option<GpuEffectSlot> {
     match effect {
-        EffectType::MotionBlur { .. }
-        | EffectType::FilmGrain { .. }
-        | EffectType::FractalNoise { .. }
-        | EffectType::Tritone { .. }
-        | EffectType::Glow { .. }
-        | EffectType::GlowPro { .. }
-        | EffectType::HueSaturation { .. }
-        | EffectType::TurbulentDisplace { .. }
+        EffectType::TurbulentDisplace { .. }
         | EffectType::WaveWarp { .. }
-        | EffectType::Spherize { .. }
-        | EffectType::HeatDistortion { .. }
-        | EffectType::GaussianBlur { .. }
-        | EffectType::DropShadow { .. }
-        | EffectType::ChromaticAberration { .. }
-        | EffectType::Vignette { .. }
-        | EffectType::MeshWarp { .. }
-        | EffectType::Posterize { .. }
-        | EffectType::CrtScanlines { .. }
         | EffectType::Twirl { .. }
         | EffectType::Bulge { .. }
-        | EffectType::LensFlare {
-            link_to_light: Some(_),
-            ..
-        }
-        | EffectType::Invert { invert_alpha: true } => false,
-        _ => matches!(
-            effect,
-            EffectType::ColorTint { .. }
-                | EffectType::Levels { .. }
-                | EffectType::LensFlare {
-                    link_to_light: None,
-                    ..
-                }
-                | EffectType::Invert {
-                    invert_alpha: false
-                }
-        ),
+        | EffectType::Spherize { .. }
+        | EffectType::HeatDistortion { .. } => Some(GpuEffectSlot::Distortion),
+        EffectType::ColorTint { .. } => Some(GpuEffectSlot::ColorTint),
+        EffectType::Levels { .. } => Some(GpuEffectSlot::Levels),
+        EffectType::Invert { invert_alpha: false } => Some(GpuEffectSlot::Invert),
+        EffectType::Posterize { .. } => Some(GpuEffectSlot::Posterize),
+        EffectType::LensFlare { link_to_light: None, .. } => Some(GpuEffectSlot::LensFlare),
+        _ => None,
     }
 }

@@ -1,0 +1,24 @@
+component SettingsPerformancePage() {
+VStack(spacing: 10) {
+                        Text("パフォーマンス", size: 18)
+                        Caption("再生時のプレビュー解像度を調整します。")
+                        Card { Padding(14) { VStack(spacing: 12) {
+                          Text("プレビュー", size: 16)
+                          Checkbox("再生中の解像度自動低下（アダプティブプレビュー）", adaptive_preview, action: setting_adaptive_preview_changed)
+                          Caption("オンにすると再生中は軽いプレビューを使い、停止時に元の解像度へ戻します。")
+                          Checkbox("音声プレビュー", audio_preview, action: setting_audio_preview_changed)
+                          Caption("タイムライン再生中にコンポジションの音声を再生します。")
+                        } } }
+                        Card { Padding(14) { VStack(spacing: 10) {
+                          Text("再生とメモリ", size: 16)
+                          HStack(spacing: 8) { Caption("GPUアクセラレーション") Spacer Checkbox("有効", gpu_enabled, action: setting_gpu_changed) }
+                          Caption("対応する描画処理でGPUを使用します。")
+                          HStack(spacing: 8) { Caption("メモリ上限") DragValue(memory_limit_gb, min: 1.0, max: 64.0, action: setting_memory_changed) Caption("GB") }
+                        } } }
+                        Card { Padding(14) { VStack(spacing: 10) {
+                          Text("履歴と復旧", size: 16)
+                          HStack(spacing: 8) { Caption("Undo履歴") DragValue(undo_steps, min: 10.0, max: 500.0, action: setting_undo_changed) Caption("件") }
+                          HStack(spacing: 8) { Caption("自動復旧スロット") DragValue(recovery_slots, min: 1.0, max: 50.0, action: setting_recovery_changed) Caption("個") }
+                        } } }
+                      }
+}

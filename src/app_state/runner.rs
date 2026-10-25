@@ -4,6 +4,16 @@ use super::*;
 impl eframe::App for KagariApp {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
         self.repaint_context = Some(ctx.clone());
+        let close_requested = ctx.input(|input| {
+            input
+                .viewport()
+                .events
+                .contains(&eframe::egui::ViewportEvent::Close)
+        });
+        if close_requested && self.confirm_exit && !self.exit_confirmed {
+            ctx.send_viewport_cmd(eframe::egui::ViewportCommand::CancelClose);
+            self.show_exit_confirmation = true;
+        }
         if let Some(receiver) = self.motion_sketch_bake_rx.take() {
             match receiver.try_recv() {
                 Ok(bake) => {
@@ -65,6 +75,8 @@ impl eframe::App for KagariApp {
         crate::ui::tracker_panel::poll_quad_track(self, ctx);
 
         self.update_panels(ctx);
+        crate::ui::preferences_dialog::draw_exit_confirmation_dialog(self, ctx);
+        crate::ui::preferences_dialog::draw_close_project_confirmation_dialog(self, ctx);
         crate::ui::project_io::draw_project_load_modal(self, ctx);
         crate::ui::drop_import::draw_import_progress(self, ctx);
     }

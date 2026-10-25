@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-/// Bytecode OpCodes for JIT compiled VFX Expressions & Effect Stacks.
+/// Bytecode OpCodes for stack-based bytecode evaluation of VFX expressions (stub evaluator without native machine code gen).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum JitOpCode {
     PushConst(f32),
@@ -12,7 +12,7 @@ pub enum JitOpCode {
     Cos,
 }
 
-/// JIT Compiled Bytecode Execution Pipeline.
+/// Bytecode Execution Pipeline (interprets VFX bytecode opcodes via stack machine).
 #[derive(Debug, Clone)]
 pub struct JitCompiledProgram {
     pub instructions: Vec<JitOpCode>,

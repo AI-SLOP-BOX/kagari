@@ -1,5 +1,7 @@
 # AI 共同開発 役割分担シート (ai_collaboration.md)
 
+> **履歴資料:** この文書はeguiが既定UIだった時期の役割分担記録です。現在の既定StudioはAmeUIで、画面定義は `src/ui/ame/`、Rustホストは `src/bin/ame_studio.rs` にあります。egui実装は互換用に `src/legacy_egui/` に残っています。現行の配置とビルド手順は `AGENTS.md` を参照してください。
+
 このファイルは、**Antigravity (本AI)** と **もう一方のAI (CopilotやChat AI等)** の2つのAIで協力して「After Effects OSS代替」を開発するための役割分担シートです。
 開発の進行状況や役割の変化に応じて、チェックボックス（ `[x]` / `[ ]` ）を更新してご活用ください。
 

@@ -11,6 +11,12 @@ impl Default for KagariApp {
             .with_process_namespace(std::process::id()),
             autosave_history_generation: 0,
             show_recovery_dialog: false,
+            confirm_exit: true,
+            confirm_close_project: true,
+            restore_previous_state: true,
+            show_close_project_confirmation: false,
+            show_exit_confirmation: false,
+            exit_confirmed: false,
             recovery_checked: false,
             recovery_snapshot_time: None,
             recovery_generations: None,
@@ -206,10 +212,10 @@ impl Default for KagariApp {
             quality_check_result: None,
             show_welcome: crate::ui::project_io::welcome_on_startup(),
             ui_mode: crate::ui::mode::load_mode(),
-            tutorial: None,
             show_new_comp_dialog: false,
             show_preferences: false,
             audio_preview_enabled: true,
+            adaptive_preview_enabled: true,
             ui_ctx: None,
             import_rx: Vec::new(),
             collect_files_rx: None,
@@ -257,8 +263,6 @@ impl Default for KagariApp {
             custom_workspaces: Vec::new(),
             selected_expression_prop_idx: 0,
             skill_level: SkillLevel::Pro,
-            show_guided_tutorial: false,
-            tutorial_step: 0,
         }
     }
 }

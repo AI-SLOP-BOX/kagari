@@ -99,6 +99,7 @@ pub fn try_gpu_glow(
     false
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn try_gpu_levels(
     pixels: &mut [u8],
     w: u32,

@@ -1,0 +1,95 @@
+component TransformProperties() {
+  Card { Padding(6) { VStack(spacing: 6) {
+    HStack(spacing: 4) {
+      Text("▎ 変形 (Transform)", size: 12)
+      Spacer
+      If(selected_layer_locked) { Caption("🔒") }
+    }
+    Card { Padding(5) { VStack(spacing: 4) {
+      HStack(spacing: 4) {
+        MinWidth(56) { Caption("位置 (X/Y)") }
+        If(selected_layer_locked) { Caption("{position_x} , {position_y}") } else {
+          DragValue(position_x, min: -100000.0, max: 100000.0, action: position_x_changed)
+          DragValue(position_y, min: -100000.0, max: 100000.0, action: position_y_changed)
+        }
+        Spacer
+        Button("◆", action: keyframe_position_2d, tone: secondary, size: small, disabled: selected_layer_locked)
+      }
+      HStack(spacing: 4) {
+        MinWidth(56) { Caption("基準点") }
+        If(selected_layer_locked) { Caption("{anchor_x} , {anchor_y}") } else {
+          DragValue(anchor_x, min: -100000.0, max: 100000.0, action: anchor_x_changed)
+          DragValue(anchor_y, min: -100000.0, max: 100000.0, action: anchor_y_changed)
+        }
+        Spacer
+        Button("◆", action: keyframe_anchor_point, tone: secondary, size: small, disabled: selected_layer_locked)
+      }
+    } } }
+    Card { Padding(5) { VStack(spacing: 4) {
+      HStack(spacing: 4) {
+        MinWidth(56) { Caption("スケール") }
+        If(selected_layer_locked) { Caption("{scale_x}% × {scale_y}%") } else {
+          DragValue(scale_x, min: 0.1, max: 1000.0, action: scale_x_changed)
+          DragValue(scale_y, min: 0.1, max: 1000.0, action: scale_y_changed)
+        }
+        Caption("%")
+        Spacer
+        Button("◆", action: keyframe_scale_2d, tone: secondary, size: small, disabled: selected_layer_locked)
+      }
+      HStack(spacing: 4) {
+        MinWidth(56) { Caption("回転") }
+        If(selected_layer_locked) { Caption("{rotation_degrees}°") } else {
+          DragValue(rotation_degrees, min: -36000.0, max: 36000.0, action: rotation_changed)
+        }
+        Caption("°")
+        Spacer
+        Button("◆", action: keyframe_rotation_2d, tone: secondary, size: small, disabled: selected_layer_locked)
+      }
+      HStack(spacing: 4) {
+        MinWidth(56) { Caption("不透明度") }
+        If(selected_layer_locked) { Caption("{opacity}%") } else {
+          DragValue(opacity, min: 0.0, max: 100.0, action: opacity_changed)
+        }
+        Caption("%")
+        Spacer
+        Button("◆", action: keyframe_opacity, tone: secondary, size: small, disabled: selected_layer_locked)
+      }
+    } } }
+  } } }
+}
+
+component LayerConstraintsProperties() {
+  Card { Padding(6) { VStack(spacing: 5) {
+    Caption("▎ コンポジションリサイズ時の追従")
+    HStack(spacing: 5) {
+      MinWidth(72) { Caption("水平方向") }
+      Button("{layer_constraint_horizontal}  ↻", action: cycle_constraint_horizontal, tone: secondary, size: small, disabled: selected_layer_locked)
+      MinWidth(72) { Caption("垂直方向") }
+      Button("{layer_constraint_vertical}  ↻", action: cycle_constraint_vertical, tone: secondary, size: small, disabled: selected_layer_locked)
+    }
+    Caption("コンポジションの縦横サイズを変更した時に、レイヤー位置を維持します。")
+  } } }
+}
+
+component Transform3DProperties() {
+  Card { Padding(6) { VStack(spacing: 5) {
+    Caption("▎ 3D変形 · XYZ")
+    HStack(spacing: 4) { Caption("位置") Button("◇", action: keyframe_position_3d, tone: secondary, size: small, disabled: selected_layer_locked) }
+    HStack(spacing: 4) { Caption("X") If(selected_layer_locked) { Caption("{position_3d_x}") } else { DragValue(position_3d_x, min: -100000.0, max: 100000.0, action: position_3d_x_changed) } Caption("Y") If(selected_layer_locked) { Caption("{position_3d_y}") } else { DragValue(position_3d_y, min: -100000.0, max: 100000.0, action: position_3d_y_changed) } Caption("Z") If(selected_layer_locked) { Caption("{position_3d_z}") } else { DragValue(position_3d_z, min: -100000.0, max: 100000.0, action: position_3d_z_changed) } }
+    HStack(spacing: 4) { Caption("回転 (°)") Button("◇", action: keyframe_rotation_3d, tone: secondary, size: small, disabled: selected_layer_locked) }
+    HStack(spacing: 4) { Caption("X") If(selected_layer_locked) { Caption("{rotation_3d_x}") } else { DragValue(rotation_3d_x, min: -36000.0, max: 36000.0, action: rotation_3d_x_changed) } Caption("Y") If(selected_layer_locked) { Caption("{rotation_3d_y}") } else { DragValue(rotation_3d_y, min: -36000.0, max: 36000.0, action: rotation_3d_y_changed) } Caption("Z") If(selected_layer_locked) { Caption("{rotation_3d_z}") } else { DragValue(rotation_3d_z, min: -36000.0, max: 36000.0, action: rotation_3d_z_changed) } }
+    HStack(spacing: 4) { Caption("倍率 (%)") Button("◇", action: keyframe_scale_3d, tone: secondary, size: small, disabled: selected_layer_locked) }
+    HStack(spacing: 4) { Caption("X") If(selected_layer_locked) { Caption("{scale_3d_x}") } else { DragValue(scale_3d_x, min: 0.1, max: 1000.0, action: scale_3d_x_changed) } Caption("Y") If(selected_layer_locked) { Caption("{scale_3d_y}") } else { DragValue(scale_3d_y, min: 0.1, max: 1000.0, action: scale_3d_y_changed) } Caption("Z") If(selected_layer_locked) { Caption("{scale_3d_z}") } else { DragValue(scale_3d_z, min: 0.1, max: 1000.0, action: scale_3d_z_changed) } }
+    Spacer
+    Caption("マテリアル · ライティング")
+    HStack(spacing: 4) { Caption("環境光") If(selected_layer_locked) { Caption("{material_ambient}") } else { DragValue(material_ambient, min: 0.0, max: 1.0, action: material_ambient_changed) } Caption("拡散") If(selected_layer_locked) { Caption("{material_diffuse}") } else { DragValue(material_diffuse, min: 0.0, max: 1.0, action: material_diffuse_changed) } }
+    HStack(spacing: 4) { Caption("鏡面") If(selected_layer_locked) { Caption("{material_specular}") } else { DragValue(material_specular, min: 0.0, max: 1.0, action: material_specular_changed) } Caption("鋭さ") If(selected_layer_locked) { Caption("{material_specular_exponent}") } else { DragValue(material_specular_exponent, min: 1.0, max: 256.0, action: material_specular_exponent_changed) } }
+    HStack(spacing: 4) { Caption("発光") If(selected_layer_locked) { Caption("{material_emission}") } else { DragValue(material_emission, min: 0.0, max: 1.0, action: material_emission_changed) } Caption("金属") If(selected_layer_locked) { Caption("{material_metalness}") } else { DragValue(material_metalness, min: 0.0, max: 1.0, action: material_metalness_changed) } }
+    HStack(spacing: 4) { Caption("透過") If(selected_layer_locked) { Caption("{material_light_transmission}") } else { DragValue(material_light_transmission, min: 0.0, max: 100.0, action: material_light_transmission_changed) } Caption("%") }
+    HStack(spacing: 4) {
+      If(material_cast_shadows) { Button("影を落とす", action: toggle_material_cast_shadows, tone: primary, size: small, disabled: selected_layer_locked) } else { Button("影を落とす", action: toggle_material_cast_shadows, tone: secondary, size: small, disabled: selected_layer_locked) }
+      If(material_accepts_shadows) { Button("影を受ける", action: toggle_material_accepts_shadows, tone: primary, size: small, disabled: selected_layer_locked) } else { Button("影を受ける", action: toggle_material_accepts_shadows, tone: secondary, size: small, disabled: selected_layer_locked) }
+      If(material_accepts_lights) { Button("ライトを受ける", action: toggle_material_accepts_lights, tone: primary, size: small, disabled: selected_layer_locked) } else { Button("ライトを受ける", action: toggle_material_accepts_lights, tone: secondary, size: small, disabled: selected_layer_locked) }
+    }
+  } } }
+}

@@ -1,0 +1,50 @@
+component ToolBar() {
+    Card {
+      Padding(4) {
+        HStack(spacing: 6) {
+          IconButton("cursor", action: tool_select, tone: secondary, size: small)
+          If(!compact) { Caption("選択") }
+          IconButton("move", action: tool_hand, tone: secondary, size: small)
+          If(!compact) { Caption("手のひら") }
+          IconButton("search", action: tool_zoom, tone: secondary, size: small)
+          If(!compact) { Caption("ズーム") }
+          Button("T", action: tool_text, tone: secondary, size: small)
+          If(!compact) { Caption("文字") }
+          IconButton("grid", action: tool_shape, tone: secondary, size: small)
+          If(!compact) { Caption("図形") }
+          IconButton("edit", action: tool_pen, tone: secondary, size: small)
+          If(!compact) { Caption("ペン") }
+          Spacer
+          If(compact) { Button("↶", action: undo_project, tone: secondary, size: small, disabled: !can_undo) } else { Button("↶ 元に戻す", action: undo_project, tone: secondary, size: small, disabled: !can_undo) }
+          If(compact) { Button("↷", action: redo_project, tone: secondary, size: small, disabled: !can_redo) } else { Button("↷ やり直し", action: redo_project, tone: secondary, size: small, disabled: !can_redo) }
+          If(compact) { Button("◐ 調整", action: add_adjustment_layer, tone: secondary, size: small) } else { Button("◐ 調整レイヤー", action: add_adjustment_layer, tone: secondary, size: small) }
+          If(compact) { Button("✦ 粒子", action: add_particle_layer, tone: secondary, size: small) } else { Button("✦ パーティクル", action: add_particle_layer, tone: secondary, size: small) }
+          If(!compact) { Caption("{selected_tool_label}ツール") }
+          Spacer
+          If(compact) { HorizontalScrollView(230) { WorkspaceTabs() } } else { HorizontalScrollView(520) { WorkspaceTabs() } }
+          Spacer
+          If(is_playing) { IconButton("pause", action: play_toggle, tone: primary, size: small) } else { IconButton("play", action: play_toggle, tone: secondary, size: small) }
+          If(playback_loop) { Button("🔁", action: toggle_playback_loop, tone: primary, size: small) } else { Button("↻", action: toggle_playback_loop, tone: secondary, size: small) }
+          IconButton("stop", action: play_stop, tone: secondary, size: small)
+        }
+      }
+    }
+  }
+
+component WorkspaceTabs() {
+  HStack(spacing: 2) {
+    Button("標準", action: workspace_default, tone: secondary, size: small)
+    Button("タイムライン", action: workspace_timeline, tone: secondary, size: small)
+    Button("グラフ", action: workspace_graph, tone: secondary, size: small)
+    Button("エフェクト", action: workspace_effects, tone: secondary, size: small)
+    Button("3D・照明", action: workspace_camera_light, tone: secondary, size: small)
+    Spacer
+    If(is_color_workspace) { Button("色補正", action: workspace_color, tone: primary, size: small) } else { Button("色補正", action: workspace_color, tone: secondary, size: small) }
+    If(is_layer_style_workspace) { Button("合成", action: workspace_layer_style, tone: primary, size: small) } else { Button("合成", action: workspace_layer_style, tone: secondary, size: small) }
+    If(is_mask_workspace) { Button("マスク", action: workspace_mask, tone: primary, size: small) } else { Button("マスク", action: workspace_mask, tone: secondary, size: small) }
+    If(is_text_workspace) { Button("文字", action: workspace_text, tone: primary, size: small) } else { Button("文字", action: workspace_text, tone: secondary, size: small) }
+    If(is_audio_workspace) { Button("音響", action: workspace_audio, tone: primary, size: small) } else { Button("音響", action: workspace_audio, tone: secondary, size: small) }
+    If(is_time_remap_workspace) { Button("リマップ", action: workspace_time_remap, tone: primary, size: small) } else { Button("リマップ", action: workspace_time_remap, tone: secondary, size: small) }
+    Button("↺", action: workspace_reset_layout, tone: secondary, size: small)
+  }
+}

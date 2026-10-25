@@ -191,6 +191,9 @@ impl OtioTimeline {
                                     frames_dir: video.frames_dir,
                                     frame_count: video.frame_count,
                                     audio_wav: video.audio_wav,
+                                    audio_volume: crate::core::property::Animatable::new_constant(
+                                        0.0,
+                                    ),
                                     speed: 1.0,
                                 },
                                 Err(error) => {
@@ -237,6 +240,7 @@ impl OtioTimeline {
                                 frames_dir: frames_dir.to_string(),
                                 frame_count,
                                 audio_wav: audio_wav.map(str::to_string),
+                                audio_volume: crate::core::property::Animatable::new_constant(0.0),
                                 speed: 1.0,
                             }
                         }

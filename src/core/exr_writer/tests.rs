@@ -223,7 +223,8 @@ fn test_pixel_type_codes_match_openexr_spec() {
     assert_eq!(PIXEL_HALF, ExrSampleType::Half.code());
     assert_eq!(PIXEL_FLOAT, ExrSampleType::Float.code());
 
-    let img = ExrImage::rgba_f32(1, 1, &[0.5, 0.25, 0.125, 1.0]);
+    let mut img = ExrImage::rgba_f32(1, 1, &[0.5, 0.25, 0.125, 1.0]);
+    img.compression = ExrCompression::None;
     let bytes = write_to_vec(&img);
     let p = parse(&bytes);
     assert_eq!(p.types, vec![ExrSampleType::Float; 4]);

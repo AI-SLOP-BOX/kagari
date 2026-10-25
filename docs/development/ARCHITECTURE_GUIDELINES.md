@@ -70,9 +70,10 @@ This document outlines mandatory architectural conventions for team collaboratio
 
 ## 7. Zero-Unwrap Protocol & Defensive Error Handling
 
-### Rule 7.1: Zero `.unwrap()` / `.expect()` in Production Code
-- Calling `.unwrap()` or `.expect()` in `src/core/` and `src/ui/` is prohibited.
-- Use pattern matching (`if let Some(...)`), defensive fallbacks (`.unwrap_or(...)`), or `Result` propagation.
+### Rule 7.1: Defensive Error Handling & Unwrap Policy
+- Calling `.unwrap()` or `.expect()` on external I/O, user files, network payloads, or unbounded inputs is strictly prohibited.
+- Use pattern matching (`if let Some(...)`), defensive fallbacks (`.unwrap_or(...)`), or `Result` propagation (`?`).
+- Exception: In internal data structures where invariants are statically proven (e.g., following an explicit non-empty slice/length check or fixed-size array conversion), `.unwrap()` or `.expect("reason")` is permitted provided a comment stating the invariant is attached.
 
 ---
 

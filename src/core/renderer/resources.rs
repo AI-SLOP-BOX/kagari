@@ -123,6 +123,7 @@ impl WgpuRenderer {
             tracking: tracking.to_bits(),
             leading: leading.to_bits(),
             box_width: params.box_width.to_bits(),
+            box_height: params.box_height.to_bits(),
             align,
             stroke_color: [
                 stroke_color[0].to_bits(),
@@ -166,6 +167,10 @@ impl WgpuRenderer {
                 params.faux_style,
             )
         })?;
+        let rasterized = crate::core::font_rasterizer::clip_text_bitmap_height(
+            rasterized,
+            params.box_height,
+        );
         if rasterized.0 == 0 || rasterized.1 == 0 || rasterized.2.is_empty() {
             return None;
         }
@@ -286,10 +291,44 @@ impl WgpuRenderer {
         });
         let snap_view = snap_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
+        let ping_texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Renderer Multi-Pass Ping Intermediate"),
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba16Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let ping_view = ping_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let pong_texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Renderer Multi-Pass Pong Intermediate"),
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba16Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST
+                | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let pong_view = pong_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
         self.target_texture = Some(texture);
         self.target_view = Some(view);
         self.snapshot_texture = Some(snap_texture);
         self.snapshot_view = Some(snap_view);
+        self.ping_texture = Some(ping_texture);
+        self.ping_view = Some(ping_view);
+        self.pong_texture = Some(pong_texture);
+        self.pong_view = Some(pong_view);
         self.target_size = (width, height);
         true
     }

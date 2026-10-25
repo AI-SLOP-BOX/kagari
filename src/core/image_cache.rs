@@ -43,6 +43,8 @@ impl Default for ImageCache {
 
 impl ImageCache {
     const DEFAULT_MAX_BYTES: usize = 1024 * 1024 * 1024;
+    const MAX_SVG_SOURCE_BYTES: u64 = 32 * 1024 * 1024;
+    const MAX_SVG_BITMAP_BYTES: usize = 256 * 1024 * 1024;
 
     pub fn new() -> Self {
         Self {
@@ -134,6 +136,12 @@ impl ImageCache {
 
     /// Decode an image file to RGBA pixels.
     fn decode_image_file(path: &str, max_bytes: usize) -> Option<CachedImage> {
+        if std::path::Path::new(path)
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("svg"))
+        {
+            return decode_svg_file(path, max_bytes);
+        }
         // Check declared dimensions BEFORE decoding to avoid huge allocations
         let reader = image::ImageReader::open(path).ok()?;
         let (declared_w, declared_h) = reader.into_dimensions().ok()?;
@@ -230,6 +238,96 @@ impl ImageCache {
             .get(path)
             .filter(|cached| cached.revision == revision)
             .map(|cached| &cached.image)
+    }
+}
+
+/// Decode an SVG through resvg while keeping the same cache and allocation limits
+/// used for raster images. External file references are ignored by usvg's nested
+/// document parser, so importing an SVG never reads files adjacent to it.
+pub(crate) fn decode_svg_file(path: &str, max_bytes: usize) -> Option<CachedImage> {
+    let tree = load_svg_tree(path)?;
+    let size = tree.size();
+    let width_f = size.width().ceil();
+    let height_f = size.height().ceil();
+    if !width_f.is_finite() || !height_f.is_finite() || width_f < 1.0 || height_f < 1.0 {
+        return None;
+    }
+    let (width, height) = (width_f as u32, height_f as u32);
+    let pixels = u64::from(width).checked_mul(u64::from(height))?;
+    let byte_len = pixels.checked_mul(4)?;
+    if pixels > ImageCache::MAX_IMAGE_PIXELS
+        || byte_len > max_bytes.min(ImageCache::MAX_SVG_BITMAP_BYTES) as u64
+    {
+        return None;
+    }
+    let mut pixmap = resvg::tiny_skia::Pixmap::new(width, height)?;
+    resvg::render(
+        &tree,
+        resvg::tiny_skia::Transform::identity(),
+        &mut pixmap.as_mut(),
+    );
+    let pixels = pixmap.take_demultiplied();
+    if pixels.len() != byte_len as usize {
+        return None;
+    }
+    Some(CachedImage {
+        width,
+        height,
+        pixels,
+    })
+}
+
+/// Read dimensions without allocating the decoded bitmap. SVG dimensions are
+/// parsed with the same source and pixel limits used by the renderer.
+pub fn image_dimensions(path: &str) -> Option<(u32, u32)> {
+    let is_svg = std::path::Path::new(path)
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("svg"));
+    let (width, height) = if is_svg {
+        let size = load_svg_tree(path)?.size();
+        let width = size.width().ceil();
+        let height = size.height().ceil();
+        if !width.is_finite() || !height.is_finite() || width < 1.0 || height < 1.0 {
+            return None;
+        }
+        (width as u32, height as u32)
+    } else {
+        image::image_dimensions(path).ok()?
+    };
+    let pixels = u64::from(width).checked_mul(u64::from(height))?;
+    let bytes = pixels.checked_mul(4)?;
+    let byte_limit = if is_svg {
+        ImageCache::MAX_SVG_BITMAP_BYTES
+    } else {
+        ImageCache::DEFAULT_MAX_BYTES
+    };
+    (width > 0
+        && height > 0
+        && pixels <= ImageCache::MAX_IMAGE_PIXELS
+        && bytes <= byte_limit as u64)
+        .then_some((width, height))
+}
+
+fn load_svg_tree(path: &str) -> Option<resvg::usvg::Tree> {
+    let metadata = std::fs::metadata(path).ok()?;
+    if metadata.len() == 0 || metadata.len() > ImageCache::MAX_SVG_SOURCE_BYTES {
+        return None;
+    }
+    let data = std::fs::read(path).ok()?;
+    let options = svg_options();
+    resvg::usvg::Tree::from_data_nested(&data, &options).ok()
+}
+
+fn svg_options() -> resvg::usvg::Options<'static> {
+    static FONT_DB: OnceLock<std::sync::Arc<resvg::usvg::fontdb::Database>> = OnceLock::new();
+    let fonts = FONT_DB.get_or_init(|| {
+        let mut database = resvg::usvg::fontdb::Database::new();
+        database.load_system_fonts();
+        std::sync::Arc::new(database)
+    });
+    resvg::usvg::Options {
+        fontdb: std::sync::Arc::clone(fonts),
+        ..Default::default()
     }
 }
 

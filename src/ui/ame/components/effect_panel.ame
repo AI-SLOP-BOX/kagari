@@ -1,0 +1,111 @@
+component EffectPanel() {
+  Card {
+    Padding(6) {
+      VStack(spacing: 5) {
+        HStack(spacing: 8) {
+          Text("エフェクト", size: 14)
+          Spacer
+          If(selected_layer) { Button("＋ ブラー", action: add_gaussian_blur, tone: secondary, size: small, disabled: selected_layer_locked) } else { Caption("レイヤー未選択") }
+        }
+        TextField(effect_search, "エフェクトを検索・追加", action: effect_search_changed)
+        If(selected_layer && effect_search != "") {
+          If(has_effect_catalog_items) {
+            HStack(spacing: 3) {
+              Caption("検索結果から追加")
+              HorizontalScrollView(360) {
+                HStack(spacing: 3) {
+                  ForEach(effect_catalog_items, candidate, key: id) {
+                    Button("＋ {candidate.label}", action: add_effect_catalog, tone: secondary, size: small, disabled: selected_layer_locked)
+                  }
+                }
+              }
+            }
+          } else {
+            Caption("対応するエフェクトがありません。")
+          }
+        }
+        If(selected_layer) {
+          HStack(spacing: 3) {
+            Button("＋ 色調", action: add_color_tint, tone: secondary, size: small, disabled: selected_layer_locked)
+            Button("＋ 影", action: add_drop_shadow, tone: secondary, size: small, disabled: selected_layer_locked)
+            Button("＋ Glow", action: add_glow, tone: secondary, size: small, disabled: selected_layer_locked)
+          }
+          HStack(spacing: 3) {
+            Button("＋ ビネット", action: add_vignette, tone: secondary, size: small, disabled: selected_layer_locked)
+            Button("＋ HSL", action: add_hue_saturation, tone: secondary, size: small, disabled: selected_layer_locked)
+            Button("＋ Levels", action: add_levels, tone: secondary, size: small, disabled: selected_layer_locked)
+          }
+          HStack(spacing: 3) {
+            Button("＋ Motion Blur", action: add_motion_blur, tone: secondary, size: small, disabled: selected_layer_locked)
+            Button("＋ 粒状", action: add_film_grain, tone: secondary, size: small, disabled: selected_layer_locked)
+            Button("＋ Posterize", action: add_posterize, tone: secondary, size: small, disabled: selected_layer_locked)
+          }
+          HStack(spacing: 3) {
+            Button("＋ 方向ぼかし", action: add_directional_blur, tone: secondary, size: small, disabled: selected_layer_locked)
+            Button("＋ Radial Blur", action: add_radial_blur, tone: secondary, size: small, disabled: selected_layer_locked)
+            Button("＋ Sharpen", action: add_sharpen, tone: secondary, size: small, disabled: selected_layer_locked)
+          }
+        }
+        If(selected_layer) {
+          If(has_effect_items) {
+            ForEach(effect_items, effect, key: id) {
+              HStack(spacing: 5) {
+                If(effect.selected) { Button("{effect.name}", action: select_effect, tone: primary, size: small) } else { Button("{effect.name}", action: select_effect, tone: secondary, size: small) }
+                Spacer
+                Caption("{effect.kind}")
+                If(effect.can_move_up) { Button("↑", action: move_effect_up, tone: secondary, size: small, disabled: selected_layer_locked) }
+                If(effect.can_move_down) { Button("↓", action: move_effect_down, tone: secondary, size: small, disabled: selected_layer_locked) }
+                If(effect.enabled) { IconButton("eye", action: toggle_effect, tone: primary, size: small, disabled: selected_layer_locked) } else { IconButton("eye_off", action: toggle_effect, tone: secondary, size: small, disabled: selected_layer_locked) }
+                IconButton("close", action: remove_effect, tone: destructive, size: small, disabled: selected_layer_locked)
+              }
+            }
+          } else {
+            Caption("選択レイヤーにエフェクトはありません。＋ブラーから追加できます。")
+          }
+        } else {
+          Caption("シーンからエフェクトを適用するレイヤーを選んでください。")
+        }
+        If(has_effect_parameters) {
+          Spacer
+          VStack(spacing: 4) {
+            ForEach(effect_parameters, parameter, key: id) {
+              HStack(spacing: 5) {
+                MinWidth(72) { Caption("{parameter.label}") }
+                If(selected_layer_locked) { Caption("{parameter.value}") } else { TextField(parameter.value, "0", action: effect_parameter_changed) }
+                Caption("{parameter.unit}")
+                Button("◇", action: effect_parameter_keyframe, tone: secondary, size: small, disabled: selected_layer_locked)
+              }
+            }
+          }
+        }
+        If(has_selected_effect_color) {
+          HStack(spacing: 5) {
+            MinWidth(72) { Caption("エフェクト色") }
+            If(selected_layer_locked) { Caption("{selected_effect_color}") } else { TextField(selected_effect_color, "#FFFFFF", action: effect_color_changed) }
+            Caption("#RRGGBB")
+          }
+        }
+      }
+    }
+  }
+}
+
+component ColorWorkspacePanel() {
+  VStack(spacing: 6) {
+    Card { Padding(8) { VStack(spacing: 5) {
+      HStack(spacing: 6) { Text("色補正", size: 16) Spacer If(selected_layer) { Caption("{layer_name}") } else { Caption("レイヤー未選択") } }
+      If(selected_layer) {
+        HStack(spacing: 4) {
+          Button("＋ HSL", action: add_hue_saturation, tone: secondary, size: small, disabled: selected_layer_locked)
+          Button("＋ Levels", action: add_levels, tone: secondary, size: small, disabled: selected_layer_locked)
+          Button("＋ 色調", action: add_color_tint, tone: secondary, size: small, disabled: selected_layer_locked)
+          Button("＋ ビネット", action: add_vignette, tone: secondary, size: small, disabled: selected_layer_locked)
+          Button("＋ 粒状", action: add_film_grain, tone: secondary, size: small, disabled: selected_layer_locked)
+        }
+      } else {
+        Caption("シーンから色補正するレイヤーを選んでください。")
+      }
+    } } }
+    EffectPanel()
+  }
+}

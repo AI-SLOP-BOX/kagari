@@ -1,0 +1,26 @@
+component ProjectsPanel() {
+    HStack(spacing: 8) {
+      Align(stretch) { HomeNavRail() }
+      Grow(1) {
+        ScrollView(680) {
+          Padding(18) {
+            VStack(spacing: 14) {
+              HStack(spacing: 10) { VStack(spacing: 3) { Text("プロジェクト", size: 24) Caption("最近開いたプロジェクトを再開する") } Spacer Button("＋ 新規プロジェクト", action: new_project, tone: primary) Button("フォルダから開く", action: open_project, tone: secondary) }
+              TextField(project_search, "プロジェクト名または保存場所で検索", action: project_search_changed)
+              If(has_recents) {
+                If(has_project_matches) {
+                  ForEach(project_items, project, key: path) {
+                    Card { Padding(12) { HStack(spacing: 12) { Icon("folder", 20) VStack(spacing: 4) { Text("{project.name}", size: 16) Caption("{project.info} · {project.specs} · {project.date}") Caption("{project.location}") } Spacer Button("開く", action: open_recent_project, tone: secondary, size: small) } } }
+                  }
+                } else {
+                  Card { Padding(18) { Caption("検索条件に一致するプロジェクトはありません。") } }
+                }
+              } else {
+                Card { Padding(18) { Caption("プロジェクトはまだありません。新規作成するか、既存のプロジェクトを開いてください。") } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }

@@ -147,8 +147,7 @@ pub fn generate_preview_proxy_for_layer(
     match &layer.layer_type {
         crate::core::timeline::LayerType::Image { path } => {
             let source = Path::new(path);
-            let image = image::open(source)
-                .map_err(|error| format!("could not decode source image: {error}"))?;
+            let image = open_proxy_source_image(source)?;
             if cancel.load(Ordering::Relaxed) {
                 return Err(PROXY_CANCELLED.to_string());
             }
@@ -175,6 +174,22 @@ pub fn generate_preview_proxy_for_layer(
             progress,
         ),
         _ => Err("Only image and video layers can generate preview proxies".into()),
+    }
+}
+
+fn open_proxy_source_image(path: &Path) -> Result<image::DynamicImage, String> {
+    if path
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("svg"))
+    {
+        let path_string = path.to_string_lossy();
+        let decoded = crate::core::image_cache::decode_svg_file(&path_string, 256 * 1024 * 1024)
+            .ok_or_else(|| "could not decode SVG source image within the size limits".to_owned())?;
+        let rgba = image::RgbaImage::from_raw(decoded.width, decoded.height, decoded.pixels)
+            .ok_or_else(|| "decoded SVG image has invalid pixel data".to_owned())?;
+        Ok(image::DynamicImage::ImageRgba8(rgba))
+    } else {
+        image::open(path).map_err(|error| format!("could not decode source image: {error}"))
     }
 }
 

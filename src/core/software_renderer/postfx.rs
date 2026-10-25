@@ -150,7 +150,7 @@ pub(crate) fn apply_post_fx(ctx: PostFxCtx<'_>) {
             let ndotl = (ldz).max(0.0);
 
             // Inverse-square attenuation with configurable intensity
-            let atten_base = light.intensity / 100.0;
+            let atten_base = light.intensity_at(frame) / 100.0;
             let atten_dist = 1.0 / (1.0 + (dist / 500.0).powi(2));
             let mut attenuation = atten_base * atten_dist;
 
@@ -215,6 +215,8 @@ pub(crate) fn apply_post_fx(ctx: PostFxCtx<'_>) {
             ]
         };
         if st.drop_shadow.enabled {
+            let mut color = st.drop_shadow.color;
+            color[3] *= (st.drop_shadow.opacity / 100.0).clamp(0.0, 1.0);
             crate::core::ae_effects_pack::apply_drop_shadow(
                 &mut *layer_buf,
                 bw,
@@ -222,11 +224,13 @@ pub(crate) fn apply_post_fx(ctx: PostFxCtx<'_>) {
                 st.drop_shadow.distance,
                 st.drop_shadow.angle,
                 (st.drop_shadow.size.round() as u32).max(1),
-                to_rgba8(st.drop_shadow.color),
+                to_rgba8(color),
             );
         }
         if st.inner_shadow.enabled {
             let s = &st.inner_shadow;
+            let mut color = s.color;
+            color[3] *= (s.opacity / 100.0).clamp(0.0, 1.0);
             crate::core::ae_effects_pack::apply_inner_shadow(
                 &mut *layer_buf,
                 bw,
@@ -234,7 +238,7 @@ pub(crate) fn apply_post_fx(ctx: PostFxCtx<'_>) {
                 s.distance,
                 s.angle,
                 (s.size.round() as u32).min(64),
-                to_rgba8(s.color),
+                to_rgba8(color),
             );
         }
         if st.outer_glow.enabled {

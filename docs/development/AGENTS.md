@@ -1,12 +1,12 @@
 # Kagari VFX — Agent Instructions
 
 ## Project Overview
-Kagari VFX is an open-source motion graphics & compositing application written in Rust with GPU rendering (wgpu/Metal), a professional dark UI (egui), and a comprehensive effects pipeline.
+Kagari VFX is an open-source motion graphics & compositing application written in Rust with GPU rendering (wgpu/Metal), a native AmeUI Studio interface, and a comprehensive effects pipeline. The former egui Studio remains an optional legacy binary; it is not the default application.
 
 ## Build & Test Commands
 ```bash
-# Build
-cargo build --all-features
+# Build the main AmeUI Studio
+cargo build --release --no-default-features --features ame --bin kagari-studio
 
 # Run all tests
 cargo test --all-features
@@ -14,8 +14,11 @@ cargo test --all-features
 # Lint (must be zero warnings, covers test modules)
 cargo clippy --all-features --all-targets
 
-# Run the GUI app
-cargo run --features gui --bin kagari-studio
+# Run the main AmeUI Studio
+cargo run --release --no-default-features --features ame --bin kagari-studio
+
+# Run the legacy egui Studio only when explicitly working on that implementation
+cargo run --features gui --bin kagari-studio-egui
 
 # Run the CLI tool
 cargo run --features cli --bin kagari -- frame --project tests/fixtures/test_project.json --frame 0 --output /tmp/test.png
@@ -45,7 +48,11 @@ cargo run --features cli --bin kagari -- frame --project tests/fixtures/test_pro
 - `src/core/ae_effects_pack.rs` — 20+ CPU effects (box blur, directional, radial, glow, etc.)
 - `src/core/cpu_effects.rs` — CPU effect dispatch for all 47 EffectType variants
 
-### UI Panels (src/ui/)
+### Primary AmeUI Studio
+The default `kagari-studio` screen is authored in Ame at `src/ui/ame/kagari_studio.ame` and hosted by `src/bin/ame_studio.rs`. The root file owns app state, actions, and routing; reusable screen bodies live in `src/ui/ame/components/`. Home, projects, activity, documents, project setup, and export each have dedicated source files. `settings.ame` is the settings shell; its eight preference pages live under `components/settings/`. The editor has separate `project_panel.ame`, `asset_panel.ame`, `composition_panel.ame`, `properties_panel.ame`, `effect_panel.ame`, and `timeline.ame` files, with `topbar.ame`, `toolbar.ame`, and `status_bar.ame` separated from responsive composition and screen routing in `workspace_layout.ame`. The toolbar exposes standard, motion, and effects workspaces; timeline interaction and layer/effect controls are hosted in Rust. `navigation.ame` provides shared navigation. Add new screens to their own `.ame` files, add their import to the root source, and register embedded source in `src/ui/ame_sources.rs`. Keep application services, project state, and custom rendering in Rust.
+
+### Legacy egui UI (`src/legacy_egui/`)
+These modules back only the optional `kagari-studio-egui` binary. The public Rust module remains named `crate::ui` for compatibility, but its source files live under `src/legacy_egui/`. Edit it only when explicitly working on the legacy binary.
 - `viewport.rs` — Composition viewer (GPU/CPU dual path)
 - `timeline/` — Timeline with tracks, keyframes, graph editor
 - `inspector*.rs` — Property inspector with expression support
@@ -60,7 +67,7 @@ cargo run --features cli --bin kagari -- frame --project tests/fixtures/test_pro
 
 ## Critical Rules
 
-1. **NEVER remove `default_fonts` from eframe features** — without it NO text renders
+1. **AmeUI is the primary Studio UI.** Keep the default `kagari-studio` target and macOS packaging on the `ame` feature; only use `gui` for the legacy egui binary.
 2. **Always run `cargo test --all-features` before committing** — 1,770+ tests must pass
 3. **Always run `cargo clippy --all-features --all-targets`** — must be zero warnings
 4. **Use `git commit` after every meaningful change** — atomic commits
@@ -74,7 +81,7 @@ cargo run --features cli --bin kagari -- frame --project tests/fixtures/test_pro
 - Prefer `impl Trait` over `dyn Trait` in hot paths
 - Use `#[derive(Serialize, Deserialize)]` with `#[serde(default)]` for backward compat
 - All new effects go in `src/core/ae_effects_pack.rs` or a new `v*.rs` file
-- All new UI panels go in `src/ui/` and get registered in `src/ui/mod.rs`
+- New Studio screens and reusable UI components belong in `src/ui/ame/` as Ame components. Do not add new egui panels to `src/legacy_egui/` unless explicitly working on the legacy binary.
 
 ## Testing
 - Unit tests: same file as implementation (`#[cfg(test)] mod tests`)
@@ -91,7 +98,7 @@ cargo run --features cli --bin kagari -- frame --project tests/fixtures/test_pro
 
 ---
 
-# egui致命的罠リスト（全エージェント必読）
+# Legacy egui notes (only for `kagari-studio-egui`)
 
 ## 罠①: 大量行の「頂点数超過」クラッシュ
 eguiは画面外要素を自動クリップするが、ウィジェット生成自体が数千個に達すると

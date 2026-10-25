@@ -46,9 +46,10 @@ pub fn start_parallel_export(
             // MFR on: rayon frames within and across items; MFR off: items in
             // parallel but each item's frames rendered sequentially.
             let render_result = if crate::core::parallel_render::mfr_enabled() {
-                queue.render_all_mfr_with_external_cancel_checked(&cancel_flag, |comp_name, frame| {
-                    render_frame_fn(comp_name, frame)
-                })
+                queue.render_all_mfr_with_external_cancel_checked(
+                    &cancel_flag,
+                    |comp_name, frame| render_frame_fn(comp_name, frame),
+                )
             } else {
                 queue.render_all_with_external_cancel_checked(&cancel_flag, |comp_name, frame| {
                     render_frame_fn(comp_name, frame)

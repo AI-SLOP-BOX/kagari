@@ -53,21 +53,33 @@ fn parse_frame_list(s: &str, max_frame: u32, step: u32) -> Result<Vec<u32>, Stri
             continue;
         }
         if let Some((start_s, end_s)) = chunk.split_once('-') {
-            let start: u32 = start_s.trim().parse().map_err(|_| format!("Invalid frame number: '{start_s}'"))?;
-            let end: u32 = end_s.trim().parse().map_err(|_| format!("Invalid frame number: '{end_s}'"))?;
+            let start: u32 = start_s
+                .trim()
+                .parse()
+                .map_err(|_| format!("Invalid frame number: '{start_s}'"))?;
+            let end: u32 = end_s
+                .trim()
+                .parse()
+                .map_err(|_| format!("Invalid frame number: '{end_s}'"))?;
             if start > end {
                 return Err(format!("Invalid range: {start}-{end}"));
             }
             if end > max_frame {
-                return Err(format!("Frame {end} exceeds composition duration ({max_frame})"));
+                return Err(format!(
+                    "Frame {end} exceeds composition duration ({max_frame})"
+                ));
             }
             for f in (start..=end).step_by(step) {
                 result.insert(f);
             }
         } else {
-            let f: u32 = chunk.parse().map_err(|_| format!("Invalid frame number: '{chunk}'"))?;
+            let f: u32 = chunk
+                .parse()
+                .map_err(|_| format!("Invalid frame number: '{chunk}'"))?;
             if f > max_frame {
-                return Err(format!("Frame {f} exceeds composition duration ({max_frame})"));
+                return Err(format!(
+                    "Frame {f} exceeds composition duration ({max_frame})"
+                ));
             }
             result.insert(f);
         }
@@ -104,21 +116,33 @@ pub(super) fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Err
                 if layer.name == layer_name || layer.id == layer_name {
                     matched = true;
                     match (&mut layer.layer_type, prop_name) {
-                        (kagari_vfx::core::timeline::LayerType::Text { text, .. }, None | Some("text")) => {
+                        (
+                            kagari_vfx::core::timeline::LayerType::Text { text, .. },
+                            None | Some("text"),
+                        ) => {
                             *text = val.clone();
                             eprintln!("Applied override: [{}].text = \"{}\"", layer.name, val);
                         }
-                        (kagari_vfx::core::timeline::LayerType::Image { path }, None | Some("src" | "path")) => {
+                        (
+                            kagari_vfx::core::timeline::LayerType::Image { path },
+                            None | Some("src" | "path"),
+                        ) => {
                             *path = val.clone();
                             eprintln!("Applied override: [{}].path = \"{}\"", layer.name, val);
                         }
-                        (kagari_vfx::core::timeline::LayerType::Video { source, .. }, None | Some("src" | "source")) => {
+                        (
+                            kagari_vfx::core::timeline::LayerType::Video { source, .. },
+                            None | Some("src" | "source"),
+                        ) => {
                             *source = val.clone();
                             eprintln!("Applied override: [{}].source = \"{}\"", layer.name, val);
                         }
                         (kagari_vfx::core::timeline::LayerType::Solid { color }, Some("color")) => {
                             // Parse hex or comma-separated RGBA if provided
-                            let parts: Vec<f32> = val.split(',').filter_map(|s| s.trim().parse::<f32>().ok()).collect();
+                            let parts: Vec<f32> = val
+                                .split(',')
+                                .filter_map(|s| s.trim().parse::<f32>().ok())
+                                .collect();
                             if parts.len() >= 3 {
                                 color[0] = parts[0];
                                 color[1] = parts[1];
@@ -137,20 +161,31 @@ pub(super) fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Err
                         match prop.to_lowercase().as_str() {
                             "opacity" | "alpha" => {
                                 if let Ok(v) = val.parse::<f32>() {
-                                    layer.transform.opacity = kagari_vfx::core::timeline::Animatable::new_constant(v);
+                                    layer.transform.opacity =
+                                        kagari_vfx::core::timeline::Animatable::new_constant(v);
                                     eprintln!("Applied override: [{}].opacity = {}", layer.name, v);
                                 }
                             }
                             "rotation" | "rot" => {
                                 if let Ok(v) = val.parse::<f32>() {
-                                    layer.transform.rotation = kagari_vfx::core::timeline::Animatable::new_constant(v);
-                                    eprintln!("Applied override: [{}].rotation = {}", layer.name, v);
+                                    layer.transform.rotation =
+                                        kagari_vfx::core::timeline::Animatable::new_constant(v);
+                                    eprintln!(
+                                        "Applied override: [{}].rotation = {}",
+                                        layer.name, v
+                                    );
                                 }
                             }
                             "scale" => {
                                 if let Ok(v) = val.parse::<f32>() {
-                                    layer.transform.scale = kagari_vfx::core::timeline::Animatable::new_constant([v, v]);
-                                    eprintln!("Applied override: [{}].scale = [{}, {}]", layer.name, v, v);
+                                    layer.transform.scale =
+                                        kagari_vfx::core::timeline::Animatable::new_constant([
+                                            v, v,
+                                        ]);
+                                    eprintln!(
+                                        "Applied override: [{}].scale = [{}, {}]",
+                                        layer.name, v, v
+                                    );
                                 }
                             }
                             "visible" => {
@@ -167,24 +202,57 @@ pub(super) fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Err
                     if let Some(sub) = prop_name {
                         if let Some((eff_name, eff_param)) = sub.split_once('.') {
                             for effect in &mut layer.effects {
-                                if effect.name.eq_ignore_ascii_case(eff_name) || format!("{:?}", effect.effect_type).to_lowercase().starts_with(&eff_name.to_lowercase()) {
-                                    match (&mut effect.effect_type, eff_param.to_lowercase().as_str()) {
-                                        (kagari_vfx::core::timeline::EffectType::GaussianBlur { blur_radius }, "radius" | "blur_radius") => {
+                                if effect.name.eq_ignore_ascii_case(eff_name)
+                                    || format!("{:?}", effect.effect_type)
+                                        .to_lowercase()
+                                        .starts_with(&eff_name.to_lowercase())
+                                {
+                                    match (
+                                        &mut effect.effect_type,
+                                        eff_param.to_lowercase().as_str(),
+                                    ) {
+                                        (
+                                            kagari_vfx::core::timeline::EffectType::GaussianBlur {
+                                                blur_radius,
+                                            },
+                                            "radius" | "blur_radius",
+                                        ) => {
                                             if let Ok(v) = val.parse::<f32>() {
                                                 *blur_radius = kagari_vfx::core::timeline::Animatable::new_constant(v);
-                                                eprintln!("Applied override: [{}.{}].{} = {}", layer.name, effect.name, eff_param, v);
+                                                eprintln!(
+                                                    "Applied override: [{}.{}].{} = {}",
+                                                    layer.name, effect.name, eff_param, v
+                                                );
                                             }
                                         }
-                                        (kagari_vfx::core::timeline::EffectType::Glow { intensity, .. }, "intensity") => {
+                                        (
+                                            kagari_vfx::core::timeline::EffectType::Glow {
+                                                intensity,
+                                                ..
+                                            },
+                                            "intensity",
+                                        ) => {
                                             if let Ok(v) = val.parse::<f32>() {
                                                 *intensity = kagari_vfx::core::timeline::Animatable::new_constant(v);
-                                                eprintln!("Applied override: [{}.{}].intensity = {}", layer.name, effect.name, v);
+                                                eprintln!(
+                                                    "Applied override: [{}.{}].intensity = {}",
+                                                    layer.name, effect.name, v
+                                                );
                                             }
                                         }
-                                        (kagari_vfx::core::timeline::EffectType::Glow { radius, .. }, "radius") => {
+                                        (
+                                            kagari_vfx::core::timeline::EffectType::Glow {
+                                                radius,
+                                                ..
+                                            },
+                                            "radius",
+                                        ) => {
                                             if let Ok(v) = val.parse::<f32>() {
                                                 *radius = kagari_vfx::core::timeline::Animatable::new_constant(v);
-                                                eprintln!("Applied override: [{}.{}].radius = {}", layer.name, effect.name, v);
+                                                eprintln!(
+                                                    "Applied override: [{}.{}].radius = {}",
+                                                    layer.name, effect.name, v
+                                                );
                                             }
                                         }
                                         _ => {}
@@ -197,7 +265,10 @@ pub(super) fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Err
             }
         }
         if !matched {
-            eprintln!("Warning: Template override target '{}' not found in any composition", target);
+            eprintln!(
+                "Warning: Template override target '{}' not found in any composition",
+                target
+            );
         }
     }
 
@@ -207,8 +278,14 @@ pub(super) fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Err
             Some((l, p)) => (l.trim(), p.trim().to_lowercase()),
             None => (target.as_str(), "rotation".to_string()),
         };
-        let expr = if let Some(w) = expr_str.strip_prefix("wiggle(").and_then(|s| s.strip_suffix(')')) {
-            let parts: Vec<f32> = w.split(',').filter_map(|s| s.trim().parse::<f32>().ok()).collect();
+        let expr = if let Some(w) = expr_str
+            .strip_prefix("wiggle(")
+            .and_then(|s| s.strip_suffix(')'))
+        {
+            let parts: Vec<f32> = w
+                .split(',')
+                .filter_map(|s| s.trim().parse::<f32>().ok())
+                .collect();
             if parts.len() >= 2 {
                 kagari_vfx::core::timeline::Expression::Wiggle {
                     frequency: parts[0],
@@ -217,9 +294,13 @@ pub(super) fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Err
             } else {
                 kagari_vfx::core::timeline::Expression::Raw(expr_str.clone())
             }
-        } else if expr_str.eq_ignore_ascii_case("loopout") || expr_str.eq_ignore_ascii_case("loopout()") {
+        } else if expr_str.eq_ignore_ascii_case("loopout")
+            || expr_str.eq_ignore_ascii_case("loopout()")
+        {
             kagari_vfx::core::timeline::Expression::LoopOut
-        } else if expr_str.eq_ignore_ascii_case("pingpong") || expr_str.eq_ignore_ascii_case("pingpong()") {
+        } else if expr_str.eq_ignore_ascii_case("pingpong")
+            || expr_str.eq_ignore_ascii_case("pingpong()")
+        {
             kagari_vfx::core::timeline::Expression::PingPong
         } else {
             kagari_vfx::core::timeline::Expression::Raw(expr_str.clone())
@@ -233,11 +314,17 @@ pub(super) fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Err
                     match prop_name.as_str() {
                         "rotation" | "rot" | "r" => {
                             layer.transform.rotation_expression = Some(expr.clone());
-                            eprintln!("Injected expression: [{}].rotation = {:?}", layer.name, expr);
+                            eprintln!(
+                                "Injected expression: [{}].rotation = {:?}",
+                                layer.name, expr
+                            );
                         }
                         "position" | "pos" | "p" => {
                             layer.transform.position_expression = Some(expr.clone());
-                            eprintln!("Injected expression: [{}].position = {:?}", layer.name, expr);
+                            eprintln!(
+                                "Injected expression: [{}].position = {:?}",
+                                layer.name, expr
+                            );
                         }
                         "scale" | "s" => {
                             layer.transform.scale_expression = Some(expr.clone());
@@ -249,17 +336,26 @@ pub(super) fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Err
                         }
                         "anchor" | "anchor_point" | "a" => {
                             layer.transform.anchor_point_expression = Some(expr.clone());
-                            eprintln!("Injected expression: [{}].anchor_point = {:?}", layer.name, expr);
+                            eprintln!(
+                                "Injected expression: [{}].anchor_point = {:?}",
+                                layer.name, expr
+                            );
                         }
                         other => {
-                            eprintln!("Warning: Unsupported property '{}' for expression on layer '{}'", other, layer.name);
+                            eprintln!(
+                                "Warning: Unsupported property '{}' for expression on layer '{}'",
+                                other, layer.name
+                            );
                         }
                     }
                 }
             }
         }
         if !matched {
-            eprintln!("Warning: Expression target layer '{}' not found in any composition", layer_name);
+            eprintln!(
+                "Warning: Expression target layer '{}' not found in any composition",
+                layer_name
+            );
         }
     }
 
@@ -268,7 +364,9 @@ pub(super) fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Err
             "rec709" | "srgb" => kagari_vfx::core::color_science::WorkingColorSpace::Rec709,
             "displayp3" | "p3" => kagari_vfx::core::color_science::WorkingColorSpace::DisplayP3,
             "rec2020" | "bt2020" => kagari_vfx::core::color_science::WorkingColorSpace::Rec2020,
-            "linear" | "linearsrgb" => kagari_vfx::core::color_science::WorkingColorSpace::LinearSRGB,
+            "linear" | "linearsrgb" => {
+                kagari_vfx::core::color_science::WorkingColorSpace::LinearSRGB
+            }
             "acescg" | "aces" | "ap1" => kagari_vfx::core::color_science::WorkingColorSpace::AcesCG,
             unknown => {
                 return Err(format!("Unknown color space '{}'. Valid options: rec709, display_p3, rec2020, linear, acescg", unknown).into());
@@ -288,7 +386,10 @@ pub(super) fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Err
     }
 
     kagari_vfx::core::parallel_render::set_mfr_enabled(args.mfr);
-    eprintln!("Multi-Frame Rendering (MFR): {}", if args.mfr { "ENABLED" } else { "DISABLED" });
+    eprintln!(
+        "Multi-Frame Rendering (MFR): {}",
+        if args.mfr { "ENABLED" } else { "DISABLED" }
+    );
 
     let comp = find_comp(&project, args.comp_ref.as_deref())?;
     let comp_index = project
@@ -312,7 +413,9 @@ pub(super) fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Err
             return Err(format!("Composition '{}' has no frames", comp.name).into());
         }
         if args.from > to {
-            return Err(format!("Invalid render range: from {} is after to {to}", args.from).into());
+            return Err(
+                format!("Invalid render range: from {} is after to {to}", args.from).into(),
+            );
         }
         if to >= comp.duration_frames {
             return Err(format!(
@@ -377,7 +480,12 @@ pub(super) fn cmd_render(args: RenderArgs) -> Result<(), Box<dyn std::error::Err
     if !log_json {
         eprintln!("Rendering composition: {}", comp.name);
         eprintln!("  Size: {}x{}", spec.w, spec.h);
-        eprintln!("  Frames: {} selected (range {}..={})", spec.frames.len(), spec.from, spec.to);
+        eprintln!(
+            "  Frames: {} selected (range {}..={})",
+            spec.frames.len(),
+            spec.from,
+            spec.to
+        );
         eprintln!("  Format: {:?}", format);
     } else {
         println!(
@@ -415,7 +523,10 @@ fn render_to_png_sequence_with_bindings(
         let path = format!("{}/frame_{:05}.png", spec.output, frame);
         if spec.skip_existing && std::path::Path::new(&path).is_file() {
             if spec.log_json {
-                println!("{{\"event\":\"skip\",\"frame\":{},\"path\":\"{}\"}}", frame, path);
+                println!(
+                    "{{\"event\":\"skip\",\"frame\":{},\"path\":\"{}\"}}",
+                    frame, path
+                );
             } else {
                 eprintln!("  Skipping existing frame {:05} ({})", frame, path);
             }
@@ -456,7 +567,10 @@ fn render_to_exr_sequence(
         let path = format!("{}/frame_{:05}.exr", spec.output, frame);
         if spec.skip_existing && std::path::Path::new(&path).is_file() {
             if spec.log_json {
-                println!("{{\"event\":\"skip\",\"frame\":{},\"path\":\"{}\"}}", frame, path);
+                println!(
+                    "{{\"event\":\"skip\",\"frame\":{},\"path\":\"{}\"}}",
+                    frame, path
+                );
             } else {
                 eprintln!("  Skipping existing frame {:05} ({})", frame, path);
             }
@@ -508,7 +622,10 @@ fn render_to_png_sequence(
         let path = format!("{}/frame_{:05}.png", spec.output, frame);
         if spec.skip_existing && std::path::Path::new(&path).is_file() {
             if spec.log_json {
-                println!("{{\"event\":\"skip\",\"frame\":{},\"path\":\"{}\"}}", frame, path);
+                println!(
+                    "{{\"event\":\"skip\",\"frame\":{},\"path\":\"{}\"}}",
+                    frame, path
+                );
             } else {
                 eprintln!("  Skipping existing frame {:05} ({})", frame, path);
             }
@@ -806,7 +923,12 @@ pub(super) fn cmd_queue(args: QueueArgs) -> Result<(), Box<dyn std::error::Error
         };
 
         if !log_json {
-            eprintln!("\n[{}/{}] Rendering: {}", idx + 1, project.compositions.len(), comp.name);
+            eprintln!(
+                "\n[{}/{}] Rendering: {}",
+                idx + 1,
+                project.compositions.len(),
+                comp.name
+            );
         } else {
             println!(
                 "{{\"event\":\"queue_comp_start\",\"index\":{},\"name\":\"{}\",\"output\":\"{}\"}}",
@@ -850,7 +972,12 @@ pub(super) fn cmd_queue(args: QueueArgs) -> Result<(), Box<dyn std::error::Error
     Ok(())
 }
 
-pub(super) fn cmd_beats(file: &str, fps: f32, duration: u32, json: bool) -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn cmd_beats(
+    file: &str,
+    fps: f32,
+    duration: u32,
+    json: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     let path = std::path::Path::new(file);
     if !path.is_file() {
         return Err(format!("Audio file '{}' not found", file).into());
@@ -861,7 +988,12 @@ pub(super) fn cmd_beats(file: &str, fps: f32, duration: u32, json: bool) -> Resu
         let json_str = serde_json::to_string(&beats)?;
         println!("{}", json_str);
     } else {
-        println!("Detected {} transient beat onsets in '{}' (fps: {}):", beats.len(), file, fps);
+        println!(
+            "Detected {} transient beat onsets in '{}' (fps: {}):",
+            beats.len(),
+            file,
+            fps
+        );
         for b in &beats {
             let sec = *b as f32 / fps;
             println!("  frame {:5}  ({:6.2}s)", b, sec);
@@ -918,7 +1050,10 @@ pub(super) fn cmd_preview(
     })
 }
 
-pub(super) fn cmd_bundle(project_path: &str, output_dir: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn cmd_bundle(
+    project_path: &str,
+    output_dir: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut project = load_project(project_path)?;
     let bundle_path = std::path::Path::new(output_dir);
     let assets_dir = bundle_path.join("assets");
@@ -992,11 +1127,19 @@ pub(super) fn cmd_remap(
         .layers
         .iter_mut()
         .find(|l| l.name == layer_name || l.id == layer_name)
-        .ok_or_else(|| format!("Layer '{layer_name}' not found in composition '{}'", comp.name))?;
+        .ok_or_else(|| {
+            format!(
+                "Layer '{layer_name}' not found in composition '{}'",
+                comp.name
+            )
+        })?;
 
     if let Some(factor) = stretch {
         layer.time_stretch(factor);
-        eprintln!("Applied time stretch factor {:.2}x to layer '{}'", factor, layer.name);
+        eprintln!(
+            "Applied time stretch factor {:.2}x to layer '{}'",
+            factor, layer.name
+        );
     }
     if reverse {
         layer.time_reverse();
@@ -1004,7 +1147,10 @@ pub(super) fn cmd_remap(
     }
     if let Some(freeze_frame) = freeze {
         layer.freeze_at(freeze_frame);
-        eprintln!("Applied freeze frame at source frame {} to layer '{}'", freeze_frame, layer.name);
+        eprintln!(
+            "Applied freeze frame at source frame {} to layer '{}'",
+            freeze_frame, layer.name
+        );
     }
     if frame_blending {
         layer.frame_blending = true;
@@ -1037,7 +1183,12 @@ pub(super) fn cmd_track(
             .iter_mut()
             .enumerate()
             .find(|(_, l)| l.name == layer_name || l.id == layer_name)
-            .ok_or_else(|| format!("Source layer '{layer_name}' not found in composition '{}'", comp.name))?;
+            .ok_or_else(|| {
+                format!(
+                    "Source layer '{layer_name}' not found in composition '{}'",
+                    comp.name
+                )
+            })?;
 
         if layer.trackers.len() <= tracker_idx {
             let initial_pos = if let Some(p) = pos_str {
@@ -1084,7 +1235,12 @@ pub(super) fn cmd_track(
             .layers
             .iter()
             .position(|l| l.name == target_name || l.id == target_name)
-            .ok_or_else(|| format!("Target layer '{target_name}' not found in composition '{}'", comp.name))?;
+            .ok_or_else(|| {
+                format!(
+                    "Target layer '{target_name}' not found in composition '{}'",
+                    comp.name
+                )
+            })?;
 
         kagari_vfx::core::tracker_engine::TrackerEngine::apply_tracker_to_target(
             comp,
@@ -1123,7 +1279,12 @@ pub(super) fn cmd_text_anim(
         .layers
         .iter_mut()
         .find(|l| l.name == layer_name || l.id == layer_name)
-        .ok_or_else(|| format!("Layer '{layer_name}' not found in composition '{}'", comp.name))?;
+        .ok_or_else(|| {
+            format!(
+                "Layer '{layer_name}' not found in composition '{}'",
+                comp.name
+            )
+        })?;
 
     let shape = match shape_str.to_lowercase().replace('-', "_").as_str() {
         "square" => kagari_vfx::core::text_animator::SelectorShape::Square,
@@ -1233,15 +1394,25 @@ pub(super) fn cmd_camera(
     if let Some(p) = pos_str {
         let parts: Vec<f32> = p.split(',').filter_map(|s| s.trim().parse().ok()).collect();
         if parts.len() >= 3 {
-            cam.transform.position = kagari_vfx::core::property::Animatable::new_constant([parts[0], parts[1], parts[2]]);
-            eprintln!("Set camera position: [{:.1}, {:.1}, {:.1}]", parts[0], parts[1], parts[2]);
+            cam.transform.position = kagari_vfx::core::property::Animatable::new_constant([
+                parts[0], parts[1], parts[2],
+            ]);
+            eprintln!(
+                "Set camera position: [{:.1}, {:.1}, {:.1}]",
+                parts[0], parts[1], parts[2]
+            );
         }
     }
     if let Some(r) = rot_str {
         let parts: Vec<f32> = r.split(',').filter_map(|s| s.trim().parse().ok()).collect();
         if parts.len() >= 3 {
-            cam.transform.rotation = kagari_vfx::core::property::Animatable::new_constant([parts[0], parts[1], parts[2]]);
-            eprintln!("Set camera rotation: [{:.1}°, {:.1}°, {:.1}°]", parts[0], parts[1], parts[2]);
+            cam.transform.rotation = kagari_vfx::core::property::Animatable::new_constant([
+                parts[0], parts[1], parts[2],
+            ]);
+            eprintln!(
+                "Set camera rotation: [{:.1}°, {:.1}°, {:.1}°]",
+                parts[0], parts[1], parts[2]
+            );
         }
     }
     if let Some(f) = fov {
@@ -1293,42 +1464,71 @@ pub(super) fn cmd_shape_anim(
         .layers
         .iter_mut()
         .find(|l| l.name == layer_name || l.id == layer_name)
-        .ok_or_else(|| format!("Layer '{layer_name}' not found in composition '{}'", comp.name))?;
+        .ok_or_else(|| {
+            format!(
+                "Layer '{layer_name}' not found in composition '{}'",
+                comp.name
+            )
+        })?;
 
     if trim_start.is_some() || trim_end.is_some() || trim_duration.is_some() {
         let mut trim = layer.trim_paths.take().unwrap_or_default();
         if let Some(dur) = trim_duration {
             let start_f = layer.in_frame;
             let end_f = start_f.saturating_add(dur.max(1));
-            trim.start = kagari_vfx::core::property::Animatable::new_constant(trim_start.unwrap_or(0.0));
+            trim.start =
+                kagari_vfx::core::property::Animatable::new_constant(trim_start.unwrap_or(0.0));
             trim.end = kagari_vfx::core::property::Animatable::Animated(vec![
-                kagari_vfx::core::keyframe::Keyframe::new(start_f, 0.0, kagari_vfx::core::keyframe::InterpolationType::Linear),
-                kagari_vfx::core::keyframe::Keyframe::new(end_f, 100.0, kagari_vfx::core::keyframe::InterpolationType::Linear),
+                kagari_vfx::core::keyframe::Keyframe::new(
+                    start_f,
+                    0.0,
+                    kagari_vfx::core::keyframe::InterpolationType::Linear,
+                ),
+                kagari_vfx::core::keyframe::Keyframe::new(
+                    end_f,
+                    100.0,
+                    kagari_vfx::core::keyframe::InterpolationType::Linear,
+                ),
             ]);
-            eprintln!("Configured animated trim paths sweep on '{}' (frames {}..={})", layer.name, start_f, end_f);
+            eprintln!(
+                "Configured animated trim paths sweep on '{}' (frames {}..={})",
+                layer.name, start_f, end_f
+            );
         } else {
             if let Some(s) = trim_start {
-                trim.start = kagari_vfx::core::property::Animatable::new_constant(s.clamp(0.0, 100.0));
+                trim.start =
+                    kagari_vfx::core::property::Animatable::new_constant(s.clamp(0.0, 100.0));
             }
             if let Some(e) = trim_end {
-                trim.end = kagari_vfx::core::property::Animatable::new_constant(e.clamp(0.0, 100.0));
+                trim.end =
+                    kagari_vfx::core::property::Animatable::new_constant(e.clamp(0.0, 100.0));
             }
             eprintln!("Configured static trim paths on '{}'", layer.name);
         }
         layer.trim_paths = Some(trim);
     }
 
-    if repeater_copies.is_some() || repeater_offset.is_some() || repeater_rotation.is_some() || repeater_scale.is_some() {
+    if repeater_copies.is_some()
+        || repeater_offset.is_some()
+        || repeater_rotation.is_some()
+        || repeater_scale.is_some()
+    {
         let mut rep = layer.shape_repeater.take().unwrap_or_default();
         if let Some(copies) = repeater_copies {
             rep.copies = copies.max(1);
             eprintln!("Set shape repeater copies: {}", rep.copies);
         }
         if let Some(off_str) = repeater_offset {
-            let parts: Vec<f32> = off_str.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+            let parts: Vec<f32> = off_str
+                .split(',')
+                .filter_map(|s| s.trim().parse().ok())
+                .collect();
             if parts.len() >= 2 {
                 rep.position_offset = [parts[0], parts[1]];
-                eprintln!("Set shape repeater position offset: [{:.1}, {:.1}]", parts[0], parts[1]);
+                eprintln!(
+                    "Set shape repeater position offset: [{:.1}, {:.1}]",
+                    parts[0], parts[1]
+                );
             }
         }
         if let Some(rot) = repeater_rotation {
@@ -1336,10 +1536,16 @@ pub(super) fn cmd_shape_anim(
             eprintln!("Set shape repeater rotation offset: {:.1}°", rot);
         }
         if let Some(sc_str) = repeater_scale {
-            let parts: Vec<f32> = sc_str.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+            let parts: Vec<f32> = sc_str
+                .split(',')
+                .filter_map(|s| s.trim().parse().ok())
+                .collect();
             if parts.len() >= 2 {
                 rep.scale_offset = [parts[0], parts[1]];
-                eprintln!("Set shape repeater scale offset: [{:.2}, {:.2}]", parts[0], parts[1]);
+                eprintln!(
+                    "Set shape repeater scale offset: [{:.2}, {:.2}]",
+                    parts[0], parts[1]
+                );
             }
         }
         layer.shape_repeater = Some(rep);
@@ -1443,10 +1649,18 @@ pub(super) fn cmd_particle(
         [comp.width as f32 / 2.0, comp.height as f32 / 2.0]
     };
 
-    if let Some(layer) = comp.layers.iter_mut().find(|l| l.name == layer_name || l.id == layer_name) {
+    if let Some(layer) = comp
+        .layers
+        .iter_mut()
+        .find(|l| l.name == layer_name || l.id == layer_name)
+    {
         layer.layer_type = kagari_vfx::core::timeline::LayerType::Particle { emitter };
-        layer.transform.position = kagari_vfx::core::property::Animatable::new_constant(emitter_pos);
-        eprintln!("Updated existing layer '{}' with particle preset '{}'", layer.name, preset);
+        layer.transform.position =
+            kagari_vfx::core::property::Animatable::new_constant(emitter_pos);
+        eprintln!(
+            "Updated existing layer '{}' with particle preset '{}'",
+            layer.name, preset
+        );
     } else {
         let mut new_layer = kagari_vfx::core::timeline::Layer::new(
             format!("particle_{}", comp.layers.len() + 1),
@@ -1454,9 +1668,13 @@ pub(super) fn cmd_particle(
             kagari_vfx::core::timeline::LayerType::Particle { emitter },
             comp.duration_frames,
         );
-        new_layer.transform.position = kagari_vfx::core::property::Animatable::new_constant(emitter_pos);
+        new_layer.transform.position =
+            kagari_vfx::core::property::Animatable::new_constant(emitter_pos);
         comp.layers.push(new_layer);
-        eprintln!("Created new particle layer '{}' with preset '{}'", layer_name, preset);
+        eprintln!(
+            "Created new particle layer '{}' with preset '{}'",
+            layer_name, preset
+        );
     }
 
     let json = serde_json::to_string_pretty(&project)?;
@@ -1504,7 +1722,11 @@ pub(super) fn cmd_audio_spectrum(
         enabled: true,
     };
 
-    if let Some(layer) = comp.layers.iter_mut().find(|l| l.name == layer_name || l.id == layer_name) {
+    if let Some(layer) = comp
+        .layers
+        .iter_mut()
+        .find(|l| l.name == layer_name || l.id == layer_name)
+    {
         layer.effects.push(effect);
         eprintln!("Added AudioSpectrum effect to layer '{}'", layer.name);
     } else {
@@ -1518,7 +1740,10 @@ pub(super) fn cmd_audio_spectrum(
         );
         solid.effects.push(effect);
         comp.layers.push(solid);
-        eprintln!("Created visualizer layer '{}' with AudioSpectrum effect", layer_name);
+        eprintln!(
+            "Created visualizer layer '{}' with AudioSpectrum effect",
+            layer_name
+        );
     }
 
     let audio_layer_exists = comp.layers.iter().any(|l| {
@@ -1564,20 +1789,28 @@ pub(super) fn cmd_roto(
         .layers
         .iter_mut()
         .find(|l| l.name == layer_name || l.id == layer_name)
-        .ok_or_else(|| format!("Layer '{layer_name}' not found in composition '{}'", comp.name))?;
+        .ok_or_else(|| {
+            format!(
+                "Layer '{layer_name}' not found in composition '{}'",
+                comp.name
+            )
+        })?;
 
-    let stroke_type = if kind_str.eq_ignore_ascii_case("bg") || kind_str.eq_ignore_ascii_case("background") {
-        kagari_vfx::core::roto_brush_engine::RotoStrokeType::Background
-    } else {
-        kagari_vfx::core::roto_brush_engine::RotoStrokeType::Foreground
-    };
+    let stroke_type =
+        if kind_str.eq_ignore_ascii_case("bg") || kind_str.eq_ignore_ascii_case("background") {
+            kagari_vfx::core::roto_brush_engine::RotoStrokeType::Background
+        } else {
+            kagari_vfx::core::roto_brush_engine::RotoStrokeType::Foreground
+        };
 
     let flat: Vec<f32> = points_str
         .split(',')
         .filter_map(|s| s.trim().parse().ok())
         .collect();
     if flat.len() < 2 {
-        return Err("Roto stroke points must contain at least one x,y pair (e.g. \"960,540\")".into());
+        return Err(
+            "Roto stroke points must contain at least one x,y pair (e.g. \"960,540\")".into(),
+        );
     }
     let points: Vec<[f32; 2]> = flat.chunks_exact(2).map(|c| [c[0], c[1]]).collect();
 
@@ -1618,7 +1851,12 @@ pub(super) fn cmd_puppet(
         .layers
         .iter_mut()
         .find(|l| l.name == layer_name || l.id == layer_name)
-        .ok_or_else(|| format!("Layer '{layer_name}' not found in composition '{}'", comp.name))?;
+        .ok_or_else(|| {
+            format!(
+                "Layer '{layer_name}' not found in composition '{}'",
+                comp.name
+            )
+        })?;
 
     let default_pos = [comp.width as f32 / 2.0, comp.height as f32 / 2.0];
     let pos = if let Some(p) = pos_str {
@@ -1632,29 +1870,46 @@ pub(super) fn cmd_puppet(
         default_pos
     };
 
-    let pin_idx = layer.puppet_pins.iter().position(|p| p.name == pin_name || p.id == pin_name);
+    let pin_idx = layer
+        .puppet_pins
+        .iter()
+        .position(|p| p.name == pin_name || p.id == pin_name);
     let target_f = frame.unwrap_or(layer.in_frame);
 
     if let Some(idx) = pin_idx {
         if let Some(t_str) = target_str {
-            let parts: Vec<f32> = t_str.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+            let parts: Vec<f32> = t_str
+                .split(',')
+                .filter_map(|s| s.trim().parse().ok())
+                .collect();
             if parts.len() >= 2 {
                 let target_pos = [parts[0], parts[1]];
                 let pin = &mut layer.puppet_pins[idx];
                 let mut kfs = match &pin.position {
                     kagari_vfx::core::property::Animatable::Animated(k) => k.clone(),
                     kagari_vfx::core::property::Animatable::Constant(c) => {
-                        vec![kagari_vfx::core::keyframe::Keyframe::new(layer.in_frame, *c, kagari_vfx::core::keyframe::InterpolationType::Linear)]
+                        vec![kagari_vfx::core::keyframe::Keyframe::new(
+                            layer.in_frame,
+                            *c,
+                            kagari_vfx::core::keyframe::InterpolationType::Linear,
+                        )]
                     }
                 };
                 if let Some(existing_kf) = kfs.iter_mut().find(|k| k.frame == target_f) {
                     existing_kf.value = target_pos;
                 } else {
-                    kfs.push(kagari_vfx::core::keyframe::Keyframe::new(target_f, target_pos, kagari_vfx::core::keyframe::InterpolationType::Linear));
+                    kfs.push(kagari_vfx::core::keyframe::Keyframe::new(
+                        target_f,
+                        target_pos,
+                        kagari_vfx::core::keyframe::InterpolationType::Linear,
+                    ));
                     kfs.sort_by_key(|k| k.frame);
                 }
                 pin.position = kagari_vfx::core::property::Animatable::Animated(kfs);
-                eprintln!("Animated Puppet Pin '{}' to [{:.1}, {:.1}] at frame {}", pin_name, target_pos[0], target_pos[1], target_f);
+                eprintln!(
+                    "Animated Puppet Pin '{}' to [{:.1}, {:.1}] at frame {}",
+                    pin_name, target_pos[0], target_pos[1], target_f
+                );
             }
         }
     } else {
@@ -1664,17 +1919,31 @@ pub(super) fn cmd_puppet(
             pos,
         );
         if let Some(t_str) = target_str {
-            let parts: Vec<f32> = t_str.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+            let parts: Vec<f32> = t_str
+                .split(',')
+                .filter_map(|s| s.trim().parse().ok())
+                .collect();
             if parts.len() >= 2 {
                 let target_pos = [parts[0], parts[1]];
                 pin.position = kagari_vfx::core::property::Animatable::Animated(vec![
-                    kagari_vfx::core::keyframe::Keyframe::new(layer.in_frame, pos, kagari_vfx::core::keyframe::InterpolationType::Linear),
-                    kagari_vfx::core::keyframe::Keyframe::new(target_f, target_pos, kagari_vfx::core::keyframe::InterpolationType::Linear),
+                    kagari_vfx::core::keyframe::Keyframe::new(
+                        layer.in_frame,
+                        pos,
+                        kagari_vfx::core::keyframe::InterpolationType::Linear,
+                    ),
+                    kagari_vfx::core::keyframe::Keyframe::new(
+                        target_f,
+                        target_pos,
+                        kagari_vfx::core::keyframe::InterpolationType::Linear,
+                    ),
                 ]);
             }
         }
         layer.puppet_pins.push(pin);
-        eprintln!("Created new Puppet Pin '{}' at [{:.1}, {:.1}] on layer '{}'", pin_name, pos[0], pos[1], layer.name);
+        eprintln!(
+            "Created new Puppet Pin '{}' at [{:.1}, {:.1}] on layer '{}'",
+            pin_name, pos[0], pos[1], layer.name
+        );
     }
 
     let json = serde_json::to_string_pretty(&project)?;
@@ -1698,7 +1967,12 @@ pub(super) fn cmd_chroma_key(
         .layers
         .iter_mut()
         .find(|l| l.name == layer_name || l.id == layer_name)
-        .ok_or_else(|| format!("Layer '{layer_name}' not found in composition '{}'", comp.name))?;
+        .ok_or_else(|| {
+            format!(
+                "Layer '{layer_name}' not found in composition '{}'",
+                comp.name
+            )
+        })?;
 
     let screen_color = match color_str.to_lowercase().as_str() {
         "green" => [0.0, 1.0, 0.0],
@@ -1725,8 +1999,12 @@ pub(super) fn cmd_chroma_key(
         effect_type: kagari_vfx::core::timeline::EffectType::ChromaKey {
             screen_color: kagari_vfx::core::property::Animatable::new_constant(screen_color),
             screen_gain: kagari_vfx::core::property::Animatable::new_constant(gain.clamp(0.1, 3.0)),
-            clip_black: kagari_vfx::core::property::Animatable::new_constant(clip_black.clamp(0.0, 1.0)),
-            clip_white: kagari_vfx::core::property::Animatable::new_constant(clip_white.clamp(0.0, 1.0)),
+            clip_black: kagari_vfx::core::property::Animatable::new_constant(
+                clip_black.clamp(0.0, 1.0),
+            ),
+            clip_white: kagari_vfx::core::property::Animatable::new_constant(
+                clip_white.clamp(0.0, 1.0),
+            ),
         },
         enabled: true,
     };
@@ -1757,7 +2035,12 @@ pub(super) fn cmd_audio_track(
         .layers
         .iter_mut()
         .find(|l| l.name == layer_name || l.id == layer_name)
-        .ok_or_else(|| format!("Layer '{layer_name}' not found in composition '{}'", comp.name))?;
+        .ok_or_else(|| {
+            format!(
+                "Layer '{layer_name}' not found in composition '{}'",
+                comp.name
+            )
+        })?;
 
     let in_f = layer.in_frame;
     let out_f = layer.out_frame;
@@ -1767,18 +2050,42 @@ pub(super) fn cmd_audio_track(
         let mut kfs = Vec::new();
         if let Some(dur_in) = fade_in {
             let fade_end = (in_f + dur_in).min(out_f);
-            kfs.push(kagari_vfx::core::keyframe::Keyframe::new(in_f, 0.0, kagari_vfx::core::keyframe::InterpolationType::Linear));
-            kfs.push(kagari_vfx::core::keyframe::Keyframe::new(fade_end, target_vol, kagari_vfx::core::keyframe::InterpolationType::Linear));
+            kfs.push(kagari_vfx::core::keyframe::Keyframe::new(
+                in_f,
+                0.0,
+                kagari_vfx::core::keyframe::InterpolationType::Linear,
+            ));
+            kfs.push(kagari_vfx::core::keyframe::Keyframe::new(
+                fade_end,
+                target_vol,
+                kagari_vfx::core::keyframe::InterpolationType::Linear,
+            ));
         } else {
-            kfs.push(kagari_vfx::core::keyframe::Keyframe::new(in_f, target_vol, kagari_vfx::core::keyframe::InterpolationType::Linear));
+            kfs.push(kagari_vfx::core::keyframe::Keyframe::new(
+                in_f,
+                target_vol,
+                kagari_vfx::core::keyframe::InterpolationType::Linear,
+            ));
         }
 
         if let Some(dur_out) = fade_out {
             let fade_start = out_f.saturating_sub(dur_out).max(in_f);
-            kfs.push(kagari_vfx::core::keyframe::Keyframe::new(fade_start, target_vol, kagari_vfx::core::keyframe::InterpolationType::Linear));
-            kfs.push(kagari_vfx::core::keyframe::Keyframe::new(out_f, 0.0, kagari_vfx::core::keyframe::InterpolationType::Linear));
+            kfs.push(kagari_vfx::core::keyframe::Keyframe::new(
+                fade_start,
+                target_vol,
+                kagari_vfx::core::keyframe::InterpolationType::Linear,
+            ));
+            kfs.push(kagari_vfx::core::keyframe::Keyframe::new(
+                out_f,
+                0.0,
+                kagari_vfx::core::keyframe::InterpolationType::Linear,
+            ));
         } else {
-            kfs.push(kagari_vfx::core::keyframe::Keyframe::new(out_f, target_vol, kagari_vfx::core::keyframe::InterpolationType::Linear));
+            kfs.push(kagari_vfx::core::keyframe::Keyframe::new(
+                out_f,
+                target_vol,
+                kagari_vfx::core::keyframe::InterpolationType::Linear,
+            ));
         }
 
         kfs.sort_by_key(|k| k.frame);
@@ -1787,17 +2094,26 @@ pub(super) fn cmd_audio_track(
         match &mut layer.layer_type {
             kagari_vfx::core::timeline::LayerType::Audio { volume, .. } => {
                 *volume = kagari_vfx::core::property::Animatable::Animated(kfs);
-                eprintln!("Configured audio volume automation envelope on '{}'", layer.name);
+                eprintln!(
+                    "Configured audio volume automation envelope on '{}'",
+                    layer.name
+                );
             }
             _ => {
-                eprintln!("Applied volume envelope to non-audio layer '{}' (recorded for export mix)", layer.name);
+                eprintln!(
+                    "Applied volume envelope to non-audio layer '{}' (recorded for export mix)",
+                    layer.name
+                );
             }
         }
     } else if let Some(vol) = volume_opt {
         match &mut layer.layer_type {
             kagari_vfx::core::timeline::LayerType::Audio { volume, .. } => {
                 *volume = kagari_vfx::core::property::Animatable::new_constant(vol);
-                eprintln!("Set constant audio volume to {:.2} on '{}'", vol, layer.name);
+                eprintln!(
+                    "Set constant audio volume to {:.2} on '{}'",
+                    vol, layer.name
+                );
             }
             _ => {
                 eprintln!("Set volume to {:.2} on layer '{}'", vol, layer.name);
@@ -1865,10 +2181,13 @@ pub(super) fn cmd_story(
                 frames_dir: foot.to_string(),
                 frame_count: total_frames,
                 audio_wav: None,
+                audio_volume: kagari_vfx::core::property::Animatable::new_constant(0.0),
                 speed: 1.0,
             }
         } else {
-            kagari_vfx::core::timeline::LayerType::Image { path: foot.to_string() }
+            kagari_vfx::core::timeline::LayerType::Image {
+                path: foot.to_string(),
+            }
         };
         let mut foot_layer = kagari_vfx::core::timeline::Layer::new(
             "footage_main".to_string(),
@@ -1876,11 +2195,20 @@ pub(super) fn cmd_story(
             l_type,
             total_frames,
         );
-        foot_layer.transform.scale = kagari_vfx::core::property::Animatable::new_constant([1.0, 1.0]);
+        foot_layer.transform.scale =
+            kagari_vfx::core::property::Animatable::new_constant([1.0, 1.0]);
         // Subtle slow cinematic push-in zoom
         foot_layer.transform.scale = kagari_vfx::core::property::Animatable::Animated(vec![
-            kagari_vfx::core::keyframe::Keyframe::new(0, [1.0, 1.0], kagari_vfx::core::keyframe::InterpolationType::Linear),
-            kagari_vfx::core::keyframe::Keyframe::new(total_frames, [1.08, 1.08], kagari_vfx::core::keyframe::InterpolationType::Linear),
+            kagari_vfx::core::keyframe::Keyframe::new(
+                0,
+                [1.0, 1.0],
+                kagari_vfx::core::keyframe::InterpolationType::Linear,
+            ),
+            kagari_vfx::core::keyframe::Keyframe::new(
+                total_frames,
+                [1.08, 1.08],
+                kagari_vfx::core::keyframe::InterpolationType::Linear,
+            ),
         ]);
         comp.layers.push(foot_layer);
     }
@@ -1893,10 +2221,26 @@ pub(super) fn cmd_story(
             kagari_vfx::core::timeline::LayerType::Audio {
                 path: aud.to_string(),
                 volume: kagari_vfx::core::property::Animatable::Animated(vec![
-                    kagari_vfx::core::keyframe::Keyframe::new(0, 0.0, kagari_vfx::core::keyframe::InterpolationType::Linear),
-                    kagari_vfx::core::keyframe::Keyframe::new(fps, 1.0, kagari_vfx::core::keyframe::InterpolationType::Linear),
-                    kagari_vfx::core::keyframe::Keyframe::new(total_frames.saturating_sub(fps * 2), 1.0, kagari_vfx::core::keyframe::InterpolationType::Linear),
-                    kagari_vfx::core::keyframe::Keyframe::new(total_frames, 0.0, kagari_vfx::core::keyframe::InterpolationType::Linear),
+                    kagari_vfx::core::keyframe::Keyframe::new(
+                        0,
+                        0.0,
+                        kagari_vfx::core::keyframe::InterpolationType::Linear,
+                    ),
+                    kagari_vfx::core::keyframe::Keyframe::new(
+                        fps,
+                        1.0,
+                        kagari_vfx::core::keyframe::InterpolationType::Linear,
+                    ),
+                    kagari_vfx::core::keyframe::Keyframe::new(
+                        total_frames.saturating_sub(fps * 2),
+                        1.0,
+                        kagari_vfx::core::keyframe::InterpolationType::Linear,
+                    ),
+                    kagari_vfx::core::keyframe::Keyframe::new(
+                        total_frames,
+                        0.0,
+                        kagari_vfx::core::keyframe::InterpolationType::Linear,
+                    ),
                 ]),
             },
             total_frames,
@@ -1923,7 +2267,9 @@ pub(super) fn cmd_story(
         let mut vis_solid = kagari_vfx::core::timeline::Layer::new(
             "visualizer_solid".to_string(),
             "Rhythm Waveform".to_string(),
-            kagari_vfx::core::timeline::LayerType::Solid { color: [0.0, 0.0, 0.0, 0.0] },
+            kagari_vfx::core::timeline::LayerType::Solid {
+                color: [0.0, 0.0, 0.0, 0.0],
+            },
             total_frames,
         );
         vis_solid.effects.push(spec_effect);
@@ -1947,7 +2293,10 @@ pub(super) fn cmd_story(
         kagari_vfx::core::timeline::LayerType::Particle { emitter },
         total_frames,
     );
-    particle_layer.transform.position = kagari_vfx::core::property::Animatable::new_constant([width as f32 / 2.0, height as f32 * 0.7]);
+    particle_layer.transform.position = kagari_vfx::core::property::Animatable::new_constant([
+        width as f32 / 2.0,
+        height as f32 * 0.7,
+    ]);
     comp.layers.push(particle_layer);
 
     // 5. Kinetic Title Typography with Text Animator
@@ -1968,7 +2317,10 @@ pub(super) fn cmd_story(
         },
         total_frames,
     );
-    title_layer.transform.position = kagari_vfx::core::property::Animatable::new_constant([width as f32 / 2.0, height as f32 * 0.44]);
+    title_layer.transform.position = kagari_vfx::core::property::Animatable::new_constant([
+        width as f32 / 2.0,
+        height as f32 * 0.44,
+    ]);
     // Cascade typewriter animator
     let title_sweep_end = (fps * 2).min(total_frames);
     title_layer.text_animator = Some(kagari_vfx::core::text_animator::TextAnimatorSettings {
@@ -1984,8 +2336,16 @@ pub(super) fn cmd_story(
             char_start: -1,
             char_end: -1,
             offset_anim: Some(kagari_vfx::core::property::Animatable::Animated(vec![
-                kagari_vfx::core::keyframe::Keyframe::new(0, -100.0, kagari_vfx::core::keyframe::InterpolationType::Linear),
-                kagari_vfx::core::keyframe::Keyframe::new(title_sweep_end, 100.0, kagari_vfx::core::keyframe::InterpolationType::Linear),
+                kagari_vfx::core::keyframe::Keyframe::new(
+                    0,
+                    -100.0,
+                    kagari_vfx::core::keyframe::InterpolationType::Linear,
+                ),
+                kagari_vfx::core::keyframe::Keyframe::new(
+                    title_sweep_end,
+                    100.0,
+                    kagari_vfx::core::keyframe::InterpolationType::Linear,
+                ),
             ])),
             expression: None,
         },
@@ -2016,13 +2376,36 @@ pub(super) fn cmd_story(
         },
         total_frames,
     );
-    sub_layer.transform.position = kagari_vfx::core::property::Animatable::new_constant([width as f32 / 2.0, height as f32 * 0.54]);
+    sub_layer.transform.position = kagari_vfx::core::property::Animatable::new_constant([
+        width as f32 / 2.0,
+        height as f32 * 0.54,
+    ]);
     sub_layer.transform.opacity = kagari_vfx::core::property::Animatable::Animated(vec![
-        kagari_vfx::core::keyframe::Keyframe::new(0, 0.0, kagari_vfx::core::keyframe::InterpolationType::Linear),
-        kagari_vfx::core::keyframe::Keyframe::new(fps, 0.0, kagari_vfx::core::keyframe::InterpolationType::Linear),
-        kagari_vfx::core::keyframe::Keyframe::new(fps * 2, 1.0, kagari_vfx::core::keyframe::InterpolationType::Linear),
-        kagari_vfx::core::keyframe::Keyframe::new(total_frames.saturating_sub(fps), 1.0, kagari_vfx::core::keyframe::InterpolationType::Linear),
-        kagari_vfx::core::keyframe::Keyframe::new(total_frames, 0.0, kagari_vfx::core::keyframe::InterpolationType::Linear),
+        kagari_vfx::core::keyframe::Keyframe::new(
+            0,
+            0.0,
+            kagari_vfx::core::keyframe::InterpolationType::Linear,
+        ),
+        kagari_vfx::core::keyframe::Keyframe::new(
+            fps,
+            0.0,
+            kagari_vfx::core::keyframe::InterpolationType::Linear,
+        ),
+        kagari_vfx::core::keyframe::Keyframe::new(
+            fps * 2,
+            1.0,
+            kagari_vfx::core::keyframe::InterpolationType::Linear,
+        ),
+        kagari_vfx::core::keyframe::Keyframe::new(
+            total_frames.saturating_sub(fps),
+            1.0,
+            kagari_vfx::core::keyframe::InterpolationType::Linear,
+        ),
+        kagari_vfx::core::keyframe::Keyframe::new(
+            total_frames,
+            0.0,
+            kagari_vfx::core::keyframe::InterpolationType::Linear,
+        ),
     ]);
     comp.layers.push(sub_layer);
 
@@ -2034,38 +2417,44 @@ pub(super) fn cmd_story(
         total_frames,
     );
     finish_layer.is_adjustment_layer = true;
-    finish_layer.effects.push(kagari_vfx::core::timeline::Effect {
-        id: "film_grain".to_string(),
-        name: "35mm Film Grain".to_string(),
-        effect_type: kagari_vfx::core::timeline::EffectType::FilmGrain {
-            intensity: kagari_vfx::core::property::Animatable::new_constant(0.12),
-            grain_size: 1.5,
-            color_film: true,
-        },
-        enabled: true,
-    });
-    finish_layer.effects.push(kagari_vfx::core::timeline::Effect {
-        id: "vignette".to_string(),
-        name: "Lens Vignette".to_string(),
-        effect_type: kagari_vfx::core::timeline::EffectType::Vignette {
-            intensity: kagari_vfx::core::property::Animatable::new_constant(35.0),
-            roundness: kagari_vfx::core::property::Animatable::new_constant(0.0),
-            feather: kagari_vfx::core::property::Animatable::new_constant(45.0),
-            color: kagari_vfx::core::property::Animatable::new_constant([0.0, 0.0, 0.0, 1.0]),
-        },
-        enabled: true,
-    });
-    finish_layer.effects.push(kagari_vfx::core::timeline::Effect {
-        id: "chromatic".to_string(),
-        name: "Chromatic Aberration".to_string(),
-        effect_type: kagari_vfx::core::timeline::EffectType::ChromaticAberration {
-            shift_r: kagari_vfx::core::property::Animatable::new_constant(2.0),
-            shift_b: kagari_vfx::core::property::Animatable::new_constant(-2.0),
-            edge_falloff: kagari_vfx::core::property::Animatable::new_constant(1.0),
-            iris_linked: true,
-        },
-        enabled: true,
-    });
+    finish_layer
+        .effects
+        .push(kagari_vfx::core::timeline::Effect {
+            id: "film_grain".to_string(),
+            name: "35mm Film Grain".to_string(),
+            effect_type: kagari_vfx::core::timeline::EffectType::FilmGrain {
+                intensity: kagari_vfx::core::property::Animatable::new_constant(0.12),
+                grain_size: 1.5,
+                color_film: true,
+            },
+            enabled: true,
+        });
+    finish_layer
+        .effects
+        .push(kagari_vfx::core::timeline::Effect {
+            id: "vignette".to_string(),
+            name: "Lens Vignette".to_string(),
+            effect_type: kagari_vfx::core::timeline::EffectType::Vignette {
+                intensity: kagari_vfx::core::property::Animatable::new_constant(35.0),
+                roundness: kagari_vfx::core::property::Animatable::new_constant(0.0),
+                feather: kagari_vfx::core::property::Animatable::new_constant(45.0),
+                color: kagari_vfx::core::property::Animatable::new_constant([0.0, 0.0, 0.0, 1.0]),
+            },
+            enabled: true,
+        });
+    finish_layer
+        .effects
+        .push(kagari_vfx::core::timeline::Effect {
+            id: "chromatic".to_string(),
+            name: "Chromatic Aberration".to_string(),
+            effect_type: kagari_vfx::core::timeline::EffectType::ChromaticAberration {
+                shift_r: kagari_vfx::core::property::Animatable::new_constant(2.0),
+                shift_b: kagari_vfx::core::property::Animatable::new_constant(-2.0),
+                edge_falloff: kagari_vfx::core::property::Animatable::new_constant(1.0),
+                iris_linked: true,
+            },
+            enabled: true,
+        });
     comp.layers.push(finish_layer);
 
     let comp_idx = project.compositions.len();
@@ -2104,7 +2493,14 @@ pub(super) fn cmd_critique(
     let mut evaluated_frames = 0;
 
     for &f in &sample_frames {
-        let pixels = kagari_vfx::core::software_renderer::render_frame_to_pixels(comp, f, comp.width.min(640), comp.height.min(360), 0.0, 0);
+        let pixels = kagari_vfx::core::software_renderer::render_frame_to_pixels(
+            comp,
+            f,
+            comp.width.min(640),
+            comp.height.min(360),
+            0.0,
+            0,
+        );
         let n_pixels = pixels.len() / 4;
         if n_pixels == 0 {
             continue;
@@ -2116,11 +2512,20 @@ pub(super) fn cmd_critique(
         let mut highlights = 0;
 
         for chunk in pixels.chunks_exact(4) {
-            let lum = ((chunk[0] as u32 * 77 + chunk[1] as u32 * 150 + chunk[2] as u32 * 29) >> 8) as u8;
-            if lum < lum_min { lum_min = lum; }
-            if lum > lum_max { lum_max = lum; }
-            if lum < 5 { shadows += 1; }
-            if lum > 250 { highlights += 1; }
+            let lum =
+                ((chunk[0] as u32 * 77 + chunk[1] as u32 * 150 + chunk[2] as u32 * 29) >> 8) as u8;
+            if lum < lum_min {
+                lum_min = lum;
+            }
+            if lum > lum_max {
+                lum_max = lum;
+            }
+            if lum < 5 {
+                shadows += 1;
+            }
+            if lum > 250 {
+                highlights += 1;
+            }
         }
 
         let shadow_ratio = (shadows as f32 / n_pixels as f32) * 100.0;
@@ -2133,23 +2538,57 @@ pub(super) fn cmd_critique(
         evaluated_frames += 1;
     }
 
-    let avg_shadow_clip = if evaluated_frames > 0 { shadow_clip_sum / evaluated_frames as f32 } else { 0.0 };
-    let avg_highlight_clip = if evaluated_frames > 0 { highlight_clip_sum / evaluated_frames as f32 } else { 0.0 };
-    let avg_dynamic_range = if evaluated_frames > 0 { contrast_sum / evaluated_frames as f32 } else { 0.0 };
+    let avg_shadow_clip = if evaluated_frames > 0 {
+        shadow_clip_sum / evaluated_frames as f32
+    } else {
+        0.0
+    };
+    let avg_highlight_clip = if evaluated_frames > 0 {
+        highlight_clip_sum / evaluated_frames as f32
+    } else {
+        0.0
+    };
+    let avg_dynamic_range = if evaluated_frames > 0 {
+        contrast_sum / evaluated_frames as f32
+    } else {
+        0.0
+    };
 
     // Audio & sync analysis
-    let has_audio = comp.layers.iter().any(|l| matches!(l.layer_type, kagari_vfx::core::timeline::LayerType::Audio { .. }));
-    let has_particles = comp.layers.iter().any(|l| matches!(l.layer_type, kagari_vfx::core::timeline::LayerType::Particle { .. }));
+    let has_audio = comp.layers.iter().any(|l| {
+        matches!(
+            l.layer_type,
+            kagari_vfx::core::timeline::LayerType::Audio { .. }
+        )
+    });
+    let has_particles = comp.layers.iter().any(|l| {
+        matches!(
+            l.layer_type,
+            kagari_vfx::core::timeline::LayerType::Particle { .. }
+        )
+    });
     let has_camera = comp.cameras.iter().any(|c| c.active) || comp.active_camera.active;
-    let has_lut_or_grade = comp.layers.iter().any(|l| l.is_adjustment_layer || l.effects.iter().any(|e| e.name.contains("Film") || e.name.contains("Grade")));
+    let has_lut_or_grade = comp.layers.iter().any(|l| {
+        l.is_adjustment_layer
+            || l.effects
+                .iter()
+                .any(|e| e.name.contains("Film") || e.name.contains("Grade"))
+    });
 
     // Scoring out of 100
     let visual_contrast_score = (avg_dynamic_range * 100.0f32).clamp(0.0f32, 100.0f32);
-    let exposure_balance_score = (100.0f32 - (avg_shadow_clip + avg_highlight_clip) * 2.0f32).clamp(0.0f32, 100.0f32);
-    let depth_add: f32 = (if has_camera { 25.0f32 } else { 0.0f32 }) + (if has_particles { 25.0f32 } else { 0.0f32 }) + (if has_lut_or_grade { 20.0f32 } else { 0.0f32 });
+    let exposure_balance_score =
+        (100.0f32 - (avg_shadow_clip + avg_highlight_clip) * 2.0f32).clamp(0.0f32, 100.0f32);
+    let depth_add: f32 = (if has_camera { 25.0f32 } else { 0.0f32 })
+        + (if has_particles { 25.0f32 } else { 0.0f32 })
+        + (if has_lut_or_grade { 20.0f32 } else { 0.0f32 });
     let composition_depth_score = (30.0f32 + depth_add).clamp(0.0f32, 100.0f32);
     let audio_sync_score = if has_audio { 95.0f32 } else { 40.0f32 };
-    let overall_score = (visual_contrast_score * 0.25 + exposure_balance_score * 0.25 + composition_depth_score * 0.3 + audio_sync_score * 0.2).round();
+    let overall_score = (visual_contrast_score * 0.25
+        + exposure_balance_score * 0.25
+        + composition_depth_score * 0.3
+        + audio_sync_score * 0.2)
+        .round();
 
     let mut suggestions = Vec::new();
     if avg_shadow_clip > 15.0 {
@@ -2192,7 +2631,10 @@ pub(super) fn cmd_critique(
         eprintln!("  Overall Production Score: {} / 100", overall_score);
         eprintln!("  ├── Visual Contrast:      {:.1}%", visual_contrast_score);
         eprintln!("  ├── Exposure Balance:     {:.1}%", exposure_balance_score);
-        eprintln!("  ├── Depth & Cinematography: {:.1}%", composition_depth_score);
+        eprintln!(
+            "  ├── Depth & Cinematography: {:.1}%",
+            composition_depth_score
+        );
         eprintln!("  └── Audio Synchronization: {:.1}%", audio_sync_score);
         eprintln!("\n💡 Actionable Director Suggestions for Claude/Opus 5.5 Beatdown:");
         for (i, s) in suggestions.iter().enumerate() {
@@ -2230,7 +2672,9 @@ pub(super) fn cmd_cinematic(
             id: format!("grain_{}", comp.layers.len()),
             name: "35mm Grain".to_string(),
             effect_type: kagari_vfx::core::timeline::EffectType::FilmGrain {
-                intensity: kagari_vfx::core::property::Animatable::new_constant(grain.clamp(0.01, 1.0)),
+                intensity: kagari_vfx::core::property::Animatable::new_constant(
+                    grain.clamp(0.01, 1.0),
+                ),
                 grain_size: 1.6,
                 color_film: true,
             },
@@ -2244,8 +2688,12 @@ pub(super) fn cmd_cinematic(
             id: format!("chromatic_{}", comp.layers.len()),
             name: "Lens Aberration".to_string(),
             effect_type: kagari_vfx::core::timeline::EffectType::ChromaticAberration {
-                shift_r: kagari_vfx::core::property::Animatable::new_constant(aberration.clamp(0.5, 20.0)),
-                shift_b: kagari_vfx::core::property::Animatable::new_constant(-aberration.clamp(0.5, 20.0)),
+                shift_r: kagari_vfx::core::property::Animatable::new_constant(
+                    aberration.clamp(0.5, 20.0),
+                ),
+                shift_b: kagari_vfx::core::property::Animatable::new_constant(
+                    -aberration.clamp(0.5, 20.0),
+                ),
                 edge_falloff: kagari_vfx::core::property::Animatable::new_constant(1.0),
                 iris_linked: true,
             },
@@ -2259,7 +2707,9 @@ pub(super) fn cmd_cinematic(
             id: format!("vignette_{}", comp.layers.len()),
             name: "Lens Falloff".to_string(),
             effect_type: kagari_vfx::core::timeline::EffectType::Vignette {
-                intensity: kagari_vfx::core::property::Animatable::new_constant((vignette * 100.0).clamp(5.0, 95.0)),
+                intensity: kagari_vfx::core::property::Animatable::new_constant(
+                    (vignette * 100.0).clamp(5.0, 95.0),
+                ),
                 roundness: kagari_vfx::core::property::Animatable::new_constant(0.0),
                 feather: kagari_vfx::core::property::Animatable::new_constant(50.0),
                 color: kagari_vfx::core::property::Animatable::new_constant([0.0, 0.0, 0.0, 1.0]),
@@ -2275,23 +2725,41 @@ pub(super) fn cmd_cinematic(
         let mut top_bar = kagari_vfx::core::timeline::Layer::new(
             "letterbox_top".to_string(),
             "Cinema Letterbox Top".to_string(),
-            kagari_vfx::core::timeline::LayerType::Solid { color: [0.0, 0.0, 0.0, 1.0] },
+            kagari_vfx::core::timeline::LayerType::Solid {
+                color: [0.0, 0.0, 0.0, 1.0],
+            },
             comp.duration_frames,
         );
-        top_bar.transform.anchor_point = kagari_vfx::core::property::Animatable::new_constant([comp.width as f32 / 2.0, 0.0]);
-        top_bar.transform.position = kagari_vfx::core::property::Animatable::new_constant([comp.width as f32 / 2.0, 0.0]);
-        top_bar.transform.scale = kagari_vfx::core::property::Animatable::new_constant([1.0, bar_h as f32 / comp.height as f32]);
+        top_bar.transform.anchor_point =
+            kagari_vfx::core::property::Animatable::new_constant([comp.width as f32 / 2.0, 0.0]);
+        top_bar.transform.position =
+            kagari_vfx::core::property::Animatable::new_constant([comp.width as f32 / 2.0, 0.0]);
+        top_bar.transform.scale = kagari_vfx::core::property::Animatable::new_constant([
+            1.0,
+            bar_h as f32 / comp.height as f32,
+        ]);
         top_bar.locked = true;
 
         let mut btm_bar = kagari_vfx::core::timeline::Layer::new(
             "letterbox_btm".to_string(),
             "Cinema Letterbox Bottom".to_string(),
-            kagari_vfx::core::timeline::LayerType::Solid { color: [0.0, 0.0, 0.0, 1.0] },
+            kagari_vfx::core::timeline::LayerType::Solid {
+                color: [0.0, 0.0, 0.0, 1.0],
+            },
             comp.duration_frames,
         );
-        btm_bar.transform.anchor_point = kagari_vfx::core::property::Animatable::new_constant([comp.width as f32 / 2.0, comp.height as f32]);
-        btm_bar.transform.position = kagari_vfx::core::property::Animatable::new_constant([comp.width as f32 / 2.0, comp.height as f32]);
-        btm_bar.transform.scale = kagari_vfx::core::property::Animatable::new_constant([1.0, bar_h as f32 / comp.height as f32]);
+        btm_bar.transform.anchor_point = kagari_vfx::core::property::Animatable::new_constant([
+            comp.width as f32 / 2.0,
+            comp.height as f32,
+        ]);
+        btm_bar.transform.position = kagari_vfx::core::property::Animatable::new_constant([
+            comp.width as f32 / 2.0,
+            comp.height as f32,
+        ]);
+        btm_bar.transform.scale = kagari_vfx::core::property::Animatable::new_constant([
+            1.0,
+            bar_h as f32 / comp.height as f32,
+        ]);
         btm_bar.locked = true;
 
         comp.layers.push(top_bar);
@@ -2344,7 +2812,11 @@ fn parse_timed_lyrics(content: &str, fps: f32, max_frames: u32) -> Vec<(u32, u32
             } else {
                 (start + (fps * 4.0) as u32).min(max_frames)
             };
-            cues.push((start.min(max_frames), end.min(max_frames), lrc_lines[i].1.clone()));
+            cues.push((
+                start.min(max_frames),
+                end.min(max_frames),
+                lrc_lines[i].1.clone(),
+            ));
         }
         return cues;
     }
@@ -2376,11 +2848,7 @@ fn parse_timed_lyrics(content: &str, fps: f32, max_frames: u32) -> Vec<(u32, u32
             if let (Some(s), Some(e)) = (current_start, current_end) {
                 let text = current_text.join(" ");
                 if !text.is_empty() {
-                    cues.push((
-                        (s * fps).round() as u32,
-                        (e * fps).round() as u32,
-                        text,
-                    ));
+                    cues.push(((s * fps).round() as u32, (e * fps).round() as u32, text));
                 }
             }
             current_start = None;
@@ -2401,11 +2869,7 @@ fn parse_timed_lyrics(content: &str, fps: f32, max_frames: u32) -> Vec<(u32, u32
     if let (Some(s), Some(e)) = (current_start, current_end) {
         let text = current_text.join(" ");
         if !text.is_empty() {
-            cues.push((
-                (s * fps).round() as u32,
-                (e * fps).round() as u32,
-                text,
-            ));
+            cues.push(((s * fps).round() as u32, (e * fps).round() as u32, text));
         }
     }
 
@@ -2437,7 +2901,11 @@ pub(super) fn cmd_mv(
         fps as f32,
     );
 
-    eprintln!("  Analyzed Audio: Found {} transient beat drops across {} frames", detected_beats.len(), max_frames);
+    eprintln!(
+        "  Analyzed Audio: Found {} transient beat drops across {} frames",
+        detected_beats.len(),
+        max_frames
+    );
 
     // 2. Parse Lyrics / Timed Subtitles
     let mut timed_cues: Vec<(u32, u32, String)> = Vec::new();
@@ -2445,10 +2913,16 @@ pub(super) fn cmd_mv(
 
     if let Some(f_path) = lyrics_file_opt {
         if let Ok(content) = std::fs::read_to_string(f_path) {
-            let is_timed = f_path.ends_with(".srt") || f_path.ends_with(".lrc") || content.contains("-->") || content.contains("[0");
+            let is_timed = f_path.ends_with(".srt")
+                || f_path.ends_with(".lrc")
+                || content.contains("-->")
+                || content.contains("[0");
             if is_timed {
                 timed_cues = parse_timed_lyrics(&content, fps as f32, max_frames);
-                eprintln!("  Parsed Timed Lyrics (SRT/LRC): {} synchronized cue points", timed_cues.len());
+                eprintln!(
+                    "  Parsed Timed Lyrics (SRT/LRC): {} synchronized cue points",
+                    timed_cues.len()
+                );
             }
             if timed_cues.is_empty() {
                 for line in content.lines() {
@@ -2493,11 +2967,36 @@ pub(super) fn cmd_mv(
 
     // 3. Stylistic Palette
     let (bg_color, neon_pri, neon_sec, _font_name) = match style.to_lowercase().as_str() {
-        "analog-grunge" => ([0.05, 0.04, 0.04, 1.0], [0.95, 0.9, 0.8, 1.0], [0.8, 0.2, 0.2, 1.0], "Outfit"),
-        "kinetic-swiss" => ([0.02, 0.02, 0.02, 1.0], [1.0, 1.0, 1.0, 1.0], [1.0, 0.1, 0.1, 1.0], "Inter"),
-        "deep-space" => ([0.01, 0.01, 0.04, 1.0], [0.3, 0.8, 1.0, 1.0], [0.7, 0.3, 1.0, 1.0], "Outfit"),
-        "hyper-pop" => ([0.08, 0.02, 0.08, 1.0], [1.0, 0.2, 0.8, 1.0], [0.2, 1.0, 0.9, 1.0], "Outfit"),
-        _ => ([0.02, 0.01, 0.03, 1.0], [0.0, 0.95, 1.0, 1.0], [1.0, 0.05, 0.6, 1.0], "Outfit"), // Cyberpunk Neon
+        "analog-grunge" => (
+            [0.05, 0.04, 0.04, 1.0],
+            [0.95, 0.9, 0.8, 1.0],
+            [0.8, 0.2, 0.2, 1.0],
+            "Outfit",
+        ),
+        "kinetic-swiss" => (
+            [0.02, 0.02, 0.02, 1.0],
+            [1.0, 1.0, 1.0, 1.0],
+            [1.0, 0.1, 0.1, 1.0],
+            "Inter",
+        ),
+        "deep-space" => (
+            [0.01, 0.01, 0.04, 1.0],
+            [0.3, 0.8, 1.0, 1.0],
+            [0.7, 0.3, 1.0, 1.0],
+            "Outfit",
+        ),
+        "hyper-pop" => (
+            [0.08, 0.02, 0.08, 1.0],
+            [1.0, 0.2, 0.8, 1.0],
+            [0.2, 1.0, 0.9, 1.0],
+            "Outfit",
+        ),
+        _ => (
+            [0.02, 0.01, 0.03, 1.0],
+            [0.0, 0.95, 1.0, 1.0],
+            [1.0, 0.05, 0.6, 1.0],
+            "Outfit",
+        ), // Cyberpunk Neon
     };
 
     // Layer 1: Dark Backdrop with Beat-Synced Camera Shake and Bass Kick
@@ -2603,7 +3102,9 @@ pub(super) fn cmd_mv(
     let mut vis_layer = kagari_vfx::core::timeline::Layer::new(
         "mv_visualizer".to_string(),
         "Beat Reactive Spectrum".to_string(),
-        kagari_vfx::core::timeline::LayerType::Solid { color: [0.0, 0.0, 0.0, 0.0] },
+        kagari_vfx::core::timeline::LayerType::Solid {
+            color: [0.0, 0.0, 0.0, 0.0],
+        },
         total_frames,
     );
     vis_layer.effects.push(spec_effect);
@@ -2626,7 +3127,10 @@ pub(super) fn cmd_mv(
         kagari_vfx::core::timeline::LayerType::Particle { emitter },
         total_frames,
     );
-    particle_layer.transform.position = kagari_vfx::core::property::Animatable::new_constant([width as f32 / 2.0, height as f32 / 2.0]);
+    particle_layer.transform.position = kagari_vfx::core::property::Animatable::new_constant([
+        width as f32 / 2.0,
+        height as f32 / 2.0,
+    ]);
     comp.layers.push(particle_layer);
 
     // Layer 5+: Kinetic Beat-Synchronized Typography Layers
@@ -2675,14 +3179,29 @@ pub(super) fn cmd_mv(
         text_layer.out_frame = p_end;
 
         // Position: centered with gentle float
-        text_layer.transform.position = kagari_vfx::core::property::Animatable::new_constant([width as f32 / 2.0, height as f32 * 0.48]);
+        text_layer.transform.position = kagari_vfx::core::property::Animatable::new_constant([
+            width as f32 / 2.0,
+            height as f32 * 0.48,
+        ]);
 
         // Scale Kick on Beat: quick pop zoom
         let beat_pop_end = p_start + (fps / 4).min(p_dur);
         text_layer.transform.scale = kagari_vfx::core::property::Animatable::Animated(vec![
-            kagari_vfx::core::keyframe::Keyframe::new(p_start, [1.4, 1.4], kagari_vfx::core::keyframe::InterpolationType::Linear),
-            kagari_vfx::core::keyframe::Keyframe::new(beat_pop_end, [1.0, 1.0], kagari_vfx::core::keyframe::InterpolationType::Linear),
-            kagari_vfx::core::keyframe::Keyframe::new(p_end, [1.05, 1.05], kagari_vfx::core::keyframe::InterpolationType::Linear),
+            kagari_vfx::core::keyframe::Keyframe::new(
+                p_start,
+                [1.4, 1.4],
+                kagari_vfx::core::keyframe::InterpolationType::Linear,
+            ),
+            kagari_vfx::core::keyframe::Keyframe::new(
+                beat_pop_end,
+                [1.0, 1.0],
+                kagari_vfx::core::keyframe::InterpolationType::Linear,
+            ),
+            kagari_vfx::core::keyframe::Keyframe::new(
+                p_end,
+                [1.05, 1.05],
+                kagari_vfx::core::keyframe::InterpolationType::Linear,
+            ),
         ]);
 
         // Per-character Text Animator (Typewriter & Rise)
@@ -2700,8 +3219,16 @@ pub(super) fn cmd_mv(
                 char_start: -1,
                 char_end: -1,
                 offset_anim: Some(kagari_vfx::core::property::Animatable::Animated(vec![
-                    kagari_vfx::core::keyframe::Keyframe::new(p_start, -100.0, kagari_vfx::core::keyframe::InterpolationType::Linear),
-                    kagari_vfx::core::keyframe::Keyframe::new(p_start + sweep_frames, 100.0, kagari_vfx::core::keyframe::InterpolationType::Linear),
+                    kagari_vfx::core::keyframe::Keyframe::new(
+                        p_start,
+                        -100.0,
+                        kagari_vfx::core::keyframe::InterpolationType::Linear,
+                    ),
+                    kagari_vfx::core::keyframe::Keyframe::new(
+                        p_start + sweep_frames,
+                        100.0,
+                        kagari_vfx::core::keyframe::InterpolationType::Linear,
+                    ),
                 ])),
                 expression: None,
             },
@@ -2751,8 +3278,16 @@ pub(super) fn cmd_mv(
     // Dynamic Chromatic Aberration Spike / Glitch at every phrase boundary
     let mut chroma_r_keys = Vec::new();
     let mut chroma_b_keys = Vec::new();
-    chroma_r_keys.push(kagari_vfx::core::keyframe::Keyframe::new(0, 2.5, kagari_vfx::core::keyframe::InterpolationType::Linear));
-    chroma_b_keys.push(kagari_vfx::core::keyframe::Keyframe::new(0, -2.5, kagari_vfx::core::keyframe::InterpolationType::Linear));
+    chroma_r_keys.push(kagari_vfx::core::keyframe::Keyframe::new(
+        0,
+        2.5,
+        kagari_vfx::core::keyframe::InterpolationType::Linear,
+    ));
+    chroma_b_keys.push(kagari_vfx::core::keyframe::Keyframe::new(
+        0,
+        -2.5,
+        kagari_vfx::core::keyframe::InterpolationType::Linear,
+    ));
 
     for &start_f in &phrase_starts {
         if start_f == 0 {
@@ -2762,13 +3297,37 @@ pub(super) fn cmd_mv(
         let spike_f = start_f;
         let post_f = (start_f + 5).min(total_frames.saturating_sub(1));
 
-        chroma_r_keys.push(kagari_vfx::core::keyframe::Keyframe::new(pre_f, 2.5, kagari_vfx::core::keyframe::InterpolationType::Linear));
-        chroma_r_keys.push(kagari_vfx::core::keyframe::Keyframe::new(spike_f, 18.0, kagari_vfx::core::keyframe::InterpolationType::Linear)); // Glitch burst
-        chroma_r_keys.push(kagari_vfx::core::keyframe::Keyframe::new(post_f, 2.5, kagari_vfx::core::keyframe::InterpolationType::Linear));
+        chroma_r_keys.push(kagari_vfx::core::keyframe::Keyframe::new(
+            pre_f,
+            2.5,
+            kagari_vfx::core::keyframe::InterpolationType::Linear,
+        ));
+        chroma_r_keys.push(kagari_vfx::core::keyframe::Keyframe::new(
+            spike_f,
+            18.0,
+            kagari_vfx::core::keyframe::InterpolationType::Linear,
+        )); // Glitch burst
+        chroma_r_keys.push(kagari_vfx::core::keyframe::Keyframe::new(
+            post_f,
+            2.5,
+            kagari_vfx::core::keyframe::InterpolationType::Linear,
+        ));
 
-        chroma_b_keys.push(kagari_vfx::core::keyframe::Keyframe::new(pre_f, -2.5, kagari_vfx::core::keyframe::InterpolationType::Linear));
-        chroma_b_keys.push(kagari_vfx::core::keyframe::Keyframe::new(spike_f, -18.0, kagari_vfx::core::keyframe::InterpolationType::Linear));
-        chroma_b_keys.push(kagari_vfx::core::keyframe::Keyframe::new(post_f, -2.5, kagari_vfx::core::keyframe::InterpolationType::Linear));
+        chroma_b_keys.push(kagari_vfx::core::keyframe::Keyframe::new(
+            pre_f,
+            -2.5,
+            kagari_vfx::core::keyframe::InterpolationType::Linear,
+        ));
+        chroma_b_keys.push(kagari_vfx::core::keyframe::Keyframe::new(
+            spike_f,
+            -18.0,
+            kagari_vfx::core::keyframe::InterpolationType::Linear,
+        ));
+        chroma_b_keys.push(kagari_vfx::core::keyframe::Keyframe::new(
+            post_f,
+            -2.5,
+            kagari_vfx::core::keyframe::InterpolationType::Linear,
+        ));
     }
     chroma_r_keys.sort_by_key(|k| k.frame);
     chroma_r_keys.dedup_by_key(|k| k.frame);
@@ -2838,9 +3397,11 @@ pub(super) fn cmd_mv(
             overrides: Vec::new(),
             expressions: Vec::new(),
         })?;
-        eprintln!("\n🎉 Masterpiece Music Video Exported Successfully to '{}'!", output_path);
+        eprintln!(
+            "\n🎉 Masterpiece Music Video Exported Successfully to '{}'!",
+            output_path
+        );
     }
 
     Ok(())
 }
-

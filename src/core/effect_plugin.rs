@@ -18,7 +18,8 @@ pub mod params;
 pub mod registry;
 
 pub use adapter::{
-    evaluate_effects, gpu_preview_effect_supported, EnumEffectPlugin, RenderEffectPlugin,
+    evaluate_effects, gpu_preview_effect_slot, gpu_preview_effect_supported, EnumEffectPlugin,
+    GpuEffectSlot, RenderEffectPlugin,
 };
 pub use naming::{effect_name, effect_type_id};
 pub use params::EffectParams;

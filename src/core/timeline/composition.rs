@@ -31,6 +31,9 @@ pub struct Light3D {
     pub light_type: LightType,
     pub color: [f32; 4],
     pub intensity: f32,
+    /// Optional animated intensity track; absent values preserve legacy projects.
+    #[serde(default)]
+    pub intensity_animation: Option<Animatable<f32>>,
     pub position: Animatable<[f32; 3]>,
     pub casts_shadows: bool,
     /// Shadow opacity cast by this light (0–100, AE Shadow Darkness). Default 60.
@@ -52,12 +55,33 @@ impl Default for Light3D {
             light_type: LightType::Point,
             color: [1.0, 1.0, 1.0, 1.0],
             intensity: 100.0,
+            intensity_animation: None,
             position: Animatable::new_constant([960.0, 540.0, -500.0]),
             casts_shadows: true,
             shadow_darkness: 60.0,
             falloff: 1.0,
             max_radius: 0.0,
         }
+    }
+}
+
+impl Light3D {
+    pub fn intensity_at(&self, frame: u32) -> f32 {
+        self.intensity_animation
+            .as_ref()
+            .map(|track| track.evaluate(frame))
+            .unwrap_or(self.intensity)
+    }
+
+    pub fn set_intensity_at(&mut self, frame: u32, value: f32) {
+        let value = value.clamp(0.0, 500.0);
+        self.intensity_animation
+            .get_or_insert_with(|| Animatable::new_constant(self.intensity))
+            .set_keyframe(crate::core::keyframe::Keyframe::new(
+                frame,
+                value,
+                crate::core::keyframe::InterpolationType::Linear,
+            ));
     }
 }
 
@@ -73,6 +97,12 @@ pub struct Composition {
     pub height: u32,
     pub fps: u32,
     pub duration_frames: u32,
+    /// Display pixel aspect ratio (horizontal pixel width / height).
+    #[serde(default = "default_pixel_aspect")]
+    pub pixel_aspect: f32,
+    /// Timeline display origin as a frame count; does not change stored keyframe coordinates.
+    #[serde(default)]
+    pub start_timecode_frames: u32,
     pub layers: Vec<Layer>,
 
     pub motion_blur_shutter_angle: f32,
@@ -109,6 +139,10 @@ pub struct Composition {
     pub comp_proxy: crate::core::proxy::CompProxy,
 }
 
+fn default_pixel_aspect() -> f32 {
+    1.0
+}
+
 impl Composition {
     pub fn new(
         id: String,
@@ -125,6 +159,8 @@ impl Composition {
             height,
             fps,
             duration_frames,
+            pixel_aspect: 1.0,
+            start_timecode_frames: 0,
             layers: Vec::new(),
             motion_blur_shutter_angle: 180.0,
             motion_blur_shutter_phase: -90.0,
@@ -227,15 +263,23 @@ impl Composition {
         self.width = new_w;
         self.height = new_h;
         for layer in &mut self.layers {
-            let current_p = layer.transform.position.evaluate(0);
-            let remapped = layer.constraints.remap_position(
-                current_p,
-                old_w as f32,
-                old_h as f32,
-                new_w as f32,
-                new_h as f32,
-            );
-            layer.transform.position = Animatable::new_constant(remapped);
+            let remap = |position| {
+                layer.constraints.remap_position(
+                    position,
+                    old_w as f32,
+                    old_h as f32,
+                    new_w as f32,
+                    new_h as f32,
+                )
+            };
+            match &mut layer.transform.position {
+                Animatable::Constant(position) => *position = remap(*position),
+                Animatable::Animated(keyframes) => {
+                    for keyframe in keyframes {
+                        keyframe.value = remap(keyframe.value);
+                    }
+                }
+            }
         }
     }
 

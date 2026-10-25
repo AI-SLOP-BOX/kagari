@@ -1,0 +1,19 @@
+component SettingsCachePage() {
+VStack(spacing: 8) {
+                        Text("メディアとキャッシュ", size: 18)
+                        Caption("ディスクキャッシュとプロジェクトの自動保存を管理します。")
+                        Card { Padding(14) { VStack(spacing: 8) {
+                          Text("ディスクキャッシュ", size: 16)
+                          HStack(spacing: 8) { Caption("保存場所") Grow(1) { TextField(cache_path, "キャッシュ保存先", action: setting_cache_path_changed) } Button("参照…", action: setting_cache_path_browse, tone: secondary, size: small) }
+                          Caption("{cache_path_status}")
+                          HStack(spacing: 8) { Caption("使用量") Spacer Caption("{cache_usage_text} / {cache_limit} GB") }
+                          ProgressBar(cache_usage_progress)
+                          HStack(spacing: 8) { Caption("最大サイズ（10〜500 GB）:") MaxWidth(140) { TextField(cache_limit, "GB", action: setting_cache_limit_changed) } Caption("GB") Spacer Button("消去…", action: clear_cache, tone: secondary) }
+                        } } }
+                        Card { Padding(14) { VStack(spacing: 8) {
+                          Text("自動保存", size: 16)
+                          HStack(spacing: 10) { VStack(spacing: 2) { Text("自動保存間隔") Caption("保存先を指定済みのプロジェクトを自動保存します。") } Spacer Select(autosave_interval, action: setting_autosave_interval_changed) { Option("0", "無効") Option("60", "1分") Option("180", "3分") Option("300", "5分") Option("600", "10分") Option("900", "15分") Option("1800", "30分") } }
+                        } } }
+                        If(clear_cache_confirm) { Card { Padding(14) { VStack(spacing: 10) { Text("キャッシュを消去しますか？", size: 17) Caption("プレビューキャッシュのみを削除します。プロジェクトや素材ファイルは削除されません。") HStack(spacing: 8) { Spacer Button("キャンセル", action: dismiss_clear_cache, tone: secondary) Button("消去", action: confirm_clear_cache, tone: destructive) } } } } }
+                      }
+}

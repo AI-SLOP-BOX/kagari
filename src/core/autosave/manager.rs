@@ -9,6 +9,8 @@ use crate::core::timeline::Project;
 
 /// Number of rotating recovery files kept on disk.
 pub const MAX_AUTOSAVE_SLOTS: usize = 5;
+/// Maximum retention exposed by Preferences.
+pub const MAX_RECOVERY_SLOTS: usize = 50;
 
 /// One recoverable snapshot generation, listed newest-first by the picker.
 #[derive(Debug, Clone)]
@@ -23,6 +25,7 @@ pub struct RecoveryGeneration {
 impl AutosaveManager {
     /// Fetch the version-history list on a background thread instead of the
     /// caller's thread, so snapshot JSON parsing does not stall the UI.
+    #[allow(clippy::type_complexity)]
     pub fn fetch_generations_async(
         &self,
     ) -> (
@@ -55,6 +58,8 @@ pub struct AutosaveManager {
     last_save: Instant,
     /// Round-robin slot for the next write.
     pub(super) next_slot: usize,
+    /// Number of recovery generations retained across sessions.
+    max_slots: usize,
     /// Set true by `mark_dirty` when the project changes.
     dirty: bool,
     pub(super) retry_at: Option<Instant>,
@@ -115,6 +120,7 @@ impl AutosaveManager {
             interval: Duration::from_secs(30),
             last_save: Instant::now(),
             next_slot: 0,
+            max_slots: MAX_AUTOSAVE_SLOTS,
             dirty: false,
             retry_at: None,
             last_error: None,
@@ -138,6 +144,21 @@ impl AutosaveManager {
     /// Runtime interval adjustment (seconds), used by the Preferences dialog.
     pub fn set_interval_secs(&mut self, secs: u64) {
         self.interval = Duration::from_secs(secs.clamp(5, 3600));
+    }
+
+    /// Sets the retained recovery-generation count and removes older files
+    /// beyond the newly selected limit.
+    pub fn set_max_slots(&mut self, slots: usize) {
+        self.max_slots = slots.clamp(1, MAX_RECOVERY_SLOTS);
+        self.next_slot %= self.max_slots;
+        let paths = self.all_recovery_paths();
+        for path in paths.into_iter().skip(self.max_slots) {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+
+    pub fn max_slots(&self) -> usize {
+        self.max_slots
     }
 
     /// Current autosave interval in seconds.
@@ -165,7 +186,7 @@ impl AutosaveManager {
             .join(format!("{}_{}.json", self.stem, slot))
     }
 
-    fn recovery_paths(&self) -> Vec<PathBuf> {
+    fn all_recovery_paths(&self) -> Vec<PathBuf> {
         let mut paths = std::fs::read_dir(&self.recovery_dir)
             .ok()
             .into_iter()
@@ -185,6 +206,13 @@ impl AutosaveManager {
         });
         paths.reverse();
         paths
+    }
+
+    fn recovery_paths(&self) -> Vec<PathBuf> {
+        self.all_recovery_paths()
+            .into_iter()
+            .take(self.max_slots)
+            .collect()
     }
 
     /// Writes a recovery snapshot if the dirty flag is set and the interval elapsed.
@@ -290,8 +318,8 @@ impl AutosaveManager {
         let project = project.clone();
         let metadata = production_document.map(ProductionDocumentMetadata::from);
         let generation = self.dirty_generation;
-        let path = self.slot_path(self.next_slot % MAX_AUTOSAVE_SLOTS);
-        self.next_slot = (self.next_slot + 1) % MAX_AUTOSAVE_SLOTS;
+        let path = self.slot_path(self.next_slot % self.max_slots);
+        self.next_slot = (self.next_slot + 1) % self.max_slots;
         let recovery_dir = self.recovery_dir.clone();
         let (sender, receiver) = std::sync::mpsc::channel();
         let worker = std::thread::Builder::new()
@@ -398,8 +426,8 @@ impl AutosaveManager {
         production_document: Option<&ProductionDocument>,
         label: &str,
     ) -> std::io::Result<PathBuf> {
-        let path = self.slot_path(self.next_slot % MAX_AUTOSAVE_SLOTS);
-        self.next_slot = (self.next_slot + 1) % MAX_AUTOSAVE_SLOTS;
+        let path = self.slot_path(self.next_slot % self.max_slots);
+        self.next_slot = (self.next_slot + 1) % self.max_slots;
         let metadata = production_document.map(ProductionDocumentMetadata::from);
         write_snapshot_file(&self.recovery_dir, &path, project, metadata.as_ref(), label)
     }
@@ -586,7 +614,7 @@ impl AutosaveManager {
                 let _ = std::fs::remove_file(path);
             }
         } else {
-            for i in 0..MAX_AUTOSAVE_SLOTS {
+            for i in 0..self.max_slots {
                 let _ = std::fs::remove_file(self.slot_path(i));
             }
         }

@@ -39,6 +39,9 @@ fn default_stroke_color() -> [f32; 4] {
 fn default_video_speed() -> f32 {
     1.0
 }
+fn default_video_audio_volume() -> Animatable<f32> {
+    Animatable::new_constant(0.0)
+}
 
 // ─── Layer Type ────────────────────────────────────────────────────────────
 
@@ -64,6 +67,9 @@ pub enum LayerType {
         frame_count: u32,
         #[serde(default)]
         audio_wav: Option<String>,
+        /// Embedded audio track gain in dB. Older projects default to unity gain.
+        #[serde(default = "default_video_audio_volume")]
+        audio_volume: Animatable<f32>,
         /// Playback speed multiplier: 1.0 = normal, 2.0 = double speed
         #[serde(default = "default_video_speed")]
         speed: f32,

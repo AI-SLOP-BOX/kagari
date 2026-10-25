@@ -1,0 +1,57 @@
+component DocumentsPanel() {
+    HStack(spacing: 8) {
+      Align(stretch) { HomeNavRail() }
+      Grow(1) {
+        ScrollView(680) {
+          Padding(24) {
+            VStack(spacing: 14) {
+              VStack(spacing: 4) {
+                Text("ドキュメント", size: 30)
+                Caption("機能の使い方と現在の対応内容")
+              }
+              Card { Padding(16) { VStack(spacing: 10) {
+                Text("プロジェクトの基本", size: 18)
+                Caption("新規作成時に解像度、フレームレート、長さを設定します。")
+                Button("作成方法を見る", action: docs_project_basics, tone: secondary, size: small)
+              } } }
+              Card { Padding(16) { VStack(spacing: 8) {
+                Text("編集画面", size: 18)
+                Caption("シーン、素材、プロパティ、タイムラインを使った基本の編集手順です。")
+                Button("編集方法を見る", action: docs_editor_workflow, tone: secondary, size: small)
+              } } }
+              Card { Padding(16) { VStack(spacing: 8) {
+                Text("素材の読み込み", size: 18)
+                Caption("画像レイヤーで使える形式と、プロジェクトへの追加方法を説明します。")
+                Button("対応形式を見る", action: docs_import, tone: secondary, size: small)
+              } } }
+              Card { Padding(16) { VStack(spacing: 8) {
+                Text("書き出し", size: 18)
+                Caption("現在フレームのPNG保存と、コンポジション全体のH.264動画出力に対応しています。")
+                Button("書き出し方法を見る", action: docs_export, tone: secondary, size: small)
+              } } }
+              Card { Padding(16) { VStack(spacing: 8) {
+                Text("キーボードショートカット", size: 18)
+                Caption("保存、新規作成、書き出し画面への移動に使えるキー操作です。")
+                Button("一覧を見る", action: docs_shortcuts, tone: secondary, size: small)
+              } } }
+            }
+          }
+        }
+      }
+    }
+  }
+component DocsDetailPanel() {
+    HStack(spacing: 8) {
+      Align(stretch) { HomeNavRail() }
+      Grow(1) {
+        ScrollView(680) {
+          Padding(24) {
+            VStack(spacing: 16) {
+              HStack(spacing: 10) { Button("← ドキュメント一覧", action: go_documents, tone: secondary, size: small) Spacer }
+              Card { Padding(24) { VStack(spacing: 14) { Text("{docs_title}", size: 28) Spacer Text("{docs_body}", size: 16) } } }
+            }
+          }
+        }
+      }
+    }
+  }

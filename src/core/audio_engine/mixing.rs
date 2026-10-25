@@ -82,7 +82,7 @@ fn mix_precomp_audio(
     loaded_sources: &mut usize,
 ) {
     for layer in &sub_comp.layers {
-        if !layer.is_active(sub_frame) || !layer.visible {
+        if !layer.is_active(sub_frame) || !layer.visible || layer.audio_muted {
             continue;
         }
         match &layer.layer_type {
@@ -139,9 +139,12 @@ fn mix_precomp_audio(
                 }
             }
             crate::core::timeline::LayerType::Video {
-                audio_wav: Some(w), ..
+                audio_wav: Some(w),
+                audio_volume,
+                ..
             } => {
                 let time_start = (sub_frame.saturating_sub(layer.in_frame)) as f32 / fps;
+                let layer_gain = gain * 10.0f32.powf(audio_volume.evaluate(sub_frame) / 20.0);
                 let source = load_cached_audio(w, sample_rate);
                 if let Ok(buf) = source {
                     *loaded_sources = loaded_sources.saturating_add(1);
@@ -155,8 +158,8 @@ fn mix_precomp_audio(
                         } else {
                             l
                         };
-                        let gl = gain * (1.0 - pan.max(0.0));
-                        let gr = gain * (1.0 - (-pan).max(0.0));
+                        let gl = layer_gain * (1.0 - pan.max(0.0));
+                        let gr = layer_gain * (1.0 - (-pan).max(0.0));
                         let l_idx = i * 2;
                         let r_idx = i * 2 + 1;
                         if l_idx < stereo_output.len() {
@@ -225,7 +228,7 @@ pub fn mix_audio_sources_for_frame_with_state(
     let fps = comp.fps.max(1) as f32;
 
     for (layer_idx, layer) in comp.layers.iter().enumerate() {
-        if !layer.is_active(frame) || !layer.visible {
+        if !layer.is_active(frame) || !layer.visible || layer.audio_muted {
             continue;
         }
         // Handle PreComp layers: recursively mix sub-composition audio
@@ -266,11 +269,12 @@ pub fn mix_audio_sources_for_frame_with_state(
             LayerType::Audio { path, volume } => (Some(path.clone()), volume.evaluate(frame), 1.0),
             LayerType::Video {
                 audio_wav: Some(w),
+                audio_volume,
                 speed,
                 ..
             } => (
                 Some(w.clone()),
-                0.0f32,
+                audio_volume.evaluate(frame),
                 if speed.is_finite() && *speed > 0.0 {
                     *speed
                 } else {

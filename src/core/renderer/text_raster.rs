@@ -96,7 +96,9 @@ pub(crate) struct TextRasterParams {
     pub(crate) leading: f32,
     pub(crate) align: usize,
     pub(crate) box_width: f32,
+    pub(crate) box_height: f32,
     pub(crate) stroke_color: [f32; 4],
     pub(crate) stroke_width: f32,
     pub(crate) faux_style: crate::core::font_rasterizer::FauxTextStyle,
 }
+

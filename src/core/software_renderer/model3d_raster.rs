@@ -40,7 +40,8 @@ fn load_mesh(path: &str) -> Option<Arc<Mesh3D>> {
         Arc::new(crate::core::gltf_loader::parse_gltf_json_with_binary(&bytes, &[]).ok()?)
     } else {
         let text =
-            crate::core::project_migration::read_bounded_text_file(source, 128 * 1024 * 1024).ok()?;
+            crate::core::project_migration::read_bounded_text_file(source, 128 * 1024 * 1024)
+                .ok()?;
         Arc::new(crate::core::obj_loader::parse_obj_str(&text).ok()?)
     };
     if let Ok(mut cache) = mesh_cache().lock() {
@@ -105,10 +106,10 @@ fn shade(
     if material.accepts_lights {
         for source in &comp.lights {
             let contribution = match source.light_type {
-                LightType::Ambient => source.intensity / 100.0,
+                LightType::Ambient => source.intensity_at(frame) / 100.0,
                 LightType::Point | LightType::Spot { .. } | LightType::Parallel => {
                     let direction = normalize(sub(comp.light_position_at(source, frame), world));
-                    (dot(normal, direction).max(0.0) * source.intensity / 100.0).min(1.0)
+                    (dot(normal, direction).max(0.0) * source.intensity_at(frame) / 100.0).min(1.0)
                 }
             };
             light += contribution * material.diffuse.clamp(0.0, 1.0);

@@ -149,15 +149,23 @@ pub fn parse_glb(bytes: &[u8]) -> Result<Mesh3D, String> {
 }
 
 /// Parses glTF JSON paired with a binary buffer payload.
-pub fn parse_gltf_json_with_binary(json_data: &[u8], binary_payload: &[u8]) -> Result<Mesh3D, String> {
-    let root: GltfRootJson = serde_json::from_slice(json_data)
-        .map_err(|e| format!("Failed to parse glTF JSON: {e}"))?;
+pub fn parse_gltf_json_with_binary(
+    json_data: &[u8],
+    binary_payload: &[u8],
+) -> Result<Mesh3D, String> {
+    let root: GltfRootJson =
+        serde_json::from_slice(json_data).map_err(|e| format!("Failed to parse glTF JSON: {e}"))?;
 
     let Some(first_mesh) = root.meshes.first() else {
         return Err("glTF contains no meshes".to_string());
     };
 
-    let mut mesh = Mesh3D::new(first_mesh.name.clone().unwrap_or_else(|| "glTF_Model".to_string()));
+    let mut mesh = Mesh3D::new(
+        first_mesh
+            .name
+            .clone()
+            .unwrap_or_else(|| "glTF_Model".to_string()),
+    );
 
     // Map PBR materials
     mesh.materials.clear();
@@ -166,7 +174,10 @@ pub fn parse_gltf_json_with_binary(json_data: &[u8], binary_payload: &[u8]) -> R
     } else {
         for mat_json in &root.materials {
             let mut mat = PbrMaterial3D {
-                name: mat_json.name.clone().unwrap_or_else(|| "Material".to_string()),
+                name: mat_json
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| "Material".to_string()),
                 ..Default::default()
             };
             if let Some(pbr) = &mat_json.pbr_metallic_roughness {
@@ -211,7 +222,7 @@ pub fn parse_gltf_json_with_binary(json_data: &[u8], binary_payload: &[u8]) -> R
 
         let vertex_count = pos_acc.count;
         let pos_bytes = read_buffer(pos_view_idx, pos_acc.byte_offset, vertex_count * 12)?;
-        for chunk in pos_bytes.chunks_exact(12) {
+        for chunk in pos_bytes.as_chunks::<12>().0 {
             let x = f32::from_le_bytes(chunk[0..4].try_into().unwrap());
             let y = f32::from_le_bytes(chunk[4..8].try_into().unwrap());
             let z = f32::from_le_bytes(chunk[8..12].try_into().unwrap());
@@ -231,7 +242,7 @@ pub fn parse_gltf_json_with_binary(json_data: &[u8], binary_payload: &[u8]) -> R
                     if let Ok(norm_bytes) =
                         read_buffer(norm_view_idx, norm_acc.byte_offset, vertex_count * 12)
                     {
-                        for chunk in norm_bytes.chunks_exact(12) {
+                        for chunk in norm_bytes.as_chunks::<12>().0 {
                             let nx = f32::from_le_bytes(chunk[0..4].try_into().unwrap());
                             let ny = f32::from_le_bytes(chunk[4..8].try_into().unwrap());
                             let nz = f32::from_le_bytes(chunk[8..12].try_into().unwrap());
@@ -250,8 +261,10 @@ pub fn parse_gltf_json_with_binary(json_data: &[u8], binary_payload: &[u8]) -> R
         if let Some(&uv_acc_idx) = prim.attributes.get("TEXCOORD_0") {
             if let Some(uv_acc) = root.accessors.get(uv_acc_idx) {
                 if let Some(uv_view_idx) = uv_acc.buffer_view {
-                    if let Ok(uv_bytes) = read_buffer(uv_view_idx, uv_acc.byte_offset, vertex_count * 8) {
-                        for chunk in uv_bytes.chunks_exact(8) {
+                    if let Ok(uv_bytes) =
+                        read_buffer(uv_view_idx, uv_acc.byte_offset, vertex_count * 8)
+                    {
+                        for chunk in uv_bytes.as_chunks::<8>().0 {
                             let u = f32::from_le_bytes(chunk[0..4].try_into().unwrap());
                             let v = f32::from_le_bytes(chunk[4..8].try_into().unwrap());
                             mesh.uvs.push([u, v]);
@@ -280,16 +293,16 @@ pub fn parse_gltf_json_with_binary(json_data: &[u8], binary_payload: &[u8]) -> R
                 5123 => {
                     // USHORT (16-bit)
                     let raw = read_buffer(idx_view_idx, idx_acc.byte_offset, idx_acc.count * 2)?;
-                    for chunk in raw.chunks_exact(2) {
-                        let i = u16::from_le_bytes(chunk.try_into().unwrap()) as u32;
+                    for chunk in raw.as_chunks::<2>().0 {
+                        let i = u16::from_le_bytes(*chunk) as u32;
                         mesh.indices.push(base_vertex + i);
                     }
                 }
                 5125 => {
                     // UINT (32-bit)
                     let raw = read_buffer(idx_view_idx, idx_acc.byte_offset, idx_acc.count * 4)?;
-                    for chunk in raw.chunks_exact(4) {
-                        let i = u32::from_le_bytes(chunk.try_into().unwrap());
+                    for chunk in raw.as_chunks::<4>().0 {
+                        let i = u32::from_le_bytes(*chunk);
                         mesh.indices.push(base_vertex + i);
                     }
                 }

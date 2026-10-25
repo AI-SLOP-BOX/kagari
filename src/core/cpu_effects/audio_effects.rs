@@ -63,9 +63,7 @@ pub(super) fn apply(
                 for p in pixels.as_chunks::<4>().0 {
                     luma.push(0.299 * p[0] as f32 + 0.587 * p[1] as f32 + 0.114 * p[2] as f32);
                 }
-                crate::core::audio_effects_dsp::apply_flanger(
-                    &mut luma, 44100.0, md, rate, fb, wd,
-                );
+                crate::core::audio_effects_dsp::apply_flanger(&mut luma, 44100.0, md, rate, fb, wd);
                 for (px, &lv) in pixels.as_chunks_mut::<4>().0.iter_mut().zip(luma.iter()) {
                     let orig = 0.299 * px[0] as f32 + 0.587 * px[1] as f32 + 0.114 * px[2] as f32;
                     let ratio = if orig > 0.5 { lv / 128.0 } else { 1.0 };

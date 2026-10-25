@@ -1,0 +1,41 @@
+component AnimationPanel() {
+  Card { Padding(6) { VStack(spacing: 5) {
+    HStack(spacing: 5) {
+      Text("モーション", size: 14)
+      Spacer
+      If(selected_layer && !selected_layer_locked) {
+        Caption("現在フレームにキーを追加")
+        If(selected_is_3d) {
+          Button("◇ 3D位置", action: keyframe_position_3d, tone: secondary, size: small)
+          Button("◇ 3D回転", action: keyframe_rotation_3d, tone: secondary, size: small)
+          Button("◇ 3D倍率", action: keyframe_scale_3d, tone: secondary, size: small)
+        } else {
+          Button("◇ 位置", action: keyframe_position_2d, tone: secondary, size: small)
+          Button("◇ 回転", action: keyframe_rotation_2d, tone: secondary, size: small)
+          Button("◇ 倍率", action: keyframe_scale_2d, tone: secondary, size: small)
+        }
+        Button("◇ 不透明度", action: keyframe_opacity, tone: secondary, size: small)
+        If(selected_is_camera) {
+          Button("◇ 画角", action: keyframe_camera_fov, tone: secondary, size: small)
+          Button("◇ 焦点距離", action: keyframe_camera_focus, tone: secondary, size: small)
+          Button("◇ 絞り", action: keyframe_camera_aperture, tone: secondary, size: small)
+        }
+        If(selected_is_light) { Button("◇ ライト強度", action: keyframe_light_intensity, tone: secondary, size: small) }
+      } else {
+        If(selected_layer_locked) { Caption("レイヤーがロックされています") } else {
+        Caption("シーンからレイヤーを選択してください")
+        }
+      }
+    }
+    If(selected_layer && !selected_layer_locked) {
+      HStack(spacing: 5) {
+        Button("前のキー", action: previous_keyframe, tone: secondary, size: small)
+        Button("次のキー", action: next_keyframe, tone: secondary, size: small)
+        Button("全キーをイージーイーズ", action: ease_selected_layer, tone: secondary, size: small)
+        If(timeline_view_graph) { Button("グラフ表示中", action: timeline_view_graph, tone: primary, size: small) } else { Button("グラフエディターを開く", action: timeline_view_graph, tone: secondary, size: small) }
+        Spacer
+        Caption("キーを選択してタイミングと補間を調整")
+      }
+    }
+  } } }
+}

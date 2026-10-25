@@ -459,14 +459,24 @@ fn test_glitch_frame_composition() {
     let raw = std::fs::read_to_string("examples/projects/glitch_project.json")
         .or_else(|_| std::fs::read_to_string("glitch_project.json"))
         .expect("read glitch_project");
-    let project = kagari_vfx::core::project_migration::load_project_migrated(&raw).expect("load project");
+    let project =
+        kagari_vfx::core::project_migration::load_project_migrated(&raw).expect("load project");
     let comp = &project.compositions[0];
     let px120 = render_frame_to_pixels(comp, 120, 1920, 1080, 0.0, 0);
     assert_eq!(px120.len(), 1920 * 1080 * 4);
     // Ensure all pixels are fully opaque (no adjustment layer hole punching)
     let transparent_count = px120.chunks_exact(4).filter(|c| c[3] < 250).count();
-    assert_eq!(transparent_count, 0, "All background pixels must remain solid");
+    assert_eq!(
+        transparent_count, 0,
+        "All background pixels must remain solid"
+    );
     // Ensure text and effects are present
-    let bright_pixels = px120.chunks_exact(4).filter(|c| c[0] > 100 || c[1] > 100 || c[2] > 100).count();
-    assert!(bright_pixels > 1000, "Rendered frame must contain composited text VFX");
+    let bright_pixels = px120
+        .chunks_exact(4)
+        .filter(|c| c[0] > 100 || c[1] > 100 || c[2] > 100)
+        .count();
+    assert!(
+        bright_pixels > 1000,
+        "Rendered frame must contain composited text VFX"
+    );
 }

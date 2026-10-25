@@ -938,9 +938,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     // --- Posterize ---
     if (layer.posterize_enabled == 1u && layer.posterize_levels >= 2.0) {
-        let steps = max(layer.posterize_levels - 1.0, 1.0);
+        let l = floor(layer.posterize_levels);
         final_color = vec4<f32>(
-            floor(final_color.rgb * steps + 0.5) / steps,
+            clamp(floor(final_color.rgb * l) / l, vec3<f32>(0.0), vec3<f32>(1.0)),
             final_color.a
         );
     }

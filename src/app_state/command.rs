@@ -26,7 +26,10 @@ pub enum AppCommand {
     // Navigation & Selection
     // ------------------------------------------------------------------------
     SelectComposition(usize),
-    SelectLayer { layer_idx: usize, multi: bool },
+    SelectLayer {
+        layer_idx: usize,
+        multi: bool,
+    },
     ClearSelection,
     SetCurrentFrame(u32),
 
@@ -39,7 +42,10 @@ pub enum AppCommand {
     },
     DeleteSelectedLayers,
     DuplicateSelectedLayers,
-    ReorderLayer { from_idx: usize, to_idx: usize },
+    ReorderLayer {
+        from_idx: usize,
+        to_idx: usize,
+    },
 
     // ------------------------------------------------------------------------
     // Layer Visibility / Solo / Lock
@@ -446,23 +452,38 @@ impl crate::app_state::KagariApp {
                 }
             }
             AppCommand::SetBackgroundColor(color) => {
-                let mut session =
-                    crate::core::editor::EditorSession::new(&mut self.history, "Change Background Color");
-                session.current_mut().active_composition_mut().background_color = color;
+                let mut session = crate::core::editor::EditorSession::new(
+                    &mut self.history,
+                    "Change Background Color",
+                );
+                session
+                    .current_mut()
+                    .active_composition_mut()
+                    .background_color = color;
                 session.commit();
                 self.notify_project_mutation();
             }
             AppCommand::SetMotionBlurShutterAngle(angle) => {
-                let mut session =
-                    crate::core::editor::EditorSession::new(&mut self.history, "Change Shutter Angle");
-                session.current_mut().active_composition_mut().motion_blur_shutter_angle = angle;
+                let mut session = crate::core::editor::EditorSession::new(
+                    &mut self.history,
+                    "Change Shutter Angle",
+                );
+                session
+                    .current_mut()
+                    .active_composition_mut()
+                    .motion_blur_shutter_angle = angle;
                 session.commit();
                 self.notify_project_mutation();
             }
             AppCommand::SetWorkingColorSpace(space) => {
-                let mut session =
-                    crate::core::editor::EditorSession::new(&mut self.history, "Change Working Color Space");
-                session.current_mut().active_composition_mut().working_color_space = space;
+                let mut session = crate::core::editor::EditorSession::new(
+                    &mut self.history,
+                    "Change Working Color Space",
+                );
+                session
+                    .current_mut()
+                    .active_composition_mut()
+                    .working_color_space = space;
                 session.commit();
                 crate::core::frame_cache::bump_version();
                 self.notify_project_mutation();
@@ -486,8 +507,10 @@ impl crate::app_state::KagariApp {
                 }
             }
             AppCommand::SetLayerStyle { layer_idx, style } => {
-                let mut session =
-                    crate::core::editor::EditorSession::new(&mut self.history, "Change Layer Style");
+                let mut session = crate::core::editor::EditorSession::new(
+                    &mut self.history,
+                    "Change Layer Style",
+                );
                 let comp = session.current_mut().active_composition_mut();
                 if let Some(layer) = comp.layers.get_mut(layer_idx) {
                     layer.style = *style;

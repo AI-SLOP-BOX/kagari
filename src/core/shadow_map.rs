@@ -119,7 +119,7 @@ pub fn calculate_surface_shading(
         let (light_dir, attenuation) = match &light.light_type {
             LightType::Ambient => {
                 let col = light.color;
-                let intensity = light.intensity * 0.01;
+                let intensity = light.intensity_at(current_frame) * 0.01;
                 ambient_acc[0] += col[0] * intensity;
                 ambient_acc[1] += col[1] * intensity;
                 ambient_acc[2] += col[2] * intensity;
@@ -130,7 +130,10 @@ pub fn calculate_surface_shading(
                 let ly = -1.0f32;
                 let lz = 1.0f32;
                 let len = (lx * lx + ly * ly + lz * lz).sqrt();
-                ([lx / len, ly / len, lz / len], light.intensity * 0.01)
+                (
+                    [lx / len, ly / len, lz / len],
+                    light.intensity_at(current_frame) * 0.01,
+                )
             }
             LightType::Point => {
                 let lpos = light.position.evaluate(current_frame);
@@ -141,7 +144,7 @@ pub fn calculate_surface_shading(
                 let l_dir = [lx / dist, ly / dist, lz / dist];
 
                 let falloff = 1.0 / (1.0 + 0.0001 * dist * dist);
-                let atten = light.intensity * 0.01 * falloff;
+                let atten = light.intensity_at(current_frame) * 0.01 * falloff;
                 (l_dir, atten)
             }
             LightType::Spot { cone_angle_deg, .. } => {
@@ -153,7 +156,7 @@ pub fn calculate_surface_shading(
                 let l_dir = [lx / dist, ly / dist, lz / dist];
 
                 let falloff = 1.0 / (1.0 + 0.0001 * dist * dist);
-                let mut atten = light.intensity * 0.01 * falloff;
+                let mut atten = light.intensity_at(current_frame) * 0.01 * falloff;
 
                 let cone_angle = (cone_angle_deg * 0.5).to_radians().cos();
                 let spot_dir = [0.0f32, 0.0f32, -1.0f32];

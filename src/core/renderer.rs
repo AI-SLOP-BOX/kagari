@@ -352,6 +352,12 @@ pub struct WgpuRenderer {
     pub snapshot_texture: Option<wgpu::Texture>,
     pub snapshot_view: Option<wgpu::TextureView>,
 
+    // Multi-pass intermediate Ping-Pong textures for chained/stacked effect passes
+    pub ping_texture: Option<wgpu::Texture>,
+    pub ping_view: Option<wgpu::TextureView>,
+    pub pong_texture: Option<wgpu::Texture>,
+    pub pong_view: Option<wgpu::TextureView>,
+
     // Dirty-checking: skip re-render when inputs are unchanged.
     // Keyed by (version, frame, exposure bits, lut, target size) per target type.
     last_main_key: Option<RenderKey>,

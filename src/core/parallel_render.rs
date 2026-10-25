@@ -46,10 +46,15 @@ pub struct RenderFailure {
     pub frame: u32,
 }
 
-fn record_first_failure(slot: &Mutex<Option<RenderFailure>>, failure: RenderFailure) {
+fn record_first_failure(
+    slot: &Mutex<Option<RenderFailure>>,
+    flag: &AtomicBool,
+    failure: RenderFailure,
+) {
     let mut recorded = slot.lock().unwrap_or_else(|error| error.into_inner());
     if recorded.is_none() {
         *recorded = Some(failure);
+        flag.store(true, Ordering::Release);
     }
 }
 
@@ -126,16 +131,13 @@ impl ParallelRenderQueue {
         F: Fn(&str, u32) -> Vec<u8> + Sync,
     {
         let failure = Arc::new(Mutex::new(None::<RenderFailure>));
+        let failed_flag = Arc::new(AtomicBool::new(false));
 
         self.items
             .par_iter()
             .enumerate()
             .for_each(|(item_idx, item)| {
-                if failure
-                    .lock()
-                    .unwrap_or_else(|error| error.into_inner())
-                    .is_some()
-                {
+                if failed_flag.load(Ordering::Acquire) {
                     return;
                 }
                 if self.is_cancelled() || external_cancel.load(Ordering::Relaxed) {
@@ -147,11 +149,7 @@ impl ParallelRenderQueue {
                     return;
                 }
                 for frame in item.start_frame..=item.end_frame {
-                    if failure
-                        .lock()
-                        .unwrap_or_else(|error| error.into_inner())
-                        .is_some()
-                    {
+                    if failed_flag.load(Ordering::Acquire) {
                         return;
                     }
                     if self.is_cancelled() || external_cancel.load(Ordering::Relaxed) {
@@ -167,6 +165,7 @@ impl ParallelRenderQueue {
                         self.cancel();
                         record_first_failure(
                             &failure,
+                            &failed_flag,
                             RenderFailure {
                                 item_index: item_idx,
                                 frame,
@@ -186,6 +185,7 @@ impl ParallelRenderQueue {
                             self.cancel();
                             record_first_failure(
                                 &failure,
+                                &failed_flag,
                                 RenderFailure {
                                     item_index: item_idx,
                                     frame,
@@ -244,16 +244,13 @@ impl ParallelRenderQueue {
         F: Fn(&str, u32) -> Vec<u8> + Sync,
     {
         let failure = Arc::new(Mutex::new(None::<RenderFailure>));
+        let failed_flag = Arc::new(AtomicBool::new(false));
 
         self.items
             .par_iter()
             .enumerate()
             .for_each(|(item_idx, item)| {
-                if failure
-                    .lock()
-                    .unwrap_or_else(|error| error.into_inner())
-                    .is_some()
-                {
+                if failed_flag.load(Ordering::Acquire) {
                     return;
                 }
                 if self.is_cancelled() || external_cancel.load(Ordering::Relaxed) {
@@ -268,11 +265,7 @@ impl ParallelRenderQueue {
                     .into_par_iter()
                     .map(|frame| frame as u32)
                     .for_each(|frame| {
-                        if failure
-                            .lock()
-                            .unwrap_or_else(|error| error.into_inner())
-                            .is_some()
-                        {
+                        if failed_flag.load(Ordering::Acquire) {
                             return;
                         }
                         if self.is_cancelled() || external_cancel.load(Ordering::Relaxed) {
@@ -288,6 +281,7 @@ impl ParallelRenderQueue {
                             self.cancel();
                             record_first_failure(
                                 &failure,
+                                &failed_flag,
                                 RenderFailure {
                                     item_index: item_idx,
                                     frame,
@@ -307,6 +301,7 @@ impl ParallelRenderQueue {
                                 self.cancel();
                                 record_first_failure(
                                     &failure,
+                                    &failed_flag,
                                     RenderFailure {
                                         item_index: item_idx,
                                         frame,

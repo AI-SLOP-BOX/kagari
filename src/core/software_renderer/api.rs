@@ -163,8 +163,7 @@ mod tests {
             },
             24,
         );
-        layer.transform.position =
-            crate::core::property::Animatable::new_constant([4.0, 4.0]);
+        layer.transform.position = crate::core::property::Animatable::new_constant([4.0, 4.0]);
         comp.layers.push(layer);
 
         let saved = crate::core::parallel_render::mfr_enabled();

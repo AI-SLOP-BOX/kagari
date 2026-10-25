@@ -131,11 +131,7 @@ pub fn apply_displacement_map(
     };
     let orig = pixels.to_vec();
     let displaced = crate::core::displacement_map::apply_displacement_map(
-        &orig,
-        &orig,
-        width,
-        height,
-        &options,
+        &orig, &orig, width, height, &options,
     );
     pixels.copy_from_slice(&displaced);
 }

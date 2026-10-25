@@ -243,6 +243,7 @@ mod collect_tests {
                 frames_dir: source_dir.join("cache").to_string_lossy().into_owned(),
                 frame_count: 12,
                 audio_wav: None,
+                audio_volume: crate::core::property::Animatable::new_constant(0.0),
                 speed: 1.0,
             },
             duration_frames,

@@ -452,11 +452,15 @@ fn stateless_load_and_note_scope_recovery_clear_to_one_namespace() {
     let mut first = AutosaveManager::new(&dir)
         .with_process_namespace(111_111)
         .with_interval(Duration::from_secs(0));
-    first.save_now(&sample_project()).expect("first session save");
+    first
+        .save_now(&sample_project())
+        .expect("first session save");
     let mut second = AutosaveManager::new(&dir)
         .with_process_namespace(222_222)
         .with_interval(Duration::from_secs(0));
-    second.save_now(&sample_project()).expect("second session save");
+    second
+        .save_now(&sample_project())
+        .expect("second session save");
 
     let gens = second.list_generations();
     assert_eq!(gens.len(), 2, "both sessions' snapshots must be listed");

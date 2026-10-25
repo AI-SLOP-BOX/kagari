@@ -110,6 +110,9 @@ pub struct Layer {
     pub transform: Transform2D,
     pub effects: Vec<Effect>,
     pub visible: bool,
+    /// Mutes this layer's audio output without hiding its visual content.
+    #[serde(default)]
+    pub audio_muted: bool,
     pub locked: bool,
 
     pub parent_id: Option<String>,
@@ -285,6 +288,7 @@ impl Layer {
             transform: Transform2D::default(),
             effects: Vec::new(),
             visible: true,
+            audio_muted: false,
             locked: false,
             parent_id: None,
             track_matte: TrackMatteMode::None,

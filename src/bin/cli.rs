@@ -22,8 +22,14 @@ mod info;
 mod render;
 #[path = "cli/validate.rs"]
 mod validate;
-use bindings::{cmd_add_sample_binding, cmd_bindings, parse_binding_value, parse_sample_point, parse_string_override};
-use edit::{cmd_add_effect, cmd_add_layer, cmd_animate, cmd_init, cmd_mask, cmd_matte, cmd_parent, cmd_transition, cmd_trim};
+use bindings::{
+    cmd_add_sample_binding, cmd_bindings, parse_binding_value, parse_sample_point,
+    parse_string_override,
+};
+use edit::{
+    cmd_add_effect, cmd_add_layer, cmd_animate, cmd_init, cmd_mask, cmd_matte, cmd_parent,
+    cmd_transition, cmd_trim,
+};
 use frame::{cmd_frame, cmd_lottie, cmd_otio};
 use info::{cmd_effects, cmd_info, cmd_production_info};
 
@@ -310,13 +316,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             param,
             comp,
         } => {
-            cmd_add_effect(
-                &project,
-                &layer,
-                comp.as_deref(),
-                &kind,
-                param,
-            )?;
+            cmd_add_effect(&project, &layer, comp.as_deref(), &kind, param)?;
         }
         Commands::Trim {
             project,
@@ -325,13 +325,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             out_frame,
             comp,
         } => {
-            cmd_trim(
-                &project,
-                &layer,
-                comp.as_deref(),
-                in_frame,
-                out_frame,
-            )?;
+            cmd_trim(&project, &layer, comp.as_deref(), in_frame, out_frame)?;
         }
         Commands::Transition {
             project,
@@ -340,13 +334,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             duration,
             comp,
         } => {
-            cmd_transition(
-                &project,
-                &layer,
-                comp.as_deref(),
-                &kind,
-                duration,
-            )?;
+            cmd_transition(&project, &layer, comp.as_deref(), &kind, duration)?;
         }
         Commands::Parent {
             project,
@@ -354,12 +342,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             parent,
             comp,
         } => {
-            cmd_parent(
-                &project,
-                &layer,
-                &parent,
-                comp.as_deref(),
-            )?;
+            cmd_parent(&project, &layer, &parent, comp.as_deref())?;
         }
         Commands::Matte {
             project,
@@ -368,13 +351,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             source,
             comp,
         } => {
-            cmd_matte(
-                &project,
-                &layer,
-                &mode,
-                source.as_deref(),
-                comp.as_deref(),
-            )?;
+            cmd_matte(&project, &layer, &mode, source.as_deref(), comp.as_deref())?;
         }
         Commands::Mask {
             project,
@@ -412,10 +389,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => {
             render::cmd_preview(&project, comp.as_deref(), &output, scale, step)?;
         }
-        Commands::Bundle {
-            project,
-            output,
-        } => {
+        Commands::Bundle { project, output } => {
             render::cmd_bundle(&project, &output)?;
         }
         Commands::Remap {
@@ -638,14 +612,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             fade_out,
             comp,
         } => {
-            render::cmd_audio_track(
-                &project,
-                &layer,
-                volume,
-                fade_in,
-                fade_out,
-                comp.as_deref(),
-            )?;
+            render::cmd_audio_track(&project, &layer, volume, fade_in, fade_out, comp.as_deref())?;
         }
         Commands::Story {
             project,
@@ -678,12 +645,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             sample_step,
             json,
         } => {
-            render::cmd_critique(
-                &project,
-                comp.as_deref(),
-                sample_step,
-                json,
-            )?;
+            render::cmd_critique(&project, comp.as_deref(), sample_step, json)?;
         }
         Commands::Cinematic {
             project,

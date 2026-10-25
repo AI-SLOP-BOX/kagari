@@ -252,7 +252,13 @@ fn planes_from_u16(raw: &[u16], components: usize, n: usize) -> Vec<ExrChannel> 
 
 /// Order the planes alphabetically like an OpenEXR channel list, dropping the
 /// alpha plane when the source had none.
-fn assemble_planes(r: Vec<f32>, g: Vec<f32>, b: Vec<f32>, a: Vec<f32>, has_alpha: bool) -> Vec<ExrChannel> {
+fn assemble_planes(
+    r: Vec<f32>,
+    g: Vec<f32>,
+    b: Vec<f32>,
+    a: Vec<f32>,
+    has_alpha: bool,
+) -> Vec<ExrChannel> {
     if has_alpha {
         vec![
             ExrChannel::new("A", a),
@@ -308,7 +314,11 @@ mod tests {
             std::process::id()
         ));
 
-        let image = ExrImage::rgba_f32(width, height, &rgba);
+        let mut image = ExrImage::rgba_f32(width, height, &rgba);
+        #[cfg(not(feature = "cli"))]
+        {
+            image.compression = crate::core::exr_writer::ExrCompression::None;
+        }
         crate::core::exr_writer::write_exr_file(&file, &image).expect("write exr");
 
         let loaded = read_exr(&file).expect("read");
@@ -387,10 +397,8 @@ mod tests {
 
     #[test]
     fn read_image_any_normalizes_8bit_rgba_png() {
-        let file = std::env::temp_dir().join(format!(
-            "kagari_read_any_rgba8_{}.png",
-            std::process::id()
-        ));
+        let file =
+            std::env::temp_dir().join(format!("kagari_read_any_rgba8_{}.png", std::process::id()));
         let pixels = vec![
             255, 0, 128, 64, // px 0
             0, 255, 64, 128, // px 1
@@ -421,19 +429,29 @@ mod tests {
                 assert!((a - e).abs() < 1e-5, "expected {e}, got {a}");
             }
         };
-        assert_approx_eq(&by_name("R"), &[255.0 / 255.0, 0.0, 10.0 / 255.0, 200.0 / 255.0]);
-        assert_approx_eq(&by_name("G"), &[0.0, 255.0 / 255.0, 20.0 / 255.0, 100.0 / 255.0]);
-        assert_approx_eq(&by_name("B"), &[128.0 / 255.0, 64.0 / 255.0, 30.0 / 255.0, 50.0 / 255.0]);
-        assert_approx_eq(&by_name("A"), &[64.0 / 255.0, 128.0 / 255.0, 40.0 / 255.0, 255.0 / 255.0]);
+        assert_approx_eq(
+            &by_name("R"),
+            &[255.0 / 255.0, 0.0, 10.0 / 255.0, 200.0 / 255.0],
+        );
+        assert_approx_eq(
+            &by_name("G"),
+            &[0.0, 255.0 / 255.0, 20.0 / 255.0, 100.0 / 255.0],
+        );
+        assert_approx_eq(
+            &by_name("B"),
+            &[128.0 / 255.0, 64.0 / 255.0, 30.0 / 255.0, 50.0 / 255.0],
+        );
+        assert_approx_eq(
+            &by_name("A"),
+            &[64.0 / 255.0, 128.0 / 255.0, 40.0 / 255.0, 255.0 / 255.0],
+        );
         std::fs::remove_file(&file).ok();
     }
 
     #[test]
     fn read_image_any_expands_8bit_grayscale_to_rgb() {
-        let file = std::env::temp_dir().join(format!(
-            "kagari_read_any_gray8_{}.png",
-            std::process::id()
-        ));
+        let file =
+            std::env::temp_dir().join(format!("kagari_read_any_gray8_{}.png", std::process::id()));
         let img = image::GrayImage::from_raw(2, 1, vec![0, 255]).expect("raw gray");
         image::DynamicImage::ImageLuma8(img)
             .save(&file)
@@ -451,13 +469,13 @@ mod tests {
 
     #[test]
     fn read_image_any_reads_16bit_png() {
-        let file = std::env::temp_dir().join(format!(
-            "kagari_read_any_gray16_{}.png",
-            std::process::id()
-        ));
-        let img = image::ImageBuffer::<image::Luma<u16>, Vec<u16>>::from_raw(3, 1, vec![
-            0, 32_768, 65_535,
-        ])
+        let file =
+            std::env::temp_dir().join(format!("kagari_read_any_gray16_{}.png", std::process::id()));
+        let img = image::ImageBuffer::<image::Luma<u16>, Vec<u16>>::from_raw(
+            3,
+            1,
+            vec![0, 32_768, 65_535],
+        )
         .expect("raw gray16");
         image::DynamicImage::ImageLuma16(img)
             .save(&file)

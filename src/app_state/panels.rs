@@ -86,11 +86,18 @@ impl KagariApp {
             eframe::egui::vec2(card_w, card_h),
         );
 
-        painter.rect_filled(card_rect, 12.0, eframe::egui::Color32::from_rgba_premultiplied(18, 24, 34, 240));
+        painter.rect_filled(
+            card_rect,
+            12.0,
+            eframe::egui::Color32::from_rgba_premultiplied(18, 24, 34, 240),
+        );
         painter.rect_stroke(
             card_rect,
             12.0,
-            eframe::egui::Stroke::new(1.0_f32, eframe::egui::Color32::from_rgba_premultiplied(255, 120, 20, 100)),
+            eframe::egui::Stroke::new(
+                1.0_f32,
+                eframe::egui::Color32::from_rgba_premultiplied(255, 120, 20, 100),
+            ),
         );
 
         // Animated Spinning Glowing Ring
@@ -128,14 +135,20 @@ impl KagariApp {
             eframe::egui::pos2(card_rect.center().x, card_rect.top() + 118.0),
             eframe::egui::vec2(bar_w, bar_h),
         );
-        painter.rect_filled(bar_bg_rect, 2.0, eframe::egui::Color32::from_rgb(30, 38, 50));
+        painter.rect_filled(
+            bar_bg_rect,
+            2.0,
+            eframe::egui::Color32::from_rgb(30, 38, 50),
+        );
 
         let fill_w = bar_w * cur_progress;
-        let bar_fill_rect = eframe::egui::Rect::from_min_size(
-            bar_bg_rect.min,
-            eframe::egui::vec2(fill_w, bar_h),
+        let bar_fill_rect =
+            eframe::egui::Rect::from_min_size(bar_bg_rect.min, eframe::egui::vec2(fill_w, bar_h));
+        painter.rect_filled(
+            bar_fill_rect,
+            2.0,
+            eframe::egui::Color32::from_rgb(255, 110, 20),
         );
-        painter.rect_filled(bar_fill_rect, 2.0, eframe::egui::Color32::from_rgb(255, 110, 20));
 
         // When animation completes (progress reaches 1.0), perform actual open
         if cur_progress >= 1.0 {
@@ -156,7 +169,6 @@ impl KagariApp {
             self.ui_tabs.active_workspace == crate::ui::menu::ASSETS_WORKSPACE_INDEX;
         let compact_inspector_drawer = self.ui_tabs.compact_inspector_drawer;
         let scripting_console_visible = !self.show_home
-            && !self.show_guided_tutorial
             && !(self.ui_tabs.left_tab_idx == 1
                 && self.ui_tabs.right_panel == crate::app_state::RightPanel::Color)
             && !(assets_workspace

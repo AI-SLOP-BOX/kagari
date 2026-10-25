@@ -1,6 +1,24 @@
 use crate::core::timeline::Composition;
 
 pub(super) fn inject_audio_reactive_data(comp: &Composition, frame: u32) {
+    // If there are no audio-bearing layers (Audio, Video, or PreComp) in the composition,
+    // skip the heavy audio mixing and FFT spectrum analysis entirely.
+    let has_audio_bearing_layers = comp.layers.iter().any(|l| {
+        matches!(
+            l.layer_type,
+            crate::core::timeline::LayerType::Audio { .. }
+                | crate::core::timeline::LayerType::Video { .. }
+                | crate::core::timeline::LayerType::PreComp { .. }
+        )
+    });
+
+    if !has_audio_bearing_layers {
+        crate::core::expression_engine::set_audio_expr_data(
+            crate::core::expression_engine::AudioExprData::default(),
+        );
+        return;
+    }
+
     // Mix audio for the current frame and compute spectrum bands for expressions.
     {
         use crate::core::audio_engine::mix_audio_for_frame;

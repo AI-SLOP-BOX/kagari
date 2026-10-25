@@ -9,6 +9,7 @@ pub(crate) struct TextTextureKey {
     pub(crate) tracking: u32,
     pub(crate) leading: u32,
     pub(crate) box_width: u32,
+    pub(crate) box_height: u32,
     pub(crate) align: usize,
     pub(crate) stroke_color: [u32; 4],
     pub(crate) stroke_width: u32,

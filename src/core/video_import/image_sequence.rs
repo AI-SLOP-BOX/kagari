@@ -5,6 +5,16 @@ pub fn import_image_sequence(
     dest_dir: &Path,
     fps: f32,
 ) -> Result<VideoAsset, String> {
+    let cancel = std::sync::atomic::AtomicBool::new(false);
+    import_image_sequence_with_cancel(src_path, dest_dir, fps, &cancel)
+}
+
+pub fn import_image_sequence_with_cancel(
+    src_path: &Path,
+    dest_dir: &Path,
+    fps: f32,
+    cancel: &std::sync::atomic::AtomicBool,
+) -> Result<VideoAsset, String> {
     if !fps.is_finite() || fps < 1.0 || fps > MAX_IMPORT_FPS {
         return Err(format!(
             "fps must be finite and between 1 and {}",
@@ -105,6 +115,9 @@ pub fn import_image_sequence(
     std::fs::create_dir_all(&frames_dir)
         .map_err(|error| format!("failed to create image sequence cache: {error}"))?;
     for (output_index, (_, source)) in frames.iter().enumerate() {
+        if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+            return Err("image sequence import cancelled".to_owned());
+        }
         let (frame_width, frame_height) = image::image_dimensions(source).map_err(|error| {
             format!(
                 "could not read sequence frame dimensions {}: {error}",
@@ -140,6 +153,9 @@ pub fn import_image_sequence(
                 ));
             }
         };
+        if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+            return Err("image sequence import cancelled".to_owned());
+        }
         let target = frames_dir.join(format!("frame_{output_index:05}.webp"));
         if let Err(error) = image.save_with_format(&target, image::ImageFormat::WebP) {
             return Err(format!(
@@ -148,8 +164,14 @@ pub fn import_image_sequence(
             ));
         }
     }
+    if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+        return Err("image sequence import cancelled".to_owned());
+    }
     write_frame_cache_manifest(&frames_dir, frames.len() as u32, width, height)
         .map_err(|error| format!("could not verify imported image sequence: {error}"))?;
+    if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+        return Err("image sequence import cancelled".to_owned());
+    }
 
     let asset = VideoAsset {
         source_path: src_path.to_string_lossy().into_owned(),

@@ -118,6 +118,17 @@ pub struct KagariApp {
     pub autosave_history_generation: u64,
     /// Show the crash-recovery restore prompt at startup
     pub show_recovery_dialog: bool,
+    /// Ask before closing the main application window.
+    pub confirm_exit: bool,
+    /// Ask before leaving an open project for the Home screen.
+    pub confirm_close_project: bool,
+    /// Restore the previous workspace panels when a project is loaded.
+    pub restore_previous_state: bool,
+    /// Project-close confirmation currently awaits a choice.
+    pub show_close_project_confirmation: bool,
+    /// Exit confirmation currently awaits a user choice.
+    pub show_exit_confirmation: bool,
+    pub exit_confirmed: bool,
     /// Ensures the startup recovery check runs only once
     pub recovery_checked: bool,
     /// Human-readable timestamp of the recovery snapshot (for the dialog)
@@ -147,8 +158,7 @@ pub struct KagariApp {
     /// [`KagariApp::background_threads`] so long-running workers (export,
     /// proxy bake, CAF, roto, …) abort promptly instead of blocking shutdown
     /// until they finish naturally.
-    pub exit_cancel_flags:
-        std::sync::Mutex<Vec<std::sync::Arc<std::sync::atomic::AtomicBool>>>,
+    pub exit_cancel_flags: std::sync::Mutex<Vec<std::sync::Arc<std::sync::atomic::AtomicBool>>>,
     /// Playback domain state (transport, frame, work area, volume)
     pub playback: PlaybackDomainState,
     /// Selection domain state (selected layers, expanded, property)
@@ -248,12 +258,12 @@ pub struct KagariApp {
     pub show_welcome: bool,
     /// Skill-level UI mode: Beginner hides advanced panels/menus.
     pub ui_mode: crate::ui::mode::UiMode,
-    /// Interactive tutorial state (None = closed).
-    pub tutorial: Option<crate::ui::tutorial::TutorialState>,
     pub show_new_comp_dialog: bool,
     pub show_preferences: bool,
     /// Audio preview during playback (Preferences).
     pub audio_preview_enabled: bool,
+    /// Allow adaptive preview mode to reduce render resolution during playback.
+    pub adaptive_preview_enabled: bool,
     /// Handle to the running egui Context (set each frame; used by prefs).
     pub ui_ctx: Option<eframe::egui::Context>,
     pub command_palette_search: String,
@@ -391,7 +401,8 @@ pub struct KagariApp {
     /// Cached recent project summaries loaded asynchronously in the background.
     pub home_recent_projects: Vec<crate::ui::home_screen::RecentProject>,
     /// Receiver for background scan of recent projects.
-    pub home_recent_rx: Option<std::sync::mpsc::Receiver<Vec<crate::ui::home_screen::RecentProject>>>,
+    pub home_recent_rx:
+        Option<std::sync::mpsc::Receiver<Vec<crate::ui::home_screen::RecentProject>>>,
     /// Cached starred project keys; refreshed only at startup and after a toggle.
     pub home_starred_projects: Vec<String>,
     /// Cached home-screen textures: banner art, file thumbnails, preview.
@@ -434,9 +445,6 @@ pub struct KagariApp {
     pub selected_expression_prop_idx: usize,
     /// User interface complexity level (Beginner vs Pro Studio)
     pub skill_level: SkillLevel,
-    /// Guided interactive tutorial modal
-    pub show_guided_tutorial: bool,
-    pub tutorial_step: usize,
 }
 
 #[cfg(feature = "gui")]
@@ -453,10 +461,7 @@ impl KagariApp {
     /// Register a cooperative-cancel flag that `on_exit()` flips before
     /// joining background threads, so long jobs abort instead of hanging
     /// shutdown.
-    pub fn register_exit_cancel_flag(
-        &self,
-        flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
-    ) {
+    pub fn register_exit_cancel_flag(&self, flag: std::sync::Arc<std::sync::atomic::AtomicBool>) {
         self.exit_cancel_flags
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)

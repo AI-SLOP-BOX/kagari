@@ -244,6 +244,16 @@ fn validate_composition(
             || light.color.iter().any(|value| !value.is_finite())
             || !light.intensity.is_finite()
             || light.intensity < 0.0
+            || light
+                .intensity_animation
+                .as_ref()
+                .is_some_and(|track| {
+                    !scalar_animation_is_finite(track)
+                        || track.keyframes().is_some_and(|keys| {
+                            keys.iter()
+                                .any(|key| !(0.0..=500.0).contains(&key.value))
+                        })
+                })
             || !vector3_animation_is_finite(&light.position)
             || !light.shadow_darkness.is_finite()
             || !(0.0..=100.0).contains(&light.shadow_darkness)

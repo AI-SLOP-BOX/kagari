@@ -213,6 +213,7 @@ fn refresh_rebuilds_missing_video_cache_from_source() {
                 frames_dir: root.join("missing").to_string_lossy().into_owned(),
                 frame_count: 0,
                 audio_wav: None,
+                audio_volume: crate::core::property::Animatable::new_constant(0.0),
                 speed: 1.0,
             },
             30,

@@ -11,15 +11,7 @@ impl KagariApp {
         if self.show_home {
             crate::ui::home_screen::draw(self, ctx);
             crate::ui::preferences_dialog::draw_preferences_dialog(self, ctx);
-            crate::ui::shortcuts_dialog::draw_shortcuts_dialog(self, ctx);
-            self.toasts.draw(ctx);
-            self.draw_startup_animation(ctx);
-            self.playback.current_frame = current_frame;
-            return;
-        }
-        if self.show_guided_tutorial {
-            crate::ui::tutorial_workspace::draw(self, ctx);
-            crate::ui::preferences_dialog::draw_preferences_dialog(self, ctx);
+            crate::ui::comp_settings_dialog::draw_comp_settings_dialog(self, ctx);
             crate::ui::shortcuts_dialog::draw_shortcuts_dialog(self, ctx);
             self.toasts.draw(ctx);
             self.draw_startup_animation(ctx);
@@ -39,7 +31,8 @@ impl KagariApp {
             self.playback.current_frame = current_frame;
             return;
         }
-        let assets_workspace = self.ui_tabs.active_workspace == crate::ui::menu::ASSETS_WORKSPACE_INDEX;
+        let assets_workspace =
+            self.ui_tabs.active_workspace == crate::ui::menu::ASSETS_WORKSPACE_INDEX;
         if assets_workspace
             && self.ui_tabs.left_tab_idx == 0
             && self.ui_tabs.right_panel == crate::app_state::RightPanel::Properties
@@ -311,7 +304,6 @@ impl KagariApp {
         crate::ui::automation_panel::draw(self, ctx);
         crate::ui::drop_import::handle_dropped_files(self, ctx);
         crate::ui::welcome::draw(self, ctx);
-        crate::ui::tutorial::draw(self, ctx);
         crate::ui::new_comp_dialog::draw_new_comp_dialog(self, ctx);
         crate::ui::preferences_dialog::draw_preferences_dialog(self, ctx);
         crate::ui::export_dialog::draw(self, ctx);

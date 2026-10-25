@@ -114,6 +114,7 @@ mod tests {
                 frames_dir: "/old/cache/frames".into(),
                 frame_count: 12,
                 audio_wav: Some("/old/cache/audio.wav".into()),
+                audio_volume: crate::core::property::Animatable::new_constant(0.0),
                 speed: 1.0,
             },
             24,

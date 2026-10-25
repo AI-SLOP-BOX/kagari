@@ -7,6 +7,7 @@
 pub mod core;
 
 #[cfg(feature = "gui")]
+#[path = "legacy_egui/mod.rs"]
 pub mod ui;
 
 #[cfg(feature = "gui")]

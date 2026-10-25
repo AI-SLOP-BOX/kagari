@@ -5,6 +5,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Layer-based motion graphics and compositing engine (After Effects-style workflows in Rust)"
 repository = "https://github.com/AI-SLOP-BOX/kagari"
+default-run = "kagari-studio"
 keywords = ["vfx", "compositing", "motion-graphics", "video", "rendering"]
 categories = ["multimedia", "graphics"]
 
@@ -17,6 +18,8 @@ eframe = { version = "0.29", default-features = false, features = [
 ], optional = true }
 winit = { version = "0.30", optional = true }
 pollster = { version = "0.3", optional = true }
+ame-ui = { path = "../AmeUI", optional = true }
+vello = { version = "0.11", optional = true }
 log = "0.4.21"
 # libloading: dlopen-based OpenFX plugin probing (host-side ABI discovery)
 libloading = "0.8"
@@ -34,7 +37,6 @@ rand = "0.8"
 egui_extras = { version = "0.29", features = ["svg"], optional = true }
 # egui-phosphor: professional icon font for crisp UI glyphs
 egui-phosphor = { version = "0.7", optional = true }
-choegui = { path = "vendor/choegui", optional = true }
 sys-locale = { version = "0.3.2", optional = true }
 # rfd for native OS file dialogs (macOS / Windows / Linux)
 rfd = { version = "0.14", optional = true }
@@ -75,6 +77,8 @@ image = { version = "0.25", default-features = false, features = [
     "exr",
     "tiff",
 ] }
+# SVG image decoding through the same renderer already used by AmeUI.
+resvg = { version = "0.48.1", default-features = false, features = ["text", "system-fonts", "raster-images"] }
 # libc: disk usage stats (statvfs) for the Home storage panel
 libc = "=0.2.189"
 # naga: runtime WGSL syntax and type validation for custom shader plugins
@@ -84,12 +88,13 @@ naga = { version = "0.19", features = ["wgsl-in"] }
 pollster = "0.3"
 
 [features]
-default = ["gui"]
-gui = ["dep:eframe", "dep:egui_extras", "dep:rfd", "dep:rodio", "dep:egui-phosphor", "dep:choegui", "dep:sys-locale", "wgpu"]
+default = ["ame"]
+gui = ["dep:eframe", "dep:egui_extras", "dep:rfd", "dep:rodio", "dep:egui-phosphor", "dep:sys-locale", "wgpu"]
 preview = ["dep:winit", "dep:pollster", "wgpu"]
 cli = ["dep:clap", "dep:png", "dep:flate2"]
 cli-gpu = ["cli", "dep:pollster", "wgpu"]
 wgpu = ["dep:wgpu"]
+ame = ["dep:ame-ui", "dep:vello", "dep:rfd"]
 
 [[bin]]
 name = "kagari"
@@ -98,6 +103,11 @@ required-features = ["cli"]
 
 [[bin]]
 name = "kagari-studio"
+path = "src/bin/ame_studio.rs"
+required-features = ["ame"]
+
+[[bin]]
+name = "kagari-studio-egui"
 path = "src/main.rs"
 required-features = ["gui"]
 

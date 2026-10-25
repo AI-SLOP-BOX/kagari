@@ -81,7 +81,13 @@ pub(crate) fn render_particle_layer(buffer: &mut [u8], ctx: ParticleLayerCtx<'_>
                             cached_ps.update(dt, pos[0], pos[1]);
                         }
                         let updated = cached_ps.clone();
-                        *cache_ref = Some((sim_key.0, sim_key.1.clone(), sim_key.2, sim_key.3, updated.clone()));
+                        *cache_ref = Some((
+                            sim_key.0,
+                            sim_key.1.clone(),
+                            sim_key.2,
+                            sim_key.3,
+                            updated.clone(),
+                        ));
                         return updated;
                     }
                 }

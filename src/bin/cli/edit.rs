@@ -35,10 +35,8 @@ pub(super) fn cmd_init(
         width as f32 * 0.5,
         height as f32 * 0.5,
     ]);
-    bg.transform.scale = kagari_vfx::core::property::Animatable::new_constant([
-        width as f32,
-        height as f32,
-    ]);
+    bg.transform.scale =
+        kagari_vfx::core::property::Animatable::new_constant([width as f32, height as f32]);
     project.compositions[0].add_layer(bg);
 
     let json = serde_json::to_string_pretty(&project)?;
@@ -93,6 +91,7 @@ pub(super) fn cmd_add_layer(
                 frames_dir: String::new(),
                 frame_count: dur,
                 audio_wav: None,
+                audio_volume: kagari_vfx::core::property::Animatable::new_constant(0.0),
                 speed: 1.0,
             }
         }
@@ -116,7 +115,8 @@ pub(super) fn cmd_add_layer(
         }
         "null" => LayerType::Null,
         "precomp" | "comp" => {
-            let target_comp = content.ok_or("PreComp layer requires --content <comp_name_or_id>")?;
+            let target_comp =
+                content.ok_or("PreComp layer requires --content <comp_name_or_id>")?;
             LayerType::PreComp {
                 comp_id: target_comp.to_string(),
             }
@@ -128,7 +128,13 @@ pub(super) fn cmd_add_layer(
                 volume: kagari_vfx::core::property::Animatable::new_constant(1.0),
             }
         }
-        other => return Err(format!("Unsupported layer kind '{}'. Use text, image, solid, video, null, precomp, or audio.", other).into()),
+        other => {
+            return Err(format!(
+            "Unsupported layer kind '{}'. Use text, image, solid, video, null, precomp, or audio.",
+            other
+        )
+            .into())
+        }
     };
 
     let mut layer = Layer::new(layer_id, name.to_string(), layer_type, dur);
@@ -197,7 +203,10 @@ pub(super) fn cmd_animate(
     }
 
     let custom_bezier = if let Some(b_str) = custom_bezier_str {
-        let parts: Vec<f32> = b_str.split(',').filter_map(|s| s.trim().parse::<f32>().ok()).collect();
+        let parts: Vec<f32> = b_str
+            .split(',')
+            .filter_map(|s| s.trim().parse::<f32>().ok())
+            .collect();
         if parts.len() == 4 {
             Some([parts[0], parts[1], parts[2], parts[3]])
         } else {
@@ -211,8 +220,14 @@ pub(super) fn cmd_animate(
 
     let interp = if let Some(bezier) = custom_bezier {
         InterpolationType::Bezier {
-            outgoing: BezierControlPoint { influence, speed: 0.0 },
-            incoming: BezierControlPoint { influence, speed: 0.0 },
+            outgoing: BezierControlPoint {
+                influence,
+                speed: 0.0,
+            },
+            incoming: BezierControlPoint {
+                influence,
+                speed: 0.0,
+            },
             custom_bezier: Some(bezier),
         }
     } else {
@@ -220,19 +235,37 @@ pub(super) fn cmd_animate(
             "linear" => InterpolationType::Linear,
             "hold" => InterpolationType::Hold,
             "ease-in" => InterpolationType::Bezier {
-                outgoing: BezierControlPoint { influence, speed: 0.0 },
-                incoming: BezierControlPoint { influence: 1.0, speed: 0.0 },
+                outgoing: BezierControlPoint {
+                    influence,
+                    speed: 0.0,
+                },
+                incoming: BezierControlPoint {
+                    influence: 1.0,
+                    speed: 0.0,
+                },
                 custom_bezier: Some([0.42, 0.0, 1.0, 1.0]),
             },
             "ease-out" => InterpolationType::Bezier {
-                outgoing: BezierControlPoint { influence: 0.0, speed: 0.0 },
-                incoming: BezierControlPoint { influence, speed: 0.0 },
+                outgoing: BezierControlPoint {
+                    influence: 0.0,
+                    speed: 0.0,
+                },
+                incoming: BezierControlPoint {
+                    influence,
+                    speed: 0.0,
+                },
                 custom_bezier: Some([0.0, 0.0, 0.58, 1.0]),
             },
             _ => InterpolationType::Bezier {
                 // Default ease-in-out (AE Easy Ease)
-                outgoing: BezierControlPoint { influence, speed: 0.0 },
-                incoming: BezierControlPoint { influence, speed: 0.0 },
+                outgoing: BezierControlPoint {
+                    influence,
+                    speed: 0.0,
+                },
+                incoming: BezierControlPoint {
+                    influence,
+                    speed: 0.0,
+                },
                 custom_bezier: Some([0.42, 0.0, 0.58, 1.0]),
             },
         }
@@ -244,7 +277,12 @@ pub(super) fn cmd_animate(
         .layers
         .iter_mut()
         .find(|l| l.name == layer_ref || l.id == layer_ref)
-        .ok_or_else(|| format!("Layer '{layer_ref}' not found in composition '{}'", comp.name))?;
+        .ok_or_else(|| {
+            format!(
+                "Layer '{layer_ref}' not found in composition '{}'",
+                comp.name
+            )
+        })?;
 
     match property.to_lowercase().as_str() {
         "position" => {
@@ -267,7 +305,9 @@ pub(super) fn cmd_animate(
         "scale" => {
             let mut kfs = Vec::new();
             for raw in keyframes_raw {
-                let (f_str, v_str) = raw.split_once('=').ok_or("Keyframe must use frame=x,y or frame=uniform")?;
+                let (f_str, v_str) = raw
+                    .split_once('=')
+                    .ok_or("Keyframe must use frame=x,y or frame=uniform")?;
                 let frame: u32 = f_str.trim().parse().map_err(|_| "Invalid frame number")?;
                 let coords: Vec<f32> = v_str
                     .split(',')
@@ -288,7 +328,9 @@ pub(super) fn cmd_animate(
         "opacity" => {
             let mut kfs = Vec::new();
             for raw in keyframes_raw {
-                let (f_str, v_str) = raw.split_once('=').ok_or("Keyframe must use frame=opacity")?;
+                let (f_str, v_str) = raw
+                    .split_once('=')
+                    .ok_or("Keyframe must use frame=opacity")?;
                 let frame: u32 = f_str.trim().parse().map_err(|_| "Invalid frame number")?;
                 let val: f32 = v_str.trim().parse().map_err(|_| "Invalid opacity value")?;
                 kfs.push(Keyframe::new(frame, val, interp));
@@ -299,7 +341,9 @@ pub(super) fn cmd_animate(
         "rotation" => {
             let mut kfs = Vec::new();
             for raw in keyframes_raw {
-                let (f_str, v_str) = raw.split_once('=').ok_or("Keyframe must use frame=degrees")?;
+                let (f_str, v_str) = raw
+                    .split_once('=')
+                    .ok_or("Keyframe must use frame=degrees")?;
                 let frame: u32 = f_str.trim().parse().map_err(|_| "Invalid frame number")?;
                 let val: f32 = v_str.trim().parse().map_err(|_| "Invalid rotation angle")?;
                 kfs.push(Keyframe::new(frame, val, interp));
@@ -345,7 +389,12 @@ pub(super) fn cmd_add_effect(
         .layers
         .iter_mut()
         .find(|l| l.name == layer_ref || l.id == layer_ref)
-        .ok_or_else(|| format!("Layer '{layer_ref}' not found in composition '{}'", comp.name))?;
+        .ok_or_else(|| {
+            format!(
+                "Layer '{layer_ref}' not found in composition '{}'",
+                comp.name
+            )
+        })?;
 
     let effect_id = format!("eff_{}_{}", layer.effects.len(), kind);
     let val = param.unwrap_or(10.0);
@@ -420,10 +469,7 @@ pub(super) fn cmd_add_effect(
     std::fs::write(project_path, json)?;
     eprintln!(
         "Added effect '{}' ({}) to layer '{}' in {}",
-        effect_name,
-        kind,
-        layer_name,
-        project_path
+        effect_name, kind, layer_name, project_path
     );
     Ok(())
 }
@@ -441,7 +487,12 @@ pub(super) fn cmd_trim(
         .layers
         .iter_mut()
         .find(|l| l.name == layer_ref || l.id == layer_ref)
-        .ok_or_else(|| format!("Layer '{layer_ref}' not found in composition '{}'", comp.name))?;
+        .ok_or_else(|| {
+            format!(
+                "Layer '{layer_ref}' not found in composition '{}'",
+                comp.name
+            )
+        })?;
 
     if let Some(inf) = in_frame {
         layer.in_frame = inf;
@@ -480,12 +531,23 @@ pub(super) fn cmd_transition(
         .layers
         .iter_mut()
         .find(|l| l.name == layer_ref || l.id == layer_ref)
-        .ok_or_else(|| format!("Layer '{layer_ref}' not found in composition '{}'", comp.name))?;
+        .ok_or_else(|| {
+            format!(
+                "Layer '{layer_ref}' not found in composition '{}'",
+                comp.name
+            )
+        })?;
 
     let dur = duration.max(1);
     let ease = InterpolationType::Bezier {
-        outgoing: BezierControlPoint { influence: 0.333, speed: 0.0 },
-        incoming: BezierControlPoint { influence: 0.333, speed: 0.0 },
+        outgoing: BezierControlPoint {
+            influence: 0.333,
+            speed: 0.0,
+        },
+        incoming: BezierControlPoint {
+            influence: 0.333,
+            speed: 0.0,
+        },
         custom_bezier: Some([0.42, 0.0, 0.58, 1.0]),
     };
 
@@ -537,7 +599,11 @@ pub(super) fn cmd_transition(
             ]);
         }
         other => {
-            return Err(format!("Unknown transition '{}'. Valid options: fade-in, fade-out, zoom-out, slide-out", other).into());
+            return Err(format!(
+                "Unknown transition '{}'. Valid options: fade-in, fade-out, zoom-out, slide-out",
+                other
+            )
+            .into());
         }
     }
 
@@ -564,7 +630,12 @@ pub(super) fn cmd_parent(
         .layers
         .iter()
         .position(|l| l.name == child_ref || l.id == child_ref)
-        .ok_or_else(|| format!("Child layer '{child_ref}' not found in composition '{}'", comp.name))?;
+        .ok_or_else(|| {
+            format!(
+                "Child layer '{child_ref}' not found in composition '{}'",
+                comp.name
+            )
+        })?;
 
     let child_name = comp.layers[child_idx].name.clone();
 
@@ -580,7 +651,12 @@ pub(super) fn cmd_parent(
         .layers
         .iter()
         .find(|l| l.name == parent_ref || l.id == parent_ref)
-        .ok_or_else(|| format!("Parent layer '{parent_ref}' not found in composition '{}'", comp.name))?;
+        .ok_or_else(|| {
+            format!(
+                "Parent layer '{parent_ref}' not found in composition '{}'",
+                comp.name
+            )
+        })?;
 
     let parent_id = parent_layer.id.clone();
     let parent_name = parent_layer.name.clone();
@@ -615,7 +691,12 @@ pub(super) fn cmd_matte(
         .layers
         .iter()
         .position(|l| l.name == layer_ref || l.id == layer_ref)
-        .ok_or_else(|| format!("Layer '{layer_ref}' not found in composition '{}'", comp.name))?;
+        .ok_or_else(|| {
+            format!(
+                "Layer '{layer_ref}' not found in composition '{}'",
+                comp.name
+            )
+        })?;
 
     let mode = match mode_str.to_lowercase().replace(['-', '_'], "").as_str() {
         "none" => TrackMatteMode::None,
@@ -623,7 +704,12 @@ pub(super) fn cmd_matte(
         "alphainv" | "alphamatteinverted" | "alphainverted" => TrackMatteMode::AlphaMatteInverted,
         "luma" | "lumamatte" => TrackMatteMode::LumaMatte,
         "lumainv" | "lumamatteinverted" | "lumainverted" => TrackMatteMode::LumaMatteInverted,
-        other => return Err(format!("Unknown matte mode '{other}'. Valid: alpha, alpha-inv, luma, luma-inv, none").into()),
+        other => {
+            return Err(format!(
+                "Unknown matte mode '{other}'. Valid: alpha, alpha-inv, luma, luma-inv, none"
+            )
+            .into())
+        }
     };
 
     let source_id = if let Some(s) = source_ref {
@@ -631,7 +717,12 @@ pub(super) fn cmd_matte(
             .layers
             .iter()
             .find(|l| l.name == s || l.id == s)
-            .ok_or_else(|| format!("Source matte layer '{s}' not found in composition '{}'", comp.name))?;
+            .ok_or_else(|| {
+                format!(
+                    "Source matte layer '{s}' not found in composition '{}'",
+                    comp.name
+                )
+            })?;
         Some(src_layer.id.clone())
     } else {
         None
@@ -669,9 +760,17 @@ pub(super) fn cmd_mask(
         .layers
         .iter_mut()
         .find(|l| l.name == layer_ref || l.id == layer_ref)
-        .ok_or_else(|| format!("Layer '{layer_ref}' not found in composition '{}'", comp.name))?;
+        .ok_or_else(|| {
+            format!(
+                "Layer '{layer_ref}' not found in composition '{}'",
+                comp.name
+            )
+        })?;
 
-    let parts: Vec<f32> = coords.split(',').filter_map(|s| s.trim().parse::<f32>().ok()).collect();
+    let parts: Vec<f32> = coords
+        .split(',')
+        .filter_map(|s| s.trim().parse::<f32>().ok())
+        .collect();
     let mask_id = format!("mask_{}", layer.masks.len());
     let mask_name = format!("Mask {}", layer.masks.len() + 1);
 
@@ -690,7 +789,9 @@ pub(super) fn cmd_mask(
         }
         "polygon" | "poly" | "path" => {
             if parts.len() < 6 || parts.len() % 2 != 0 {
-                return Err("Polygon mask requires at least 3 points 'x1,y1,x2,y2,x3,y3...'".into());
+                return Err(
+                    "Polygon mask requires at least 3 points 'x1,y1,x2,y2,x3,y3...'".into(),
+                );
             }
             let mut verts = Vec::with_capacity(parts.len() / 2);
             for chunk in parts.chunks_exact(2) {
@@ -698,7 +799,13 @@ pub(super) fn cmd_mask(
             }
             Mask::new_closed(mask_id, mask_name, verts)
         }
-        other => return Err(format!("Unknown mask shape '{}'. Valid: rect, ellipse, polygon", other).into()),
+        other => {
+            return Err(format!(
+                "Unknown mask shape '{}'. Valid: rect, ellipse, polygon",
+                other
+            )
+            .into())
+        }
     };
 
     mask.feather = Animatable::new_constant(feather.max(0.0));

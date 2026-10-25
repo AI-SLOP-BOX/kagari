@@ -193,9 +193,15 @@ where
                 // (single-threaded) when disabled. Pixels are identical either way.
                 let rendered_frames: Vec<Result<(u32, Vec<u8>), u32>> =
                     if crate::core::parallel_render::mfr_enabled() {
-                        (next_frame..chunk_end).into_par_iter().map(&render_one).collect()
+                        (next_frame..chunk_end)
+                            .into_par_iter()
+                            .map(&render_one)
+                            .collect()
                     } else {
-                        (next_frame..chunk_end).into_iter().map(&render_one).collect()
+                        (next_frame..chunk_end)
+                            .into_iter()
+                            .map(&render_one)
+                            .collect()
                     };
                 let mut frames = Vec::with_capacity(rendered_frames.len());
                 for rendered in rendered_frames {

@@ -25,6 +25,7 @@ pub fn soft_light(source: f32, destination: f32) -> f32 {
 }
 
 #[inline(always)]
+#[allow(clippy::too_many_arguments)]
 pub fn evaluate_blend_mode(
     blend_mode: BlendMode,
     src_r: f32,

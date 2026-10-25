@@ -50,6 +50,7 @@ pub(crate) fn rasterize_text_layer(ctx: RasterCtx<'_>) {
     let effective_leading = formatting.map(|tf| tf.leading).unwrap_or(*leading);
     let effective_align = formatting.map(|tf| tf.alignment as usize).unwrap_or(*align);
     let effective_box_width = formatting.map(|tf| tf.box_width).unwrap_or(0.0);
+    let effective_box_height = formatting.map(|tf| tf.box_height).unwrap_or(0.0);
     let effective_stroke_color = formatting
         .map(|tf| tf.stroke_color.unwrap_or([0.0, 0.0, 0.0, 0.0]))
         .unwrap_or(*stroke_color);
@@ -254,7 +255,12 @@ pub(crate) fn rasterize_text_layer(ctx: RasterCtx<'_>) {
                 faux_style,
             )
         };
-        if let Some((tw, th, text_pixels)) = maybe_text {
+        if let Some(rasterized) = maybe_text {
+            let (tw, th, text_pixels) =
+                crate::core::font_rasterizer::clip_text_bitmap_height(
+                    rasterized,
+                    effective_box_height,
+                );
             let text_w = tw as i32;
             let text_h = th as i32;
             let origin_x = (cx - tw as f32 * 0.5) as i32;
@@ -282,8 +288,12 @@ pub(crate) fn rasterize_text_layer(ctx: RasterCtx<'_>) {
                 // Fast-path: no stroke, direct bounded blit
                 let ix0 = origin_x.max(min_x as i32).clamp(0, width as i32) as u32;
                 let iy0 = origin_y.max(min_y as i32).clamp(0, height as i32) as u32;
-                let ix1 = (origin_x + text_w).clamp(min_x as i32, max_x as i32).max(ix0 as i32) as u32;
-                let iy1 = (origin_y + text_h).clamp(min_y as i32, max_y as i32).max(iy0 as i32) as u32;
+                let ix1 = (origin_x + text_w)
+                    .clamp(min_x as i32, max_x as i32)
+                    .max(ix0 as i32) as u32;
+                let iy1 = (origin_y + text_h)
+                    .clamp(min_y as i32, max_y as i32)
+                    .max(iy0 as i32) as u32;
 
                 let tr = (text_color[0] * 255.0) as u8;
                 let tg = (text_color[1] * 255.0) as u8;
@@ -306,7 +316,8 @@ pub(crate) fn rasterize_text_layer(ctx: RasterCtx<'_>) {
                         }
                         let mut fill_alpha = fill_byte as f32 / 255.0;
                         if !masks.is_empty() {
-                            let mask_alpha = compute_combined_mask_coverage(px as f32, py as f32, masks);
+                            let mask_alpha =
+                                compute_combined_mask_coverage(px as f32, py as f32, masks);
                             if mask_alpha <= 0.001 {
                                 continue;
                             }
@@ -327,7 +338,8 @@ pub(crate) fn rasterize_text_layer(ctx: RasterCtx<'_>) {
                         // Vector mask check
                         let mut mask_alpha = 1.0;
                         if !masks.is_empty() {
-                            mask_alpha = compute_combined_mask_coverage(px as f32, py as f32, masks);
+                            mask_alpha =
+                                compute_combined_mask_coverage(px as f32, py as f32, masks);
                         }
                         if mask_alpha <= 0.001 {
                             continue;
@@ -364,7 +376,8 @@ pub(crate) fn rasterize_text_layer(ctx: RasterCtx<'_>) {
                                                 if n_alpha > 0.001 {
                                                     let edge_dist = stroke_w * 0.5 - dist;
                                                     stroke_alpha = stroke_alpha.max(
-                                                        (edge_dist / (stroke_w * 0.25)).clamp(0.0, 1.0),
+                                                        (edge_dist / (stroke_w * 0.25))
+                                                            .clamp(0.0, 1.0),
                                                     );
                                                 }
                                             }

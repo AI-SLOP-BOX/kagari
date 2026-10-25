@@ -1,0 +1,22 @@
+component SettingsPluginsPage() {
+VStack(spacing: 10) {
+                        Text("プラグイン", size: 18)
+                        Caption("インストール済みOpenFXバンドルの検出状況")
+                        Card { Padding(14) { VStack(spacing: 10) {
+                          HStack(spacing: 8) { Text("OpenFX", size: 16) Spacer Caption("検出のみ") Button("再スキャン", action: settings_plugins_refresh, tone: secondary, size: small) }
+                          If(has_openfx_plugins) {
+                            ForEach(openfx_plugins, plugin, key: path) {
+                              Card { Padding(10) { VStack(spacing: 4) { Text("{plugin.name}", size: 14) Caption("{plugin.path}") } } }
+                            }
+                          } else {
+                            Caption("対応する場所にOpenFXプラグインは見つかりませんでした。")
+                          }
+                          Caption("エフェクトの読み込み・実行は未対応です。")
+                          Caption("AEGPホスト連携は未実装です。")
+                        } } }
+                        Card { Padding(14) { VStack(spacing: 8) {
+                          Text("検索場所", size: 16)
+                          If(openfx_search_paths != "") { Caption("{openfx_search_paths}") } else { Caption("標準のOpenFX検索フォルダが見つかりません。") }
+                        } } }
+                      }
+}

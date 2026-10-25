@@ -31,7 +31,7 @@ use frame_cache::write_frame_cache_manifest;
 pub use frame_cache::{frame_path, frame_path_in_dir, refresh_missing_video_caches};
 mod image_sequence;
 mod process;
-pub use image_sequence::import_image_sequence;
+pub use image_sequence::{import_image_sequence, import_image_sequence_with_cancel};
 use process::{
     available_disk_space, dimensions_within_import_budget, estimate_import_disk_bytes,
     format_disk_bytes, run_ffmpeg, ImportDirectoryGuard, ImportSafety,

@@ -97,7 +97,10 @@ fn fixture(variable: &str) -> Option<PathBuf> {
     let raw = std::env::var_os(variable)?;
     let path = PathBuf::from(raw);
     if !path.is_file() {
-        eprintln!("{variable} specified path is not a file: {}", path.display());
+        eprintln!(
+            "{variable} specified path is not a file: {}",
+            path.display()
+        );
         return None;
     }
     Some(path)
@@ -531,11 +534,17 @@ fn dynamic_link_asset_and_render_requests_are_executable() {
 fn openfx_real_fixture_produces_expected_pixels() {
     use kagari_vfx::core::openfx_bridge::{LoadedOfxPlugin, OfxRenderRequest};
     let Some(plugin_path) = fixture("KAGARI_TEST_OFX_PLUGIN") else {
-        eprintln!("Skipping openfx_real_fixture_produces_expected_pixels: KAGARI_TEST_OFX_PLUGIN not set");
+        eprintln!(
+            "Skipping openfx_real_fixture_produces_expected_pixels: KAGARI_TEST_OFX_PLUGIN not set"
+        );
         return;
     };
-    let Some(input_path) = fixture("KAGARI_TEST_OFX_INPUT") else { return; };
-    let Some(expected_path) = fixture("KAGARI_TEST_OFX_EXPECTED") else { return; };
+    let Some(input_path) = fixture("KAGARI_TEST_OFX_INPUT") else {
+        return;
+    };
+    let Some(expected_path) = fixture("KAGARI_TEST_OFX_EXPECTED") else {
+        return;
+    };
     let mut plugin = LoadedOfxPlugin::attach(&plugin_path, "Bridge Acceptance")
         .unwrap_or_else(|error| panic!("Real OpenFX plugin attachment failed: {error}"));
     let input = image::open(input_path).unwrap().to_rgba8();

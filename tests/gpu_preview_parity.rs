@@ -176,6 +176,12 @@ fn allowlisted_gpu_effects_match_the_software_reference_across_the_full_frame() 
                 invert_alpha: false,
             },
         ),
+        (
+            "Posterize",
+            EffectType::Posterize {
+                levels: constant(4.0),
+            },
+        ),
     ];
     let mut renderer = WgpuRenderer::new(device.clone(), queue.clone());
 
@@ -208,4 +214,92 @@ fn allowlisted_gpu_effects_match_the_software_reference_across_the_full_frame() 
             worst_pixel.2
         );
     }
+}
+
+#[test]
+fn multi_effect_non_conflicting_chain_matches_software_reference_and_passes_capability_check() {
+    let Some((device, queue)) = request_gpu() else {
+        eprintln!("skipping GPU preview multi-effect test: no adapter available");
+        return;
+    };
+    let mut comp = Composition::new("multi-fx".into(), "multi-fx".into(), WIDTH, HEIGHT, 30, 1);
+    comp.background_color = [0.05, 0.05, 0.05, 1.0];
+    let mut layer = Layer::new(
+        "chain-layer".into(),
+        "Chain Layer".into(),
+        LayerType::Solid {
+            color: [0.35, 0.55, 0.75, 1.0],
+        },
+        1,
+    );
+    layer.transform.position = Animatable::new_constant([WIDTH as f32 * 0.5, HEIGHT as f32 * 0.5]);
+    layer.transform.anchor_point = Animatable::new_constant([WIDTH as f32 * 0.5, HEIGHT as f32 * 0.5]);
+
+    // Stack multiple distinct non-conflicting GPU effects in shader pipeline order:
+    // Slot 1: ColorTint
+    layer.effects.push(Effect {
+        id: "fx-tint".into(),
+        name: "Color Tint".into(),
+        effect_type: EffectType::ColorTint {
+            color: constant([0.8, 0.2, 0.4, 1.0]),
+            intensity: constant(40.0),
+        },
+        enabled: true,
+    });
+    // Slot 2: Levels
+    layer.effects.push(Effect {
+        id: "fx-levels".into(),
+        name: "Levels".into(),
+        effect_type: EffectType::Levels {
+            input_black: constant(0.05),
+            input_white: constant(0.95),
+            gamma: constant(1.2),
+            output_black: constant(0.0),
+            output_white: constant(1.0),
+        },
+        enabled: true,
+    });
+    // Slot 3: Invert
+    layer.effects.push(Effect {
+        id: "fx-invert".into(),
+        name: "Invert".into(),
+        effect_type: EffectType::Invert { invert_alpha: false },
+        enabled: true,
+    });
+
+    comp.layers.push(layer);
+
+    // Verify render_capability allows GPU preview (no CPU fallback triggered!)
+    assert!(
+        !kagari_vfx::core::render_capability::software_preview_required(&comp, 0),
+        "Non-conflicting multi-effect chain should NOT require software preview"
+    );
+    assert_eq!(
+        kagari_vfx::core::render_capability::software_preview_reason(&comp, 0),
+        None,
+        "No software preview reason should be present for non-conflicting effects"
+    );
+
+    let mut renderer = WgpuRenderer::new(device.clone(), queue.clone());
+    let cpu = render_frame_to_pixels(&comp, 0, WIDTH, HEIGHT, 0.0, 0);
+    let gpu = gpu_rgba16f_pixels(&device, &queue, &mut renderer, &comp);
+
+    let mut max_error = 0.0f32;
+    let mut worst_pixel = (0usize, 0usize, 0usize);
+    for (index, actual_pixel) in gpu.iter().enumerate() {
+        for channel in 0..4 {
+            let expected = cpu[index * 4 + channel] as f32;
+            let actual = actual_pixel[channel] * 255.0;
+            let error = (expected - actual).abs();
+            if error > max_error {
+                max_error = error;
+                worst_pixel = (index % WIDTH as usize, index / WIDTH as usize, channel);
+            }
+        }
+    }
+    assert!(
+        max_error <= 2.0,
+        "Multi-effect chain GPU/software mismatch at pixel ({}, {}), channel {}: max error {max_error:.3}",
+        worst_pixel.0, worst_pixel.1, worst_pixel.2
+    );
 }

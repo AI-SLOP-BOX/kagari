@@ -2,6 +2,8 @@
 
 このファイルは、**もう一方のAI (Cursor, ChatGPT, GitHub Copilot 等)** に読み込ませて、現在のプロジェクト状況を瞬時に理解させ、役割分担に基づいて協調して開発を進めさせるための指示書です。
 
+> **履歴資料:** 以下の指示とコード例はeguiが既定UIだった時期の記録で、現行構成の説明ではありません。既定の `kagari-studio` はAmeUIを使い、画面定義は `src/ui/ame/kagari_studio.ame` と `src/ui/ame/components/`、Rustホストは `src/bin/ame_studio.rs` です。既存egui版は削除せず `src/legacy_egui/` に保持し、`kagari-studio-egui` として分離しています。現行の配置は `AGENTS.md` を参照してください。
+
 以下の「📋 コピペ用プロンプト」をコピーして、もう一方のAIのチャットに入力してください。
 
 ---

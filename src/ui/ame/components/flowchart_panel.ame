@@ -1,0 +1,11 @@
+component FlowchartPanel() {
+  VStack(spacing: 4) {
+    HStack(spacing: 6) {
+      Caption("ノードグラフ & パイプライン依存構造")
+      Spacer
+      Button("タイムラインに戻る", action: timeline_view_all, tone: secondary, size: small)
+    }
+    Canvas("kagari.flowchart").frame(height: 260)
+    Caption("親・子リンク (シアン) · トラックマット依存 (アンバー) · レイヤーをクリックで選択")
+  }
+}

@@ -42,6 +42,7 @@
             light_type: crate::core::timeline::LightType::Point,
             color: [1.0; 4],
             intensity: 100.0,
+            intensity_animation: None,
             position: Animatable::new_constant([48.0, 48.0, 300.0]),
             casts_shadows: true,
             shadow_darkness: 90.0,
