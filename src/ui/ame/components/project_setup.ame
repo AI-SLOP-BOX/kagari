@@ -1,0 +1,51 @@
+component ProjectSetupPanel() {
+    ScrollView(680) {
+      Padding(16) {
+        Center {
+          MaxWidth(900) {
+            VStack(spacing: 14) {
+            HStack(spacing: 12) { Button("← 戻る", action: setup_cancel, tone: secondary, size: small) Spacer Caption("新規プロジェクト") }
+            VStack(spacing: 5) { Text("作成設定", size: 30) Caption("動画の用途に合わせて、コンポジションのサイズとフレームレートを選びます。") }
+            Card { Padding(16) { VStack(spacing: 12) {
+              VStack(spacing: 6) { Text("プロジェクト名", size: 17) TextField(setup_name, "無題のプロジェクト", action: setup_name_changed) }
+              VStack(spacing: 8) {
+                HStack(spacing: 8) { Text("動画サイズ", size: 17) Spacer Caption("用途に近いプリセットを選択") }
+                HStack(spacing: 8) {
+                  If(setup_hd_selected) { Button("HD  ·  1280 × 720", action: setup_preset_hd, tone: primary) } else { Button("HD  ·  1280 × 720", action: setup_preset_hd, tone: secondary) }
+                  If(setup_full_hd_selected) { Button("Full HD  ·  1920 × 1080", action: setup_preset_full_hd, tone: primary) } else { Button("Full HD  ·  1920 × 1080", action: setup_preset_full_hd, tone: secondary) }
+                }
+                HStack(spacing: 8) {
+                  If(setup_uhd_selected) { Button("4K UHD  ·  3840 × 2160", action: setup_preset_uhd, tone: primary) } else { Button("4K UHD  ·  3840 × 2160", action: setup_preset_uhd, tone: secondary) }
+                  If(setup_qhd_selected) { Button("1440p  ·  2560 × 1440", action: setup_preset_qhd, tone: primary) } else { Button("1440p  ·  2560 × 1440", action: setup_preset_qhd, tone: secondary) }
+                }
+                HStack(spacing: 8) {
+                  If(setup_vertical_selected) { Button("縦型  ·  1080 × 1920", action: setup_preset_vertical, tone: primary) } else { Button("縦型  ·  1080 × 1920", action: setup_preset_vertical, tone: secondary) }
+                  If(setup_square_selected) { Button("正方形  ·  1080 × 1080", action: setup_preset_square, tone: primary) } else { Button("正方形  ·  1080 × 1080", action: setup_preset_square, tone: secondary) }
+                }
+                HStack(spacing: 8) {
+                  If(setup_portrait_4_5_selected) { Button("縦型 4:5  ·  1080 × 1350", action: setup_preset_portrait_4_5, tone: primary) } else { Button("縦型 4:5  ·  1080 × 1350", action: setup_preset_portrait_4_5, tone: secondary) }
+                }
+                HStack(spacing: 10) { Caption("幅") MaxWidth(180) { TextField(setup_width, "1920", action: setup_width_changed) } Caption("×") MaxWidth(180) { TextField(setup_height, "1080", action: setup_height_changed) } Caption("px") Spacer }
+              }
+              HStack(spacing: 10) { Text("コンポジションの長さ", size: 17) Spacer MaxWidth(140) { TextField(setup_duration_seconds, "10", action: setup_duration_changed) } Caption("秒") }
+              VStack(spacing: 8) {
+                HStack(spacing: 8) { Text("フレームレート", size: 17) Spacer Caption("用途に応じて選択") }
+                HStack(spacing: 8) {
+                  If(setup_fps_24_selected) { Button("24 fps", action: setup_fps_24, tone: primary, size: small) } else { Button("24 fps", action: setup_fps_24, tone: secondary, size: small) }
+                  If(setup_fps_25_selected) { Button("25 fps", action: setup_fps_25, tone: primary, size: small) } else { Button("25 fps", action: setup_fps_25, tone: secondary, size: small) }
+                  If(setup_fps_30_selected) { Button("30 fps", action: setup_fps_30, tone: primary, size: small) } else { Button("30 fps", action: setup_fps_30, tone: secondary, size: small) }
+                  If(setup_fps_50_selected) { Button("50 fps", action: setup_fps_50, tone: primary, size: small) } else { Button("50 fps", action: setup_fps_50, tone: secondary, size: small) }
+                  If(setup_fps_60_selected) { Button("60 fps", action: setup_fps_60, tone: primary, size: small) } else { Button("60 fps", action: setup_fps_60, tone: secondary, size: small) }
+                  MaxWidth(150) { TextField(setup_fps, "30", action: setup_fps_changed) }
+                  Caption("fps")
+                }
+              }
+              If(setup_error != "") { Caption("{setup_error}") }
+              HStack(spacing: 8) { Spacer Button("作成して編集へ", action: setup_create, tone: primary) }
+            } } }
+            }
+          }
+        }
+      }
+    }
+  }

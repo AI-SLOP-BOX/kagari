@@ -1,8 +1,13 @@
 [package]
 name = "kagari-vfx"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
+description = "Layer-based motion graphics and compositing engine (After Effects-style workflows in Rust)"
+repository = "https://github.com/AI-SLOP-BOX/kagari"
+default-run = "kagari-studio"
+keywords = ["vfx", "compositing", "motion-graphics", "video", "rendering"]
+categories = ["multimedia", "graphics"]
 
 [dependencies]
 eframe = { version = "0.29", default-features = false, features = [
@@ -11,6 +16,10 @@ eframe = { version = "0.29", default-features = false, features = [
     "wayland",
     "x11",
 ], optional = true }
+winit = { version = "0.30", optional = true }
+pollster = { version = "0.3", optional = true }
+ame-ui = { path = "../AmeUI", optional = true }
+vello = { version = "0.11", optional = true }
 log = "0.4.21"
 # libloading: dlopen-based OpenFX plugin probing (host-side ABI discovery)
 libloading = "0.8"
@@ -19,7 +28,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 bytemuck = { version = "1.15.0", features = ["derive"] }
 half = { version = "2", features = ["bytemuck"] }
-wgpu = { version = "22" }
+wgpu = { version = "22", optional = true }
 # Rhai: lightweight Rust-native scripting engine for AE-style expressions
 rhai = { version = "1.18", features = ["sync"] }
 # rand: for film grain and procedural noise
@@ -28,6 +37,7 @@ rand = "0.8"
 egui_extras = { version = "0.29", features = ["svg"], optional = true }
 # egui-phosphor: professional icon font for crisp UI glyphs
 egui-phosphor = { version = "0.7", optional = true }
+sys-locale = { version = "0.3.2", optional = true }
 # rfd for native OS file dialogs (macOS / Windows / Linux)
 rfd = { version = "0.14", optional = true }
 # rayon for multi-core parallel pixel sweeps
@@ -54,10 +64,21 @@ symphonia = { version = "0.5.5", default-features = false, features = [
 clap = { version = "4", features = ["derive"], optional = true }
 # png: headless frame export
 png = { version = "0.17", optional = true }
+# flate2: zlib streams for OpenEXR ZIP compression (headless VFX interchange export)
+flate2 = { version = "1", optional = true }
 # ab_glyph: font loading and glyph rasterization for text layers
 ab_glyph = "0.2"
-# image: loading JPEG/PNG image layers
-image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+# image: loading JPEG/PNG image layers; `exr`/`tiff` keep VFX interchange
+# formats open for import (writer side lives in core::exr_writer)
+image = { version = "0.25", default-features = false, features = [
+    "jpeg",
+    "png",
+    "webp",
+    "exr",
+    "tiff",
+] }
+# SVG image decoding through the same renderer already used by AmeUI.
+resvg = { version = "0.48.1", default-features = false, features = ["text", "system-fonts", "raster-images"] }
 # libc: disk usage stats (statvfs) for the Home storage panel
 libc = "=0.2.189"
 # naga: runtime WGSL syntax and type validation for custom shader plugins
@@ -67,10 +88,13 @@ naga = { version = "0.19", features = ["wgsl-in"] }
 pollster = "0.3"
 
 [features]
-default = ["gui"]
-gui = ["dep:eframe", "dep:egui_extras", "dep:rfd", "dep:rodio", "dep:egui-phosphor", "wgpu"]
-cli = ["dep:clap", "dep:png"]
-wgpu = []
+default = ["ame"]
+gui = ["dep:eframe", "dep:egui_extras", "dep:rfd", "dep:rodio", "dep:egui-phosphor", "dep:sys-locale", "wgpu"]
+preview = ["dep:winit", "dep:pollster", "wgpu"]
+cli = ["dep:clap", "dep:png", "dep:flate2"]
+cli-gpu = ["cli", "dep:pollster", "wgpu"]
+wgpu = ["dep:wgpu"]
+ame = ["dep:ame-ui", "dep:vello", "dep:rfd"]
 
 [[bin]]
 name = "kagari"
@@ -79,10 +103,162 @@ required-features = ["cli"]
 
 [[bin]]
 name = "kagari-studio"
+path = "src/bin/ame_studio.rs"
+required-features = ["ame"]
+
+[[bin]]
+name = "kagari-studio-egui"
 path = "src/main.rs"
 required-features = ["gui"]
 
 [[bin]]
+name = "kagari-preview"
+path = "src/bin/preview.rs"
+required-features = ["preview"]
+
+[[bin]]
 name = "gen-splash"
-path = "src/bin/gen_splash.rs"
+path = "src/bin/gen_splash/main.rs"
 required-features = ["cli"]
+
+[[bin]]
+name = "gen-glitch"
+path = "src/bin/gen_glitch/main.rs"
+required-features = ["cli"]
+
+[[bin]]
+name = "gen-logo"
+path = "src/bin/gen_logo/main.rs"
+required-features = ["cli"]
+
+# Bridge acceptance gate: verified with mock/fallback pathways when external plugins are not set
+[[test]]
+name = "bridge_acceptance"
+path = "tests/bridge_acceptance.rs"
+test = true
+
+[profile.dev]
+opt-level = 1
+
+# ─── KAGARI CORE CAPABILITIES & AE PARITY MATRIX ─────────────────────────────
+# Verified in-tree implementations in src/core/
+[package.metadata.kagari.engine_capabilities]
+spatial_3d = [
+    "Camera3D (Perspective Projection, FOV, Multi-camera switching)",
+    "DepthOfField (Aperture, Focus Distance, Polygonal Iris Bokeh)",
+    "Light3D (Point, Spot, Ambient, Parallel with Distance Falloff)",
+    "ShadowMapping (Light shadow darkness, casting & receiving)",
+    "Z-Sorting & 3D Layer Compositing",
+    "Auto-Orient along 3D motion path",
+    "Wavefront OBJ 3D Model Loader (Mesh3D, PBR Materials, UV mapping, Normal generation)",
+    "glTF 2.0 & GLB 3D Asset Loader (Binary GLB chunks, JSON accessors, PBR Metallic-Roughness)",
+    "3D Vector Mesh Extrusion & Beveling (Mesh3D solid generation, Front/Side/Back facets, Depth & Normals)",
+]
+vector_shapes = [
+    "SDF Shape Rasterizer (Rectangle, Ellipse, Star, Polygon, Freeform Bezier)",
+    "ShapeRepeater (Instancing, Transform deltas, Opacity decay)",
+    "TrimPaths (Start, End, Offset trim)",
+    "WigglePaths (Procedural shape noise)",
+    "ZigzagPaths (Wave / Corner ridges)",
+    "MergePaths & OffsetPaths (Boolean operations & stroke offset)",
+    "BezierShapeMorph (Resampling & smooth interpolation across arbitrary knot counts)",
+    "AutoTrace (Bitmap edge detection to Bezier Spline paths)",
+    "SVG & Illustrator Importer (Path tokenizer, cubic bezier & arc conversion)",
+]
+typography = [
+    "TextAnimator (Per-character RangeSelector, Wiggly, Ramp, Shape selectors)",
+    "TextToShapes (Vector glyph outline extraction)",
+    "FontRasterizer (ab_glyph with Faux Bold, Italic, Tracking, Leading)",
+    "PathText (Text aligned and animated along curved vector paths)",
+]
+deformation = [
+    "PuppetPinEngine (Moving Least Squares 2D deformation & Delaunay Triangulation)",
+    "BendWarp & Spherize",
+    "CylinderSphereWarp",
+    "PageTurn 3D (Cylindrical paper peel & back-side shading)",
+    "TurbulentDisplace (Perlin vector noise warping)",
+    "CornerPin (4-point projective homography DLT warp with bilinear sampling)",
+]
+tracking = [
+    "CameraTracker3D (Optical parallax depth & camera trajectory solve from 2D tracks)",
+    "BlenderCameraTrack (Interchange & keyframe baking)",
+    "PointTracker (Multi-point luminance/cross-correlation tracking, Stabilize)",
+    "PlanarTracker (Homography region tracking)",
+    "MotionSketch (Real-time cursor recording to keyframes)",
+    "TheSmoother (Gaussian/moving average keyframe reduction)",
+    "TheWiggler (Procedural keyframe noise injector)",
+]
+video_ai = [
+    "ContentAwareFill (Spatio-temporal Fast Marching inpainting for object removal)",
+    "RotoBrush (Foreground/Background color modeling, boundary propagation & edge feathering)",
+    "OpticalFlowTimewarp (Bidirectional dense optical flow intermediate frame synthesis)",
+    "TemporalDenoise (Spatio-temporal noise reduction across frame buffers)",
+]
+paint_tool = [
+    "VectorPaintPro (32-bit float HDR brush, Gaussian hardness feathering, Pressure dynamics)",
+    "CloneStamp (Source offset sampling & HDR alpha blending)",
+    "EraserMode (Alpha subtraction & edge softness)",
+]
+simulation = [
+    "AdvancedParticles3D (3D emitters, Gravity, Wind, Vortex, Floor bounce, Sprites)",
+    "PhysicsEngine (Rigid 2D velocity & restitution)",
+]
+compositing = [
+    "UniversalTrackMatte (Target any arbitrary layer, Alpha / Luma / Inverted)",
+    "BlendModes (30+ AE blend modes)",
+    "LinearLightComposite (1.0 Gamma compositing toggle)",
+    "CollapseTransformations (Nested pre-comp 3D space continuity)",
+    "SubframeMotionBlur (High-precision shutter angle & shutter phase time integration)",
+    "SetMatte (Channel copy & composite)",
+]
+audio = [
+    "14-Format Decoder via Symphonia (AAC, MP3, FLAC, WAV, OGG, ALAC, etc.)",
+    "AudioBuffer & Multi-track Mixer",
+    "AudioToKeyframes (Converts waveform amplitude into Slider Controls)",
+    "AudioSpectrum (FFT-based frequency bar visualizer)",
+    "DSP (Parametric EQ, Flanger, Chorus)",
+]
+color = [
+    "OpenColorIO (OCIO) & ACEScg Color Transformations",
+    "ICC Color Profile conversion",
+    "1D & 3D LUT Cube Cache",
+    "HDR Output Dithering (Triangular-PDF to eliminate banding)",
+    "LinearColorKey & ChromaKey (Clean green/blue screen extraction)",
+]
+effects = [
+    "GlowPro (Threshold bloom)",
+    "CameraLensBlur (Iris blades, Bokeh roundness & highlights)",
+    "Colorama (Phase color cycling)",
+    "MotionTile & CC RepeTile (Tiling, Mirror edges)",
+    "DisplacementMap (Source channel displacement)",
+    "OpticalFlares (Multi-element lens flare)",
+    "LightningArc (Procedural electric bolts)",
+    "HeatDistortion (Thermal turbulence)",
+    "EchoTime (Frame accumulation trails)",
+]
+automation = [
+    "RhaiExpressionEngine (thisComp, thisLayer, wiggle, valueAtTime, loopOut)",
+    "MOGRT Engine (Essential Properties definition, export & parameter overrides)",
+    "Headless CLI Batch Rendering (Dynamic layer overrides with --override)",
+]
+interchange = [
+    "OpenFX Discovery & ABI Properties (libloading symbol probing)",
+    "OpenTimelineIO (OTIO video/audio tracks import & export)",
+    "MLT Framework XML export",
+    "Lottie JSON Exporter (Shapes, transforms, keyframes)",
+    "OpenEXR (Half-float RGB/RGBA with Zip compression)",
+    "SubtitleInterchange (SRT / WebVTT parser & bidirectional Text layer sync)",
+]
+vr_360 = [
+    "VRHorizon (3-axis spherical orientation realignment: Pitch, Yaw, Roll)",
+    "VRSphericalBlur (Geodesic latitude-compensated Gaussian blur with 360 wrap)",
+]
+project_workflow = [
+    "ProjectHistory & UndoManager (Bounded serialization snapshot stack, multi-branch memory guard)",
+    "AutosaveRecovery (Periodic rotating slot snapshots with corrupted file validation)",
+    "LayerAlign & Distribute (AE Align palette parity: 6-way alignment, gap distribution, Fit-to-Comp)",
+    "LayerConstraints (Responsive composition resizing pins: Left, Center, Right, Top, Bottom, Scale)",
+    "SpatialKeyframes (Rove Across Time, cubic Bezier numerical integration velocity smoothing)",
+    "ClipboardSystem (Cross-composition layer, effect, and keyframe copy/paste with ID collision safety)",
+]
+

@@ -249,9 +249,11 @@ mod tests {
         let height = 64u32;
         let mut buf = vec![0u8; (width * height * 4) as usize];
 
-        let mut config = OpticalFlareConfig::default();
-        config.position = [32.0, 32.0];
-        config.overall_scale = 0.2;
+        let config = OpticalFlareConfig {
+            position: [32.0, 32.0],
+            overall_scale: 0.2,
+            ..Default::default()
+        };
 
         render_optical_flare(&mut buf, width, height, &config);
 

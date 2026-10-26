@@ -120,45 +120,48 @@ fn rasterize_image_layer(ctx: RasterCtx<'_>) {
         ),
         _ => unreachable!(),
     };
-    with_image_cache(|cache| {
-        let Some(img) = cache.load_image(&img_path).cloned() else {
-            return;
-        };
+    let Some((img, next_img)) = with_image_cache(|cache| {
+        let img = cache.load_image(&img_path).cloned()?;
         let next_img = if blend_t > 0.0 && next_img_path != img_path {
             cache.load_image(&next_img_path).cloned()
         } else {
             None
         };
-        {
-            let img_w = img.width as f32;
-            let img_h = img.height as f32;
+        Some((img, next_img))
+    }) else {
+        return;
+    };
+    {
+        let img_w = img.width as f32;
+        let img_h = img.height as f32;
 
-            for py in min_y..max_y {
-                for px in min_x..max_x {
-                    // Vector mask check
-                    let mut mask_alpha = 1.0;
-                    if !masks.is_empty() {
-                        mask_alpha = compute_combined_mask_coverage(px as f32, py as f32, masks);
-                    }
-                    if mask_alpha <= 0.001 {
-                        continue;
-                    }
+        for py in min_y..max_y {
+            for px in min_x..max_x {
+                // Vector mask check
+                let mut mask_alpha = 1.0;
+                if !masks.is_empty() {
+                    mask_alpha = compute_combined_mask_coverage(px as f32, py as f32, masks);
+                }
+                if mask_alpha <= 0.001 {
+                    continue;
+                }
 
-                    // Map pixel to image texture coordinates [0, 1]
-                    let dx = px as f32 - cx;
-                    let dy = py as f32 - cy;
-                    let lx = dx * cos_r + dy * sin_r;
-                    let ly = -dx * sin_r + dy * cos_r;
-                    let u = (lx / bounds_x + 1.0) * 0.5;
-                    let v = (ly / bounds_y + 1.0) * 0.5;
+                // Map pixel to image texture coordinates [0, 1]
+                let dx = px as f32 - cx;
+                let dy = py as f32 - cy;
+                let lx = dx * cos_r + dy * sin_r;
+                let ly = -dx * sin_r + dy * cos_r;
+                let u = (lx / bounds_x + 1.0) * 0.5;
+                let v = (ly / bounds_y + 1.0) * 0.5;
 
-                    if (0.0..=1.0).contains(&u) && (0.0..=1.0).contains(&v) {
-                        let tex_x = ((u * (img_w - 1.0)).round() as u32).min(img_w as u32 - 1);
-                        let tex_y = ((v * (img_h - 1.0)).round() as u32).min(img_h as u32 - 1);
-                        let tidx = ((tex_y * img.width + tex_x) * 4) as usize;
-                        if tidx + 3 < img.pixels.len() {
-                            let lidx = (((py - min_y) * bw + (px - min_x)) * 4) as usize;
-                            if lidx + 3 < layer_buf.len() {
+                if (0.0..=1.0).contains(&u) && (0.0..=1.0).contains(&v) {
+                    let tex_x = ((u * (img_w - 1.0)).round() as u32).min(img_w as u32 - 1);
+                    let tex_y = ((v * (img_h - 1.0)).round() as u32).min(img_h as u32 - 1);
+                    let tidx = ((tex_y * img.width + tex_x) * 4) as usize;
+                    if tidx + 3 < img.pixels.len() {
+                        let lidx = (((py - min_y) * bw + (px - min_x)) * 4) as usize;
+                        if lidx + 3 < layer_buf.len() {
+                            if blend_t > 0.0 && next_img.is_some() {
                                 let sample = |channel: usize| -> u8 {
                                     let a = img.pixels[tidx + channel] as f32;
                                     let b = next_img
@@ -180,13 +183,19 @@ fn rasterize_image_layer(ctx: RasterCtx<'_>) {
                                 layer_buf[lidx + 1] = sample(1);
                                 layer_buf[lidx + 2] = sample(2);
                                 layer_buf[lidx + 3] = (src_a * 255.0) as u8;
+                            } else {
+                                let src_a = (f32::from(img.pixels[tidx + 3]) / 255.0) * mask_alpha;
+                                layer_buf[lidx] = img.pixels[tidx];
+                                layer_buf[lidx + 1] = img.pixels[tidx + 1];
+                                layer_buf[lidx + 2] = img.pixels[tidx + 2];
+                                layer_buf[lidx + 3] = (src_a * 255.0) as u8;
                             }
                         }
                     }
                 }
             }
         }
-    });
+    }
 }
 
 /// Flat rasterization for solid (and other non-shape) layers.

@@ -1,0 +1,25 @@
+component ExportPanel() {
+    Padding(24) {
+      VStack(spacing: 16) {
+        HStack(spacing: 8) { VStack(spacing: 3) { Text("書き出し", size: 26) Caption("コンポジション全体、または現在のフレームを保存します。") } Spacer Button("編集に戻る", action: back_to_editor, tone: secondary, size: small) }
+        MaxWidth(920) {
+          VStack(spacing: 14) {
+            Card { Padding(18) { VStack(spacing: 12) {
+              HStack(spacing: 8) { Text("動画を書き出す", size: 19) Spacer Button("形式: {video_export_codec}", action: cycle_video_export_codec, tone: secondary, size: small) }
+              Caption("{status_resolution} · {fps_label} · {duration_label}")
+              HStack(spacing: 8) { Grow(1) { TextField(video_output_path, "動画の保存先 (.mp4)", action: video_output_changed) } Button("保存先…", action: choose_video_output, tone: secondary, size: small) }
+              ProgressBar(render_progress)
+              HStack(spacing: 8) { Caption("{render_status}") Spacer If(render_running) { Button("キャンセル", action: render_stop, tone: destructive) } else { If(video_overwrite_pending) { Button("上書きして書き出す", action: render_overwrite, tone: destructive) Button("戻る", action: render_cancel_overwrite, tone: secondary) } else { Button("書き出しを開始", action: render_start, tone: primary) } } }
+            } } }
+            Card { Padding(16) { VStack(spacing: 10) {
+              HStack(spacing: 8) { Text("現在のフレームを画像保存", size: 17) Spacer Caption("PNG") }
+              Caption("タイムラインで選択中のフレームだけを書き出します。")
+              HStack(spacing: 8) { Grow(1) { TextField(output_path, "画像の保存先 (.png)", action: output_changed) } Button("保存先…", action: choose_output_file, tone: secondary, size: small) }
+              HStack(spacing: 8) { Caption("{status_resolution} · {current_time}") Spacer If(still_overwrite_pending) { Button("上書き保存", action: render_still_overwrite, tone: destructive, size: small) Button("戻る", action: render_still_cancel_overwrite, tone: secondary, size: small) } else { Button("PNGを保存", action: render_still, tone: secondary) } }
+              Caption("{still_status}")
+            } } }
+          }
+        }
+      }
+    }
+  }

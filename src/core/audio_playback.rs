@@ -69,6 +69,17 @@ impl AudioPlayback {
         Ok(())
     }
 
+    /// Resume the currently loaded sink (or restart it) without swapping files.
+    pub fn resume(&mut self) {
+        if let Some(sink) = &mut self.sink {
+            if sink.is_paused() {
+                sink.play();
+            }
+            // Already playing: no-op. `stop()` here would clear the queue and
+            // produce silence, so it must not be called.
+        }
+    }
+
     /// Applies master output volume (0.0..1.0) to the live sink.
     pub fn set_volume(&self, volume: f32) {
         if let Some(sink) = &self.sink {

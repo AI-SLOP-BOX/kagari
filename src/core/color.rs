@@ -135,7 +135,7 @@ impl Rgbaf {
     pub fn buffer_from_rgba8(src: &[u8], width: u32, height: u32) -> Vec<Self> {
         let n = (width as usize) * (height as usize);
         let mut out = Vec::with_capacity(n);
-        for chunk in src.chunks_exact(4) {
+        for chunk in src.as_chunks::<4>().0 {
             out.push(Self::from_rgba8(chunk[0], chunk[1], chunk[2], chunk[3]));
         }
         out
@@ -143,7 +143,7 @@ impl Rgbaf {
 
     /// Write linear Rgbaf pixels back to an RGBA8 buffer.
     pub fn buffer_to_rgba8(src: &[Self], dst: &mut [u8]) {
-        for (px, chunk) in src.iter().zip(dst.chunks_exact_mut(4)) {
+        for (px, chunk) in src.iter().zip(dst.as_chunks_mut::<4>().0.iter_mut()) {
             px.write_rgba8(chunk);
         }
     }

@@ -142,22 +142,27 @@ impl AutomationCurve {
 
     pub fn sample(&self, time: Time) -> Option<f64> {
         self.validate().ok()?;
+        self.sample_validated(time)
+    }
+
+    fn sample_validated(&self, time: Time) -> Option<f64> {
         let first = *self.points.first()?;
         if time_before(time, first.time) {
             return Some(first.value);
         }
-        for pair in self.points.windows(2) {
-            let [left, right] = pair else { unreachable!() };
-            if !time_before(right.time, time) {
-                let span = seconds(right.time) - seconds(left.time);
-                if span <= f64::EPSILON {
-                    return Some(right.value);
-                }
-                let amount = ((seconds(time) - seconds(left.time)) / span).clamp(0.0, 1.0);
-                return Some(left.value + (right.value - left.value) * amount);
-            }
+        let right_index = self
+            .points
+            .partition_point(|point| !time_before(time, point.time));
+        let Some(right) = self.points.get(right_index) else {
+            return self.points.last().map(|point| point.value);
+        };
+        let left = &self.points[right_index - 1];
+        let span = seconds(right.time) - seconds(left.time);
+        if span <= f64::EPSILON {
+            return Some(right.value);
         }
-        self.points.last().map(|point| point.value)
+        let amount = ((seconds(time) - seconds(left.time)) / span).clamp(0.0, 1.0);
+        Some(left.value + (right.value - left.value) * amount)
     }
 
     pub fn sample_at_frame(&self, frame: i64, rate: FrameRate) -> Option<f64> {
@@ -222,12 +227,23 @@ impl AutomationBinding {
 
     pub fn evaluate(&self, time: Time) -> Option<f64> {
         self.validate().ok()?;
-        let value = self.curve.sample(time)?;
-        self.map_value(value)
+        let value = self.curve.sample_validated(time)?;
+        self.map_value_validated(value)
     }
 
     pub fn map_value(&self, value: f64) -> Option<f64> {
-        self.validate().ok()?;
+        if !self.input_min.is_finite()
+            || !self.input_max.is_finite()
+            || !self.output_min.is_finite()
+            || !self.output_max.is_finite()
+            || self.input_max <= self.input_min
+        {
+            return None;
+        }
+        self.map_value_validated(value)
+    }
+
+    fn map_value_validated(&self, value: f64) -> Option<f64> {
         if !value.is_finite() {
             return None;
         }

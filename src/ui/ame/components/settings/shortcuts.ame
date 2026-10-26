@@ -1,0 +1,11 @@
+component SettingsShortcutsPage() {
+VStack(spacing: 10) {
+                        Text("キーボードショートカット", size: 18)
+                        Caption("現在割り当てられている主なショートカットです。")
+                        Card { Padding(14) { VStack(spacing: 8) {
+                          HStack(spacing: 6) { Text("プロジェクトを保存（編集画面）") Spacer Caption("⌘ / Ctrl + S") }
+                          HStack(spacing: 6) { Text("新規プロジェクト設定") Spacer Caption("⌘ / Ctrl + N") }
+                          HStack(spacing: 6) { Text("書き出し画面を開く（編集画面）") Spacer Caption("⌘ / Ctrl + M") }
+                        } } }
+                      }
+}

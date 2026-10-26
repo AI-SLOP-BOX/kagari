@@ -1,0 +1,196 @@
+component SceneAssetPanel() {
+  Card { Padding(8) { VStack(spacing: 5) {
+    Text("シーン内の素材", size: 14)
+    If(has_scene_assets) {
+      ScrollView(260) {
+        VStack(spacing: 2) {
+          ForEach(scene_assets, asset, key: id) {
+            HStack(spacing: 5) {
+              If(asset.kind == "動画" || asset.kind == "画像") { Icon("film", 13) } else {
+                If(asset.kind == "音声") { Icon("music", 13) } else {
+                  If(asset.kind == "3Dモデル") { Icon("environment", 13) } else { Icon("folder", 13) }
+                }
+              }
+              If(asset.selected) { Button("{asset.name}", action: select_layer, tone: primary, size: small) } else { Button("{asset.name}", action: select_layer, tone: secondary, size: small) }
+              Spacer
+              Caption("{asset.kind}")
+            }
+            If(asset.missing) {
+              VStack(spacing: 2) {
+                HStack(spacing: 5) {
+                  Caption("素材が見つかりません")
+                  Spacer
+                  If(asset.locked) { Caption("ロック中") } else { Button("再指定", action: relink_scene_asset, tone: primary, size: small) }
+                }
+                Caption("{asset.source_path}")
+              }
+            } else {
+              HStack(spacing: 5) {
+                Caption("{asset.source}")
+                Spacer
+                If(asset.locked) { Caption("ロック中") }
+              }
+            }
+          }
+        }
+      }
+    } else {
+      Caption("読み込み済みの画像・動画・音声・3Dモデル素材はありません。")
+    }
+  } } }
+}
+
+component SceneCreationPanel() {
+  Card { Padding(8) { VStack(spacing: 5) {
+    Text("レイヤーを追加", size: 14)
+    HorizontalScrollView(460) { HStack(spacing: 4) {
+      Button("＋ 粒子", action: add_particle_layer, tone: secondary, size: small)
+      Button("＋ 調整", action: add_adjustment_layer, tone: secondary, size: small)
+      Button("＋ ヌル", action: add_null_layer, tone: secondary, size: small)
+      Button("＋ 文字", action: add_text_layer, tone: secondary, size: small)
+      Button("＋ 図形", action: add_shape_layer, tone: secondary, size: small)
+      Button("＋ 円", action: add_ellipse_layer, tone: secondary, size: small)
+      Button("＋ 星", action: add_star_layer, tone: secondary, size: small)
+      Button("＋ 多角形", action: add_polygon_layer, tone: secondary, size: small)
+      Button("＋ 平面", action: add_solid_layer, tone: secondary, size: small)
+      Button("＋ カメラ", action: add_scene_camera, tone: secondary, size: small)
+      Button("＋ ライト", action: add_scene_light, tone: secondary, size: small)
+    } }
+  } } }
+}
+
+component SceneHierarchyPanel() {
+  Card { Padding(8) { VStack(spacing: 5) {
+    HStack(spacing: 4) {
+      Text("シーン階層", size: 14)
+      Button("すべて畳む", action: collapse_all_scene_groups, tone: secondary, size: small)
+      Button("すべて展開", action: expand_all_scene_groups, tone: secondary, size: small)
+      Spacer
+      Caption("{align_selected_count} 整列対象")
+    }
+    HStack(spacing: 4) {
+      Caption("表示")
+      Button("すべて表示", action: show_all_scene_layers, tone: secondary, size: small)
+      Button("すべて非表示", action: hide_all_scene_layers, tone: secondary, size: small)
+    }
+    HStack(spacing: 4) {
+      Grow(1) { TextField(search, "名前・種類・素材パスで検索", action: search_changed) }
+      If(search != "") { Button("検索解除", action: clear_scene_search, tone: secondary, size: small) }
+    }
+    If(has_scene_layers) {
+      ScrollView(360) {
+        VStack(spacing: 2) {
+          ForEach(scene_layers, layer, key: id) {
+            VStack(spacing: 1) {
+              HStack(spacing: 4) {
+                Caption("{layer.indent}")
+                If(layer.has_children) { If(layer.collapsed) { Button("▸", action: toggle_scene_group, tone: secondary, size: small) } else { Button("▾", action: toggle_scene_group, tone: secondary, size: small) } } else { Icon("tree_branch", 14) }
+                If(layer.selected) { Button("{layer.name}", action: select_layer, tone: primary, size: small) } else { Button("{layer.name}", action: select_layer, tone: secondary, size: small) }
+                Spacer
+                Caption("{layer.kind}")
+              }
+              HStack(spacing: 3) {
+                If(layer.align_selected) { Button("✓ 整列", action: toggle_alignment_layer_selection, tone: primary, size: small, disabled: layer.locked) } else { Button("□ 整列", action: toggle_alignment_layer_selection, tone: secondary, size: small, disabled: layer.locked) }
+                Button("● {layer.label}", action: cycle_layer_label_color, tone: secondary, size: small, disabled: layer.locked)
+                If(layer.visible) { IconButton("eye", action: toggle_layer_visibility, tone: primary, size: small) } else { IconButton("eye_off", action: toggle_layer_visibility, tone: secondary, size: small) }
+                If(layer.locked) { IconButton("lock", action: toggle_layer_lock, tone: primary, size: small) } else { IconButton("unlock", action: toggle_layer_lock, tone: secondary, size: small) }
+                If(layer.solo) { Button("S", action: toggle_layer_solo, tone: primary, size: small) } else { Button("S", action: toggle_layer_solo, tone: secondary, size: small) }
+                If(layer.has_audio) { If(layer.audio_muted) { Button("M", action: toggle_audio_mute, tone: primary, size: small) } else { Button("M", action: toggle_audio_mute, tone: secondary, size: small) } }
+                If(layer.motion_blur) { Button("MB", action: toggle_layer_motion_blur, tone: primary, size: small, disabled: layer.locked) } else { Button("MB", action: toggle_layer_motion_blur, tone: secondary, size: small, disabled: layer.locked) }
+              }
+              HStack(spacing: 3) {
+                Caption("並び順")
+                Button("↑ 1段", action: move_timeline_layer_up, tone: secondary, size: small, disabled: layer.locked)
+                Button("↓ 1段", action: move_timeline_layer_down, tone: secondary, size: small, disabled: layer.locked)
+              }
+            }
+          }
+          If(!has_scene_layer_matches) { Caption("検索条件に一致するレイヤーはありません。") }
+        }
+      }
+    } else { Caption("コンポジションにレイヤーがありません。素材やシェイプを追加できます。") }
+  } } }
+}
+
+component SceneAlignmentPanel() {
+  Card { Padding(6) { VStack(spacing: 4) {
+    HStack(spacing: 4) {
+      Text("整列と分布", size: 14)
+      Caption("対象 {align_selected_count}件")
+      Spacer
+      Button("全て", action: select_all_alignment_layers, tone: secondary, size: small)
+      Button("選択解除", action: clear_alignment_selection, tone: secondary, size: small)
+      If(align_to_composition) { Button("基準: コンポジション", action: toggle_align_to_composition, tone: primary, size: small) } else { Button("基準: 選択範囲", action: toggle_align_to_composition, tone: secondary, size: small) }
+    }
+    HStack(spacing: 3) { Caption("横") Button("左", action: align_scene_left, tone: secondary, size: small, disabled: !can_align_layers) Button("中央", action: align_scene_horizontal_center, tone: secondary, size: small, disabled: !can_align_layers) Button("右", action: align_scene_right, tone: secondary, size: small, disabled: !can_align_layers) Button("中心を等間隔", action: distribute_scene_horizontal, tone: secondary, size: small, disabled: !can_distribute_layers) }
+    HStack(spacing: 3) { Caption("縦") Button("上", action: align_scene_top, tone: secondary, size: small, disabled: !can_align_layers) Button("中央", action: align_scene_vertical_center, tone: secondary, size: small, disabled: !can_align_layers) Button("下", action: align_scene_bottom, tone: secondary, size: small, disabled: !can_align_layers) Button("中心を等間隔", action: distribute_scene_vertical, tone: secondary, size: small, disabled: !can_distribute_layers) }
+    If(!can_distribute_layers) { Caption("分布にはロック解除済みのレイヤーを3つ以上選択してください。") }
+  } } }
+}
+
+component SceneLayerOperationsPanel() {
+  Card { Padding(6) { VStack(spacing: 4) {
+    HStack(spacing: 5) {
+      Text("選択レイヤー", size: 14)
+      Spacer
+      Caption("{selected_layer_kind}")
+    }
+    HStack(spacing: 5) {
+      If(selected_layer) { If(selected_layer_locked) { Caption("{layer_name} · ロック中") } else { TextField(layer_name, "レイヤー名", action: layer_changed) } } else { Caption("レイヤーを選択してください") }
+      Button("↑", action: move_layer_up, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+      Button("↓", action: move_layer_down, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+    }
+    HStack(spacing: 5) {
+      Button("先頭へ", action: move_layer_to_start, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+      Button("末尾へ", action: move_layer_to_end, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+      Button("複製", action: duplicate_selected_layer, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+      Button("削除", action: request_remove_selected_layer, tone: destructive, size: small, disabled: !selected_layer || selected_layer_locked)
+    }
+    HStack(spacing: 6) {
+      Caption("親: {selected_layer_parent_name}")
+      If(selected_layer_has_parent) { Button("親を解除", action: unparent_selected_layer, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked) }
+      If(has_parent_candidates) {
+        HorizontalScrollView(320) { HStack(spacing: 3) { ForEach(parent_candidates, parent, key: id) { If(parent.selected) { Button("{parent.name}", action: set_layer_parent, tone: primary, size: small, disabled: !selected_layer || selected_layer_locked) } else { Button("{parent.name}", action: set_layer_parent, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked) } } } }
+      } else { Caption("親にできるレイヤーはありません") }
+      Button("直前を親に", action: parent_selected_layer, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+    }
+  } } }
+}
+
+component CameraLightWorkspacePanel() {
+  VStack(spacing: 6) {
+    Card { Padding(8) { HStack(spacing: 6) { Text("カメラ・照明", size: 16) Spacer If(selected_layer) { Caption("{layer_name}") } else { Caption("レイヤー未選択") } } } }
+    If(selected_is_camera) {
+      CameraProperties()
+      Transform3DProperties()
+    } else {
+      If(selected_is_light) {
+        LightProperties()
+        Transform3DProperties()
+      } else {
+        Card { Padding(10) { VStack(spacing: 6) {
+          Caption("カメラまたはライトを選ぶと、撮影・照明と3D位置をここで調整できます。")
+          HStack(spacing: 5) { Button("＋ カメラ", action: add_scene_camera, tone: secondary, size: small) Button("＋ ライト", action: add_scene_light, tone: secondary, size: small) }
+        } } }
+      }
+    }
+    SceneAlignmentPanel()
+  }
+}
+
+component LayerRemoveConfirmModal() {
+  Card {
+    Padding(16) {
+      VStack(spacing: 10) {
+        Text("レイヤーを削除", size: 17)
+        Caption("「{layer_name}」を削除します。親子関係とトラックマット参照も解除されます。この操作は取り消せません。")
+        HStack(spacing: 8) {
+          Spacer
+          Button("キャンセル", action: cancel_remove_selected_layer, tone: secondary)
+          Button("削除", action: confirm_remove_selected_layer, tone: destructive)
+        }
+      }
+    }
+  }
+}
+

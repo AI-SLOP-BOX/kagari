@@ -1,0 +1,186 @@
+component CompositionHeader() {
+  Card { Padding(5) { VStack(spacing: 4) {
+    HStack(spacing: 8) {
+      Caption("コンポジション")
+      Button("◀", action: composition_previous, tone: secondary, size: small)
+      Caption("{composition_position}")
+      Button("▶", action: composition_next, tone: secondary, size: small)
+      Button("＋", action: composition_add, tone: secondary, size: small)
+      Button("複製", action: composition_duplicate, tone: secondary, size: small)
+      If(has_multiple_compositions) { Button("削除", action: composition_remove, tone: secondary, size: small) }
+      Spacer
+      Caption("ズーム")
+      Button("−", action: composition_zoom_out, tone: secondary, size: small)
+      MaxWidth(88) { TextField(zoom, "100%", action: zoom_changed) }
+      Button("＋", action: composition_zoom_in, tone: secondary, size: small)
+      Button("全体", action: composition_zoom_fit, tone: secondary, size: small)
+    }
+    If(has_multiple_compositions) {
+      HorizontalScrollView(420) { HStack(spacing: 4) {
+        ForEach(composition_items, item, key: id) {
+          If(item.selected) { Button("{item.name}", action: composition_select, tone: primary, size: small) } else { Button("{item.name}", action: composition_select, tone: secondary, size: small) }
+        }
+      } }
+    }
+  } } }
+}
+
+component CompositionSelector() {
+  Card { Padding(5) { VStack(spacing: 4) {
+    HStack(spacing: 8) {
+      Caption("コンポジション")
+      Button("◀", action: composition_previous, tone: secondary, size: small)
+      Caption("{composition_position}")
+      Button("▶", action: composition_next, tone: secondary, size: small)
+      Button("＋", action: composition_add, tone: secondary, size: small)
+      Button("複製", action: composition_duplicate, tone: secondary, size: small)
+      If(has_multiple_compositions) { Button("削除", action: composition_remove, tone: secondary, size: small) }
+      Spacer
+      Caption("ズーム")
+      Button("−", action: composition_zoom_out, tone: secondary, size: small)
+      MaxWidth(88) { TextField(zoom, "100%", action: zoom_changed) }
+      Button("＋", action: composition_zoom_in, tone: secondary, size: small)
+      Button("全体", action: composition_zoom_fit, tone: secondary, size: small)
+    }
+    If(has_multiple_compositions) {
+      HorizontalScrollView(420) { HStack(spacing: 4) {
+        ForEach(composition_items, item, key: id) {
+          If(item.selected) { Button("{item.name}", action: composition_select, tone: primary, size: small) } else { Button("{item.name}", action: composition_select, tone: secondary, size: small) }
+        }
+      } }
+    }
+  } } }
+}
+
+component CompositionBasicSettings() {
+  Card { Padding(6) { VStack(spacing: 5) {
+    Text("基本設定", size: 14)
+    TextField(composition_name, "コンポジション名", action: composition_name_changed)
+    HStack(spacing: 4) {
+      Caption("サイズ")
+      MaxWidth(68) { TextField(composition_width, "1920", action: composition_width_changed) }
+      Caption("×")
+      MaxWidth(68) { TextField(composition_height, "1080", action: composition_height_changed) }
+      Caption("fps")
+      MaxWidth(52) { TextField(composition_fps, "30", action: composition_fps_changed) }
+      Caption("秒")
+      MaxWidth(58) { TextField(composition_duration, "10", action: composition_duration_changed) }
+    }
+    HStack(spacing: 4) {
+      Caption("サイズプリセット")
+      Button("HD 720p", action: composition_preset_hd, tone: secondary, size: small)
+      Button("Full HD", action: composition_preset_full_hd, tone: secondary, size: small)
+      Button("4K UHD", action: composition_preset_4k, tone: secondary, size: small)
+      Button("縦 9:16", action: composition_preset_vertical, tone: secondary, size: small)
+      Button("正方形", action: composition_preset_square, tone: secondary, size: small)
+    }
+    HStack(spacing: 4) {
+      Caption("fpsプリセット")
+      Button("24 fps", action: composition_fps_24, tone: secondary, size: small)
+      Button("25 fps", action: composition_fps_25, tone: secondary, size: small)
+      Button("30 fps", action: composition_fps_30, tone: secondary, size: small)
+      Button("50 fps", action: composition_fps_50, tone: secondary, size: small)
+      Button("60 fps", action: composition_fps_60, tone: secondary, size: small)
+      Caption("尺は秒単位で維持")
+    }
+    HStack(spacing: 5) {
+      Caption("開始タイムコード")
+      MaxWidth(128) { TextField(composition_start_timecode, "00:00:00:00", action: composition_start_timecode_changed) }
+      Caption("HH:MM:SS:FF · タイムラインの表示基準")
+    }
+  } } }
+}
+
+component CompositionColorSettings() {
+  Card { Padding(6) { VStack(spacing: 5) {
+    Text("色とシャッター", size: 14)
+    HStack(spacing: 4) {
+      Caption("ピクセル比")
+      MaxWidth(58) { TextField(composition_pixel_aspect, "1.0", action: composition_pixel_aspect_changed) }
+      Caption("シャッター角")
+      MaxWidth(58) { TextField(composition_shutter_angle, "180", action: composition_shutter_angle_changed) }
+      Caption("背景")
+      MaxWidth(86) { TextField(composition_background, "#000000", action: composition_background_changed) }
+      Button("{composition_bit_depth}", action: composition_cycle_bit_depth, tone: secondary, size: small)
+      Button("{composition_working_space}", action: composition_cycle_working_space, tone: secondary, size: small)
+    }
+    HStack(spacing: 4) {
+      Caption("シャッター位相")
+      MaxWidth(58) { TextField(composition_shutter_phase, "-90", action: composition_shutter_phase_changed) }
+      Caption("°  ·  -360〜360")
+    }
+  } } }
+}
+
+component CompositionPreviewSettings() {
+  Card { Padding(6) { VStack(spacing: 5) {
+    Text("プレビュー", size: 14)
+    HStack(spacing: 4) {
+      Caption("プレビュー解像度")
+      If(composition_proxy_full) { Button("Full", action: composition_proxy_full, tone: primary, size: small) } else { Button("Full", action: composition_proxy_full, tone: secondary, size: small) }
+      If(composition_proxy_half) { Button("1/2", action: composition_proxy_half, tone: primary, size: small) } else { Button("1/2", action: composition_proxy_half, tone: secondary, size: small) }
+      If(composition_proxy_quarter) { Button("1/4", action: composition_proxy_quarter, tone: primary, size: small) } else { Button("1/4", action: composition_proxy_quarter, tone: secondary, size: small) }
+      If(composition_proxy_eighth) { Button("1/8", action: composition_proxy_eighth, tone: primary, size: small) } else { Button("1/8", action: composition_proxy_eighth, tone: secondary, size: small) }
+      If(composition_proxy_preview) { Button("プレビューON", action: toggle_composition_proxy_preview, tone: primary, size: small) } else { Button("プレビューOFF", action: toggle_composition_proxy_preview, tone: secondary, size: small) }
+    }
+  } } }
+}
+
+component CompositionRenderSettings() {
+  Card { Padding(6) { VStack(spacing: 5) {
+    Text("レンダー", size: 14)
+    HStack(spacing: 4) {
+      If(composition_blend_linear) { Button("リニア光合成 ON", action: toggle_composition_blend_linear, tone: primary, size: small) } else { Button("リニア光合成 OFF", action: toggle_composition_blend_linear, tone: secondary, size: small) }
+      If(composition_dither_output) { Button("ディザ ON", action: toggle_composition_dither_output, tone: primary, size: small) } else { Button("ディザ OFF", action: toggle_composition_dither_output, tone: secondary, size: small) }
+      Caption("階調のバンディングを軽減")
+    }
+  } } }
+}
+
+component CompositionSettingsPanel() {
+  VStack(spacing: 5) {
+    If(composition_settings_status != "") { Caption("{composition_settings_status}") }
+    CompositionBasicSettings()
+    CompositionColorSettings()
+    CompositionPreviewSettings()
+    CompositionRenderSettings()
+  }
+}
+
+component CompositionViewerPanel() {
+  Card { Padding(5) { VStack(spacing: 4) {
+    If(compact) { Canvas("kagari.viewport").frame(height: 360) } else { Grow(1) { Canvas("kagari.viewport") } }
+    HStack(spacing: 6) { Icon("grid", 14) Caption("コンポジション") Spacer Caption("{status_resolution}") Caption("{fps_label}") }
+  } } }
+}
+
+component CompositionPanel() {
+  VStack(spacing: 4) {
+    CompositionHeader()
+    CompositionSettingsPanel()
+    CompositionViewerPanel()
+  }
+}
+
+component CompositionPreview() {
+  VStack(spacing: 4) {
+    CompositionHeader()
+    CompositionViewerPanel()
+  }
+}
+
+component CompositionRemoveConfirmModal() {
+  Card {
+    Padding(16) {
+      VStack(spacing: 10) {
+        Text("コンポジションを削除", size: 17)
+        Caption("「{composition_name}」と中のレイヤーを削除します。他のコンポジション内の参照レイヤーも削除されます。この操作は取り消せません。")
+        HStack(spacing: 8) {
+          Spacer
+          Button("キャンセル", action: composition_remove_cancel, tone: secondary)
+          Button("削除", action: composition_remove_confirm, tone: destructive)
+        }
+      }
+    }
+  }
+}

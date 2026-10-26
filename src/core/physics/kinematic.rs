@@ -1,0 +1,88 @@
+//! Vector3D and kinematic point simulation state/solver.
+
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Vector3D {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+
+impl Vector3D {
+    pub fn new(x: f32, y: f32, z: f32) -> Self {
+        Self { x, y, z }
+    }
+
+    pub fn zero() -> Self {
+        Self {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct KinematicState {
+    pub position: Vector3D,
+    pub velocity: Vector3D,
+    pub acceleration: Vector3D,
+    pub rotation_deg: f32,
+    pub angular_velocity: f32,
+}
+
+impl Default for KinematicState {
+    fn default() -> Self {
+        Self {
+            position: Vector3D::zero(),
+            velocity: Vector3D::zero(),
+            acceleration: Vector3D::zero(),
+            rotation_deg: 0.0,
+            angular_velocity: 0.0,
+        }
+    }
+}
+
+pub struct KinematicSolver {
+    pub gravity: Vector3D,
+    pub drag: f32,
+}
+
+impl Default for KinematicSolver {
+    fn default() -> Self {
+        Self {
+            gravity: Vector3D::new(0.0, 980.0, 0.0), // pixels / sec^2 standard AE gravity
+            drag: 0.98,
+        }
+    }
+}
+
+impl KinematicSolver {
+    pub fn new(gravity: Vector3D, drag: f32) -> Self {
+        Self { gravity, drag }
+    }
+
+    /// Advance particle / layer kinematic physics simulation state by `dt` seconds.
+    pub fn update_state(&self, state: &mut KinematicState, dt: f32) {
+        let dt = dt.max(0.0001);
+
+        // Apply accelerations & gravity
+        state.velocity.x += (self.gravity.x + state.acceleration.x) * dt;
+        state.velocity.y += (self.gravity.y + state.acceleration.y) * dt;
+        state.velocity.z += (self.gravity.z + state.acceleration.z) * dt;
+
+        // Apply drag damping (clamped: 0.0 = instant stop, 1.0 = no drag)
+        let clamped_drag = self.drag.clamp(0.0, 1.0);
+        let damp = clamped_drag.powf(dt * 60.0);
+        state.velocity.x *= damp;
+        state.velocity.y *= damp;
+        state.velocity.z *= damp;
+
+        // Integrate positions
+        state.position.x += state.velocity.x * dt;
+        state.position.y += state.velocity.y * dt;
+        state.position.z += state.velocity.z * dt;
+
+        // Integrate rotation
+        state.rotation_deg += state.angular_velocity * dt;
+    }
+}

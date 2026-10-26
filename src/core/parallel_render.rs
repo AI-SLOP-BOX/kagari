@@ -1,6 +1,22 @@
 use rayon::prelude::*;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+
+/// Global Multi-Frame Rendering (MFR) switch, toggled from the proxy/timeline
+/// header and read by the processing side (FFmpeg export chunk rendering,
+/// software-renderer frame ranges, parallel export queues) so the UI toggle
+/// changes real behavior instead of only flipping a label.
+static MFR_ENABLED: AtomicBool = AtomicBool::new(true);
+
+/// Whether Multi-Frame Rendering (frame-parallel rayon) is currently enabled.
+pub fn mfr_enabled() -> bool {
+    MFR_ENABLED.load(Ordering::Relaxed)
+}
+
+/// Enable/disable Multi-Frame Rendering for subsequent render jobs.
+pub fn set_mfr_enabled(enabled: bool) {
+    MFR_ENABLED.store(enabled, Ordering::Relaxed);
+}
 
 /// Render queue item representing a composition to be rendered.
 #[derive(Debug, Clone)]
@@ -21,7 +37,7 @@ pub enum RenderStatus {
 }
 
 /// Progress callback: (item_index, frames_done, total_frames).
-type ProgressCallback = dyn Fn(usize, u32, u32) + Send + Sync;
+type ProgressCallback = dyn Fn(usize, u64, u64) + Send + Sync;
 
 /// A render callback failed for one concrete queue item/frame.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,10 +46,15 @@ pub struct RenderFailure {
     pub frame: u32,
 }
 
-fn record_first_failure(slot: &Mutex<Option<RenderFailure>>, failure: RenderFailure) {
+fn record_first_failure(
+    slot: &Mutex<Option<RenderFailure>>,
+    flag: &AtomicBool,
+    failure: RenderFailure,
+) {
     let mut recorded = slot.lock().unwrap_or_else(|error| error.into_inner());
     if recorded.is_none() {
         *recorded = Some(failure);
+        flag.store(true, Ordering::Release);
     }
 }
 
@@ -42,9 +63,9 @@ fn record_first_failure(slot: &Mutex<Option<RenderFailure>>, failure: RenderFail
 pub struct ParallelRenderQueue {
     pub items: Vec<RenderQueueItem>,
     /// Total frames rendered across all items.
-    pub total_frames_rendered: AtomicU32,
+    pub total_frames_rendered: AtomicU64,
     /// Total frames to render across all items.
-    pub total_frames: u32,
+    pub total_frames: u64,
     /// Whether the entire queue has been cancelled.
     pub cancelled: AtomicBool,
     progress: Option<Arc<ProgressCallback>>,
@@ -54,20 +75,20 @@ impl ParallelRenderQueue {
     pub fn new() -> Self {
         Self {
             items: Vec::new(),
-            total_frames_rendered: AtomicU32::new(0),
+            total_frames_rendered: AtomicU64::new(0),
             total_frames: 0,
             cancelled: AtomicBool::new(false),
             progress: None,
         }
     }
 
-    pub fn set_progress_callback<F: Fn(usize, u32, u32) + Send + Sync + 'static>(&mut self, cb: F) {
+    pub fn set_progress_callback<F: Fn(usize, u64, u64) + Send + Sync + 'static>(&mut self, cb: F) {
         self.progress = Some(Arc::new(cb));
     }
 
     pub fn add_item(&mut self, item: RenderQueueItem) {
         if item.start_frame <= item.end_frame {
-            let frames = item.end_frame - item.start_frame + 1;
+            let frames = u64::from(item.end_frame) - u64::from(item.start_frame) + 1;
             self.total_frames = self.total_frames.saturating_add(frames);
         }
         self.items.push(item);
@@ -110,16 +131,13 @@ impl ParallelRenderQueue {
         F: Fn(&str, u32) -> Vec<u8> + Sync,
     {
         let failure = Arc::new(Mutex::new(None::<RenderFailure>));
+        let failed_flag = Arc::new(AtomicBool::new(false));
 
         self.items
             .par_iter()
             .enumerate()
             .for_each(|(item_idx, item)| {
-                if failure
-                    .lock()
-                    .unwrap_or_else(|error| error.into_inner())
-                    .is_some()
-                {
+                if failed_flag.load(Ordering::Acquire) {
                     return;
                 }
                 if self.is_cancelled() || external_cancel.load(Ordering::Relaxed) {
@@ -131,11 +149,7 @@ impl ParallelRenderQueue {
                     return;
                 }
                 for frame in item.start_frame..=item.end_frame {
-                    if failure
-                        .lock()
-                        .unwrap_or_else(|error| error.into_inner())
-                        .is_some()
-                    {
+                    if failed_flag.load(Ordering::Acquire) {
                         return;
                     }
                     if self.is_cancelled() || external_cancel.load(Ordering::Relaxed) {
@@ -151,6 +165,7 @@ impl ParallelRenderQueue {
                         self.cancel();
                         record_first_failure(
                             &failure,
+                            &failed_flag,
                             RenderFailure {
                                 item_index: item_idx,
                                 frame,
@@ -170,6 +185,7 @@ impl ParallelRenderQueue {
                             self.cancel();
                             record_first_failure(
                                 &failure,
+                                &failed_flag,
                                 RenderFailure {
                                     item_index: item_idx,
                                     frame,
@@ -228,16 +244,13 @@ impl ParallelRenderQueue {
         F: Fn(&str, u32) -> Vec<u8> + Sync,
     {
         let failure = Arc::new(Mutex::new(None::<RenderFailure>));
+        let failed_flag = Arc::new(AtomicBool::new(false));
 
         self.items
             .par_iter()
             .enumerate()
             .for_each(|(item_idx, item)| {
-                if failure
-                    .lock()
-                    .unwrap_or_else(|error| error.into_inner())
-                    .is_some()
-                {
+                if failed_flag.load(Ordering::Acquire) {
                     return;
                 }
                 if self.is_cancelled() || external_cancel.load(Ordering::Relaxed) {
@@ -248,55 +261,55 @@ impl ParallelRenderQueue {
                 if item.start_frame > item.end_frame {
                     return;
                 }
-                let frames: Vec<u32> = (item.start_frame..=item.end_frame).collect();
-                frames.par_iter().for_each(|&frame| {
-                    if failure
-                        .lock()
-                        .unwrap_or_else(|error| error.into_inner())
-                        .is_some()
-                    {
-                        return;
-                    }
-                    if self.is_cancelled() || external_cancel.load(Ordering::Relaxed) {
-                        self.cancel();
-                        return;
-                    }
+                (u64::from(item.start_frame)..(u64::from(item.end_frame) + 1))
+                    .into_par_iter()
+                    .map(|frame| frame as u32)
+                    .for_each(|frame| {
+                        if failed_flag.load(Ordering::Acquire) {
+                            return;
+                        }
+                        if self.is_cancelled() || external_cancel.load(Ordering::Relaxed) {
+                            self.cancel();
+                            return;
+                        }
 
-                    let render_result =
-                        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                            render_frame(&item.comp_name, frame)
-                        }));
-                    if render_result.is_err() {
-                        self.cancel();
-                        record_first_failure(
-                            &failure,
-                            RenderFailure {
-                                item_index: item_idx,
-                                frame,
-                            },
-                        );
-                        return;
-                    }
-                    self.total_frames_rendered.fetch_add(1, Ordering::Relaxed);
-
-                    if let Some(cb) = &self.progress {
-                        let done = self.total_frames_rendered.load(Ordering::Relaxed);
-                        let callback_result =
+                        let render_result =
                             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                                cb(item_idx, done, self.total_frames)
+                                render_frame(&item.comp_name, frame)
                             }));
-                        if callback_result.is_err() {
+                        if render_result.is_err() {
                             self.cancel();
                             record_first_failure(
                                 &failure,
+                                &failed_flag,
                                 RenderFailure {
                                     item_index: item_idx,
                                     frame,
                                 },
                             );
+                            return;
                         }
-                    }
-                });
+                        self.total_frames_rendered.fetch_add(1, Ordering::Relaxed);
+
+                        if let Some(cb) = &self.progress {
+                            let done = self.total_frames_rendered.load(Ordering::Relaxed);
+                            let callback_result =
+                                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                    cb(item_idx, done, self.total_frames)
+                                }));
+                            if callback_result.is_err() {
+                                self.cancel();
+                                record_first_failure(
+                                    &failure,
+                                    &failed_flag,
+                                    RenderFailure {
+                                        item_index: item_idx,
+                                        frame,
+                                    },
+                                );
+                            }
+                        }
+                    });
             });
 
         let result = failure

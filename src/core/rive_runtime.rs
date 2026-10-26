@@ -9,7 +9,7 @@ pub enum RiveInput {
     Trigger,
 }
 
-/// Rive State Machine Runtime Engine for interactive 2D real-time vector graphics.
+/// Experimental/stub state machine model for Rive-style interactive inputs (does not parse binary .riv).
 pub struct RiveRuntimeEngine {
     pub inputs: HashMap<String, RiveInput>,
     pub current_state: String,

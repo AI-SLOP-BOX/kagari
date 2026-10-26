@@ -79,6 +79,7 @@ fn footage_workflow_import_proxy_track_preview_and_export_stays_connected() {
             frames_dir: asset.frames_dir.clone(),
             frame_count: asset.frame_count,
             audio_wav: asset.audio_wav.clone(),
+            audio_volume: kagari_vfx::core::property::Animatable::new_constant(0.0),
             speed: 1.0,
         },
         3,
@@ -95,8 +96,14 @@ fn footage_workflow_import_proxy_track_preview_and_export_stays_connected() {
     assert!(tracked.iter().all(|value| value.is_finite()));
     assert!(tracked[0] > 7.0, "tracking should follow the moving plate");
 
-    let proxy_path = generate_preview_proxy_for_layer(&layer, ProxyResolution::Half, &proxy_dir)
-        .expect("video footage should generate a WebP proxy sequence");
+    let proxy_path = generate_preview_proxy_for_layer(
+        &layer,
+        ProxyResolution::Half,
+        &proxy_dir,
+        &std::sync::atomic::AtomicBool::new(false),
+        &mut |_, _| {},
+    )
+    .expect("video footage should generate a WebP proxy sequence");
     layer.proxy.enabled = true;
     layer.proxy.resolution = ProxyResolution::Half;
     layer.proxy.proxy_path = Some(proxy_path.clone());

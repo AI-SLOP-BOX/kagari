@@ -1,0 +1,162 @@
+component HomeHero() {
+    VStack(spacing: 0) {
+      Text("おかえりなさい", size: 32)
+      Svg("<svg xmlns='http://www.w3.org/2000/svg' width='1' height='14' viewBox='0 0 1 14'><path d='M0 0h1v14H0z' fill='transparent'/></svg>", 1, 14)
+      Caption("創造の続きから、または新しいプロジェクトを始めましょう。")
+      Svg("<svg xmlns='http://www.w3.org/2000/svg' width='1' height='21' viewBox='0 0 1 21'><path d='M0 0h1v21H0z' fill='transparent'/></svg>", 1, 21)
+      HStack(spacing: 16) {
+        HeroNewProjectAction()
+        HeroOpenProjectAction()
+      }
+    }
+  }
+
+component HeroNewProjectAction() {
+    ZStack { 
+      Svg("<svg xmlns='http://www.w3.org/2000/svg' width='171' height='38' viewBox='0 0 171 38'><rect x='.5' y='.5' width='170' height='37' rx='9' fill='#f58c4b'/></svg>", 171, 38)
+      HStack(spacing: 8) { AssetImage("kagari.home.plus", 1, 18, 18) Text("新規プロジェクト", size: 14) }
+      
+     Positioned(left: 0, right: 0, top: 0, bottom: 0) { Button("", action: new_project, tone: secondary).opacity(nav_hitbox_opacity) }}
+  }
+
+component HeroOpenProjectAction() {
+    ZStack { 
+      Svg("<svg xmlns='http://www.w3.org/2000/svg' width='176' height='38' viewBox='0 0 176 38'><rect x='.5' y='.5' width='175' height='37' rx='9' fill='#0d1215' stroke='#30363c'/></svg>", 176, 38)
+      HStack(spacing: 8) { AssetImage("kagari.home.open", 1, 18, 18) Text("プロジェクトを開く", size: 14) }
+      
+     Positioned(left: 0, right: 0, top: 0, bottom: 0) { Button("", action: open_project, tone: secondary).opacity(nav_hitbox_opacity) }}
+  }
+
+component RecentCardsGrid() {
+    VStack(spacing: 10) {
+      HStack(spacing: 8) {
+        Text("最近のプロジェクト", size: 21)
+        Spacer
+        Button("すべて表示  →", action: go_projects, tone: secondary, size: small)
+      }
+      If(has_recent_1) {
+        If(compact) {
+          MaxWidth(800) {
+            Card {
+              VStack(spacing: 0) {
+                ZStack {
+                  AssetImage("kagari.home.recent.1", 1, 460, 259)
+                  Svg("<svg xmlns='http://www.w3.org/2000/svg' width='460' height='259' viewBox='0 0 460 259'><path d='M0 0H14A14 14 0 0 0 0 14Z M446 0H460V14A14 14 0 0 0 446 0Z M0 245V259H14A14 14 0 0 0 0 245Z M460 245V259H446A14 14 0 0 0 460 245Z' fill='#11161a'/></svg>", 460, 259)
+                }
+                Padding(14) {
+                  VStack(spacing: 9) {
+                    HStack(spacing: 8) {
+                      Text("{recent_1_name}", size: 17)
+                      Spacer
+                      Button("開く  →", action: open_recent_1, tone: secondary, size: small)
+                    }
+                    Caption("{recent_1_path}")
+                    VStack(spacing: 4) {
+                      HStack(spacing: 6) { AssetImage("kagari.nav.projects", 1, 14, 14) Text("{recent_1_res}  ·  {recent_1_layers}レイヤー", size: 12) }
+                      Align(end) { Text("最終更新  {recent_1_day}", size: 11) }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } else {
+          MaxWidth(1600) {
+            Card {
+              HStack(spacing: 0) {
+                ZStack {
+                  AssetImage("kagari.home.recent.1", 1, 360, 203)
+                  Svg("<svg xmlns='http://www.w3.org/2000/svg' width='360' height='203' viewBox='0 0 360 203'><path d='M0 0H14A14 14 0 0 0 0 14Z M346 0H360V14A14 14 0 0 0 346 0Z M0 189V203H14A14 14 0 0 0 0 189Z M360 189V203H346A14 14 0 0 0 360 189Z' fill='#11161a'/></svg>", 360, 203)
+                }
+                Grow(1) {
+                  Padding(24) {
+                    VStack(spacing: 14) {
+                      Text("{recent_1_name}", size: 24)
+                      Caption("{recent_1_path}")
+                      Spacer
+                      HStack(spacing: 6) {
+                        AssetImage("kagari.nav.projects", 1, 16, 16)
+                        Text("{recent_1_res}  ·  {recent_1_layers}レイヤー", size: 12)
+                      }
+                      Text("最終更新  {recent_1_date}", size: 12)
+                    }
+                  }
+                }
+                Padding(20) { Button("開く  →", action: open_recent_1, tone: primary, size: small) }
+              }
+            }
+          }
+        }
+      } else {
+        Card { Padding(14) { HStack(spacing: 8) { Caption("最近使ったプロジェクトはありません") Spacer Button("プロジェクトを開く", action: open_project, tone: secondary, size: small) } } }
+      }
+    }
+  }
+
+component RecentWorkTable() {
+    VStack(spacing: 8) {
+      HStack(spacing: 8) {
+        Text("最近の更新", size: 21)
+        Spacer
+        Button("更新履歴を見る  →", action: go_activity, tone: secondary, size: small)
+      }
+      If(compact) {
+        If(has_recents) {
+          VStack(spacing: 6) {
+            ForEach(recent_project_items, project, key: path) {
+              Card { Padding(8) { VStack(spacing: 5) {
+                HStack(spacing: 8) { AssetImage("kagari.nav.projects", 1, 16, 16) Grow(1) { Text("{project.name} を更新しました", size: 13) } Button("開く", action: open_recent_project, tone: secondary, size: small) }
+                HStack(spacing: 6) { Caption("プロジェクト: {project.name}") Spacer Caption("{project.date}") }
+              } } }
+            }
+          }
+        } else {
+          Card { Padding(10) { Caption("プロジェクトを保存すると、ファイルの更新履歴がここに表示されます。") } }
+        }
+      } else {
+        VStack(spacing: 0) {
+          Padding(8) { HStack(spacing: 10) { Grow(42) { Text("項目", size: 12) } Grow(32) { Text("プロジェクト", size: 12) } Grow(26) { Text("更新日時", size: 12) } } }
+          Spacer
+          If(has_recents) {
+            ForEach(recent_project_items, project, key: path) {
+              Padding(8) { HStack(spacing: 10) { AssetImage("kagari.nav.projects", 1, 16, 16) Grow(42) { Text("{project.name} を更新しました", size: 14) } Grow(32) { Text("{project.name}", size: 14) } Grow(26) { Caption("{project.date}") } Button("開く", action: open_recent_project, tone: secondary, size: small) } }
+              Spacer
+            }
+          } else {
+            Padding(10) { Caption("プロジェクトを保存すると、ファイルの更新履歴がここに表示されます。") }
+          }
+        }
+      }
+    }
+  }
+
+component HomePanel() {
+    HStack(spacing: 0) {
+      Align(stretch) { HomeNavRail() }
+      Grow(1) {
+        ScrollView(680) {
+          Padding(32) {
+            VStack(spacing: 24) {
+              HomeHero()
+          Spacer
+              RecentCardsGrid()
+            Spacer
+              RecentWorkTable()
+            }
+          }
+        }
+      }
+    }
+  }
+
+component HomeFooter() {
+    Card {
+      Padding(8) {
+        HStack(spacing: 8) {
+          Caption("KAGARI VFX · ホーム")
+          Spacer
+          Caption("v0.1.0")
+        }
+      }
+    }
+  }

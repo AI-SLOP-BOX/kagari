@@ -119,6 +119,34 @@ pub fn extrude_2d_contour(contour_points: &[[f32; 2]], options: &ExtrusionOption
     mesh
 }
 
+impl ExtrudedMesh {
+    /// Converts this extruded volume mesh into an engine-standard `Mesh3D` with bounding boxes.
+    pub fn to_mesh3d(&self, name: impl Into<String>) -> crate::core::obj_loader::Mesh3D {
+        let mut bbox_min = [f32::INFINITY; 3];
+        let mut bbox_max = [f32::NEG_INFINITY; 3];
+        for v in &self.vertices {
+            bbox_min[0] = bbox_min[0].min(v[0]);
+            bbox_min[1] = bbox_min[1].min(v[1]);
+            bbox_min[2] = bbox_min[2].min(v[2]);
+            bbox_max[0] = bbox_max[0].max(v[0]);
+            bbox_max[1] = bbox_max[1].max(v[1]);
+            bbox_max[2] = bbox_max[2].max(v[2]);
+        }
+        let triangle_count = self.indices.len() / 3;
+        crate::core::obj_loader::Mesh3D {
+            name: name.into(),
+            vertices: self.vertices.clone(),
+            normals: self.normals.clone(),
+            uvs: self.uvs.clone(),
+            indices: self.indices.clone(),
+            materials: vec![crate::core::obj_loader::PbrMaterial3D::default()],
+            material_indices: vec![0; triangle_count],
+            bbox_min,
+            bbox_max,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -139,5 +167,11 @@ mod tests {
         assert_eq!(mesh.side_indices_count, 24); // 4 sides * 2 triangles * 3 indices = 24
         assert_eq!(mesh.back_indices_count, 6); // 2 triangles for back cap quad
         assert_eq!(mesh.indices.len(), 36); // Total cube index count = 36
+
+        let model3d = mesh.to_mesh3d("Cube");
+        assert_eq!(model3d.indices.len(), 36);
+        assert_eq!(model3d.vertices.len(), mesh.vertices.len());
+        assert_eq!(model3d.bbox_min[2], -40.0);
+        assert_eq!(model3d.bbox_max[2], 0.0);
     }
 }

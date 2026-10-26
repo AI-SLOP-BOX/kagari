@@ -1,0 +1,18 @@
+component ActivityPanel() {
+    HStack(spacing: 8) {
+      Align(stretch) { HomeNavRail() }
+      Grow(1) {
+        ScrollView(680) {
+          Padding(24) {
+            VStack(spacing: 14) {
+              HStack(spacing: 10) { VStack(spacing: 4) { Text("更新履歴", size: 28) Caption("プロジェクトファイルの更新日時を新しい順に表示") } Spacer Button("ホームへ", action: go_home, tone: secondary, size: small) }
+              ForEach(recent_project_items, project, key: path) {
+                Card { Padding(14) { HStack(spacing: 12) { AssetImage("kagari.nav.documents", 1, 18, 18) VStack(spacing: 4) { Text("{project.name} を更新しました", size: 15) Caption("{project.info} · {project.specs}") Caption("{project.location}") } Spacer VStack(spacing: 3) { Text("{project.date}", size: 12) } Button("開く", action: open_recent_project, tone: secondary, size: small) } } }
+              }
+              If(!has_recents) { Card { Padding(20) { VStack(spacing: 8) { Text("更新履歴はありません", size: 18) Caption("プロジェクトを保存すると、ファイルの更新日時がここに表示されます。") Button("プロジェクトを開く", action: open_project, tone: primary) } } } }
+            }
+          }
+        }
+      }
+    }
+  }

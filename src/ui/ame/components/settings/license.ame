@@ -1,0 +1,3 @@
+component SettingsLicensePage() {
+VStack(spacing: 10) { Text("ライセンス", size: 18) Caption("アプリケーションのバージョンとライセンス情報です。") Card { Padding(14) { VStack(spacing: 10) { Text("Kagari VFX", size: 18) Text("Version 0.3.0", size: 16) Caption("MIT License または Apache License 2.0") Caption("サードパーティのライセンスは THIRD-PARTY-NOTICES に記載されています。") } } } }
+}

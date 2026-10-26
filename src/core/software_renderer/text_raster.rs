@@ -50,6 +50,7 @@ pub(crate) fn rasterize_text_layer(ctx: RasterCtx<'_>) {
     let effective_leading = formatting.map(|tf| tf.leading).unwrap_or(*leading);
     let effective_align = formatting.map(|tf| tf.alignment as usize).unwrap_or(*align);
     let effective_box_width = formatting.map(|tf| tf.box_width).unwrap_or(0.0);
+    let effective_box_height = formatting.map(|tf| tf.box_height).unwrap_or(0.0);
     let effective_stroke_color = formatting
         .map(|tf| tf.stroke_color.unwrap_or([0.0, 0.0, 0.0, 0.0]))
         .unwrap_or(*stroke_color);
@@ -254,7 +255,12 @@ pub(crate) fn rasterize_text_layer(ctx: RasterCtx<'_>) {
                 faux_style,
             )
         };
-        if let Some((tw, th, text_pixels)) = maybe_text {
+        if let Some(rasterized) = maybe_text {
+            let (tw, th, text_pixels) =
+                crate::core::font_rasterizer::clip_text_bitmap_height(
+                    rasterized,
+                    effective_box_height,
+                );
             let text_w = tw as i32;
             let text_h = th as i32;
             let origin_x = (cx - tw as f32 * 0.5) as i32;
@@ -278,74 +284,126 @@ pub(crate) fn rasterize_text_layer(ctx: RasterCtx<'_>) {
                 .clamp(min_y as i32, max_y as i32)
                 .max(qy0 as i32) as u32;
 
-            for py in qy0..qy1 {
-                for px in qx0..qx1 {
-                    // Vector mask check
-                    let mut mask_alpha = 1.0;
-                    if !masks.is_empty() {
-                        mask_alpha = compute_combined_mask_coverage(px as f32, py as f32, masks);
-                    }
-                    if mask_alpha <= 0.001 {
-                        continue;
-                    }
+            if stroke_w <= 0.1 {
+                // Fast-path: no stroke, direct bounded blit
+                let ix0 = origin_x.max(min_x as i32).clamp(0, width as i32) as u32;
+                let iy0 = origin_y.max(min_y as i32).clamp(0, height as i32) as u32;
+                let ix1 = (origin_x + text_w)
+                    .clamp(min_x as i32, max_x as i32)
+                    .max(ix0 as i32) as u32;
+                let iy1 = (origin_y + text_h)
+                    .clamp(min_y as i32, max_y as i32)
+                    .max(iy0 as i32) as u32;
 
-                    let tx = px as i32 - origin_x;
-                    let ty = py as i32 - origin_y;
+                let tr = (text_color[0] * 255.0) as u8;
+                let tg = (text_color[1] * 255.0) as u8;
+                let tb = (text_color[2] * 255.0) as u8;
 
-                    // Sample fill alpha
-                    let fill_alpha = if tx >= 0 && ty >= 0 && tx < text_w && ty < text_h {
-                        let tidx = ((ty as u32 * tw + tx as u32) * 4) as usize;
-                        if tidx + 3 < text_pixels.len() {
-                            text_pixels[tidx + 3] as f32 / 255.0
+                for py in iy0..iy1 {
+                    let ty = (py as i32 - origin_y) as u32;
+                    let text_row = (ty * tw * 4) as usize;
+                    let l_row = (((py - min_y) * bw) * 4) as usize;
+
+                    for px in ix0..ix1 {
+                        let tx = (px as i32 - origin_x) as u32;
+                        let tidx = text_row + (tx * 4) as usize;
+                        if tidx + 3 >= text_pixels.len() {
+                            continue;
+                        }
+                        let fill_byte = text_pixels[tidx + 3];
+                        if fill_byte == 0 {
+                            continue;
+                        }
+                        let mut fill_alpha = fill_byte as f32 / 255.0;
+                        if !masks.is_empty() {
+                            let mask_alpha =
+                                compute_combined_mask_coverage(px as f32, py as f32, masks);
+                            if mask_alpha <= 0.001 {
+                                continue;
+                            }
+                            fill_alpha *= mask_alpha;
+                        }
+                        let lidx = l_row + ((px - min_x) * 4) as usize;
+                        if lidx + 3 < layer_buf.len() {
+                            layer_buf[lidx] = tr;
+                            layer_buf[lidx + 1] = tg;
+                            layer_buf[lidx + 2] = tb;
+                            layer_buf[lidx + 3] = (fill_alpha * 255.0) as u8;
+                        }
+                    }
+                }
+            } else {
+                for py in qy0..qy1 {
+                    for px in qx0..qx1 {
+                        // Vector mask check
+                        let mut mask_alpha = 1.0;
+                        if !masks.is_empty() {
+                            mask_alpha =
+                                compute_combined_mask_coverage(px as f32, py as f32, masks);
+                        }
+                        if mask_alpha <= 0.001 {
+                            continue;
+                        }
+
+                        let tx = px as i32 - origin_x;
+                        let ty = py as i32 - origin_y;
+
+                        // Sample fill alpha
+                        let fill_alpha = if tx >= 0 && ty >= 0 && tx < text_w && ty < text_h {
+                            let tidx = ((ty as u32 * tw + tx as u32) * 4) as usize;
+                            if tidx + 3 < text_pixels.len() {
+                                text_pixels[tidx + 3] as f32 / 255.0
+                            } else {
+                                0.0
+                            }
                         } else {
                             0.0
-                        }
-                    } else {
-                        0.0
-                    };
+                        };
 
-                    // Sample stroke alpha: check if any neighbor within radius has fill
-                    let mut stroke_alpha = 0.0f32;
-                    if stroke_w > 0.1 && fill_alpha < 0.001 {
-                        for dy in -stroke_radius..=stroke_radius {
-                            for dx in -stroke_radius..=stroke_radius {
-                                let nx = tx + dx;
-                                let ny = ty + dy;
-                                if nx >= 0 && ny >= 0 && nx < text_w && ny < text_h {
-                                    let dist = ((dx * dx + dy * dy) as f32).sqrt();
-                                    if dist <= stroke_w * 0.5 {
-                                        let nidx = ((ny as u32 * tw + nx as u32) * 4) as usize;
-                                        if nidx + 3 < text_pixels.len() {
-                                            let n_alpha = text_pixels[nidx + 3] as f32 / 255.0;
-                                            if n_alpha > 0.001 {
-                                                let edge_dist = stroke_w * 0.5 - dist;
-                                                stroke_alpha = stroke_alpha.max(
-                                                    (edge_dist / (stroke_w * 0.25)).clamp(0.0, 1.0),
-                                                );
+                        // Sample stroke alpha: check if any neighbor within radius has fill
+                        let mut stroke_alpha = 0.0f32;
+                        if stroke_w > 0.1 && fill_alpha < 0.001 {
+                            for dy in -stroke_radius..=stroke_radius {
+                                for dx in -stroke_radius..=stroke_radius {
+                                    let nx = tx + dx;
+                                    let ny = ty + dy;
+                                    if nx >= 0 && ny >= 0 && nx < text_w && ny < text_h {
+                                        let dist = ((dx * dx + dy * dy) as f32).sqrt();
+                                        if dist <= stroke_w * 0.5 {
+                                            let nidx = ((ny as u32 * tw + nx as u32) * 4) as usize;
+                                            if nidx + 3 < text_pixels.len() {
+                                                let n_alpha = text_pixels[nidx + 3] as f32 / 255.0;
+                                                if n_alpha > 0.001 {
+                                                    let edge_dist = stroke_w * 0.5 - dist;
+                                                    stroke_alpha = stroke_alpha.max(
+                                                        (edge_dist / (stroke_w * 0.25))
+                                                            .clamp(0.0, 1.0),
+                                                    );
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
                         }
-                    }
 
-                    // Composite: stroke behind fill
-                    let lidx = (((py - min_y) * bw + (px - min_x)) * 4) as usize;
-                    if lidx + 3 < layer_buf.len() {
-                        if stroke_alpha > 0.001 {
-                            let src_a = stroke_alpha * mask_alpha;
-                            layer_buf[lidx] = (stroke_c[0] * 255.0) as u8;
-                            layer_buf[lidx + 1] = (stroke_c[1] * 255.0) as u8;
-                            layer_buf[lidx + 2] = (stroke_c[2] * 255.0) as u8;
-                            layer_buf[lidx + 3] = (src_a * 255.0) as u8;
-                        }
-                        if fill_alpha > 0.001 {
-                            let src_a = fill_alpha * mask_alpha;
-                            layer_buf[lidx] = (text_color[0] * 255.0) as u8;
-                            layer_buf[lidx + 1] = (text_color[1] * 255.0) as u8;
-                            layer_buf[lidx + 2] = (text_color[2] * 255.0) as u8;
-                            layer_buf[lidx + 3] = (src_a * 255.0) as u8;
+                        // Composite: stroke behind fill
+                        let lidx = (((py - min_y) * bw + (px - min_x)) * 4) as usize;
+                        if lidx + 3 < layer_buf.len() {
+                            if stroke_alpha > 0.001 {
+                                let src_a = stroke_alpha * mask_alpha;
+                                layer_buf[lidx] = (stroke_c[0] * 255.0) as u8;
+                                layer_buf[lidx + 1] = (stroke_c[1] * 255.0) as u8;
+                                layer_buf[lidx + 2] = (stroke_c[2] * 255.0) as u8;
+                                layer_buf[lidx + 3] = (src_a * 255.0) as u8;
+                            }
+                            if fill_alpha > 0.001 {
+                                let src_a = fill_alpha * mask_alpha;
+                                layer_buf[lidx] = (text_color[0] * 255.0) as u8;
+                                layer_buf[lidx + 1] = (text_color[1] * 255.0) as u8;
+                                layer_buf[lidx + 2] = (text_color[2] * 255.0) as u8;
+                                layer_buf[lidx + 3] = (src_a * 255.0) as u8;
+                            }
                         }
                     }
                 }

@@ -183,6 +183,22 @@ impl<T: Clone> Animatable<T> {
         true
     }
 
+    /// Remove the keyframe at `frame`. If it was the final key, preserve its
+    /// value as a constant so removing animation does not change the property.
+    pub fn remove_keyframe(&mut self, frame: u32) -> bool {
+        let Some(keyframes) = self.keyframes_mut() else {
+            return false;
+        };
+        let Some(index) = keyframes.iter().position(|key| key.frame == frame) else {
+            return false;
+        };
+        let removed = keyframes.remove(index);
+        if keyframes.is_empty() {
+            *self = Animatable::Constant(removed.value);
+        }
+        true
+    }
+
     /// Reverse the timing and interpolation direction of an animated track.
     /// Bezier handles belong to a time-directed segment, so reversing only the
     /// frame numbers would leave the curve easing in the wrong direction.

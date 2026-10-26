@@ -85,7 +85,7 @@ impl Mesh3D {
 
         let mut normals = vec![[0.0f32; 3]; self.vertices.len()];
 
-        for chunk in self.indices.chunks_exact(3) {
+        for chunk in self.indices.as_chunks::<3>().0 {
             let i0 = chunk[0] as usize;
             let i1 = chunk[1] as usize;
             let i2 = chunk[2] as usize;
@@ -128,7 +128,7 @@ impl Mesh3D {
         let mut closest_t = f32::INFINITY;
         let mut hit_tri = None;
 
-        for (tri_idx, chunk) in self.indices.chunks_exact(3).enumerate() {
+        for (tri_idx, chunk) in self.indices.as_chunks::<3>().0.iter().enumerate() {
             let (Some(&v0), Some(&v1), Some(&v2)) = (
                 self.vertices.get(chunk[0] as usize),
                 self.vertices.get(chunk[1] as usize),

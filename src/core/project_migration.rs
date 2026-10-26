@@ -1,234 +1,25 @@
-use crate::core::timeline::Project;
-/// Forward & Backward Compatible Project Schema Migration Engine.
-///
-/// Ensures saved project files (.json) remain 100% loadable even as
-/// fields are added, renamed, or refactored across application versions.
-use serde::{Deserialize, Serialize};
-use std::io::Write;
+//! Forward & Backward Compatible Project Schema Migration Engine.
+//!
+//! Ensures saved project files (.json) remain 100% loadable even as
+//! fields are added, renamed, or refactored across application versions.
 
-pub const CURRENT_SCHEMA_VERSION: u32 = 1;
-pub const MAX_PROJECT_JSON_BYTES: usize = 100 * 1024 * 1024;
+pub mod bundle;
+pub mod schema;
+pub mod storage;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VersionedProjectFile {
-    pub schema_version: u32,
-    pub project_data: serde_json::Value,
-}
-
-/// Load a project JSON string safely, executing schema migrations if needed.
-#[allow(dead_code)]
-pub fn load_project_migrated(json_str: &str) -> Result<Project, String> {
-    if json_str.len() > MAX_PROJECT_JSON_BYTES {
-        return Err(format!(
-            "Project JSON exceeds the {} MiB limit",
-            MAX_PROJECT_JSON_BYTES / (1024 * 1024)
-        ));
-    }
-
-    let mut proj: Project = if let Ok(proj) = serde_json::from_str::<Project>(json_str) {
-        proj
-    } else if let Ok(wrapper) = serde_json::from_str::<VersionedProjectFile>(json_str) {
-        let migrated_val = migrate_schema_json(wrapper.schema_version, wrapper.project_data)?;
-        serde_json::from_value::<Project>(migrated_val)
-            .map_err(|e| format!("Failed to parse project after migration: {}", e))?
-    } else {
-        let val: serde_json::Value = serde_json::from_str(json_str)
-            .map_err(|e| format!("Invalid JSON project file: {}", e))?;
-        let schema_ver = val
-            .get("schema_version")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as u32;
-        let migrated = migrate_schema_json(schema_ver, val)?;
-        serde_json::from_value::<Project>(migrated)
-            .map_err(|e| format!("Schema migration error: {}", e))?
-    };
-
-    // Sanitize any broken or circular parent-child layer links from deserialization
-    for comp in &mut proj.compositions {
-        comp.sanitize_parent_cycles();
-    }
-
-    crate::core::production_document::ProductionDocument::new(proj.clone())
-        .validate()
-        .map_err(|e| format!("Project validation failed after migration: {e}"))?;
-
-    Ok(proj)
-}
-
-/// Serialize a Project to versioned JSON string.
-#[allow(dead_code)]
-pub fn save_project_versioned(proj: &Project) -> Result<String, String> {
-    let proj_val = serde_json::to_value(proj).map_err(|e| e.to_string())?;
-    let wrapper = VersionedProjectFile {
-        schema_version: CURRENT_SCHEMA_VERSION,
-        project_data: proj_val,
-    };
-    serde_json::to_string_pretty(&wrapper).map_err(|e| e.to_string())
-}
-
-/// Save a project file atomically using temporary file creation and OS atomic replacement.
-/// Guards against 0-byte file corruption during disk full or process interruption.
-///
-/// Also keeps a one-generation backup (`<name>.json.bak`) of the previously saved
-/// file so the user can recover from an accidental save-over.
-#[allow(dead_code)]
-pub fn save_project_atomic<P: AsRef<std::path::Path>>(
-    proj: &Project,
-    path: P,
-) -> Result<(), String> {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    use std::sync::{Mutex, OnceLock};
-
-    static SAVE_COUNTER: AtomicU64 = AtomicU64::new(0);
-    static SAVE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-
-    // Keep the backup and atomic replacement as one operation within this
-    // process. Cross-process writers still need an OS-level lock at the caller.
-    let _save_guard = SAVE_LOCK
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-
-    let json_str = save_project_versioned(proj)?;
-    let target_path = path.as_ref();
-    let temp_suffix = format!(
-        "json.tmp.{}.{}",
-        std::process::id(),
-        SAVE_COUNTER.fetch_add(1, Ordering::Relaxed)
-    );
-    let tmp_path = target_path.with_extension(temp_suffix);
-    let bak_path = target_path.with_extension("json.bak");
-
-    // Preserve the previous generation before overwriting
-    if target_path.exists() {
-        std::fs::copy(target_path, &bak_path)
-            .map_err(|e| format!("Failed to create project backup: {}", e))?;
-    }
-
-    let write_result = (|| {
-        let mut tmp_file = std::fs::File::create(&tmp_path)
-            .map_err(|e| format!("Failed to create temporary project file: {}", e))?;
-        tmp_file
-            .write_all(json_str.as_bytes())
-            .map_err(|e| format!("Failed to write temporary project file: {}", e))?;
-        tmp_file
-            .sync_all()
-            .map_err(|e| format!("Failed to sync temporary project file: {}", e))?;
-        drop(tmp_file);
-
-        std::fs::rename(&tmp_path, target_path)
-            .map_err(|e| format!("Failed to atomically replace project file: {}", e))
-    })();
-
-    if write_result.is_err() {
-        let _ = std::fs::remove_file(&tmp_path);
-    }
-    write_result?;
-
-    if let Some(parent) = target_path.parent() {
-        if let Ok(dir) = std::fs::File::open(parent) {
-            let _ = dir.sync_all();
-        }
-    }
-
-    Ok(())
-}
-
-/// Loads `<path>` or, if missing/corrupt, falls back to `<path>.bak`.
-/// Returns (project, used_backup).
-pub fn load_project_with_backup<P: AsRef<std::path::Path>>(
-    path: P,
-) -> Result<(Project, bool), String> {
-    let target = path.as_ref();
-    let bak = target.with_extension("json.bak");
-
-    if let Ok(json) = read_project_json_file(target) {
-        match load_project_migrated(&json) {
-            Ok(p) => return Ok((p, false)),
-            Err(e) => log::warn!("[Project] Primary file corrupt ({}); trying backup", e),
-        }
-    }
-    if let Ok(json) = read_project_json_file(&bak) {
-        match load_project_migrated(&json) {
-            Ok(p) => return Ok((p, true)),
-            Err(e) => log::warn!("[Project] Backup also corrupt: {}", e),
-        }
-    }
-    Err(format!(
-        "Could not load '{}' and no valid backup at '{}'",
-        target.display(),
-        bak.display()
-    ))
-}
-
-/// Read a project JSON file only after enforcing the same size limit used by
-/// the in-memory parser. CLI and GUI entry points should use this helper so a
-/// large file cannot bypass the parser's limit during the initial read.
-pub fn read_project_json_file(path: &std::path::Path) -> Result<String, String> {
-    read_bounded_text_file(path, MAX_PROJECT_JSON_BYTES)
-}
-
-/// Read a user-selected text file without allocating beyond the caller's
-/// declared limit.
-pub fn read_bounded_text_file(path: &std::path::Path, max_bytes: usize) -> Result<String, String> {
-    use std::io::Read;
-
-    let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
-    let metadata = file.metadata().map_err(|e| e.to_string())?;
-    if metadata.len() > max_bytes as u64 {
-        return Err(format!("File exceeds the {} byte limit", max_bytes));
-    }
-    let mut text = String::new();
-    file.take(max_bytes.saturating_add(1) as u64)
-        .read_to_string(&mut text)
-        .map_err(|e| e.to_string())?;
-    if text.len() > max_bytes {
-        return Err(format!("File exceeds the {} byte limit", max_bytes));
-    }
-    Ok(text)
-}
-
-/// Migrate JSON schema from `from_version` to `CURRENT_SCHEMA_VERSION`.
-fn migrate_schema_json(
-    from_version: u32,
-    mut data: serde_json::Value,
-) -> Result<serde_json::Value, String> {
-    if from_version > CURRENT_SCHEMA_VERSION {
-        return Err(format!(
-            "Project schema version {} is newer than supported version {}",
-            from_version, CURRENT_SCHEMA_VERSION
-        ));
-    }
-
-    let mut version = from_version;
-
-    while version < CURRENT_SCHEMA_VERSION {
-        match version {
-            0 => {
-                // Schema v0 -> v1 migration: ensure active_composition_idx and name exist
-                if let Some(obj) = data.as_object_mut() {
-                    if !obj.contains_key("name") {
-                        obj.insert("name".to_string(), serde_json::json!("Untitled Project"));
-                    }
-                    if !obj.contains_key("active_composition_idx") {
-                        obj.insert("active_composition_idx".to_string(), serde_json::json!(0));
-                    }
-                    if !obj.contains_key("assets") {
-                        obj.insert("assets".to_string(), serde_json::json!([]));
-                    }
-                }
-                version = 1;
-            }
-            _ => break,
-        }
-    }
-
-    Ok(data)
-}
+pub use bundle::collect_production_document;
+pub use schema::{
+    load_project_migrated, migrate_schema_json, save_project_versioned, VersionedProjectFile,
+    CURRENT_SCHEMA_VERSION, MAX_PROJECT_JSON_BYTES,
+};
+pub use storage::{
+    load_project_with_backup, read_bounded_text_file, read_project_json_file, save_project_atomic,
+};
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::timeline::Project;
 
     #[test]
     fn test_save_and_load_versioned_project() {
@@ -303,9 +94,194 @@ mod tests {
 }
 
 #[cfg(test)]
+mod collect_tests {
+    use super::*;
+    use crate::core::timeline::{Layer, LayerType, Project};
+
+    #[test]
+    fn collect_bundle_copies_and_rewrites_project_media_paths() {
+        let root = std::env::temp_dir().join(format!(
+            "kagari_collect_bundle_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let source_dir = root.join("source");
+        let destination = root.join("output");
+        std::fs::create_dir_all(&source_dir).unwrap();
+        std::fs::create_dir_all(&destination).unwrap();
+        let source = source_dir.join("shot plate.png");
+        std::fs::write(&source, b"collected-media").unwrap();
+
+        let mut project = Project::empty_for_new_project();
+        project.assets.push(crate::core::timeline::ProjectItem::new(
+            "image_0",
+            "Shot Plate",
+            crate::core::timeline::ProjectItemType::Image {
+                path: source.to_string_lossy().into_owned(),
+                width: 1,
+                height: 1,
+            },
+        ));
+        let document = crate::core::production_document::ProductionDocument::new(project);
+        let (project_path, copied) =
+            collect_production_document(&document, &destination, &source_dir).unwrap();
+        assert_eq!(copied, 1);
+        let collected =
+            crate::core::production_document::ProductionDocument::load(&project_path).unwrap();
+        let media_path = collected.project.assets[0].media_path().unwrap();
+        assert!(!std::path::Path::new(media_path).is_absolute());
+        assert_eq!(
+            std::fs::read(
+                project_path
+                    .parent()
+                    .unwrap()
+                    .join("Footage")
+                    .join(media_path)
+            )
+            .unwrap(),
+            b"collected-media"
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn collect_bundle_includes_and_rewrites_obj_material_and_texture_files() {
+        let root = std::env::temp_dir().join(format!(
+            "kagari_collect_obj_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let source_dir = root.join("source");
+        let destination = root.join("output");
+        std::fs::create_dir_all(&source_dir).unwrap();
+        std::fs::create_dir_all(&destination).unwrap();
+        let model = source_dir.join("scene.obj");
+        let material = source_dir.join("scene.mtl");
+        let texture = source_dir.join("albedo.png");
+        std::fs::write(&model, "mtllib scene.mtl\no Scene\n").unwrap();
+        std::fs::write(&material, "newmtl Surface\nmap_Kd albedo.png\n").unwrap();
+        std::fs::write(&texture, b"texture").unwrap();
+
+        let mut project = Project::empty_for_new_project();
+        project.assets.push(crate::core::timeline::ProjectItem::new(
+            "model_0",
+            "Scene",
+            crate::core::timeline::ProjectItemType::Model3D {
+                path: model.to_string_lossy().into_owned(),
+            },
+        ));
+        let document = crate::core::production_document::ProductionDocument::new(project);
+        let (project_path, copied) =
+            collect_production_document(&document, &destination, &source_dir).unwrap();
+        assert_eq!(copied, 3);
+
+        let footage = project_path.parent().unwrap().join("Footage");
+        let collected_model = std::fs::read_dir(&footage)
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.path())
+            .find(|path| {
+                path.file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .ends_with("_scene.obj")
+            })
+            .unwrap();
+        let model_text = std::fs::read_to_string(&collected_model).unwrap();
+        let material_name = model_text
+            .lines()
+            .find_map(|line| line.strip_prefix("mtllib "))
+            .unwrap();
+        let collected_material = footage.join(material_name);
+        assert!(collected_material.is_file());
+        let material_text = std::fs::read_to_string(&collected_material).unwrap();
+        let texture_name = material_text
+            .lines()
+            .find_map(|line| line.strip_prefix("map_Kd "))
+            .unwrap();
+        assert!(footage.join(texture_name).is_file());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn collect_bundle_keeps_video_metadata_valid_for_cache_rebuild() {
+        let root = std::env::temp_dir().join(format!(
+            "kagari_collect_video_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let source_dir = root.join("source");
+        let destination = root.join("output");
+        std::fs::create_dir_all(&source_dir).unwrap();
+        std::fs::create_dir_all(&destination).unwrap();
+        let source = source_dir.join("shot.mp4");
+        std::fs::write(&source, b"video-source").unwrap();
+
+        let mut project = Project::empty_for_new_project();
+        let (layer_id, duration_frames) = {
+            let composition = project.active_composition_mut();
+            (
+                composition.next_layer_id("layer_video"),
+                composition.duration_frames,
+            )
+        };
+        let composition = project.active_composition_mut();
+        composition.layers.push(Layer::new(
+            layer_id,
+            "Shot".to_string(),
+            LayerType::Video {
+                source: source.to_string_lossy().into_owned(),
+                frames_dir: source_dir.join("cache").to_string_lossy().into_owned(),
+                frame_count: 12,
+                audio_wav: None,
+                audio_volume: crate::core::property::Animatable::new_constant(0.0),
+                speed: 1.0,
+            },
+            duration_frames,
+        ));
+
+        let document = crate::core::production_document::ProductionDocument::new(project);
+        let (project_path, copied) =
+            collect_production_document(&document, &destination, &source_dir).unwrap();
+        assert_eq!(copied, 1);
+        let collected =
+            crate::core::production_document::ProductionDocument::load(&project_path).unwrap();
+        let LayerType::Video {
+            source: collected_source,
+            frames_dir,
+            frame_count,
+            audio_wav,
+            ..
+        } = &collected.project.compositions[0].layers[0].layer_type
+        else {
+            panic!("collected video layer must remain a video");
+        };
+        assert_eq!(*frame_count, 12);
+        assert_eq!(frames_dir, "cache_pending");
+        assert!(audio_wav.is_none());
+        assert!(project_path
+            .parent()
+            .unwrap()
+            .join("Footage")
+            .join(collected_source)
+            .is_file());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[cfg(test)]
 mod backup_tests {
     use super::*;
-    use crate::core::timeline::{Composition, Layer, LayerType};
+    use crate::core::timeline::{Composition, Layer, LayerType, Project};
 
     fn project_named(name: &str) -> Project {
         let mut comp = Composition::new("c1".into(), name.into(), 32, 32, 30, 30);
@@ -330,11 +306,9 @@ mod backup_tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("proj.json");
 
-        // First save: no backup yet
         save_project_atomic(&project_named("v1"), &path).unwrap();
         assert!(!path.with_extension("json.bak").exists());
 
-        // Second save: v1 must be preserved as .bak
         save_project_atomic(&project_named("v2"), &path).unwrap();
         assert!(path.with_extension("json.bak").exists());
 
@@ -358,13 +332,10 @@ mod backup_tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("proj.json");
 
-        // Two generations so a .bak exists, then simulate corruption of the primary
         save_project_atomic(&project_named("older_generation"), &path).unwrap();
         save_project_atomic(&project_named("newer_generation"), &path).unwrap();
         std::fs::write(&path, "{ truncated garbage").unwrap();
 
-        // The backup holds the previous generation (newer_generation was in the
-        // primary file that we corrupted)
         let (loaded, used_backup) = load_project_with_backup(&path).unwrap();
         assert!(used_backup);
         assert_eq!(loaded.compositions[0].name, "older_generation");

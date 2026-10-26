@@ -118,6 +118,7 @@ fn imported_webp_footage_roto_propagates_persists_and_previews() {
             frames_dir: footage.frames_dir,
             frame_count: footage.frame_count,
             audio_wav: footage.audio_wav,
+            audio_volume: Animatable::new_constant(0.0),
             speed: 1.0,
         },
         3,

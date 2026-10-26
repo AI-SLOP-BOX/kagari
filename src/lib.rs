@@ -3,28 +3,11 @@
 #![warn(dead_code)]
 #![warn(unreachable_code)]
 #![warn(unreachable_patterns)]
-// Style lints: allow at crate level — widespread patterns across 100+ files.
-// Fix incrementally, not in a single hardening pass.
-#![allow(clippy::type_complexity)]
-#![allow(clippy::too_many_arguments)]
-#![allow(clippy::needless_range_loop)]
-#![allow(clippy::manual_let_else)]
-#![allow(clippy::single_match)]
-#![allow(clippy::chunks_exact_to_as_chunks)]
-#![allow(clippy::field_reassign_with_default)]
-#![allow(clippy::excessive_precision)]
-#![allow(clippy::unnecessary_cast)]
-#![allow(clippy::obfuscated_if_else)]
-#![allow(clippy::clone_on_copy)]
-#![allow(clippy::collapsible_match)]
-#![allow(clippy::collapsible_if)]
-#![allow(clippy::identity_op)]
-#![allow(clippy::useless_vec)]
-#![allow(clippy::manual_range_contains)]
 
 pub mod core;
 
 #[cfg(feature = "gui")]
+#[path = "legacy_egui/mod.rs"]
 pub mod ui;
 
 #[cfg(feature = "gui")]

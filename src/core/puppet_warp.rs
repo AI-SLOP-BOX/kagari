@@ -339,7 +339,7 @@ mod tests {
     use super::*;
     fn solid(w: u32, h: u32) -> Vec<u8> {
         let mut v = vec![0u8; (w * h * 4) as usize];
-        for p in v.chunks_exact_mut(4) {
+        for p in v.as_chunks_mut::<4>().0 {
             p[0] = 100;
             p[1] = 100;
             p[2] = 100;

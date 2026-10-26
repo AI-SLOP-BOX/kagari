@@ -1,0 +1,73 @@
+component PropertiesContent() {
+  VStack(spacing: 5) {
+    Card { Padding(6) { HStack(spacing: 8) { Text("プロパティ", size: 14) Spacer If(selected_layer) { Caption("{layer_name}") } else { Caption("未選択") } } } }
+    If(selected_layer_locked) { Caption("ロック中: タイムラインまたはシーン一覧で解除すると編集できます。") }
+    If(selected_layer) {
+      HorizontalScrollView(420) { HStack(spacing: 3) {
+        If(properties_section_transform) { Button("変形", action: properties_section_transform, tone: primary, size: small) } else { Button("変形", action: properties_section_transform, tone: secondary, size: small) }
+        If(properties_section_content) { Button("種類別", action: properties_section_content, tone: primary, size: small) } else { Button("種類別", action: properties_section_content, tone: secondary, size: small) }
+        If(properties_section_composite) { Button("合成・スタイル", action: properties_section_composite, tone: primary, size: small) } else { Button("合成・スタイル", action: properties_section_composite, tone: secondary, size: small) }
+        If(properties_section_advanced) { Button("マスク・その他", action: properties_section_advanced, tone: primary, size: small) } else { Button("マスク・その他", action: properties_section_advanced, tone: secondary, size: small) }
+      } }
+      If(properties_section_transform) {
+        Card { Padding(6) { VStack(spacing: 5) {
+          Caption("▎ レイヤー時間")
+          HStack(spacing: 5) { MinWidth(72) { Caption("イン点") } If(selected_layer_locked) { Caption("{layer_in_frame}") } else { TextField(layer_in_frame, "0", action: layer_in_frame_changed) } Caption("フレーム") }
+          HStack(spacing: 5) { MinWidth(72) { Caption("アウト点") } If(selected_layer_locked) { Caption("{layer_out_frame}") } else { TextField(layer_out_frame, "300", action: layer_out_frame_changed) } Caption("フレーム") }
+          HStack(spacing: 5) {
+            Button("イン点を再生位置へ", action: layer_in_to_playhead, tone: secondary, size: small, disabled: selected_layer_locked)
+            Button("アウト点を再生位置へ", action: layer_out_to_playhead, tone: secondary, size: small, disabled: selected_layer_locked)
+          }
+          Caption("イン点からアウト点までを表示します。アウト点は含みます。")
+        } } }
+        If(selected_is_3d) { Transform3DProperties() } else { TransformProperties() }
+        LayerConstraintsProperties()
+      }
+      If(properties_section_content) {
+        If(selected_is_precomp) { PreCompProperties() }
+        If(selected_is_camera) { CameraProperties() }
+        If(selected_is_light) { LightProperties() }
+        If(selected_is_particle) { ParticleProperties() }
+        If(selected_is_text) { TextProperties() TextAnimatorProperties() }
+        If(selected_is_audio) { AudioProperties() }
+        If(selected_is_video) { VideoProperties() }
+        If(selected_is_image || selected_is_video) { ImageProperties() }
+        If(selected_is_image || selected_is_video || proxy_generation_active) { LayerProxyProperties() }
+        If(selected_is_shape) { ShapeProperties() }
+        If(selected_is_solid) { SolidProperties() }
+        If(!selected_is_precomp && !selected_is_camera && !selected_is_light && !selected_is_particle && !selected_is_text && !selected_is_audio && !selected_is_video && !selected_is_image && !selected_is_shape && !selected_is_solid) { Caption("このレイヤーに種類別の追加設定はありません。") }
+      }
+      If(properties_section_composite) {
+        LayerCompositeProperties()
+        MotionTrackerProperties()
+        LayerStylesProperties()
+      }
+      If(properties_section_advanced) {
+        MaskProperties()
+        LayerOptionsProperties()
+        LayerMarkerProperties()
+      }
+    } else { Card { Padding(8) { Caption("シーンからレイヤーを選ぶと、編集できる項目を表示します。") } } }
+  }
+}
+
+component PropertiesPanel() {
+  If(compact) {
+    ScrollView(430) { PropertiesContent() }
+  } else {
+    ScrollView(760) { PropertiesContent() }
+  }
+}
+
+component LayerStyleWorkspacePanel() {
+  VStack(spacing: 6) {
+    Card { Padding(8) { HStack(spacing: 6) { Text("レイヤー合成", size: 16) Spacer If(selected_layer) { Caption("{layer_name}") } else { Caption("レイヤー未選択") } } } }
+    If(selected_layer) {
+      LayerCompositeProperties()
+      LayerStylesProperties()
+      LayerOptionsProperties()
+    } else {
+      Card { Padding(10) { Caption("レイヤーを選択すると、ブレンドモード・不透明度・描画スタイルを編集できます。") } }
+    }
+  }
+}

@@ -1,0 +1,97 @@
+import "settings/general.ame";
+import "settings/projects.ame";
+import "settings/cache.ame";
+import "settings/performance.ame";
+import "settings/shortcuts.ame";
+import "settings/interface.ame";
+import "settings/plugins.ame";
+import "settings/license.ame";
+
+component SettingsModal() {
+    MaxWidth(900) {
+      Card {
+        Padding(16) {
+          VStack(spacing: 12) {
+            HStack(spacing: 10) {
+              AssetImage("kagari.nav.settings", 1, 24, 24)
+              Text("設定", size: 20)
+              Spacer
+              Button("キャンセル", action: settings_cancel, tone: secondary, size: small)
+              Button("適用", action: settings_apply, tone: primary, size: small)
+              Button("×", action: close_settings, tone: secondary, size: small)
+            }
+            If(settings_feedback != "") { Caption("{settings_feedback}") }
+            HStack(spacing: 14) {
+              If(compact) { MinWidth(48) { SettingsCompactNav() } } else {
+              MinWidth(245) {
+                VStack(spacing: 4) {
+                  ZStack {  If(settings_general) { Svg("<svg xmlns='http://www.w3.org/2000/svg' width='245' height='44' viewBox='0 0 245 44'><rect width='245' height='44' rx='13' fill='#1d2026'/><rect x='0' y='5' width='5' height='34' rx='2.5' fill='#ff6b1a'/></svg>", 245, 44) } else { Svg("<svg xmlns='http://www.w3.org/2000/svg' width='245' height='44' viewBox='0 0 245 44'><rect width='245' height='44' fill='transparent'/></svg>", 245, 44) } Padding(12) { HStack(spacing: 14) { If(settings_general) { AssetImage("kagari.preferences.general.active", 1, 22, 22) } else { AssetImage("kagari.preferences.general", 1, 22, 22) } Text("一般", size: 15) Spacer } }   Positioned(left: 0, right: 0, top: 0, bottom: 0) { Button("", action: settings_general_select, tone: secondary).opacity(nav_hitbox_opacity) }}
+                  ZStack {  If(settings_projects) { Svg("<svg xmlns='http://www.w3.org/2000/svg' width='245' height='44' viewBox='0 0 245 44'><rect width='245' height='44' rx='13' fill='#1d2026'/><rect x='0' y='5' width='5' height='34' rx='2.5' fill='#ff6b1a'/></svg>", 245, 44) } else { Svg("<svg xmlns='http://www.w3.org/2000/svg' width='245' height='44' viewBox='0 0 245 44'><rect width='245' height='44' fill='transparent'/></svg>", 245, 44) } Padding(12) { HStack(spacing: 14) { If(settings_projects) { AssetImage("kagari.preferences.projects.active", 1, 22, 22) } else { AssetImage("kagari.preferences.projects", 1, 22, 22) } Text("プロジェクト", size: 15) Spacer } }   Positioned(left: 0, right: 0, top: 0, bottom: 0) { Button("", action: settings_projects_select, tone: secondary).opacity(nav_hitbox_opacity) }}
+                  ZStack {  If(settings_cache) { Svg("<svg xmlns='http://www.w3.org/2000/svg' width='245' height='44' viewBox='0 0 245 44'><rect width='245' height='44' rx='13' fill='#1d2026'/><rect x='0' y='5' width='5' height='34' rx='2.5' fill='#ff6b1a'/></svg>", 245, 44) } else { Svg("<svg xmlns='http://www.w3.org/2000/svg' width='245' height='44' viewBox='0 0 245 44'><rect width='245' height='44' fill='transparent'/></svg>", 245, 44) } Padding(12) { HStack(spacing: 14) { If(settings_cache) { AssetImage("kagari.preferences.cache.active", 1, 22, 22) } else { AssetImage("kagari.preferences.cache", 1, 22, 22) } Text("メディアとキャッシュ", size: 15) Spacer } }   Positioned(left: 0, right: 0, top: 0, bottom: 0) { Button("", action: settings_cache_select, tone: secondary).opacity(nav_hitbox_opacity) }}
+                  ZStack {  If(settings_performance) { Svg("<svg xmlns='http://www.w3.org/2000/svg' width='245' height='44' viewBox='0 0 245 44'><rect width='245' height='44' rx='13' fill='#1d2026'/><rect x='0' y='5' width='5' height='34' rx='2.5' fill='#ff6b1a'/></svg>", 245, 44) } else { Svg("<svg xmlns='http://www.w3.org/2000/svg' width='245' height='44' viewBox='0 0 245 44'><rect width='245' height='44' fill='transparent'/></svg>", 245, 44) } Padding(12) { HStack(spacing: 14) { If(settings_performance) { AssetImage("kagari.preferences.performance.active", 1, 22, 22) } else { AssetImage("kagari.preferences.performance", 1, 22, 22) } Text("パフォーマンス", size: 15) Spacer } }   Positioned(left: 0, right: 0, top: 0, bottom: 0) { Button("", action: settings_performance_select, tone: secondary).opacity(nav_hitbox_opacity) }}
+                  ZStack {  If(settings_shortcuts) { Svg("<svg xmlns='http://www.w3.org/2000/svg' width='245' height='44' viewBox='0 0 245 44'><rect width='245' height='44' rx='13' fill='#1d2026'/><rect x='0' y='5' width='5' height='34' rx='2.5' fill='#ff6b1a'/></svg>", 245, 44) } else { Svg("<svg xmlns='http://www.w3.org/2000/svg' width='245' height='44' viewBox='0 0 245 44'><rect width='245' height='44' fill='transparent'/></svg>", 245, 44) } Padding(12) { HStack(spacing: 14) { If(settings_shortcuts) { AssetImage("kagari.preferences.shortcuts.active", 1, 22, 22) } else { AssetImage("kagari.preferences.shortcuts", 1, 22, 22) } Text("ショートカット", size: 15) Spacer } }   Positioned(left: 0, right: 0, top: 0, bottom: 0) { Button("", action: settings_shortcuts_select, tone: secondary).opacity(nav_hitbox_opacity) }}
+                  ZStack {  If(settings_interface) { Svg("<svg xmlns='http://www.w3.org/2000/svg' width='245' height='44' viewBox='0 0 245 44'><rect width='245' height='44' rx='13' fill='#1d2026'/><rect x='0' y='5' width='5' height='34' rx='2.5' fill='#ff6b1a'/></svg>", 245, 44) } else { Svg("<svg xmlns='http://www.w3.org/2000/svg' width='245' height='44' viewBox='0 0 245 44'><rect width='245' height='44' fill='transparent'/></svg>", 245, 44) } Padding(12) { HStack(spacing: 14) { If(settings_interface) { AssetImage("kagari.preferences.interface.active", 1, 22, 22) } else { AssetImage("kagari.preferences.interface", 1, 22, 22) } Text("インターフェース", size: 15) Spacer } }   Positioned(left: 0, right: 0, top: 0, bottom: 0) { Button("", action: settings_interface_select, tone: secondary).opacity(nav_hitbox_opacity) }}
+                  ZStack {  If(settings_plugins) { Svg("<svg xmlns='http://www.w3.org/2000/svg' width='245' height='44' viewBox='0 0 245 44'><rect width='245' height='44' rx='13' fill='#1d2026'/><rect x='0' y='5' width='5' height='34' rx='2.5' fill='#ff6b1a'/></svg>", 245, 44) } else { Svg("<svg xmlns='http://www.w3.org/2000/svg' width='245' height='44' viewBox='0 0 245 44'><rect width='245' height='44' fill='transparent'/></svg>", 245, 44) } Padding(12) { HStack(spacing: 14) { If(settings_plugins) { AssetImage("kagari.preferences.plugins.active", 1, 22, 22) } else { AssetImage("kagari.preferences.plugins", 1, 22, 22) } Text("プラグイン", size: 15) Spacer } }   Positioned(left: 0, right: 0, top: 0, bottom: 0) { Button("", action: settings_plugins_select, tone: secondary).opacity(nav_hitbox_opacity) }}
+                  ZStack {  If(settings_license) { Svg("<svg xmlns='http://www.w3.org/2000/svg' width='245' height='44' viewBox='0 0 245 44'><rect width='245' height='44' rx='13' fill='#1d2026'/><rect x='0' y='5' width='5' height='34' rx='2.5' fill='#ff6b1a'/></svg>", 245, 44) } else { Svg("<svg xmlns='http://www.w3.org/2000/svg' width='245' height='44' viewBox='0 0 245 44'><rect width='245' height='44' fill='transparent'/></svg>", 245, 44) } Padding(12) { HStack(spacing: 14) { If(settings_license) { AssetImage("kagari.preferences.license.active", 1, 22, 22) } else { AssetImage("kagari.preferences.license", 1, 22, 22) } Text("ライセンス", size: 15) Spacer } }   Positioned(left: 0, right: 0, top: 0, bottom: 0) { Button("", action: settings_license_select, tone: secondary).opacity(nav_hitbox_opacity) }}
+                }
+              }
+              }
+              MinWidth(520) {
+                VStack(spacing: 10) {
+                ScrollView(340) {
+                  VStack(spacing: 10) {
+                    If(settings_general) { SettingsGeneralPage() }
+                    If(settings_projects) { SettingsProjectsPage() }
+                    If(settings_cache) { SettingsCachePage() }
+                    If(settings_performance) { SettingsPerformancePage() }
+                    If(settings_shortcuts) { SettingsShortcutsPage() }
+                    If(settings_interface) { SettingsInterfacePage() }
+                    If(settings_plugins) { SettingsPluginsPage() }
+                    If(settings_license) { SettingsLicensePage() }
+                  }
+                }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+component ExitConfirmModal() {
+    MaxWidth(420) {
+      Card {
+        Padding(22) {
+          VStack(spacing: 14) {
+            Text("Kagari VFX を終了しますか？", size: 20)
+            Caption("保存していない変更がある場合は、終了する前に保存してください。")
+            HStack(spacing: 10) {
+              Spacer
+              Button("キャンセル", action: cancel_exit_app, tone: secondary)
+              Button("終了", action: confirm_exit_app, tone: destructive)
+            }
+          }
+        }
+      }
+    }
+  }
+
+component ProjectSwitchConfirmModal() {
+    MaxWidth(620) {
+      Card {
+        Padding(22) {
+          VStack(spacing: 14) {
+            Text("未保存の変更があります", size: 20)
+            Caption("新しいプロジェクトへ移ると、現在の未保存変更は失われます。先に保存しますか？")
+            HStack(spacing: 10) {
+              Spacer
+              Button("キャンセル", action: cancel_project_switch, tone: secondary)
+              Button("保存して切り替え", action: save_and_confirm_project_switch, tone: primary)
+              Button("保存せず切り替え", action: confirm_project_switch, tone: destructive)
+            }
+          }
+        }
+      }
+    }
+  }

@@ -1,7 +1,9 @@
 /target
 **/*.rs.bk
-test_project.json
-test_text_only.json
+tests/fixtures/test_project.json
+tests/fixtures/test_text_only.json
+glitch_project.json
+tests/fixtures/test_invalid.json
 .DS_Store
 *.log
 *.env

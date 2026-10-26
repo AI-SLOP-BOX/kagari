@@ -1,0 +1,32 @@
+component TimeRemapPanel() {
+  Card { Padding(6) { VStack(spacing: 5) {
+    HStack(spacing: 6) {
+      Text("タイムリマップ", size: 14)
+      Spacer
+      If(selected_is_video_layer) {
+        If(selected_time_remap) { Button("無効化", action: toggle_video_time_remap, tone: secondary, size: small, disabled: selected_layer_locked) } else { Button("有効化", action: toggle_video_time_remap, tone: primary, size: small, disabled: selected_layer_locked) }
+      }
+    }
+    If(selected_is_video_layer) {
+      If(selected_time_remap) {
+        HStack(spacing: 5) {
+          Caption("現在位置のソースフレーム")
+          MaxWidth(100) { If(selected_layer_locked) { Caption("{selected_time_remap_source_frame}") } else { TextField(selected_time_remap_source_frame, "0", action: time_remap_value_changed) } }
+          Caption("再生位置にキーを追加・更新")
+          Button("ソースフレーム曲線を開く", action: graph_time_remap, tone: primary, size: small)
+        }
+        HStack(spacing: 5) {
+          Button("逆再生", action: time_remap_reverse, tone: secondary, size: small, disabled: selected_layer_locked)
+          Button("2倍スロー", action: time_remap_slow, tone: secondary, size: small, disabled: selected_layer_locked)
+          Button("2倍速", action: time_remap_fast, tone: secondary, size: small, disabled: selected_layer_locked)
+          Button("現在フレームで静止", action: time_remap_freeze, tone: secondary, size: small, disabled: selected_layer_locked)
+          Caption("キーはタイムライン上で移動できます")
+        }
+      } else {
+        Caption("動画レイヤーの再生速度や逆再生を編集できます。タイムリマップを有効にしてください。")
+      }
+    } else {
+      Caption("動画レイヤーを選択すると、ソースフレームの再生方法を編集できます。")
+    }
+  } } }
+}

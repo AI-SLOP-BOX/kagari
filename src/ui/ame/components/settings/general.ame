@@ -1,0 +1,13 @@
+component SettingsGeneralPage() {
+VStack(spacing: 10) {
+                        Text("一般", size: 18)
+                        Caption("アプリケーションの基本動作と起動時の設定です。")
+                        Card { Padding(14) { VStack(spacing: 10) {
+                          HStack(spacing: 10) { VStack(spacing: 2) { Text("インターフェース言語") Caption("現在の表示言語") } Spacer Caption("日本語") }
+                          HStack(spacing: 10) { VStack(spacing: 2) { Text("テーマ") Caption("現在の配色") } Spacer Caption("ダーク") }
+                          HStack(spacing: 10) { VStack(spacing: 2) { Text("起動時に開く画面") Caption("起動後に最初に表示する画面を選択します。") } Spacer Checkbox("ホーム", show_home_on_startup, action: setting_home_changed) }
+                          If(!show_home_on_startup) { Checkbox("起動時に前回のプロジェクトを再開", restore_previous_state, action: setting_restore_changed) }
+                          Checkbox("アプリケーション終了前に確認する", confirm_exit, action: setting_confirm_exit_changed)
+                        } } }
+                      }
+}

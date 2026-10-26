@@ -1,0 +1,85 @@
+component LayerCompositeProperties() {
+  Card { Padding(6) { VStack(spacing: 5) {
+    Caption("▎ 合成")
+    HStack(spacing: 5) {
+      MinWidth(78) { Caption("ブレンド") }
+      Button("{selected_blend_mode_label}  ↻", action: cycle_layer_blend_mode, tone: secondary, size: small, disabled: selected_layer_locked)
+    }
+    HStack(spacing: 5) {
+      MinWidth(78) { Caption("トラックマット") }
+      Button("{selected_track_matte_label}  ↻", action: cycle_layer_track_matte, tone: secondary, size: small, disabled: selected_layer_locked)
+    }
+    If(selected_has_track_matte) {
+      Caption("マット元レイヤー")
+      Button("直上のレイヤーを使用", action: clear_track_matte_source, tone: secondary, size: small, disabled: selected_layer_locked)
+      ForEach(matte_source_layers, source, key: id) {
+        Button("{source.name}", action: select_track_matte_source, tone: secondary, size: small, disabled: selected_layer_locked)
+      }
+    }
+  } } }
+}
+
+component MotionTrackerProperties() {
+  Card { Padding(6) { VStack(spacing: 5) {
+    Caption("▎ モーショントラッキング")
+    HStack(spacing: 5) {
+      Button("＋ トラッカーを追加", action: add_motion_tracker, tone: primary, size: small, disabled: selected_layer_locked)
+      If(has_tracker_items) {
+        Button("前方解析 ▶", action: analyze_motion_track_forward, tone: secondary, size: small, disabled: selected_layer_locked)
+      }
+    }
+    If(has_tracker_items) {
+      Caption("アクティブトラッカー")
+      ForEach(tracker_items, item, key: id) {
+        HStack(spacing: 4) {
+          If(item.selected) {
+            Button("{item.name}", action: select_motion_tracker, tone: primary, size: small)
+          } else {
+            Button("{item.name}", action: select_motion_tracker, tone: secondary, size: small)
+          }
+          Caption("{item.points_count} pts")
+        }
+      }
+      Caption("ターゲット先レイヤーへ適用")
+      ForEach(tracker_target_layers, target, key: id) {
+        HStack(spacing: 4) {
+          If(target.selected) {
+            Button("{target.name}", action: select_motion_tracker_target, tone: primary, size: small)
+          } else {
+            Button("{target.name}", action: select_motion_tracker_target, tone: secondary, size: small)
+          }
+        }
+      }
+      HStack(spacing: 4) {
+        Button("位置/回転を適用", action: apply_motion_track_to_target, tone: primary, size: small, disabled: selected_layer_locked)
+        Button("手ブレ補正 (反転)", action: apply_motion_track_stabilize, tone: secondary, size: small, disabled: selected_layer_locked)
+      }
+      HStack(spacing: 4) {
+        Button("4点プラナー コーナーピン適用", action: apply_planar_track_corner_pin, tone: primary, size: small, disabled: selected_layer_locked)
+      }
+    }
+    Caption("{tracker_status}")
+  } } }
+}
+
+component LayerStylesProperties() {
+  Card { Padding(6) { VStack(spacing: 5) {
+    Caption("▎ レイヤースタイル")
+    ForEach(layer_style_items, style, key: id) {
+      HStack(spacing: 5) {
+        If(style.enabled) { Button("{style.label}  ON", action: toggle_layer_style, tone: secondary, size: small, disabled: selected_layer_locked) } else { Button("{style.label}  OFF", action: toggle_layer_style, tone: secondary, size: small, disabled: selected_layer_locked) }
+      }
+    }
+    If(has_layer_style_parameters) {
+      VStack(spacing: 4) {
+        ForEach(layer_style_parameters, parameter, key: id) {
+          HStack(spacing: 5) {
+            MinWidth(72) { Caption("{parameter.label}") }
+            If(selected_layer_locked) { Caption("{parameter.value}") } else { TextField(parameter.value, "0", action: layer_style_parameter_changed) }
+            Caption("{parameter.unit}")
+          }
+        }
+      }
+    }
+  } } }
+}

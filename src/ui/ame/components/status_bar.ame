@@ -1,0 +1,38 @@
+component StatusBar() {
+    Card {
+      Padding(3) {
+        If(wide) {
+          HStack(spacing: 10) {
+            Text("KAGARI VFX", size: 12)
+            Caption("{status_resolution}")
+            Caption("│")
+            Caption("{status_frame}")
+            Caption("│")
+            Caption("{preview_badge}")
+            If(preview_fallback_reason != "") {
+              Caption("({preview_fallback_reason})")
+            }
+            Spacer
+            Caption("{current_time}")
+            Caption("{save_status}")
+          }
+        } else {
+          If(compact) {
+            HStack(spacing: 8) { Text("KAGARI", size: 12) Caption("{preview_badge}") Spacer Caption("{save_status}") }
+          } else {
+            HStack(spacing: 8) {
+              Text("KAGARI", size: 12)
+              Caption("{status_resolution}")
+              Caption("│")
+              Caption("{status_frame}")
+              Caption("│")
+              Caption("{preview_badge}")
+              Spacer
+              Caption("{current_time}")
+              Caption("{save_status}")
+            }
+          }
+        }
+      }
+    }
+  }

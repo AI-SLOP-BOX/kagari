@@ -90,18 +90,14 @@ pub fn apply_essential_overrides(
         }
         for layer in &mut precomp.layers {
             match &mut layer.layer_type {
-                crate::core::timeline::LayerType::Text { text, .. } => {
-                    if ep.name == "Text" {
-                        if let EssentialValue::Text(t) = &ep.value {
-                            *text = t.clone();
-                        }
+                crate::core::timeline::LayerType::Text { text, .. } if ep.name == "Text" => {
+                    if let EssentialValue::Text(t) = &ep.value {
+                        *text = t.clone();
                     }
                 }
-                crate::core::timeline::LayerType::Solid { color } => {
-                    if ep.name == "Color" {
-                        if let EssentialValue::Color(c) = &ep.value {
-                            *color = *c;
-                        }
+                crate::core::timeline::LayerType::Solid { color } if ep.name == "Color" => {
+                    if let EssentialValue::Color(c) = &ep.value {
+                        *color = *c;
                     }
                 }
                 _ => {}

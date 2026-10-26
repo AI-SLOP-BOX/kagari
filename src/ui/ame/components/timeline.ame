@@ -1,0 +1,236 @@
+component TimelineRows() {
+  HStack(spacing: 3) {
+    MinWidth(296) { VStack(spacing: 0) {
+      HStack(spacing: 2) {
+        Caption("レイヤー").frame(width: 120)
+        Caption("モード").frame(width: 52)
+        Caption("マット").frame(width: 44)
+        Spacer
+        Caption("スイッチ")
+      }.frame(height: 22)
+      ForEach(timeline_layers, layer, key: id) {
+        HStack(spacing: 1) {
+          Caption("{layer.indent}")
+          If(layer.has_children) { If(layer.collapsed) { Button("▸", action: toggle_scene_group, tone: secondary, size: small) } else { Button("▾", action: toggle_scene_group, tone: secondary, size: small) } } else { Icon("tree_branch", 12) }
+          Caption("{layer.label}")
+          MaxWidth(104) { Button("{layer.name}", action: select_layer, tone: secondary, size: small) }
+          Button("{layer.blend_mode}", action: cycle_layer_blend_mode, tone: secondary, size: small)
+          Button("{layer.track_matte}", action: cycle_layer_track_matte, tone: secondary, size: small)
+          Spacer
+          If(layer.visible) { IconButton("eye", action: toggle_layer_visibility, tone: secondary, size: small) } else { IconButton("eye_off", action: toggle_layer_visibility, tone: secondary, size: small) }
+          If(layer.locked) { IconButton("lock", action: toggle_layer_lock, tone: secondary, size: small) } else { IconButton("unlock", action: toggle_layer_lock, tone: secondary, size: small) }
+          Button("S", action: toggle_layer_solo, tone: secondary, size: small)
+          If(layer.has_audio) { Button("M", action: toggle_audio_mute, tone: secondary, size: small) }
+        }.frame(height: 28).context_menu() {
+          Item("レイヤー複製 (Cmd+D)", action: duplicate_selected_layer)
+          Item("再生位置で分割 (Cmd+Shift+D)", action: split_selected_layer_at_playhead)
+          Item("イン点を再生位置へ ([)", action: set_selected_layer_in_to_playhead)
+          Item("アウト点を再生位置へ (])", action: set_selected_layer_out_to_playhead)
+          Item("レイヤー削除 (Delete)", action: request_remove_selected_layer)
+        }
+      }
+      If(!has_timeline_layers) { Caption("該当レイヤーなし").frame(height: 28) }
+    } }
+    Grow(1) { Canvas("kagari.timeline") }
+  }
+}
+
+component TimelineTransport() {
+  HStack(spacing: 4) {
+    Button("⏮", action: play_rewind, tone: secondary, size: small)
+    Button("◀", action: step_frame_backward, tone: secondary, size: small)
+    If(is_playing) { Button("⏸", action: play_toggle, tone: primary, size: small) } else { Button("▶", action: play_toggle, tone: secondary, size: small) }
+    Button("▶", action: step_frame_forward, tone: secondary, size: small)
+    If(playback_loop) { Button("🔁", action: toggle_playback_loop, tone: primary, size: small) } else { Button("↻", action: toggle_playback_loop, tone: secondary, size: small) }
+    Button("⏭", action: play_forward, tone: secondary, size: small)
+  }
+}
+
+component CompactTimelineControls() {
+  HStack(spacing: 4) {
+    Button("⏮", action: play_rewind, tone: secondary, size: small)
+    Button("◀", action: step_frame_backward, tone: secondary, size: small)
+    If(is_playing) { Button("⏸", action: play_toggle, tone: primary, size: small) } else { Button("▶", action: play_toggle, tone: secondary, size: small) }
+    Button("▶", action: step_frame_forward, tone: secondary, size: small)
+    If(playback_loop) { Button("🔁", action: toggle_playback_loop, tone: primary, size: small) } else { Button("↻", action: toggle_playback_loop, tone: secondary, size: small) }
+    Button("⏭", action: play_forward, tone: secondary, size: small)
+    Spacer
+    MinWidth(112) { TextField(current_time, "00:00:02:12", action: time_changed) }
+    Button("◆ キー", action: add_keyframe, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+    Button("∿ イーズ (F9)", action: ease_selected_layer, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+    KeyframeNavigation()
+    Caption("{fps_label}")
+  }
+}
+
+component KeyframeNavigation() {
+  HStack(spacing: 4) {
+    Button("⏮◆", action: previous_keyframe, tone: secondary, size: small)
+    Button("◆⏭", action: next_keyframe, tone: secondary, size: small)
+    Caption("{keyframe_status}")
+  }
+}
+
+component TimelineRuler() {
+  HStack(spacing: 3) {
+    MinWidth(212) { Caption("時間") }
+    Grow(1) {
+      HStack(spacing: 0) {
+        Caption("{timeline_time_0}")
+        Spacer
+        Caption("{timeline_time_1}")
+        Spacer
+        Caption("{timeline_time_2}")
+        Spacer
+        Caption("{timeline_time_3}")
+        Spacer
+        Caption("{timeline_time_4}")
+        Spacer
+        Caption("{timeline_time_5}")
+      }
+    }
+  }
+}
+
+component TimelinePanel() {
+    Card {
+      Padding(4) {
+        VStack(spacing: 4) {
+          If(wide) {
+            HStack(spacing: 5) {
+              If(is_audio_workspace) { Text("オーディオタイムライン", size: 13) } else { Text("タイムライン", size: 13) }
+              HorizontalScrollView(460) { HStack(spacing: 3) {
+                Button("すべて", action: timeline_view_all, tone: secondary, size: small)
+                Button("アニメーション", action: timeline_view_animation, tone: secondary, size: small)
+                Button("現在位置のキー", action: timeline_view_current_keyframes, tone: secondary, size: small)
+                Button("音声", action: timeline_view_audio, tone: secondary, size: small)
+                Button("メディア", action: timeline_view_media, tone: secondary, size: small)
+                Button("文字", action: timeline_view_text, tone: secondary, size: small)
+                Button("図形", action: timeline_view_shapes, tone: secondary, size: small)
+                Button("3D", action: timeline_view_3d, tone: secondary, size: small)
+                Button("カメラ", action: timeline_view_cameras, tone: secondary, size: small)
+                Button("ライト", action: timeline_view_lights, tone: secondary, size: small)
+                Button("グラフ", action: timeline_view_graph, tone: secondary, size: small)
+                Button("ノード", action: timeline_view_flowchart, tone: secondary, size: small)
+              } }
+              Button("シャイ", action: toggle_shy_visibility, tone: secondary, size: small)
+              TimelineTransport()
+              Spacer
+              TextField(current_time, "00:00:02:12", action: time_changed)
+              Button("◆ キー追加", action: add_keyframe, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+              Button("∿ イージーイーズ (F9)", action: ease_selected_layer, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+              KeyframeNavigation()
+              Caption("{fps_label}")
+              Button("書き出し", action: go_export, tone: secondary, size: small)
+            }
+          } else {
+            HStack(spacing: 5) {
+              If(is_audio_workspace) { Text("オーディオ", size: 13) } else { Text("タイムライン", size: 13) }
+              HorizontalScrollView(290) { HStack(spacing: 2) {
+                Button("全", action: timeline_view_all, tone: secondary, size: small)
+                Button("動", action: timeline_view_animation, tone: secondary, size: small)
+                Button("現キー", action: timeline_view_current_keyframes, tone: secondary, size: small)
+                Button("音", action: timeline_view_audio, tone: secondary, size: small)
+                Button("映", action: timeline_view_media, tone: secondary, size: small)
+                Button("文", action: timeline_view_text, tone: secondary, size: small)
+                Button("図", action: timeline_view_shapes, tone: secondary, size: small)
+                Button("3D", action: timeline_view_3d, tone: secondary, size: small)
+                Button("C", action: timeline_view_cameras, tone: secondary, size: small)
+                Button("L", action: timeline_view_lights, tone: secondary, size: small)
+                Button("曲", action: timeline_view_graph, tone: secondary, size: small)
+                Button("節", action: timeline_view_flowchart, tone: secondary, size: small)
+              } }
+              Button("SH", action: toggle_shy_visibility, tone: secondary, size: small)
+              Spacer
+            }
+          }
+          If(!wide) { CompactTimelineControls() }
+          If(wide) {
+            HStack(spacing: 4) {
+              Caption("時間範囲")
+              Button("−", action: timeline_zoom_out, tone: secondary, size: small)
+              Caption("{timeline_zoom_label}")
+              Button("＋", action: timeline_zoom_in, tone: secondary, size: small)
+              Button("全体", action: timeline_zoom_fit, tone: secondary, size: small)
+              Button("再生位置で分割", action: split_selected_layer_at_playhead, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+              Button("イン点 ← 再生位置", action: layer_in_to_playhead, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+              Button("アウト点 ← 再生位置", action: layer_out_to_playhead, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+              Button("↑", action: move_layer_up, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+              Button("↓", action: move_layer_down, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+              Button("先頭へ", action: move_layer_to_start, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+              Button("末尾へ", action: move_layer_to_end, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+              Button("←", action: timeline_pan_left, tone: secondary, size: small)
+              Button("→", action: timeline_pan_right, tone: secondary, size: small)
+              If(timeline_view_markers) { Button("マーカー", action: timeline_view_markers, tone: primary, size: small) } else { Button("マーカー", action: timeline_view_markers, tone: secondary, size: small) }
+              If(timeline_snap_enabled) { Button("スナップ", action: toggle_timeline_snap, tone: primary, size: small) } else { Button("スナップ", action: toggle_timeline_snap, tone: secondary, size: small) }
+            }
+          } else {
+            VStack(spacing: 3) {
+              HStack(spacing: 4) {
+                Caption("時間範囲")
+                Button("−", action: timeline_zoom_out, tone: secondary, size: small)
+                Caption("{timeline_zoom_label}")
+                Button("＋", action: timeline_zoom_in, tone: secondary, size: small)
+                Button("全体", action: timeline_zoom_fit, tone: secondary, size: small)
+                Button("←", action: timeline_pan_left, tone: secondary, size: small)
+                Button("→", action: timeline_pan_right, tone: secondary, size: small)
+                Spacer
+              }
+              HStack(spacing: 4) {
+                Button("再生位置で分割", action: split_selected_layer_at_playhead, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+                Button("イン点", action: layer_in_to_playhead, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+                Button("アウト点", action: layer_out_to_playhead, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+                Button("↑", action: move_layer_up, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+                Button("↓", action: move_layer_down, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+                Button("先頭へ", action: move_layer_to_start, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+                Button("末尾へ", action: move_layer_to_end, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+                If(timeline_view_markers) { Button("マーカー", action: timeline_view_markers, tone: primary, size: small) } else { Button("マーカー", action: timeline_view_markers, tone: secondary, size: small) }
+                If(timeline_snap_enabled) { Button("スナップ", action: toggle_timeline_snap, tone: primary, size: small) } else { Button("スナップ", action: toggle_timeline_snap, tone: secondary, size: small) }
+                Spacer
+              }
+            }
+          }
+          If(wide) {
+            HStack(spacing: 4) {
+              Caption("再生範囲")
+              Caption("開始f")
+              MaxWidth(70) { TextField(work_area_start_frame, "0", action: work_area_start_frame_changed) }
+              Button("開始を現在位置へ", action: set_playback_range_start, tone: secondary, size: small)
+              Caption("終了f")
+              MaxWidth(70) { TextField(work_area_end_frame, "0", action: work_area_end_frame_changed) }
+              Button("終了を現在位置へ", action: set_playback_range_end, tone: secondary, size: small)
+              Caption("{work_area_label}")
+              Button("解除", action: clear_playback_range, tone: secondary, size: small)
+              Caption("ループ再生ON時に適用")
+            }
+          } else {
+            HStack(spacing: 3) {
+              Caption("範囲")
+              Caption("開始")
+              MaxWidth(48) { TextField(work_area_start_frame, "0", action: work_area_start_frame_changed) }
+              Button("現在位置", action: set_playback_range_start, tone: secondary, size: small)
+              Caption("終了")
+              MaxWidth(48) { TextField(work_area_end_frame, "0", action: work_area_end_frame_changed) }
+              Button("現在位置", action: set_playback_range_end, tone: secondary, size: small)
+              Button("解除", action: clear_playback_range, tone: secondary, size: small)
+              Spacer
+            }
+            Caption("{work_area_label} · ループ再生ON時に適用")
+          }
+          If(timeline_view_current_keyframes) { Caption("{current_time} にキーフレームがあるレイヤー") }
+          If(timeline_view_graph) {
+            GraphEditorPanel()
+          } else {
+            If(timeline_view_flowchart) {
+              FlowchartPanel()
+            } else {
+              If(wide) { TimelineRuler() }
+              If(is_animation_workspace || is_audio_workspace) { ScrollView(420) { TimelineRows() } } else { ScrollView(220) { TimelineRows() } }
+              TimelineMarkers()
+              If(timeline_view_markers) { LayerMarkerTrackList() }
+            }
+          }
+        }
+      }
+    }
+  }

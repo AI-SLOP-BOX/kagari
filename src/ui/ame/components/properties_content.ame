@@ -1,0 +1,284 @@
+component CameraProperties() {
+  Card { Padding(6) { VStack(spacing: 5) {
+    Caption("▎ カメラ")
+    If(selected_is_active_camera) { Caption("このカメラを使用中") } else { Button("このカメラを使用", action: activate_selected_camera, tone: primary, size: small) }
+    HStack(spacing: 4) { Caption("画角") If(selected_layer_locked) { Caption("{selected_camera_fov}") } else { DragValue(selected_camera_fov, min: 1.0, max: 179.0, action: selected_camera_fov_changed) } Caption("°") Button("◇", action: keyframe_camera_fov, tone: secondary, size: small, disabled: selected_layer_locked) }
+    HStack(spacing: 4) { Caption("焦点距離") If(selected_layer_locked) { Caption("{selected_camera_focus}") } else { DragValue(selected_camera_focus, min: 0.0, max: 100000.0, action: selected_camera_focus_changed) } Button("◇", action: keyframe_camera_focus, tone: secondary, size: small, disabled: selected_layer_locked) }
+    HStack(spacing: 4) { Caption("絞り") If(selected_layer_locked) { Caption("{selected_camera_aperture}") } else { DragValue(selected_camera_aperture, min: 0.0, max: 500.0, action: selected_camera_aperture_changed) } Button("◇", action: keyframe_camera_aperture, tone: secondary, size: small, disabled: selected_layer_locked) }
+    If(selected_camera_dof_enabled) { Button("被写界深度: ON", action: toggle_selected_camera_dof, tone: secondary, size: small, disabled: selected_layer_locked) } else { Button("被写界深度: OFF", action: toggle_selected_camera_dof, tone: secondary, size: small, disabled: selected_layer_locked) }
+    If(selected_camera_dof_enabled) { HStack(spacing: 4) { Caption("最大ぼけ") If(selected_layer_locked) { Caption("{selected_camera_dof_max_blur}") } else { DragValue(selected_camera_dof_max_blur, min: 1.0, max: 64.0, action: selected_camera_dof_max_blur_changed) } Caption("px") Button("◇", action: keyframe_camera_dof_blur, tone: secondary, size: small, disabled: selected_layer_locked) } }
+  } } }
+}
+
+component LightProperties() {
+  Card { Padding(6) { VStack(spacing: 5) {
+    Caption("▎ ライト")
+    Button("種類: {selected_light_type_label}  ↻", action: cycle_selected_light_type, tone: secondary, size: small, disabled: selected_layer_locked)
+    HStack(spacing: 4) { Caption("色") If(selected_layer_locked) { Caption("{selected_light_color}") } else { TextField(selected_light_color, "#FFFFFF", action: selected_light_color_changed) } }
+    HStack(spacing: 4) { Caption("強度") If(selected_layer_locked) { Caption("{selected_light_intensity}") } else { DragValue(selected_light_intensity, min: 0.0, max: 500.0, action: selected_light_intensity_changed) } Caption("%") Button("◇", action: keyframe_light_intensity, tone: secondary, size: small, disabled: selected_layer_locked) }
+    If(selected_light_is_spot) {
+      HStack(spacing: 4) { Caption("照射角") If(selected_layer_locked) { Caption("{selected_light_cone_angle}") } else { DragValue(selected_light_cone_angle, min: 0.0, max: 180.0, action: selected_light_cone_angle_changed) } Caption("°") }
+      HStack(spacing: 4) { Caption("境界") If(selected_layer_locked) { Caption("{selected_light_cone_feather}") } else { DragValue(selected_light_cone_feather, min: 0.0, max: 100.0, action: selected_light_cone_feather_changed) } Caption("%") }
+    }
+    HStack(spacing: 4) { Caption("減衰") If(selected_layer_locked) { Caption("{selected_light_falloff}") } else { DragValue(selected_light_falloff, min: 0.0, max: 2.0, action: selected_light_falloff_changed) } }
+    Button("影を落とす", action: toggle_selected_light_shadows, tone: secondary, size: small, disabled: selected_layer_locked)
+    HStack(spacing: 4) { Caption("影の濃さ") If(selected_layer_locked) { Caption("{selected_light_shadow_darkness}") } else { DragValue(selected_light_shadow_darkness, min: 0.0, max: 100.0, action: selected_light_shadow_darkness_changed) } Caption("%") }
+    Caption("位置と回転は3D変形から編集できます。")
+  } } }
+}
+
+component ParticleProperties() {
+  Card { Padding(6) { VStack(spacing: 5) {
+    Caption("▎ パーティクルエミッター")
+    HStack(spacing: 5) { MinWidth(92) { Caption("発生数 / 秒") } If(selected_layer_locked) { Caption("{emitter_rate}") } else { TextField(emitter_rate, "50", action: emitter_rate_changed) } }
+    Caption("発生形状")
+    HStack(spacing: 5) {
+      Button("円", action: emitter_shape_circle_select, tone: secondary, size: small, disabled: selected_layer_locked)
+      If(emitter_shape_circle) { Button("点", action: emitter_shape_point, tone: secondary, size: small, disabled: selected_layer_locked) } else { Button("点", action: emitter_shape_point, tone: primary, size: small, disabled: selected_layer_locked) }
+    }
+    If(emitter_shape_circle) { HStack(spacing: 5) { MinWidth(92) { Caption("半径 (px)") } If(selected_layer_locked) { Caption("{emitter_radius}") } else { TextField(emitter_radius, "50", action: emitter_radius_changed) } } }
+    HStack(spacing: 5) { MinWidth(92) { Caption("拡散角 (度)") } If(selected_layer_locked) { Caption("{emitter_spread}") } else { TextField(emitter_spread, "45", action: emitter_spread_changed) } }
+    HStack(spacing: 5) { MinWidth(92) { Caption("速度 (px/秒)") } If(selected_layer_locked) { Caption("{velocity}") } else { TextField(velocity, "200", action: emitter_speed_changed) } }
+    HStack(spacing: 5) { MinWidth(92) { Caption("速度の幅") } If(selected_layer_locked) { Caption("{velocity_random}") } else { TextField(velocity_random, "0.3", action: emitter_speed_variance_changed) } }
+    HStack(spacing: 5) { MinWidth(92) { Caption("寿命 (秒)") } If(selected_layer_locked) { Caption("{lifetime}") } else { TextField(lifetime, "2", action: emitter_lifetime_changed) } }
+    HStack(spacing: 5) { MinWidth(92) { Caption("開始サイズ") } If(selected_layer_locked) { Caption("{particle_size}") } else { TextField(particle_size, "8", action: emitter_size_start_changed) } }
+    HStack(spacing: 5) { MinWidth(92) { Caption("終了サイズ") } If(selected_layer_locked) { Caption("{size_random}") } else { TextField(size_random, "0", action: emitter_size_end_changed) } }
+    HStack(spacing: 5) { MinWidth(92) { Caption("重力 (Y)") } If(selected_layer_locked) { Caption("{emitter_gravity_y}") } else { TextField(emitter_gravity_y, "0", action: emitter_gravity_y_changed) } }
+    HStack(spacing: 5) { MinWidth(92) { Caption("風 (X)") } If(selected_layer_locked) { Caption("{emitter_wind_x}") } else { TextField(emitter_wind_x, "0", action: emitter_wind_x_changed) } }
+    HStack(spacing: 5) { MinWidth(92) { Caption("乱流強度") } If(selected_layer_locked) { Caption("{emitter_turbulence}") } else { TextField(emitter_turbulence, "0", action: emitter_turbulence_changed) } }
+    HStack(spacing: 5) { MinWidth(92) { Caption("空気抵抗") } If(selected_layer_locked) { Caption("{emitter_drag}") } else { TextField(emitter_drag, "0", action: emitter_drag_changed) } }
+  } } }
+}
+
+component TextProperties() {
+  Card { Padding(6) { VStack(spacing: 5) {
+    Caption("▎ テキスト")
+    If(selected_layer_locked) { Caption("{text_content}") } else { TextArea(text_content, "テキストを入力", 92, action: text_content_changed) }
+    HStack(spacing: 5) { MinWidth(72) { Caption("書体") } If(selected_layer_locked) { Caption("{text_font_family}") } else { TextField(text_font_family, "Inter", action: text_font_family_changed) } }
+    If(has_text_font_families) {
+      TextField(text_font_search, "フォントを検索", action: text_font_search_changed)
+      HorizontalScrollView(420) { HStack(spacing: 3) { ForEach(text_font_families, family, key: id) { Button("{family.name}", action: text_font_family_select, tone: secondary, size: small, disabled: selected_layer_locked) } } }
+    } else {
+      If(text_font_search != "") { Caption("一致するインストール済みフォントがありません。") }
+    }
+    HStack(spacing: 5) { MinWidth(72) { Caption("サイズ") } If(selected_layer_locked) { Caption("{text_font_size}") } else { TextField(text_font_size, "48", action: text_font_size_changed) } }
+    HStack(spacing: 5) { MinWidth(72) { Caption("文字色") } If(selected_layer_locked) { Caption("{text_color}") } else { TextField(text_color, "#FFFFFF", action: text_color_changed) } }
+    HStack(spacing: 5) { MinWidth(72) { Caption("文字間隔") } If(selected_layer_locked) { Caption("{text_tracking}") } else { TextField(text_tracking, "0", action: text_tracking_changed) } Caption("px") }
+    HStack(spacing: 5) { MinWidth(72) { Caption("行間") } If(selected_layer_locked) { Caption("{text_leading}") } else { TextField(text_leading, "1.2", action: text_leading_changed) } Caption("×") }
+    HStack(spacing: 5) {
+      MinWidth(72) { Caption("揃え") }
+      Button("左", action: text_align_left, tone: secondary, size: small, disabled: selected_layer_locked)
+      Button("中央", action: text_align_center, tone: secondary, size: small, disabled: selected_layer_locked)
+      Button("右", action: text_align_right, tone: secondary, size: small, disabled: selected_layer_locked)
+    }
+    HStack(spacing: 5) { MinWidth(72) { Caption("縁取り") } If(selected_layer_locked) { Caption("{text_stroke_width}") } else { TextField(text_stroke_width, "0", action: text_stroke_width_changed) } Caption("px") }
+    HStack(spacing: 5) { MinWidth(72) { Caption("縁の色") } If(selected_layer_locked) { Caption("{text_stroke_color}") } else { TextField(text_stroke_color, "#000000", action: text_stroke_color_changed) } }
+    HStack(spacing: 5) {
+      MinWidth(72) { Caption("スタイル") }
+      Button("B", action: toggle_text_faux_bold, tone: secondary, size: small, disabled: selected_layer_locked)
+      Button("I", action: toggle_text_faux_italic, tone: secondary, size: small, disabled: selected_layer_locked)
+      Button("TT", action: toggle_text_all_caps, tone: secondary, size: small, disabled: selected_layer_locked)
+      Button("Tt", action: toggle_text_small_caps, tone: secondary, size: small, disabled: selected_layer_locked)
+    }
+    HStack(spacing: 5) { MinWidth(72) { Caption("テキスト枠") } If(selected_layer_locked) { Caption("{text_box_width} × {text_box_height}") } else { MaxWidth(110) { TextField(text_box_width, "幅 px", action: text_box_width_changed) } MaxWidth(110) { TextField(text_box_height, "高さ px", action: text_box_height_changed) } } Caption("0 は自動") }
+  } } }
+}
+
+component TextAnimatorProperties() {
+  Card { Padding(6) { VStack(spacing: 5) {
+    Caption("▎ 文字アニメーター")
+    If(text_animator_present) {
+      If(text_animator_enabled) { Button("アニメーター ON", action: toggle_text_animator, tone: primary, size: small, disabled: selected_layer_locked) } else { Button("アニメーター OFF", action: toggle_text_animator, tone: secondary, size: small, disabled: selected_layer_locked) }
+      If(text_animator_enabled) {
+        HStack(spacing: 5) {
+          Caption("選択範囲")
+          Button("{text_animator_shape_label}  ↻", action: cycle_text_animator_shape, tone: secondary, size: small, disabled: selected_layer_locked)
+          If(text_animator_random_order) { Button("ランダム順", action: toggle_text_animator_random_order, tone: primary, size: small, disabled: selected_layer_locked) } else { Button("文字順", action: toggle_text_animator_random_order, tone: secondary, size: small, disabled: selected_layer_locked) }
+        }
+        If(text_animator_shape_label == "Expression") {
+          HStack(spacing: 5) { Caption("式") If(selected_layer_locked) { Caption("{text_animator_expression}") } else { TextField(text_animator_expression, "index / total", action: text_animator_expression_changed) } }
+          Caption("index・total・time を使い、0〜1を返す式")
+        }
+        If(has_text_animator_parameters) {
+          VStack(spacing: 4) {
+            ForEach(text_animator_parameters, parameter, key: id) {
+              HStack(spacing: 5) {
+                MinWidth(82) { Caption("{parameter.label}") }
+                If(selected_layer_locked) { Caption("{parameter.value}") } else { TextField(parameter.value, "0", action: text_animator_parameter_changed) }
+                Caption("{parameter.unit}")
+              }
+            }
+          }
+        }
+      }
+    } else {
+      Button("文字アニメーターを追加", action: toggle_text_animator, tone: secondary, size: small, disabled: selected_layer_locked)
+      Caption("範囲セレクターで文字ごとの位置・拡大率・不透明度などを調整します。")
+    }
+  } } }
+}
+
+component TextWorkspacePanel() {
+  VStack(spacing: 6) {
+    Card { Padding(8) { HStack(spacing: 6) { Text("文字制作", size: 16) Spacer If(selected_is_text) { Caption("{layer_name}") } else { Caption("テキストレイヤー未選択") } } } }
+    If(selected_is_text) {
+      TextProperties()
+      TextAnimatorProperties()
+      TransformProperties()
+    } else {
+      Card { Padding(10) { VStack(spacing: 6) { Caption("文字レイヤーを選択して、書体・組版・文字アニメーションを編集します。") Button("＋ テキストレイヤー", action: add_text_layer, tone: primary, size: small) } } }
+    }
+  }
+}
+
+component AudioProperties() {
+  Card { Padding(6) { VStack(spacing: 5) {
+    Caption("▎ 音声")
+    HStack(spacing: 5) { MinWidth(72) { Caption("音量") } If(selected_layer_locked) { Caption("{audio_volume}") } else { TextField(audio_volume, "0.0", action: audio_volume_changed) } Caption("dB") If(audio_volume_keyframe_here) { Button("◇ キーあり", action: keyframe_audio_volume, tone: secondary, size: small, disabled: selected_layer_locked) } else { Button("◇ キー追加", action: keyframe_audio_volume, tone: secondary, size: small, disabled: selected_layer_locked) } }
+    Caption("0 dB = 元の音量 · −48 dB = ほぼ無音 · 範囲 −48〜+12 dB")
+  } } }
+}
+
+component VideoProperties() {
+  Card { Padding(6) { VStack(spacing: 5) {
+    Caption("▎ 動画")
+    HStack(spacing: 5) { MinWidth(72) { Caption("再生速度") } If(selected_layer_locked) { Caption("{video_speed}") } else { TextField(video_speed, "1.0", action: video_speed_changed) } Caption("×") }
+    If(selected_time_remap) { Button("時間リマップを解除", action: toggle_video_time_remap, tone: secondary, size: small, disabled: selected_layer_locked) } else { Button("時間リマップを有効化", action: toggle_video_time_remap, tone: secondary, size: small, disabled: selected_layer_locked) }
+    HStack(spacing: 5) {
+      Caption("時間のポスタライズ")
+      Spacer
+      If(video_posterize_present) {
+        If(video_posterize_enabled) { Button("有効", action: toggle_video_posterize, tone: secondary, size: small, disabled: selected_layer_locked) } else { Button("無効", action: toggle_video_posterize, tone: secondary, size: small, disabled: selected_layer_locked) }
+      } else { Button("追加", action: toggle_video_posterize, tone: secondary, size: small, disabled: selected_layer_locked) }
+    }
+    If(video_posterize_present && video_posterize_enabled) {
+      HStack(spacing: 5) { MinWidth(72) { Caption("目標 fps") } If(selected_layer_locked) { Caption("{video_posterize_fps}") } else { TextField(video_posterize_fps, "12", action: video_posterize_fps_changed) } Caption("fps") }
+    }
+    Caption("{video_info}")
+    Caption("0.05×〜10×")
+  } } }
+}
+
+component ImageProperties() {
+  Card { Padding(6) { VStack(spacing: 5) {
+    Caption("▎ 画像・動画素材")
+    Caption("{image_info}")
+    HStack(spacing: 5) {
+      Button("全体を表示", action: fit_selected_image_to_composition, tone: secondary, size: small, disabled: selected_layer_locked)
+      Button("画面を埋める", action: fill_selected_image_to_composition, tone: secondary, size: small, disabled: selected_layer_locked)
+    }
+    Caption("再生位置に位置・倍率を設定します。既存のキーフレームは保持されます。")
+  } } }
+}
+
+component LayerProxyProperties() {
+  Card { Padding(6) { VStack(spacing: 5) {
+    Caption("▎ レイヤープロキシ")
+    If(selected_is_image || selected_is_video) {
+      HStack(spacing: 5) {
+        Caption("解像度")
+        Button("{layer_proxy_resolution_label}  ↻", action: cycle_layer_proxy_resolution, tone: secondary, size: small, disabled: selected_layer_locked)
+        Spacer
+        If(layer_proxy_enabled) { Button("プレビュー適用中", action: toggle_layer_proxy, tone: primary, size: small, disabled: selected_layer_locked) } else { Button("プレビューに適用", action: toggle_layer_proxy, tone: secondary, size: small, disabled: selected_layer_locked) }
+      }
+      If(layer_proxy_has_file) { Caption("プロキシファイルをプレビューに使用中") }
+      If(layer_proxy_path_set && !layer_proxy_has_file) { Caption("登録済みプロキシが見つかりません") }
+      If(layer_proxy_path_set) { Button("プロキシ参照を解除", action: clear_layer_proxy, tone: secondary, size: small, disabled: selected_layer_locked) }
+      If(layer_proxy_can_generate && !proxy_generation_active) { Button("低解像度プロキシを生成", action: generate_layer_proxy, tone: primary, size: small, disabled: selected_layer_locked) }
+      If(!layer_proxy_can_generate && !proxy_generation_active) { Caption("生成する場合は解像度を1/2、1/4、1/8にしてください。") }
+    }
+    If(proxy_generation_active) {
+      Caption("{proxy_status}")
+      ProgressBar(proxy_progress)
+      Button("生成をキャンセル", action: cancel_layer_proxy_generation, tone: secondary, size: small)
+    } else { If(!selected_is_image && !selected_is_video) { Caption("画像または動画レイヤーを選択するとプロキシを設定できます。") } else { Caption("{proxy_status}") } }
+    Caption("プレビューを軽くし、最終書き出しでは元解像度を使用します。")
+  } } }
+}
+
+component ShapeProperties() {
+  Card { Padding(6) { VStack(spacing: 5) {
+    Caption("▎ シェイプ")
+    If(selected_is_sized_shape) {
+      HStack(spacing: 5) { MinWidth(72) { Caption("幅 (%)") } If(selected_layer_locked) { Caption("{shape_width}") } else { TextField(shape_width, "100", action: shape_width_changed) } Button("◇", action: shape_width_keyframe, tone: secondary, size: small, disabled: selected_layer_locked) }
+      HStack(spacing: 5) { MinWidth(72) { Caption("高さ (%)") } If(selected_layer_locked) { Caption("{shape_height}") } else { TextField(shape_height, "100", action: shape_height_changed) } Button("◇", action: shape_height_keyframe, tone: secondary, size: small, disabled: selected_layer_locked) }
+    }
+    If(selected_is_rectangle) { HStack(spacing: 5) { MinWidth(72) { Caption("角丸 (%)") } If(selected_layer_locked) { Caption("{shape_corner_radius}") } else { TextField(shape_corner_radius, "0", action: shape_corner_radius_changed) } Button("◇", action: shape_corner_radius_keyframe, tone: secondary, size: small, disabled: selected_layer_locked) } }
+    If(selected_is_star) {
+      HStack(spacing: 5) { MinWidth(72) { Caption("頂点数") } If(selected_layer_locked) { Caption("{shape_points}") } else { TextField(shape_points, "5", action: shape_points_changed) } Button("◇", action: shape_points_keyframe, tone: secondary, size: small, disabled: selected_layer_locked) }
+      HStack(spacing: 5) { MinWidth(72) { Caption("内半径") } If(selected_layer_locked) { Caption("{shape_inner_radius}") } else { TextField(shape_inner_radius, "30", action: shape_inner_radius_changed) } Caption("px") Button("◇", action: shape_inner_radius_keyframe, tone: secondary, size: small, disabled: selected_layer_locked) }
+      HStack(spacing: 5) { MinWidth(72) { Caption("外半径") } If(selected_layer_locked) { Caption("{shape_outer_radius}") } else { TextField(shape_outer_radius, "80", action: shape_outer_radius_changed) } Caption("px") Button("◇", action: shape_outer_radius_keyframe, tone: secondary, size: small, disabled: selected_layer_locked) }
+    }
+    If(selected_is_polygon) {
+      HStack(spacing: 5) { MinWidth(72) { Caption("辺の数") } If(selected_layer_locked) { Caption("{shape_sides}") } else { TextField(shape_sides, "6", action: shape_sides_changed) } Button("◇", action: shape_sides_keyframe, tone: secondary, size: small, disabled: selected_layer_locked) }
+      HStack(spacing: 5) { MinWidth(72) { Caption("半径") } If(selected_layer_locked) { Caption("{shape_radius}") } else { TextField(shape_radius, "80", action: shape_radius_changed) } Caption("px") Button("◇", action: shape_radius_keyframe, tone: secondary, size: small, disabled: selected_layer_locked) }
+    }
+    HStack(spacing: 5) {
+      MinWidth(72) { Caption("塗り") }
+      Button("{shape_fill_type_label}  ↻", action: cycle_shape_fill_type, tone: secondary, size: small, disabled: selected_layer_locked)
+    }
+    If(selected_shape_solid) {
+      HStack(spacing: 5) { MinWidth(72) { Caption("塗り色") } If(selected_layer_locked) { Caption("{shape_color}") } else { TextField(shape_color, "#FF6B1A", action: shape_color_changed) } }
+    }
+    If(selected_shape_gradient) {
+      HStack(spacing: 5) { MinWidth(72) { Caption("始点色") } If(selected_layer_locked) { Caption("{shape_gradient_start_color}") } else { TextField(shape_gradient_start_color, "#FF6B1A", action: shape_gradient_start_color_changed) } }
+      HStack(spacing: 5) { MinWidth(72) { Caption("終点色") } If(selected_layer_locked) { Caption("{shape_gradient_end_color}") } else { TextField(shape_gradient_end_color, "#FFFFFF", action: shape_gradient_end_color_changed) } }
+      If(shape_fill_type_label == "線形グラデーション") {
+        HStack(spacing: 5) { MinWidth(72) { Caption("角度") } If(selected_layer_locked) { Caption("{shape_gradient_angle}") } else { TextField(shape_gradient_angle, "0", action: shape_gradient_angle_changed) } Caption("°") }
+      }
+      If(shape_fill_type_label == "円形グラデーション") {
+        HStack(spacing: 5) { MinWidth(72) { Caption("半径") } If(selected_layer_locked) { Caption("{shape_gradient_radius}") } else { TextField(shape_gradient_radius, "960", action: shape_gradient_radius_changed) } Caption("px") }
+      }
+      Caption("グラデーションの中心はレイヤー中心です。")
+    }
+    HStack(spacing: 5) { MinWidth(72) { Caption("線の色") } If(selected_layer_locked) { Caption("{shape_stroke_color}") } else { TextField(shape_stroke_color, "#FFFFFF", action: shape_stroke_color_changed) } }
+    HStack(spacing: 5) { MinWidth(72) { Caption("線幅") } If(selected_layer_locked) { Caption("{shape_stroke_width}") } else { TextField(shape_stroke_width, "0", action: shape_stroke_width_changed) } Caption("px") }
+    HStack(spacing: 5) { MinWidth(72) { Caption("押し出し") } If(selected_layer_locked) { Caption("{shape_extrusion_depth}") } else { TextField(shape_extrusion_depth, "0", action: shape_extrusion_depth_changed) } Caption("px") }
+    HStack(spacing: 5) { MinWidth(72) { Caption("ベベル") } If(selected_layer_locked) { Caption("{shape_bevel_depth}") } else { TextField(shape_bevel_depth, "0", action: shape_bevel_depth_changed) } Caption("px") }
+    Spacer
+    HStack(spacing: 5) {
+      Caption("パスのトリミング")
+      Spacer
+      If(shape_trim_enabled) { Button("有効", action: toggle_shape_trim_paths, tone: secondary, size: small, disabled: selected_layer_locked) } else { Button("追加", action: toggle_shape_trim_paths, tone: secondary, size: small, disabled: selected_layer_locked) }
+    }
+    If(shape_trim_enabled) {
+      HStack(spacing: 5) { MinWidth(72) { Caption("開始") } If(selected_layer_locked) { Caption("{shape_trim_start}") } else { TextField(shape_trim_start, "0", action: shape_trim_start_changed) } Caption("%") Button("◇", action: shape_trim_start_keyframe, tone: secondary, size: small, disabled: selected_layer_locked) }
+      HStack(spacing: 5) { MinWidth(72) { Caption("終了") } If(selected_layer_locked) { Caption("{shape_trim_end}") } else { TextField(shape_trim_end, "100", action: shape_trim_end_changed) } Caption("%") Button("◇", action: shape_trim_end_keyframe, tone: secondary, size: small, disabled: selected_layer_locked) }
+      HStack(spacing: 5) { MinWidth(72) { Caption("オフセット") } If(selected_layer_locked) { Caption("{shape_trim_offset}") } else { TextField(shape_trim_offset, "0", action: shape_trim_offset_changed) } Caption("°") Button("◇", action: shape_trim_offset_keyframe, tone: secondary, size: small, disabled: selected_layer_locked) }
+    }
+    Spacer
+    HStack(spacing: 5) {
+      Caption("シェイプリピーター")
+      Spacer
+      If(shape_repeater_enabled) { Button("有効", action: toggle_shape_repeater, tone: secondary, size: small, disabled: selected_layer_locked) } else { Button("追加", action: toggle_shape_repeater, tone: secondary, size: small, disabled: selected_layer_locked) }
+    }
+    If(shape_repeater_enabled) {
+      HStack(spacing: 5) { MinWidth(72) { Caption("コピー数") } If(selected_layer_locked) { Caption("{shape_repeater_copies}") } else { TextField(shape_repeater_copies, "3", action: shape_repeater_copies_changed) } Button("◇", action: shape_repeater_copies_keyframe, tone: secondary, size: small, disabled: selected_layer_locked) }
+      HStack(spacing: 5) { MinWidth(72) { Caption("間隔 X") } If(selected_layer_locked) { Caption("{shape_repeater_x}") } else { TextField(shape_repeater_x, "100", action: shape_repeater_x_changed) } Caption("px") Button("◇", action: shape_repeater_x_keyframe, tone: secondary, size: small, disabled: selected_layer_locked) }
+      HStack(spacing: 5) { MinWidth(72) { Caption("間隔 Y") } If(selected_layer_locked) { Caption("{shape_repeater_y}") } else { TextField(shape_repeater_y, "0", action: shape_repeater_y_changed) } Caption("px") Button("◇", action: shape_repeater_y_keyframe, tone: secondary, size: small, disabled: selected_layer_locked) }
+      HStack(spacing: 5) { MinWidth(72) { Caption("倍率 X") } If(selected_layer_locked) { Caption("{shape_repeater_scale_x}") } else { TextField(shape_repeater_scale_x, "100", action: shape_repeater_scale_x_changed) } Caption("%") Button("◇", action: shape_repeater_scale_x_keyframe, tone: secondary, size: small, disabled: selected_layer_locked) }
+      HStack(spacing: 5) { MinWidth(72) { Caption("倍率 Y") } If(selected_layer_locked) { Caption("{shape_repeater_scale_y}") } else { TextField(shape_repeater_scale_y, "100", action: shape_repeater_scale_y_changed) } Caption("%") Button("◇", action: shape_repeater_scale_y_keyframe, tone: secondary, size: small, disabled: selected_layer_locked) }
+      HStack(spacing: 5) { MinWidth(72) { Caption("回転") } If(selected_layer_locked) { Caption("{shape_repeater_rotation}") } else { TextField(shape_repeater_rotation, "0", action: shape_repeater_rotation_changed) } Caption("° / コピー") Button("◇", action: shape_repeater_rotation_keyframe, tone: secondary, size: small, disabled: selected_layer_locked) }
+      HStack(spacing: 5) { MinWidth(72) { Caption("開始不透明度") } If(selected_layer_locked) { Caption("{shape_repeater_start_opacity}") } else { TextField(shape_repeater_start_opacity, "100", action: shape_repeater_start_opacity_changed) } Caption("%") Button("◇", action: shape_repeater_start_opacity_keyframe, tone: secondary, size: small, disabled: selected_layer_locked) }
+      HStack(spacing: 5) { MinWidth(72) { Caption("終了不透明度") } If(selected_layer_locked) { Caption("{shape_repeater_end_opacity}") } else { TextField(shape_repeater_end_opacity, "100", action: shape_repeater_end_opacity_changed) } Caption("%") Button("◇", action: shape_repeater_end_opacity_keyframe, tone: secondary, size: small, disabled: selected_layer_locked) }
+      If(shape_repeater_composite_below) { Button("下に合成", action: toggle_shape_repeater_composite, tone: secondary, size: small, disabled: selected_layer_locked) } else { Button("上に合成", action: toggle_shape_repeater_composite, tone: secondary, size: small, disabled: selected_layer_locked) }
+    }
+  } } }
+}
+
+component SolidProperties() {
+  Card { Padding(6) { VStack(spacing: 5) {
+    Caption("▎ 平面レイヤー")
+    HStack(spacing: 5) { MinWidth(72) { Caption("色") } If(selected_layer_locked) { Caption("{solid_color}") } else { TextField(solid_color, "#20252A", action: solid_color_changed) } }
+    Caption("平面はコンポジション全体を塗りつぶします。")
+  } } }
+}
+
+component PreCompProperties() {
+  Card { Padding(6) { VStack(spacing: 5) {
+    Caption("▎ プリコンポーズ")
+    Caption("{precomp_source_summary}")
+    If(precomp_collapse_transforms) { Button("変形を折りたたむ: ON", action: toggle_precomp_collapse_transforms, tone: secondary, size: small, disabled: selected_layer_locked) } else { Button("変形を折りたたむ: OFF", action: toggle_precomp_collapse_transforms, tone: secondary, size: small, disabled: selected_layer_locked) }
+    Caption("内側のレイヤーを親コンポジションの変形空間へ展開して合成します。")
+  } } }
+}

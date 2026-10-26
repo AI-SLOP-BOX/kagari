@@ -1,0 +1,20 @@
+pub const HIT_TARGET_MIN: f32 = 24.0;
+pub const HIT_TARGET_COMFORT: f32 = 28.0;
+pub const FIELD_HEIGHT: f32 = 26.0;
+pub const FIELD_RADIUS: f32 = 6.0;
+pub const BUTTON_RADIUS: f32 = 6.0;
+pub const SURFACE_RADIUS: f32 = 8.0;
+pub const PROPERTY_LABEL_WIDTH: f32 = 136.0;
+pub const PROPERTY_CONTROL_MIN_WIDTH: f32 = 130.0;
+pub const SIDEBAR_DEFAULT_WIDTH: f32 = 280.0;
+pub const TOOLBAR_HEIGHT: f32 = 32.0;
+pub const PANEL_HEADER_HEIGHT: f32 = 32.0;
+pub const DOCKED_PANELS_MIN_WIDTH: f32 = 840.0;
+pub const TIMELINE_LEFT_PANE_WIDTH: f32 = 240.0;
+pub const BOTTOM_TIMELINE_HEIGHT: f32 = 280.0;
+pub const STATUS_BAR_HEIGHT: f32 = 20.0;
+
+pub const FONT_SIZE_SMALL: f32 = 10.5;
+pub const FONT_SIZE_BODY: f32 = 12.5;
+pub const FONT_SIZE_HEADING: f32 = 13.5;
+pub const FONT_SIZE_TITLE: f32 = 14.5;

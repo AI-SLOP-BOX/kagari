@@ -1,0 +1,28 @@
+component AudioMixerPanel() {
+  Card { Padding(6) { VStack(spacing: 5) {
+    HStack(spacing: 5) {
+      Text("オーディオミキサー", size: 14)
+      Spacer
+      Caption("音量入力またはキー追加 · ミュートとソロを切り替え")
+    }
+    If(has_audio_tracks) {
+      ForEach(audio_tracks, track, key: id) {
+        VStack(spacing: 3) {
+          HStack(spacing: 5) {
+            If(track.selected) { Button("{track.name}", action: select_layer, tone: primary, size: small) } else { Button("{track.name}", action: select_layer, tone: secondary, size: small) }
+            Caption("{track.source_kind}")
+            Spacer
+          }
+          HStack(spacing: 5) {
+            If(track.has_volume) { If(track.locked) { Caption("{track.volume} dB · ロック中") } else { TextField(track.volume, "0.0", action: audio_track_volume_changed) Caption("dB") If(track.keyframe_here) { Button("◇", action: audio_track_volume_keyframe, tone: primary, size: small) } else { Button("◇", action: audio_track_volume_keyframe, tone: secondary, size: small) } } }
+            Spacer
+            If(track.muted) { Button("ミュート", action: toggle_audio_mute, tone: primary, size: small) } else { Button("ミュート", action: toggle_audio_mute, tone: secondary, size: small) }
+            If(track.solo) { Button("ソロ", action: toggle_layer_solo, tone: primary, size: small) } else { Button("ソロ", action: toggle_layer_solo, tone: secondary, size: small) }
+          }
+        }
+      }
+    } else {
+      Caption("音声トラックがありません。プロジェクトパネルから音声を追加できます。")
+    }
+  } } }
+}
