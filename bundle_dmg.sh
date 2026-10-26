@@ -2,7 +2,7 @@
 set -euo pipefail
 
 echo "🦀 Building Kagari Studio release binary..."
-cargo build --release --features gui --bin kagari-studio
+cargo build --release --no-default-features --features ame --bin kagari-studio
 
 echo "📦 Packaging macOS App Bundle..."
 BUNDLE_DIR="target/bundle/Kagari Studio.app/Contents"

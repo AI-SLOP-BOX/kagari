@@ -59,8 +59,8 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Build Release GUI Binary
-        run: cargo build --release --features gui --bin kagari-studio
+      - name: Build Release AmeUI Studio Binary
+        run: cargo build --release --features ame --bin kagari-studio
 
       - name: Create macOS .app Bundle & DMG
         run: |

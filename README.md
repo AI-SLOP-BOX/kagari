@@ -21,11 +21,11 @@ Kagari is designed to handle the VFX work that code-first video tools eventually
 ```bash
 git clone https://github.com/AI-SLOP-BOX/kagari.git
 cd kagari
-cargo run --release --features gui --bin kagari-studio
+cargo run --release --bin kagari-studio
 ```
 
-The UI toolkit (`choegui`) is vendored under `vendor/choegui`, so a fresh clone
-builds without any external path dependency.
+The Studio shell is built with AmeUI. `kagari-studio` is also the package's
+default run target.
 
 Headless-only build (no GUI, smaller dependency set):
 
@@ -71,7 +71,7 @@ For a comprehensive breakdown of all subsystems, layer types, effect packages, a
 ## Stack
 
 - **Rust + wgpu** — GPU compositing with Metal backend on macOS (DirectX 12 / Vulkan on Windows/Linux)
-- **egui** — Dark professional motion graphics UI
+- **AmeUI + Vello** — Native Studio interface and vector rendering
 - **FFmpeg** — Video decode / encode pipeline
 - **Symphonia + rodio** — Comprehensive multi-format audio decoding & live playback sync
 - **Rhai** — Embedded, deterministic expression scripting for animatable properties
