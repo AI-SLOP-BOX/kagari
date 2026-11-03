@@ -1133,6 +1133,14 @@ impl AfterEffectsStudio {
             ("effect_search_changed", Some(ActionValue::Text(value))) => {
                 self.effect_search = value
             }
+            ("animation_preset_search_changed", Some(ActionValue::Text(value))) => {
+                self.animation_preset_search = value;
+            }
+            ("apply_animation_preset", _) => {
+                if let Some(preset_id) = selected_row_id.as_deref() {
+                    self.apply_animation_preset(preset_id);
+                }
+            }
             ("add_effect_catalog", _) => {
                 if let Some(effect_id) = selected_row_id.as_deref() { self.add_effect(effect_id); }
             }

@@ -642,6 +642,8 @@ impl AfterEffectsStudio {
             scale_y: 20.0,
             opacity: 100.0,
             effect_search: String::new(),
+            animation_preset_search: String::new(),
+            animation_preset_status: String::new(),
             text_font_search: String::new(),
             asset_status: "素材を読み込むとシーンに追加されます。".to_owned(),
             asset_folder_id: None,

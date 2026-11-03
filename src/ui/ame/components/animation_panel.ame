@@ -28,6 +28,26 @@ component AnimationPanel() {
       }
     }
     If(selected_layer && !selected_layer_locked) {
+      VStack(spacing: 5) {
+        HStack(spacing: 5) {
+          Caption("アニメーションプリセット")
+          Spacer
+          MaxWidth(180) { TextField(animation_preset_search, "プリセットを検索", action: animation_preset_search_changed) }
+        }
+        If(has_animation_preset_items) {
+          HorizontalScrollView(720) {
+            HStack(spacing: 4) {
+              ForEach(animation_preset_items, preset, key: id) {
+                Button("{preset.label}", action: apply_animation_preset, tone: secondary, size: small, disabled: selected_layer_locked)
+              }
+            }
+          }
+        } else {
+          Caption("対応するプリセットはありません。")
+        }
+        If(animation_preset_status != "") { Caption("{animation_preset_status}") }
+      }
+
       HStack(spacing: 5) {
         Button("前のキー", action: previous_keyframe, tone: secondary, size: small)
         Button("次のキー", action: next_keyframe, tone: secondary, size: small)

@@ -159,6 +159,47 @@ impl AfterEffectsStudio {
             Value::Bool(!effect_parameters.is_empty()),
         )?;
         self.sync_tracker_bindings()?;
+        self.sync_animation_preset_bindings()?;
+        Ok(())
+    }
+
+    pub(crate) fn sync_animation_preset_bindings(
+        &mut self,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let query = self.animation_preset_search.trim().to_lowercase();
+        let animation_preset_items = AfterEffectsStudio::animation_preset_catalog()
+            .iter()
+            .filter(|(id, label, category, keywords)| {
+                query.is_empty()
+                    || id.to_lowercase().contains(&query)
+                    || label.to_lowercase().contains(&query)
+                    || category.to_lowercase().contains(&query)
+                    || keywords.contains(&query)
+            })
+            .map(|(id, label, category, _)| {
+                Value::Record(std::collections::BTreeMap::from([
+                    ("id".to_owned(), Value::String((*id).to_owned())),
+                    ("label".to_owned(), Value::String((*label).to_owned())),
+                    ("category".to_owned(), Value::String((*category).to_owned())),
+                ]))
+            })
+            .collect::<Vec<_>>();
+        self.ui.set_binding(
+            "has_animation_preset_items",
+            Value::Bool(!animation_preset_items.is_empty()),
+        )?;
+        self.ui.set_binding(
+            "animation_preset_items",
+            Value::List(animation_preset_items),
+        )?;
+        self.ui.set_binding(
+            "animation_preset_search",
+            Value::String(self.animation_preset_search.clone()),
+        )?;
+        self.ui.set_binding(
+            "animation_preset_status",
+            Value::String(self.animation_preset_status.clone()),
+        )?;
         Ok(())
     }
 

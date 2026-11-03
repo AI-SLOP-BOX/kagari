@@ -99,6 +99,11 @@ app AfterEffectsStudio {
     id: String;
     label: String;
   }
+  record AnimationPresetItem {
+    id: String;
+    label: String;
+    category: String;
+  }
   record EffectParameter {
     id: String;
     label: String;
@@ -376,6 +381,10 @@ app AfterEffectsStudio {
   bind has_effect_catalog_items: Bool = false;
   bind effect_parameters: List<EffectParameter> = [];
   bind has_effect_parameters: Bool = false;
+  bind animation_preset_search: String = "";
+  bind animation_preset_items: List<AnimationPresetItem> = [];
+  bind has_animation_preset_items: Bool = false;
+  bind animation_preset_status: String = "";
   bind layer_style_items: List<LayerStyleItem> = [];
   bind has_layer_style_parameters: Bool = false;
   bind layer_style_parameters: List<EffectParameter> = [];
@@ -955,6 +964,8 @@ app AfterEffectsStudio {
   action toggle_selected_light_shadows;
   action solid_color_changed;
   action effect_search_changed;
+  action animation_preset_search_changed;
+  action apply_animation_preset;
   action add_effect_catalog;
   action add_gaussian_blur;
   action add_color_tint;

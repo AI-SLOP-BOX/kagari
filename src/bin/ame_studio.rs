@@ -33,6 +33,8 @@ mod ame_studio_icons;
 mod ame_studio_layer_controls;
 #[path = "ame_studio/media_import.rs"]
 mod ame_studio_media_import;
+#[path = "ame_studio/preset_ops.rs"]
+mod ame_studio_preset_ops;
 #[path = "ame_studio/project_io.rs"]
 mod ame_studio_project_io;
 #[path = "ame_studio/sync_assets.rs"]
@@ -193,6 +195,8 @@ pub struct AfterEffectsStudio {
     scale_y: f64,
     opacity: f64,
     effect_search: String,
+    animation_preset_search: String,
+    animation_preset_status: String,
     text_font_search: String,
     asset_status: String,
     asset_folder_id: Option<String>,
