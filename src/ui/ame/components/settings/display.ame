@@ -1,0 +1,74 @@
+component SettingsDisplayPage() {
+  VStack(spacing: 12) {
+    VStack(spacing: 4) { Title("表示") Caption("ユーザーインターフェース、プレビューの表示、カラーに関する設定を行います。") }
+
+    Card(padding: 12, spacing: 10) {
+      Text("ユーザーインターフェース", size: 13)
+      SettingsRow("UI のスケール", label_width: 180) {
+        HStack(spacing: 6) { Text("100%") Caption("(標準)") }
+      }
+      SettingsRow("テーマ", label_width: 180) {
+        Caption("ダーク (推奨)")
+      }
+      SettingsRow("アクセントカラー", label_width: 180) {
+        ColorSwatches(selected: accent_color) {
+          Swatch("#f39c29")
+          Swatch("#2b82f6")
+          Swatch("#8b5cf6")
+          Swatch("#ec4899")
+          Swatch("#ef4444")
+          Swatch("#eab308")
+          Swatch("#22c55e")
+          Swatch("#06b6d4")
+        }
+      }
+    }
+
+    Card(padding: 12, spacing: 10) {
+      Text("プレビュー", size: 13)
+      SettingsRow("プレビューの解像度", label_width: 180) {
+        Select(preview_resolution, action: setting_preview_resolution_changed) {
+          Option("auto", "自動 (画面に合わせる)")
+          Option("full", "Full")
+          Option("half", "1/2")
+          Option("quarter", "1/4")
+        }
+      }
+      SettingsRow("高品質プレビュー", label_width: 180) {
+        Checkbox("可能な場合は高品質で表示する", high_quality_preview, action: setting_high_quality_changed)
+      }
+      SettingsRow("セーフエリアの表示", label_width: 180) {
+        Checkbox("映像のセーフエリア（タイトル / アクション）を表示する", safe_area_visible, action: setting_safe_area_changed)
+      }
+      SettingsRow("グリッドの表示", label_width: 180) {
+        HStack(spacing: 8) {
+          Checkbox("グリッドを表示する", grid_visible, action: setting_grid_visible_changed)
+          Caption("間隔")
+          MaxWidth(110) { DragValue(grid_spacing, min: 8.0, max: 512.0, action: setting_grid_spacing_changed) }
+          Caption("px")
+        }
+      }
+    }
+
+    Card(padding: 12, spacing: 10) {
+      Text("カラーと表示効果", size: 13)
+      SettingsRow("カラーマネジメント", label_width: 180) {
+        Select(color_management, action: setting_color_management_changed) {
+          Option("project", "プロジェクトの設定に従う")
+          Option("acescg", "ACEScg")
+          Option("srgb", "sRGB")
+        }
+      }
+      SettingsRow("ガンマ補正", label_width: 180) {
+        Select(gamma, action: setting_gamma_changed) {
+          Option("1.8", "1.8")
+          Option("2.2", "2.2")
+          Option("2.4", "2.4")
+        }
+      }
+      SettingsRow("HDR 表示を有効化", label_width: 180) {
+        Checkbox("対応するディスプレイで HDR を使用する", hdr_enabled, action: setting_hdr_changed)
+      }
+    }
+  }
+}

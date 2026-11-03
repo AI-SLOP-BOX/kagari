@@ -1,0 +1,69 @@
+component SettingsPlaybackPage() {
+  VStack(spacing: 12) {
+    VStack(spacing: 4) { Title("再生") Caption("プレビューの再生動作、品質、音声に関する設定を行います。") }
+
+    Card(padding: 12, spacing: 10) {
+      Text("再生の基本設定", size: 13)
+      SettingsRow("再生品質", label_width: 180) {
+        Select(playback_quality, action: setting_playback_quality_changed) {
+          Option("auto", "自動（バランス）")
+          Option("performance", "パフォーマンス優先")
+          Option("quality", "品質優先")
+          Option("full", "Full")
+          Option("high", "高品質")
+          Option("balanced", "バランス")
+        }
+      }
+      SettingsRow("フレームレート", label_width: 180) {
+        Caption("プロジェクトの設定に従う")
+      }
+      SettingsRow("再生の開始位置", label_width: 180) {
+        Select(playback_start_mode, action: setting_playback_start_changed) {
+          Option("current", "現在のフレームから再生")
+          Option("beginning", "先頭から再生")
+        }
+      }
+      SettingsRow("ループ再生", label_width: 180) {
+        Checkbox("作業領域の範囲をループ再生する", playback_loop, action: setting_loop_changed)
+      }
+    }
+
+    Card(padding: 12, spacing: 10) {
+      Text("プレビューの動作", size: 13)
+      SettingsRow("プリロール", label_width: 180) {
+        HStack(spacing: 6) { DragValue(pre_roll_secs, min: 0.0, max: 10.0, action: setting_pre_roll_changed) Caption("秒（前）") }
+      }
+      SettingsRow("ポストロール", label_width: 180) {
+        HStack(spacing: 6) { DragValue(post_roll_secs, min: 0.0, max: 10.0, action: setting_post_roll_changed) Caption("秒（後）") }
+      }
+      SettingsRow("再生時のキャッシュ", label_width: 180) {
+        Checkbox("再生中にバックグラウンドでキャッシュを更新する", playback_cache, action: setting_playback_cache_changed)
+      }
+      SettingsRow("スクラブ時の音声", label_width: 180) {
+        Checkbox("スクラブ時に音声を再生する", scrub_audio, action: setting_scrub_audio_changed)
+      }
+    }
+
+    Card(padding: 12, spacing: 10) {
+      Text("音声", size: 13)
+      SettingsRow("音声デバイス", label_width: 180) {
+        Caption("システムの既定のデバイス")
+      }
+      SettingsRow("出力チャンネル", label_width: 180) {
+        Caption("ステレオ")
+      }
+      SettingsRow("再生音量", label_width: 180) {
+        HStack(spacing: 8) {
+          Slider(playback_volume, min: 0.0, max: 100.0, action: setting_volume_changed)
+          Text("{playback_volume:.0f} %", size: 12)
+        }
+      }
+      SettingsRow("ピーク表示", label_width: 180) {
+        Checkbox("プレビュー中に音声のピークを表示する", show_audio_peaks, action: setting_show_peaks_changed)
+      }
+      SettingsRow("音声プレビュー", label_width: 180) {
+        Checkbox("タイムライン再生中にコンポジションの音声を再生する", audio_preview, action: setting_audio_preview_changed)
+      }
+    }
+  }
+}

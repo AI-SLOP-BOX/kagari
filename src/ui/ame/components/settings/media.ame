@@ -1,0 +1,65 @@
+component SettingsMediaPage() {
+  VStack(spacing: 12) {
+    VStack(spacing: 4) { Title("メディア") Caption("メディアの読み込み、デコード、キャッシュに関する設定を行います。") }
+
+    Card(padding: 12, spacing: 10) {
+      Text("読み込み", size: 13)
+      SettingsRow("静止画のデフォルト長", label_width: 180) {
+        HStack(spacing: 6) {
+          DragValue(still_duration_secs, min: 0.1, max: 600.0, action: setting_still_duration_changed)
+          Caption("秒")
+        }
+      }
+      SettingsRow("連番画像の認識", label_width: 180) {
+        Checkbox("連番ファイルを1つのクリップとして読み込む", image_sequence_detect, action: setting_image_sequence_changed)
+      }
+      SettingsRow("プロキシの自動生成", label_width: 180) {
+        Checkbox("重い素材に対してプロキシを自動作成する", proxy_auto_generate, action: setting_proxy_auto_changed)
+      }
+    }
+
+    Card(padding: 12, spacing: 10) {
+      Text("デコード", size: 13)
+      SettingsRow("ハードウェアデコード", label_width: 180) {
+        Checkbox("対応する形式でハードウェアデコードを使用する", hardware_decode, action: setting_hardware_decode_changed)
+      }
+      SettingsRow("優先デコーダー", label_width: 180) {
+        Select(preferred_decoder, action: setting_preferred_decoder_changed) {
+          Option("auto", "自動 (推奨)")
+          Option("ffmpeg", "FFmpeg")
+          Option("software", "ソフトウェア")
+        }
+      }
+      SettingsRow("色空間", label_width: 180) {
+        Select(media_color_space, action: setting_media_color_space_changed) {
+          Option("project", "プロジェクトの設定に従う")
+          Option("srgb", "sRGB")
+          Option("rec709", "Rec. 709")
+        }
+      }
+    }
+
+    Card(padding: 12, spacing: 10) {
+      Text("キャッシュとメディア管理", size: 13)
+      SettingsRow("メディアキャッシュの場所", label_width: 190) {
+        AttachedButton("参照…", action: setting_cache_path_browse) {
+          TextField(cache_path, "メディアキャッシュ", action: setting_cache_path_changed)
+        }
+      }
+      If(cache_path_status != "") { Caption("{cache_path_status}") }
+      HStack(spacing: 8) {
+        Caption("使用量")
+        Spacer
+        Caption("{cache_usage_text} / {cache_limit} GB")
+      }
+      ProgressBar(cache_usage_progress)
+      HStack(spacing: 8) {
+        Caption("最大キャッシュサイズ")
+        MaxWidth(80) { TextField(cache_limit, "GB", action: setting_cache_limit_changed) }
+        Caption("GB")
+        Spacer
+        Button("キャッシュを削除", action: clear_cache, tone: secondary, size: small)
+      }
+    }
+  }
+}

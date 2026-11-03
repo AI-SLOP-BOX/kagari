@@ -1,13 +1,66 @@
 component SettingsGeneralPage() {
-VStack(spacing: 10) {
-                        Text("一般", size: 18)
-                        Caption("アプリケーションの基本動作と起動時の設定です。")
-                        Card { Padding(14) { VStack(spacing: 10) {
-                          HStack(spacing: 10) { VStack(spacing: 2) { Text("インターフェース言語") Caption("現在の表示言語") } Spacer Caption("日本語") }
-                          HStack(spacing: 10) { VStack(spacing: 2) { Text("テーマ") Caption("現在の配色") } Spacer Caption("ダーク") }
-                          HStack(spacing: 10) { VStack(spacing: 2) { Text("起動時に開く画面") Caption("起動後に最初に表示する画面を選択します。") } Spacer Checkbox("ホーム", show_home_on_startup, action: setting_home_changed) }
-                          If(!show_home_on_startup) { Checkbox("起動時に前回のプロジェクトを再開", restore_previous_state, action: setting_restore_changed) }
-                          Checkbox("アプリケーション終了前に確認する", confirm_exit, action: setting_confirm_exit_changed)
-                        } } }
-                      }
+  VStack(spacing: 12) {
+    VStack(spacing: 4) { Title("一般") Caption("アプリケーションの基本的な動作を設定します。") }
+
+    Card(padding: 12, spacing: 10) {
+      Text("起動と終了", size: 13)
+      SettingsRow("起動時の動作", label_width: 170) {
+        Checkbox("ホーム画面を開く", show_home_on_startup, action: setting_home_changed)
+      }
+      If(!show_home_on_startup) {
+        SettingsRow("再開する", label_width: 170) {
+          Checkbox("前回のプロジェクトを開く", restore_previous_state, action: setting_restore_changed)
+        }
+      }
+      SettingsRow("終了時の確認", label_width: 170) {
+        Checkbox("プロジェクトを閉じる前に確認ダイアログを表示する", confirm_exit, action: setting_confirm_exit_changed)
+      }
+      SettingsRow("自動保存", label_width: 170) {
+        Select(autosave_interval, action: setting_autosave_interval_changed) {
+          Option("0", "無効")
+          Option("30", "30秒")
+          Option("60", "1分")
+          Option("180", "3分")
+          Option("300", "5分")
+          Option("600", "10分")
+          Option("900", "15分")
+          Option("1800", "30分")
+        }
+      }
+    }
+
+    Card(padding: 12, spacing: 10) {
+      Text("インターフェース", size: 13)
+      SettingsRow("テーマ", label_width: 170) {
+        Caption("ダーク (推奨)")
+      }
+      SettingsRow("アクセントカラー", label_width: 170) {
+        ColorSwatches(selected: accent_color) {
+          Swatch("#f39c29")
+          Swatch("#2b82f6")
+          Swatch("#8b5cf6")
+          Swatch("#ec4899")
+          Swatch("#ef4444")
+          Swatch("#eab308")
+          Swatch("#22c55e")
+          Swatch("#06b6d4")
+        }
+      }
+      SettingsRow("UI の拡大率", label_width: 170) {
+        HStack(spacing: 6) { Text("100%") Caption("(標準)") }
+      }
+    }
+
+    Card(padding: 12, spacing: 10) {
+      Text("プロジェクト", size: 13)
+      SettingsRow("新規プロジェクトの場所", label_width: 190) {
+        AttachedButton("参照…", action: setting_project_dir_browse) {
+          TextField(project_dir, "保存先フォルダ", action: setting_project_dir_changed)
+        }
+      }
+      SettingsRow("自動命名", label_width: 190) {
+        Checkbox("プロジェクトに自動で名前を付ける（例：プロジェクト 1、2…）", auto_project_names, action: setting_auto_project_names_changed)
+      }
+    }
+  }
 }

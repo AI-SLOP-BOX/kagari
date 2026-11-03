@@ -37,10 +37,12 @@ impl AfterEffectsStudio {
             .get("startup_home")
             .and_then(serde_json::Value::as_bool)
             .unwrap_or(true);
-        let autosave_secs = saved
-            .get("autosave_secs")
-            .and_then(serde_json::Value::as_u64)
-            .unwrap_or(300);
+        let autosave_secs = normalize_autosave_secs(
+            saved
+                .get("autosave_secs")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(300),
+        );
         let memory_limit_gb = saved
             .get("cache_mb")
             .and_then(serde_json::Value::as_u64)
@@ -80,6 +82,73 @@ impl AfterEffectsStudio {
             .get("gpu_compute_enabled")
             .and_then(serde_json::Value::as_bool)
             .unwrap_or(true);
+        let saved_string = |key: &str, fallback: String| {
+            saved
+                .get(key)
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned)
+                .unwrap_or(fallback)
+        };
+        let saved_bool = |key: &str, fallback: bool| {
+            saved
+                .get(key)
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(fallback)
+        };
+        let saved_f64 = |key: &str, fallback: f64| {
+            saved
+                .get(key)
+                .and_then(serde_json::Value::as_f64)
+                .filter(|value| value.is_finite())
+                .unwrap_or(fallback)
+        };
+        let accent_color = saved_string("accent_color", default_accent_color());
+        let accent_color = if parse_hex_color(&accent_color).is_some() {
+            accent_color
+        } else {
+            default_accent_color()
+        };
+        let auto_project_names = saved_bool("auto_project_names", true);
+        let renderer = saved_string(
+            "renderer",
+            if gpu_enabled { "gpu" } else { "cpu" }.to_owned(),
+        );
+        let background_render = saved_bool("background_render", true);
+        let preview_quality = saved_string("preview_quality", "auto".to_owned());
+        let high_quality_preview = saved_bool("high_quality_preview", true);
+        let preview_resolution = saved_string("preview_resolution", "auto".to_owned());
+        let still_duration_secs = saved_f64("still_duration_secs", 5.0).clamp(0.1, 600.0);
+        let image_sequence_detect = saved_bool("image_sequence_detect", true);
+        let proxy_auto_generate = saved_bool("proxy_auto_generate", false);
+        let hardware_decode = saved_bool("hardware_decode", true);
+        let preferred_decoder = saved_string("preferred_decoder", "auto".to_owned());
+        let media_color_space = saved_string("media_color_space", "project".to_owned());
+        let grid_visible = saved_bool("grid_visible", false);
+        let grid_spacing = saved_f64("grid_spacing", 100.0).clamp(8.0, 512.0);
+        let safe_area_visible = saved_bool("safe_area_visible", false);
+        let color_management = saved_string("color_management", "project".to_owned());
+        let gamma = saved_string("gamma", "2.2".to_owned());
+        let hdr_enabled = saved_bool("hdr_enabled", false);
+        let playback_quality = saved_string("playback_quality", "auto".to_owned());
+        let playback_start_mode = saved_string("playback_start_mode", "current".to_owned());
+        let pre_roll_secs = saved_f64("pre_roll_secs", 1.0).clamp(0.0, 10.0);
+        let post_roll_secs = saved_f64("post_roll_secs", 1.0).clamp(0.0, 10.0);
+        let playback_volume = saved_f64("playback_volume", 100.0).clamp(0.0, 100.0);
+        let playback_cache = saved_bool("playback_cache", true);
+        let scrub_audio = saved_bool("scrub_audio", false);
+        let show_audio_peaks = saved_bool("show_audio_peaks", false);
+        let project_dir = saved_string("project_dir", default_project_dir());
+        let preview_cache_dir = saved_string("preview_cache_dir", default_preview_cache_dir());
+        let temp_dir = saved_string("temp_dir", default_temp_dir());
+        let autosave_dir = saved_string("autosave_dir", default_autosave_dir());
+        let backup_dir = saved_string("backup_dir", default_backup_dir());
+        let backup_generations = saved
+            .get("backup_generations")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(10)
+            .clamp(1, 100);
+        let asset_library_dir = saved_string("asset_library_dir", default_asset_library_dir());
+        let shortcut_filter = saved_string("shortcut_filter", "all".to_owned());
         let configured_cache_path = saved
             .get("disk_cache_directory")
             .and_then(serde_json::Value::as_str)
@@ -268,6 +337,66 @@ impl AfterEffectsStudio {
                 ame_studio_icons::SVG_LOCK,
                 "#ff8a36",
             ),
+            (
+                "kagari.preferences.media",
+                ame_studio_icons::SVG_DATABASE,
+                "#aeb7bd",
+            ),
+            (
+                "kagari.preferences.media.active",
+                ame_studio_icons::SVG_DATABASE,
+                "#ff8a36",
+            ),
+            (
+                "kagari.preferences.display",
+                ame_studio_icons::SVG_MONITOR,
+                "#aeb7bd",
+            ),
+            (
+                "kagari.preferences.display.active",
+                ame_studio_icons::SVG_MONITOR,
+                "#ff8a36",
+            ),
+            (
+                "kagari.preferences.playback",
+                ame_studio_icons::SVG_PLAY,
+                "#aeb7bd",
+            ),
+            (
+                "kagari.preferences.playback.active",
+                ame_studio_icons::SVG_PLAY,
+                "#ff8a36",
+            ),
+            (
+                "kagari.preferences.filepath",
+                ame_studio_icons::SVG_FOLDER,
+                "#aeb7bd",
+            ),
+            (
+                "kagari.preferences.filepath.active",
+                ame_studio_icons::SVG_FOLDER,
+                "#ff8a36",
+            ),
+            (
+                "kagari.preferences.external",
+                ame_studio_icons::SVG_PUZZLE,
+                "#aeb7bd",
+            ),
+            (
+                "kagari.preferences.external.active",
+                ame_studio_icons::SVG_PUZZLE,
+                "#ff8a36",
+            ),
+            (
+                "kagari.preferences.experimental",
+                ame_studio_icons::SVG_ADJUSTMENT,
+                "#aeb7bd",
+            ),
+            (
+                "kagari.preferences.experimental.active",
+                ame_studio_icons::SVG_ADJUSTMENT,
+                "#ff8a36",
+            ),
             ("kagari.icon.undo", ame_studio_icons::SVG_UNDO, "#d0d7de"),
             ("kagari.icon.redo", ame_studio_icons::SVG_REDO, "#d0d7de"),
             (
@@ -420,6 +549,41 @@ impl AfterEffectsStudio {
             settings_feedback: String::new(),
             cache_limit,
             cache_usage_bytes,
+            accent_color,
+            auto_project_names,
+            renderer,
+            background_render,
+            preview_quality,
+            high_quality_preview,
+            preview_resolution,
+            still_duration_secs,
+            image_sequence_detect,
+            proxy_auto_generate,
+            hardware_decode,
+            preferred_decoder,
+            media_color_space,
+            grid_visible,
+            grid_spacing,
+            safe_area_visible,
+            color_management,
+            gamma,
+            hdr_enabled,
+            playback_quality,
+            playback_start_mode,
+            pre_roll_secs,
+            post_roll_secs,
+            playback_volume,
+            playback_cache,
+            scrub_audio,
+            show_audio_peaks,
+            project_dir,
+            preview_cache_dir,
+            temp_dir,
+            autosave_dir,
+            backup_dir,
+            backup_generations,
+            asset_library_dir,
+            shortcut_filter,
             compact: false,
             narrow: false,
             wide: true,

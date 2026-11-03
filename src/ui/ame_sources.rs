@@ -34,32 +34,36 @@ pub const STUDIO_MODULES: &[(&str, &str)] = &[
         include_str!("ame/components/settings/general.ame"),
     ),
     (
-        "components/settings/projects.ame",
-        include_str!("ame/components/settings/projects.ame"),
-    ),
-    (
-        "components/settings/cache.ame",
-        include_str!("ame/components/settings/cache.ame"),
-    ),
-    (
         "components/settings/performance.ame",
         include_str!("ame/components/settings/performance.ame"),
+    ),
+    (
+        "components/settings/media.ame",
+        include_str!("ame/components/settings/media.ame"),
+    ),
+    (
+        "components/settings/display.ame",
+        include_str!("ame/components/settings/display.ame"),
+    ),
+    (
+        "components/settings/playback.ame",
+        include_str!("ame/components/settings/playback.ame"),
     ),
     (
         "components/settings/shortcuts.ame",
         include_str!("ame/components/settings/shortcuts.ame"),
     ),
     (
-        "components/settings/interface.ame",
-        include_str!("ame/components/settings/interface.ame"),
+        "components/settings/filepath.ame",
+        include_str!("ame/components/settings/filepath.ame"),
     ),
     (
-        "components/settings/plugins.ame",
-        include_str!("ame/components/settings/plugins.ame"),
+        "components/settings/external.ame",
+        include_str!("ame/components/settings/external.ame"),
     ),
     (
-        "components/settings/license.ame",
-        include_str!("ame/components/settings/license.ame"),
+        "components/settings/experimental.ame",
+        include_str!("ame/components/settings/experimental.ame"),
     ),
     (
         "components/export.ame",

@@ -1,5 +1,66 @@
 use super::*;
 
+/// Preset autosave intervals exposed by the preferences screen. Loading a
+/// value outside this set would make the Select fail to find a matching
+/// option, so persisted values are normalised on startup.
+pub(crate) const AUTOSAVE_INTERVALS: [u64; 8] = [0, 30, 60, 180, 300, 600, 900, 1800];
+
+pub(crate) fn normalize_autosave_secs(value: u64) -> u64 {
+    if AUTOSAVE_INTERVALS.contains(&value) {
+        return value;
+    }
+    AUTOSAVE_INTERVALS
+        .into_iter()
+        .min_by_key(|candidate| candidate.abs_diff(value))
+        .unwrap_or(300)
+}
+
+fn home_subdir(relative: &str) -> String {
+    std::env::var_os("HOME")
+        .map(std::path::PathBuf::from)
+        .map(|home| home.join(relative).display().to_string())
+        .unwrap_or_else(|| relative.to_owned())
+}
+
+pub(crate) fn default_project_dir() -> String {
+    home_subdir("Documents/Kagari/Projects")
+}
+
+pub(crate) fn default_preview_cache_dir() -> String {
+    home_subdir("Library/Caches/Kagari/Preview")
+}
+
+pub(crate) fn default_temp_dir() -> String {
+    std::env::temp_dir().join("Kagari").display().to_string()
+}
+
+pub(crate) fn default_autosave_dir() -> String {
+    home_subdir("Documents/Kagari/AutoSave")
+}
+
+pub(crate) fn default_backup_dir() -> String {
+    home_subdir("Documents/Kagari/Backup")
+}
+
+pub(crate) fn default_asset_library_dir() -> String {
+    home_subdir("Documents/Kagari/Assets")
+}
+
+pub(crate) fn default_accent_color() -> String {
+    "#f39c29".to_owned()
+}
+
+pub(crate) fn parse_hex_color(value: &str) -> Option<vello::peniko::Color> {
+    let hex = value.trim().trim_start_matches('#');
+    if hex.len() != 6 || !hex.chars().all(|character| character.is_ascii_hexdigit()) {
+        return None;
+    }
+    let red = u8::from_str_radix(&hex[0..2], 16).ok()?;
+    let green = u8::from_str_radix(&hex[2..4], 16).ok()?;
+    let blue = u8::from_str_radix(&hex[4..6], 16).ok()?;
+    Some(vello::peniko::Color::from_rgb8(red, green, blue))
+}
+
 pub(crate) fn format_cache_size(bytes: u64) -> String {
     const KB: f64 = 1024.0;
     let size = bytes as f64;
@@ -143,6 +204,21 @@ pub(crate) fn expand_home_path(value: &str) -> std::path::PathBuf {
     } else {
         std::path::PathBuf::from(value)
     }
+}
+
+pub(crate) fn pick_directory(current: &str) -> Option<String> {
+    let initial = expand_home_path(current.trim());
+    let initial = if initial.is_dir() {
+        initial
+    } else {
+        std::env::var_os("HOME")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir)
+    };
+    rfd::FileDialog::new()
+        .set_directory(initial)
+        .pick_folder()
+        .map(|path| path.display().to_string())
 }
 
 pub(crate) fn fmt_timestamp(time: std::time::SystemTime) -> String {
@@ -390,28 +466,41 @@ impl AfterEffectsStudio {
                 self.settings_category = 0;
                 true
             }
-            ("settings_projects_select", _) => {
+            ("settings_performance_select", _) => {
                 self.settings_category = 1;
                 true
             }
-            ("settings_cache_select", _) => {
+            ("settings_media_select", _) => {
                 self.settings_category = 2;
                 true
             }
-            ("settings_performance_select", _) => {
+            ("settings_display_select", _) => {
                 self.settings_category = 3;
                 true
             }
-            ("settings_shortcuts_select", _) => {
+            ("settings_playback_select", _) => {
                 self.settings_category = 4;
                 true
             }
-            ("settings_interface_select", _) => {
+            ("settings_shortcuts_select", _) => {
                 self.settings_category = 5;
                 true
             }
-            ("settings_plugins_select", _) => {
+            ("settings_filepath_select", _) => {
                 self.settings_category = 6;
+                true
+            }
+            ("settings_external_select", _) => {
+                self.settings_category = 7;
+                self.refresh_openfx_plugins();
+                true
+            }
+            ("settings_experimental_select", _) => {
+                self.settings_category = 8;
+                true
+            }
+            ("settings_plugins_select", _) => {
+                self.settings_category = 7;
                 self.refresh_openfx_plugins();
                 true
             }
@@ -419,8 +508,222 @@ impl AfterEffectsStudio {
                 self.refresh_openfx_plugins();
                 true
             }
+            ("settings_projects_select", _) => {
+                self.settings_category = 6;
+                true
+            }
+            ("settings_cache_select", _) => {
+                self.settings_category = 2;
+                true
+            }
+            ("settings_interface_select", _) => {
+                self.settings_category = 3;
+                true
+            }
             ("settings_license_select", _) => {
-                self.settings_category = 7;
+                self.settings_category = 8;
+                true
+            }
+            ("settings_defaults", _) => {
+                self.reset_settings_draft();
+                self.settings_feedback = "デフォルトに戻しました。「OK」で保存します。".to_owned();
+                true
+            }
+            ("__ame_binding_update_accent_color", Some(ActionValue::Text(value))) => {
+                if parse_hex_color(value).is_some() {
+                    self.accent_color = value.clone();
+                }
+                true
+            }
+            ("setting_accent_changed", Some(ActionValue::Text(value))) => {
+                if parse_hex_color(value).is_some() {
+                    self.accent_color = value.clone();
+                }
+                true
+            }
+            ("setting_renderer_changed", Some(ActionValue::Text(value))) => {
+                self.renderer = value.clone();
+                self.gpu_enabled = value != "cpu";
+                true
+            }
+            ("setting_background_render_changed", Some(ActionValue::Checked(value))) => {
+                self.background_render = *value;
+                true
+            }
+            ("setting_preview_quality_changed", Some(ActionValue::Text(value))) => {
+                self.preview_quality = value.clone();
+                true
+            }
+            ("setting_high_quality_changed", Some(ActionValue::Checked(value))) => {
+                self.high_quality_preview = *value;
+                true
+            }
+            ("setting_preview_resolution_changed", Some(ActionValue::Text(value))) => {
+                self.preview_resolution = value.clone();
+                true
+            }
+            ("setting_still_duration_changed", Some(ActionValue::Number(value)))
+                if value.is_finite() =>
+            {
+                self.still_duration_secs = value.clamp(0.1, 600.0);
+                true
+            }
+            ("setting_image_sequence_changed", Some(ActionValue::Checked(value))) => {
+                self.image_sequence_detect = *value;
+                true
+            }
+            ("setting_proxy_auto_changed", Some(ActionValue::Checked(value))) => {
+                self.proxy_auto_generate = *value;
+                true
+            }
+            ("setting_hardware_decode_changed", Some(ActionValue::Checked(value))) => {
+                self.hardware_decode = *value;
+                true
+            }
+            ("setting_preferred_decoder_changed", Some(ActionValue::Text(value))) => {
+                self.preferred_decoder = value.clone();
+                true
+            }
+            ("setting_media_color_space_changed", Some(ActionValue::Text(value))) => {
+                self.media_color_space = value.clone();
+                true
+            }
+            ("setting_grid_visible_changed", Some(ActionValue::Checked(value))) => {
+                self.grid_visible = *value;
+                true
+            }
+            ("setting_grid_spacing_changed", Some(ActionValue::Number(value)))
+                if value.is_finite() =>
+            {
+                self.grid_spacing = value.clamp(8.0, 512.0);
+                true
+            }
+            ("setting_safe_area_changed", Some(ActionValue::Checked(value))) => {
+                self.safe_area_visible = *value;
+                true
+            }
+            ("setting_color_management_changed", Some(ActionValue::Text(value))) => {
+                self.color_management = value.clone();
+                true
+            }
+            ("setting_gamma_changed", Some(ActionValue::Text(value))) => {
+                self.gamma = value.clone();
+                true
+            }
+            ("setting_hdr_changed", Some(ActionValue::Checked(value))) => {
+                self.hdr_enabled = *value;
+                true
+            }
+            ("setting_playback_quality_changed", Some(ActionValue::Text(value))) => {
+                self.playback_quality = value.clone();
+                true
+            }
+            ("setting_playback_start_changed", Some(ActionValue::Text(value))) => {
+                self.playback_start_mode = value.clone();
+                true
+            }
+            ("setting_pre_roll_changed", Some(ActionValue::Number(value))) if value.is_finite() => {
+                self.pre_roll_secs = value.clamp(0.0, 10.0);
+                true
+            }
+            ("setting_post_roll_changed", Some(ActionValue::Number(value)))
+                if value.is_finite() =>
+            {
+                self.post_roll_secs = value.clamp(0.0, 10.0);
+                true
+            }
+            ("setting_volume_changed", Some(ActionValue::Number(value))) if value.is_finite() => {
+                self.playback_volume = value.clamp(0.0, 100.0);
+                true
+            }
+            ("setting_playback_cache_changed", Some(ActionValue::Checked(value))) => {
+                self.playback_cache = *value;
+                true
+            }
+            ("setting_scrub_audio_changed", Some(ActionValue::Checked(value))) => {
+                self.scrub_audio = *value;
+                true
+            }
+            ("setting_show_peaks_changed", Some(ActionValue::Checked(value))) => {
+                self.show_audio_peaks = *value;
+                true
+            }
+            ("setting_loop_changed", Some(ActionValue::Checked(value))) => {
+                self.playback_loop = *value;
+                true
+            }
+            ("setting_auto_project_names_changed", Some(ActionValue::Checked(value))) => {
+                self.auto_project_names = *value;
+                true
+            }
+            ("setting_shortcut_filter_changed", Some(ActionValue::Text(value))) => {
+                self.shortcut_filter = value.clone();
+                true
+            }
+            ("setting_project_dir_changed", Some(ActionValue::Text(value))) => {
+                self.project_dir = value.clone();
+                true
+            }
+            ("setting_project_dir_browse", _) => {
+                if let Some(path) = pick_directory(&self.project_dir) {
+                    self.project_dir = path;
+                }
+                true
+            }
+            ("setting_preview_cache_changed", Some(ActionValue::Text(value))) => {
+                self.preview_cache_dir = value.clone();
+                true
+            }
+            ("setting_preview_cache_browse", _) => {
+                if let Some(path) = pick_directory(&self.preview_cache_dir) {
+                    self.preview_cache_dir = path;
+                }
+                true
+            }
+            ("setting_temp_dir_changed", Some(ActionValue::Text(value))) => {
+                self.temp_dir = value.clone();
+                true
+            }
+            ("setting_temp_dir_browse", _) => {
+                if let Some(path) = pick_directory(&self.temp_dir) {
+                    self.temp_dir = path;
+                }
+                true
+            }
+            ("setting_autosave_dir_changed", Some(ActionValue::Text(value))) => {
+                self.autosave_dir = value.clone();
+                true
+            }
+            ("setting_autosave_dir_browse", _) => {
+                if let Some(path) = pick_directory(&self.autosave_dir) {
+                    self.autosave_dir = path;
+                }
+                true
+            }
+            ("setting_backup_dir_changed", Some(ActionValue::Text(value))) => {
+                self.backup_dir = value.clone();
+                true
+            }
+            ("setting_backup_dir_browse", _) => {
+                if let Some(path) = pick_directory(&self.backup_dir) {
+                    self.backup_dir = path;
+                }
+                true
+            }
+            ("setting_backup_generations_changed", Some(ActionValue::Number(value)))
+                if value.is_finite() =>
+            {
+                self.backup_generations = (value.round() as u64).clamp(1, 100);
+                true
+            }
+            ("setting_asset_library_changed", Some(ActionValue::Text(value))) => {
+                self.asset_library_dir = value.clone();
+                true
+            }
+            ("setting_asset_library_browse", _) => {
+                if let Some(path) = pick_directory(&self.asset_library_dir) {
+                    self.asset_library_dir = path;
+                }
                 true
             }
             ("setting_restore_changed", Some(ActionValue::Checked(value))) => {

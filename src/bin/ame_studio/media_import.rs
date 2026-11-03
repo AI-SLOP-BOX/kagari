@@ -88,7 +88,12 @@ impl AfterEffectsStudio {
                 height: image_height,
             },
         );
+        let still_secs = self.still_duration_secs.clamp(0.1, 600.0);
         let composition = self.project_model.active_composition_mut();
+        let still_frames = (still_secs * f64::from(composition.fps.max(1)))
+            .round()
+            .max(1.0) as u32;
+        let layer_frames = still_frames.min(composition.duration_frames.max(1));
         let id = format!(
             "ameui_image_{}",
             std::time::SystemTime::now()
@@ -100,7 +105,7 @@ impl AfterEffectsStudio {
             id.clone(),
             file_name,
             kagari_vfx::core::timeline::LayerType::Image { path: source_path },
-            composition.duration_frames,
+            layer_frames,
         );
         layer.transform.position = kagari_vfx::core::timeline::Animatable::new_constant([
             composition.width as f32 * 0.5,

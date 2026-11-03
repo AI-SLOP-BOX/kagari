@@ -1425,7 +1425,9 @@ impl App for AfterEffectsStudio {
     }
 
     fn theme(&self) -> Theme {
-        Theme {
+        let accent =
+            parse_hex_color(&self.accent_color).unwrap_or_else(|| Color::from_rgb8(245, 140, 75));
+        (Theme {
             // Use soft panel corners throughout the studio. Square cards made
             // the new interface read like a default utility app.
             panel_radius: 14.0,
@@ -1442,7 +1444,7 @@ impl App for AfterEffectsStudio {
             text: Color::from_rgb8(232, 235, 239),
             secondary_text: Color::from_rgb8(158, 165, 173),
             placeholder_text: Color::from_rgb8(112, 120, 128),
-            accent: Color::from_rgb8(245, 140, 75),
+            accent,
             accent_hover: Color::from_rgb8(255, 160, 99),
             accent_pressed: Color::from_rgb8(222, 113, 54),
             accent_text: Color::from_rgb8(255, 255, 255),
@@ -1462,7 +1464,8 @@ impl App for AfterEffectsStudio {
             input_border: Color::from_rgb8(64, 70, 76),
             selection: Color::from_rgba8(245, 126, 53, 108),
             focus_ring: Color::from_rgb8(255, 151, 88),
-        }
+        })
+        .with_accent(accent)
     }
 
     fn window_config(&self) -> WindowConfig {

@@ -78,13 +78,14 @@ impl AfterEffectsStudio {
             .set_binding("clear_cache_confirm", Value::Bool(self.clear_cache_confirm))?;
         for (name, index) in [
             ("settings_general", 0),
-            ("settings_projects", 1),
-            ("settings_cache", 2),
-            ("settings_performance", 3),
-            ("settings_shortcuts", 4),
-            ("settings_interface", 5),
-            ("settings_plugins", 6),
-            ("settings_license", 7),
+            ("settings_performance", 1),
+            ("settings_media", 2),
+            ("settings_display", 3),
+            ("settings_playback", 4),
+            ("settings_shortcuts", 5),
+            ("settings_filepath", 6),
+            ("settings_external", 7),
+            ("settings_experimental", 8),
         ] {
             self.ui
                 .set_binding(name, Value::Bool(self.settings_category == index))?;
@@ -138,6 +139,104 @@ impl AfterEffectsStudio {
         )?;
         self.ui
             .set_binding("cache_limit", Value::String(self.cache_limit.clone()))?;
+        self.ui
+            .set_binding("accent_color", Value::String(self.accent_color.clone()))?;
+        self.ui
+            .set_binding("auto_project_names", Value::Bool(self.auto_project_names))?;
+        self.ui
+            .set_binding("renderer", Value::String(self.renderer.clone()))?;
+        self.ui
+            .set_binding("background_render", Value::Bool(self.background_render))?;
+        self.ui.set_binding(
+            "preview_quality",
+            Value::String(self.preview_quality.clone()),
+        )?;
+        self.ui.set_binding(
+            "high_quality_preview",
+            Value::Bool(self.high_quality_preview),
+        )?;
+        self.ui.set_binding(
+            "preview_resolution",
+            Value::String(self.preview_resolution.clone()),
+        )?;
+        self.ui.set_binding(
+            "still_duration_secs",
+            Value::Float(self.still_duration_secs),
+        )?;
+        self.ui.set_binding(
+            "image_sequence_detect",
+            Value::Bool(self.image_sequence_detect),
+        )?;
+        self.ui
+            .set_binding("proxy_auto_generate", Value::Bool(self.proxy_auto_generate))?;
+        self.ui
+            .set_binding("hardware_decode", Value::Bool(self.hardware_decode))?;
+        self.ui.set_binding(
+            "preferred_decoder",
+            Value::String(self.preferred_decoder.clone()),
+        )?;
+        self.ui.set_binding(
+            "media_color_space",
+            Value::String(self.media_color_space.clone()),
+        )?;
+        self.ui
+            .set_binding("grid_visible", Value::Bool(self.grid_visible))?;
+        self.ui
+            .set_binding("grid_spacing", Value::Float(self.grid_spacing))?;
+        self.ui
+            .set_binding("safe_area_visible", Value::Bool(self.safe_area_visible))?;
+        self.ui.set_binding(
+            "color_management",
+            Value::String(self.color_management.clone()),
+        )?;
+        self.ui
+            .set_binding("gamma", Value::String(self.gamma.clone()))?;
+        self.ui
+            .set_binding("hdr_enabled", Value::Bool(self.hdr_enabled))?;
+        self.ui.set_binding(
+            "playback_quality",
+            Value::String(self.playback_quality.clone()),
+        )?;
+        self.ui.set_binding(
+            "playback_start_mode",
+            Value::String(self.playback_start_mode.clone()),
+        )?;
+        self.ui
+            .set_binding("pre_roll_secs", Value::Float(self.pre_roll_secs))?;
+        self.ui
+            .set_binding("post_roll_secs", Value::Float(self.post_roll_secs))?;
+        self.ui
+            .set_binding("playback_volume", Value::Float(self.playback_volume))?;
+        self.ui
+            .set_binding("playback_cache", Value::Bool(self.playback_cache))?;
+        self.ui
+            .set_binding("scrub_audio", Value::Bool(self.scrub_audio))?;
+        self.ui
+            .set_binding("show_audio_peaks", Value::Bool(self.show_audio_peaks))?;
+        self.ui
+            .set_binding("project_dir", Value::String(self.project_dir.clone()))?;
+        self.ui.set_binding(
+            "preview_cache_dir",
+            Value::String(self.preview_cache_dir.clone()),
+        )?;
+        self.ui
+            .set_binding("temp_dir", Value::String(self.temp_dir.clone()))?;
+        self.ui
+            .set_binding("autosave_dir", Value::String(self.autosave_dir.clone()))?;
+        self.ui
+            .set_binding("backup_dir", Value::String(self.backup_dir.clone()))?;
+        self.ui.set_binding(
+            "backup_generations",
+            Value::Float(self.backup_generations as f64),
+        )?;
+        self.ui.set_binding(
+            "asset_library_dir",
+            Value::String(self.asset_library_dir.clone()),
+        )?;
+        self.ui.set_binding(
+            "shortcut_filter",
+            Value::String(self.shortcut_filter.clone()),
+        )?;
         self.ui
             .set_binding("output_path", Value::String(self.output_path.clone()))?;
         self.ui.set_binding(

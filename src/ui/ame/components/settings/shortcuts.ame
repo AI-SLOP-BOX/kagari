@@ -1,11 +1,89 @@
+component ShortcutRow(command: String, keys: String) {
+  Padding(horizontal: 4, vertical: 4) {
+    HStack(spacing: 8) {
+      Text(command)
+      Spacer
+      Text(keys)
+    }
+  }
+}
+
 component SettingsShortcutsPage() {
-VStack(spacing: 10) {
-                        Text("キーボードショートカット", size: 18)
-                        Caption("現在割り当てられている主なショートカットです。")
-                        Card { Padding(14) { VStack(spacing: 8) {
-                          HStack(spacing: 6) { Text("プロジェクトを保存（編集画面）") Spacer Caption("⌘ / Ctrl + S") }
-                          HStack(spacing: 6) { Text("新規プロジェクト設定") Spacer Caption("⌘ / Ctrl + N") }
-                          HStack(spacing: 6) { Text("書き出し画面を開く（編集画面）") Spacer Caption("⌘ / Ctrl + M") }
-                        } } }
-                      }
+  VStack(spacing: 12) {
+    VStack(spacing: 4) { Title("ショートカット") Caption("各機能のキーボードショートカットを確認します。") }
+
+    Card(padding: 12, spacing: 8) {
+      Text("プリセット", size: 13)
+      SettingsRow("プリセット", label_width: 120) {
+        Caption("デフォルト")
+      }
+      Caption("現在はデフォルトのキーバインドを使用します。独自キーバインドの編集は今後のバージョンで対応予定です。")
+    }
+
+    Card(padding: 12, spacing: 8) {
+      HStack(spacing: 8) {
+        Text("コマンド", size: 13)
+        Spacer
+        Select(shortcut_filter, action: setting_shortcut_filter_changed) {
+          Option("all", "すべて")
+          Option("file", "ファイル")
+          Option("edit", "編集")
+          Option("playback", "再生")
+          Option("timeline", "タイムライン")
+          Option("view", "表示")
+          Option("tools", "ツール")
+          Option("other", "その他")
+        }
+      }
+
+      If(shortcut_filter == "all" || shortcut_filter == "file") {
+        VStack(spacing: 4) {
+          Caption("ファイル")
+          ShortcutRow(command: "新規プロジェクト", keys: "⌘ / Ctrl + N")
+          ShortcutRow(command: "プロジェクトを保存（編集画面）", keys: "⌘ / Ctrl + S")
+          ShortcutRow(command: "書き出し画面を開く（編集画面）", keys: "⌘ / Ctrl + M")
+        }
+      }
+      If(shortcut_filter == "all" || shortcut_filter == "edit") {
+        VStack(spacing: 4) {
+          Caption("編集")
+          ShortcutRow(command: "元に戻す", keys: "⌘ / Ctrl + Z")
+          ShortcutRow(command: "やり直す", keys: "⌘ / Ctrl + Shift + Z")
+          ShortcutRow(command: "やり直す（代替）", keys: "⌘ / Ctrl + Y")
+        }
+      }
+      If(shortcut_filter == "all" || shortcut_filter == "playback") {
+        VStack(spacing: 4) {
+          Caption("再生")
+          ShortcutRow(command: "再生 / 停止（編集画面）", keys: "Space")
+        }
+      }
+      If(shortcut_filter == "all" || shortcut_filter == "timeline") {
+        VStack(spacing: 4) {
+          Caption("タイムライン")
+          ShortcutRow(command: "前のキーフレームへ移動", keys: "J")
+          ShortcutRow(command: "次のキーフレームへ移動", keys: "K")
+          ShortcutRow(command: "作業領域の開始を設定", keys: "B")
+          ShortcutRow(command: "作業領域の終了を設定", keys: "N")
+          ShortcutRow(command: "レイヤーの先頭を再生位置へ", keys: "[")
+          ShortcutRow(command: "レイヤーの末尾を再生位置へ", keys: "]")
+        }
+      }
+      If(shortcut_filter == "all" || shortcut_filter == "view") {
+        VStack(spacing: 4) {
+          Caption("表示")
+          ShortcutRow(command: "プレビューを再読み込み", keys: "F5")
+        }
+      }
+      If(shortcut_filter == "all" || shortcut_filter == "tools") {
+        VStack(spacing: 4) {
+          Caption("ツール")
+          ShortcutRow(command: "イージングを適用", keys: "F9")
+        }
+      }
+      If(shortcut_filter == "other") {
+        Caption("このビルドに登録されているキーバインドはありません。")
+      }
+    }
+  }
 }

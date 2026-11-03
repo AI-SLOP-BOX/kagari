@@ -17,11 +17,30 @@ impl AfterEffectsStudio {
         let proxy_scale = f64::from(kagari_vfx::core::proxy::composition_preview_scale(
             composition,
         ));
-        let preview_limit = if self.adaptive_preview && self.is_playing {
-            320.0
-        } else {
-            640.0
+        let mut preview_limit: f64 = match self.playback_quality.as_str() {
+            "full" => 960.0,
+            "high" => 768.0,
+            "balanced" => 640.0,
+            "performance" => 480.0,
+            _ => {
+                if self.adaptive_preview && self.is_playing {
+                    320.0
+                } else {
+                    640.0
+                }
+            }
         };
+        if let Some(limit) = match self.preview_resolution.as_str() {
+            "full" => Some(960.0_f64),
+            "half" => Some(480.0),
+            "quarter" => Some(320.0),
+            _ => None,
+        } {
+            preview_limit = preview_limit.min(limit);
+        }
+        if !self.high_quality_preview {
+            preview_limit = preview_limit.min(480.0);
+        }
         let render_scale = (preview_limit / (f64::from(source_width) * pixel_aspect))
             .min(preview_limit / f64::from(source_height))
             .min(1.0)
@@ -125,6 +144,7 @@ impl AfterEffectsStudio {
             }
         }
         scene.push_clip_layer(Fill::NonZero, Affine::IDENTITY, &viewport);
+        let composition_frame;
         if let Some(image) = preview {
             let zoom_factor = self
                 .zoom
@@ -155,6 +175,7 @@ impl AfterEffectsStudio {
                 None,
                 &frame,
             );
+            composition_frame = Some((frame, draw_width, draw_height));
         } else {
             let frame = Rect::new(x + 16.0, y + 16.0, x + width - 16.0, y + height - 16.0);
             scene.stroke(
@@ -164,6 +185,64 @@ impl AfterEffectsStudio {
                 None,
                 &frame,
             );
+            composition_frame = Some((frame, frame.width(), frame.height()));
+        }
+        if let Some((frame, draw_width, draw_height)) = composition_frame {
+            if self.safe_area_visible {
+                for (scale, color) in [
+                    (0.9, Color::from_rgba8(255, 255, 255, 70)),
+                    (0.8, Color::from_rgba8(255, 190, 90, 80)),
+                ] {
+                    let inset_x = draw_width * (1.0 - scale) * 0.5;
+                    let inset_y = draw_height * (1.0 - scale) * 0.5;
+                    scene.stroke(
+                        &Stroke::new(1.0),
+                        Affine::IDENTITY,
+                        color,
+                        None,
+                        &Rect::new(
+                            frame.x0 + inset_x,
+                            frame.y0 + inset_y,
+                            frame.x1 - inset_x,
+                            frame.y1 - inset_y,
+                        ),
+                    );
+                }
+            }
+            if self.grid_visible && draw_width > 8.0 && draw_height > 8.0 {
+                let spacing = self.grid_spacing.clamp(8.0, 512.0);
+                let step_x = (spacing * draw_width / f64::from(source_width)).max(4.0);
+                let step_y = (spacing * draw_height / f64::from(source_height)).max(4.0);
+                let color = Color::from_rgba8(255, 255, 255, 34);
+                let mut grid_x = frame.x0 + step_x;
+                while grid_x < frame.x1 - 0.5 {
+                    scene.stroke(
+                        &Stroke::new(1.0),
+                        Affine::IDENTITY,
+                        color,
+                        None,
+                        &Line {
+                            p0: Point::new(grid_x, frame.y0),
+                            p1: Point::new(grid_x, frame.y1),
+                        },
+                    );
+                    grid_x += step_x;
+                }
+                let mut grid_y = frame.y0 + step_y;
+                while grid_y < frame.y1 - 0.5 {
+                    scene.stroke(
+                        &Stroke::new(1.0),
+                        Affine::IDENTITY,
+                        color,
+                        None,
+                        &Line {
+                            p0: Point::new(frame.x0, grid_y),
+                            p1: Point::new(frame.x1, grid_y),
+                        },
+                    );
+                    grid_y += step_y;
+                }
+            }
         }
         // AE-style layer bounding box and anchor point gizmo for the selected layer
         if let (Some((map_left, map_top, scale_x, scale_y)), Some(layer_id)) =

@@ -1,24 +1,82 @@
 component SettingsPerformancePage() {
-VStack(spacing: 10) {
-                        Text("パフォーマンス", size: 18)
-                        Caption("再生時のプレビュー解像度を調整します。")
-                        Card { Padding(14) { VStack(spacing: 12) {
-                          Text("プレビュー", size: 16)
-                          Checkbox("再生中の解像度自動低下（アダプティブプレビュー）", adaptive_preview, action: setting_adaptive_preview_changed)
-                          Caption("オンにすると再生中は軽いプレビューを使い、停止時に元の解像度へ戻します。")
-                          Checkbox("音声プレビュー", audio_preview, action: setting_audio_preview_changed)
-                          Caption("タイムライン再生中にコンポジションの音声を再生します。")
-                        } } }
-                        Card { Padding(14) { VStack(spacing: 10) {
-                          Text("再生とメモリ", size: 16)
-                          HStack(spacing: 8) { Caption("GPUアクセラレーション") Spacer Checkbox("有効", gpu_enabled, action: setting_gpu_changed) }
-                          Caption("対応する描画処理でGPUを使用します。")
-                          HStack(spacing: 8) { Caption("メモリ上限") DragValue(memory_limit_gb, min: 1.0, max: 64.0, action: setting_memory_changed) Caption("GB") }
-                        } } }
-                        Card { Padding(14) { VStack(spacing: 10) {
-                          Text("履歴と復旧", size: 16)
-                          HStack(spacing: 8) { Caption("Undo履歴") DragValue(undo_steps, min: 10.0, max: 500.0, action: setting_undo_changed) Caption("件") }
-                          HStack(spacing: 8) { Caption("自動復旧スロット") DragValue(recovery_slots, min: 1.0, max: 50.0, action: setting_recovery_changed) Caption("個") }
-                        } } }
-                      }
+  VStack(spacing: 12) {
+    VStack(spacing: 4) { Title("パフォーマンス") Caption("メモリの使用方法や処理の設定を調整します。") }
+
+    Card(padding: 12, spacing: 10) {
+      Text("メモリ", size: 13)
+      HStack(spacing: 8) {
+        Caption("メモリ使用量")
+        Spacer
+        Text("{memory_limit_gb:.0f} GB", size: 12)
+      }
+      Slider(memory_limit_gb, min: 1.0, max: 64.0, action: setting_memory_changed)
+      Caption("再生やレンダリングで使えるメモリの上限です。複数の処理が同時に走る場合は余裕を持たせてください。")
+    }
+
+    Card(padding: 12, spacing: 10) {
+      Text("レンダリング", size: 13)
+      SettingsRow("レンダラー", label_width: 170) {
+        Select(renderer, action: setting_renderer_changed) {
+          Option("gpu", "GPU (推奨)")
+          Option("cpu", "CPU")
+        }
+      }
+      SettingsRow("プレビューの品質", label_width: 170) {
+        Select(preview_quality, action: setting_preview_quality_changed) {
+          Option("auto", "自動 (バランス)")
+          Option("performance", "パフォーマンス優先")
+          Option("quality", "品質優先")
+        }
+      }
+      SettingsRow("バックグラウンド", label_width: 170) {
+        Checkbox("アイドル時にレンダリングを実行する", background_render, action: setting_background_render_changed)
+      }
+      Checkbox("再生中の解像度自動低下（アダプティブプレビュー）", adaptive_preview, action: setting_adaptive_preview_changed)
+    }
+
+    Card(padding: 12, spacing: 10) {
+      Text("キャッシュ", size: 13)
+      SettingsRow("ディスクキャッシュの場所", label_width: 200) {
+        AttachedButton("参照…", action: setting_cache_path_browse) {
+          TextField(cache_path, "キャッシュ保存先", action: setting_cache_path_changed)
+        }
+      }
+      If(cache_path_status != "") { Caption("{cache_path_status}") }
+      HStack(spacing: 8) {
+        Caption("使用量")
+        Spacer
+        Caption("{cache_usage_text} / {cache_limit} GB")
+      }
+      ProgressBar(cache_usage_progress)
+      HStack(spacing: 8) {
+        Caption("最大サイズ（10〜500 GB）")
+        MaxWidth(80) { TextField(cache_limit, "GB", action: setting_cache_limit_changed) }
+        Caption("GB")
+        Spacer
+        Button("キャッシュを削除", action: clear_cache, tone: secondary, size: small)
+      }
+    }
+
+    Card(padding: 12, spacing: 10) {
+      Text("履歴と復旧", size: 13)
+      SettingsRow("Undo 履歴", label_width: 170) {
+        HStack(spacing: 6) { DragValue(undo_steps, min: 10.0, max: 500.0, action: setting_undo_changed) Caption("件") }
+      }
+      SettingsRow("自動復旧スロット", label_width: 170) {
+        HStack(spacing: 6) { DragValue(recovery_slots, min: 1.0, max: 50.0, action: setting_recovery_changed) Caption("個") }
+      }
+    }
+
+    If(clear_cache_confirm) {
+      Card(padding: 14, spacing: 10) {
+        Text("キャッシュを消去しますか？", size: 17)
+        Caption("プレビューキャッシュのみを削除します。プロジェクトや素材ファイルは削除されません。")
+        HStack(spacing: 8) {
+          Spacer
+          Button("キャンセル", action: dismiss_clear_cache, tone: secondary)
+          Button("消去", action: confirm_clear_cache, tone: destructive)
+        }
+      }
+    }
+  }
 }

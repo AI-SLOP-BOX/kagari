@@ -1,0 +1,20 @@
+component SettingsExperimentalPage() {
+  VStack(spacing: 12) {
+    VStack(spacing: 4) { Title("実験的機能") Caption("開発中の機能と、このビルドについての情報です。") }
+
+    Card(padding: 12, spacing: 10) {
+      Text("試験的機能", size: 13)
+      Caption("実験的機能は不安定だったり、予告なく動作が変わることがあります。有効にする前にプロジェクトを保存してください。")
+      Caption("このビルドには、有効化できる試験的機能はありません。")
+      Caption("必要な機能は Issue でリクエストできます。")
+    }
+
+    Card(padding: 12, spacing: 10) {
+      Text("このビルドについて", size: 13)
+      Text("Kagari VFX", size: 18)
+      Text("Version 0.3.0", size: 14)
+      Caption("MIT License または Apache License 2.0")
+      Caption("サードパーティのライセンスは THIRD-PARTY-NOTICES に記載されています。")
+    }
+  }
+}

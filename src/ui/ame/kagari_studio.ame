@@ -499,13 +499,49 @@ app AfterEffectsStudio {
   bind docs_detail_page: Bool = false;
   bind clear_cache_confirm: Bool = false;
   bind settings_general: Bool = true;
-  bind settings_projects: Bool = false;
-  bind settings_cache: Bool = false;
   bind settings_performance: Bool = false;
+  bind settings_media: Bool = false;
+  bind settings_display: Bool = false;
+  bind settings_playback: Bool = false;
   bind settings_shortcuts: Bool = false;
-  bind settings_interface: Bool = false;
-  bind settings_plugins: Bool = false;
-  bind settings_license: Bool = false;
+  bind settings_filepath: Bool = false;
+  bind settings_external: Bool = false;
+  bind settings_experimental: Bool = false;
+  bind accent_color: String = "#f39c29";
+  bind auto_project_names: Bool = true;
+  bind renderer: String = "gpu";
+  bind background_render: Bool = true;
+  bind preview_quality: String = "auto";
+  bind high_quality_preview: Bool = true;
+  bind preview_resolution: String = "auto";
+  bind still_duration_secs: Float = 5.0;
+  bind image_sequence_detect: Bool = true;
+  bind proxy_auto_generate: Bool = false;
+  bind hardware_decode: Bool = true;
+  bind preferred_decoder: String = "auto";
+  bind media_color_space: String = "project";
+  bind grid_visible: Bool = false;
+  bind grid_spacing: Float = 100.0;
+  bind safe_area_visible: Bool = false;
+  bind color_management: String = "project";
+  bind gamma: String = "2.2";
+  bind hdr_enabled: Bool = false;
+  bind playback_quality: String = "auto";
+  bind playback_start_mode: String = "current";
+  bind pre_roll_secs: Float = 1.0;
+  bind post_roll_secs: Float = 1.0;
+  bind playback_volume: Float = 100.0;
+  bind playback_cache: Bool = true;
+  bind scrub_audio: Bool = false;
+  bind show_audio_peaks: Bool = false;
+  bind project_dir: String = "";
+  bind preview_cache_dir: String = "";
+  bind temp_dir: String = "";
+  bind autosave_dir: String = "";
+  bind backup_dir: String = "";
+  bind backup_generations: Float = 10.0;
+  bind asset_library_dir: String = "";
+  bind shortcut_filter: String = "all";
   bind openfx_plugins: List<DetectedOfxPlugin> = [];
   bind has_openfx_plugins: Bool = false;
   bind openfx_search_paths: String = "";
@@ -1120,14 +1156,58 @@ app AfterEffectsStudio {
   action setting_cache_limit_changed;
   action setting_gpu_changed;
   action settings_general_select;
-  action settings_projects_select;
-  action settings_cache_select;
   action settings_performance_select;
+  action settings_media_select;
+  action settings_display_select;
+  action settings_playback_select;
   action settings_shortcuts_select;
-  action settings_interface_select;
-  action settings_plugins_select;
+  action settings_filepath_select;
+  action settings_external_select;
+  action settings_experimental_select;
+  action settings_defaults;
   action settings_plugins_refresh;
-  action settings_license_select;
+  action setting_accent_changed;
+  action setting_renderer_changed;
+  action setting_background_render_changed;
+  action setting_preview_quality_changed;
+  action setting_high_quality_changed;
+  action setting_preview_resolution_changed;
+  action setting_still_duration_changed;
+  action setting_image_sequence_changed;
+  action setting_proxy_auto_changed;
+  action setting_hardware_decode_changed;
+  action setting_preferred_decoder_changed;
+  action setting_media_color_space_changed;
+  action setting_grid_visible_changed;
+  action setting_grid_spacing_changed;
+  action setting_safe_area_changed;
+  action setting_color_management_changed;
+  action setting_gamma_changed;
+  action setting_hdr_changed;
+  action setting_playback_quality_changed;
+  action setting_playback_start_changed;
+  action setting_pre_roll_changed;
+  action setting_post_roll_changed;
+  action setting_volume_changed;
+  action setting_playback_cache_changed;
+  action setting_scrub_audio_changed;
+  action setting_show_peaks_changed;
+  action setting_loop_changed;
+  action setting_auto_project_names_changed;
+  action setting_shortcut_filter_changed;
+  action setting_project_dir_changed;
+  action setting_project_dir_browse;
+  action setting_preview_cache_changed;
+  action setting_preview_cache_browse;
+  action setting_temp_dir_changed;
+  action setting_temp_dir_browse;
+  action setting_autosave_dir_changed;
+  action setting_autosave_dir_browse;
+  action setting_backup_dir_changed;
+  action setting_backup_dir_browse;
+  action setting_backup_generations_changed;
+  action setting_asset_library_changed;
+  action setting_asset_library_browse;
   action clear_cache;
   action dismiss_clear_cache;
   action confirm_clear_cache;
@@ -1229,10 +1309,7 @@ app AfterEffectsStudio {
 
   view {
     If(settings_page) {
-      Overlay {
-        MainContent()
-        Center { SettingsModal() }
-      }
+      SettingsPanel()
     } else {
       If(project_switch_confirm_open) {
         Overlay {
