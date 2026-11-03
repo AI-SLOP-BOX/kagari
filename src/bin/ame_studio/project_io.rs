@@ -559,8 +559,65 @@ impl AfterEffectsStudio {
             return;
         };
         self.last_autosave_at = std::time::Instant::now();
-        match kagari_vfx::core::project_migration::save_project_atomic(&self.project_model, &path) {
-            Ok(()) => self.save_status = "自動保存しました".to_owned(),
+        let mut backup_status = None;
+        let backup_dir = expand_home_path(self.backup_dir.trim());
+        if !self.backup_dir.trim().is_empty() {
+            match std::fs::create_dir_all(&backup_dir) {
+                Ok(()) => {
+                    let snapshot_name = autosave_snapshot_name(&path);
+                    let snapshot_path = backup_dir.join(&snapshot_name);
+                    if let Err(error) = std::fs::copy(&path, &snapshot_path) {
+                        backup_status = Some(format!("バックアップの作成に失敗しました: {error}"));
+                    } else {
+                        let extension = path
+                            .extension()
+                            .and_then(|extension| extension.to_str())
+                            .unwrap_or("json");
+                        let stem = path
+                            .file_stem()
+                            .map(|stem| stem.to_string_lossy().to_string())
+                            .unwrap_or_else(|| "project".to_owned());
+                        if let Err(error) = prune_backup_files(
+                            &backup_dir,
+                            &stem,
+                            extension,
+                            self.backup_generations.clamp(1, 100),
+                        ) {
+                            backup_status =
+                                Some(format!("バックアップの整理に失敗しました: {error}"));
+                        }
+                    }
+                }
+                Err(error) => {
+                    backup_status = Some(format!(
+                        "バックアップフォルダを作成できませんでした: {error}"
+                    ))
+                }
+            }
+        }
+        let autosave_dir = expand_home_path(self.autosave_dir.trim());
+        let autosave_target = if self.autosave_dir.trim().is_empty() {
+            path.clone()
+        } else {
+            match std::fs::create_dir_all(&autosave_dir) {
+                Ok(()) => autosave_dir.join(autosave_snapshot_name(&path)),
+                Err(error) => {
+                    self.save_status = format!("自動保存の保存先を作成できませんでした: {error}");
+                    return;
+                }
+            }
+        };
+        match kagari_vfx::core::project_migration::save_project_atomic(
+            &self.project_model,
+            &autosave_target,
+        ) {
+            Ok(()) => {
+                self.save_status = match backup_status {
+                    Some(message) => format!("自動保存しました（{message}）"),
+                    None if autosave_target == path => "自動保存しました".to_owned(),
+                    None => format!("自動保存しました: {}", autosave_target.display()),
+                }
+            }
             Err(error) => self.save_status = format!("自動保存できませんでした: {error}"),
         }
     }

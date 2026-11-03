@@ -206,6 +206,83 @@ pub(crate) fn expand_home_path(value: &str) -> std::path::PathBuf {
     }
 }
 
+pub(crate) fn autosave_snapshot_name(path: &std::path::Path) -> String {
+    let stem = path
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().to_string())
+        .unwrap_or_else(|| "project".to_owned());
+    let extension = path
+        .extension()
+        .map(|extension| extension.to_string_lossy().to_string())
+        .unwrap_or_else(|| "json".to_owned());
+    #[cfg(unix)]
+    {
+        let Ok(duration) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+        else {
+            return format!("{stem}.{extension}");
+        };
+        let seconds = duration.as_secs() as libc::time_t;
+        let mut local: libc::tm = unsafe { std::mem::zeroed() };
+        if unsafe { libc::localtime_r(&seconds, &mut local) }.is_null() {
+            return format!("{stem}-{}.{}", duration.as_millis(), extension);
+        }
+        return format!(
+            "{stem}-{:04}{:02}{:02}-{:02}{:02}{:02}-{:03}.{extension}",
+            local.tm_year + 1900,
+            local.tm_mon + 1,
+            local.tm_mday,
+            local.tm_hour,
+            local.tm_min,
+            local.tm_sec,
+            duration.subsec_millis()
+        );
+    }
+    #[cfg(not(unix))]
+    {
+        let millis = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_millis())
+            .unwrap_or(0);
+        format!("{stem}-{millis:013}.{extension}")
+    }
+}
+
+pub(crate) fn prune_backup_files(
+    directory: &std::path::Path,
+    stem: &str,
+    extension: &str,
+    generations: u64,
+) -> Result<(), String> {
+    let mut snapshots = Vec::new();
+    for entry in std::fs::read_dir(directory).map_err(|error| error.to_string())? {
+        let entry = entry.map_err(|error| error.to_string())?;
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if name.starts_with(stem)
+            && name.ends_with(extension)
+            && path
+                .extension()
+                .is_some_and(|ext| ext.to_str() == Some(extension))
+        {
+            snapshots.push((name.to_owned(), path));
+        }
+    }
+    snapshots.sort_by(|left, right| left.0.cmp(&right.0));
+    let keep = generations.max(1) as usize;
+    let excess = snapshots.len().saturating_sub(keep);
+    if excess > 0 {
+        for (_, path) in snapshots.into_iter().take(excess) {
+            std::fs::remove_file(path).map_err(|error| error.to_string())?;
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn pick_directory(current: &str) -> Option<String> {
     let initial = expand_home_path(current.trim());
     let initial = if initial.is_dir() {
