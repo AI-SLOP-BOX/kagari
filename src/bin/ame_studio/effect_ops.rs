@@ -166,6 +166,220 @@ impl AfterEffectsStudio {
                     tint: Animatable::new_constant(0.0),
                 },
             ),
+            "chromatic_aberration" => (
+                "色収差",
+                EffectType::ChromaticAberration {
+                    shift_r: Animatable::new_constant(2.0),
+                    shift_b: Animatable::new_constant(2.0),
+                    edge_falloff: Animatable::new_constant(0.5),
+                    iris_linked: false,
+                },
+            ),
+            "chroma_key" => (
+                "クロマキー",
+                EffectType::ChromaKey {
+                    screen_color: Animatable::new_constant([0.0, 1.0, 0.0]),
+                    screen_gain: Animatable::new_constant(1.0),
+                    clip_black: Animatable::new_constant(0.1),
+                    clip_white: Animatable::new_constant(0.9),
+                },
+            ),
+            "turbulent_displace" => (
+                "タービュレントディスプレイス",
+                EffectType::TurbulentDisplace {
+                    amount: Animatable::new_constant(10.0),
+                    size: Animatable::new_constant(40.0),
+                    evolution: Animatable::new_constant(0.0),
+                    complexity: Animatable::new_constant(2.0),
+                },
+            ),
+            "cc_lens" => (
+                "CC Lens",
+                EffectType::CcLens {
+                    convergence: Animatable::new_constant(2.0),
+                    zoom: Animatable::new_constant(1.0),
+                },
+            ),
+            "polar_coordinates" => (
+                "極座標",
+                EffectType::PolarCoordinates {
+                    to_polar: false,
+                    interpolation: Animatable::new_constant(0.0),
+                },
+            ),
+            "wave_warp" => (
+                "波形ワープ",
+                EffectType::WaveWarp {
+                    wave_height: Animatable::new_constant(20.0),
+                    wave_width: Animatable::new_constant(50.0),
+                    speed: Animatable::new_constant(1.0),
+                    direction_deg: Animatable::new_constant(0.0),
+                    wave_type: 0,
+                    pinning: 0,
+                },
+            ),
+            "vortex" => (
+                "渦",
+                EffectType::Vortex {
+                    radius: Animatable::new_constant(0.5),
+                    angle_deg: Animatable::new_constant(90.0),
+                },
+            ),
+            "fisheye" => (
+                "魚眼レンズ",
+                EffectType::Fisheye {
+                    strength: Animatable::new_constant(0.5),
+                },
+            ),
+            "lens_correction" => (
+                "レンズ補正",
+                EffectType::LensCorrection {
+                    k1: Animatable::new_constant(0.0),
+                    k2: Animatable::new_constant(0.0),
+                },
+            ),
+            "glitch_displacement" => (
+                "グリッチディスプレイス",
+                EffectType::GlitchDisplacement {
+                    seed: Animatable::new_constant(0.0),
+                    amount: Animatable::new_constant(1.0),
+                },
+            ),
+            "tiler" => (
+                "タイル",
+                EffectType::Tiler {
+                    scale_percent: Animatable::new_constant(100.0),
+                    mirror: false,
+                },
+            ),
+            "hsl_adjust" => (
+                "HSL 調整",
+                EffectType::HslAdjust {
+                    hue_deg: Animatable::new_constant(0.0),
+                    saturation: Animatable::new_constant(0.0),
+                    lightness: Animatable::new_constant(0.0),
+                },
+            ),
+            "crt_scanlines" => (
+                "CRT スキャンライン",
+                EffectType::CrtScanlines {
+                    line_spacing: Animatable::new_constant(3.0),
+                    intensity: Animatable::new_constant(20.0),
+                },
+            ),
+            "shift_channels" => (
+                "チャンネルシフト",
+                EffectType::ShiftChannels {
+                    take_red: Animatable::new_constant(0.0),
+                    take_green: Animatable::new_constant(1.0),
+                    take_blue: Animatable::new_constant(2.0),
+                    take_alpha: Animatable::new_constant(3.0),
+                },
+            ),
+            "minimax" => (
+                "ミニマックス",
+                EffectType::Minimax {
+                    operation: Animatable::new_constant(0.0),
+                    radius: Animatable::new_constant(3.0),
+                },
+            ),
+            "fractal_noise" => (
+                "フラクタルノイズ",
+                EffectType::FractalNoise {
+                    fractal_type: Animatable::new_constant(0.0),
+                    contrast: Animatable::new_constant(90.0),
+                    brightness: Animatable::new_constant(0.0),
+                    complexity: Animatable::new_constant(2.0),
+                    evolution: Animatable::new_constant(0.0),
+                },
+            ),
+            "curves" => (
+                "トーンカーブ",
+                EffectType::Curves {
+                    channel: Animatable::new_constant(0.0),
+                },
+            ),
+            "compound_blur" => (
+                "コンパウンドブラー",
+                EffectType::CompoundBlur {
+                    source_layer: Animatable::new_constant(0.0),
+                    max_blur: Animatable::new_constant(20.0),
+                },
+            ),
+            "displacement_map" => (
+                "ディスプレイスメントマップ",
+                EffectType::DisplacementMap {
+                    source_layer: Animatable::new_constant(0.0),
+                    max_horizontal: Animatable::new_constant(10.0),
+                    max_vertical: Animatable::new_constant(10.0),
+                },
+            ),
+            "mosaic" => (
+                "モザイク",
+                EffectType::Mosaic {
+                    block_w: Animatable::new_constant(16.0),
+                    block_h: Animatable::new_constant(16.0),
+                },
+            ),
+            "flicker" => (
+                "フリッカー",
+                EffectType::Flicker {
+                    amount: Animatable::new_constant(15.0),
+                    speed: Animatable::new_constant(8.0),
+                    seed: Animatable::new_constant(0.0),
+                },
+            ),
+            "directional_sharpen" => (
+                "方向シャープ",
+                EffectType::DirectionalSharpen {
+                    angle_deg: Animatable::new_constant(0.0),
+                    strength: Animatable::new_constant(40.0),
+                },
+            ),
+            "emboss" => (
+                "エンボス",
+                EffectType::Emboss {
+                    angle_deg: Animatable::new_constant(45.0),
+                    depth: Animatable::new_constant(50.0),
+                },
+            ),
+            "bevel_alpha" => (
+                "アルファベベル",
+                EffectType::BevelAlpha {
+                    depth: Animatable::new_constant(20.0),
+                    light_angle_deg: Animatable::new_constant(45.0),
+                },
+            ),
+            "letterbox" => (
+                "レターボックス",
+                EffectType::Letterbox {
+                    frac: Animatable::new_constant(0.12),
+                },
+            ),
+            "luma_key_range" => (
+                "輝度キー",
+                EffectType::LumaKeyRange {
+                    low_threshold: Animatable::new_constant(0.2),
+                    high_threshold: Animatable::new_constant(0.8),
+                    invert: false,
+                },
+            ),
+            "tritone" => (
+                "トライトーン",
+                EffectType::Tritone {
+                    shadow_color: Animatable::new_constant([0.05, 0.05, 0.12]),
+                    mid_color: Animatable::new_constant([0.5, 0.5, 0.55]),
+                    highlight_color: Animatable::new_constant([1.0, 0.95, 0.8]),
+                },
+            ),
+            "gradient_map" => (
+                "グラデーションマップ",
+                EffectType::GradientMap {
+                    low_color: Animatable::new_constant([0.1, 0.14, 0.2]),
+                    mid_color: Animatable::new_constant([0.48, 0.54, 0.72]),
+                    high_color: Animatable::new_constant([1.0, 0.95, 0.84]),
+                },
+            ),
             _ => return,
         };
         let id = format!(

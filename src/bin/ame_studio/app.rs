@@ -1601,6 +1601,34 @@ pub(crate) fn effect_type_label(effect: &kagari_vfx::core::timeline::EffectType)
         EffectType::Spherize { .. } => "球面化",
         EffectType::Vibrance { .. } => "自然な彩度",
         EffectType::WhiteBalance { .. } => "ホワイトバランス",
+        EffectType::ChromaticAberration { .. } => "色収差",
+        EffectType::ChromaKey { .. } => "クロマキー",
+        EffectType::TurbulentDisplace { .. } => "タービュレントディスプレイス",
+        EffectType::CcLens { .. } => "CC Lens",
+        EffectType::PolarCoordinates { .. } => "極座標",
+        EffectType::WaveWarp { .. } => "波形ワープ",
+        EffectType::Vortex { .. } => "渦",
+        EffectType::Fisheye { .. } => "魚眼レンズ",
+        EffectType::LensCorrection { .. } => "レンズ補正",
+        EffectType::GlitchDisplacement { .. } => "グリッチディスプレイス",
+        EffectType::Tiler { .. } => "タイル",
+        EffectType::HslAdjust { .. } => "HSL 調整",
+        EffectType::CrtScanlines { .. } => "CRT スキャンライン",
+        EffectType::ShiftChannels { .. } => "チャンネルシフト",
+        EffectType::Minimax { .. } => "ミニマックス",
+        EffectType::FractalNoise { .. } => "フラクタルノイズ",
+        EffectType::Curves { .. } => "トーンカーブ",
+        EffectType::CompoundBlur { .. } => "コンパウンドブラー",
+        EffectType::DisplacementMap { .. } => "ディスプレイスメントマップ",
+        EffectType::Mosaic { .. } => "モザイク",
+        EffectType::Flicker { .. } => "フリッカー",
+        EffectType::DirectionalSharpen { .. } => "方向シャープ",
+        EffectType::Emboss { .. } => "エンボス",
+        EffectType::BevelAlpha { .. } => "アルファベベル",
+        EffectType::Letterbox { .. } => "レターボックス",
+        EffectType::LumaKeyRange { .. } => "輝度キー",
+        EffectType::Tritone { .. } => "トライトーン",
+        EffectType::GradientMap { .. } => "グラデーションマップ",
         _ => "その他",
     }
 }
@@ -1693,6 +1721,196 @@ pub(crate) fn effect_parameter_specs(
         EffectType::Sharpen { amount } => {
             vec![("amount", "量", amount.evaluate(frame), "×")]
         }
+        EffectType::ChromaticAberration {
+            shift_r,
+            shift_b,
+            edge_falloff,
+            ..
+        } => vec![
+            ("shift_r", "赤シフト", shift_r.evaluate(frame), "px"),
+            ("shift_b", "青シフト", shift_b.evaluate(frame), "px"),
+            ("edge_falloff", "端の減衰", edge_falloff.evaluate(frame), ""),
+        ],
+        EffectType::ChromaKey {
+            screen_gain,
+            clip_black,
+            clip_white,
+            ..
+        } => vec![
+            ("screen_gain", "ゲイン", screen_gain.evaluate(frame), ""),
+            ("clip_black", "黒クリップ", clip_black.evaluate(frame), ""),
+            ("clip_white", "白クリップ", clip_white.evaluate(frame), ""),
+        ],
+        EffectType::TurbulentDisplace {
+            amount,
+            size,
+            evolution,
+            complexity,
+        } => vec![
+            ("amount", "量", amount.evaluate(frame), "px"),
+            ("size", "サイズ", size.evaluate(frame), "px"),
+            ("evolution", "進化", evolution.evaluate(frame), ""),
+            ("complexity", "複雑さ", complexity.evaluate(frame), ""),
+        ],
+        EffectType::CcLens { convergence, zoom } => vec![
+            ("convergence", "収束", convergence.evaluate(frame), ""),
+            ("zoom", "ズーム", zoom.evaluate(frame), ""),
+        ],
+        EffectType::PolarCoordinates { interpolation, .. } => {
+            vec![("interpolation", "補間", interpolation.evaluate(frame), "")]
+        }
+        EffectType::WaveWarp {
+            wave_height,
+            wave_width,
+            speed,
+            direction_deg,
+            ..
+        } => vec![
+            ("wave_height", "波の高さ", wave_height.evaluate(frame), "px"),
+            ("wave_width", "波の幅", wave_width.evaluate(frame), "px"),
+            ("speed", "速度", speed.evaluate(frame), ""),
+            ("direction_deg", "方向", direction_deg.evaluate(frame), "°"),
+        ],
+        EffectType::Vortex { radius, angle_deg } => vec![
+            ("radius", "半径", radius.evaluate(frame), ""),
+            ("angle_deg", "角度", angle_deg.evaluate(frame), "°"),
+        ],
+        EffectType::Fisheye { strength } => {
+            vec![("strength", "強度", strength.evaluate(frame), "")]
+        }
+        EffectType::LensCorrection { k1, k2 } => vec![
+            ("k1", "K1", k1.evaluate(frame), ""),
+            ("k2", "K2", k2.evaluate(frame), ""),
+        ],
+        EffectType::GlitchDisplacement { seed, amount } => vec![
+            ("seed", "シード", seed.evaluate(frame), ""),
+            ("amount", "量", amount.evaluate(frame), ""),
+        ],
+        EffectType::Tiler { scale_percent, .. } => {
+            vec![(
+                "scale_percent",
+                "スケール",
+                scale_percent.evaluate(frame),
+                "%",
+            )]
+        }
+        EffectType::HslAdjust {
+            hue_deg,
+            saturation,
+            lightness,
+        } => vec![
+            ("hue_deg", "色相", hue_deg.evaluate(frame), "°"),
+            ("saturation", "彩度", saturation.evaluate(frame), "%"),
+            ("lightness", "明度", lightness.evaluate(frame), "%"),
+        ],
+        EffectType::CrtScanlines {
+            line_spacing,
+            intensity,
+        } => vec![
+            ("line_spacing", "線間隔", line_spacing.evaluate(frame), "px"),
+            ("intensity", "強度", intensity.evaluate(frame), "%"),
+        ],
+        EffectType::ShiftChannels {
+            take_red,
+            take_green,
+            take_blue,
+            take_alpha,
+        } => vec![
+            ("take_red", "赤", take_red.evaluate(frame), ""),
+            ("take_green", "緑", take_green.evaluate(frame), ""),
+            ("take_blue", "青", take_blue.evaluate(frame), ""),
+            ("take_alpha", "アルファ", take_alpha.evaluate(frame), ""),
+        ],
+        EffectType::Minimax { operation, radius } => vec![
+            ("operation", "演算", operation.evaluate(frame), ""),
+            ("radius", "半径", radius.evaluate(frame), "px"),
+        ],
+        EffectType::FractalNoise {
+            contrast,
+            brightness,
+            complexity,
+            evolution,
+            ..
+        } => vec![
+            ("contrast", "コントラスト", contrast.evaluate(frame), "%"),
+            ("brightness", "明るさ", brightness.evaluate(frame), ""),
+            ("complexity", "複雑さ", complexity.evaluate(frame), ""),
+            ("evolution", "進化", evolution.evaluate(frame), ""),
+        ],
+        EffectType::Curves { channel } => {
+            vec![("channel", "チャンネル", channel.evaluate(frame), "")]
+        }
+        EffectType::CompoundBlur { max_blur, .. } => {
+            vec![("max_blur", "最大ぼかし", max_blur.evaluate(frame), "px")]
+        }
+        EffectType::DisplacementMap {
+            max_horizontal,
+            max_vertical,
+            ..
+        } => vec![
+            (
+                "max_horizontal",
+                "水平量",
+                max_horizontal.evaluate(frame),
+                "px",
+            ),
+            ("max_vertical", "垂直量", max_vertical.evaluate(frame), "px"),
+        ],
+        EffectType::Mosaic { block_w, block_h } => vec![
+            ("block_w", "幅", block_w.evaluate(frame), "px"),
+            ("block_h", "高さ", block_h.evaluate(frame), "px"),
+        ],
+        EffectType::Flicker {
+            amount,
+            speed,
+            seed,
+        } => vec![
+            ("amount", "量", amount.evaluate(frame), "%"),
+            ("speed", "速度", speed.evaluate(frame), ""),
+            ("seed", "シード", seed.evaluate(frame), ""),
+        ],
+        EffectType::DirectionalSharpen {
+            angle_deg,
+            strength,
+        } => vec![
+            ("angle_deg", "角度", angle_deg.evaluate(frame), "°"),
+            ("strength", "強度", strength.evaluate(frame), "%"),
+        ],
+        EffectType::Emboss { angle_deg, depth } => vec![
+            ("angle_deg", "角度", angle_deg.evaluate(frame), "°"),
+            ("depth", "深度", depth.evaluate(frame), "%"),
+        ],
+        EffectType::BevelAlpha {
+            depth,
+            light_angle_deg,
+        } => vec![
+            ("depth", "深度", depth.evaluate(frame), "%"),
+            (
+                "light_angle_deg",
+                "ライト角度",
+                light_angle_deg.evaluate(frame),
+                "°",
+            ),
+        ],
+        EffectType::Letterbox { frac } => vec![("frac", "比率", frac.evaluate(frame), "")],
+        EffectType::LumaKeyRange {
+            low_threshold,
+            high_threshold,
+            ..
+        } => vec![
+            (
+                "low_threshold",
+                "低しきい値",
+                low_threshold.evaluate(frame),
+                "",
+            ),
+            (
+                "high_threshold",
+                "高しきい値",
+                high_threshold.evaluate(frame),
+                "",
+            ),
+        ],
         _ => Vec::new(),
     };
     use kagari_vfx::core::effect_params::ParamRefRef;
