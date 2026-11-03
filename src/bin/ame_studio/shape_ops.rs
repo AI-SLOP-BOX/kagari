@@ -535,21 +535,21 @@ impl AfterEffectsStudio {
                 add_current_keyframe(track, frame);
             }
             "position_x" | "position_y" => {
-                let track = repeater.position_offset_animation.get_or_insert_with(|| {
-                    Animatable::new_constant(repeater.position_offset)
-                });
+                let track = repeater
+                    .position_offset_animation
+                    .get_or_insert_with(|| Animatable::new_constant(repeater.position_offset));
                 add_current_keyframe(track, frame);
             }
             "scale_x" | "scale_y" => {
-                let track = repeater.scale_offset_animation.get_or_insert_with(|| {
-                    Animatable::new_constant(repeater.scale_offset)
-                });
+                let track = repeater
+                    .scale_offset_animation
+                    .get_or_insert_with(|| Animatable::new_constant(repeater.scale_offset));
                 add_current_keyframe(track, frame);
             }
             "rotation" => {
-                let track = repeater.rotation_offset_animation.get_or_insert_with(|| {
-                    Animatable::new_constant(repeater.rotation_offset_deg)
-                });
+                let track = repeater
+                    .rotation_offset_animation
+                    .get_or_insert_with(|| Animatable::new_constant(repeater.rotation_offset_deg));
                 add_current_keyframe(track, frame);
             }
             "start_opacity" | "end_opacity" => {

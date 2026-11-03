@@ -101,4 +101,3 @@ pub(crate) struct TextRasterParams {
     pub(crate) stroke_width: f32,
     pub(crate) faux_style: crate::core::font_rasterizer::FauxTextStyle,
 }
-

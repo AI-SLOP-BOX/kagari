@@ -88,7 +88,9 @@ impl AfterEffectsStudio {
         self.project_model = project;
         let composition = self.project_model.active_composition();
         self.project_fps = composition.fps.max(1);
-        self.current_frame = self.current_frame.min(composition.duration_frames.saturating_sub(1));
+        self.current_frame = self
+            .current_frame
+            .min(composition.duration_frames.saturating_sub(1));
         self.current_time = format_timecode(self.current_frame, self.project_fps);
         let layer_ids = composition
             .layers
@@ -153,10 +155,7 @@ impl AfterEffectsStudio {
             return;
         };
         let composition = self.project_model.active_composition();
-        let Some(layer_for_fit) = composition
-            .layers
-            .iter()
-            .find(|layer| layer.id == layer_id)
+        let Some(layer_for_fit) = composition.layers.iter().find(|layer| layer.id == layer_id)
         else {
             return;
         };
@@ -168,21 +167,21 @@ impl AfterEffectsStudio {
             return;
         }
         let Some(path) = (match &layer_for_fit.layer_type {
-                LayerType::Image { path } => Some(path.clone()),
-                LayerType::Video { frames_dir, .. } => Some(
-                    kagari_vfx::core::video_import::frame_path_in_dir(frames_dir, 0)
-                        .to_string_lossy()
-                        .into_owned(),
-                ),
-                _ => None,
-            })
-        else {
+            LayerType::Image { path } => Some(path.clone()),
+            LayerType::Video { frames_dir, .. } => Some(
+                kagari_vfx::core::video_import::frame_path_in_dir(frames_dir, 0)
+                    .to_string_lossy()
+                    .into_owned(),
+            ),
+            _ => None,
+        }) else {
             return;
         };
         let Some((image_width, image_height)) =
             kagari_vfx::core::image_cache::image_dimensions(&path)
         else {
-            self.asset_status = "素材の寸法を取得できませんでした。ファイルを確認してください。".to_owned();
+            self.asset_status =
+                "素材の寸法を取得できませんでした。ファイルを確認してください。".to_owned();
             return;
         };
         let (comp_width, comp_height, frame) = (
@@ -208,26 +207,31 @@ impl AfterEffectsStudio {
             return;
         };
         if matches!(&layer.transform.position, Animatable::Animated(_)) {
-            layer.transform.position.set_keyframe(kagari_vfx::core::keyframe::Keyframe::new(
-                frame,
-                center,
-                kagari_vfx::core::keyframe::InterpolationType::Linear,
-            ));
+            layer
+                .transform
+                .position
+                .set_keyframe(kagari_vfx::core::keyframe::Keyframe::new(
+                    frame,
+                    center,
+                    kagari_vfx::core::keyframe::InterpolationType::Linear,
+                ));
         } else {
             layer.transform.position = Animatable::new_constant(center);
         }
         let fitted_scale = [media_scale, media_scale];
         if matches!(&layer.transform.scale, Animatable::Animated(_)) {
-            layer.transform.scale.set_keyframe(kagari_vfx::core::keyframe::Keyframe::new(
-                frame,
-                fitted_scale,
-                kagari_vfx::core::keyframe::InterpolationType::Linear,
-            ));
+            layer
+                .transform
+                .scale
+                .set_keyframe(kagari_vfx::core::keyframe::Keyframe::new(
+                    frame,
+                    fitted_scale,
+                    kagari_vfx::core::keyframe::InterpolationType::Linear,
+                ));
         } else {
             layer.transform.scale = Animatable::new_constant(fitted_scale);
         }
         self.mark_project_changed();
         self.sync_selected_layer_controls();
     }
-
 }

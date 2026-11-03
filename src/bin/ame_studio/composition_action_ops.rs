@@ -85,19 +85,27 @@ impl AfterEffectsStudio {
                 true
             }
             ("composition_proxy_full", _) => {
-                self.set_composition_proxy_resolution(kagari_vfx::core::proxy::ProxyResolution::Full);
+                self.set_composition_proxy_resolution(
+                    kagari_vfx::core::proxy::ProxyResolution::Full,
+                );
                 true
             }
             ("composition_proxy_half", _) => {
-                self.set_composition_proxy_resolution(kagari_vfx::core::proxy::ProxyResolution::Half);
+                self.set_composition_proxy_resolution(
+                    kagari_vfx::core::proxy::ProxyResolution::Half,
+                );
                 true
             }
             ("composition_proxy_quarter", _) => {
-                self.set_composition_proxy_resolution(kagari_vfx::core::proxy::ProxyResolution::Quarter);
+                self.set_composition_proxy_resolution(
+                    kagari_vfx::core::proxy::ProxyResolution::Quarter,
+                );
                 true
             }
             ("composition_proxy_eighth", _) => {
-                self.set_composition_proxy_resolution(kagari_vfx::core::proxy::ProxyResolution::Eighth);
+                self.set_composition_proxy_resolution(
+                    kagari_vfx::core::proxy::ProxyResolution::Eighth,
+                );
                 true
             }
             ("toggle_composition_proxy_preview", _) => {

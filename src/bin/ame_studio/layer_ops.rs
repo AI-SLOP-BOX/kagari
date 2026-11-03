@@ -506,7 +506,10 @@ impl AfterEffectsStudio {
         let selected_ids = if self.align_selected_layer_ids.is_empty() {
             self.selected_layer_id.iter().cloned().collect::<Vec<_>>()
         } else {
-            self.align_selected_layer_ids.iter().cloned().collect::<Vec<_>>()
+            self.align_selected_layer_ids
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>()
         };
         if selected_ids.is_empty() {
             return;
@@ -534,13 +537,19 @@ impl AfterEffectsStudio {
         }
     }
 
-    pub(crate) fn distribute_scene_layers(&mut self, mode: kagari_vfx::core::layer_align::DistributeMode) {
+    pub(crate) fn distribute_scene_layers(
+        &mut self,
+        mode: kagari_vfx::core::layer_align::DistributeMode,
+    ) {
         use kagari_vfx::core::layer_align::{apply_to_composition, AlignOperation};
 
         let selected_ids = if self.align_selected_layer_ids.is_empty() {
             self.selected_layer_id.iter().cloned().collect::<Vec<_>>()
         } else {
-            self.align_selected_layer_ids.iter().cloned().collect::<Vec<_>>()
+            self.align_selected_layer_ids
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>()
         };
         if selected_ids.len() < 3 {
             return;
@@ -598,8 +607,13 @@ impl AfterEffectsStudio {
             return;
         };
         let frame = self.current_frame;
-        let Some(layer) = self.project_model.active_composition_mut().layers.iter_mut()
-            .find(|layer| layer.id == layer_id && !layer.locked) else {
+        let Some(layer) = self
+            .project_model
+            .active_composition_mut()
+            .layers
+            .iter_mut()
+            .find(|layer| layer.id == layer_id && !layer.locked)
+        else {
             return;
         };
         match property {
@@ -621,7 +635,11 @@ impl AfterEffectsStudio {
             return;
         };
         let frame = self.current_frame;
-        let changed = self.project_model.active_composition_mut().layers.iter_mut()
+        let changed = self
+            .project_model
+            .active_composition_mut()
+            .layers
+            .iter_mut()
             .find(|layer| layer.id == layer_id && !layer.locked)
             .and_then(|layer| shape_parameter_track_mut(layer, channel))
             .is_some_and(|track| {
@@ -854,7 +872,11 @@ impl AfterEffectsStudio {
         };
         let frame = self.current_frame;
         let composition = self.project_model.active_composition_mut();
-        let Some(layer) = composition.layers.iter_mut().find(|l| l.id == layer_id && !l.locked) else {
+        let Some(layer) = composition
+            .layers
+            .iter_mut()
+            .find(|l| l.id == layer_id && !l.locked)
+        else {
             return;
         };
         if frame < layer.out_frame {
@@ -871,7 +893,11 @@ impl AfterEffectsStudio {
         };
         let frame = self.current_frame;
         let composition = self.project_model.active_composition_mut();
-        let Some(layer) = composition.layers.iter_mut().find(|l| l.id == layer_id && !l.locked) else {
+        let Some(layer) = composition
+            .layers
+            .iter_mut()
+            .find(|l| l.id == layer_id && !l.locked)
+        else {
             return;
         };
         if frame > layer.in_frame {
@@ -940,7 +966,11 @@ impl AfterEffectsStudio {
             .filter(|layer| search_visible.contains(&layer.id))
             .filter(|layer| {
                 !query.is_empty()
-                    || !scene_layer_hidden_by_collapse(&layer_by_id, layer, &self.collapsed_scene_layers)
+                    || !scene_layer_hidden_by_collapse(
+                        &layer_by_id,
+                        layer,
+                        &self.collapsed_scene_layers,
+                    )
             })
             .map(|layer| layer.id.as_str())
             .collect::<Vec<_>>();
@@ -1240,7 +1270,10 @@ impl AfterEffectsStudio {
                 _ => None,
             });
         let (layers, cameras) = (&mut composition.layers, &mut composition.cameras);
-        let Some(layer) = layers.iter_mut().find(|layer| layer.id == id && !layer.locked) else {
+        let Some(layer) = layers
+            .iter_mut()
+            .find(|layer| layer.id == id && !layer.locked)
+        else {
             return;
         };
         layer.easy_ease_transform();
@@ -1344,7 +1377,11 @@ impl AfterEffectsStudio {
         self.current_time = format_timecode(self.current_frame, self.project_fps);
     }
 
-    pub(crate) fn add_utility_layer(&mut self, name: &str, layer_type: kagari_vfx::core::timeline::LayerType) {
+    pub(crate) fn add_utility_layer(
+        &mut self,
+        name: &str,
+        layer_type: kagari_vfx::core::timeline::LayerType,
+    ) {
         let composition = self.project_model.active_composition_mut();
         let id = format!(
             "ameui_utility_{}",
@@ -1458,10 +1495,17 @@ impl AfterEffectsStudio {
             BlendMode::LinearLight,
         ];
         if let Some(id) = self.selected_layer_id.as_deref() {
-            let selected = self.project_model.active_composition_mut().layers
-                .iter_mut().find(|layer| layer.id == id && !layer.locked);
+            let selected = self
+                .project_model
+                .active_composition_mut()
+                .layers
+                .iter_mut()
+                .find(|layer| layer.id == id && !layer.locked);
             if let Some(layer) = selected {
-                let index = MODES.iter().position(|mode| *mode == layer.blend_mode).unwrap_or(0);
+                let index = MODES
+                    .iter()
+                    .position(|mode| *mode == layer.blend_mode)
+                    .unwrap_or(0);
                 layer.blend_mode = MODES[(index + 1) % MODES.len()];
                 self.mark_project_changed();
             }
@@ -1478,10 +1522,17 @@ impl AfterEffectsStudio {
             Matte::LumaMatteInverted,
         ];
         if let Some(id) = self.selected_layer_id.as_deref() {
-            let selected = self.project_model.active_composition_mut().layers
-                .iter_mut().find(|layer| layer.id == id && !layer.locked);
+            let selected = self
+                .project_model
+                .active_composition_mut()
+                .layers
+                .iter_mut()
+                .find(|layer| layer.id == id && !layer.locked);
             if let Some(layer) = selected {
-                let index = MODES.iter().position(|mode| *mode == layer.track_matte).unwrap_or(0);
+                let index = MODES
+                    .iter()
+                    .position(|mode| *mode == layer.track_matte)
+                    .unwrap_or(0);
                 layer.track_matte = MODES[(index + 1) % MODES.len()];
                 if layer.track_matte == Matte::None {
                     layer.track_matte_layer_id = None;
@@ -1496,8 +1547,12 @@ impl AfterEffectsStudio {
             (self.selected_layer_id.as_deref(), source_id_opt)
         {
             if layer_id != source_id {
-                let selected = self.project_model.active_composition_mut().layers
-                    .iter_mut().find(|layer| layer.id == layer_id && !layer.locked);
+                let selected = self
+                    .project_model
+                    .active_composition_mut()
+                    .layers
+                    .iter_mut()
+                    .find(|layer| layer.id == layer_id && !layer.locked);
                 if let Some(layer) = selected {
                     layer.track_matte_layer_id = Some(source_id.to_owned());
                     self.mark_project_changed();
@@ -1508,8 +1563,12 @@ impl AfterEffectsStudio {
 
     pub(crate) fn clear_track_matte_source(&mut self) {
         if let Some(layer_id) = self.selected_layer_id.as_deref() {
-            let selected = self.project_model.active_composition_mut().layers
-                .iter_mut().find(|layer| layer.id == layer_id && !layer.locked);
+            let selected = self
+                .project_model
+                .active_composition_mut()
+                .layers
+                .iter_mut()
+                .find(|layer| layer.id == layer_id && !layer.locked);
             if let Some(layer) = selected {
                 if layer.track_matte_layer_id.take().is_some() {
                     self.mark_project_changed();
@@ -1518,4 +1577,3 @@ impl AfterEffectsStudio {
         }
     }
 }
-

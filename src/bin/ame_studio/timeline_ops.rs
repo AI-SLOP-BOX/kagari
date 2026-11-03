@@ -69,11 +69,10 @@ impl AfterEffectsStudio {
                         TimelineView::Animation => {
                             !layer_keyframe_frames_for_composition(composition, layer).is_empty()
                         }
-                        TimelineView::CurrentKeyframes => layer_keyframe_frames_for_composition(
-                            composition,
-                            layer,
-                        )
-                        .contains(&self.current_frame.min(composition.duration_frames)),
+                        TimelineView::CurrentKeyframes => {
+                            layer_keyframe_frames_for_composition(composition, layer)
+                                .contains(&self.current_frame.min(composition.duration_frames))
+                        }
                         TimelineView::Audio => match &layer.layer_type {
                             LayerType::Audio { .. } => true,
                             LayerType::Video { audio_wav, .. } => audio_wav.is_some(),
@@ -160,12 +159,17 @@ impl AfterEffectsStudio {
             let mut target =
                 (i64::from(source) + delta).clamp(i64::from(minimum), i64::from(maximum)) as u32;
             if self.timeline_snap_enabled && self.timeline_width > 0.0 {
-                let snap_distance = (8.0 * visible_frames / self.timeline_width).ceil().max(1.0) as u32;
+                let snap_distance =
+                    (8.0 * visible_frames / self.timeline_width).ceil().max(1.0) as u32;
                 let composition = self.project_model.active_composition();
                 let mut candidates = composition.markers.iter().map(|marker| marker.frame);
                 let mut snap_points = candidates.by_ref().collect::<Vec<_>>();
                 snap_points.push(self.current_frame);
-                for layer in composition.layers.iter().filter(|layer| layer.id != drag.layer_id) {
+                for layer in composition
+                    .layers
+                    .iter()
+                    .filter(|layer| layer.id != drag.layer_id)
+                {
                     snap_points.push(layer.in_frame);
                     snap_points.push(layer.out_frame);
                     snap_points.extend(layer_keyframe_frames_for_composition(composition, layer));
@@ -173,7 +177,8 @@ impl AfterEffectsStudio {
                 for camera in &composition.cameras {
                     snap_points.extend(camera_keyframe_frames(camera));
                 }
-                if let Some((snap_frame, _)) = snap_points.into_iter()
+                if let Some((snap_frame, _)) = snap_points
+                    .into_iter()
                     .filter(|candidate| *candidate >= minimum && *candidate <= maximum)
                     .map(|candidate| (candidate, target.abs_diff(candidate)))
                     .filter(|(_, distance)| *distance <= snap_distance)

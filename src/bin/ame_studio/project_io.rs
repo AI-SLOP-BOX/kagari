@@ -155,7 +155,6 @@ impl AfterEffectsStudio {
         Ok(())
     }
 
-
     pub(crate) fn apply_cache_path(&mut self) -> Result<(), String> {
         let value = self.cache_path.trim();
         let directory = if value.is_empty() {
@@ -336,9 +335,7 @@ impl AfterEffectsStudio {
         self.last_autosave_at = std::time::Instant::now();
         self.output_path = format!("~/Movies/{default_name}.png");
         self.project_model = project;
-        self.history = kagari_vfx::core::history::ProjectHistory::new(
-            self.project_model.clone(),
-        );
+        self.history = kagari_vfx::core::history::ProjectHistory::new(self.project_model.clone());
         self.history.set_max_history_entries(self.undo_steps);
         self.history_interaction_snapshot = None;
         self.reset_project_asset_browser();
@@ -509,10 +506,10 @@ impl AfterEffectsStudio {
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
         let root_path = manifest_dir.join("src/ui/ame/kagari_studio.ame");
-        
+
         let root_source = std::fs::read_to_string(&root_path)
             .unwrap_or_else(|_| ame_sources::STUDIO_ROOT.to_owned());
-        
+
         let mut disk_modules = Vec::new();
         for (module_path, fallback_content) in ame_sources::STUDIO_MODULES {
             let full_path = manifest_dir.join("src/ui/ame").join(module_path);
@@ -520,10 +517,8 @@ impl AfterEffectsStudio {
                 .unwrap_or_else(|_| (*fallback_content).to_owned());
             disk_modules.push((*module_path, content));
         }
-        let disk_module_refs: Vec<(&str, &str)> = disk_modules
-            .iter()
-            .map(|(p, c)| (*p, c.as_str()))
-            .collect();
+        let disk_module_refs: Vec<(&str, &str)> =
+            disk_modules.iter().map(|(p, c)| (*p, c.as_str())).collect();
 
         match compile_with_sources(
             "src/ui/ame/kagari_studio.ame",

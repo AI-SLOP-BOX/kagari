@@ -29,7 +29,8 @@ impl App for AfterEffectsStudio {
                     };
                     let (layer_locked, keys) = {
                         let composition = self.project_model.active_composition();
-                        let Some(layer) = composition.layers.iter().find(|layer| layer.id == layer_id)
+                        let Some(layer) =
+                            composition.layers.iter().find(|layer| layer.id == layer_id)
                         else {
                             return true;
                         };
@@ -75,9 +76,13 @@ impl App for AfterEffectsStudio {
                         self.current_time = format_timecode(self.current_frame, self.project_fps);
 
                         // If right-clicked on keyframe, cycle interpolation (Linear -> Bezier Easing -> Hold)
-                        if event.button == Some(ame_ui::event::PointerButton::Secondary) && !layer_locked {
+                        if event.button == Some(ame_ui::event::PointerButton::Secondary)
+                            && !layer_locked
+                        {
                             let comp = self.project_model.active_composition_mut();
-                            if let Some((target_layer, target_camera, target_light)) = graph_targets_mut(comp, layer_id) {
+                            if let Some((target_layer, target_camera, target_light)) =
+                                graph_targets_mut(comp, layer_id)
+                            {
                                 if cycle_graph_interpolation(
                                     target_layer,
                                     target_camera,
@@ -98,14 +103,20 @@ impl App for AfterEffectsStudio {
 
                         let mut snap_points = Vec::new();
                         let composition = self.project_model.active_composition();
-                        snap_points.extend(composition.markers.iter().map(|marker| marker.frame.min(duration.saturating_sub(1))));
+                        snap_points.extend(
+                            composition
+                                .markers
+                                .iter()
+                                .map(|marker| marker.frame.min(duration.saturating_sub(1))),
+                        );
                         snap_points.push(self.current_frame.min(duration.saturating_sub(1)));
                         for l in &composition.layers {
                             if l.id != layer_id {
                                 snap_points.push(l.in_frame.min(duration.saturating_sub(1)));
                                 snap_points.push(l.out_frame.min(duration.saturating_sub(1)));
                             }
-                            snap_points.extend(layer_keyframe_frames_for_composition(composition, l));
+                            snap_points
+                                .extend(layer_keyframe_frames_for_composition(composition, l));
                         }
                         for camera in &composition.cameras {
                             snap_points.extend(camera_keyframe_frames(camera));
@@ -143,14 +154,14 @@ impl App for AfterEffectsStudio {
                         drag.min_value + (drag.max_value - drag.min_value) * value_fraction as f32;
                     let time_fraction =
                         ((event.x - plot_left) / (plot_right - plot_left)).clamp(0.0, 1.0);
-                    let mut target_frame = ((timeline_start + time_fraction * visible_frames).round()
-                        as u32)
+                    let mut target_frame = ((timeline_start + time_fraction * visible_frames)
+                        .round() as u32)
                         .min(duration.saturating_sub(1));
                     self.timeline_snap_frame = None;
                     if self.timeline_snap_enabled {
-                        let snap_distance =
-                            (8.0 * visible_frames / self.timeline_width.max(1.0)).ceil().max(1.0)
-                                as u32;
+                        let snap_distance = (8.0 * visible_frames / self.timeline_width.max(1.0))
+                            .ceil()
+                            .max(1.0) as u32;
                         if let Some((snap_frame, _)) = drag
                             .snap_points
                             .iter()
@@ -172,12 +183,10 @@ impl App for AfterEffectsStudio {
                         .find(|layer| layer.id == drag.layer_id)
                         .is_some_and(|layer| !layer.locked);
                     if target_is_unlocked {
-                        if let Some((layer, camera, light)) =
-                            graph_targets_mut(
-                                self.project_model.active_composition_mut(),
-                                &drag.layer_id,
-                            )
-                        {
+                        if let Some((layer, camera, light)) = graph_targets_mut(
+                            self.project_model.active_composition_mut(),
+                            &drag.layer_id,
+                        ) {
                             if update_graph_keyframe(
                                 layer,
                                 camera,
@@ -227,7 +236,9 @@ impl App for AfterEffectsStudio {
                 let cam = comp.resolve_camera();
                 let cam_pos = cam.transform.position.evaluate(self.current_frame);
                 let cam_rot = cam.transform.rotation.evaluate(self.current_frame);
-                let mode = if event.modifiers.shift || event.button == Some(ame_ui::event::PointerButton::Middle) {
+                let mode = if event.modifiers.shift
+                    || event.button == Some(ame_ui::event::PointerButton::Middle)
+                {
                     CameraNavMode::Dolly
                 } else if event.button == Some(ame_ui::event::PointerButton::Secondary) {
                     CameraNavMode::Pan
@@ -272,9 +283,7 @@ impl App for AfterEffectsStudio {
                                         .hypot((f64::from(vertex[1]) - point[1]) * scale_y);
                                     (index, distance)
                                 })
-                                .filter(|(_, distance)| {
-                                    *distance <= 12.0
-                                })
+                                .filter(|(_, distance)| *distance <= 12.0)
                                 .min_by(|a, b| a.1.total_cmp(&b.1))
                         });
                     if let Some((vertex_index, _)) = hit {
@@ -349,14 +358,18 @@ impl App for AfterEffectsStudio {
                     let mut hit_light = None;
                     for light in &composition.lights {
                         let l_pos = light.position.evaluate(self.current_frame);
-                        let (lx, ly) = if let Some(norm) = kagari_vfx::core::timeline::project_point_to_screen_at_frame(
-                            active_cam,
-                            l_pos,
-                            src_w,
-                            src_h,
-                            self.current_frame,
-                        ) {
-                            (f64::from(norm[0]) * f64::from(src_w), f64::from(norm[1]) * f64::from(src_h))
+                        let (lx, ly) = if let Some(norm) =
+                            kagari_vfx::core::timeline::project_point_to_screen_at_frame(
+                                active_cam,
+                                l_pos,
+                                src_w,
+                                src_h,
+                                self.current_frame,
+                            ) {
+                            (
+                                f64::from(norm[0]) * f64::from(src_w),
+                                f64::from(norm[1]) * f64::from(src_h),
+                            )
                         } else {
                             (f64::from(l_pos[0]), f64::from(l_pos[1]))
                         };
@@ -439,7 +452,9 @@ impl App for AfterEffectsStudio {
                                     drag.start_rot[1] + dx * 0.4,
                                     drag.start_rot[2],
                                 ];
-                                cam.transform.rotation.set_value_at_frame(self.current_frame, new_rot);
+                                cam.transform
+                                    .rotation
+                                    .set_value_at_frame(self.current_frame, new_rot);
                             }
                             CameraNavMode::Pan => {
                                 // Pan camera along local screen X and Y
@@ -448,7 +463,9 @@ impl App for AfterEffectsStudio {
                                     drag.start_pos[1] - dy * 1.5,
                                     drag.start_pos[2],
                                 ];
-                                cam.transform.position.set_value_at_frame(self.current_frame, new_pos);
+                                cam.transform
+                                    .position
+                                    .set_value_at_frame(self.current_frame, new_pos);
                             }
                             CameraNavMode::Dolly => {
                                 // Dolly camera along depth (Z axis)
@@ -457,7 +474,9 @@ impl App for AfterEffectsStudio {
                                     drag.start_pos[1],
                                     drag.start_pos[2] + dy * 3.0,
                                 ];
-                                cam.transform.position.set_value_at_frame(self.current_frame, new_pos);
+                                cam.transform
+                                    .position
+                                    .set_value_at_frame(self.current_frame, new_pos);
                             }
                         }
                         self.mark_project_changed();
@@ -484,8 +503,11 @@ impl App for AfterEffectsStudio {
                             drag.start_pos_3d[2],
                         ];
                         let comp = self.project_model.active_composition_mut();
-                        if let Some(light) = comp.lights.iter_mut().find(|l| l.id == drag.light_id) {
-                            light.position.set_value_at_frame(self.current_frame, new_pos_3d);
+                        if let Some(light) = comp.lights.iter_mut().find(|l| l.id == drag.light_id)
+                        {
+                            light
+                                .position
+                                .set_value_at_frame(self.current_frame, new_pos_3d);
                             self.mark_project_changed();
                             self.sync_bindings_logged();
                         }
@@ -568,11 +590,12 @@ impl App for AfterEffectsStudio {
                             let start_distance = (event.x - start_x).abs();
                             let end_distance = (event.x - end_x).abs();
                             if start_distance.min(end_distance) <= 10.0 {
-                                self.timeline_work_area_drag = Some(if start_distance <= end_distance {
-                                    TimelineWorkAreaDragMode::Start
-                                } else {
-                                    TimelineWorkAreaDragMode::End
-                                });
+                                self.timeline_work_area_drag =
+                                    Some(if start_distance <= end_distance {
+                                        TimelineWorkAreaDragMode::Start
+                                    } else {
+                                        TimelineWorkAreaDragMode::End
+                                    });
                                 self.timeline_scrubbing = false;
                                 return true;
                             }
@@ -770,7 +793,8 @@ impl App for AfterEffectsStudio {
             }
         } else if canvas_id == "kagari.flowchart" {
             let composition = self.project_model.active_composition();
-            let graph = kagari_vfx::core::flow_graph_model::FlowGraphModel::build_structure(composition);
+            let graph =
+                kagari_vfx::core::flow_graph_model::FlowGraphModel::build_structure(composition);
             let node_w = 150.0;
             let node_h = 38.0;
             let col_spacing = 180.0;
@@ -786,8 +810,10 @@ impl App for AfterEffectsStudio {
                         let parent_pin_center = (nx + node_w, ny + 12.0);
                         let matte_pin_center = (nx + node_w, ny + node_h - 12.0);
 
-                        let p_dist_sq = (event.x - parent_pin_center.0).powi(2) + (event.y - parent_pin_center.1).powi(2);
-                        let m_dist_sq = (event.x - matte_pin_center.0).powi(2) + (event.y - matte_pin_center.1).powi(2);
+                        let p_dist_sq = (event.x - parent_pin_center.0).powi(2)
+                            + (event.y - parent_pin_center.1).powi(2);
+                        let m_dist_sq = (event.x - matte_pin_center.0).powi(2)
+                            + (event.y - matte_pin_center.1).powi(2);
 
                         if p_dist_sq <= 100.0 {
                             if let Some(layer) = composition.layers.get(idx) {
@@ -814,7 +840,11 @@ impl App for AfterEffectsStudio {
 
                     // Otherwise, hit-test nodes to select layer
                     for (idx, (nx, ny)) in positions.into_iter().enumerate() {
-                        if event.x >= nx && event.x <= nx + node_w && event.y >= ny && event.y <= ny + node_h {
+                        if event.x >= nx
+                            && event.x <= nx + node_w
+                            && event.y >= ny
+                            && event.y <= ny + node_h
+                        {
                             if let Some(layer) = composition.layers.get(idx) {
                                 if self.selected_layer_id.as_deref() != Some(layer.id.as_str()) {
                                     self.selected_layer_marker_frame = None;
@@ -838,15 +868,21 @@ impl App for AfterEffectsStudio {
                         // Check if dropped onto an input pin of another node (or inside the node)
                         for (idx, (nx, ny)) in positions.iter().enumerate() {
                             let in_pin_center = (*nx, ny + node_h * 0.5);
-                            let dist_sq = (event.x - in_pin_center.0).powi(2) + (event.y - in_pin_center.1).powi(2);
-                            let inside_node = event.x >= *nx && event.x <= nx + node_w && event.y >= *ny && event.y <= ny + node_h;
+                            let dist_sq = (event.x - in_pin_center.0).powi(2)
+                                + (event.y - in_pin_center.1).powi(2);
+                            let inside_node = event.x >= *nx
+                                && event.x <= nx + node_w
+                                && event.y >= *ny
+                                && event.y <= ny + node_h;
                             if dist_sq <= 144.0 || inside_node {
                                 if let Some(target_layer) = composition.layers.get(idx) {
                                     if target_layer.id != drag.source_layer_id {
                                         let target_id = target_layer.id.clone();
                                         let source_id = drag.source_layer_id.clone();
                                         let comp = self.project_model.active_composition_mut();
-                                        if let Some(target) = comp.layers.iter_mut().find(|l| l.id == target_id) {
+                                        if let Some(target) =
+                                            comp.layers.iter_mut().find(|l| l.id == target_id)
+                                        {
                                             match drag.kind {
                                                 FlowchartWireKind::Parent => {
                                                     target.parent_id = Some(source_id);
@@ -961,13 +997,14 @@ impl App for AfterEffectsStudio {
         }
         if canvas_id == "kagari.flowchart" {
             let composition = self.project_model.active_composition();
-            let drag_wire = self.flowchart_wire_drag.as_ref().map(|d| {
-                FlowchartDragWireView {
+            let drag_wire = self
+                .flowchart_wire_drag
+                .as_ref()
+                .map(|d| FlowchartDragWireView {
                     start: d.start_pos,
                     current: d.current_pos,
                     is_matte: d.kind == FlowchartWireKind::Matte,
-                }
-            });
+                });
             draw_flowchart(
                 scene,
                 x,
@@ -1081,18 +1118,15 @@ impl App for AfterEffectsStudio {
                     ProjectItemType::Image { path, .. } => {
                         Some(asset_image_preview_cache_key(asset_id, path))
                     }
-                    ProjectItemType::Video { path, .. } => {
-                        find_video_preview_frame(&self.project_model.compositions, path)
-                            .map(|frame| asset_image_preview_cache_key(
-                                asset_id,
-                                &frame.to_string_lossy(),
-                            ))
-                    }
+                    ProjectItemType::Video { path, .. } => find_video_preview_frame(
+                        &self.project_model.compositions,
+                        path,
+                    )
+                    .map(|frame| asset_image_preview_cache_key(asset_id, &frame.to_string_lossy())),
                     ProjectItemType::Model3D { path } => Some(model_preview_cache_key(path)),
-                    ProjectItemType::Composition { .. } => Some(format!(
-                        "composition:{asset_id}:{}",
-                        self.preview_revision
-                    )),
+                    ProjectItemType::Composition { .. } => {
+                        Some(format!("composition:{asset_id}:{}", self.preview_revision))
+                    }
                     _ => None,
                 }
             });
@@ -1150,9 +1184,8 @@ impl App for AfterEffectsStudio {
                         }
                     }
                     ProjectItemType::Solid { color } => {
-                        let rgba = color.map(|component| {
-                            (component.clamp(0.0, 1.0) * 255.0).round() as u8
-                        });
+                        let rgba = color
+                            .map(|component| (component.clamp(0.0, 1.0) * 255.0).round() as u8);
                         let cache_key = format!(
                             "solid:{asset_id}:{}:{}:{}:{}",
                             rgba[0], rgba[1], rgba[2], rgba[3]
@@ -1198,13 +1231,11 @@ impl App for AfterEffectsStudio {
                                 if !self.asset_render_preview_requested.contains(&cache_key)
                                     && !self.asset_render_preview_pending.contains_key(&cache_key)
                                 {
-                                    if let Some(composition) = self
-                                        .project_model
-                                        .compositions
-                                        .get(comp_idx)
-                                        .cloned()
+                                    if let Some(composition) =
+                                        self.project_model.compositions.get(comp_idx).cloned()
                                     {
-                                        let job = AssetPreviewJob::Composition(Box::new(composition));
+                                        let job =
+                                            AssetPreviewJob::Composition(Box::new(composition));
                                         if self
                                             .asset_render_preview_request_tx
                                             .try_send((cache_key.clone(), job.clone()))
@@ -1212,7 +1243,8 @@ impl App for AfterEffectsStudio {
                                         {
                                             self.asset_render_preview_requested.insert(cache_key);
                                         } else {
-                                            self.asset_render_preview_pending.insert(cache_key, job);
+                                            self.asset_render_preview_pending
+                                                .insert(cache_key, job);
                                         }
                                     } else {
                                         self.asset_preview_failed_asset_id = Some(asset_id.clone());
@@ -1223,7 +1255,9 @@ impl App for AfterEffectsStudio {
                     }
                     item_type => {
                         let path = match item_type {
-                            ProjectItemType::Image { path, .. } => Some(std::path::PathBuf::from(path)),
+                            ProjectItemType::Image { path, .. } => {
+                                Some(std::path::PathBuf::from(path))
+                            }
                             ProjectItemType::Video { path, .. } => {
                                 find_video_preview_frame(&self.project_model.compositions, &path)
                             }
@@ -1252,7 +1286,9 @@ impl App for AfterEffectsStudio {
                                     self.asset_preview_image = Some((cache_key.clone(), None));
                                     self.asset_preview_failed_asset_id = None;
                                     if !self.asset_render_preview_requested.contains(&cache_key)
-                                        && !self.asset_render_preview_pending.contains_key(&cache_key)
+                                        && !self
+                                            .asset_render_preview_pending
+                                            .contains_key(&cache_key)
                                     {
                                         let job = AssetPreviewJob::Image(path);
                                         if self
@@ -1262,7 +1298,8 @@ impl App for AfterEffectsStudio {
                                         {
                                             self.asset_render_preview_requested.insert(cache_key);
                                         } else {
-                                            self.asset_render_preview_pending.insert(cache_key, job);
+                                            self.asset_render_preview_pending
+                                                .insert(cache_key, job);
                                         }
                                     }
                                 }
@@ -1309,7 +1346,9 @@ impl App for AfterEffectsStudio {
         let source_width = f64::from(composition.width.max(1));
         let source_height = f64::from(composition.height.max(1));
         let pixel_aspect = f64::from(composition.pixel_aspect).clamp(0.1, 10.0);
-        let proxy_scale = f64::from(kagari_vfx::core::proxy::composition_preview_scale(composition));
+        let proxy_scale = f64::from(kagari_vfx::core::proxy::composition_preview_scale(
+            composition,
+        ));
         let render_scale = (preview_limit / (source_width * pixel_aspect))
             .min(preview_limit / source_height)
             .min(1.0)
@@ -1355,9 +1394,9 @@ impl App for AfterEffectsStudio {
             Some(std::time::Duration::from_millis(16))
         } else if self.screen == Screen::Editor
             && (!self.waveform_requested.is_empty()
-                                || !self.asset_render_preview_requested.is_empty()
-                                || !self.asset_render_preview_pending.is_empty()
-                                || self.viewport_preview_inflight)
+                || !self.asset_render_preview_requested.is_empty()
+                || !self.asset_render_preview_pending.is_empty()
+                || self.viewport_preview_inflight)
         {
             Some(std::time::Duration::from_millis(100))
         } else if self.screen == Screen::Editor
@@ -1394,6 +1433,9 @@ impl App for AfterEffectsStudio {
             panel_padding_y: 0.0,
             control_radius: 10.0,
             input_radius: 9.0,
+            body_font_size: 13.0,
+            title_font_size: 20.0,
+            caption_font_size: 11.0,
             background: Color::from_rgb8(11, 12, 14),
             surface: Color::from_rgb8(17, 22, 26),
             surface_border: Color::from_rgb8(42, 49, 55),
@@ -2010,10 +2052,7 @@ pub(crate) fn scene_layer_kind_label(layer: &kagari_vfx::core::timeline::Layer) 
 
 pub(crate) fn scene_layer_depths(
     layers: &[kagari_vfx::core::timeline::Layer],
-    layer_by_id: &std::collections::HashMap<
-        &str,
-        &kagari_vfx::core::timeline::Layer,
-    >,
+    layer_by_id: &std::collections::HashMap<&str, &kagari_vfx::core::timeline::Layer>,
 ) -> std::collections::HashMap<String, usize> {
     let mut depths = std::collections::HashMap::with_capacity(layers.len());
     for layer in layers {
@@ -2253,10 +2292,7 @@ pub(crate) fn replace_project_video_references(
 }
 
 pub(crate) fn scene_layer_hidden_by_collapse(
-    layer_by_id: &std::collections::HashMap<
-        &str,
-        &kagari_vfx::core::timeline::Layer,
-    >,
+    layer_by_id: &std::collections::HashMap<&str, &kagari_vfx::core::timeline::Layer>,
     layer: &kagari_vfx::core::timeline::Layer,
     collapsed: &std::collections::HashSet<String>,
 ) -> bool {
@@ -2276,10 +2312,7 @@ pub(crate) fn scene_layer_hidden_by_collapse(
 
 pub(crate) fn scene_search_visible_layer_ids(
     layers: &[kagari_vfx::core::timeline::Layer],
-    layer_by_id: &std::collections::HashMap<
-        &str,
-        &kagari_vfx::core::timeline::Layer,
-    >,
+    layer_by_id: &std::collections::HashMap<&str, &kagari_vfx::core::timeline::Layer>,
     query: &str,
 ) -> std::collections::HashSet<String> {
     if query.is_empty() {
@@ -2287,7 +2320,10 @@ pub(crate) fn scene_search_visible_layer_ids(
     }
 
     let mut visible = std::collections::HashSet::new();
-    for layer in layers.iter().filter(|layer| scene_layer_matches_query(layer, query)) {
+    for layer in layers
+        .iter()
+        .filter(|layer| scene_layer_matches_query(layer, query))
+    {
         visible.insert(layer.id.clone());
         let mut parent_id = layer.parent_id.as_deref();
         let mut visited = std::collections::HashSet::new();
@@ -2305,7 +2341,10 @@ pub(crate) fn scene_search_visible_layer_ids(
     visible
 }
 
-pub(crate) fn scene_layer_matches_query(layer: &kagari_vfx::core::timeline::Layer, query: &str) -> bool {
+pub(crate) fn scene_layer_matches_query(
+    layer: &kagari_vfx::core::timeline::Layer,
+    query: &str,
+) -> bool {
     if layer.name.to_lowercase().contains(query) {
         return true;
     }
@@ -2321,12 +2360,12 @@ pub(crate) fn scene_layer_matches_query(layer: &kagari_vfx::core::timeline::Laye
             kagari_vfx::core::timeline::LayerType::Model3D { path } => {
                 matches_text("3dモデル") || matches_text(path)
             }
-            kagari_vfx::core::timeline::LayerType::Video { source, frames_dir, .. } => {
-                matches_text("動画") || matches_text(source) || matches_text(frames_dir)
-            }
-            kagari_vfx::core::timeline::LayerType::Text { text, font_family, .. } => {
-                matches_text("テキスト") || matches_text(text) || matches_text(font_family)
-            }
+            kagari_vfx::core::timeline::LayerType::Video {
+                source, frames_dir, ..
+            } => matches_text("動画") || matches_text(source) || matches_text(frames_dir),
+            kagari_vfx::core::timeline::LayerType::Text {
+                text, font_family, ..
+            } => matches_text("テキスト") || matches_text(text) || matches_text(font_family),
             kagari_vfx::core::timeline::LayerType::Shape { shape_type, .. } => {
                 matches_text("シェイプ") || matches_text(&format!("{shape_type:?}").to_lowercase())
             }
@@ -2337,12 +2376,8 @@ pub(crate) fn scene_layer_matches_query(layer: &kagari_vfx::core::timeline::Laye
             kagari_vfx::core::timeline::LayerType::Audio { path, .. } => {
                 matches_text("音声") || matches_text(path)
             }
-            kagari_vfx::core::timeline::LayerType::AdjustmentLayer => {
-                matches_text("調整レイヤー")
-            }
-            kagari_vfx::core::timeline::LayerType::Particle { .. } => {
-                matches_text("パーティクル")
-            }
+            kagari_vfx::core::timeline::LayerType::AdjustmentLayer => matches_text("調整レイヤー"),
+            kagari_vfx::core::timeline::LayerType::Particle { .. } => matches_text("パーティクル"),
         },
     };
     matches_kind_or_source
@@ -2607,7 +2642,10 @@ pub(crate) fn light_for_layer<'a>(
         kagari_vfx::core::timeline::SceneObjectRef::Light { id } => id,
         _ => return None,
     };
-    composition.lights.iter().find(|light| light.id == *light_id)
+    composition
+        .lights
+        .iter()
+        .find(|light| light.id == *light_id)
 }
 
 pub(crate) fn camera_id_for_layer(layer: &kagari_vfx::core::timeline::Layer) -> Option<String> {
@@ -2654,4 +2692,3 @@ pub(crate) fn light_id_for_layer(layer: &kagari_vfx::core::timeline::Layer) -> O
         _ => None,
     }
 }
-

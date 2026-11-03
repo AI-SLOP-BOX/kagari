@@ -62,13 +62,15 @@ mod tests {
         // 1b. Verify 3D Light Gizmo renders when Point, Spot, and Parallel lights are present
         {
             let comp = app.project_model.active_composition_mut();
-            comp.lights.push(kagari_vfx::core::timeline::Light3D::default());
+            comp.lights
+                .push(kagari_vfx::core::timeline::Light3D::default());
             let mut spot = kagari_vfx::core::timeline::Light3D::default();
             spot.light_type = kagari_vfx::core::timeline::LightType::Spot {
                 cone_angle_deg: 60.0,
                 cone_feather_pct: 20.0,
             };
-            spot.position = kagari_vfx::core::property::Animatable::new_constant([400.0, 200.0, -300.0]);
+            spot.position =
+                kagari_vfx::core::property::Animatable::new_constant([400.0, 200.0, -300.0]);
             comp.lights.push(spot);
 
             let mut parallel = kagari_vfx::core::timeline::Light3D::default();
@@ -76,7 +78,8 @@ mod tests {
             comp.lights.push(parallel);
 
             // Add a 3D camera
-            comp.cameras.push(kagari_vfx::core::timeline::Camera3D::default());
+            comp.cameras
+                .push(kagari_vfx::core::timeline::Camera3D::default());
         }
         let mut scene_with_light_and_cam = Scene::new();
         app.draw_viewport(&mut scene_with_light_and_cam, 0.0, 0.0, 800.0, 450.0);
@@ -135,7 +138,9 @@ mod tests {
                 comp.layers.push(kagari_vfx::core::timeline::Layer::new(
                     format!("layer-{idx}"),
                     format!("Layer {idx}"),
-                    kagari_vfx::core::timeline::LayerType::Solid { color: [0.5, 0.5, 0.5, 1.0] },
+                    kagari_vfx::core::timeline::LayerType::Solid {
+                        color: [0.5, 0.5, 0.5, 1.0],
+                    },
                     comp.duration_frames,
                 ));
             }
@@ -144,7 +149,9 @@ mod tests {
             (comp.layers[0].id.clone(), comp.layers[1].id.clone())
         };
 
-        let graph = kagari_vfx::core::flow_graph_model::FlowGraphModel::build_structure(app.project_model.active_composition());
+        let graph = kagari_vfx::core::flow_graph_model::FlowGraphModel::build_structure(
+            app.project_model.active_composition(),
+        );
         let positions = graph.positions_f64(24.0, 20.0, 180.0, 52.0);
         let node_w = 150.0;
         let node_h = 38.0;
@@ -163,9 +170,22 @@ mod tests {
         // Simulate Mouse Down on Layer 0's parent output pin (top pin)
         let (p0_x, p0_y) = positions[0];
         let p0_parent_out = (p0_x + node_w, p0_y + 12.0);
-        app.on_canvas_pointer_event("kagari.flowchart", make_event(ame_ui::CanvasPointerPhase::Down, p0_parent_out.0, p0_parent_out.1));
-        assert!(app.flowchart_wire_drag.is_some(), "Flowchart drag should start from parent output pin");
-        assert_eq!(app.flowchart_wire_drag.as_ref().map(|d| d.kind), Some(FlowchartWireKind::Parent));
+        app.on_canvas_pointer_event(
+            "kagari.flowchart",
+            make_event(
+                ame_ui::CanvasPointerPhase::Down,
+                p0_parent_out.0,
+                p0_parent_out.1,
+            ),
+        );
+        assert!(
+            app.flowchart_wire_drag.is_some(),
+            "Flowchart drag should start from parent output pin"
+        );
+        assert_eq!(
+            app.flowchart_wire_drag.as_ref().map(|d| d.kind),
+            Some(FlowchartWireKind::Parent)
+        );
 
         // Simulate Mouse Move to stretch wire
         app.on_canvas_pointer_event(
@@ -180,7 +200,10 @@ mod tests {
         // Simulate Mouse Up on Layer 1's input pin / card
         let (p1_x, p1_y) = positions[1];
         let p1_in = (p1_x, p1_y + node_h * 0.5);
-        app.on_canvas_pointer_event("kagari.flowchart", make_event(ame_ui::CanvasPointerPhase::Up, p1_in.0, p1_in.1));
+        app.on_canvas_pointer_event(
+            "kagari.flowchart",
+            make_event(ame_ui::CanvasPointerPhase::Up, p1_in.0, p1_in.1),
+        );
         assert!(app.flowchart_wire_drag.is_none(), "Drag should clear on Up");
 
         // Verify that layer 1's parent_id is now connected to layer 0!
@@ -193,18 +216,36 @@ mod tests {
         );
 
         // Recompute positions because layer 1 is now a child (depth 1 instead of depth 0)
-        let graph2 = kagari_vfx::core::flow_graph_model::FlowGraphModel::build_structure(app.project_model.active_composition());
+        let graph2 = kagari_vfx::core::flow_graph_model::FlowGraphModel::build_structure(
+            app.project_model.active_composition(),
+        );
         let positions2 = graph2.positions_f64(24.0, 20.0, 180.0, 52.0);
         let (p1_new_x, p1_new_y) = positions2[1];
         let p1_new_in = (p1_new_x, p1_new_y + node_h * 0.5);
 
         // Now test Matte pin wiring: Drag from layer 0's matte pin to layer 1
         let p0_matte_out = (p0_x + node_w, p0_y + node_h - 12.0);
-        app.on_canvas_pointer_event("kagari.flowchart", make_event(ame_ui::CanvasPointerPhase::Down, p0_matte_out.0, p0_matte_out.1));
-        assert!(app.flowchart_wire_drag.is_some(), "Flowchart drag should start from matte pin");
-        assert_eq!(app.flowchart_wire_drag.as_ref().map(|d| d.kind), Some(FlowchartWireKind::Matte));
+        app.on_canvas_pointer_event(
+            "kagari.flowchart",
+            make_event(
+                ame_ui::CanvasPointerPhase::Down,
+                p0_matte_out.0,
+                p0_matte_out.1,
+            ),
+        );
+        assert!(
+            app.flowchart_wire_drag.is_some(),
+            "Flowchart drag should start from matte pin"
+        );
+        assert_eq!(
+            app.flowchart_wire_drag.as_ref().map(|d| d.kind),
+            Some(FlowchartWireKind::Matte)
+        );
 
-        app.on_canvas_pointer_event("kagari.flowchart", make_event(ame_ui::CanvasPointerPhase::Up, p1_new_in.0, p1_new_in.1));
+        app.on_canvas_pointer_event(
+            "kagari.flowchart",
+            make_event(ame_ui::CanvasPointerPhase::Up, p1_new_in.0, p1_new_in.1),
+        );
         assert!(app.flowchart_wire_drag.is_none());
 
         let comp = app.project_model.active_composition();
@@ -241,11 +282,17 @@ mod tests {
         let initial_layer_count = app.project_model.active_composition().layers.len();
 
         // Down
-        app.on_canvas_pointer_event("kagari.viewport", make_event(ame_ui::CanvasPointerPhase::Down, 50.0, 50.0));
+        app.on_canvas_pointer_event(
+            "kagari.viewport",
+            make_event(ame_ui::CanvasPointerPhase::Down, 50.0, 50.0),
+        );
         assert_eq!(app.viewport_pen_start, Some([50.0, 50.0]));
 
         // Moved
-        app.on_canvas_pointer_event("kagari.viewport", make_event(ame_ui::CanvasPointerPhase::Moved, 150.0, 200.0));
+        app.on_canvas_pointer_event(
+            "kagari.viewport",
+            make_event(ame_ui::CanvasPointerPhase::Moved, 150.0, 200.0),
+        );
         assert_eq!(app.viewport_pen_current, Some([150.0, 200.0]));
 
         // Verify draw_viewport renders live pen guide without panics
@@ -254,7 +301,10 @@ mod tests {
         assert!(!scene.encoding().is_empty());
 
         // Up -> creates bezier shape layer
-        app.on_canvas_pointer_event("kagari.viewport", make_event(ame_ui::CanvasPointerPhase::Up, 150.0, 200.0));
+        app.on_canvas_pointer_event(
+            "kagari.viewport",
+            make_event(ame_ui::CanvasPointerPhase::Up, 150.0, 200.0),
+        );
         assert_eq!(app.viewport_pen_start, None);
         assert_eq!(app.viewport_pen_current, None);
         assert_eq!(
@@ -275,7 +325,8 @@ mod tests {
             let comp = app.project_model.active_composition_mut();
             let mut light = kagari_vfx::core::timeline::Light3D::default();
             light.id = "interactive_light".to_string();
-            light.position = kagari_vfx::core::property::Animatable::new_constant([200.0, 150.0, -500.0]);
+            light.position =
+                kagari_vfx::core::property::Animatable::new_constant([200.0, 150.0, -500.0]);
             comp.lights.push(light);
             "interactive_light".to_string()
         };
@@ -296,33 +347,56 @@ mod tests {
         let active_cam = comp.resolve_camera();
         let src_w = comp.width.max(1) as f32;
         let src_h = comp.height.max(1) as f32;
-        let (lx, ly) = if let Some(norm) = kagari_vfx::core::timeline::project_point_to_screen_at_frame(
-            active_cam,
-            [200.0, 150.0, -500.0],
-            src_w,
-            src_h,
-            0,
-        ) {
-            (f64::from(norm[0]) * f64::from(src_w), f64::from(norm[1]) * f64::from(src_h))
+        let (lx, ly) = if let Some(norm) =
+            kagari_vfx::core::timeline::project_point_to_screen_at_frame(
+                active_cam,
+                [200.0, 150.0, -500.0],
+                src_w,
+                src_h,
+                0,
+            ) {
+            (
+                f64::from(norm[0]) * f64::from(src_w),
+                f64::from(norm[1]) * f64::from(src_h),
+            )
         } else {
             (200.0, 150.0)
         };
 
         // Click directly on light gizmo
-        let handled = app.on_canvas_pointer_event("kagari.viewport", make_event(ame_ui::CanvasPointerPhase::Down, lx, ly));
+        let handled = app.on_canvas_pointer_event(
+            "kagari.viewport",
+            make_event(ame_ui::CanvasPointerPhase::Down, lx, ly),
+        );
         assert!(handled, "Click on light gizmo should be handled");
-        assert!(app.light_gizmo_drag.is_some(), "Light gizmo drag should be active");
+        assert!(
+            app.light_gizmo_drag.is_some(),
+            "Light gizmo drag should be active"
+        );
 
         // Drag by (+50, +30)
-        app.on_canvas_pointer_event("kagari.viewport", make_event(ame_ui::CanvasPointerPhase::Moved, lx + 50.0, ly + 30.0));
+        app.on_canvas_pointer_event(
+            "kagari.viewport",
+            make_event(ame_ui::CanvasPointerPhase::Moved, lx + 50.0, ly + 30.0),
+        );
 
         // Release mouse
-        app.on_canvas_pointer_event("kagari.viewport", make_event(ame_ui::CanvasPointerPhase::Up, lx + 50.0, ly + 30.0));
-        assert!(app.light_gizmo_drag.is_none(), "Drag should be cleared on Up");
+        app.on_canvas_pointer_event(
+            "kagari.viewport",
+            make_event(ame_ui::CanvasPointerPhase::Up, lx + 50.0, ly + 30.0),
+        );
+        assert!(
+            app.light_gizmo_drag.is_none(),
+            "Drag should be cleared on Up"
+        );
 
         // Verify that light's 3D position updated
         let comp = app.project_model.active_composition();
-        let light = comp.lights.iter().find(|l| l.id == light_id).expect("light exists");
+        let light = comp
+            .lights
+            .iter()
+            .find(|l| l.id == light_id)
+            .expect("light exists");
         let updated_pos = light.position.evaluate(0);
         assert_eq!(updated_pos[0], 250.0);
         assert_eq!(updated_pos[1], 180.0);
@@ -461,7 +535,9 @@ mod tests {
         fn extract_action(line: &str) -> Option<String> {
             let idx = line.find("action:")?;
             let rest = line[idx + 7..].trim_start();
-            let end = rest.find(|c: char| !c.is_alphanumeric() && c != '_').unwrap_or(rest.len());
+            let end = rest
+                .find(|c: char| !c.is_alphanumeric() && c != '_')
+                .unwrap_or(rest.len());
             let action = &rest[..end];
             if !action.is_empty() {
                 Some(action.to_string())
@@ -484,7 +560,9 @@ mod tests {
                                     acc.insert(action);
                                     if let Some(pos) = curr.find("action:") {
                                         curr = &curr[pos + 7..];
-                                        if let Some(next_pos) = curr.find(|c: char| !c.is_alphanumeric() && c != '_') {
+                                        if let Some(next_pos) =
+                                            curr.find(|c: char| !c.is_alphanumeric() && c != '_')
+                                        {
                                             curr = &curr[next_pos..];
                                         } else {
                                             break;
@@ -501,7 +579,10 @@ mod tests {
         }
 
         visit_dirs(ame_dir, &mut declared_actions);
-        assert!(!declared_actions.is_empty(), "Expected to find actions declared in .ame files");
+        assert!(
+            !declared_actions.is_empty(),
+            "Expected to find actions declared in .ame files"
+        );
 
         // 2. Scan Rust handler files for handled action names
         let handler_files = [
@@ -551,7 +632,10 @@ mod tests {
     fn particle_emitter_extended_controls_update_state() {
         let mut app = AfterEffectsStudio::new().unwrap();
         app.add_particle_layer();
-        let selected_id = app.selected_layer_id.clone().expect("particle layer should be selected");
+        let selected_id = app
+            .selected_layer_id
+            .clone()
+            .expect("particle layer should be selected");
 
         // Test updating extended properties via update_selected_emitter
         app.update_selected_emitter("spread", "120.0");
@@ -561,7 +645,11 @@ mod tests {
         app.update_selected_emitter("drag", "0.25");
 
         let comp = app.project_model.active_composition();
-        let layer = comp.layers.iter().find(|l| l.id == selected_id).expect("layer exists");
+        let layer = comp
+            .layers
+            .iter()
+            .find(|l| l.id == selected_id)
+            .expect("layer exists");
         if let kagari_vfx::core::timeline::LayerType::Particle { emitter } = &layer.layer_type {
             assert_eq!(emitter.spread_degrees, 120.0);
             assert_eq!(emitter.gravity[1], 980.0);
@@ -586,8 +674,22 @@ mod tests {
         let layer_id = {
             let comp = app.project_model.active_composition_mut();
             let layer = &mut comp.layers[0];
-            layer.transform.position.add_keyframe(kagari_vfx::core::keyframe::Keyframe::new(0, [100.0, 100.0], kagari_vfx::core::keyframe::InterpolationType::Linear));
-            layer.transform.position.add_keyframe(kagari_vfx::core::keyframe::Keyframe::new(30, [400.0, 100.0], kagari_vfx::core::keyframe::InterpolationType::Linear));
+            layer
+                .transform
+                .position
+                .add_keyframe(kagari_vfx::core::keyframe::Keyframe::new(
+                    0,
+                    [100.0, 100.0],
+                    kagari_vfx::core::keyframe::InterpolationType::Linear,
+                ));
+            layer
+                .transform
+                .position
+                .add_keyframe(kagari_vfx::core::keyframe::Keyframe::new(
+                    30,
+                    [400.0, 100.0],
+                    kagari_vfx::core::keyframe::InterpolationType::Linear,
+                ));
             layer.id.clone()
         };
         app.selected_layer_id = Some(layer_id.clone());
@@ -605,7 +707,9 @@ mod tests {
         let (min_v, max_v) = graph_value_range(&keys);
         let plot_top = 12.0;
         let plot_bottom = app.graph_canvas_height - 12.0;
-        let py_0 = plot_bottom - (100.0 - f64::from(min_v)) / f64::from((max_v - min_v).max(f32::EPSILON)) * (plot_bottom - plot_top);
+        let py_0 = plot_bottom
+            - (100.0 - f64::from(min_v)) / f64::from((max_v - min_v).max(f32::EPSILON))
+                * (plot_bottom - plot_top);
 
         let right_click_event = ame_ui::CanvasPointerEvent {
             phase: ame_ui::CanvasPointerPhase::Down,
@@ -625,9 +729,19 @@ mod tests {
         // Verify that interpolation changed to Bezier
         let comp = app.project_model.active_composition();
         let layer = comp.layers.iter().find(|l| l.id == layer_id).unwrap();
-        let key_0 = layer.transform.position.keyframes().unwrap().iter().find(|k| k.frame == 0).unwrap();
+        let key_0 = layer
+            .transform
+            .position
+            .keyframes()
+            .unwrap()
+            .iter()
+            .find(|k| k.frame == 0)
+            .unwrap();
         assert!(
-            matches!(key_0.interpolation, kagari_vfx::core::keyframe::InterpolationType::Bezier { .. }),
+            matches!(
+                key_0.interpolation,
+                kagari_vfx::core::keyframe::InterpolationType::Bezier { .. }
+            ),
             "Keyframe 0 should now have Bezier easing"
         );
 
@@ -661,8 +775,20 @@ mod tests {
         app.screen = Screen::Editor;
         app.viewport_mapping = Some((0.0, 0.0, 1.0, 1.0));
 
-        let initial_pos = app.project_model.active_composition().resolve_camera().transform.position.evaluate(0);
-        let initial_rot = app.project_model.active_composition().resolve_camera().transform.rotation.evaluate(0);
+        let initial_pos = app
+            .project_model
+            .active_composition()
+            .resolve_camera()
+            .transform
+            .position
+            .evaluate(0);
+        let initial_rot = app
+            .project_model
+            .active_composition()
+            .resolve_camera()
+            .transform
+            .rotation
+            .evaluate(0);
 
         // 1. Alt + Left Drag -> Orbit (Changes camera rotation yaw and pitch)
         let alt_mod = ame_ui::event::KeyModifiers {
@@ -709,9 +835,21 @@ mod tests {
         assert!(app.on_canvas_pointer_event("kagari.viewport", up_orbit));
         assert!(app.camera_nav_drag.is_none());
 
-        let rot_after = app.project_model.active_composition().resolve_camera().transform.rotation.evaluate(0);
-        assert!((rot_after[1] - (initial_rot[1] + 50.0 * 0.4)).abs() < 1e-3, "Yaw should rotate with X delta");
-        assert!((rot_after[0] - (initial_rot[0] + 30.0 * 0.4)).abs() < 1e-3, "Pitch should rotate with Y delta");
+        let rot_after = app
+            .project_model
+            .active_composition()
+            .resolve_camera()
+            .transform
+            .rotation
+            .evaluate(0);
+        assert!(
+            (rot_after[1] - (initial_rot[1] + 50.0 * 0.4)).abs() < 1e-3,
+            "Yaw should rotate with X delta"
+        );
+        assert!(
+            (rot_after[0] - (initial_rot[0] + 30.0 * 0.4)).abs() < 1e-3,
+            "Pitch should rotate with Y delta"
+        );
 
         // 2. Alt + Right Drag -> Pan (Changes camera X/Y position)
         let down_pan = ame_ui::CanvasPointerEvent {
@@ -750,9 +888,21 @@ mod tests {
         };
         assert!(app.on_canvas_pointer_event("kagari.viewport", up_pan));
 
-        let pos_after_pan = app.project_model.active_composition().resolve_camera().transform.position.evaluate(0);
-        assert!((pos_after_pan[0] - (initial_pos[0] - 40.0 * 1.5)).abs() < 1e-3, "Camera should pan along X");
-        assert!((pos_after_pan[1] - (initial_pos[1] - 20.0 * 1.5)).abs() < 1e-3, "Camera should pan along Y");
+        let pos_after_pan = app
+            .project_model
+            .active_composition()
+            .resolve_camera()
+            .transform
+            .position
+            .evaluate(0);
+        assert!(
+            (pos_after_pan[0] - (initial_pos[0] - 40.0 * 1.5)).abs() < 1e-3,
+            "Camera should pan along X"
+        );
+        assert!(
+            (pos_after_pan[1] - (initial_pos[1] - 20.0 * 1.5)).abs() < 1e-3,
+            "Camera should pan along Y"
+        );
 
         // 3. Alt + Shift + Drag -> Dolly (Changes camera Z position)
         let alt_shift_mod = ame_ui::event::KeyModifiers {
@@ -797,8 +947,17 @@ mod tests {
         };
         assert!(app.on_canvas_pointer_event("kagari.viewport", up_dolly));
 
-        let pos_after_dolly = app.project_model.active_composition().resolve_camera().transform.position.evaluate(0);
-        assert!((pos_after_dolly[2] - (initial_pos[2] + 50.0 * 3.0)).abs() < 1e-3, "Camera should dolly along Z");
+        let pos_after_dolly = app
+            .project_model
+            .active_composition()
+            .resolve_camera()
+            .transform
+            .position
+            .evaluate(0);
+        assert!(
+            (pos_after_dolly[2] - (initial_pos[2] + 50.0 * 3.0)).abs() < 1e-3,
+            "Camera should dolly along Z"
+        );
     }
 
     #[test]
@@ -812,13 +971,17 @@ mod tests {
             let l1 = kagari_vfx::core::timeline::Layer::new(
                 "source-layer".to_owned(),
                 "Source Layer".to_owned(),
-                kagari_vfx::core::timeline::LayerType::Solid { color: [1.0, 0.0, 0.0, 1.0] },
+                kagari_vfx::core::timeline::LayerType::Solid {
+                    color: [1.0, 0.0, 0.0, 1.0],
+                },
                 comp.duration_frames,
             );
             let l2 = kagari_vfx::core::timeline::Layer::new(
                 "target-layer".to_owned(),
                 "Target Layer".to_owned(),
-                kagari_vfx::core::timeline::LayerType::Solid { color: [0.0, 1.0, 0.0, 1.0] },
+                kagari_vfx::core::timeline::LayerType::Solid {
+                    color: [0.0, 1.0, 0.0, 1.0],
+                },
                 comp.duration_frames,
             );
             comp.layers.push(l1);
@@ -831,7 +994,12 @@ mod tests {
 
         // 1. Add tracker
         invoke(&mut app, "add_motion_tracker", None);
-        assert_eq!(app.project_model.active_composition().layers[0].trackers.len(), 1);
+        assert_eq!(
+            app.project_model.active_composition().layers[0]
+                .trackers
+                .len(),
+            1
+        );
         assert!(app.tracker_status.contains("トラッカー 1 を作成しました"));
 
         // 2. Forward analyze
@@ -845,15 +1013,31 @@ mod tests {
         }
 
         // 3. Select target layer
-        invoke(&mut app, "select_motion_tracker_target", Some(ActionValue::Text(target_layer_id.clone())));
-        assert_eq!(app.selected_tracker_target_id.as_ref(), Some(&target_layer_id));
+        invoke(
+            &mut app,
+            "select_motion_tracker_target",
+            Some(ActionValue::Text(target_layer_id.clone())),
+        );
+        assert_eq!(
+            app.selected_tracker_target_id.as_ref(),
+            Some(&target_layer_id)
+        );
 
         // 4. Apply motion track to target
         invoke(&mut app, "apply_motion_track_to_target", None);
-        let target_layer = app.project_model.active_composition().layers.iter().find(|l| l.id == target_layer_id).unwrap();
+        let target_layer = app
+            .project_model
+            .active_composition()
+            .layers
+            .iter()
+            .find(|l| l.id == target_layer_id)
+            .unwrap();
         match &target_layer.transform.position {
             kagari_vfx::core::timeline::Animatable::Animated(kfs) => {
-                assert!(kfs.len() > 1, "Target layer should now have animated position keyframes from tracker");
+                assert!(
+                    kfs.len() > 1,
+                    "Target layer should now have animated position keyframes from tracker"
+                );
             }
             _ => panic!("Target layer position should be animated after track apply"),
         }
@@ -862,14 +1046,35 @@ mod tests {
         invoke(&mut app, "add_motion_tracker", None);
         invoke(&mut app, "add_motion_tracker", None);
         invoke(&mut app, "add_motion_tracker", None);
-        assert_eq!(app.project_model.active_composition().layers[0].trackers.len(), 4);
+        assert_eq!(
+            app.project_model.active_composition().layers[0]
+                .trackers
+                .len(),
+            4
+        );
 
         // 6. Apply 4-point planar track to target Corner Pin effect
         invoke(&mut app, "apply_planar_track_corner_pin", None);
-        assert!(app.tracker_status.contains("4点プラナー コーナーピンを適用しました"));
-        let target_layer_after_pin = app.project_model.active_composition().layers.iter().find(|l| l.id == target_layer_id).unwrap();
-        let has_corner_pin = target_layer_after_pin.effects.iter().any(|e| matches!(e.effect_type, kagari_vfx::core::timeline::EffectType::CornerPin { .. }));
-        assert!(has_corner_pin, "Target layer should have a Corner Pin effect created by planar tracker");
+        assert!(app
+            .tracker_status
+            .contains("4点プラナー コーナーピンを適用しました"));
+        let target_layer_after_pin = app
+            .project_model
+            .active_composition()
+            .layers
+            .iter()
+            .find(|l| l.id == target_layer_id)
+            .unwrap();
+        let has_corner_pin = target_layer_after_pin.effects.iter().any(|e| {
+            matches!(
+                e.effect_type,
+                kagari_vfx::core::timeline::EffectType::CornerPin { .. }
+            )
+        });
+        assert!(
+            has_corner_pin,
+            "Target layer should have a Corner Pin effect created by planar tracker"
+        );
     }
 
     #[test]
@@ -884,4 +1089,3 @@ mod tests {
         assert_eq!(app.screen, Screen::Editor);
     }
 }
-

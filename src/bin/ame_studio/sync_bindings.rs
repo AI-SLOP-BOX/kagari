@@ -25,10 +25,7 @@ impl AfterEffectsStudio {
                     composition.width,
                     composition.height,
                     composition.fps,
-                    format_duration_seconds(
-                        composition.duration_frames,
-                        composition.fps,
-                    ),
+                    format_duration_seconds(composition.duration_frames, composition.fps,),
                     composition.layers.len(),
                 )
             })
@@ -36,10 +33,8 @@ impl AfterEffectsStudio {
         self.ui
             .set_binding("project_summary", Value::String(project_summary))?;
         let active_composition = self.project_model.active_composition();
-        let duration_text = format_duration_seconds(
-            active_composition.duration_frames,
-            active_composition.fps,
-        );
+        let duration_text =
+            format_duration_seconds(active_composition.duration_frames, active_composition.fps);
         for (name, value) in [
             ("composition_width", active_composition.width.to_string()),
             ("composition_height", active_composition.height.to_string()),
@@ -108,7 +103,11 @@ impl AfterEffectsStudio {
             .set_binding("asset_importing", Value::Bool(self.video_import.is_some()))?;
         self.ui.set_binding(
             "asset_import_cancellable",
-            Value::Bool(self.video_import.as_ref().is_some_and(|job| job.cancel_supported)),
+            Value::Bool(
+                self.video_import
+                    .as_ref()
+                    .is_some_and(|job| job.cancel_supported),
+            ),
         )?;
         self.ui.set_binding(
             "composition_name",
@@ -228,11 +227,13 @@ impl AfterEffectsStudio {
             active_composition,
             self.current_frame,
         );
-        let preview_badge = if sw_reason.is_none() { "GPU プレビュー" } else { "CPU プレビュー" };
-        self.ui.set_binding(
-            "preview_badge",
-            Value::String(preview_badge.to_owned()),
-        )?;
+        let preview_badge = if sw_reason.is_none() {
+            "GPU プレビュー"
+        } else {
+            "CPU プレビュー"
+        };
+        self.ui
+            .set_binding("preview_badge", Value::String(preview_badge.to_owned()))?;
         self.ui.set_binding(
             "preview_fallback_reason",
             Value::String(sw_reason.unwrap_or("").to_owned()),
@@ -304,12 +305,15 @@ impl AfterEffectsStudio {
         )?;
         self.ui.set_binding(
             "video_export_codec",
-            Value::String(match self.video_export_codec_idx % 4 {
-                0 => "H.264 · MP4",
-                1 => "H.265 · MP4",
-                2 => "ProRes 422 · MOV",
-                _ => "ProRes 4444 · MOV",
-            }.to_owned()),
+            Value::String(
+                match self.video_export_codec_idx % 4 {
+                    0 => "H.264 · MP4",
+                    1 => "H.265 · MP4",
+                    2 => "ProRes 422 · MOV",
+                    _ => "ProRes 4444 · MOV",
+                }
+                .to_owned(),
+            ),
         )?;
         self.ui.set_binding(
             "video_overwrite_pending",
@@ -338,7 +342,9 @@ impl AfterEffectsStudio {
                 "current_time",
                 format_timecode(
                     self.current_frame.saturating_add(
-                        self.project_model.active_composition().start_timecode_frames,
+                        self.project_model
+                            .active_composition()
+                            .start_timecode_frames,
                     ),
                     self.project_model.active_composition().fps,
                 ),
@@ -399,8 +405,14 @@ impl AfterEffectsStudio {
         self.ui
             .set_binding("work_area_label", Value::String(work_area_label))?;
         let last_frame = active_composition.duration_frames.saturating_sub(1);
-        let (work_area_start, work_area_end) = self.playback_range
-            .map(|(start, end)| (start.min(last_frame), end.min(last_frame).max(start.min(last_frame))))
+        let (work_area_start, work_area_end) = self
+            .playback_range
+            .map(|(start, end)| {
+                (
+                    start.min(last_frame),
+                    end.min(last_frame).max(start.min(last_frame)),
+                )
+            })
             .unwrap_or((0, last_frame));
         self.ui.set_binding(
             "work_area_start_frame",
@@ -451,7 +463,12 @@ impl AfterEffectsStudio {
                     (
                         "indent".to_owned(),
                         Value::String(
-                            "　".repeat(scene_layer_depths.get(layer.id.as_str()).copied().unwrap_or(0)),
+                            "　".repeat(
+                                scene_layer_depths
+                                    .get(layer.id.as_str())
+                                    .copied()
+                                    .unwrap_or(0),
+                            ),
                         ),
                     ),
                     (
@@ -474,20 +491,38 @@ impl AfterEffectsStudio {
                     ("locked".to_owned(), Value::Bool(layer.locked)),
                     ("solo".to_owned(), Value::Bool(layer.solo)),
                     ("motion_blur".to_owned(), Value::Bool(layer.motion_blur)),
-                    ("has_audio".to_owned(), Value::Bool(matches!(&layer.layer_type,
-                        kagari_vfx::core::timeline::LayerType::Audio { .. }
-                            | kagari_vfx::core::timeline::LayerType::Video { audio_wav: Some(_), .. }
-                    ))),
+                    (
+                        "has_audio".to_owned(),
+                        Value::Bool(matches!(
+                            &layer.layer_type,
+                            kagari_vfx::core::timeline::LayerType::Audio { .. }
+                                | kagari_vfx::core::timeline::LayerType::Video {
+                                    audio_wav: Some(_),
+                                    ..
+                                }
+                        )),
+                    ),
                     ("audio_muted".to_owned(), Value::Bool(layer.audio_muted)),
-                    ("blend_mode".to_owned(), Value::String(blend_mode_label(layer.blend_mode).to_owned())),
+                    (
+                        "blend_mode".to_owned(),
+                        Value::String(blend_mode_label(layer.blend_mode).to_owned()),
+                    ),
                     (
                         "track_matte".to_owned(),
                         Value::String(match layer.track_matte {
                             kagari_vfx::core::timeline::TrackMatteMode::None => "なし".to_owned(),
-                            kagari_vfx::core::timeline::TrackMatteMode::AlphaMatte => "α".to_owned(),
-                            kagari_vfx::core::timeline::TrackMatteMode::AlphaMatteInverted => "α反転".to_owned(),
-                            kagari_vfx::core::timeline::TrackMatteMode::LumaMatte => "輝度".to_owned(),
-                            kagari_vfx::core::timeline::TrackMatteMode::LumaMatteInverted => "輝度反転".to_owned(),
+                            kagari_vfx::core::timeline::TrackMatteMode::AlphaMatte => {
+                                "α".to_owned()
+                            }
+                            kagari_vfx::core::timeline::TrackMatteMode::AlphaMatteInverted => {
+                                "α反転".to_owned()
+                            }
+                            kagari_vfx::core::timeline::TrackMatteMode::LumaMatte => {
+                                "輝度".to_owned()
+                            }
+                            kagari_vfx::core::timeline::TrackMatteMode::LumaMatteInverted => {
+                                "輝度反転".to_owned()
+                            }
                         }),
                     ),
                 ]))
@@ -510,9 +545,7 @@ impl AfterEffectsStudio {
         let active_layers = &self.project_model.active_composition().layers;
         let mut align_selected_count = active_layers
             .iter()
-            .filter(|layer| {
-                !layer.locked && self.align_selected_layer_ids.contains(&layer.id)
-            })
+            .filter(|layer| !layer.locked && self.align_selected_layer_ids.contains(&layer.id))
             .count();
         if self.align_selected_layer_ids.is_empty()
             && self.selected_layer_id.as_deref().is_some_and(|id| {
@@ -527,10 +560,8 @@ impl AfterEffectsStudio {
             "align_selected_count",
             Value::Int(align_selected_count as i64),
         )?;
-        self.ui.set_binding(
-            "can_align_layers",
-            Value::Bool(align_selected_count >= 1),
-        )?;
+        self.ui
+            .set_binding("can_align_layers", Value::Bool(align_selected_count >= 1))?;
         self.ui.set_binding(
             "can_distribute_layers",
             Value::Bool(align_selected_count >= 3),
@@ -673,7 +704,12 @@ impl AfterEffectsStudio {
                     (
                         "indent".to_owned(),
                         Value::String(
-                            "　".repeat(scene_layer_depths.get(layer.id.as_str()).copied().unwrap_or(0)),
+                            "　".repeat(
+                                scene_layer_depths
+                                    .get(layer.id.as_str())
+                                    .copied()
+                                    .unwrap_or(0),
+                            ),
                         ),
                     ),
                     (
@@ -696,20 +732,38 @@ impl AfterEffectsStudio {
                     ("locked".to_owned(), Value::Bool(layer.locked)),
                     ("solo".to_owned(), Value::Bool(layer.solo)),
                     ("motion_blur".to_owned(), Value::Bool(layer.motion_blur)),
-                    ("has_audio".to_owned(), Value::Bool(matches!(&layer.layer_type,
-                        kagari_vfx::core::timeline::LayerType::Audio { .. }
-                            | kagari_vfx::core::timeline::LayerType::Video { audio_wav: Some(_), .. }
-                    ))),
+                    (
+                        "has_audio".to_owned(),
+                        Value::Bool(matches!(
+                            &layer.layer_type,
+                            kagari_vfx::core::timeline::LayerType::Audio { .. }
+                                | kagari_vfx::core::timeline::LayerType::Video {
+                                    audio_wav: Some(_),
+                                    ..
+                                }
+                        )),
+                    ),
                     ("audio_muted".to_owned(), Value::Bool(layer.audio_muted)),
-                    ("blend_mode".to_owned(), Value::String(blend_mode_label(layer.blend_mode).to_owned())),
+                    (
+                        "blend_mode".to_owned(),
+                        Value::String(blend_mode_label(layer.blend_mode).to_owned()),
+                    ),
                     (
                         "track_matte".to_owned(),
                         Value::String(match layer.track_matte {
                             kagari_vfx::core::timeline::TrackMatteMode::None => "なし".to_owned(),
-                            kagari_vfx::core::timeline::TrackMatteMode::AlphaMatte => "α".to_owned(),
-                            kagari_vfx::core::timeline::TrackMatteMode::AlphaMatteInverted => "α反転".to_owned(),
-                            kagari_vfx::core::timeline::TrackMatteMode::LumaMatte => "輝度".to_owned(),
-                            kagari_vfx::core::timeline::TrackMatteMode::LumaMatteInverted => "輝度反転".to_owned(),
+                            kagari_vfx::core::timeline::TrackMatteMode::AlphaMatte => {
+                                "α".to_owned()
+                            }
+                            kagari_vfx::core::timeline::TrackMatteMode::AlphaMatteInverted => {
+                                "α反転".to_owned()
+                            }
+                            kagari_vfx::core::timeline::TrackMatteMode::LumaMatte => {
+                                "輝度".to_owned()
+                            }
+                            kagari_vfx::core::timeline::TrackMatteMode::LumaMatteInverted => {
+                                "輝度反転".to_owned()
+                            }
                         }),
                     ),
                 ]))
@@ -734,7 +788,9 @@ impl AfterEffectsStudio {
                     (
                         "time".to_owned(),
                         Value::String(format_timecode(
-                            marker.frame.saturating_add(composition.start_timecode_frames),
+                            marker
+                                .frame
+                                .saturating_add(composition.start_timecode_frames),
                             composition.fps,
                         )),
                     ),
@@ -752,7 +808,10 @@ impl AfterEffectsStudio {
         self.ui.set_binding(
             "has_selected_timeline_marker",
             Value::Bool(self.selected_marker_frame.is_some_and(|frame| {
-                composition.markers.iter().any(|marker| marker.frame == frame)
+                composition
+                    .markers
+                    .iter()
+                    .any(|marker| marker.frame == frame)
             })),
         )?;
         self.ui
@@ -773,7 +832,11 @@ impl AfterEffectsStudio {
         )?;
         self.ui.set_binding(
             "timeline_marker_frame",
-            Value::String(self.selected_marker_frame.map(|frame| frame.to_string()).unwrap_or_default()),
+            Value::String(
+                self.selected_marker_frame
+                    .map(|frame| frame.to_string())
+                    .unwrap_or_default(),
+            ),
         )?;
         let selected_layer_markers = self.selected_layer_id.as_deref().and_then(|id| {
             self.project_model
@@ -795,7 +858,9 @@ impl AfterEffectsStudio {
                     (
                         "time".to_owned(),
                         Value::String(format_timecode(
-                            marker.frame.saturating_add(composition.start_timecode_frames),
+                            marker
+                                .frame
+                                .saturating_add(composition.start_timecode_frames),
                             composition.fps,
                         )),
                     ),
@@ -813,9 +878,8 @@ impl AfterEffectsStudio {
         self.ui.set_binding(
             "has_selected_layer_marker",
             Value::Bool(self.selected_layer_marker_frame.is_some_and(|frame| {
-                selected_layer_markers.is_some_and(|layer| {
-                    layer.markers.iter().any(|marker| marker.frame == frame)
-                })
+                selected_layer_markers
+                    .is_some_and(|layer| layer.markers.iter().any(|marker| marker.frame == frame))
             })),
         )?;
         self.ui
@@ -834,7 +898,11 @@ impl AfterEffectsStudio {
         )?;
         self.ui.set_binding(
             "layer_marker_frame",
-            Value::String(self.selected_layer_marker_frame.map(|frame| frame.to_string()).unwrap_or_default()),
+            Value::String(
+                self.selected_layer_marker_frame
+                    .map(|frame| frame.to_string())
+                    .unwrap_or_default(),
+            ),
         )?;
 
         let scene_assets = self
@@ -918,7 +986,10 @@ impl AfterEffectsStudio {
                 "emitter_radius",
                 selected_particle.map(|e| e.emitter_size[0] * 0.5),
             ),
-            ("emitter_spread", selected_particle.map(|e| e.spread_degrees)),
+            (
+                "emitter_spread",
+                selected_particle.map(|e| e.spread_degrees),
+            ),
             ("velocity", selected_particle.map(|e| e.speed)),
             (
                 "velocity_random",
@@ -929,7 +1000,10 @@ impl AfterEffectsStudio {
             ("size_random", selected_particle.map(|e| e.size_end)),
             ("emitter_gravity_y", selected_particle.map(|e| e.gravity[1])),
             ("emitter_wind_x", selected_particle.map(|e| e.wind[0])),
-            ("emitter_turbulence", selected_particle.map(|e| e.turbulence)),
+            (
+                "emitter_turbulence",
+                selected_particle.map(|e| e.turbulence),
+            ),
             ("emitter_drag", selected_particle.map(|e| e.drag)),
         ] {
             self.ui.set_binding(
@@ -1514,9 +1588,9 @@ impl AfterEffectsStudio {
         });
         let audio_volume = audio_volume_track.map(|track| track.evaluate(self.current_frame));
         let audio_volume_keyframe_here = audio_volume_track.is_some_and(|track| {
-            track
-                .keyframes()
-                .is_some_and(|keyframes| keyframes.iter().any(|key| key.frame == self.current_frame))
+            track.keyframes().is_some_and(|keyframes| {
+                keyframes.iter().any(|key| key.frame == self.current_frame)
+            })
         });
         self.ui
             .set_binding("selected_is_audio", Value::Bool(audio_volume.is_some()))?;
@@ -1682,12 +1756,17 @@ impl AfterEffectsStudio {
             ("rotation_3d_x", transform_3d.map(|values| values.1[0])),
             ("rotation_3d_y", transform_3d.map(|values| values.1[1])),
             ("rotation_3d_z", transform_3d.map(|values| values.1[2])),
+        ] {
+            self.ui
+                .set_binding(name, Value::Float(value.map(f64::from).unwrap_or(0.0)))?;
+        }
+        for (name, value) in [
             ("scale_3d_x", transform_3d.map(|values| values.2[0])),
             ("scale_3d_y", transform_3d.map(|values| values.2[1])),
             ("scale_3d_z", transform_3d.map(|values| values.2[2])),
         ] {
             self.ui
-                .set_binding(name, Value::Float(value.map(f64::from).unwrap_or(0.0)))?;
+                .set_binding(name, Value::Float(value.map(f64::from).unwrap_or(100.0)))?;
         }
         let material = selected_layer
             .filter(|layer| layer.is_3d)
@@ -1696,10 +1775,6 @@ impl AfterEffectsStudio {
             ("material_ambient", material.map(|value| value.ambient)),
             ("material_diffuse", material.map(|value| value.diffuse)),
             ("material_specular", material.map(|value| value.specular)),
-            (
-                "material_specular_exponent",
-                material.map(|value| value.specular_exponent),
-            ),
             ("material_emission", material.map(|value| value.emission)),
             ("material_metalness", material.map(|value| value.metalness)),
             (
@@ -1776,10 +1851,7 @@ impl AfterEffectsStudio {
                             composition.width,
                             composition.height,
                             composition.fps,
-                            format_duration_seconds(
-                                composition.duration_frames,
-                                composition.fps,
-                            ),
+                            format_duration_seconds(composition.duration_frames, composition.fps,),
                             composition.layers.len(),
                         )
                     }),
@@ -1868,20 +1940,27 @@ impl AfterEffectsStudio {
         });
         self.ui
             .set_binding("selected_is_text", Value::Bool(text_properties.is_some()))?;
-        let active_text_family = text_properties.as_ref().map(|properties| properties.3.as_str());
+        let active_text_family = text_properties
+            .as_ref()
+            .map(|properties| properties.3.as_str());
         let font_query = self.text_font_search.trim().to_lowercase();
         let mut visible_font_families = self
             .text_font_families
             .iter()
-            .filter(|family| {
-                font_query.is_empty() || family.to_lowercase().contains(&font_query)
-            })
+            .filter(|family| font_query.is_empty() || family.to_lowercase().contains(&font_query))
             .take(if font_query.is_empty() { 16 } else { 40 })
             .collect::<Vec<_>>();
         if font_query.is_empty() {
             if let Some(selected_family) = active_text_family {
-                if !visible_font_families.iter().any(|family| family.as_str() == selected_family) {
-                    if let Some(family) = self.text_font_families.iter().find(|family| family.as_str() == selected_family) {
+                if !visible_font_families
+                    .iter()
+                    .any(|family| family.as_str() == selected_family)
+                {
+                    if let Some(family) = self
+                        .text_font_families
+                        .iter()
+                        .find(|family| family.as_str() == selected_family)
+                    {
                         visible_font_families.push(family);
                     }
                 }
@@ -1915,20 +1994,40 @@ impl AfterEffectsStudio {
         )?;
         let text_formatting = selected_layer.and_then(|layer| layer.text_formatting.as_ref());
         for (name, value) in [
-            ("text_faux_bold", text_formatting.is_some_and(|formatting| formatting.faux_bold)),
-            ("text_faux_italic", text_formatting.is_some_and(|formatting| formatting.faux_italic)),
-            ("text_all_caps", text_formatting.is_some_and(|formatting| formatting.all_caps)),
-            ("text_small_caps", text_formatting.is_some_and(|formatting| formatting.small_caps)),
+            (
+                "text_faux_bold",
+                text_formatting.is_some_and(|formatting| formatting.faux_bold),
+            ),
+            (
+                "text_faux_italic",
+                text_formatting.is_some_and(|formatting| formatting.faux_italic),
+            ),
+            (
+                "text_all_caps",
+                text_formatting.is_some_and(|formatting| formatting.all_caps),
+            ),
+            (
+                "text_small_caps",
+                text_formatting.is_some_and(|formatting| formatting.small_caps),
+            ),
         ] {
             self.ui.set_binding(name, Value::Bool(value))?;
         }
         self.ui.set_binding(
             "text_box_width",
-            Value::String(text_formatting.map(|formatting| formatting.box_width.to_string()).unwrap_or_else(|| "0".to_owned())),
+            Value::String(
+                text_formatting
+                    .map(|formatting| formatting.box_width.to_string())
+                    .unwrap_or_else(|| "0".to_owned()),
+            ),
         )?;
         self.ui.set_binding(
             "text_box_height",
-            Value::String(text_formatting.map(|formatting| formatting.box_height.to_string()).unwrap_or_else(|| "0".to_owned())),
+            Value::String(
+                text_formatting
+                    .map(|formatting| formatting.box_height.to_string())
+                    .unwrap_or_else(|| "0".to_owned()),
+            ),
         )?;
         for (name, value) in [
             (
@@ -2123,6 +2222,4 @@ impl AfterEffectsStudio {
         self.sync_recent_projects_bindings()?;
         Ok(())
     }
-
-
 }

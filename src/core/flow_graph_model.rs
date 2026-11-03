@@ -163,9 +163,6 @@ mod tests {
         assert_eq!(model.nodes[1].parent_index, Some(0));
         assert_eq!(model.nodes[1].depth, 1);
         assert_eq!(model.nodes[0].execution_order, Some(1));
-        assert_eq!(
-            model.positions_f64(0.0, 0.0, 100.0, 20.0)[1],
-            (100.0, 20.0)
-        );
+        assert_eq!(model.positions_f64(0.0, 0.0, 100.0, 20.0)[1], (100.0, 20.0));
     }
 }

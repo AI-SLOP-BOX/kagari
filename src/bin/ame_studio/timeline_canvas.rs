@@ -176,10 +176,8 @@ pub(crate) fn draw_timeline(
 
     if let Some((start_frame, end_frame)) = work_area {
         let start_x = x + width * (f64::from(start_frame) - timeline_start) / visible_frames;
-        let end_x = x
-            + width
-                * (f64::from(end_frame.saturating_add(1)) - timeline_start)
-                / visible_frames;
+        let end_x =
+            x + width * (f64::from(end_frame.saturating_add(1)) - timeline_start) / visible_frames;
         let visible_left = start_x.max(x);
         let visible_right = end_x.min(x + width);
         if visible_right > visible_left {
@@ -499,7 +497,9 @@ pub(crate) fn blend_mode_label(mode: kagari_vfx::core::timeline::BlendMode) -> &
     }
 }
 
-pub(crate) fn auto_orient_label(mode: kagari_vfx::core::auto_orient::AutoOrientMode) -> &'static str {
+pub(crate) fn auto_orient_label(
+    mode: kagari_vfx::core::auto_orient::AutoOrientMode,
+) -> &'static str {
     match mode {
         kagari_vfx::core::auto_orient::AutoOrientMode::Off => "なし",
         kagari_vfx::core::auto_orient::AutoOrientMode::OrientAlongPath => "パスに沿う",
@@ -507,7 +507,9 @@ pub(crate) fn auto_orient_label(mode: kagari_vfx::core::auto_orient::AutoOrientM
     }
 }
 
-pub(crate) fn layer_label_color_label(color: kagari_vfx::core::timeline::LabelColor) -> &'static str {
+pub(crate) fn layer_label_color_label(
+    color: kagari_vfx::core::timeline::LabelColor,
+) -> &'static str {
     use kagari_vfx::core::timeline::LabelColor;
     match color {
         LabelColor::None => "なし",
@@ -523,7 +525,9 @@ pub(crate) fn layer_label_color_label(color: kagari_vfx::core::timeline::LabelCo
     }
 }
 
-pub(crate) fn layer_label_color_badge(color: kagari_vfx::core::timeline::LabelColor) -> &'static str {
+pub(crate) fn layer_label_color_badge(
+    color: kagari_vfx::core::timeline::LabelColor,
+) -> &'static str {
     use kagari_vfx::core::timeline::LabelColor;
     match color {
         LabelColor::None => "▫",
@@ -600,9 +604,7 @@ pub(crate) fn graph_channel_value(
                 }
             })
             .unwrap_or(0.0),
-        GraphChannel::LightIntensity => light
-            .map(|light| light.intensity_at(frame))
-            .unwrap_or(0.0),
+        GraphChannel::LightIntensity => light.map(|light| light.intensity_at(frame)).unwrap_or(0.0),
         GraphChannel::MaskFeather => mask_id
             .and_then(|id| layer.masks.iter().find(|mask| mask.id == id))
             .map(|mask| mask.feather.evaluate(frame))
@@ -1005,8 +1007,12 @@ pub(crate) fn set_graph_interpolation_preset(
         GraphChannel::ScaleX | GraphChannel::ScaleY => {
             set_track_interpolation_preset(&mut layer.transform.scale, frame, preset)
         }
-        GraphChannel::Rotation => set_track_interpolation_preset(&mut layer.transform.rotation, frame, preset),
-        GraphChannel::Opacity => set_track_interpolation_preset(&mut layer.transform.opacity, frame, preset),
+        GraphChannel::Rotation => {
+            set_track_interpolation_preset(&mut layer.transform.rotation, frame, preset)
+        }
+        GraphChannel::Opacity => {
+            set_track_interpolation_preset(&mut layer.transform.opacity, frame, preset)
+        }
         GraphChannel::Position3DX | GraphChannel::Position3DY | GraphChannel::Position3DZ => {
             set_track_interpolation_preset(&mut layer.transform_3d.position, frame, preset)
         }
@@ -1290,11 +1296,9 @@ pub(crate) fn add_graph_keyframe(
         GraphChannel::LightIntensity => {
             if let Some(light) = light {
                 add_current_keyframe(
-                    light
-                        .intensity_animation
-                        .get_or_insert_with(|| {
-                            kagari_vfx::core::timeline::Animatable::new_constant(light.intensity)
-                        }),
+                    light.intensity_animation.get_or_insert_with(|| {
+                        kagari_vfx::core::timeline::Animatable::new_constant(light.intensity)
+                    }),
                     frame,
                 );
             }
@@ -1977,18 +1981,20 @@ pub(crate) fn draw_value_graph(
         }
         let py = bottom - (f64::from(*value) - f64::from(min_value)) / value_span * plot_height;
         // Dynamic tangent handles if easing/bezier is active on this keyframe
-        let is_bezier = layer.and_then(|l| {
-            graph_interpolation_label(
-                l,
-                camera,
-                light,
-                mask_id,
-                effect_id,
-                effect_parameter_id,
-                channel,
-                *key_frame,
-            )
-        }).is_some_and(|label| label == "イージング");
+        let is_bezier = layer
+            .and_then(|l| {
+                graph_interpolation_label(
+                    l,
+                    camera,
+                    light,
+                    mask_id,
+                    effect_id,
+                    effect_parameter_id,
+                    channel,
+                    *key_frame,
+                )
+            })
+            .is_some_and(|label| label == "イージング");
 
         if is_bezier {
             let handle_len = 22.0;
@@ -2002,13 +2008,37 @@ pub(crate) fn draw_value_graph(
             );
             // In handle circle (left)
             let in_handle = Circle::new((px - handle_len, py), 2.5);
-            scene.fill(Fill::NonZero, Affine::IDENTITY, Color::from_rgb8(255, 200, 100), None, &in_handle);
-            scene.stroke(&Stroke::new(0.8), Affine::IDENTITY, Color::from_rgb8(13, 15, 17), None, &in_handle);
+            scene.fill(
+                Fill::NonZero,
+                Affine::IDENTITY,
+                Color::from_rgb8(255, 200, 100),
+                None,
+                &in_handle,
+            );
+            scene.stroke(
+                &Stroke::new(0.8),
+                Affine::IDENTITY,
+                Color::from_rgb8(13, 15, 17),
+                None,
+                &in_handle,
+            );
 
             // Out handle circle (right)
             let out_handle = Circle::new((px + handle_len, py), 2.5);
-            scene.fill(Fill::NonZero, Affine::IDENTITY, Color::from_rgb8(255, 200, 100), None, &out_handle);
-            scene.stroke(&Stroke::new(0.8), Affine::IDENTITY, Color::from_rgb8(13, 15, 17), None, &out_handle);
+            scene.fill(
+                Fill::NonZero,
+                Affine::IDENTITY,
+                Color::from_rgb8(255, 200, 100),
+                None,
+                &out_handle,
+            );
+            scene.stroke(
+                &Stroke::new(0.8),
+                Affine::IDENTITY,
+                Color::from_rgb8(13, 15, 17),
+                None,
+                &out_handle,
+            );
         } else {
             // Stub line for linear/hold
             scene.stroke(
@@ -2250,7 +2280,8 @@ pub(crate) fn render_asset_image_preview_pixels(
         let source_y = (u64::from(y) * u64::from(image.height) / u64::from(height)) as u32;
         for x in 0..width {
             let source_x = (u64::from(x) * u64::from(image.width) / u64::from(width)) as u32;
-            let source_offset = ((source_y as usize * image.width as usize) + source_x as usize) * 4;
+            let source_offset =
+                ((source_y as usize * image.width as usize) + source_x as usize) * 4;
             let destination_offset = ((y as usize * width as usize) + x as usize) * 4;
             pixels[destination_offset..destination_offset + 4]
                 .copy_from_slice(&image.pixels[source_offset..source_offset + 4]);
@@ -2457,14 +2488,21 @@ pub(crate) fn draw_flowchart(
             )
         };
         let color_bar = RoundedRect::new(nx + 4.0, ny + 6.0, nx + 9.0, ny + node_h - 6.0, 2.0);
-        scene.fill(Fill::NonZero, Affine::IDENTITY, label_color, None, &color_bar);
+        scene.fill(
+            Fill::NonZero,
+            Affine::IDENTITY,
+            label_color,
+            None,
+            &color_bar,
+        );
 
         // Layer type badge & status pills inside node card
         let badge_x = nx + 16.0;
         let badge_y = ny + 10.0;
         let badge_w = 18.0;
         let badge_h = 18.0;
-        let badge_rect = RoundedRect::new(badge_x, badge_y, badge_x + badge_w, badge_y + badge_h, 3.0);
+        let badge_rect =
+            RoundedRect::new(badge_x, badge_y, badge_x + badge_w, badge_y + badge_h, 3.0);
 
         let (badge_bg, badge_stroke_color) = match &layer.layer_type {
             kagari_vfx::core::timeline::LayerType::Text { .. } => (
@@ -2489,21 +2527,57 @@ pub(crate) fn draw_flowchart(
             ),
         };
         scene.fill(Fill::NonZero, Affine::IDENTITY, badge_bg, None, &badge_rect);
-        scene.stroke(&Stroke::new(1.0), Affine::IDENTITY, badge_stroke_color, None, &badge_rect);
+        scene.stroke(
+            &Stroke::new(1.0),
+            Affine::IDENTITY,
+            badge_stroke_color,
+            None,
+            &badge_rect,
+        );
 
         // Draw geometric symbol inside badge:
         match &layer.layer_type {
             kagari_vfx::core::timeline::LayerType::Text { .. } => {
                 // "T" icon: horizontal bar + vertical stem
-                let bar = Line::new((badge_x + 4.0, badge_y + 5.0), (badge_x + badge_w - 4.0, badge_y + 5.0));
-                let stem = Line::new((badge_x + badge_w * 0.5, badge_y + 5.0), (badge_x + badge_w * 0.5, badge_y + badge_h - 4.0));
-                scene.stroke(&Stroke::new(1.5), Affine::IDENTITY, Color::WHITE, None, &bar);
-                scene.stroke(&Stroke::new(1.5), Affine::IDENTITY, Color::WHITE, None, &stem);
+                let bar = Line::new(
+                    (badge_x + 4.0, badge_y + 5.0),
+                    (badge_x + badge_w - 4.0, badge_y + 5.0),
+                );
+                let stem = Line::new(
+                    (badge_x + badge_w * 0.5, badge_y + 5.0),
+                    (badge_x + badge_w * 0.5, badge_y + badge_h - 4.0),
+                );
+                scene.stroke(
+                    &Stroke::new(1.5),
+                    Affine::IDENTITY,
+                    Color::WHITE,
+                    None,
+                    &bar,
+                );
+                scene.stroke(
+                    &Stroke::new(1.5),
+                    Affine::IDENTITY,
+                    Color::WHITE,
+                    None,
+                    &stem,
+                );
             }
             kagari_vfx::core::timeline::LayerType::Shape { .. } => {
                 // Star/diamond polygon
-                let diamond = RoundedRect::new(badge_x + 4.0, badge_y + 4.0, badge_x + badge_w - 4.0, badge_y + badge_h - 4.0, 2.0);
-                scene.stroke(&Stroke::new(1.3), Affine::IDENTITY, Color::WHITE, None, &diamond);
+                let diamond = RoundedRect::new(
+                    badge_x + 4.0,
+                    badge_y + 4.0,
+                    badge_x + badge_w - 4.0,
+                    badge_y + badge_h - 4.0,
+                    2.0,
+                );
+                scene.stroke(
+                    &Stroke::new(1.3),
+                    Affine::IDENTITY,
+                    Color::WHITE,
+                    None,
+                    &diamond,
+                );
             }
             _ => {
                 // Dot icon
@@ -2519,7 +2593,13 @@ pub(crate) fn draw_flowchart(
         } else {
             Color::from_rgba8(140, 155, 175, 180)
         };
-        scene.fill(Fill::NonZero, Affine::IDENTITY, name_bar_color, None, &name_bar);
+        scene.fill(
+            Fill::NonZero,
+            Affine::IDENTITY,
+            name_bar_color,
+            None,
+            &name_bar,
+        );
 
         // Subtitle / Effects count indicator line
         let has_effects = layer.effects_enabled && !layer.effects.is_empty();
@@ -2535,7 +2615,13 @@ pub(crate) fn draw_flowchart(
         // 3D layer badge indicator (cyan cube corner)
         if layer.is_3d {
             let cube_dot = Circle::new((nx + node_w - 28.0, ny + 25.0), 2.5);
-            scene.fill(Fill::NonZero, Affine::IDENTITY, Color::from_rgb8(0, 220, 255), None, &cube_dot);
+            scene.fill(
+                Fill::NonZero,
+                Affine::IDENTITY,
+                Color::from_rgb8(0, 220, 255),
+                None,
+                &cube_dot,
+            );
         }
 
         // Input port pin (left side: Cyan)
@@ -2591,7 +2677,12 @@ pub(crate) fn draw_flowchart(
     }
 
     // 3. Draw Interactive Dragging Wire (Active Pin-to-Pin connection)
-    if let Some(FlowchartDragWireView { start, current, is_matte }) = drag_wire {
+    if let Some(FlowchartDragWireView {
+        start,
+        current,
+        is_matte,
+    }) = drag_wire
+    {
         let mut path = BezPath::new();
         path.move_to(start);
         let dx = (current.0 - start.0).abs().max(40.0) * 0.5;
@@ -2613,29 +2704,9 @@ pub(crate) fn draw_flowchart(
             )
         };
 
-        scene.stroke(
-            &Stroke::new(4.0),
-            Affine::IDENTITY,
-            glow_color,
-            None,
-            &path,
-        );
-        scene.stroke(
-            &Stroke::new(2.0),
-            Affine::IDENTITY,
-            core_color,
-            None,
-            &path,
-        );
+        scene.stroke(&Stroke::new(4.0), Affine::IDENTITY, glow_color, None, &path);
+        scene.stroke(&Stroke::new(2.0), Affine::IDENTITY, core_color, None, &path);
         let end_point = Circle::new(current, 4.0);
-        scene.fill(
-            Fill::NonZero,
-            Affine::IDENTITY,
-            end_color,
-            None,
-            &end_point,
-        );
+        scene.fill(Fill::NonZero, Affine::IDENTITY, end_color, None, &end_point);
     }
 }
-
-

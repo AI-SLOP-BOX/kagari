@@ -20,37 +20,37 @@ use vello::{
 
 #[path = "../ui/ame_sources.rs"]
 mod ame_sources;
+#[path = "ame_studio/effect_ops.rs"]
+mod ame_studio_effect_ops;
+#[path = "ame_studio/event_handlers.rs"]
+mod ame_studio_event_handlers;
+#[path = "ame_studio/export.rs"]
+mod ame_studio_export;
 #[allow(dead_code)]
 #[path = "ame_studio/icons.rs"]
 mod ame_studio_icons;
-#[path = "ame_studio/sync_bindings.rs"]
-mod ame_studio_sync_bindings;
-#[path = "ame_studio/sync_recents.rs"]
-mod ame_studio_sync_recents;
-#[path = "ame_studio/sync_assets.rs"]
-mod ame_studio_sync_assets;
-#[path = "ame_studio/sync_layer_styles.rs"]
-mod ame_studio_sync_layer_styles;
-#[path = "ame_studio/sync_environment.rs"]
-mod ame_studio_sync_environment;
-#[path = "ame_studio/sync_effects.rs"]
-mod ame_studio_sync_effects;
-#[path = "ame_studio/sync_shapes.rs"]
-mod ame_studio_sync_shapes;
-#[path = "ame_studio/event_handlers.rs"]
-mod ame_studio_event_handlers;
-#[path = "ame_studio/viewport.rs"]
-mod ame_studio_viewport;
 #[path = "ame_studio/layer_controls.rs"]
 mod ame_studio_layer_controls;
-#[path = "ame_studio/export.rs"]
-mod ame_studio_export;
 #[path = "ame_studio/media_import.rs"]
 mod ame_studio_media_import;
 #[path = "ame_studio/project_io.rs"]
 mod ame_studio_project_io;
-#[path = "ame_studio/effect_ops.rs"]
-mod ame_studio_effect_ops;
+#[path = "ame_studio/sync_assets.rs"]
+mod ame_studio_sync_assets;
+#[path = "ame_studio/sync_bindings.rs"]
+mod ame_studio_sync_bindings;
+#[path = "ame_studio/sync_effects.rs"]
+mod ame_studio_sync_effects;
+#[path = "ame_studio/sync_environment.rs"]
+mod ame_studio_sync_environment;
+#[path = "ame_studio/sync_layer_styles.rs"]
+mod ame_studio_sync_layer_styles;
+#[path = "ame_studio/sync_recents.rs"]
+mod ame_studio_sync_recents;
+#[path = "ame_studio/sync_shapes.rs"]
+mod ame_studio_sync_shapes;
+#[path = "ame_studio/viewport.rs"]
+mod ame_studio_viewport;
 
 pub struct AfterEffectsStudio {
     ui: AmeRuntime,
@@ -61,8 +61,7 @@ pub struct AfterEffectsStudio {
     asset_render_preview_requested: std::collections::HashSet<String>,
     asset_render_preview_pending: std::collections::HashMap<String, AssetPreviewJob>,
     asset_render_preview_request_tx: std::sync::mpsc::SyncSender<(String, AssetPreviewJob)>,
-    asset_render_preview_result_rx:
-        std::sync::mpsc::Receiver<(String, Option<CachedAssetPreview>)>,
+    asset_render_preview_result_rx: std::sync::mpsc::Receiver<(String, Option<CachedAssetPreview>)>,
     text_font_families: Vec<String>,
     screen: Screen,
     docs_detail_page: bool,
@@ -736,8 +735,7 @@ const WORKSPACE_LEFT_DEFAULTS: [f64; 15] = [
     0.22, 0.22, 0.30, 0.20, 0.22, 0.22, 0.22, 0.22, 0.22, 0.22, 0.34, 0.22, 0.22, 0.22, 0.22,
 ];
 const WORKSPACE_CENTER_DEFAULTS: [f64; 15] = [
-    0.70, 0.62, 0.72, 0.72, 0.70, 0.70, 0.70, 0.70, 0.70, 0.70, 0.70, 0.70, 0.70, 0.70,
-    0.70,
+    0.70, 0.62, 0.72, 0.72, 0.70, 0.70, 0.70, 0.70, 0.70, 0.70, 0.70, 0.70, 0.70, 0.70, 0.70,
 ];
 const WORKSPACE_VERTICAL_DEFAULT: f64 = 0.54;
 
@@ -823,14 +821,13 @@ pub(crate) use ame_studio_preferences::*;
 #[path = "ame_studio/app_init.rs"]
 mod ame_studio_app_init;
 
-
 #[path = "ame_studio/methods.rs"]
 mod ame_studio_methods;
 
-#[path = "ame_studio/composition_ops.rs"]
-mod ame_studio_composition_ops;
 #[path = "ame_studio/composition_action_ops.rs"]
 mod ame_studio_composition_action_ops;
+#[path = "ame_studio/composition_ops.rs"]
+mod ame_studio_composition_ops;
 
 #[path = "ame_studio/transform_3d_ops.rs"]
 mod ame_studio_transform_3d_ops;

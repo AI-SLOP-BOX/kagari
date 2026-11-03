@@ -40,7 +40,9 @@ pub(crate) fn render_model_preview_pixels(path: &str) -> Option<CachedAssetPrevi
     }
     let background = &pixels[..4];
     let visible = pixels
-        .as_chunks::<4>().0.iter()
+        .as_chunks::<4>()
+        .0
+        .iter()
         .any(|pixel| pixel != background);
     visible.then_some(CachedAssetPreview {
         pixels: std::sync::Arc::new(pixels),
@@ -62,7 +64,12 @@ pub(crate) fn render_composition_preview(
         .round()
         .max(1.0) as u32;
     let pixels = kagari_vfx::core::software_renderer::render_frame_to_pixels_preview(
-        composition, 0, width, height, 0.0, 0,
+        composition,
+        0,
+        width,
+        height,
+        0.0,
+        0,
     );
     if pixels.len() != width as usize * height as usize * 4 {
         return None;
@@ -95,8 +102,7 @@ pub(crate) fn spawn_viewport_preview_renderer() -> (
                     0.0,
                     0,
                 );
-                let pixels = (pixels.len() == expected)
-                    .then(|| std::sync::Arc::new(pixels));
+                let pixels = (pixels.len() == expected).then(|| std::sync::Arc::new(pixels));
                 if result_tx
                     .send(ViewportPreviewResult {
                         key: job.key,
@@ -116,8 +122,7 @@ pub(crate) fn spawn_asset_preview_renderer() -> (
     std::sync::mpsc::SyncSender<(String, AssetPreviewJob)>,
     std::sync::mpsc::Receiver<(String, Option<CachedAssetPreview>)>,
 ) {
-    let (request_tx, request_rx) =
-        std::sync::mpsc::sync_channel::<(String, AssetPreviewJob)>(2);
+    let (request_tx, request_rx) = std::sync::mpsc::sync_channel::<(String, AssetPreviewJob)>(2);
     let (result_tx, result_rx) = std::sync::mpsc::channel();
     let _ = std::thread::Builder::new()
         .name("ame-asset-preview".to_owned())

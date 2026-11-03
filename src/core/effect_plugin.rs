@@ -155,12 +155,10 @@ mod tests {
                 bottom_left: constant([0.0, 1.0]),
                 bottom_right: constant([1.0, 1.0]),
             },
-
             EffectType::CrtScanlines {
                 line_spacing: constant(4.0),
                 intensity: constant(0.5),
             },
-
             EffectType::Invert { invert_alpha: true },
         ];
 
@@ -189,12 +187,14 @@ mod tests {
             amount: constant(0.5),
             radius: constant(100.0),
         }));
-        assert!(gpu_preview_effect_supported(&EffectType::TurbulentDisplace {
-            amount: constant(10.0),
-            size: constant(5.0),
-            evolution: constant(0.0),
-            complexity: constant(5.0),
-        }));
+        assert!(gpu_preview_effect_supported(
+            &EffectType::TurbulentDisplace {
+                amount: constant(10.0),
+                size: constant(5.0),
+                evolution: constant(0.0),
+                complexity: constant(5.0),
+            }
+        ));
         assert!(gpu_preview_effect_supported(&EffectType::WaveWarp {
             wave_height: constant(10.0),
             wave_width: constant(20.0),

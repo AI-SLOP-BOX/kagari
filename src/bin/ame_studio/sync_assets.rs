@@ -30,7 +30,10 @@ impl AfterEffectsStudio {
             "project_asset_search_all_folders",
             Value::Bool(self.project_asset_search_all_folders),
         )?;
-        self.ui.set_binding("project_assets_sort_by_type", Value::Bool(self.project_assets_sort_by_type))?;
+        self.ui.set_binding(
+            "project_assets_sort_by_type",
+            Value::Bool(self.project_assets_sort_by_type),
+        )?;
         let selected_project_asset_name = self
             .selected_project_asset_id
             .as_deref()
@@ -44,18 +47,16 @@ impl AfterEffectsStudio {
             .map(|item| {
                 use kagari_vfx::core::timeline::ProjectItemType;
                 let file_size = |path: &str| {
-                    std::fs::metadata(path)
-                        .ok()
-                        .map(|metadata| {
-                            let bytes = metadata.len();
-                            if bytes >= 1024 * 1024 {
-                                format!("{:.1} MiB", bytes as f64 / (1024.0 * 1024.0))
-                            } else if bytes >= 1024 {
-                                format!("{:.0} KiB", bytes as f64 / 1024.0)
-                            } else {
-                                format!("{bytes} B")
-                            }
-                        })
+                    std::fs::metadata(path).ok().map(|metadata| {
+                        let bytes = metadata.len();
+                        if bytes >= 1024 * 1024 {
+                            format!("{:.1} MiB", bytes as f64 / (1024.0 * 1024.0))
+                        } else if bytes >= 1024 {
+                            format!("{:.0} KiB", bytes as f64 / 1024.0)
+                        } else {
+                            format!("{bytes} B")
+                        }
+                    })
                 };
                 match &item.item_type {
                     ProjectItemType::Composition { comp_idx } => self
@@ -73,7 +74,11 @@ impl AfterEffectsStudio {
                             )
                         })
                         .unwrap_or_else(|| "コンポジション".to_owned()),
-                    ProjectItemType::Image { path, width, height } => format!(
+                    ProjectItemType::Image {
+                        path,
+                        width,
+                        height,
+                    } => format!(
                         "{} × {} px{}",
                         width,
                         height,
@@ -106,10 +111,8 @@ impl AfterEffectsStudio {
                 }
             })
             .unwrap_or_default();
-        let selected_project_asset_can_move_here = self
-            .selected_project_asset_id
-            .as_deref()
-            .is_some_and(|id| {
+        let selected_project_asset_can_move_here =
+            self.selected_project_asset_id.as_deref().is_some_and(|id| {
                 project_asset_can_move_to_folder(
                     &self.project_model.assets,
                     id,
@@ -233,7 +236,10 @@ impl AfterEffectsStudio {
         let asset_query = self.project_asset_search.trim().to_lowercase();
         let search_all_asset_folders =
             !asset_query.is_empty() && self.project_asset_search_all_folders;
-        let mut project_asset_entries = self.project_model.assets.iter()
+        let mut project_asset_entries = self
+            .project_model
+            .assets
+            .iter()
             .filter(|item| {
                 search_all_asset_folders
                     || item.parent_folder.as_deref() == self.asset_folder_id.as_deref()
@@ -251,7 +257,9 @@ impl AfterEffectsStudio {
                 ProjectItemType::Folder { .. } => "フォルダー",
             };
             if self.project_assets_sort_by_type {
-                kind(left).cmp(kind(right)).then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+                kind(left)
+                    .cmp(kind(right))
+                    .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
             } else {
                 left.name.to_lowercase().cmp(&right.name.to_lowercase())
             }
@@ -296,39 +304,43 @@ impl AfterEffectsStudio {
                     ProjectItemType::Folder { .. } => ("フォルダー", String::new(), false),
                 };
                 let missing = item.is_media_missing();
-                let usage_count = self
-                    .project_model
-                    .compositions
-                    .iter()
-                    .flat_map(|composition| &composition.layers)
-                    .filter(|layer| match (&item.item_type, &layer.layer_type) {
-                        (
-                            ProjectItemType::Composition { comp_idx },
-                            kagari_vfx::core::timeline::LayerType::PreComp { comp_id },
-                        ) => self
-                            .project_model
-                            .compositions
-                            .get(*comp_idx)
-                            .is_some_and(|composition| composition.id.as_str() == comp_id.as_str()),
-                        (
-                            ProjectItemType::Image { path: asset_path, .. },
-                            kagari_vfx::core::timeline::LayerType::Image { path },
-                        ) => path == asset_path,
-                        (
-                            ProjectItemType::Video { path: asset_path, .. },
-                            kagari_vfx::core::timeline::LayerType::Video { source, .. },
-                        ) => source == asset_path,
-                        (
-                            ProjectItemType::Audio { path: asset_path, .. },
-                            kagari_vfx::core::timeline::LayerType::Audio { path, .. },
-                        ) => path == asset_path,
-                        (
-                            ProjectItemType::Model3D { path: asset_path },
-                            kagari_vfx::core::timeline::LayerType::Model3D { path },
-                        ) => path == asset_path,
-                        _ => false,
-                    })
-                    .count();
+                let usage_count =
+                    self.project_model
+                        .compositions
+                        .iter()
+                        .flat_map(|composition| &composition.layers)
+                        .filter(|layer| match (&item.item_type, &layer.layer_type) {
+                            (
+                                ProjectItemType::Composition { comp_idx },
+                                kagari_vfx::core::timeline::LayerType::PreComp { comp_id },
+                            ) => self.project_model.compositions.get(*comp_idx).is_some_and(
+                                |composition| composition.id.as_str() == comp_id.as_str(),
+                            ),
+                            (
+                                ProjectItemType::Image {
+                                    path: asset_path, ..
+                                },
+                                kagari_vfx::core::timeline::LayerType::Image { path },
+                            ) => path == asset_path,
+                            (
+                                ProjectItemType::Video {
+                                    path: asset_path, ..
+                                },
+                                kagari_vfx::core::timeline::LayerType::Video { source, .. },
+                            ) => source == asset_path,
+                            (
+                                ProjectItemType::Audio {
+                                    path: asset_path, ..
+                                },
+                                kagari_vfx::core::timeline::LayerType::Audio { path, .. },
+                            ) => path == asset_path,
+                            (
+                                ProjectItemType::Model3D { path: asset_path },
+                                kagari_vfx::core::timeline::LayerType::Model3D { path },
+                            ) => path == asset_path,
+                            _ => false,
+                        })
+                        .count();
                 Value::Record(std::collections::BTreeMap::from([
                     ("id".to_owned(), Value::String(item.id.clone())),
                     ("name".to_owned(), Value::String(item.name.clone())),

@@ -351,7 +351,11 @@ pub(crate) fn recent_preview(path: Option<&std::path::Path>, index: usize) -> (A
 }
 
 impl AfterEffectsStudio {
-    pub(crate) fn handle_settings_action(&mut self, action_name: &str, action_value: Option<&ActionValue>) -> bool {
+    pub(crate) fn handle_settings_action(
+        &mut self,
+        action_name: &str,
+        action_value: Option<&ActionValue>,
+    ) -> bool {
         match (action_name, action_value) {
             ("go_settings", _) => {
                 self.settings_open = true;
@@ -545,4 +549,3 @@ impl AfterEffectsStudio {
         }
     }
 }
-

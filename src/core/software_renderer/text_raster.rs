@@ -256,11 +256,10 @@ pub(crate) fn rasterize_text_layer(ctx: RasterCtx<'_>) {
             )
         };
         if let Some(rasterized) = maybe_text {
-            let (tw, th, text_pixels) =
-                crate::core::font_rasterizer::clip_text_bitmap_height(
-                    rasterized,
-                    effective_box_height,
-                );
+            let (tw, th, text_pixels) = crate::core::font_rasterizer::clip_text_bitmap_height(
+                rasterized,
+                effective_box_height,
+            );
             let text_w = tw as i32;
             let text_h = th as i32;
             let origin_x = (cx - tw as f32 * 0.5) as i32;

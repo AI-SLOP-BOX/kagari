@@ -241,7 +241,10 @@ impl AfterEffectsStudio {
         for (name, view) in [
             ("timeline_view_all", TimelineView::All),
             ("timeline_view_animation", TimelineView::Animation),
-            ("timeline_view_current_keyframes", TimelineView::CurrentKeyframes),
+            (
+                "timeline_view_current_keyframes",
+                TimelineView::CurrentKeyframes,
+            ),
             ("timeline_view_audio", TimelineView::Audio),
             ("timeline_view_media", TimelineView::Media),
             ("timeline_view_text", TimelineView::Text),

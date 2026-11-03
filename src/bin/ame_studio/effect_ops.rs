@@ -534,13 +534,26 @@ impl AfterEffectsStudio {
             return;
         };
         let frame = self.current_frame;
-        let changed = self.project_model.active_composition_mut().layers.iter_mut()
+        let changed = self
+            .project_model
+            .active_composition_mut()
+            .layers
+            .iter_mut()
             .find(|layer| layer.id == layer_id && !layer.locked)
-            .and_then(|layer| layer.effects.iter_mut().find(|effect| effect.id == effect_id))
+            .and_then(|layer| {
+                layer
+                    .effects
+                    .iter_mut()
+                    .find(|effect| effect.id == effect_id)
+            })
             .is_some_and(|effect| {
                 use kagari_vfx::core::effect_params::ParamRef;
-                let Some((_, parameter)) = effect.effect_type.animatable_params().into_iter()
-                    .find(|(id, _)| *id == parameter_id) else {
+                let Some((_, parameter)) = effect
+                    .effect_type
+                    .animatable_params()
+                    .into_iter()
+                    .find(|(id, _)| *id == parameter_id)
+                else {
                     return false;
                 };
                 match parameter {

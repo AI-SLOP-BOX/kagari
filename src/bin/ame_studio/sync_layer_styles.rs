@@ -331,9 +331,10 @@ impl AfterEffectsStudio {
     pub(crate) fn sync_composite_bindings(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let (blend_mode_label_str, track_matte_label_str, has_track_matte, matte_source_layers) = {
             let active_comp = self.project_model.active_composition();
-            let selected_layer = self.selected_layer_id.as_deref().and_then(|id| {
-                active_comp.layers.iter().find(|layer| layer.id == id)
-            });
+            let selected_layer = self
+                .selected_layer_id
+                .as_deref()
+                .and_then(|id| active_comp.layers.iter().find(|layer| layer.id == id));
 
             let blend_label = selected_layer
                 .map(|layer| blend_mode_label(layer.blend_mode).to_owned())
@@ -343,7 +344,9 @@ impl AfterEffectsStudio {
                 .map(|layer| match layer.track_matte {
                     kagari_vfx::core::timeline::TrackMatteMode::None => "なし",
                     kagari_vfx::core::timeline::TrackMatteMode::AlphaMatte => "アルファ",
-                    kagari_vfx::core::timeline::TrackMatteMode::AlphaMatteInverted => "アルファ反転",
+                    kagari_vfx::core::timeline::TrackMatteMode::AlphaMatteInverted => {
+                        "アルファ反転"
+                    }
                     kagari_vfx::core::timeline::TrackMatteMode::LumaMatte => "輝度",
                     kagari_vfx::core::timeline::TrackMatteMode::LumaMatteInverted => "輝度反転",
                 })
@@ -380,10 +383,14 @@ impl AfterEffectsStudio {
             (blend_label, matte_label, has_matte, matte_sources)
         };
 
-        self.ui
-            .set_binding("selected_blend_mode_label", Value::String(blend_mode_label_str))?;
-        self.ui
-            .set_binding("selected_track_matte_label", Value::String(track_matte_label_str))?;
+        self.ui.set_binding(
+            "selected_blend_mode_label",
+            Value::String(blend_mode_label_str),
+        )?;
+        self.ui.set_binding(
+            "selected_track_matte_label",
+            Value::String(track_matte_label_str),
+        )?;
         self.ui
             .set_binding("selected_has_track_matte", Value::Bool(has_track_matte))?;
         self.ui

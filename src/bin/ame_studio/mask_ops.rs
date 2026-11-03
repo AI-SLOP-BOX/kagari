@@ -46,7 +46,11 @@ impl AfterEffectsStudio {
             return;
         };
         let frame = self.current_frame;
-        let changed = self.project_model.active_composition_mut().layers.iter_mut()
+        let changed = self
+            .project_model
+            .active_composition_mut()
+            .layers
+            .iter_mut()
             .find(|layer| layer.id == layer_id && !layer.locked)
             .and_then(|layer| layer.masks.iter_mut().find(|mask| mask.id == mask_id))
             .is_some_and(|mask| {

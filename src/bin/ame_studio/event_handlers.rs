@@ -1,7 +1,10 @@
 use super::*;
 
 impl AfterEffectsStudio {
-    pub(crate) fn handle_action(&mut self, action: HostAction) -> Result<(), Box<dyn std::error::Error>> {
+    pub(crate) fn handle_action(
+        &mut self,
+        action: HostAction,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let prior_frame = self.current_frame;
         if action.name.starts_with("setting_") {
             self.settings_feedback.clear();
@@ -2055,5 +2058,4 @@ impl AfterEffectsStudio {
         }
         self.sync_bindings()
     }
-
 }

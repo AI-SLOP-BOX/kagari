@@ -257,7 +257,9 @@ impl FrameCache {
         let current = self.effective_version();
         self.collect_garbage_below(current);
 
-        if self.current_memory_bytes > self.max_memory_bytes || self.entries.len() > self.max_entries {
+        if self.current_memory_bytes > self.max_memory_bytes
+            || self.entries.len() > self.max_entries
+        {
             let target_memory = (self.max_memory_bytes as f64 * 0.75) as usize;
             let target_entries = (self.max_entries as f64 * 0.75) as usize;
 
@@ -271,7 +273,9 @@ impl FrameCache {
             keys_by_access.sort_unstable_by_key(|(_k, accessed)| *accessed);
 
             for (key, _accessed) in keys_by_access {
-                if self.current_memory_bytes <= target_memory && self.entries.len() <= target_entries {
+                if self.current_memory_bytes <= target_memory
+                    && self.entries.len() <= target_entries
+                {
                     break;
                 }
                 if let Some(removed) = self.entries.remove(&key) {

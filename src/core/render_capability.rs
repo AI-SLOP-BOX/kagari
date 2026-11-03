@@ -75,7 +75,9 @@ pub fn software_preview_required(comp: &Composition, frame: u32) -> bool {
                     let mut has_conflict_or_unsupported = false;
                     for effect in &layer.effects {
                         if effect.enabled {
-                            match crate::core::effect_plugin::gpu_preview_effect_slot(&effect.effect_type) {
+                            match crate::core::effect_plugin::gpu_preview_effect_slot(
+                                &effect.effect_type,
+                            ) {
                                 Some(slot) => {
                                     let order = slot.execution_order();
                                     // Must be strictly increasing: no duplicate slots and must match shader execution order
@@ -161,4 +163,3 @@ pub fn software_preview_reason(comp: &Composition, frame: u32) -> Option<&'stati
     }
     None
 }
-

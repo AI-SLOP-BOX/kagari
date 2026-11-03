@@ -233,7 +233,8 @@ fn multi_effect_non_conflicting_chain_matches_software_reference_and_passes_capa
         1,
     );
     layer.transform.position = Animatable::new_constant([WIDTH as f32 * 0.5, HEIGHT as f32 * 0.5]);
-    layer.transform.anchor_point = Animatable::new_constant([WIDTH as f32 * 0.5, HEIGHT as f32 * 0.5]);
+    layer.transform.anchor_point =
+        Animatable::new_constant([WIDTH as f32 * 0.5, HEIGHT as f32 * 0.5]);
 
     // Stack multiple distinct non-conflicting GPU effects in shader pipeline order:
     // Slot 1: ColorTint
@@ -263,7 +264,9 @@ fn multi_effect_non_conflicting_chain_matches_software_reference_and_passes_capa
     layer.effects.push(Effect {
         id: "fx-invert".into(),
         name: "Invert".into(),
-        effect_type: EffectType::Invert { invert_alpha: false },
+        effect_type: EffectType::Invert {
+            invert_alpha: false,
+        },
         enabled: true,
     });
 

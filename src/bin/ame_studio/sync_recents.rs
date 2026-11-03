@@ -1,7 +1,9 @@
 use super::*;
 
 impl AfterEffectsStudio {
-    pub(crate) fn sync_recent_projects_bindings(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub(crate) fn sync_recent_projects_bindings(
+        &mut self,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let has_recents = !self.recent_projects.is_empty();
         self.ui
             .set_binding("has_recents", Value::Bool(has_recents))?;

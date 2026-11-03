@@ -167,10 +167,8 @@ impl WgpuRenderer {
                 params.faux_style,
             )
         })?;
-        let rasterized = crate::core::font_rasterizer::clip_text_bitmap_height(
-            rasterized,
-            params.box_height,
-        );
+        let rasterized =
+            crate::core::font_rasterizer::clip_text_bitmap_height(rasterized, params.box_height);
         if rasterized.0 == 0 || rasterized.1 == 0 || rasterized.2.is_empty() {
             return None;
         }

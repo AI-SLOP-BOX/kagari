@@ -41,7 +41,10 @@ impl AfterEffectsStudio {
             .duration_frames
             .saturating_sub(1);
         let frame = self.current_frame.min(last);
-        let end = self.playback_range.map(|(_, end)| end.min(last)).unwrap_or(last);
+        let end = self
+            .playback_range
+            .map(|(_, end)| end.min(last))
+            .unwrap_or(last);
         self.playback_range = Some((frame, frame.max(end)));
     }
 
@@ -53,7 +56,10 @@ impl AfterEffectsStudio {
             .duration_frames
             .saturating_sub(1);
         let frame = self.current_frame.min(last);
-        let start = self.playback_range.map(|(start, _)| start.min(last)).unwrap_or(0);
+        let start = self
+            .playback_range
+            .map(|(start, _)| start.min(last))
+            .unwrap_or(0);
         self.playback_range = Some(if frame < start {
             (frame, frame)
         } else {
@@ -74,7 +80,9 @@ impl AfterEffectsStudio {
         let fraction = (pointer_x / self.timeline_width.max(1.0)).clamp(0.0, 1.0);
         let frame = ((timeline_start + fraction * visible_frames).round() as u32)
             .min(duration.saturating_sub(1));
-        let (start, end) = self.playback_range.unwrap_or((0, duration.saturating_sub(1)));
+        let (start, end) = self
+            .playback_range
+            .unwrap_or((0, duration.saturating_sub(1)));
         self.playback_range = Some(match mode {
             TimelineWorkAreaDragMode::Start if frame <= end => (frame, end),
             TimelineWorkAreaDragMode::Start => (frame, frame),
@@ -94,7 +102,9 @@ impl AfterEffectsStudio {
         self.current_frame = if direction < 0 {
             self.current_frame.saturating_sub(1)
         } else {
-            self.current_frame.saturating_add(1).min(duration.saturating_sub(1))
+            self.current_frame
+                .saturating_add(1)
+                .min(duration.saturating_sub(1))
         };
         self.current_time = format_timecode(
             self.current_frame,
@@ -118,7 +128,8 @@ impl AfterEffectsStudio {
                 let start = start.min(last);
                 let end = end.min(last).max(start);
                 let range_len = end.saturating_sub(start).saturating_add(1).max(1);
-                self.current_frame = start.saturating_add(next_frame.saturating_sub(start) % range_len);
+                self.current_frame =
+                    start.saturating_add(next_frame.saturating_sub(start) % range_len);
             } else {
                 self.current_frame = next_frame % frame_count;
             }
@@ -136,7 +147,11 @@ impl AfterEffectsStudio {
         }
     }
 
-    pub(crate) fn handle_playback_action(&mut self, action_name: &str, action_value: Option<&ActionValue>) -> bool {
+    pub(crate) fn handle_playback_action(
+        &mut self,
+        action_name: &str,
+        action_value: Option<&ActionValue>,
+    ) -> bool {
         match (action_name, action_value) {
             ("play_toggle", _) => {
                 if self.is_playing {
@@ -176,7 +191,11 @@ impl AfterEffectsStudio {
             }
             ("work_area_start_frame_changed", Some(ActionValue::Text(value))) => {
                 if let Ok(frame) = value.trim().parse::<u32>() {
-                    let last = self.project_model.active_composition().duration_frames.saturating_sub(1);
+                    let last = self
+                        .project_model
+                        .active_composition()
+                        .duration_frames
+                        .saturating_sub(1);
                     let (_, end) = self.playback_range.unwrap_or((0, last));
                     self.stop_playback();
                     self.playback_range = Some((frame.min(last).min(end.min(last)), end.min(last)));
@@ -185,7 +204,11 @@ impl AfterEffectsStudio {
             }
             ("work_area_end_frame_changed", Some(ActionValue::Text(value))) => {
                 if let Ok(frame) = value.trim().parse::<u32>() {
-                    let last = self.project_model.active_composition().duration_frames.saturating_sub(1);
+                    let last = self
+                        .project_model
+                        .active_composition()
+                        .duration_frames
+                        .saturating_sub(1);
                     let (start, _) = self.playback_range.unwrap_or((0, last));
                     let start = start.min(last);
                     self.stop_playback();
@@ -232,4 +255,3 @@ impl AfterEffectsStudio {
         }
     }
 }
-

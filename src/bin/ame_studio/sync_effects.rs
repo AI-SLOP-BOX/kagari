@@ -157,7 +157,10 @@ impl AfterEffectsStudio {
                         Value::Record(std::collections::BTreeMap::from([
                             ("id".to_owned(), Value::String(tracker.id.clone())),
                             ("name".to_owned(), Value::String(tracker.name.clone())),
-                            ("points_count".to_owned(), Value::String(points_count.to_string())),
+                            (
+                                "points_count".to_owned(),
+                                Value::String(points_count.to_string()),
+                            ),
                             (
                                 "selected".to_owned(),
                                 Value::Bool(self.selected_tracker_idx == index),
@@ -168,10 +171,8 @@ impl AfterEffectsStudio {
             })
             .unwrap_or_default();
 
-        self.ui.set_binding(
-            "has_tracker_items",
-            Value::Bool(!tracker_items.is_empty()),
-        )?;
+        self.ui
+            .set_binding("has_tracker_items", Value::Bool(!tracker_items.is_empty()))?;
         self.ui
             .set_binding("tracker_items", Value::List(tracker_items))?;
 
@@ -188,22 +189,16 @@ impl AfterEffectsStudio {
                     ("name".to_owned(), Value::String(layer.name.clone())),
                     (
                         "selected".to_owned(),
-                        Value::Bool(
-                            self.selected_tracker_target_id.as_deref() == Some(&layer.id),
-                        ),
+                        Value::Bool(self.selected_tracker_target_id.as_deref() == Some(&layer.id)),
                     ),
                 ]))
             })
             .collect::<Vec<_>>();
 
-        self.ui.set_binding(
-            "tracker_target_layers",
-            Value::List(tracker_target_layers),
-        )?;
-        self.ui.set_binding(
-            "tracker_status",
-            Value::String(self.tracker_status.clone()),
-        )?;
+        self.ui
+            .set_binding("tracker_target_layers", Value::List(tracker_target_layers))?;
+        self.ui
+            .set_binding("tracker_status", Value::String(self.tracker_status.clone()))?;
         Ok(())
     }
 }

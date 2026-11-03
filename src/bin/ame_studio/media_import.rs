@@ -188,10 +188,8 @@ impl AfterEffectsStudio {
             .iter()
             .find(|layer| layer.id == layer_id && layer.locked)
         {
-            self.asset_status = format!(
-                "「{}」はロック中のため素材を再指定できません。",
-                layer.name
-            );
+            self.asset_status =
+                format!("「{}」はロック中のため素材を再指定できません。", layer.name);
             return;
         }
 
@@ -425,8 +423,8 @@ impl AfterEffectsStudio {
             "png" | "jpg" | "jpeg" | "webp" | "bmp" | "tif" | "tiff" | "svg" => {
                 self.import_image_file(path);
             }
-            "mp4" | "mov" | "mkv" | "avi" | "webm" | "m4v" | "mpeg" | "mpg" | "ts"
-            | "m2ts" | "ivf" => self.start_video_import(path, None, None, true),
+            "mp4" | "mov" | "mkv" | "avi" | "webm" | "m4v" | "mpeg" | "mpg" | "ts" | "m2ts"
+            | "ivf" => self.start_video_import(path, None, None, true),
             "wav" | "mp3" | "m4a" | "aac" | "flac" | "ogg" | "aiff" | "aif" | "caf" => {
                 self.import_audio_file(path);
             }
@@ -434,9 +432,7 @@ impl AfterEffectsStudio {
             _ => {
                 self.asset_status = format!(
                     "対応していない素材形式です: {}",
-                    path.extension()
-                        .unwrap_or_default()
-                        .to_string_lossy()
+                    path.extension().unwrap_or_default().to_string_lossy()
                 );
             }
         }
@@ -1051,5 +1047,3 @@ impl AfterEffectsStudio {
         self.mark_project_changed();
     }
 }
-
-

@@ -340,9 +340,14 @@ pub fn gpu_preview_effect_slot(effect: &EffectType) -> Option<GpuEffectSlot> {
         | EffectType::HeatDistortion { .. } => Some(GpuEffectSlot::Distortion),
         EffectType::ColorTint { .. } => Some(GpuEffectSlot::ColorTint),
         EffectType::Levels { .. } => Some(GpuEffectSlot::Levels),
-        EffectType::Invert { invert_alpha: false } => Some(GpuEffectSlot::Invert),
+        EffectType::Invert {
+            invert_alpha: false,
+        } => Some(GpuEffectSlot::Invert),
         EffectType::Posterize { .. } => Some(GpuEffectSlot::Posterize),
-        EffectType::LensFlare { link_to_light: None, .. } => Some(GpuEffectSlot::LensFlare),
+        EffectType::LensFlare {
+            link_to_light: None,
+            ..
+        } => Some(GpuEffectSlot::LensFlare),
         _ => None,
     }
 }

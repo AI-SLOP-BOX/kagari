@@ -4,11 +4,13 @@ impl AfterEffectsStudio {
     pub(crate) fn update_composition_setting(&mut self, field: &str, input: &str) {
         if field == "duration" {
             let Ok(seconds) = input.trim().parse::<f64>() else {
-                self.composition_settings_status = "尺は0.01〜3600秒の数値で入力してください。".to_owned();
+                self.composition_settings_status =
+                    "尺は0.01〜3600秒の数値で入力してください。".to_owned();
                 return;
             };
             if !seconds.is_finite() || !(0.01..=3_600.0).contains(&seconds) {
-                self.composition_settings_status = "尺は0.01〜3600秒の範囲で入力してください。".to_owned();
+                self.composition_settings_status =
+                    "尺は0.01〜3600秒の範囲で入力してください。".to_owned();
                 return;
             }
             let fps = self.project_model.active_composition().fps.max(1);
@@ -45,7 +47,8 @@ impl AfterEffectsStudio {
             _ => return,
         };
         if !(minimum..=maximum).contains(&value) {
-            self.composition_settings_status = format!("{label}は{minimum}〜{maximum}の範囲で入力してください。");
+            self.composition_settings_status =
+                format!("{label}は{minimum}〜{maximum}の範囲で入力してください。");
             return;
         }
         let unchanged = match field {
@@ -106,7 +109,12 @@ impl AfterEffectsStudio {
             return;
         };
         self.composition_settings_status.clear();
-        if self.project_model.active_composition().start_timecode_frames == start_frame {
+        if self
+            .project_model
+            .active_composition()
+            .start_timecode_frames
+            == start_frame
+        {
             return;
         }
         self.project_model
@@ -145,7 +153,8 @@ impl AfterEffectsStudio {
             _ => return,
         };
         if !(minimum..=maximum).contains(&value) {
-            self.composition_settings_status = format!("{label}は{minimum}〜{maximum}の範囲で入力してください。");
+            self.composition_settings_status =
+                format!("{label}は{minimum}〜{maximum}の範囲で入力してください。");
             return;
         }
         self.composition_settings_status.clear();
@@ -172,7 +181,8 @@ impl AfterEffectsStudio {
     pub(crate) fn update_composition_background(&mut self, input: &str) {
         let composition = self.project_model.active_composition_mut();
         let Some(color) = parse_hex_rgb(input, composition.background_color[3]) else {
-            self.composition_settings_status = "背景色は #RRGGBB 形式で入力してください。".to_owned();
+            self.composition_settings_status =
+                "背景色は #RRGGBB 形式で入力してください。".to_owned();
             return;
         };
         self.composition_settings_status.clear();
@@ -524,13 +534,14 @@ impl AfterEffectsStudio {
             },
             duration,
         );
-        layer.transform.position =
-            kagari_vfx::core::timeline::Animatable::new_constant([
-                width as f32 * 0.5,
-                height as f32 * 0.5,
-            ]);
+        layer.transform.position = kagari_vfx::core::timeline::Animatable::new_constant([
+            width as f32 * 0.5,
+            height as f32 * 0.5,
+        ]);
         let composition = self.project_model.active_composition_mut();
-        composition.sub_compositions.append(&mut nested_compositions);
+        composition
+            .sub_compositions
+            .append(&mut nested_compositions);
         composition.add_layer(layer);
         self.selected_layer_id = Some(layer_id);
         self.sync_selected_layer_controls();

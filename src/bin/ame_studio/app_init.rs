@@ -270,27 +270,87 @@ impl AfterEffectsStudio {
             ),
             ("kagari.icon.undo", ame_studio_icons::SVG_UNDO, "#d0d7de"),
             ("kagari.icon.redo", ame_studio_icons::SVG_REDO, "#d0d7de"),
-            ("kagari.icon.refresh", ame_studio_icons::SVG_REFRESH, "#d0d7de"),
-            ("kagari.icon.keyframe", ame_studio_icons::SVG_KEYFRAME_DIAMOND, "#58a6ff"),
-            ("kagari.icon.keyframe.prev", ame_studio_icons::SVG_KEYFRAME_PREV, "#d0d7de"),
-            ("kagari.icon.keyframe.next", ame_studio_icons::SVG_KEYFRAME_NEXT, "#d0d7de"),
-            ("kagari.icon.ease", ame_studio_icons::SVG_EASE_CURVE, "#f58c4b"),
-            ("kagari.icon.adjustment", ame_studio_icons::SVG_ADJUSTMENT, "#79c0ff"),
-            ("kagari.icon.particle", ame_studio_icons::SVG_PARTICLE, "#d2a8ff"),
-            ("kagari.icon.camera", ame_studio_icons::SVG_CAMERA, "#7ee787"),
+            (
+                "kagari.icon.refresh",
+                ame_studio_icons::SVG_REFRESH,
+                "#d0d7de",
+            ),
+            (
+                "kagari.icon.keyframe",
+                ame_studio_icons::SVG_KEYFRAME_DIAMOND,
+                "#58a6ff",
+            ),
+            (
+                "kagari.icon.keyframe.prev",
+                ame_studio_icons::SVG_KEYFRAME_PREV,
+                "#d0d7de",
+            ),
+            (
+                "kagari.icon.keyframe.next",
+                ame_studio_icons::SVG_KEYFRAME_NEXT,
+                "#d0d7de",
+            ),
+            (
+                "kagari.icon.ease",
+                ame_studio_icons::SVG_EASE_CURVE,
+                "#f58c4b",
+            ),
+            (
+                "kagari.icon.adjustment",
+                ame_studio_icons::SVG_ADJUSTMENT,
+                "#79c0ff",
+            ),
+            (
+                "kagari.icon.particle",
+                ame_studio_icons::SVG_PARTICLE,
+                "#d2a8ff",
+            ),
+            (
+                "kagari.icon.camera",
+                ame_studio_icons::SVG_CAMERA,
+                "#7ee787",
+            ),
             ("kagari.icon.light", ame_studio_icons::SVG_LIGHT, "#ffa657"),
             ("kagari.icon.graph", ame_studio_icons::SVG_GRAPH, "#58a6ff"),
-            ("kagari.icon.motion_blur", ame_studio_icons::SVG_MOTION_BLUR, "#d0d7de"),
+            (
+                "kagari.icon.motion_blur",
+                ame_studio_icons::SVG_MOTION_BLUR,
+                "#d0d7de",
+            ),
             ("kagari.icon.solo", ame_studio_icons::SVG_SOLO, "#f58c4b"),
             ("kagari.icon.play", ame_studio_icons::SVG_PLAY, "#ffffff"),
             ("kagari.icon.pause", ame_studio_icons::SVG_PAUSE, "#f58c4b"),
             ("kagari.icon.stop", ame_studio_icons::SVG_STOP, "#f85149"),
-            ("kagari.icon.rewind", ame_studio_icons::SVG_REWIND, "#d0d7de"),
-            ("kagari.icon.forward", ame_studio_icons::SVG_FORWARD, "#d0d7de"),
-            ("kagari.icon.step_back", ame_studio_icons::SVG_PREV_FRAME, "#d0d7de"),
-            ("kagari.icon.step_forward", ame_studio_icons::SVG_NEXT_FRAME, "#d0d7de"),
-            ("kagari.icon.repeat", ame_studio_icons::SVG_REPEAT, "#d0d7de"),
-            ("kagari.icon.repeat.active", ame_studio_icons::SVG_REPEAT, "#ff8a36"),
+            (
+                "kagari.icon.rewind",
+                ame_studio_icons::SVG_REWIND,
+                "#d0d7de",
+            ),
+            (
+                "kagari.icon.forward",
+                ame_studio_icons::SVG_FORWARD,
+                "#d0d7de",
+            ),
+            (
+                "kagari.icon.step_back",
+                ame_studio_icons::SVG_PREV_FRAME,
+                "#d0d7de",
+            ),
+            (
+                "kagari.icon.step_forward",
+                ame_studio_icons::SVG_NEXT_FRAME,
+                "#d0d7de",
+            ),
+            (
+                "kagari.icon.repeat",
+                ame_studio_icons::SVG_REPEAT,
+                "#d0d7de",
+            ),
+            (
+                "kagari.icon.repeat.active",
+                ame_studio_icons::SVG_REPEAT,
+                "#ff8a36",
+            ),
         ] {
             let svg = svg.replace("stroke=\"white\"", &format!("stroke=\"{color}\""));
             assets.insert(
@@ -303,9 +363,10 @@ impl AfterEffectsStudio {
             spawn_asset_preview_renderer();
         let (viewport_preview_request_tx, viewport_preview_result_rx) =
             spawn_viewport_preview_renderer();
-        let text_font_families = kagari_vfx::core::font_rasterizer::with_font_rasterizer(|rasterizer| {
-            rasterizer.available_families()
-        });
+        let text_font_families =
+            kagari_vfx::core::font_rasterizer::with_font_rasterizer(|rasterizer| {
+                rasterizer.available_families()
+            });
         let mut app = Self {
             ui,
             assets,
