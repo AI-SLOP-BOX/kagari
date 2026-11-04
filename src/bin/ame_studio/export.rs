@@ -1,6 +1,83 @@
 use super::*;
 
 impl AfterEffectsStudio {
+    pub(crate) fn export_mogrt(&mut self) {
+        let Some(path) = rfd::FileDialog::new()
+            .add_filter("Essential Graphics Template", &["mogrt"])
+            .set_file_name(&format!(
+                "{}.mogrt",
+                self.project_name.trim().replace(['/', '\\', ':'], "_")
+            ))
+            .save_file()
+        else {
+            return;
+        };
+        let project_json = match serde_json::to_string(&self.project_model) {
+            Ok(json) => json,
+            Err(error) => {
+                self.render_status = format!("プロジェクトを保存できませんでした: {error}");
+                return;
+            }
+        };
+        let composition = self.project_model.active_composition();
+        let properties = composition
+            .layers
+            .iter()
+            .filter_map(|layer| match &layer.layer_type {
+                kagari_vfx::core::timeline::LayerType::Text { text, .. } => {
+                    Some(kagari_vfx::core::mogrt_engine::EssentialProperty {
+                        id: layer.id.clone(),
+                        name: layer.name.clone(),
+                        comment: Some("テキストレイヤーの内容".to_owned()),
+                        target_layer_id: layer.id.clone(),
+                        target_property_path: "text.content".to_owned(),
+                        property_type:
+                            kagari_vfx::core::mogrt_engine::EssentialPropertyType::Text {
+                                text: text.clone(),
+                            },
+                    })
+                }
+                _ => None,
+            })
+            .collect();
+        let name = self.project_name.trim().to_owned();
+        let author = std::env::var("USER").unwrap_or_else(|_| "Kagari".to_owned());
+        let manifest = kagari_vfx::core::mogrt_engine::create_mogrt_manifest(
+            composition,
+            name.clone(),
+            author,
+            properties,
+        );
+        match kagari_vfx::core::mogrt_engine::MogrtPackage::new(manifest, project_json).to_json() {
+            Ok(json) => match std::fs::write(&path, json) {
+                Ok(()) => self.render_status = format!("MOGRT を保存しました: {}", path.display()),
+                Err(error) => self.render_status = format!("MOGRT を保存できませんでした: {error}"),
+            },
+            Err(error) => self.render_status = format!("MOGRT を生成できませんでした: {error}"),
+        }
+    }
+
+    pub(crate) fn export_mlt(&mut self) {
+        let Some(path) = rfd::FileDialog::new()
+            .add_filter("MLT XML", &["mlt"])
+            .set_file_name(&format!(
+                "{}.mlt",
+                self.project_name.trim().replace(['/', '\\', ':'], "_")
+            ))
+            .save_file()
+        else {
+            return;
+        };
+        let composition = self.project_model.active_composition();
+        match kagari_vfx::core::mlt_export::MltExporter::export_to_xml(composition) {
+            Ok(xml) => match std::fs::write(&path, xml) {
+                Ok(()) => self.render_status = format!("MLT を保存しました: {}", path.display()),
+                Err(error) => self.render_status = format!("MLT を保存できませんでした: {error}"),
+            },
+            Err(error) => self.render_status = format!("MLT を書き出せません: {error}"),
+        }
+    }
+
     pub(crate) fn export_current_frame_png(&mut self, overwrite_confirmed: bool) {
         let raw_path = self.output_path.trim();
         if raw_path.is_empty() {

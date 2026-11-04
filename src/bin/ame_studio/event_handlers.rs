@@ -253,6 +253,8 @@ impl AfterEffectsStudio {
                 self.screen = Screen::Export;
                 self.render_queue = true;
             }
+            ("export_mlt", _) => self.export_mlt(),
+            ("export_mogrt", _) => self.export_mogrt(),
             ("workspace_left_resized", Some(ActionValue::Number(value)))
                 if value.is_finite() =>
             {

@@ -12,6 +12,16 @@ component ExportPanel() {
               HStack(spacing: 8) { Caption("{render_status}") Spacer If(render_running) { Button("キャンセル", action: render_stop, tone: destructive) } else { If(video_overwrite_pending) { Button("上書きして書き出す", action: render_overwrite, tone: destructive) Button("戻る", action: render_cancel_overwrite, tone: secondary) } else { Button("書き出しを開始", action: render_start, tone: primary) } } }
             } } }
             Card { Padding(16) { VStack(spacing: 10) {
+              HStack(spacing: 8) { Text("インターチェンジ / テンプレート", size: 17) Spacer Caption("MLT · MOGRT") }
+              Caption("選択中のコンポジションを MLT XML または MOGRT パッケージとして保存します。MOGRT はテキストレイヤーを編集可能な本質的プロパティとして公開します。")
+              HStack(spacing: 8) {
+                Button("MLT を保存…", action: export_mlt, tone: secondary)
+                Button("MOGRT を保存…", action: export_mogrt, tone: secondary)
+                Spacer
+                Caption("{status_resolution} · {duration_label}")
+              }
+            } } }
+            Card { Padding(16) { VStack(spacing: 10) {
               HStack(spacing: 8) { Text("現在のフレームを画像保存", size: 17) Spacer Caption("PNG") }
               Caption("タイムラインで選択中のフレームだけを書き出します。")
               HStack(spacing: 8) { Grow(1) { TextField(output_path, "画像の保存先 (.png)", action: output_changed) } Button("保存先…", action: choose_output_file, tone: secondary, size: small) }
