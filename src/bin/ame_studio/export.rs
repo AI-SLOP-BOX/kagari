@@ -125,6 +125,28 @@ impl AfterEffectsStudio {
         }
     }
 
+    pub(crate) fn export_otio(&mut self) {
+        let Some(path) = rfd::FileDialog::new()
+            .add_filter("OpenTimelineIO", &["otio", "json"])
+            .set_file_name(&format!(
+                "{}.otio",
+                self.project_name.trim().replace(['/', '\\', ':'], "_")
+            ))
+            .save_file()
+        else {
+            return;
+        };
+        let composition = self.project_model.active_composition();
+        let timeline = kagari_vfx::core::integration::OtioTimeline::from_composition(composition);
+        match timeline.to_json() {
+            Ok(json) => match std::fs::write(&path, json) {
+                Ok(()) => self.render_status = format!("OTIO を保存しました: {}", path.display()),
+                Err(error) => self.render_status = format!("OTIO を保存できませんでした: {error}"),
+            },
+            Err(error) => self.render_status = format!("OTIO を生成できませんでした: {error}"),
+        }
+    }
+
     pub(crate) fn export_current_frame_png(&mut self, overwrite_confirmed: bool) {
         let raw_path = self.output_path.trim();
         if raw_path.is_empty() {

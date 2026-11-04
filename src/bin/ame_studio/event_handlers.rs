@@ -257,6 +257,7 @@ impl AfterEffectsStudio {
             ("export_mogrt", _) => self.export_mogrt(),
             ("export_lottie", _) => self.export_lottie(),
             ("export_subtitles", _) => self.export_subtitles(),
+            ("export_otio", _) => self.export_otio(),
             ("workspace_left_resized", Some(ActionValue::Number(value)))
                 if value.is_finite() =>
             {

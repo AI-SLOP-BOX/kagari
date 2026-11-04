@@ -1255,6 +1255,7 @@ app AfterEffectsStudio {
   action export_mogrt;
   action export_lottie;
   action export_subtitles;
+  action export_otio;
   action back_to_editor;
   action choose_output_file;
   action choose_video_output;
