@@ -120,7 +120,7 @@ component TextAnimatorProperties() {
 
 component TextWorkspacePanel() {
   VStack(spacing: 6) {
-    Card { Padding(8) { HStack(spacing: 6) { Text("文字制作", size: 16) Spacer If(selected_is_text) { Caption("{layer_name}") } else { Caption("テキストレイヤー未選択") } } } }
+    Card { Padding(8) { HStack(spacing: 6) { Text("文字制作", size: 16) Spacer If(selected_is_text) { Caption("{layer_name}") } else { Caption("テキストレイヤー未選択") } Button("字幕(.srt)", action: import_subtitles, tone: secondary, size: small) } } }
     If(selected_is_text) {
       TextProperties()
       TextAnimatorProperties()

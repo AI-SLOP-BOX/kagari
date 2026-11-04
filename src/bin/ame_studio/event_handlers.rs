@@ -1567,6 +1567,7 @@ impl AfterEffectsStudio {
                 kagari_vfx::core::timeline::LayerType::Null,
             ),
             ("add_text_layer", _) => self.add_text_layer(),
+            ("import_subtitles", _) => self.import_subtitles(),
             ("add_shape_layer", _) => self.add_shape_layer(),
             ("add_ellipse_layer", _) => self.add_ellipse_layer(),
             ("add_star_layer", _) => self.add_star_layer(),

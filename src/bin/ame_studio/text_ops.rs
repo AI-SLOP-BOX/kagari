@@ -1,6 +1,37 @@
 use super::*;
 
 impl AfterEffectsStudio {
+    pub(crate) fn import_subtitles(&mut self) {
+        let Some(path) = rfd::FileDialog::new()
+            .add_filter("字幕ファイル", &["srt", "vtt"])
+            .pick_file()
+        else {
+            return;
+        };
+        let Ok(content) = std::fs::read_to_string(&path).map_err(|error| error) else {
+            self.asset_status = "字幕ファイルを読み込めませんでした。".to_owned();
+            return;
+        };
+        let fps = self.project_model.active_composition().fps;
+        let cues = kagari_vfx::core::subtitles::parse_srt(&content, fps.max(1));
+        if cues.is_empty() {
+            self.asset_status = "字幕キューが見つかりませんでした。".to_owned();
+            return;
+        }
+        let (width, height) = {
+            let comp = self.project_model.active_composition();
+            (comp.width as f32, comp.height as f32)
+        };
+        let layers = kagari_vfx::core::subtitles::cues_to_layers(&cues, width, height, 48);
+        let count = layers.len();
+        let composition = self.project_model.active_composition_mut();
+        for layer in layers {
+            composition.add_layer(layer);
+        }
+        self.asset_status = format!("字幕を読み込みました: {count} 件");
+        self.mark_project_changed();
+    }
+
     pub(crate) fn add_text_layer(&mut self) {
         let composition = self.project_model.active_composition();
         let position = [
