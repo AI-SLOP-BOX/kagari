@@ -3,6 +3,7 @@ component AudioMixerPanel() {
     HStack(spacing: 5) {
       Text("オーディオミキサー", size: 14)
       Spacer
+      If(has_audio_tracks) { Button("音声をキーフレームへ変換", action: audio_to_keyframes, tone: secondary, size: small) }
       Caption("音量入力またはキー追加 · ミュートとソロを切り替え")
     }
     If(has_audio_tracks) {

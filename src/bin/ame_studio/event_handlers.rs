@@ -1756,6 +1756,7 @@ impl AfterEffectsStudio {
                 self.update_selected_audio_volume(&value)
             }
             ("keyframe_audio_volume", _) => self.add_selected_audio_volume_keyframe(),
+            ("audio_to_keyframes", _) => self.convert_selected_audio_to_keyframes(),
             ("audio_track_volume_changed", Some(ActionValue::Text(value))) => {
                 if let Some(id) = selected_row_id.as_deref() {
                     self.update_audio_volume_for_layer(id, &value);

@@ -85,6 +85,56 @@ impl AfterEffectsStudio {
         self.mark_project_changed();
     }
 
+    pub(crate) fn convert_selected_audio_to_keyframes(&mut self) {
+        let Some(id) = self.selected_layer_id.clone() else {
+            self.asset_status = "変換する音声レイヤーを選択してください。".to_owned();
+            return;
+        };
+        let source = {
+            let composition = self.project_model.active_composition();
+            composition
+                .layers
+                .iter()
+                .find(|layer| layer.id == id)
+                .map(|layer| {
+                    let locked = layer.locked;
+                    let source = match &layer.layer_type {
+                        kagari_vfx::core::timeline::LayerType::Audio { path, .. } => {
+                            Some((path.clone(), layer.name.clone()))
+                        }
+                        kagari_vfx::core::timeline::LayerType::Video {
+                            audio_wav: Some(wav),
+                            ..
+                        } => Some((wav.clone(), layer.name.clone())),
+                        _ => None,
+                    };
+                    (locked, source)
+                })
+        };
+        let Some((locked, source)) = source else {
+            self.asset_status = "選択したレイヤーには音声がありません。".to_owned();
+            return;
+        };
+        if locked {
+            self.asset_status = "ロック中のレイヤーの音声は変換できません。".to_owned();
+            return;
+        }
+        let Some((path, _name)) = source else {
+            self.asset_status = "選択したレイヤーには音声がありません。".to_owned();
+            return;
+        };
+        let composition = self.project_model.active_composition_mut();
+        match kagari_vfx::core::audio_to_keyframes::convert_audio_to_keyframes(composition, &path) {
+            Ok(name) => {
+                self.asset_status = format!("Audio Amplitude レイヤーを作成しました: {name}");
+                self.mark_project_changed();
+            }
+            Err(error) => {
+                self.asset_status = format!("音声をキーフレームへ変換できませんでした: {error}")
+            }
+        }
+    }
+
     pub(crate) fn update_selected_video_speed(&mut self, input: &str) {
         let Ok(value) = input.trim().parse::<f32>() else {
             return;

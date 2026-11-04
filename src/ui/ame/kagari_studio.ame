@@ -1137,6 +1137,7 @@ app AfterEffectsStudio {
   action go_projects;
   action go_activity;
   action go_documents;
+  action audio_to_keyframes;
   action go_settings;
   action docs_project_basics;
   action docs_editor_workflow;
