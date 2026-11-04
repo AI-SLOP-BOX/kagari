@@ -1525,9 +1525,9 @@ impl App for AfterEffectsStudio {
             }
         }
         if let AmeEvent::Resized { width, height } = event {
-            let compact = *width < 900 || *height < 620;
-            let narrow = *width < 760;
-            let wide = *width >= 1300 && *height >= 700;
+            let compact = *width < 1300 || *height < 760;
+            let narrow = *width < 950;
+            let wide = *width >= 1500 && *height >= 850;
             let mut changed = false;
             if narrow != self.narrow {
                 self.narrow = narrow;
