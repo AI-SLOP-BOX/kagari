@@ -100,6 +100,31 @@ impl AfterEffectsStudio {
         }
     }
 
+    pub(crate) fn export_subtitles(&mut self) {
+        let Some(path) = rfd::FileDialog::new()
+            .add_filter("SubRip 字幕", &["srt"])
+            .set_file_name(&format!(
+                "{}.srt",
+                self.project_name.trim().replace(['/', '\\', ':'], "_")
+            ))
+            .save_file()
+        else {
+            return;
+        };
+        let composition = self.project_model.active_composition();
+        let srt =
+            kagari_vfx::core::subtitles::layers_to_srt(&composition.layers, composition.fps.max(1));
+        let export_path = if path.extension().is_some_and(|extension| extension == "vtt") {
+            kagari_vfx::core::subtitles::layers_to_vtt(&composition.layers, composition.fps.max(1))
+        } else {
+            srt
+        };
+        match std::fs::write(&path, export_path) {
+            Ok(()) => self.render_status = format!("字幕を保存しました: {}", path.display()),
+            Err(error) => self.render_status = format!("字幕を保存できませんでした: {error}"),
+        }
+    }
+
     pub(crate) fn export_current_frame_png(&mut self, overwrite_confirmed: bool) {
         let raw_path = self.output_path.trim();
         if raw_path.is_empty() {

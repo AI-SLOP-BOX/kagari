@@ -13,11 +13,12 @@ component ExportPanel() {
             } } }
             Card { Padding(16) { VStack(spacing: 10) {
               HStack(spacing: 8) { Text("インターチェンジ / テンプレート", size: 17) Spacer Caption("MLT · MOGRT · Lottie") }
-              Caption("選択中のコンポジションを MLT XML、MOGRT、または Lottie として保存します。MOGRT はテキストレイヤーを編集可能な本質的プロパティとして公開します。")
+              Caption("選択中のコンポジションを MLT XML、MOGRT、または Lottie として保存します。MOGRT はテキストレイヤーを編集可能な本質的プロパティとして公開します。字幕レイヤーは SRT/VTT としても書き出せます。")
               HStack(spacing: 8) {
                 Button("MLT を保存…", action: export_mlt, tone: secondary)
                 Button("MOGRT を保存…", action: export_mogrt, tone: secondary)
                 Button("Lottie を保存…", action: export_lottie, tone: secondary)
+                Button("字幕(.srt)", action: export_subtitles, tone: secondary)
                 Spacer
                 Caption("{status_resolution} · {duration_label}")
               }
