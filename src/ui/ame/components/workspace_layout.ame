@@ -87,10 +87,10 @@ component WorkArea() {
       If(compact) {
         ScrollView(760) {
           VStack(spacing: 8) {
-            ProjectAssetBrowser()
-            AssetPreviewPanel()
             CompositionPreview()
             TimelinePanel()
+            ProjectAssetBrowser()
+            AssetPreviewPanel()
             SceneAssetPanel()
           }
         }
@@ -163,13 +163,13 @@ component WorkArea() {
       If(compact) {
         ScrollView(760) {
           VStack(spacing: 8) {
+            CompositionPreview()
+            TimelinePanel()
             SceneCreationPanel()
             SceneHierarchyPanel()
             SceneAlignmentPanel()
             SceneLayerOperationsPanel()
             AssetPanel()
-            CompositionPreview()
-            TimelinePanel()
             PropertiesPanel()
           }
         }
@@ -339,12 +339,12 @@ component WorkArea() {
       If(compact) {
         ScrollView(680) {
           VStack(spacing: 8) {
+            CompositionPreview()
+            TimelinePanel()
             HStack(spacing: 8) {
               Grow(1) { ProjectPanel() }
               Grow(1) { PropertiesPanel() }
             }
-            CompositionPreview()
-            TimelinePanel()
             AssetPanel()
           }
         }
