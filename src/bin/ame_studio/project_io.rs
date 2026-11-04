@@ -628,19 +628,36 @@ impl AfterEffectsStudio {
         default_name: &str,
     ) -> Result<(), String> {
         self.stop_playback();
+        let is_mogrt = path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("mogrt"));
         let content = kagari_vfx::core::project_migration::read_bounded_text_file(
             path,
             kagari_vfx::core::project_migration::MAX_PROJECT_JSON_BYTES,
         )
         .map_err(|error| format!("プロジェクトを読み込めません: {error}"))?;
+        let embedded_json = if is_mogrt {
+            kagari_vfx::core::mogrt_engine::MogrtPackage::from_json(&content)
+                .map(|package| package.project_json)
+                .map_err(|error| format!("MOGRT を解析できませんでした: {error}"))?
+        } else {
+            content
+        };
         let project =
-            kagari_vfx::core::production_document::ProductionDocument::from_json(&content)
+            kagari_vfx::core::production_document::ProductionDocument::from_json(&embedded_json)
                 .map(|document| document.project)
-                .or_else(|_| kagari_vfx::core::project_migration::load_project_migrated(&content))
+                .or_else(|_| {
+                    kagari_vfx::core::project_migration::load_project_migrated(&embedded_json)
+                })
                 .map_err(|error| format!("プロジェクト形式を読み込めません: {error}"))?;
 
         self.project_name = default_name.to_owned();
-        self.project_file_path = Some(path.to_path_buf());
+        self.project_file_path = if is_mogrt {
+            None
+        } else {
+            Some(path.to_path_buf())
+        };
         self.save_status.clear();
         self.last_autosave_at = std::time::Instant::now();
         self.output_path = format!("~/Movies/{default_name}.png");
