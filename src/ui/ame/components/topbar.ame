@@ -1,16 +1,16 @@
 component AppBar() {
     Card {
-      Padding(6) {
-        HStack(spacing: 14) {
+      Padding(horizontal: 8, vertical: 6) {
+        HStack(spacing: 12) {
           HStack(spacing: 8) {
             AssetImage("kagari.logo", 1, 28, 30)
-            Text("Kagari VFX", size: 16)
+            Text("Kagari VFX", size: 15).weight(semibold)
           }
           HStack(spacing: 6) {
             If(home_page) {
               Button("ホーム", action: go_home, tone: primary, size: small)
             } else {
-              Button("ホーム", action: go_home, tone: secondary)
+              Button("ホーム", action: go_home, tone: secondary, size: small)
             }
             Button("プロジェクト", action: open_project, tone: secondary, size: small)
             If(editor_page) {
@@ -19,12 +19,18 @@ component AppBar() {
               Button("編集", action: back_to_editor, tone: secondary, size: small)
             }
           }
-          If(editor_page) { Caption("{project_summary}") }
-          If(editor_page) { HStack(spacing: 6) { Caption("{save_status}") Button("保存", action: save_project, tone: primary, size: small) Button("書き出し", action: go_export, tone: secondary, size: small) } }
-          Spacer
-          HStack(spacing: 8) {
-            IconButton("settings", action: go_settings, tone: secondary, size: small)
+          If(editor_page) {
+            Grow(1) {
+              HStack(spacing: 10) {
+                Caption("{project_summary}")
+                Spacer
+                Caption("{save_status}")
+              }
+            }
+            HStack(spacing: 6) { Button("保存", action: save_project, tone: primary, size: small) Button("書き出し", action: go_export, tone: secondary, size: small) }
           }
+          Spacer
+          IconButton("settings", action: go_settings, tone: secondary, size: small)
         }
       }
     }
