@@ -1,36 +1,34 @@
 component HomeHero() {
-    VStack(spacing: 0) {
-      Text("おかえりなさい", size: 32)
-      Svg("<svg xmlns='http://www.w3.org/2000/svg' width='1' height='14' viewBox='0 0 1 14'><path d='M0 0h1v14H0z' fill='transparent'/></svg>", 1, 14)
-      Caption("創造の続きから、または新しいプロジェクトを始めましょう。")
-      Svg("<svg xmlns='http://www.w3.org/2000/svg' width='1' height='21' viewBox='0 0 1 21'><path d='M0 0h1v21H0z' fill='transparent'/></svg>", 1, 21)
-      HStack(spacing: 16) {
+    VStack(spacing: 18) {
+      AssetImage("kagari.logo", 1, 96, 96)
+      Text("Kagari", size: 40).weight(bold)
+      Caption("VFX・コンポジット・モーショングラフィックスの制作を始めましょう。")
+      HStack(spacing: 14) {
         HeroNewProjectAction()
         HeroOpenProjectAction()
       }
+      Button("ドキュメントを見る  →", action: go_documents, tone: secondary, size: small)
     }
   }
 
 component HeroNewProjectAction() {
-    ZStack { 
+    ZStack {
       Svg("<svg xmlns='http://www.w3.org/2000/svg' width='171' height='38' viewBox='0 0 171 38'><rect x='.5' y='.5' width='170' height='37' rx='9' fill='#f58c4b'/></svg>", 171, 38)
       HStack(spacing: 8) { AssetImage("kagari.home.plus", 1, 18, 18) Text("新規プロジェクト", size: 14) }
-      
-     Positioned(left: 0, right: 0, top: 0, bottom: 0) { Button("", action: new_project, tone: secondary).opacity(nav_hitbox_opacity) }}
+      Positioned(left: 0, right: 0, top: 0, bottom: 0) { Button("", action: new_project, tone: secondary).opacity(nav_hitbox_opacity) }}
   }
 
 component HeroOpenProjectAction() {
-    ZStack { 
+    ZStack {
       Svg("<svg xmlns='http://www.w3.org/2000/svg' width='176' height='38' viewBox='0 0 176 38'><rect x='.5' y='.5' width='175' height='37' rx='9' fill='#0d1215' stroke='#30363c'/></svg>", 176, 38)
       HStack(spacing: 8) { AssetImage("kagari.home.open", 1, 18, 18) Text("プロジェクトを開く", size: 14) }
-      
-     Positioned(left: 0, right: 0, top: 0, bottom: 0) { Button("", action: open_project, tone: secondary).opacity(nav_hitbox_opacity) }}
+      Positioned(left: 0, right: 0, top: 0, bottom: 0) { Button("", action: open_project, tone: secondary).opacity(nav_hitbox_opacity) }}
   }
 
 component RecentCardsGrid() {
     VStack(spacing: 10) {
       HStack(spacing: 8) {
-        Text("最近のプロジェクト", size: 21)
+        Text("最近のプロジェクト", size: 20)
         Spacer
         Button("すべて表示  →", action: go_projects, tone: secondary, size: small)
       }
@@ -96,7 +94,7 @@ component RecentCardsGrid() {
 component RecentWorkTable() {
     VStack(spacing: 8) {
       HStack(spacing: 8) {
-        Text("最近の更新", size: 21)
+        Text("最近の更新", size: 20)
         Spacer
         Button("更新履歴を見る  →", action: go_activity, tone: secondary, size: small)
       }
@@ -135,12 +133,12 @@ component HomePanel() {
       Align(stretch) { HomeNavRail() }
       Grow(1) {
         ScrollView(680) {
-          Padding(32) {
-            VStack(spacing: 24) {
+          Padding(horizontal: 40, vertical: 36) {
+            VStack(spacing: 32) {
               HomeHero()
-          Spacer
+              Spacer
               RecentCardsGrid()
-            Spacer
+              Spacer
               RecentWorkTable()
             }
           }
@@ -155,7 +153,7 @@ component HomeFooter() {
         HStack(spacing: 8) {
           Caption("KAGARI VFX · ホーム")
           Spacer
-          Caption("v0.1.0")
+          Caption("v0.3.0")
         }
       }
     }
