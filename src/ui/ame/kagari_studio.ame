@@ -1249,6 +1249,7 @@ app AfterEffectsStudio {
   action go_export;
   action export_mlt;
   action export_mogrt;
+  action export_lottie;
   action back_to_editor;
   action choose_output_file;
   action choose_video_output;

@@ -57,6 +57,28 @@ impl AfterEffectsStudio {
         }
     }
 
+    pub(crate) fn export_lottie(&mut self) {
+        let Some(path) = rfd::FileDialog::new()
+            .add_filter("Lottie Animation", &["json"])
+            .set_file_name(&format!(
+                "{}.json",
+                self.project_name.trim().replace(['/', '\\', ':'], "_")
+            ))
+            .save_file()
+        else {
+            return;
+        };
+        match kagari_vfx::core::lottie_exporter::export_project_to_json(&self.project_model) {
+            Ok(json) => match std::fs::write(&path, json) {
+                Ok(()) => self.render_status = format!("Lottie を保存しました: {}", path.display()),
+                Err(error) => {
+                    self.render_status = format!("Lottie を保存できませんでした: {error}")
+                }
+            },
+            Err(error) => self.render_status = format!("Lottie を書き出せません: {error}"),
+        }
+    }
+
     pub(crate) fn export_mlt(&mut self) {
         let Some(path) = rfd::FileDialog::new()
             .add_filter("MLT XML", &["mlt"])

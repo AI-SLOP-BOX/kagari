@@ -12,11 +12,12 @@ component ExportPanel() {
               HStack(spacing: 8) { Caption("{render_status}") Spacer If(render_running) { Button("キャンセル", action: render_stop, tone: destructive) } else { If(video_overwrite_pending) { Button("上書きして書き出す", action: render_overwrite, tone: destructive) Button("戻る", action: render_cancel_overwrite, tone: secondary) } else { Button("書き出しを開始", action: render_start, tone: primary) } } }
             } } }
             Card { Padding(16) { VStack(spacing: 10) {
-              HStack(spacing: 8) { Text("インターチェンジ / テンプレート", size: 17) Spacer Caption("MLT · MOGRT") }
-              Caption("選択中のコンポジションを MLT XML または MOGRT パッケージとして保存します。MOGRT はテキストレイヤーを編集可能な本質的プロパティとして公開します。")
+              HStack(spacing: 8) { Text("インターチェンジ / テンプレート", size: 17) Spacer Caption("MLT · MOGRT · Lottie") }
+              Caption("選択中のコンポジションを MLT XML、MOGRT、または Lottie として保存します。MOGRT はテキストレイヤーを編集可能な本質的プロパティとして公開します。")
               HStack(spacing: 8) {
                 Button("MLT を保存…", action: export_mlt, tone: secondary)
                 Button("MOGRT を保存…", action: export_mogrt, tone: secondary)
+                Button("Lottie を保存…", action: export_lottie, tone: secondary)
                 Spacer
                 Caption("{status_resolution} · {duration_label}")
               }
