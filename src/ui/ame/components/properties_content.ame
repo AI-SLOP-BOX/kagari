@@ -81,6 +81,11 @@ component TextProperties() {
       Button("Tt", action: toggle_text_small_caps, tone: secondary, size: small, disabled: selected_layer_locked)
     }
     HStack(spacing: 5) { MinWidth(72) { Caption("テキスト枠") } If(selected_layer_locked) { Caption("{text_box_width} × {text_box_height}") } else { MaxWidth(110) { TextField(text_box_width, "幅 px", action: text_box_width_changed) } MaxWidth(110) { TextField(text_box_height, "高さ px", action: text_box_height_changed) } } Caption("0 は自動") }
+    HStack(spacing: 5) {
+      MinWidth(72) { Caption("パスに沿わせる") }
+      If(selected_text_on_path) { Button("有効", action: toggle_text_on_path, tone: primary, size: small, disabled: selected_layer_locked) } else { Button("無効", action: toggle_text_on_path, tone: secondary, size: small, disabled: selected_layer_locked) }
+      If(has_layer_masks) { Caption("最初のマスクをパスに使用") } else { Caption("テキストレイヤーにマスクが必要です") }
+    }
   } } }
 }
 

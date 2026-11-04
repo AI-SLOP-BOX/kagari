@@ -385,6 +385,7 @@ app AfterEffectsStudio {
   bind animation_preset_items: List<AnimationPresetItem> = [];
   bind has_animation_preset_items: Bool = false;
   bind animation_preset_status: String = "";
+  bind selected_text_on_path: Bool = false;
   bind layer_style_items: List<LayerStyleItem> = [];
   bind has_layer_style_parameters: Bool = false;
   bind layer_style_parameters: List<EffectParameter> = [];
@@ -1139,6 +1140,7 @@ app AfterEffectsStudio {
   action go_documents;
   action audio_to_keyframes;
   action import_subtitles;
+  action toggle_text_on_path;
   action go_settings;
   action docs_project_basics;
   action docs_editor_workflow;

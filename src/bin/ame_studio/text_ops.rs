@@ -1,6 +1,34 @@
 use super::*;
 
 impl AfterEffectsStudio {
+    pub(crate) fn toggle_selected_text_on_path(&mut self) {
+        let Some(id) = self.selected_layer_id.clone() else {
+            return;
+        };
+        let layer = self
+            .project_model
+            .active_composition_mut()
+            .layers
+            .iter_mut()
+            .find(|layer| {
+                layer.id == id
+                    && !layer.locked
+                    && matches!(
+                        &layer.layer_type,
+                        kagari_vfx::core::timeline::LayerType::Text { .. }
+                    )
+            });
+        let Some(layer) = layer else {
+            return;
+        };
+        if let kagari_vfx::core::timeline::LayerType::Text { text_on_path, .. } =
+            &mut layer.layer_type
+        {
+            *text_on_path = !*text_on_path;
+        }
+        self.mark_project_changed();
+    }
+
     pub(crate) fn import_subtitles(&mut self) {
         let Some(path) = rfd::FileDialog::new()
             .add_filter("字幕ファイル", &["srt", "vtt"])

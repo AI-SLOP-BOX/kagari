@@ -2089,6 +2089,16 @@ impl AfterEffectsStudio {
         ] {
             self.ui.set_binding(name, Value::String(value))?;
         }
+        self.ui.set_binding(
+            "selected_text_on_path",
+            Value::Bool(selected_layer.is_some_and(|layer| {
+                matches!(
+                    &layer.layer_type,
+                    kagari_vfx::core::timeline::LayerType::Text { text_on_path, .. }
+                        if *text_on_path
+                )
+            })),
+        )?;
         for (name, alignment) in [
             ("text_align_left", 0),
             ("text_align_center", 1),

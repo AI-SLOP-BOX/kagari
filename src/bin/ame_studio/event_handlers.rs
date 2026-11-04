@@ -1569,6 +1569,7 @@ impl AfterEffectsStudio {
             ),
             ("add_text_layer", _) => self.add_text_layer(),
             ("import_subtitles", _) => self.import_subtitles(),
+            ("toggle_text_on_path", _) => self.toggle_selected_text_on_path(),
             ("add_shape_layer", _) => self.add_shape_layer(),
             ("add_ellipse_layer", _) => self.add_ellipse_layer(),
             ("add_star_layer", _) => self.add_star_layer(),
