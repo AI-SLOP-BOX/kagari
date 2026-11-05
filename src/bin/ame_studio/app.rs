@@ -1428,13 +1428,12 @@ impl App for AfterEffectsStudio {
         let accent =
             parse_hex_color(&self.accent_color).unwrap_or_else(|| Color::from_rgb8(245, 140, 75));
         (Theme {
-            // Use soft panel corners throughout the studio. Square cards made
-            // the new interface read like a default utility app.
-            panel_radius: 14.0,
+            // Keep chrome restrained and utility-like rather than toy-rounded.
+            panel_radius: 8.0,
             panel_padding_x: 0.0,
             panel_padding_y: 0.0,
-            control_radius: 10.0,
-            input_radius: 9.0,
+            control_radius: 7.0,
+            input_radius: 6.0,
             body_font_size: 13.0,
             title_font_size: 20.0,
             caption_font_size: 11.0,
