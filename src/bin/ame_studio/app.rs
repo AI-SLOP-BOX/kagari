@@ -1647,6 +1647,7 @@ pub(crate) fn effect_type_label(effect: &kagari_vfx::core::timeline::EffectType)
         EffectType::LightSweep { .. } => "ライトスイープ",
         EffectType::RadialFastBlur { .. } => "ラジアル高速ぼかし",
         EffectType::BendIt { .. } => "曲げ",
+        EffectType::VenetianBlinds { .. } => "ベネチアンブラインド",
         _ => "その他",
     }
 }
@@ -1971,6 +1972,10 @@ pub(crate) fn effect_parameter_specs(
                 bottom_offset.evaluate(frame),
                 "px",
             ),
+        ],
+        EffectType::VenetianBlinds { completion, width } => vec![
+            ("completion", "完了率", completion.evaluate(frame), "%"),
+            ("width", "幅", width.evaluate(frame), "px"),
         ],
         _ => Vec::new(),
     };

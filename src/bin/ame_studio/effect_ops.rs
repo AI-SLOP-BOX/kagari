@@ -404,6 +404,13 @@ impl AfterEffectsStudio {
                     bottom_offset: Animatable::new_constant(0.0),
                 },
             ),
+            "venetian_blinds" => (
+                "ベネチアンブラインド",
+                EffectType::VenetianBlinds {
+                    completion: Animatable::new_constant(0.0),
+                    width: Animatable::new_constant(30.0),
+                },
+            ),
             _ => return,
         };
         let id = format!(
