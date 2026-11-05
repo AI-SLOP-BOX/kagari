@@ -33,55 +33,25 @@ component RecentCardsGrid() {
         Button("すべて表示  →", action: go_projects, tone: secondary, size: small)
       }
       If(has_recent_1) {
-        If(compact) {
-          MaxWidth(800) {
-            Card {
-              VStack(spacing: 0) {
-                ZStack {
-                  AssetImage("kagari.home.recent.1", 1, 460, 259)
-                  Svg("<svg xmlns='http://www.w3.org/2000/svg' width='460' height='259' viewBox='0 0 460 259'><path d='M0 0H14A14 14 0 0 0 0 14Z M446 0H460V14A14 14 0 0 0 446 0Z M0 245V259H14A14 14 0 0 0 0 245Z M460 245V259H446A14 14 0 0 0 460 245Z' fill='#11161a'/></svg>", 460, 259)
-                }
-                Padding(14) {
-                  VStack(spacing: 9) {
-                    HStack(spacing: 8) {
-                      Text("{recent_1_name}", size: 17)
-                      Spacer
-                      Button("開く  →", action: open_recent_1, tone: secondary, size: small)
-                    }
+        MaxWidth(1200) {
+          Card {
+            HStack(spacing: 0) {
+              ZStack {
+                AssetImage("kagari.home.recent.1", 1, 300, 169)
+                Svg("<svg xmlns='http://www.w3.org/2000/svg' width='300' height='169' viewBox='0 0 300 169'><path d='M0 0H14A14 14 0 0 0 0 14Z M286 0H300V14A14 14 0 0 0 286 0Z M0 155V169H14A14 14 0 0 0 0 155Z M286 155V169H272A14 14 0 0 0 286 155Z' fill='#11161a'/></svg>", 300, 169)
+              }
+              Grow(1) {
+                Padding(18) {
+                  VStack(spacing: 10) {
+                    Text("{recent_1_name}", size: 18)
                     Caption("{recent_1_path}")
-                    VStack(spacing: 4) {
-                      HStack(spacing: 6) { AssetImage("kagari.nav.projects", 1, 14, 14) Text("{recent_1_res}  ·  {recent_1_layers}レイヤー", size: 12) }
-                      Align(end) { Text("最終更新  {recent_1_day}", size: 11) }
-                    }
+                    Spacer
+                    HStack(spacing: 6) { AssetImage("kagari.nav.projects", 1, 14, 14) Text("{recent_1_res}  ·  {recent_1_layers}レイヤー", size: 11) Spacer }
+                    Text("最終更新  {recent_1_date}", size: 11)
                   }
                 }
               }
-            }
-          }
-        } else {
-          MaxWidth(1600) {
-            Card {
-              HStack(spacing: 0) {
-                ZStack {
-                  AssetImage("kagari.home.recent.1", 1, 360, 203)
-                  Svg("<svg xmlns='http://www.w3.org/2000/svg' width='360' height='203' viewBox='0 0 360 203'><path d='M0 0H14A14 14 0 0 0 0 14Z M346 0H360V14A14 14 0 0 0 346 0Z M0 189V203H14A14 14 0 0 0 0 189Z M360 189V203H346A14 14 0 0 0 360 189Z' fill='#11161a'/></svg>", 360, 203)
-                }
-                Grow(1) {
-                  Padding(24) {
-                    VStack(spacing: 14) {
-                      Text("{recent_1_name}", size: 24)
-                      Caption("{recent_1_path}")
-                      Spacer
-                      HStack(spacing: 6) {
-                        AssetImage("kagari.nav.projects", 1, 16, 16)
-                        Text("{recent_1_res}  ·  {recent_1_layers}レイヤー", size: 12)
-                      }
-                      Text("最終更新  {recent_1_date}", size: 12)
-                    }
-                  }
-                }
-                Padding(20) { Button("開く  →", action: open_recent_1, tone: primary, size: small) }
-              }
+              Padding(16) { Button("開く  →", action: open_recent_1, tone: primary, size: small) }
             }
           }
         }
