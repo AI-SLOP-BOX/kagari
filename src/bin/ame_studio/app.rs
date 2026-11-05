@@ -1513,6 +1513,7 @@ impl App for AfterEffectsStudio {
                     "n" => Some("new_project"),
                     "m" if self.screen == Screen::Editor => Some("go_export"),
                     "," => Some("go_settings"),
+                    "q" => Some("exit_app"),
                     _ => None,
                 }
             } else if self.screen == Screen::Editor && !modifiers.alt && !modifiers.shift {

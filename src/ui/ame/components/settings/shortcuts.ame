@@ -43,6 +43,7 @@ component SettingsShortcutsPage() {
           ShortcutRow(command: "プロジェクトを保存（編集画面）", keys: "⌘ / Ctrl + S")
           ShortcutRow(command: "書き出し画面を開く（編集画面）", keys: "⌘ / Ctrl + M")
           ShortcutRow(command: "環境設定を開く / 閉じる", keys: "⌘ / Ctrl + ,")
+          ShortcutRow(command: "Kagari を終了", keys: "⌘ / Ctrl + Q")
         }
       }
       If(shortcut_filter == "all" || shortcut_filter == "edit") {
