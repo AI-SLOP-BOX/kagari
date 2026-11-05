@@ -1644,6 +1644,9 @@ pub(crate) fn effect_type_label(effect: &kagari_vfx::core::timeline::EffectType)
         EffectType::LumaKeyRange { .. } => "輝度キー",
         EffectType::Tritone { .. } => "トライトーン",
         EffectType::GradientMap { .. } => "グラデーションマップ",
+        EffectType::LightSweep { .. } => "ライトスイープ",
+        EffectType::RadialFastBlur { .. } => "ラジアル高速ぼかし",
+        EffectType::BendIt { .. } => "曲げ",
         _ => "その他",
     }
 }
@@ -1924,6 +1927,49 @@ pub(crate) fn effect_parameter_specs(
                 "高しきい値",
                 high_threshold.evaluate(frame),
                 "",
+            ),
+        ],
+        EffectType::LightSweep {
+            direction_deg,
+            center,
+            width,
+            sweep_intensity,
+            edge_intensity,
+        } => vec![
+            ("direction_deg", "方向", direction_deg.evaluate(frame), "°"),
+            ("center", "中心", center.evaluate(frame), ""),
+            ("width", "幅", width.evaluate(frame), ""),
+            (
+                "sweep_intensity",
+                "スイープ強度",
+                sweep_intensity.evaluate(frame),
+                "%",
+            ),
+            (
+                "edge_intensity",
+                "エッジ強度",
+                edge_intensity.evaluate(frame),
+                "%",
+            ),
+        ],
+        EffectType::RadialFastBlur { amount, .. } => {
+            vec![("amount", "量", amount.evaluate(frame), "%")]
+        }
+        EffectType::BendIt {
+            top_offset,
+            bottom_offset,
+        } => vec![
+            (
+                "top_offset",
+                "上オフセット",
+                top_offset.evaluate(frame),
+                "px",
+            ),
+            (
+                "bottom_offset",
+                "下オフセット",
+                bottom_offset.evaluate(frame),
+                "px",
             ),
         ],
         _ => Vec::new(),

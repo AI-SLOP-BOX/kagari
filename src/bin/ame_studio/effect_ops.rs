@@ -380,6 +380,30 @@ impl AfterEffectsStudio {
                     high_color: Animatable::new_constant([1.0, 0.95, 0.84]),
                 },
             ),
+            "light_sweep" => (
+                "ライトスイープ",
+                EffectType::LightSweep {
+                    direction_deg: Animatable::new_constant(0.0),
+                    center: Animatable::new_constant(0.5),
+                    width: Animatable::new_constant(0.1),
+                    sweep_intensity: Animatable::new_constant(50.0),
+                    edge_intensity: Animatable::new_constant(15.0),
+                },
+            ),
+            "radial_fast_blur" => (
+                "ラジアル高速ぼかし",
+                EffectType::RadialFastBlur {
+                    amount: Animatable::new_constant(20.0),
+                    samples: 3,
+                },
+            ),
+            "bend_it" => (
+                "曲げ",
+                EffectType::BendIt {
+                    top_offset: Animatable::new_constant(0.0),
+                    bottom_offset: Animatable::new_constant(0.0),
+                },
+            ),
             _ => return,
         };
         let id = format!(

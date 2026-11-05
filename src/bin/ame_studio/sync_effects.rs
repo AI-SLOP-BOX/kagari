@@ -90,6 +90,9 @@ impl AfterEffectsStudio {
             ("luma_key_range", "輝度キー"),
             ("tritone", "トライトーン"),
             ("gradient_map", "グラデーションマップ"),
+            ("light_sweep", "ライトスイープ"),
+            ("radial_fast_blur", "ラジアル高速ぼかし"),
+            ("bend_it", "曲げ"),
         ];
         let effect_catalog_items = effect_catalog
             .iter()
