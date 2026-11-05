@@ -1,7 +1,7 @@
 component HomeHero() {
-    VStack(spacing: 18) {
-      AssetImage("kagari.logo", 1, 96, 96)
-      Text("Kagari", size: 40).weight(bold)
+    VStack(spacing: 12) {
+      AssetImage("kagari.logo", 1, 72, 72)
+      Text("Kagari", size: 32).weight(bold)
       Caption("VFX・コンポジット・モーショングラフィックスの制作を始めましょう。")
       HStack(spacing: 14) {
         HeroNewProjectAction()
@@ -133,12 +133,10 @@ component HomePanel() {
       Align(stretch) { HomeNavRail() }
       Grow(1) {
         ScrollView(680) {
-          Padding(horizontal: 40, vertical: 36) {
-            VStack(spacing: 32) {
+          Padding(horizontal: 28, vertical: 16) {
+            VStack(spacing: 18) {
               HomeHero()
-              Spacer
               RecentCardsGrid()
-              Spacer
               RecentWorkTable()
             }
           }
