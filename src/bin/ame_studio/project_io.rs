@@ -632,11 +632,31 @@ impl AfterEffectsStudio {
             .extension()
             .and_then(|extension| extension.to_str())
             .is_some_and(|extension| extension.eq_ignore_ascii_case("mogrt"));
+        let is_otio = path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("otio"));
         let content = kagari_vfx::core::project_migration::read_bounded_text_file(
             path,
             kagari_vfx::core::project_migration::MAX_PROJECT_JSON_BYTES,
         )
         .map_err(|error| format!("プロジェクトを読み込めません: {error}"))?;
+        if is_otio {
+            let timeline = kagari_vfx::core::integration::OtioTimeline::from_json(&content)
+                .map_err(|error| format!("OTIO を解析できませんでした: {error}"))?;
+            let composition = timeline
+                .to_composition()
+                .map_err(|error| format!("OTIO のコンポジションを復元できませんでした: {error}"))?;
+            let mut project = kagari_vfx::core::timeline::Project::default();
+            project.compositions = vec![composition];
+            project.active_composition_idx = 0;
+            project.assets = vec![kagari_vfx::core::timeline::ProjectItem::new(
+                "item_otio_comp",
+                "OTIO Import",
+                kagari_vfx::core::timeline::ProjectItemType::Composition { comp_idx: 0 },
+            )];
+            return self.install_loaded_project(project, default_name, None);
+        }
         let embedded_json = if is_mogrt {
             kagari_vfx::core::mogrt_engine::MogrtPackage::from_json(&content)
                 .map(|package| package.project_json)
@@ -652,12 +672,22 @@ impl AfterEffectsStudio {
                 })
                 .map_err(|error| format!("プロジェクト形式を読み込めません: {error}"))?;
 
-        self.project_name = default_name.to_owned();
-        self.project_file_path = if is_mogrt {
+        let file_path = if is_mogrt {
             None
         } else {
             Some(path.to_path_buf())
         };
+        self.install_loaded_project(project, default_name, file_path)
+    }
+
+    pub(crate) fn install_loaded_project(
+        &mut self,
+        project: kagari_vfx::core::timeline::Project,
+        default_name: &str,
+        file_path: Option<std::path::PathBuf>,
+    ) -> Result<(), String> {
+        self.project_name = default_name.to_owned();
+        self.project_file_path = file_path;
         self.save_status.clear();
         self.last_autosave_at = std::time::Instant::now();
         self.output_path = format!("~/Movies/{default_name}.png");
@@ -689,7 +719,9 @@ impl AfterEffectsStudio {
             self.position_y = f64::from(composition.height) * 0.5;
         }
         self.sync_selected_layer_controls();
-        self.record_recent_project(path);
+        if let Some(path) = self.project_file_path.clone() {
+            self.record_recent_project(&path);
+        }
         Ok(())
     }
 

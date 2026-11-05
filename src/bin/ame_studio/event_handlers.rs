@@ -78,7 +78,7 @@ impl AfterEffectsStudio {
 
             ("open_project", _) => {
                 if let Some(path) = rfd::FileDialog::new()
-                    .add_filter("Kagari プロジェクト / MOGRT", &["json", "mogrt"])
+                    .add_filter("Kagari プロジェクト / MOGRT / OTIO", &["json", "mogrt", "otio"])
                     .pick_file()
                 {
                     self.request_project_open(&path);
