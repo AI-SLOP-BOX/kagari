@@ -147,6 +147,108 @@ impl AfterEffectsStudio {
         }
     }
 
+    pub(crate) fn export_gif(&mut self) {
+        if self.render_events.is_some() {
+            return;
+        }
+        let Some(path) = rfd::FileDialog::new()
+            .add_filter("GIF Animation", &["gif"])
+            .set_file_name(&format!(
+                "{}.gif",
+                self.project_name.trim().replace(['/', '\\', ':'], "_")
+            ))
+            .save_file()
+        else {
+            return;
+        };
+        if path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("gif"))
+            == false
+        {
+            self.render_status = "GIF の拡張子は .gif にしてください。".to_owned();
+            return;
+        }
+        if path.exists() {
+            self.render_status = format!(
+                "同名ファイルがあります: {}。別の保存先を選んでください。",
+                path.display()
+            );
+            return;
+        }
+        let composition = self.project_model.active_composition().clone();
+        let frame_bytes = u64::from(composition.width.max(1))
+            .checked_mul(u64::from(composition.height.max(1)))
+            .and_then(|pixels| pixels.checked_mul(4));
+        if frame_bytes.is_none_or(|bytes| bytes > 256 * 1024 * 1024) {
+            self.render_status =
+                "1フレームが256 MiBを超えるため書き出せません。コンポジションの解像度を下げてください。"
+                    .to_owned();
+            return;
+        }
+        if !kagari_vfx::core::ffmpeg_export::is_ffmpeg_available() {
+            self.render_status =
+                "FFmpegが見つかりません。FFmpegをインストールしてから再試行してください。"
+                    .to_owned();
+            return;
+        }
+        let config = kagari_vfx::core::ffmpeg_export::ExportConfig {
+            output_path: path.to_string_lossy().into_owned(),
+            width: composition.width.max(1),
+            height: composition.height.max(1),
+            fps: composition.fps.max(1),
+            total_frames: composition.duration_frames.max(1),
+            audio_wav: None,
+            codec: kagari_vfx::core::ffmpeg_export::VideoCodec::Gif,
+        };
+        let width = config.width;
+        let height = config.height;
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let worker_cancel = cancel.clone();
+        std::thread::spawn(move || {
+            let (progress_sender, progress_receiver) = std::sync::mpsc::channel();
+            let render_composition = composition.clone();
+            let result = kagari_vfx::core::ffmpeg_export::start_gif_export(
+                config,
+                progress_sender,
+                worker_cancel.clone(),
+                move |frame| {
+                    kagari_vfx::core::software_renderer::render_frame_to_pixels(
+                        &render_composition,
+                        frame,
+                        width,
+                        height,
+                        0.0,
+                        0,
+                    )
+                },
+            );
+            if let Err(error) = result {
+                let _ = sender.send(kagari_vfx::core::ffmpeg_export::ExportEvent::Error(error));
+            } else {
+                for event in progress_receiver {
+                    let terminal = matches!(
+                        &event,
+                        kagari_vfx::core::ffmpeg_export::ExportEvent::Finished(_)
+                            | kagari_vfx::core::ffmpeg_export::ExportEvent::Error(_)
+                    );
+                    let _ = sender.send(event);
+                    if terminal {
+                        break;
+                    }
+                }
+            }
+        });
+        self.video_output_path = path.to_string_lossy().into_owned();
+        self.render_progress = 0;
+        self.render_status = "GIF を書き出しています…".to_owned();
+        self.render_events = Some(receiver);
+        self.render_cancel = Some(cancel);
+        self.render_refresh_ticks = 0;
+    }
+
     pub(crate) fn export_current_frame_png(&mut self, overwrite_confirmed: bool) {
         let raw_path = self.output_path.trim();
         if raw_path.is_empty() {
