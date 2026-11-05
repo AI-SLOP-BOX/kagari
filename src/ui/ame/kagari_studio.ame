@@ -1257,6 +1257,7 @@ app AfterEffectsStudio {
   action export_subtitles;
   action export_otio;
   action export_gif;
+  action export_png_sequence;
   action back_to_editor;
   action choose_output_file;
   action choose_video_output;
