@@ -94,6 +94,7 @@ impl AfterEffectsStudio {
             ("radial_fast_blur", "ラジアル高速ぼかし"),
             ("bend_it", "曲げ"),
             ("venetian_blinds", "ベネチアンブラインド"),
+            ("glow_pro", "Glow Pro"),
         ];
         let effect_catalog_items = effect_catalog
             .iter()

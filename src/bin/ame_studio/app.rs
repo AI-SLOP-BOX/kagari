@@ -1648,6 +1648,7 @@ pub(crate) fn effect_type_label(effect: &kagari_vfx::core::timeline::EffectType)
         EffectType::RadialFastBlur { .. } => "ラジアル高速ぼかし",
         EffectType::BendIt { .. } => "曲げ",
         EffectType::VenetianBlinds { .. } => "ベネチアンブラインド",
+        EffectType::GlowPro { .. } => "Glow Pro",
         _ => "その他",
     }
 }
@@ -1976,6 +1977,15 @@ pub(crate) fn effect_parameter_specs(
         EffectType::VenetianBlinds { completion, width } => vec![
             ("completion", "完了率", completion.evaluate(frame), "%"),
             ("width", "幅", width.evaluate(frame), "px"),
+        ],
+        EffectType::GlowPro {
+            threshold,
+            radius,
+            intensity,
+        } => vec![
+            ("threshold", "しきい値", threshold.evaluate(frame), "%"),
+            ("radius", "半径", radius.evaluate(frame), "px"),
+            ("intensity", "強度", intensity.evaluate(frame), "%"),
         ],
         _ => Vec::new(),
     };

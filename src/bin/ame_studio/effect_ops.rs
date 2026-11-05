@@ -411,6 +411,14 @@ impl AfterEffectsStudio {
                     width: Animatable::new_constant(30.0),
                 },
             ),
+            "glow_pro" => (
+                "Glow Pro",
+                EffectType::GlowPro {
+                    threshold: Animatable::new_constant(40.0),
+                    radius: Animatable::new_constant(24.0),
+                    intensity: Animatable::new_constant(80.0),
+                },
+            ),
             _ => return,
         };
         let id = format!(
