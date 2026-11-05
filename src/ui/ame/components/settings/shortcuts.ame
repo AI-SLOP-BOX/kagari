@@ -74,6 +74,7 @@ component SettingsShortcutsPage() {
         VStack(spacing: 4) {
           Caption("表示")
           ShortcutRow(command: "プレビューを再読み込み", keys: "F5")
+          ShortcutRow(command: "環境設定・ダイアログを閉じる", keys: "Esc")
         }
       }
       If(shortcut_filter == "all" || shortcut_filter == "tools") {
