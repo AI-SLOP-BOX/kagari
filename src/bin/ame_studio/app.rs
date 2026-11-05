@@ -1490,7 +1490,22 @@ impl App for AfterEffectsStudio {
             modifiers,
         } = event
         {
-            let action = if modifiers.is_primary() {
+            let action = if !modifiers.alt && !modifiers.shift && key.eq_ignore_ascii_case("escape")
+            {
+                if self.exit_confirm_open {
+                    Some("cancel_exit_app")
+                } else if self.project_switch_confirm_open {
+                    Some("cancel_project_switch")
+                } else if self.composition_remove_confirm_open {
+                    Some("composition_remove_cancel")
+                } else if self.layer_remove_confirm_open {
+                    Some("cancel_remove_selected_layer")
+                } else if self.settings_open {
+                    Some("close_settings")
+                } else {
+                    None
+                }
+            } else if modifiers.is_primary() {
                 match key.to_ascii_lowercase().as_str() {
                     "z" if modifiers.shift => Some("redo_project"),
                     "z" => Some("undo_project"),
@@ -1498,6 +1513,7 @@ impl App for AfterEffectsStudio {
                     "s" if self.screen == Screen::Editor => Some("save_project"),
                     "n" => Some("new_project"),
                     "m" if self.screen == Screen::Editor => Some("go_export"),
+                    "," => Some("go_settings"),
                     _ => None,
                 }
             } else if self.screen == Screen::Editor && !modifiers.alt && !modifiers.shift {
