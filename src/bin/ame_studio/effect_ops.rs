@@ -419,6 +419,14 @@ impl AfterEffectsStudio {
                     intensity: Animatable::new_constant(80.0),
                 },
             ),
+            "sobel_edges" => ("Sobel Edges", EffectType::SobelEdges { invert: false }),
+            "find_edges" => ("Find Edges", EffectType::FindEdges { invert: false }),
+            "median_filter" => (
+                "メディアンフィルター",
+                EffectType::MedianFilter {
+                    radius: Animatable::new_constant(2.0),
+                },
+            ),
             _ => return,
         };
         let id = format!(

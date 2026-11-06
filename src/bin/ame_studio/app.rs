@@ -1650,6 +1650,9 @@ pub(crate) fn effect_type_label(effect: &kagari_vfx::core::timeline::EffectType)
         EffectType::BendIt { .. } => "曲げ",
         EffectType::VenetianBlinds { .. } => "ベネチアンブラインド",
         EffectType::GlowPro { .. } => "Glow Pro",
+        EffectType::SobelEdges { .. } => "Sobel Edges",
+        EffectType::FindEdges { .. } => "Find Edges",
+        EffectType::MedianFilter { .. } => "メディアンフィルター",
         _ => "その他",
     }
 }
@@ -1988,6 +1991,9 @@ pub(crate) fn effect_parameter_specs(
             ("radius", "半径", radius.evaluate(frame), "px"),
             ("intensity", "強度", intensity.evaluate(frame), "%"),
         ],
+        EffectType::MedianFilter { radius } => {
+            vec![("radius", "半径", radius.evaluate(frame), "px")]
+        }
         _ => Vec::new(),
     };
     use kagari_vfx::core::effect_params::ParamRefRef;

@@ -95,6 +95,9 @@ impl AfterEffectsStudio {
             ("bend_it", "曲げ"),
             ("venetian_blinds", "ベネチアンブラインド"),
             ("glow_pro", "Glow Pro"),
+            ("sobel_edges", "Sobel Edges"),
+            ("find_edges", "Find Edges"),
+            ("median_filter", "メディアンフィルター"),
         ];
         let effect_catalog_items = effect_catalog
             .iter()
