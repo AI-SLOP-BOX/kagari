@@ -2,7 +2,7 @@ component TimelineMarkers() {
   Card { Padding(4) { VStack(spacing: 3) {
     HStack(spacing: 5) {
       Caption("コンポジションマーカー")
-      Button("＋ 現在位置", action: add_timeline_marker, tone: secondary, size: small)
+      Button("現在位置", action: add_timeline_marker, tone: secondary, size: small)
       If(has_timeline_markers) {
         If(has_selected_timeline_marker) {
           MaxWidth(190) { TextField(timeline_marker_label, "マーカー名", action: timeline_marker_label_changed) }
@@ -28,7 +28,7 @@ component LayerMarkerTrackList() {
     HStack(spacing: 5) {
       Caption("レイヤーマーカーを編集するレイヤー")
       Spacer
-      If(selected_layer) { Button("＋ 現在位置", action: add_layer_marker, tone: secondary, size: small, disabled: selected_layer_locked) } else { Caption("レイヤーを選ぶと追加できます") }
+      If(selected_layer) { Button("現在位置", action: add_layer_marker, tone: secondary, size: small, disabled: selected_layer_locked) } else { Caption("レイヤーを選ぶと追加できます") }
     }
     If(has_timeline_layers) {
       ScrollView(200) {

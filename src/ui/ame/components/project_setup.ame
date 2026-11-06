@@ -4,7 +4,7 @@ component ProjectSetupPanel() {
         Center {
           MaxWidth(900) {
             VStack(spacing: 14) {
-            HStack(spacing: 12) { Button("← 戻る", action: setup_cancel, tone: secondary, size: small) Spacer Caption("新規プロジェクト") }
+            HStack(spacing: 12) { Button("戻る", action: setup_cancel, tone: secondary, size: small) Spacer Caption("新規プロジェクト") }
             VStack(spacing: 5) { Text("作成設定", size: 30) Caption("動画の用途に合わせて、コンポジションのサイズとフレームレートを選びます。") }
             Card { Padding(16) { VStack(spacing: 12) {
               VStack(spacing: 6) { Text("プロジェクト名", size: 17) TextField(setup_name, "無題のプロジェクト", action: setup_name_changed) }

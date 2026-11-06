@@ -47,7 +47,7 @@ component DocsDetailPanel() {
         ScrollView(680) {
           Padding(24) {
             VStack(spacing: 16) {
-              HStack(spacing: 10) { Button("← ドキュメント一覧", action: go_documents, tone: secondary, size: small) Spacer }
+              HStack(spacing: 10) { Button("ドキュメント一覧", action: go_documents, tone: secondary, size: small) Spacer }
               Card { Padding(24) { VStack(spacing: 14) { Text("{docs_title}", size: 28) Spacer Text("{docs_body}", size: 16) } } }
             }
           }

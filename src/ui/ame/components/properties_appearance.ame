@@ -3,11 +3,11 @@ component LayerCompositeProperties() {
     Caption("▎ 合成")
     HStack(spacing: 5) {
       MinWidth(78) { Caption("ブレンド") }
-      Button("{selected_blend_mode_label}  ↻", action: cycle_layer_blend_mode, tone: secondary, size: small, disabled: selected_layer_locked)
+      Button("{selected_blend_mode_label}", action: cycle_layer_blend_mode, tone: secondary, size: small, disabled: selected_layer_locked)
     }
     HStack(spacing: 5) {
       MinWidth(78) { Caption("トラックマット") }
-      Button("{selected_track_matte_label}  ↻", action: cycle_layer_track_matte, tone: secondary, size: small, disabled: selected_layer_locked)
+      Button("{selected_track_matte_label}", action: cycle_layer_track_matte, tone: secondary, size: small, disabled: selected_layer_locked)
     }
     If(selected_has_track_matte) {
       Caption("マット元レイヤー")
@@ -23,9 +23,9 @@ component MotionTrackerProperties() {
   Card { Padding(6) { VStack(spacing: 5) {
     Caption("▎ モーショントラッキング")
     HStack(spacing: 5) {
-      Button("＋ トラッカーを追加", action: add_motion_tracker, tone: primary, size: small, disabled: selected_layer_locked)
+      Button("トラッカーを追加", action: add_motion_tracker, tone: primary, size: small, disabled: selected_layer_locked)
       If(has_tracker_items) {
-        Button("前方解析 ▶", action: analyze_motion_track_forward, tone: secondary, size: small, disabled: selected_layer_locked)
+        Button("前方解析", action: analyze_motion_track_forward, tone: secondary, size: small, disabled: selected_layer_locked)
       }
     }
     If(has_tracker_items) {

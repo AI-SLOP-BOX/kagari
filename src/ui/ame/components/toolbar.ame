@@ -6,16 +6,16 @@ component ToolBar() {
             If(selected_tool == "Selection") { Button("選択", action: tool_select, tone: primary, size: small) } else { Button("選択", action: tool_select, tone: secondary, size: small) }
             If(selected_tool == "Hand") { Button("手", action: tool_hand, tone: primary, size: small) } else { Button("手", action: tool_hand, tone: secondary, size: small) }
             If(selected_tool == "Zoom") { Button("ズーム", action: tool_zoom, tone: primary, size: small) } else { Button("ズーム", action: tool_zoom, tone: secondary, size: small) }
-            Button("T", action: tool_text, tone: secondary, size: small)
-            Button("□", action: tool_shape, tone: secondary, size: small)
-            Button("✎", action: tool_pen, tone: secondary, size: small)
+            IconButton("type", action: tool_text, tone: secondary, size: small)
+            IconButton("shape", action: tool_shape, tone: secondary, size: small)
+            IconButton("edit", action: tool_pen, tone: secondary, size: small)
           }
           Spacer
           HStack(spacing: 6) {
-            If(compact) { Button("↶", action: undo_project, tone: secondary, size: small, disabled: !can_undo) } else { Button("↶ 戻す", action: undo_project, tone: secondary, size: small, disabled: !can_undo) }
-            If(compact) { Button("↷", action: redo_project, tone: secondary, size: small, disabled: !can_redo) } else { Button("↷ やり直す", action: redo_project, tone: secondary, size: small, disabled: !can_redo) }
-            If(compact) { Button("◐", action: add_adjustment_layer, tone: secondary, size: small) } else { Button("◐ 調整", action: add_adjustment_layer, tone: secondary, size: small) }
-            If(compact) { Button("✦", action: add_particle_layer, tone: secondary, size: small) } else { Button("✦ 粒子", action: add_particle_layer, tone: secondary, size: small) }
+            If(compact) { IconButton("undo", action: undo_project, tone: secondary, size: small, disabled: !can_undo) } else { Button("戻す", action: undo_project, tone: secondary, size: small, disabled: !can_undo) }
+            If(compact) { IconButton("redo", action: redo_project, tone: secondary, size: small, disabled: !can_redo) } else { Button("やり直す", action: redo_project, tone: secondary, size: small, disabled: !can_redo) }
+            If(compact) { IconButton("effect", action: add_adjustment_layer, tone: secondary, size: small) } else { Button("調整", action: add_adjustment_layer, tone: secondary, size: small) }
+            If(compact) { IconButton("particle", action: add_particle_layer, tone: secondary, size: small) } else { Button("粒子", action: add_particle_layer, tone: secondary, size: small) }
             Caption("{selected_tool_label}ツール")
           }
           Spacer
@@ -23,7 +23,7 @@ component ToolBar() {
           Spacer
           HStack(spacing: 4) {
             If(is_playing) { IconButton("pause", action: play_toggle, tone: primary, size: small) } else { IconButton("play", action: play_toggle, tone: secondary, size: small) }
-            If(playback_loop) { Button("🔁", action: toggle_playback_loop, tone: primary, size: small) } else { Button("↻", action: toggle_playback_loop, tone: secondary, size: small) }
+            If(playback_loop) { IconButton("repeat", action: toggle_playback_loop, tone: primary, size: small) } else { IconButton("repeat", action: toggle_playback_loop, tone: secondary, size: small) }
             IconButton("stop", action: play_stop, tone: secondary, size: small)
           }
         }
@@ -44,6 +44,6 @@ component WorkspaceTabs() {
     Button("文字", action: workspace_text, tone: secondary, size: small)
     Button("音響", action: workspace_audio, tone: secondary, size: small)
     Button("リマップ", action: workspace_time_remap, tone: secondary, size: small)
-    Button("↺", action: workspace_reset_layout, tone: secondary, size: small)
+    IconButton("reset", action: workspace_reset_layout, tone: secondary, size: small)
   }
 }

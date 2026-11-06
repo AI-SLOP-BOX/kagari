@@ -22,12 +22,12 @@ component ProjectAssetPanel() {
   Card { Padding(10) { VStack(spacing: 8) {
     HStack(spacing: 5) {
       Text("プロジェクト素材 / {asset_folder_name}", size: 14)
-      If(asset_folder_has_parent) { Button("↑", action: leave_project_asset_folder, tone: secondary, size: small) }
+      If(asset_folder_has_parent) { IconButton("arrow_up", action: leave_project_asset_folder, tone: secondary, size: small) }
       Spacer
     }
     HStack(spacing: 5) {
       TextField(new_asset_folder_name, "フォルダー名", action: new_asset_folder_name_changed)
-      Button("＋ フォルダー", action: create_project_asset_folder, tone: secondary, size: small)
+      Button("フォルダー", action: create_project_asset_folder, tone: secondary, size: small)
     }
     HStack(spacing: 4) {
       Caption("並び替え")
@@ -73,7 +73,7 @@ component ProjectAssetPanel() {
                 }
               }
               If(asset.is_folder) {
-                Button("▸", action: enter_project_asset_folder, tone: secondary, size: small)
+                IconButton("chevron_right", action: enter_project_asset_folder, tone: secondary, size: small)
                 If(asset.selected) { Button("選択中", action: select_project_asset_folder, tone: primary, size: small) } else { Button("選択", action: select_project_asset_folder, tone: secondary, size: small) }
                 MaxWidth(180) { TextField(asset.name, "フォルダー名", action: rename_project_asset) }
               } else { If(asset.is_composition) {

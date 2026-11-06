@@ -11,7 +11,7 @@ component GraphEditorPanel() {
           }
         }
       }
-      Button("次へ ↻", action: graph_channel_next, tone: secondary, size: small)
+      Button("次へ", action: graph_channel_next, tone: secondary, size: small)
       If(graph_effect_channel) { Button("次のエフェクト値", action: graph_effect_parameter_next, tone: secondary, size: small) }
       If(graph_effect_channel) {
         HorizontalScrollView(320) {
@@ -22,15 +22,15 @@ component GraphEditorPanel() {
           }
         }
       }
-      Button("◆ キー追加", action: graph_add_keyframe, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+      Button("キー追加", action: graph_add_keyframe, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
       Button("キー削除", action: graph_remove_keyframe, tone: destructive, size: small, disabled: !selected_layer || selected_layer_locked)
       Button("補間: {graph_interpolation_label}", action: graph_cycle_interpolation, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
-      Button("∿ イージング (F9)", action: graph_set_easy_ease, tone: primary, size: small, disabled: !selected_layer || selected_layer_locked)
+      Button("イージング (F9)", action: graph_set_easy_ease, tone: primary, size: small, disabled: !selected_layer || selected_layer_locked)
       Button("⤥ イーズイン", action: graph_set_ease_in, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
       Button("⤦ イーズアウト", action: graph_set_ease_out, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
       Button("⤹ オーバースイング", action: graph_set_overshoot, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
       Button("⌇ バウンス", action: graph_set_bounce, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
-      Button("∿ サイン波", action: graph_set_sine, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+      Button("サイン波", action: graph_set_sine, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
       Button("／ リニア", action: graph_set_linear, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
       Button("⎍ 停止 (Hold)", action: graph_set_hold, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
     }

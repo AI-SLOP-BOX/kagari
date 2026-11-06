@@ -6,21 +6,21 @@ component AnimationPanel() {
       If(selected_layer && !selected_layer_locked) {
         Caption("現在フレームにキーを追加")
         If(selected_is_3d) {
-          Button("◇ 3D位置", action: keyframe_position_3d, tone: secondary, size: small)
-          Button("◇ 3D回転", action: keyframe_rotation_3d, tone: secondary, size: small)
-          Button("◇ 3D倍率", action: keyframe_scale_3d, tone: secondary, size: small)
+          Button("3D位置", action: keyframe_position_3d, tone: secondary, size: small)
+          Button("3D回転", action: keyframe_rotation_3d, tone: secondary, size: small)
+          Button("3D倍率", action: keyframe_scale_3d, tone: secondary, size: small)
         } else {
-          Button("◇ 位置", action: keyframe_position_2d, tone: secondary, size: small)
-          Button("◇ 回転", action: keyframe_rotation_2d, tone: secondary, size: small)
-          Button("◇ 倍率", action: keyframe_scale_2d, tone: secondary, size: small)
+          Button("位置", action: keyframe_position_2d, tone: secondary, size: small)
+          Button("回転", action: keyframe_rotation_2d, tone: secondary, size: small)
+          Button("倍率", action: keyframe_scale_2d, tone: secondary, size: small)
         }
-        Button("◇ 不透明度", action: keyframe_opacity, tone: secondary, size: small)
+        Button("不透明度", action: keyframe_opacity, tone: secondary, size: small)
         If(selected_is_camera) {
-          Button("◇ 画角", action: keyframe_camera_fov, tone: secondary, size: small)
-          Button("◇ 焦点距離", action: keyframe_camera_focus, tone: secondary, size: small)
-          Button("◇ 絞り", action: keyframe_camera_aperture, tone: secondary, size: small)
+          Button("画角", action: keyframe_camera_fov, tone: secondary, size: small)
+          Button("焦点距離", action: keyframe_camera_focus, tone: secondary, size: small)
+          Button("絞り", action: keyframe_camera_aperture, tone: secondary, size: small)
         }
-        If(selected_is_light) { Button("◇ ライト強度", action: keyframe_light_intensity, tone: secondary, size: small) }
+        If(selected_is_light) { Button("ライト強度", action: keyframe_light_intensity, tone: secondary, size: small) }
       } else {
         If(selected_layer_locked) { Caption("レイヤーがロックされています") } else {
         Caption("シーンからレイヤーを選択してください")

@@ -11,7 +11,7 @@ component TimelineRows() {
       ForEach(timeline_layers, layer, key: id) {
         HStack(spacing: 1) {
           Caption("{layer.indent}")
-          If(layer.has_children) { If(layer.collapsed) { Button("▸", action: toggle_scene_group, tone: secondary, size: small) } else { Button("▾", action: toggle_scene_group, tone: secondary, size: small) } } else { Icon("tree_branch", 12) }
+          If(layer.has_children) { If(layer.collapsed) { IconButton("chevron_right", action: toggle_scene_group, tone: secondary, size: small) } else { IconButton("chevron_down", action: toggle_scene_group, tone: secondary, size: small) } } else { Icon("tree_branch", 12) }
           Caption("{layer.label}")
           MaxWidth(104) { Button("{layer.name}", action: select_layer, tone: secondary, size: small) }
           Button("{layer.blend_mode}", action: cycle_layer_blend_mode, tone: secondary, size: small)
@@ -37,27 +37,27 @@ component TimelineRows() {
 
 component TimelineTransport() {
   HStack(spacing: 4) {
-    Button("⏮", action: play_rewind, tone: secondary, size: small)
-    Button("◀", action: step_frame_backward, tone: secondary, size: small)
-    If(is_playing) { Button("⏸", action: play_toggle, tone: primary, size: small) } else { Button("▶", action: play_toggle, tone: secondary, size: small) }
-    Button("▶", action: step_frame_forward, tone: secondary, size: small)
-    If(playback_loop) { Button("🔁", action: toggle_playback_loop, tone: primary, size: small) } else { Button("↻", action: toggle_playback_loop, tone: secondary, size: small) }
-    Button("⏭", action: play_forward, tone: secondary, size: small)
+    IconButton("rewind", action: play_rewind, tone: secondary, size: small)
+    IconButton("step_prev", action: step_frame_backward, tone: secondary, size: small)
+    If(is_playing) { IconButton("pause", action: play_toggle, tone: primary, size: small) } else { IconButton("play", action: play_toggle, tone: secondary, size: small) }
+    IconButton("step_next", action: step_frame_forward, tone: secondary, size: small)
+    If(playback_loop) { IconButton("repeat", action: toggle_playback_loop, tone: primary, size: small) } else { IconButton("repeat", action: toggle_playback_loop, tone: secondary, size: small) }
+    IconButton("fast_forward", action: play_forward, tone: secondary, size: small)
   }
 }
 
 component CompactTimelineControls() {
   HStack(spacing: 4) {
-    Button("⏮", action: play_rewind, tone: secondary, size: small)
-    Button("◀", action: step_frame_backward, tone: secondary, size: small)
-    If(is_playing) { Button("⏸", action: play_toggle, tone: primary, size: small) } else { Button("▶", action: play_toggle, tone: secondary, size: small) }
-    Button("▶", action: step_frame_forward, tone: secondary, size: small)
-    If(playback_loop) { Button("🔁", action: toggle_playback_loop, tone: primary, size: small) } else { Button("↻", action: toggle_playback_loop, tone: secondary, size: small) }
-    Button("⏭", action: play_forward, tone: secondary, size: small)
+    IconButton("rewind", action: play_rewind, tone: secondary, size: small)
+    IconButton("step_prev", action: step_frame_backward, tone: secondary, size: small)
+    If(is_playing) { IconButton("pause", action: play_toggle, tone: primary, size: small) } else { IconButton("play", action: play_toggle, tone: secondary, size: small) }
+    IconButton("step_next", action: step_frame_forward, tone: secondary, size: small)
+    If(playback_loop) { IconButton("repeat", action: toggle_playback_loop, tone: primary, size: small) } else { IconButton("repeat", action: toggle_playback_loop, tone: secondary, size: small) }
+    IconButton("fast_forward", action: play_forward, tone: secondary, size: small)
     Spacer
     MinWidth(112) { TextField(current_time, "00:00:02:12", action: time_changed) }
-    Button("◆ キー", action: add_keyframe, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
-    Button("∿ イーズ (F9)", action: ease_selected_layer, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+    Button("キー", action: add_keyframe, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+    Button("イーズ (F9)", action: ease_selected_layer, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
     KeyframeNavigation()
     Caption("{fps_label}")
   }
@@ -65,8 +65,8 @@ component CompactTimelineControls() {
 
 component KeyframeNavigation() {
   HStack(spacing: 4) {
-    Button("⏮◆", action: previous_keyframe, tone: secondary, size: small)
-    Button("◆⏭", action: next_keyframe, tone: secondary, size: small)
+    IconButton("step_prev", action: previous_keyframe, tone: secondary, size: small)
+    IconButton("step_next", action: next_keyframe, tone: secondary, size: small)
     Caption("{keyframe_status}")
   }
 }
@@ -117,8 +117,8 @@ component TimelinePanel() {
               TimelineTransport()
               Spacer
               TextField(current_time, "00:00:02:12", action: time_changed)
-              Button("◆ キー追加", action: add_keyframe, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
-              Button("∿ イージーイーズ (F9)", action: ease_selected_layer, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+              Button("キー追加", action: add_keyframe, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+              Button("イージーイーズ (F9)", action: ease_selected_layer, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
               KeyframeNavigation()
               Caption("{fps_label}")
               Button("書き出し", action: go_export, tone: secondary, size: small)
@@ -148,19 +148,19 @@ component TimelinePanel() {
           If(wide) {
             HStack(spacing: 4) {
               Caption("時間範囲")
-              Button("−", action: timeline_zoom_out, tone: secondary, size: small)
+              IconButton("minus", action: timeline_zoom_out, tone: secondary, size: small)
               Caption("{timeline_zoom_label}")
-              Button("＋", action: timeline_zoom_in, tone: secondary, size: small)
+              IconButton("add", action: timeline_zoom_in, tone: secondary, size: small)
               Button("全体", action: timeline_zoom_fit, tone: secondary, size: small)
               Button("再生位置で分割", action: split_selected_layer_at_playhead, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
-              Button("イン点 ← 再生位置", action: layer_in_to_playhead, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
-              Button("アウト点 ← 再生位置", action: layer_out_to_playhead, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
-              Button("↑", action: move_layer_up, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
-              Button("↓", action: move_layer_down, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+              Button("イン点へ", action: layer_in_to_playhead, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+              Button("アウト点へ", action: layer_out_to_playhead, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+              IconButton("arrow_up", action: move_layer_up, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+              IconButton("arrow_down", action: move_layer_down, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
               Button("先頭へ", action: move_layer_to_start, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
               Button("末尾へ", action: move_layer_to_end, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
-              Button("←", action: timeline_pan_left, tone: secondary, size: small)
-              Button("→", action: timeline_pan_right, tone: secondary, size: small)
+              IconButton("arrow_left", action: timeline_pan_left, tone: secondary, size: small)
+              IconButton("arrow_right", action: timeline_pan_right, tone: secondary, size: small)
               If(timeline_view_markers) { Button("マーカー", action: timeline_view_markers, tone: primary, size: small) } else { Button("マーカー", action: timeline_view_markers, tone: secondary, size: small) }
               If(timeline_snap_enabled) { Button("スナップ", action: toggle_timeline_snap, tone: primary, size: small) } else { Button("スナップ", action: toggle_timeline_snap, tone: secondary, size: small) }
             }
@@ -168,20 +168,20 @@ component TimelinePanel() {
             VStack(spacing: 3) {
               HStack(spacing: 4) {
                 Caption("時間範囲")
-                Button("−", action: timeline_zoom_out, tone: secondary, size: small)
+                IconButton("minus", action: timeline_zoom_out, tone: secondary, size: small)
                 Caption("{timeline_zoom_label}")
-                Button("＋", action: timeline_zoom_in, tone: secondary, size: small)
+                IconButton("add", action: timeline_zoom_in, tone: secondary, size: small)
                 Button("全体", action: timeline_zoom_fit, tone: secondary, size: small)
-                Button("←", action: timeline_pan_left, tone: secondary, size: small)
-                Button("→", action: timeline_pan_right, tone: secondary, size: small)
+                IconButton("arrow_left", action: timeline_pan_left, tone: secondary, size: small)
+                IconButton("arrow_right", action: timeline_pan_right, tone: secondary, size: small)
                 Spacer
               }
               HStack(spacing: 4) {
                 Button("再生位置で分割", action: split_selected_layer_at_playhead, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
                 Button("イン点", action: layer_in_to_playhead, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
                 Button("アウト点", action: layer_out_to_playhead, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
-                Button("↑", action: move_layer_up, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
-                Button("↓", action: move_layer_down, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+                IconButton("arrow_up", action: move_layer_up, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+                IconButton("arrow_down", action: move_layer_down, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
                 Button("先頭へ", action: move_layer_to_start, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
                 Button("末尾へ", action: move_layer_to_end, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
                 If(timeline_view_markers) { Button("マーカー", action: timeline_view_markers, tone: primary, size: small) } else { Button("マーカー", action: timeline_view_markers, tone: secondary, size: small) }
