@@ -343,6 +343,95 @@ impl AfterEffectsStudio {
         self.render_refresh_ticks = 0;
     }
 
+    pub(crate) fn export_exr_sequence(&mut self) {
+        if self.render_events.is_some() {
+            return;
+        }
+        let Some(directory) = rfd::FileDialog::new().pick_folder() else {
+            return;
+        };
+        let prefix = self
+            .project_name
+            .trim()
+            .chars()
+            .map(|character| match character {
+                '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
+                character if character.is_control() => '_',
+                character => character,
+            })
+            .collect::<String>();
+        let prefix = if prefix.trim().is_empty() {
+            "frame".to_owned()
+        } else {
+            prefix
+        };
+        let composition = self.project_model.active_composition().clone();
+        let width = composition.width.max(1);
+        let height = composition.height.max(1);
+        let frame_count = composition.duration_frames.max(1);
+        let first_path = directory.join(format!("{prefix}_00001.exr"));
+        if first_path.exists() {
+            self.render_status = format!(
+                "{} が既にあります。同一フォルダでの連番上書きを避けるため中止しました。",
+                first_path.display()
+            );
+            return;
+        }
+        let frame_bytes = u64::from(width)
+            .checked_mul(u64::from(height))
+            .and_then(|pixels| pixels.checked_mul(4));
+        if frame_bytes.is_none_or(|bytes| bytes > 256 * 1024 * 1024) {
+            self.render_status =
+                "1フレームが256 MiBを超えるため書き出せません。コンポジションの解像度を下げてください。"
+                    .to_owned();
+            return;
+        }
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let worker_cancel = cancel.clone();
+        let target = directory.clone();
+        std::thread::spawn(move || {
+            for frame in 0..frame_count {
+                if worker_cancel.load(std::sync::atomic::Ordering::SeqCst) {
+                    let _ = sender.send(kagari_vfx::core::ffmpeg_export::ExportEvent::Error(
+                        "Export canceled by user".to_owned(),
+                    ));
+                    return;
+                }
+                let hdr = kagari_vfx::core::software_renderer::render_frame_to_hdr_f32(
+                    &composition,
+                    frame,
+                    width,
+                    height,
+                    0.0,
+                    0,
+                );
+                let image =
+                    kagari_vfx::core::exr_writer::ExrImage::rgba_f32(width, height, &hdr.data);
+                let path = target.join(format!("{prefix}_{:05}.exr", frame + 1));
+                if let Err(error) = kagari_vfx::core::exr_writer::write_exr_file(&path, &image) {
+                    let _ = sender.send(kagari_vfx::core::ffmpeg_export::ExportEvent::Error(
+                        format!("EXR を書き出せませんでした: {error}"),
+                    ));
+                    return;
+                }
+                let _ = sender.send(kagari_vfx::core::ffmpeg_export::ExportEvent::Progress(
+                    (frame + 1) as f32 / frame_count as f32,
+                    format!("{} / {}", frame + 1, frame_count),
+                ));
+            }
+            let _ = sender.send(kagari_vfx::core::ffmpeg_export::ExportEvent::Finished(
+                format!("EXR 連番を書き出しました: {}", target.display()),
+            ));
+        });
+        self.video_output_path = directory.to_string_lossy().into_owned();
+        self.render_progress = 0;
+        self.render_status = "EXR 連番を書き出しています…".to_owned();
+        self.render_events = Some(receiver);
+        self.render_cancel = Some(cancel);
+        self.render_refresh_ticks = 0;
+    }
+
     pub(crate) fn export_current_frame_png(&mut self, overwrite_confirmed: bool) {
         let raw_path = self.output_path.trim();
         if raw_path.is_empty() {

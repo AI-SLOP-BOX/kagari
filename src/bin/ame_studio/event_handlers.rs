@@ -260,6 +260,7 @@ impl AfterEffectsStudio {
             ("export_otio", _) => self.export_otio(),
             ("export_gif", _) => self.export_gif(),
             ("export_png_sequence", _) => self.export_png_sequence(),
+            ("export_exr_sequence", _) => self.export_exr_sequence(),
             ("workspace_left_resized", Some(ActionValue::Number(value)))
                 if value.is_finite() =>
             {

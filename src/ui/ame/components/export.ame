@@ -21,6 +21,7 @@ component ExportPanel() {
                 Button("OTIO を保存…", action: export_otio, tone: secondary)
                 Button("GIF を書き出す", action: export_gif, tone: secondary)
                 Button("PNG 連番…", action: export_png_sequence, tone: secondary)
+                Button("EXR 連番…", action: export_exr_sequence, tone: secondary)
                 Button("字幕(.srt)", action: export_subtitles, tone: secondary)
                 Spacer
                 Caption("{status_resolution} · {duration_label}")
