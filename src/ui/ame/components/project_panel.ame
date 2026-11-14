@@ -100,5 +100,4 @@ component ProjectPanel() {
           }
         }
       }
-    }
   }
