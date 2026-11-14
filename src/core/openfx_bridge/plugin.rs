@@ -183,15 +183,21 @@ unsafe extern "C" fn ofx_clip_define(
     0
 }
 
+std::thread_local! {
+    static ACTIVE_OFX_IMAGES: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+}
+
 unsafe extern "C" fn ofx_clip_get_handle(
     _image_effect: *const std::ffi::c_void,
-    _name: *const std::ffi::c_char,
+    name: *const std::ffi::c_char,
     clip: *mut *mut std::ffi::c_void,
     _property_set: *mut *mut OfxPropertySet,
 ) -> std::ffi::c_int {
-    if !clip.is_null() {
-        unsafe { *clip = std::ptr::dangling_mut::<std::ffi::c_void>() };
+    if clip.is_null() {
+        return 3;
     }
+    let is_output = !name.is_null() && unsafe { cstr(name) } == Some("Output");
+    unsafe { *clip = (if is_output { 2usize } else { 1usize }) as *mut std::ffi::c_void };
     0
 }
 
@@ -203,11 +209,20 @@ unsafe extern "C" fn ofx_clip_get_property_set(
 }
 
 unsafe extern "C" fn ofx_clip_get_image(
-    _clip: *const std::ffi::c_void,
+    clip: *const std::ffi::c_void,
     _time: f64,
     _region: *const std::ffi::c_void,
-    _image_handle: *mut *mut OfxPropertySet,
+    image_handle: *mut *mut OfxPropertySet,
 ) -> std::ffi::c_int {
+    if image_handle.is_null() {
+        return 3;
+    }
+    let (in_ptr, out_ptr) = ACTIVE_OFX_IMAGES.with(|c| c.get());
+    let chosen = if clip as usize == 2 { out_ptr } else { in_ptr };
+    if chosen == 0 {
+        return 1; // kOfxStatFailed
+    }
+    unsafe { *image_handle = chosen as *mut OfxPropertySet };
     0
 }
 
@@ -489,6 +504,26 @@ impl LoadedOfxPlugin {
             (*render_in_args).set_double("OfxImageEffectPropRenderScale", 0, 1.0);
             (*render_in_args).set_double("OfxImageEffectPropRenderScale", 1, 1.0);
         }
+        let in_image_props = self.new_property_set();
+        let out_image_props = self.new_property_set();
+        let row_bytes = (req.width as i32) * 4;
+        for (props, data_ptr) in [
+            (in_image_props, req.input.as_ptr() as *mut std::ffi::c_void),
+            (
+                out_image_props,
+                req.output.as_mut_ptr() as *mut std::ffi::c_void,
+            ),
+        ] {
+            unsafe {
+                (*props).set_int("OfxImagePropBounds", 0, 0);
+                (*props).set_int("OfxImagePropBounds", 1, 0);
+                (*props).set_int("OfxImagePropBounds", 2, req.width as i32);
+                (*props).set_int("OfxImagePropBounds", 3, req.height as i32);
+                (*props).set_int("OfxImagePropRowBytes", 0, row_bytes);
+                (*props).set_pointer("OfxImagePropData", 0, data_ptr);
+            }
+        }
+        ACTIVE_OFX_IMAGES.with(|c| c.set((in_image_props as usize, out_image_props as usize)));
         let render_action = std::ffi::CString::new("OfxImageEffectActionRender")
             .map_err(|e| format!("invalid OfxImageEffectActionRender CString: {e}"))?;
         let status = unsafe {
@@ -499,6 +534,7 @@ impl LoadedOfxPlugin {
                 std::ptr::null_mut(),
             )
         };
+        ACTIVE_OFX_IMAGES.with(|c| c.set((0, 0)));
         if status != 0 {
             return Err(format!(
                 "OfxImageEffectActionRender failed with status {status}"
