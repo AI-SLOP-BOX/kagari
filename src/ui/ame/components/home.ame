@@ -14,14 +14,20 @@ component HomeHero() {
 component HeroNewProjectAction() {
     ZStack {
       Svg("<svg xmlns='http://www.w3.org/2000/svg' width='171' height='38' viewBox='0 0 171 38'><rect x='.5' y='.5' width='170' height='37' rx='9' fill='#f58c4b'/></svg>", 171, 38)
-      HStack(spacing: 8) { AssetImage("kagari.home.plus", 1, 18, 18) Text("新規プロジェクト", size: 14) }
+      HStack(spacing: 8) {
+        Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#11161a' stroke-width='2.4' stroke-linecap='round'><path d='M12 5v14M5 12h14'/></svg>", 16, 16)
+        Text("新規プロジェクト", size: 14).weight(bold)
+      }
       Positioned(left: 0, right: 0, top: 0, bottom: 0) { Button("", action: new_project, tone: secondary).opacity(nav_hitbox_opacity) }}
   }
 
 component HeroOpenProjectAction() {
     ZStack {
       Svg("<svg xmlns='http://www.w3.org/2000/svg' width='176' height='38' viewBox='0 0 176 38'><rect x='.5' y='.5' width='175' height='37' rx='9' fill='#0d1215' stroke='#30363c'/></svg>", 176, 38)
-      HStack(spacing: 8) { AssetImage("kagari.home.open", 1, 18, 18) Text("プロジェクトを開く", size: 14) }
+      HStack(spacing: 8) {
+        Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#d8dee4' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/></svg>", 16, 16)
+        Text("プロジェクトを開く", size: 14)
+      }
       Positioned(left: 0, right: 0, top: 0, bottom: 0) { Button("", action: open_project, tone: secondary).opacity(nav_hitbox_opacity) }}
   }
 
