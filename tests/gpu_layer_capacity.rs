@@ -1,3 +1,5 @@
+#![cfg(feature = "wgpu")]
+
 use std::sync::Arc;
 
 use kagari_vfx::core::renderer::WgpuRenderer;
