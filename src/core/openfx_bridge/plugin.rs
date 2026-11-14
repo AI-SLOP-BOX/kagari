@@ -55,6 +55,44 @@ impl OpenFxPluginBridge {
     }
 }
 
+#[repr(C)]
+pub struct OfxHost {
+    pub host: *mut OfxPropertySet,
+    pub fetch_suite: Option<
+        unsafe extern "C" fn(
+            host: *mut OfxPropertySet,
+            suite_name: *const std::ffi::c_char,
+            suite_version: std::ffi::c_int,
+        ) -> *const std::ffi::c_void,
+    >,
+}
+
+#[repr(C)]
+pub struct OfxPlugin {
+    pub plugin_api: *const std::ffi::c_char,
+    pub api_version: std::ffi::c_int,
+    pub plugin_identifier: *const std::ffi::c_char,
+    pub plugin_version_major: std::ffi::c_uint,
+    pub plugin_version_minor: std::ffi::c_uint,
+    pub set_host: Option<unsafe extern "C" fn(host: *mut OfxHost)>,
+    pub main_entry: Option<
+        unsafe extern "C" fn(
+            action: *const std::ffi::c_char,
+            handle: *const std::ffi::c_void,
+            in_args: *mut OfxPropertySet,
+            out_args: *mut OfxPropertySet,
+        ) -> std::ffi::c_int,
+    >,
+}
+
+unsafe extern "C" fn kagari_fetch_suite(
+    _host: *mut OfxPropertySet,
+    _suite_name: *const std::ffi::c_char,
+    _suite_version: std::ffi::c_int,
+) -> *const std::ffi::c_void {
+    std::ptr::null()
+}
+
 /// A third-party plugin whose binary is held open for its lifetime.
 pub struct LoadedOfxPlugin {
     pub name: String,
@@ -62,13 +100,67 @@ pub struct LoadedOfxPlugin {
     /// Per-instance property sets the plugin may have requested during Load.
     #[allow(clippy::vec_box)]
     instance_props: Vec<Box<OfxPropertySet>>,
+    #[allow(dead_code)]
+    host: Box<OfxHost>,
 }
 
 impl LoadedOfxPlugin {
-    /// Attaching third-party plugins is disabled until the required OFX host
-    /// and image-effect suites are implemented against the official C ABI.
-    pub fn attach(_path: &Path, _name: &str) -> Result<Self, String> {
-        Err("OpenFX execution is unavailable: the required host suites are not implemented".into())
+    /// Load an OpenFX `.ofx` dynamic library, locate its `OfxPlugin` entry,
+    /// attach the Kagari `OfxHost`, and invoke `OfxActionLoad`.
+    pub fn attach(path: &Path, name: &str) -> Result<Self, String> {
+        let library = unsafe { libloading::Library::new(path) }
+            .map_err(|e| format!("failed to load OpenFX library {}: {e}", path.display()))?;
+        let get_count: libloading::Symbol<unsafe extern "C" fn() -> std::ffi::c_int> =
+            unsafe { library.get(b"OfxGetNumberOfPlugins\0") }
+                .map_err(|e| format!("missing OfxGetNumberOfPlugins: {e}"))?;
+        let get_plugin: libloading::Symbol<
+            unsafe extern "C" fn(nth: std::ffi::c_int) -> *const OfxPlugin,
+        > = unsafe { library.get(b"OfxGetPlugin\0") }
+            .map_err(|e| format!("missing OfxGetPlugin: {e}"))?;
+
+        let count = unsafe { get_count() };
+        if count <= 0 {
+            return Err("OpenFX binary reported 0 plugins".into());
+        }
+        let plugin_ptr = unsafe { get_plugin(0) };
+        if plugin_ptr.is_null() {
+            return Err("OfxGetPlugin(0) returned null".into());
+        }
+
+        let mut host_props = Box::new(OfxPropertySet::new());
+        let host_props_ptr = host_props.as_mut() as *mut OfxPropertySet;
+        register_property_set_handle(host_props_ptr);
+        let mut host = Box::new(OfxHost {
+            host: host_props_ptr,
+            fetch_suite: Some(kagari_fetch_suite),
+        });
+        let host_ptr = host.as_mut() as *mut OfxHost;
+
+        unsafe {
+            if let Some(set_host) = (*plugin_ptr).set_host {
+                set_host(host_ptr);
+            }
+            if let Some(main_entry) = (*plugin_ptr).main_entry {
+                let action = cstr("OfxActionLoad");
+                let status = main_entry(
+                    action.as_ptr(),
+                    std::ptr::null(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                );
+                if status != 0 {
+                    unregister_property_set_handle(host_props_ptr);
+                    return Err(format!("OfxActionLoad failed with status {status}"));
+                }
+            }
+        }
+
+        Ok(Self {
+            name: name.to_string(),
+            library,
+            instance_props: vec![host_props],
+            host,
+        })
     }
 
     /// Allocate an instance property set owned by this plugin session.
