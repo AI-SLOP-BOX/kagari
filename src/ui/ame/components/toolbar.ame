@@ -1,8 +1,7 @@
 component ToolBar() {
-    Card {
-      Padding(horizontal: 6, vertical: 4) {
-        VStack(spacing: 4) {
-        HStack(spacing: 8) {
+    Padding(horizontal: 6, vertical: 3) {
+      VStack(spacing: 4) {
+        HStack(spacing: 6) {
           HStack(spacing: 2) {
             If(selected_tool == "Selection") { Button("選択", action: tool_select, tone: primary, size: small) } else { Button("選択", action: tool_select, tone: secondary, size: small) }
             If(selected_tool == "Hand") { Button("手", action: tool_hand, tone: primary, size: small) } else { Button("手", action: tool_hand, tone: secondary, size: small) }
@@ -12,22 +11,20 @@ component ToolBar() {
             IconButton("edit", action: tool_pen, tone: secondary, size: small)
             If(selected_tool_roto) { Button("ロト", action: tool_roto, tone: primary, size: small) } else { Button("ロト", action: tool_roto, tone: secondary, size: small) }
           }
-          Spacer
-          HStack(spacing: 6) {
-            If(compact) { IconButton("undo", action: undo_project, tone: secondary, size: small, disabled: !can_undo) } else { Button("戻す", action: undo_project, tone: secondary, size: small, disabled: !can_undo) }
-            If(compact) { IconButton("redo", action: redo_project, tone: secondary, size: small, disabled: !can_redo) } else { Button("やり直す", action: redo_project, tone: secondary, size: small, disabled: !can_redo) }
-            If(compact) { IconButton("effect", action: add_adjustment_layer, tone: secondary, size: small) } else { Button("調整", action: add_adjustment_layer, tone: secondary, size: small) }
-            If(compact) { IconButton("particle", action: add_particle_layer, tone: secondary, size: small) } else { Button("粒子", action: add_particle_layer, tone: secondary, size: small) }
-            Caption("{selected_tool_label}ツール")
-            If(roto_analysis_busy) { Button("ロト処理を中止", action: roto_cancel, tone: secondary, size: small) }
+          HStack(spacing: 2) {
+            IconButton("undo", action: undo_project, tone: secondary, size: small, disabled: !can_undo)
+            IconButton("redo", action: redo_project, tone: secondary, size: small, disabled: !can_redo)
+            IconButton("effect", action: add_adjustment_layer, tone: secondary, size: small)
+            IconButton("particle", action: add_particle_layer, tone: secondary, size: small)
+            If(roto_analysis_busy) { Button("ロト中止", action: roto_cancel, tone: secondary, size: small) }
           }
           Spacer
-          If(compact) { HorizontalScrollView(220) { WorkspaceTabs() } } else { HorizontalScrollView(400) { WorkspaceTabs() } }
+          If(compact) { HorizontalScrollView(240) { WorkspaceTabs() } } else { HorizontalScrollView(440) { WorkspaceTabs() } }
           Spacer
-          HStack(spacing: 4) {
+          HStack(spacing: 2) {
             If(is_playing) { IconButton("pause", action: play_toggle, tone: primary, size: small) } else { IconButton("play", action: play_toggle, tone: secondary, size: small) }
-            If(playback_loop) { IconButton("repeat", action: toggle_playback_loop, tone: primary, size: small) } else { IconButton("repeat", action: toggle_playback_loop, tone: secondary, size: small) }
             IconButton("stop", action: play_stop, tone: secondary, size: small)
+            If(playback_loop) { IconButton("repeat", action: toggle_playback_loop, tone: primary, size: small) } else { IconButton("repeat", action: toggle_playback_loop, tone: secondary, size: small) }
           }
         }
         If(selected_tool_roto) {
@@ -44,7 +41,6 @@ component ToolBar() {
           }
         }
       }
-    }
     }
   }
 
