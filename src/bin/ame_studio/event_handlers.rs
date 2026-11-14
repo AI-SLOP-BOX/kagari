@@ -290,11 +290,7 @@ impl AfterEffectsStudio {
             {
                 self.workspace_vertical_ratios[self.workspace.index()] = value.clamp(0.20, 0.80);
             }
-            ("sidebar_vertical_resized", Some(ActionValue::Number(value)))
-                if value.is_finite() =>
-            {
-                runtime.set_state("sidebar_vertical_ratio", Value::Float(value.clamp(0.18, 0.82)));
-            }
+            ("sidebar_vertical_resized", Some(ActionValue::Number(_value))) => {}
             ("workspace_reset_layout", _) => {
                 let index = self.workspace.index();
                 self.workspace_left_ratios[index] = WORKSPACE_LEFT_DEFAULTS[index];
