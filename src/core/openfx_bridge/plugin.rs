@@ -65,7 +65,7 @@ impl OpenFxPluginBridge {
             return OfxStatus::Failed;
         };
         match plugin.render(&mut req) {
-            Ok(()) => OfxStatus::Ok,
+            Ok(()) => OfxStatus::OK,
             Err(_) => OfxStatus::Failed,
         }
     }
