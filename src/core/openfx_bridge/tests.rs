@@ -266,5 +266,26 @@ mod tests {
         };
         assert_eq!(rc, 0);
         assert_eq!(sum.load(std::sync::atomic::Ordering::Relaxed), 1 + 2 + 3 + 4);
+
+        let msg_ptr = unsafe {
+            crate::core::openfx_bridge::plugin::kagari_fetch_suite(
+                std::ptr::null_mut(),
+                b"OfxMessageSuite\0".as_ptr().cast(),
+                2,
+            )
+        };
+        assert!(!msg_ptr.is_null());
+        let msg_suite =
+            unsafe { &*(msg_ptr as *const crate::core::openfx_bridge::plugin::OfxMessageSuiteV2) };
+        let rc = unsafe {
+            (msg_suite.message)(
+                std::ptr::null_mut(),
+                b"OfxMessageLog\0".as_ptr().cast(),
+                b"test.id\0".as_ptr().cast(),
+                b"OpenFX message suite OK\0".as_ptr().cast(),
+            )
+        };
+        assert_eq!(rc, 0);
+        assert_eq!(unsafe { (msg_suite.clear_persistent_message)(std::ptr::null_mut()) }, 0);
     }
 }

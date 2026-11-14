@@ -605,6 +605,74 @@ static MULTI_THREAD_SUITE_V1: OfxMultiThreadSuiteV1 = OfxMultiThreadSuiteV1 {
     mutex_try_lock: ofx_mutex_try_lock,
 };
 
+#[repr(C)]
+pub struct OfxMessageSuiteV2 {
+    pub message: unsafe extern "C" fn(
+        handle: *mut std::ffi::c_void,
+        message_type: *const std::ffi::c_char,
+        message_id: *const std::ffi::c_char,
+        format: *const std::ffi::c_char,
+    ) -> std::ffi::c_int,
+    pub set_persistent_message: unsafe extern "C" fn(
+        handle: *mut std::ffi::c_void,
+        message_type: *const std::ffi::c_char,
+        message_id: *const std::ffi::c_char,
+        format: *const std::ffi::c_char,
+    ) -> std::ffi::c_int,
+    pub clear_persistent_message:
+        unsafe extern "C" fn(handle: *mut std::ffi::c_void) -> std::ffi::c_int,
+}
+
+unsafe extern "C" fn ofx_message(
+    _handle: *mut std::ffi::c_void,
+    message_type: *const std::ffi::c_char,
+    message_id: *const std::ffi::c_char,
+    format: *const std::ffi::c_char,
+) -> std::ffi::c_int {
+    let kind = if message_type.is_null() {
+        "OfxMessageLog".to_string()
+    } else {
+        unsafe { cstr(message_type) }.unwrap_or_else(|| "OfxMessageLog".to_string())
+    };
+    let id = if message_id.is_null() {
+        String::new()
+    } else {
+        unsafe { cstr(message_id) }.unwrap_or_default()
+    };
+    let msg = if format.is_null() {
+        String::new()
+    } else {
+        unsafe { cstr(format) }.unwrap_or_default()
+    };
+    match kind.as_str() {
+        "OfxMessageError" | "OfxMessageFatal" => log::error!("[OpenFX:{id}] {msg}"),
+        "OfxMessageWarning" => log::warn!("[OpenFX:{id}] {msg}"),
+        _ => log::info!("[OpenFX:{id}] {msg}"),
+    }
+    super::K_OFX_STAT_OK
+}
+
+unsafe extern "C" fn ofx_set_persistent_message(
+    handle: *mut std::ffi::c_void,
+    message_type: *const std::ffi::c_char,
+    message_id: *const std::ffi::c_char,
+    format: *const std::ffi::c_char,
+) -> std::ffi::c_int {
+    unsafe { ofx_message(handle, message_type, message_id, format) }
+}
+
+unsafe extern "C" fn ofx_clear_persistent_message(
+    _handle: *mut std::ffi::c_void,
+) -> std::ffi::c_int {
+    super::K_OFX_STAT_OK
+}
+
+static MESSAGE_SUITE_V2: OfxMessageSuiteV2 = OfxMessageSuiteV2 {
+    message: ofx_message,
+    set_persistent_message: ofx_set_persistent_message,
+    clear_persistent_message: ofx_clear_persistent_message,
+};
+
 pub(crate) unsafe extern "C" fn kagari_fetch_suite(
     _host: *mut OfxPropertySet,
     suite_name: *const std::ffi::c_char,
@@ -627,6 +695,9 @@ pub(crate) unsafe extern "C" fn kagari_fetch_suite(
     }
     if name == "OfxMultiThreadSuite" && suite_version == 1 {
         return (&raw const MULTI_THREAD_SUITE_V1).cast();
+    }
+    if name == "OfxMessageSuite" && (suite_version == 1 || suite_version == 2) {
+        return (&raw const MESSAGE_SUITE_V2).cast();
     }
     std::ptr::null()
 }
