@@ -153,13 +153,22 @@ component CompositionViewerPanel() {
     If(preview_worker_failed) { Caption("プレビュー処理が停止しました。アプリを再起動してください。") }
     HStack(spacing: 4) {
       Icon("grid", 12)
-      Caption("{composition_name}")
       Button("グリッド", action: setting_grid_visible_changed, tone: secondary, size: small)
       Button("セーフ", action: setting_safe_area_changed, tone: secondary, size: small)
       Button("{viewport_channel_mode}", action: viewport_cycle_channel, tone: secondary, size: small)
       Button("{viewport_exposure_label}", action: viewport_cycle_exposure, tone: secondary, size: small)
       If(viewport_wipe_enabled) { Button("A/B", action: viewport_toggle_wipe, tone: primary, size: small) } else { Button("A/B", action: viewport_toggle_wipe, tone: secondary, size: small) }
       Spacer
+      HStack(spacing: 2) {
+        IconButton("step_prev", action: step_prev, tone: secondary, size: small)
+        If(is_playing) { IconButton("pause", action: play_toggle, tone: primary, size: small) } else { IconButton("play", action: play_toggle, tone: secondary, size: small) }
+        IconButton("stop", action: play_stop, tone: secondary, size: small)
+        IconButton("step_next", action: step_next, tone: secondary, size: small)
+        If(playback_loop) { IconButton("repeat", action: toggle_playback_loop, tone: primary, size: small) } else { IconButton("repeat", action: toggle_playback_loop, tone: secondary, size: small) }
+      }
+      Spacer
+      Caption("{composition_name}")
+      Caption("·")
       Caption("{status_resolution}")
       Caption("·")
       Caption("{fps_label}")
