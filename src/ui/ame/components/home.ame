@@ -1,6 +1,6 @@
 component HomeHero() {
     VStack(spacing: 12) {
-      AssetImage("kagari.logo", 1, 72, 72)
+      AssetImage("kagari.logo", 1, 72, 72).material(HeroBloom)
       Text("Kagari", size: 32).weight(bold)
       Caption("VFX・コンポジット・モーショングラフィックスの制作を始めましょう。")
       HStack(spacing: 14) {
@@ -20,7 +20,7 @@ component HeroNewProjectAction() {
           Text("新規プロジェクト", size: 14).weight(bold)
         }
       }
-      Positioned(left: 0, right: 0, top: 0, bottom: 0) { Button("", action: new_project, tone: secondary).opacity(nav_hitbox_opacity) }}
+      Positioned(left: 0, right: 0, top: 0, bottom: 0) { Button("", action: new_project, tone: secondary).opacity(nav_hitbox_opacity) }}.material(AccentBorder)
   }
 
 component HeroOpenProjectAction() {
