@@ -135,5 +135,5 @@ component HomeFooter() {
           Caption("v0.3.0")
         }
       }
-    }
+    }.material(HomeMeshBg)
   }
