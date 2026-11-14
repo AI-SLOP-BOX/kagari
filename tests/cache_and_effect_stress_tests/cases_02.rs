@@ -29,8 +29,11 @@ fn parallel_render_mfr_survives_concurrent_cancel_without_overcounting() {
     queue.render_all_mfr_with_external_cancel(&external_cancel, move |_, _| {
         if !callback_started_once.swap(true, Ordering::SeqCst) {
             callback_barrier.wait();
+            while !external_cancel.load(Ordering::SeqCst) {
+                thread::yield_now();
+            }
         }
-        thread::yield_now();
+        thread::sleep(std::time::Duration::from_millis(1));
         vec![0u8; 4]
     });
     canceller.join().unwrap();
