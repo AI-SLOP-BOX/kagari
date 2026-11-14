@@ -311,12 +311,45 @@ pub struct OfxParamSuiteV1 {
     ) -> std::ffi::c_int,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OfxParamDesc {
+    pub name: String,
+    pub param_type: String,
+}
+
+fn defined_ofx_params() -> &'static std::sync::Mutex<Vec<OfxParamDesc>> {
+    static PARAMS: std::sync::OnceLock<std::sync::Mutex<Vec<OfxParamDesc>>> =
+        std::sync::OnceLock::new();
+    PARAMS.get_or_init(|| std::sync::Mutex::new(Vec::new()))
+}
+
+/// Return all OpenFX parameters registered via `OfxParamSuiteV1::paramDefine`.
+pub fn list_defined_ofx_params() -> Vec<OfxParamDesc> {
+    let guard = match defined_ofx_params().lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    guard.clone()
+}
+
 unsafe extern "C" fn ofx_param_define(
     _param_set: *const std::ffi::c_void,
-    _param_type: *const std::ffi::c_char,
-    _name: *const std::ffi::c_char,
+    param_type: *const std::ffi::c_char,
+    name: *const std::ffi::c_char,
     _property_set: *mut *mut OfxPropertySet,
 ) -> std::ffi::c_int {
+    if let (Some(pt), Some(n)) = (unsafe { cstr(param_type) }, unsafe { cstr(name) }) {
+        let mut guard = match defined_ofx_params().lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        if !guard.iter().any(|p| p.name == n) {
+            guard.push(OfxParamDesc {
+                name: n.to_string(),
+                param_type: pt.to_string(),
+            });
+        }
+    }
     0
 }
 
