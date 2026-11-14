@@ -445,6 +445,7 @@ fn test_legacy_snapshot_without_metadata_is_listed_and_loadable() {
     assert!(mgr.load_snapshot_at(&gens[0].path).is_some());
 
     // Corrupt slot must not appear in the generation list.
+    let _ = std::fs::create_dir_all(&dir);
     std::fs::write(dir.join("recovery_1.json"), "{\"compositions\": [").unwrap();
     assert_eq!(mgr.list_generations().len(), 1);
     let _ = std::fs::remove_dir_all(&dir);
