@@ -23,8 +23,8 @@ component GraphEditorPanel() {
         }
       }
       Spacer
-      Button("キー追加", action: graph_add_keyframe, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
-      Button("キー削除", action: graph_remove_keyframe, tone: destructive, size: small, disabled: !selected_layer || selected_layer_locked)
+      IconButton("add", action: graph_add_keyframe, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+      IconButton("trash", action: graph_remove_keyframe, tone: destructive, size: small, disabled: !selected_layer || selected_layer_locked)
     }
     Wrap(item_spacing: 4, line_spacing: 4) {
       Button("補間: {graph_interpolation_label}", action: graph_cycle_interpolation, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
