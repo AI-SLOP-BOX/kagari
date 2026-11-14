@@ -374,6 +374,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     } else if (globals.channel_mode == 5u) {
         let luma = dot(final_color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
         final_color = vec4<f32>(vec3<f32>(luma), 1.0);
+    } else if (globals.channel_mode == 6u) {
+        let stripe = step(0.5, fract((in.clip_position.x + in.clip_position.y) * 0.08));
+        if (any(final_color.rgb > vec3<f32>(1.0))) {
+            final_color = vec4<f32>(mix(final_color.rgb, vec3<f32>(1.0, 0.15, 0.15), stripe * 0.75), 1.0);
+        } else if (any(final_color.rgb < vec3<f32>(0.0))) {
+            final_color = vec4<f32>(mix(final_color.rgb, vec3<f32>(0.15, 0.45, 1.0), stripe * 0.75), 1.0);
+        }
     }
 
     if (globals.wipe_split_x > 0.0 && (in.clip_position.x / max(globals.viewport_size.x, 1.0)) < globals.wipe_split_x) {
