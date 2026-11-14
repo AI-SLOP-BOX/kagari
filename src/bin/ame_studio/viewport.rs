@@ -339,12 +339,76 @@ impl AfterEffectsStudio {
                 let left_clip = Rect::new(left, top, split_x, top + draw_height);
                 scene.push_clip_layer(Fill::NonZero, Affine::IDENTITY, &left_clip);
                 scene.draw_image(&image, transform);
-                scene.pop_layer();
+                let hud_border = Color::from_rgba8(255, 255, 255, 24);
+        scene.stroke(
+            &Stroke::new(1.0),
+            Affine::IDENTITY,
+            hud_border,
+            None,
+            &Rect::new(x + 0.5, y + 0.5, x + width - 0.5, y + height - 0.5),
+        );
+        let corner = 10.0;
+        let bracket_color = Color::from_rgba8(255, 255, 255, 55);
+        for (cx, cy, dx, dy) in [
+            (x + 8.5, y + 8.5, 1.0, 1.0),
+            (x + width - 8.5, y + 8.5, -1.0, 1.0),
+            (x + 8.5, y + height - 8.5, 1.0, -1.0),
+            (x + width - 8.5, y + height - 8.5, -1.0, -1.0),
+        ] {
+            scene.stroke(
+                &Stroke::new(1.2),
+                Affine::IDENTITY,
+                bracket_color,
+                None,
+                &Line::new((cx, cy), (cx + corner * dx, cy)),
+            );
+            scene.stroke(
+                &Stroke::new(1.2),
+                Affine::IDENTITY,
+                bracket_color,
+                None,
+                &Line::new((cx, cy), (cx, cy + corner * dy)),
+            );
+        }
+
+        scene.pop_layer();
 
                 let right_clip = Rect::new(split_x, top, left + draw_width, top + draw_height);
                 scene.push_clip_layer(Fill::NonZero, Affine::IDENTITY, &right_clip);
                 scene.draw_image(draw_img, transform);
-                scene.pop_layer();
+                let hud_border = Color::from_rgba8(255, 255, 255, 24);
+        scene.stroke(
+            &Stroke::new(1.0),
+            Affine::IDENTITY,
+            hud_border,
+            None,
+            &Rect::new(x + 0.5, y + 0.5, x + width - 0.5, y + height - 0.5),
+        );
+        let corner = 10.0;
+        let bracket_color = Color::from_rgba8(255, 255, 255, 55);
+        for (cx, cy, dx, dy) in [
+            (x + 8.5, y + 8.5, 1.0, 1.0),
+            (x + width - 8.5, y + 8.5, -1.0, 1.0),
+            (x + 8.5, y + height - 8.5, 1.0, -1.0),
+            (x + width - 8.5, y + height - 8.5, -1.0, -1.0),
+        ] {
+            scene.stroke(
+                &Stroke::new(1.2),
+                Affine::IDENTITY,
+                bracket_color,
+                None,
+                &Line::new((cx, cy), (cx + corner * dx, cy)),
+            );
+            scene.stroke(
+                &Stroke::new(1.2),
+                Affine::IDENTITY,
+                bracket_color,
+                None,
+                &Line::new((cx, cy), (cx, cy + corner * dy)),
+            );
+        }
+
+        scene.pop_layer();
 
                 scene.stroke(
                     &Stroke::new(1.5),
@@ -476,6 +540,38 @@ impl AfterEffectsStudio {
                 frame_index,
             },
         );
+
+        let hud_border = Color::from_rgba8(255, 255, 255, 24);
+        scene.stroke(
+            &Stroke::new(1.0),
+            Affine::IDENTITY,
+            hud_border,
+            None,
+            &Rect::new(x + 0.5, y + 0.5, x + width - 0.5, y + height - 0.5),
+        );
+        let corner = 10.0;
+        let bracket_color = Color::from_rgba8(255, 255, 255, 55);
+        for (cx, cy, dx, dy) in [
+            (x + 8.5, y + 8.5, 1.0, 1.0),
+            (x + width - 8.5, y + 8.5, -1.0, 1.0),
+            (x + 8.5, y + height - 8.5, 1.0, -1.0),
+            (x + width - 8.5, y + height - 8.5, -1.0, -1.0),
+        ] {
+            scene.stroke(
+                &Stroke::new(1.2),
+                Affine::IDENTITY,
+                bracket_color,
+                None,
+                &Line::new((cx, cy), (cx + corner * dx, cy)),
+            );
+            scene.stroke(
+                &Stroke::new(1.2),
+                Affine::IDENTITY,
+                bracket_color,
+                None,
+                &Line::new((cx, cy), (cx, cy + corner * dy)),
+            );
+        }
 
         scene.pop_layer();
     }
