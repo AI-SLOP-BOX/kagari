@@ -25,9 +25,10 @@ component AppBar() {
                 Caption("{project_summary}")
                 Spacer
                 Caption("{save_status}")
+                Button("保存", action: save_project, tone: primary, size: small)
+                Button("書き出し", action: go_export, tone: secondary, size: small)
               }
             }
-            HStack(spacing: 6) { Button("保存", action: save_project, tone: primary, size: small) Button("書き出し", action: go_export, tone: secondary, size: small) }
           }
           Spacer
           IconButton("settings", action: go_settings, tone: secondary, size: small)
