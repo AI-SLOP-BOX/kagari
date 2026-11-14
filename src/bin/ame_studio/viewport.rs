@@ -333,39 +333,19 @@ impl AfterEffectsStudio {
                 };
             let draw_img = filtered_image.as_ref().unwrap_or(&image);
             if self.viewport_wipe_enabled {
-                use rayon::prelude::*;
-                let w = draw_img.width as usize;
-                let h = draw_img.height as usize;
-                let split_col = w / 2;
-                let raw_src = image.data.data();
-                let filt_src = draw_img.data.data();
-                let row_bytes = w * 4;
-                let mid_bytes = split_col * 4;
-                let mut split_dst = vec![0u8; h * row_bytes];
-                split_dst
-                    .par_chunks_exact_mut(row_bytes)
-                    .enumerate()
-                    .for_each(|(row, out_row)| {
-                        let row_off = row * row_bytes;
-                        let end = row_off + row_bytes;
-                        if end <= raw_src.len() && end <= filt_src.len() {
-                            out_row[..mid_bytes].copy_from_slice(&raw_src[row_off..row_off + mid_bytes]);
-                            out_row[mid_bytes..].copy_from_slice(&filt_src[row_off + mid_bytes..end]);
-                        }
-                    });
-                let wipe_img = vello::peniko::ImageData {
-                    data: vello::peniko::Blob::from(split_dst),
-                    format: draw_img.format,
-                    alpha_type: draw_img.alpha_type,
-                    width: draw_img.width,
-                    height: draw_img.height,
-                };
-                scene.draw_image(
-                    &wipe_img,
-                    Affine::translate((left, top))
-                        * Affine::scale_non_uniform(fit * pixel_aspect, fit),
-                );
                 let split_x = (left + draw_width * 0.5).round() + 0.5;
+                let transform = Affine::translate((left, top))
+                    * Affine::scale_non_uniform(fit * pixel_aspect, fit);
+                let left_clip = Rect::new(left, top, split_x, top + draw_height);
+                scene.push_clip_layer(Fill::NonZero, Affine::IDENTITY, &left_clip);
+                scene.draw_image(&image, transform);
+                scene.pop_layer();
+
+                let right_clip = Rect::new(split_x, top, left + draw_width, top + draw_height);
+                scene.push_clip_layer(Fill::NonZero, Affine::IDENTITY, &right_clip);
+                scene.draw_image(draw_img, transform);
+                scene.pop_layer();
+
                 scene.stroke(
                     &Stroke::new(1.5),
                     Affine::IDENTITY,
