@@ -142,6 +142,8 @@
   bind viewport_channel_mode: String = "RGBA";
   bind viewport_exposure_label: String = "0EV";
   bind viewport_wipe_enabled: Bool = false;
+  bind has_ofx_params: Bool = false;
+  bind ofx_param_items: List<OfxParamItem> = [];
   bind sidebar_vertical_ratio: Float = 0.38;
   bind is_audio_workspace: Bool = false;
   bind zoom: String = "20%";

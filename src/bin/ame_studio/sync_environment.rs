@@ -334,6 +334,21 @@ impl AfterEffectsStudio {
             .set_binding("viewport_exposure_label", Value::String(ev_label.to_string()))?;
         self.ui
             .set_binding("viewport_wipe_enabled", Value::Bool(self.viewport_wipe_enabled))?;
+        let ofx_params = kagari_vfx::core::openfx_bridge::list_defined_ofx_params();
+        self.ui
+            .set_binding("has_ofx_params", Value::Bool(!ofx_params.is_empty()))?;
+        let ofx_items = ofx_params
+            .into_iter()
+            .map(|p| {
+                let mut m = std::collections::BTreeMap::new();
+                m.insert("id".to_string(), Value::String(p.name.clone()));
+                m.insert("name".to_string(), Value::String(p.name));
+                m.insert("param_type".to_string(), Value::String(p.param_type));
+                Value::Record(m)
+            })
+            .collect();
+        self.ui
+            .set_binding("ofx_param_items", Value::List(ofx_items))?;
         for (name, workspace) in [
             ("is_default_workspace", Workspace::Default),
             ("is_composition_workspace", Workspace::Composition),

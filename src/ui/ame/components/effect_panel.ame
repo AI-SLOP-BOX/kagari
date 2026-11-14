@@ -5,7 +5,17 @@ component EffectPanel() {
         HStack(spacing: 8) {
           Text("エフェクト", size: 14)
           Spacer
-          If(selected_layer) { Button("ブラー", action: add_gaussian_blur, tone: secondary, size: small, disabled: selected_layer_locked) } else { Caption("レイヤー未選択") }
+          If(has_ofx_params) {
+          Caption("OpenFX パラメータ")
+          ForEach(ofx_param_items, param, key: id) {
+            HStack(spacing: 4) {
+              Caption("{param.name}")
+              Spacer
+              Caption("{param.param_type}")
+            }
+          }
+        }
+        If(selected_layer) { Button("ブラー", action: add_gaussian_blur, tone: secondary, size: small, disabled: selected_layer_locked) } else { Caption("レイヤー未選択") }
         }
         TextField(effect_search, "エフェクトを検索・追加", action: effect_search_changed)
         If(selected_layer && effect_search != "") {
@@ -22,6 +32,16 @@ component EffectPanel() {
             }
           } else {
             Caption("対応するエフェクトがありません。")
+          }
+        }
+        If(has_ofx_params) {
+          Caption("OpenFX パラメータ")
+          ForEach(ofx_param_items, param, key: id) {
+            HStack(spacing: 4) {
+              Caption("{param.name}")
+              Spacer
+              Caption("{param.param_type}")
+            }
           }
         }
         If(selected_layer) {
@@ -44,6 +64,16 @@ component EffectPanel() {
             Button("方向ぼかし", action: add_directional_blur, tone: secondary, size: small, disabled: selected_layer_locked)
             Button("Radial Blur", action: add_radial_blur, tone: secondary, size: small, disabled: selected_layer_locked)
             Button("Sharpen", action: add_sharpen, tone: secondary, size: small, disabled: selected_layer_locked)
+          }
+        }
+        If(has_ofx_params) {
+          Caption("OpenFX パラメータ")
+          ForEach(ofx_param_items, param, key: id) {
+            HStack(spacing: 4) {
+              Caption("{param.name}")
+              Spacer
+              Caption("{param.param_type}")
+            }
           }
         }
         If(selected_layer) {

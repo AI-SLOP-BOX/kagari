@@ -118,6 +118,11 @@
     name: String;
     selected: Bool;
   }
+  record OfxParamItem {
+    id: String;
+    name: String;
+    param_type: String;
+  }
   record MaskItem {
     id: String;
     name: String;
