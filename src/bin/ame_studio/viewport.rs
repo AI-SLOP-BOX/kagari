@@ -365,6 +365,14 @@ impl AfterEffectsStudio {
                     Affine::translate((left, top))
                         * Affine::scale_non_uniform(fit * pixel_aspect, fit),
                 );
+                let split_x = (left + draw_width * 0.5).round() + 0.5;
+                scene.stroke(
+                    &Stroke::new(1.5),
+                    Affine::IDENTITY,
+                    Color::from_rgba8(255, 255, 255, 210),
+                    None,
+                    &Line::new((split_x, top), (split_x, top + draw_height)),
+                );
             } else {
                 scene.draw_image(
                     draw_img,

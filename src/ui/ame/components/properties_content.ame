@@ -28,7 +28,7 @@ component LightProperties() {
 }
 
 component ParticleProperties() {
-  Card { Padding(6) { VStack(spacing: 5) {
+  Padding(4) { VStack(spacing: 4) {
     Caption("▎ パーティクルエミッター")
     HStack(spacing: 5) { MinWidth(92) { Caption("発生数 / 秒") } If(selected_layer_locked) { Caption("{emitter_rate}") } else { TextField(emitter_rate, "50", action: emitter_rate_changed) } }
     Caption("発生形状")
@@ -49,11 +49,11 @@ component ParticleProperties() {
     HStack(spacing: 5) { MinWidth(92) { Caption("風 (X)") } If(selected_layer_locked) { Caption("{emitter_wind_x}") } else { TextField(emitter_wind_x, "0", action: emitter_wind_x_changed) } }
     HStack(spacing: 5) { MinWidth(92) { Caption("乱流強度") } If(selected_layer_locked) { Caption("{emitter_turbulence}") } else { TextField(emitter_turbulence, "0", action: emitter_turbulence_changed) } }
     HStack(spacing: 5) { MinWidth(92) { Caption("空気抵抗") } If(selected_layer_locked) { Caption("{emitter_drag}") } else { TextField(emitter_drag, "0", action: emitter_drag_changed) } }
-  } } }
+  } }
 }
 
 component TextProperties() {
-  Card { Padding(6) { VStack(spacing: 5) {
+  Padding(4) { VStack(spacing: 4) {
     Caption("▎ テキスト")
     If(selected_layer_locked) { Caption("{text_content}") } else { TextArea(text_content, "テキストを入力", 92, action: text_content_changed) }
     HStack(spacing: 5) { MinWidth(72) { Caption("書体") } If(selected_layer_locked) { Caption("{text_font_family}") } else { TextField(text_font_family, "Inter", action: text_font_family_changed) } }
@@ -88,11 +88,11 @@ component TextProperties() {
       If(selected_text_on_path) { Button("有効", action: toggle_text_on_path, tone: primary, size: small, disabled: selected_layer_locked) } else { Button("無効", action: toggle_text_on_path, tone: secondary, size: small, disabled: selected_layer_locked) }
       If(has_layer_masks) { Caption("最初のマスクをパスに使用") } else { Caption("テキストレイヤーにマスクが必要です") }
     }
-  } } }
+  } }
 }
 
 component TextAnimatorProperties() {
-  Card { Padding(6) { VStack(spacing: 5) {
+  Padding(4) { VStack(spacing: 4) {
     Caption("▎ 文字アニメーター")
     If(text_animator_present) {
       If(text_animator_enabled) { Button("アニメーター ON", action: toggle_text_animator, tone: primary, size: small, disabled: selected_layer_locked) } else { Button("アニメーター OFF", action: toggle_text_animator, tone: secondary, size: small, disabled: selected_layer_locked) }
@@ -122,7 +122,7 @@ component TextAnimatorProperties() {
       Button("文字アニメーターを追加", action: toggle_text_animator, tone: secondary, size: small, disabled: selected_layer_locked)
       Caption("範囲セレクターで文字ごとの位置・拡大率・不透明度などを調整します。")
     }
-  } } }
+  } }
 }
 
 component TextWorkspacePanel() {
@@ -139,15 +139,15 @@ component TextWorkspacePanel() {
 }
 
 component AudioProperties() {
-  Card { Padding(6) { VStack(spacing: 5) {
+  Padding(4) { VStack(spacing: 4) {
     Caption("▎ 音声")
     HStack(spacing: 5) { MinWidth(72) { Caption("音量") } If(selected_layer_locked) { Caption("{audio_volume}") } else { TextField(audio_volume, "0.0", action: audio_volume_changed) } Caption("dB") If(audio_volume_keyframe_here) { Button("キーあり", action: keyframe_audio_volume, tone: secondary, size: small, disabled: selected_layer_locked) } else { Button("キー追加", action: keyframe_audio_volume, tone: secondary, size: small, disabled: selected_layer_locked) } }
     Caption("0 dB = 元の音量 · −48 dB = ほぼ無音 · 範囲 −48〜+12 dB")
-  } } }
+  } }
 }
 
 component VideoProperties() {
-  Card { Padding(6) { VStack(spacing: 5) {
+  Padding(4) { VStack(spacing: 4) {
     Caption("▎ 動画")
     HStack(spacing: 5) { MinWidth(72) { Caption("再生速度") } If(selected_layer_locked) { Caption("{video_speed}") } else { TextField(video_speed, "1.0", action: video_speed_changed) } Caption("×") }
     If(selected_time_remap) { Button("時間リマップを解除", action: toggle_video_time_remap, tone: secondary, size: small, disabled: selected_layer_locked) } else { Button("時間リマップを有効化", action: toggle_video_time_remap, tone: secondary, size: small, disabled: selected_layer_locked) }
@@ -163,11 +163,11 @@ component VideoProperties() {
     }
     Caption("{video_info}")
     Caption("0.05×〜10×")
-  } } }
+  } }
 }
 
 component ImageProperties() {
-  Card { Padding(6) { VStack(spacing: 5) {
+  Padding(4) { VStack(spacing: 4) {
     Caption("▎ 画像・動画素材")
     Caption("{image_info}")
     HStack(spacing: 5) {
@@ -175,11 +175,11 @@ component ImageProperties() {
       Button("画面を埋める", action: fill_selected_image_to_composition, tone: secondary, size: small, disabled: selected_layer_locked)
     }
     Caption("再生位置に位置・倍率を設定します。既存のキーフレームは保持されます。")
-  } } }
+  } }
 }
 
 component LayerProxyProperties() {
-  Card { Padding(6) { VStack(spacing: 5) {
+  Padding(4) { VStack(spacing: 4) {
     Caption("▎ レイヤープロキシ")
     If(selected_is_image || selected_is_video) {
       HStack(spacing: 5) {
@@ -201,11 +201,11 @@ component LayerProxyProperties() {
       Button("生成をキャンセル", action: cancel_layer_proxy_generation, tone: secondary, size: small)
     } else { If(!selected_is_image && !selected_is_video) { Caption("画像または動画レイヤーを選択するとプロキシを設定できます。") } else { Caption("{proxy_status}") } }
     Caption("プレビューを軽くし、最終書き出しでは元解像度を使用します。")
-  } } }
+  } }
 }
 
 component ShapeProperties() {
-  Card { Padding(6) { VStack(spacing: 5) {
+  Padding(4) { VStack(spacing: 4) {
     Caption("▎ シェイプ")
     If(selected_is_sized_shape) {
       HStack(spacing: 5) { MinWidth(72) { Caption("幅 (%)") } If(selected_layer_locked) { Caption("{shape_width}") } else { TextField(shape_width, "100", action: shape_width_changed) } IconButton("diamond", action: shape_width_keyframe, tone: secondary, size: small, disabled: selected_layer_locked) }
@@ -271,22 +271,22 @@ component ShapeProperties() {
       HStack(spacing: 5) { MinWidth(72) { Caption("終了不透明度") } If(selected_layer_locked) { Caption("{shape_repeater_end_opacity}") } else { TextField(shape_repeater_end_opacity, "100", action: shape_repeater_end_opacity_changed) } Caption("%") IconButton("diamond", action: shape_repeater_end_opacity_keyframe, tone: secondary, size: small, disabled: selected_layer_locked) }
       If(shape_repeater_composite_below) { Button("下に合成", action: toggle_shape_repeater_composite, tone: secondary, size: small, disabled: selected_layer_locked) } else { Button("上に合成", action: toggle_shape_repeater_composite, tone: secondary, size: small, disabled: selected_layer_locked) }
     }
-  } } }
+  } }
 }
 
 component SolidProperties() {
-  Card { Padding(6) { VStack(spacing: 5) {
+  Padding(4) { VStack(spacing: 4) {
     Caption("▎ 平面レイヤー")
     HStack(spacing: 5) { MinWidth(72) { Caption("色") } If(selected_layer_locked) { Caption("{solid_color}") } else { TextField(solid_color, "#20252A", action: solid_color_changed) } }
     Caption("平面はコンポジション全体を塗りつぶします。")
-  } } }
+  } }
 }
 
 component PreCompProperties() {
-  Card { Padding(6) { VStack(spacing: 5) {
+  Padding(4) { VStack(spacing: 4) {
     Caption("▎ プリコンポーズ")
     Caption("{precomp_source_summary}")
     If(precomp_collapse_transforms) { Button("変形を折りたたむ: ON", action: toggle_precomp_collapse_transforms, tone: secondary, size: small, disabled: selected_layer_locked) } else { Button("変形を折りたたむ: OFF", action: toggle_precomp_collapse_transforms, tone: secondary, size: small, disabled: selected_layer_locked) }
     Caption("内側のレイヤーを親コンポジションの変形空間へ展開して合成します。")
-  } } }
+  } }
 }
