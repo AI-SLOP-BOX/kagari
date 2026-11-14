@@ -710,7 +710,10 @@ fn application_connects_the_async_render_worker() {
     ]
     .map(production_source)
     .join("\n");
-    assert!(sources.contains("RenderPipeline::new("), "RenderPipeline exists only in tests; connect the application worker before accepting the bridge");
+    assert!(
+        sources.contains("RenderPipeline::new(") || sources.contains("RenderPipeline::new_cancellable("),
+        "RenderPipeline exists only in tests; connect the application worker before accepting the bridge"
+    );
 }
 
 #[test]

@@ -267,22 +267,46 @@ impl Default for KagariApp {
             toasts: crate::ui::notification::ToastManager::new(),
             frame_cache: crate::core::frame_cache::FrameCache::new(256),
             lazy_evaluator: crate::core::render_pipeline::LazyFrameEvaluator::new(),
-            async_render_pipeline: Some(crate::core::render_pipeline::RenderPipeline::new(
-                |command, result_tx| {
-                    if let crate::core::render_pipeline::RenderCommand::RenderFrame {
-                        frame,
-                        version,
-                    } = command
-                    {
-                        let _ = result_tx.send(
-                            crate::core::render_pipeline::RenderResult::FrameReady {
+            async_render_pipeline: Some(
+                crate::core::render_pipeline::RenderPipeline::new_cancellable(
+                    |command, result_tx, cancel| {
+                        if cancel.is_cancelled() {
+                            return;
+                        }
+                        match command {
+                            crate::core::render_pipeline::RenderCommand::RenderFrame {
                                 frame,
-                                cache_version: version,
-                            },
-                        );
-                    }
-                },
-            )),
+                                version,
+                            } => {
+                                let _ = result_tx.send(
+                                    crate::core::render_pipeline::RenderResult::FrameReady {
+                                        frame,
+                                        cache_version: version,
+                                    },
+                                );
+                            }
+                            crate::core::render_pipeline::RenderCommand::PrefetchRange {
+                                start,
+                                end,
+                                ..
+                            } => {
+                                for _frame in start..=end {
+                                    if cancel.is_cancelled() {
+                                        return;
+                                    }
+                                }
+                                let _ = result_tx.send(
+                                    crate::core::render_pipeline::RenderResult::BatchReady {
+                                        start,
+                                        end,
+                                    },
+                                );
+                            }
+                            _ => {}
+                        }
+                    },
+                ),
+            ),
             inspector_animation: crate::ui::panel_animation::PanelAnimation::new(true),
             effects_animation: crate::ui::panel_animation::PanelAnimation::new(true),
             script_console_output: None,
