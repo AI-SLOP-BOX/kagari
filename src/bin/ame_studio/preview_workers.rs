@@ -1,5 +1,37 @@
 use super::*;
 
+#[allow(dead_code)]
+fn headless_wgpu_renderer(
+) -> &'static std::sync::Mutex<Option<kagari_vfx::core::renderer::Renderer>> {
+    static RENDERER: std::sync::OnceLock<
+        std::sync::Mutex<Option<kagari_vfx::core::renderer::Renderer>>,
+    > = std::sync::OnceLock::new();
+    RENDERER.get_or_init(|| {
+        let instance = wgpu::Instance::default();
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        }))
+        .ok()?;
+        let (device, queue) = pollster::block_on(adapter.request_device(
+            &wgpu::DeviceDescriptor {
+                label: Some("kagari_preview_worker_gpu"),
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::default(),
+                memory_hints: wgpu::MemoryHints::Performance,
+                trace: wgpu::Trace::Off,
+            },
+        ))
+        .ok()?;
+        Some(kagari_vfx::core::renderer::Renderer::new(
+            std::sync::Arc::new(device),
+            std::sync::Arc::new(queue),
+        ))
+    })
+    .into()
+}
+
 pub(crate) type WaveformDecodeRequest = (String, u64);
 pub(crate) type WaveformDecodeResult = (String, u64, Option<CachedAudioWaveform>);
 const MAX_CACHED_AUDIO_WAVEFORMS: usize = 128;
@@ -457,6 +489,38 @@ impl AfterEffectsStudio {
 #[cfg(test)]
 mod viewport_preview_worker_tests {
     use super::*;
+
+#[allow(dead_code)]
+fn headless_wgpu_renderer(
+) -> &'static std::sync::Mutex<Option<kagari_vfx::core::renderer::Renderer>> {
+    static RENDERER: std::sync::OnceLock<
+        std::sync::Mutex<Option<kagari_vfx::core::renderer::Renderer>>,
+    > = std::sync::OnceLock::new();
+    RENDERER.get_or_init(|| {
+        let instance = wgpu::Instance::default();
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        }))
+        .ok()?;
+        let (device, queue) = pollster::block_on(adapter.request_device(
+            &wgpu::DeviceDescriptor {
+                label: Some("kagari_preview_worker_gpu"),
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::default(),
+                memory_hints: wgpu::MemoryHints::Performance,
+                trace: wgpu::Trace::Off,
+            },
+        ))
+        .ok()?;
+        Some(kagari_vfx::core::renderer::Renderer::new(
+            std::sync::Arc::new(device),
+            std::sync::Arc::new(queue),
+        ))
+    })
+    .into()
+}
 
     #[test]
     fn cancelled_preview_never_returns_a_partial_frame() {
