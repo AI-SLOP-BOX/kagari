@@ -356,5 +356,15 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         discard;
     }
 
+    if (globals.channel_mode == 1u) {
+        final_color = vec4<f32>(vec3<f32>(final_color.r), 1.0);
+    } else if (globals.channel_mode == 2u) {
+        final_color = vec4<f32>(vec3<f32>(final_color.g), 1.0);
+    } else if (globals.channel_mode == 3u) {
+        final_color = vec4<f32>(vec3<f32>(final_color.b), 1.0);
+    } else if (globals.channel_mode == 4u) {
+        final_color = vec4<f32>(vec3<f32>(final_color.a), 1.0);
+    }
+
     return final_color;
 }

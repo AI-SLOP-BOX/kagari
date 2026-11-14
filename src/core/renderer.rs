@@ -67,6 +67,8 @@ struct GlobalsUniform {
     lut_mode: u32,
     shadow_enabled: u32,
     shadow_strength: f32,
+    channel_mode: u32,
+    _pad_globals: u32,
 }
 
 /// Compile-time proof that LayerUniform is non-zero-sized, embedded directly
