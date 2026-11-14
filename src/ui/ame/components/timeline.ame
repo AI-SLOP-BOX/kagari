@@ -31,7 +31,7 @@ component TimelineRows() {
       }
       If(!has_timeline_layers) { Caption("該当レイヤーなし").frame(height: 28) }
     } }
-    Grow(1) { Canvas("kagari.timeline") }
+    Grow(1) { Canvas("kagari.timeline").frame(height: 420) }
   }
 }
 
