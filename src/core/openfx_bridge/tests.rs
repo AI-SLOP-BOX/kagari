@@ -187,4 +187,32 @@ mod tests {
         assert_eq!(set.get_string("OfxPropName", 0), Some("test"));
         unregister_property_set_handle(handle.cast());
     }
+
+    #[test]
+    fn test_param_suite_records_defined_parameters() {
+        let suite_ptr = unsafe {
+            crate::core::openfx_bridge::plugin::kagari_fetch_suite(
+                std::ptr::null_mut(),
+                b"OfxParamSuite\0".as_ptr().cast(),
+                1,
+            )
+        };
+        assert!(!suite_ptr.is_null());
+        let suite = unsafe { &*suite_ptr.cast::<OfxParamSuiteV1>() };
+        let rc = unsafe {
+            (suite.param_define)(
+                std::ptr::null(),
+                b"OfxParamTypeDouble\0".as_ptr().cast(),
+                b"blurRadius\0".as_ptr().cast(),
+                std::ptr::null_mut(),
+            )
+        };
+        assert_eq!(rc, 0);
+        let params = list_defined_ofx_params();
+        assert!(
+            params
+                .iter()
+                .any(|p| p.name == "blurRadius" && p.param_type == "OfxParamTypeDouble")
+        );
+    }
 }

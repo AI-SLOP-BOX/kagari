@@ -386,7 +386,7 @@ static PARAM_SUITE_V1: OfxParamSuiteV1 = OfxParamSuiteV1 {
     param_get_property_set: ofx_param_get_property_set,
 };
 
-unsafe extern "C" fn kagari_fetch_suite(
+pub(crate) unsafe extern "C" fn kagari_fetch_suite(
     _host: *mut OfxPropertySet,
     suite_name: *const std::ffi::c_char,
     suite_version: std::ffi::c_int,
