@@ -25,11 +25,12 @@ fn parallel_render_mfr_survives_concurrent_cancel_without_overcounting() {
     let callback_barrier = Arc::clone(&first_frame_started);
     let callback_started = Arc::new(AtomicBool::new(false));
     let callback_started_once = Arc::clone(&callback_started);
+    let cancel_for_callback = Arc::clone(&external_cancel);
 
     queue.render_all_mfr_with_external_cancel(&external_cancel, move |_, _| {
         if !callback_started_once.swap(true, Ordering::SeqCst) {
             callback_barrier.wait();
-            while !external_cancel.load(Ordering::SeqCst) {
+            while !cancel_for_callback.load(Ordering::SeqCst) {
                 thread::yield_now();
             }
         }
