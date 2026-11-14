@@ -1,5 +1,5 @@
 component AnimationPanel() {
-  Card { Padding(6) { VStack(spacing: 5) {
+  Padding(4) { VStack(spacing: 4) {
     HStack(spacing: 5) {
       Text("モーション", size: 14)
       Spacer
@@ -57,5 +57,5 @@ component AnimationPanel() {
         Caption("キーを選択してタイミングと補間を調整")
       }
     }
-  } } }
+  } }
 }
