@@ -1,9 +1,9 @@
 component GraphEditorPanel() {
   VStack(spacing: 4) {
-    HStack(spacing: 5) {
+    HStack(spacing: 4) {
       Caption("値カーブ")
       If(has_graph_channels) {
-        HorizontalScrollView(460) {
+        HorizontalScrollView(360) {
           HStack(spacing: 3) {
             ForEach(graph_channels, channel, key: id) {
               If(channel.selected) { Button("{channel.label}", action: graph_channel_select, tone: primary, size: small) } else { Button("{channel.label}", action: graph_channel_select, tone: secondary, size: small) }
@@ -14,7 +14,7 @@ component GraphEditorPanel() {
       Button("次へ", action: graph_channel_next, tone: secondary, size: small)
       If(graph_effect_channel) { Button("次のエフェクト値", action: graph_effect_parameter_next, tone: secondary, size: small) }
       If(graph_effect_channel) {
-        HorizontalScrollView(320) {
+        HorizontalScrollView(260) {
           HStack(spacing: 3) {
             ForEach(graph_parameter_items, parameter, key: id) {
               If(parameter.selected) { Button("{parameter.label}", action: graph_effect_parameter_select, tone: primary, size: small) } else { Button("{parameter.label}", action: graph_effect_parameter_select, tone: secondary, size: small) }
@@ -22,8 +22,11 @@ component GraphEditorPanel() {
           }
         }
       }
+      Spacer
       Button("キー追加", action: graph_add_keyframe, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
       Button("キー削除", action: graph_remove_keyframe, tone: destructive, size: small, disabled: !selected_layer || selected_layer_locked)
+    }
+    Wrap(item_spacing: 4, line_spacing: 4) {
       Button("補間: {graph_interpolation_label}", action: graph_cycle_interpolation, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
       Button("イージング (F9)", action: graph_set_easy_ease, tone: primary, size: small, disabled: !selected_layer || selected_layer_locked)
       Button("⤥ イーズイン", action: graph_set_ease_in, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
