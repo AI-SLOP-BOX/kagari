@@ -296,6 +296,7 @@ impl AfterEffectsStudio {
                 self.workspace_center_ratios[index] = WORKSPACE_CENTER_DEFAULTS[index];
                 self.workspace_vertical_ratios[index] = WORKSPACE_VERTICAL_DEFAULT;
             }
+            ("sidebar_vertical_resized", _) => {}
             ("viewport_cycle_channel", _) => {
                 self.viewport_channel_mode = match self.viewport_channel_mode.as_str() {
                     "RGBA" => "R",
