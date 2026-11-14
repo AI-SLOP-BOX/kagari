@@ -166,7 +166,7 @@ component TimelinePanel() {
               IconButton("arrow_left", action: timeline_pan_left, tone: secondary, size: small)
               IconButton("arrow_right", action: timeline_pan_right, tone: secondary, size: small)
               If(timeline_view_markers) { Button("マーカー", action: timeline_view_markers, tone: primary, size: small) } else { Button("マーカー", action: timeline_view_markers, tone: secondary, size: small) }
-              If(timeline_snap_enabled) { Button("スナップ", action: toggle_timeline_snap, tone: primary, size: small) } else { Button("スナップ", action: toggle_timeline_snap, tone: secondary, size: small) }
+              If(timeline_snap_enabled) { IconButton("magnet", action: toggle_timeline_snap, tone: primary, size: small) } else { IconButton("magnet", action: toggle_timeline_snap, tone: secondary, size: small) }
             }
           } else {
             HStack(spacing: 3) {
@@ -180,7 +180,7 @@ component TimelinePanel() {
               IconButton("arrow_up", action: move_layer_up, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
               IconButton("arrow_down", action: move_layer_down, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
               If(timeline_view_markers) { Button("マーカー", action: timeline_view_markers, tone: primary, size: small) } else { Button("マーカー", action: timeline_view_markers, tone: secondary, size: small) }
-              If(timeline_snap_enabled) { Button("スナップ", action: toggle_timeline_snap, tone: primary, size: small) } else { Button("スナップ", action: toggle_timeline_snap, tone: secondary, size: small) }
+              If(timeline_snap_enabled) { IconButton("magnet", action: toggle_timeline_snap, tone: primary, size: small) } else { IconButton("magnet", action: toggle_timeline_snap, tone: secondary, size: small) }
               Spacer
             }
           }
