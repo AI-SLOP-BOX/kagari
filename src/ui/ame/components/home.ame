@@ -14,9 +14,11 @@ component HomeHero() {
 component HeroNewProjectAction() {
     ZStack {
       Svg("<svg xmlns='http://www.w3.org/2000/svg' width='171' height='38' viewBox='0 0 171 38'><rect x='.5' y='.5' width='170' height='37' rx='9' fill='#f58c4b'/></svg>", 171, 38)
-      HStack(spacing: 8) {
-        Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#11161a' stroke-width='2.4' stroke-linecap='round'><path d='M12 5v14M5 12h14'/></svg>", 16, 16)
-        Text("新規プロジェクト", size: 14).weight(bold)
+      Center {
+        HStack(spacing: 8) {
+          Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#11161a' stroke-width='2.4' stroke-linecap='round'><path d='M12 5v14M5 12h14'/></svg>", 16, 16)
+          Text("新規プロジェクト", size: 14).weight(bold)
+        }
       }
       Positioned(left: 0, right: 0, top: 0, bottom: 0) { Button("", action: new_project, tone: secondary).opacity(nav_hitbox_opacity) }}
   }
@@ -24,9 +26,11 @@ component HeroNewProjectAction() {
 component HeroOpenProjectAction() {
     ZStack {
       Svg("<svg xmlns='http://www.w3.org/2000/svg' width='176' height='38' viewBox='0 0 176 38'><rect x='.5' y='.5' width='175' height='37' rx='9' fill='#0d1215' stroke='#30363c'/></svg>", 176, 38)
-      HStack(spacing: 8) {
-        Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#d8dee4' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/></svg>", 16, 16)
-        Text("プロジェクトを開く", size: 14)
+      Center {
+        HStack(spacing: 8) {
+          Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#d8dee4' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/></svg>", 16, 16)
+          Text("プロジェクトを開く", size: 14)
+        }
       }
       Positioned(left: 0, right: 0, top: 0, bottom: 0) { Button("", action: open_project, tone: secondary).opacity(nav_hitbox_opacity) }}
   }
@@ -43,6 +47,7 @@ component RecentCardsGrid() {
           Card {
             HStack(spacing: 0) {
               ZStack {
+                Svg("<svg xmlns='http://www.w3.org/2000/svg' width='300' height='169' viewBox='0 0 300 169'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0%' stop-color='#192027'/><stop offset='100%' stop-color='#0e1318'/></linearGradient></defs><rect width='300' height='169' fill='url(#g)'/><g transform='translate(132,66)' fill='none' stroke='#3e4a56' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='2' y='4' width='32' height='24' rx='3'/><path d='M10 4v24M26 4v24M2 12h8M2 20h8M26 12h8M26 20h8'/></g></svg>", 300, 169)
                 AssetImage("kagari.home.recent.1", 1, 300, 169)
                 Svg("<svg xmlns='http://www.w3.org/2000/svg' width='300' height='169' viewBox='0 0 300 169'><path d='M0 0H14A14 14 0 0 0 0 14Z M286 0H300V14A14 14 0 0 0 286 0Z M0 155V169H14A14 14 0 0 0 0 155Z M286 155V169H272A14 14 0 0 0 286 155Z' fill='#11161a'/></svg>", 300, 169)
               }
