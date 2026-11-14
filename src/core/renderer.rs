@@ -467,6 +467,87 @@ impl WgpuRenderer {
         )
     }
 
+    /// Render `comp` at `frame` on the GPU and read back an RGBA8 buffer.
+    pub fn render_frame_to_rgba8_gpu(
+        &mut self,
+        comp: &Composition,
+        frame: u32,
+        width: u32,
+        height: u32,
+        exposure_ev: f32,
+        lut_mode: u32,
+    ) -> Option<Vec<u8>> {
+        self.set_preview_max_width(Some(width.max(1)));
+        let _ = self.render_snapshot_frame(comp, frame, exposure_ev, lut_mode);
+        let tex = self.snapshot_texture.as_ref()?;
+        let size = tex.size();
+        let w = size.width;
+        let h = size.height;
+        if w == 0 || h == 0 || w != width || h != height {
+            return None;
+        }
+        let bpp = 8u32; // Rgba16Float = 4 * 2 bytes
+        let unpadded_bytes_per_row = w * bpp;
+        let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+        let padded_bytes_per_row = unpadded_bytes_per_row.div_ceil(align) * align;
+        let buffer_size = u64::from(padded_bytes_per_row) * u64::from(h);
+        let readback = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("kagari_gpu_preview_readback"),
+            size: buffer_size,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("kagari_gpu_preview_copy"),
+            });
+        encoder.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo {
+                texture: tex,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyBufferInfo {
+                buffer: &readback,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(padded_bytes_per_row),
+                    rows_per_image: Some(h),
+                },
+            },
+            size,
+        );
+        self.queue.submit(Some(encoder.finish()));
+
+        let slice = readback.slice(..);
+        let (tx, rx) = std::sync::mpsc::channel();
+        slice.map_async(wgpu::MapMode::Read, move |res| {
+            let _ = tx.send(res);
+        });
+        let _ = self.device.poll(wgpu::PollType::Wait);
+        rx.recv().ok()?.ok()?;
+
+        let mapped = slice.get_mapped_range();
+        let mut rgba8 = vec![0u8; (w * h * 4) as usize];
+        for row in 0..h as usize {
+            let src_row = &mapped[row * padded_bytes_per_row as usize
+                ..row * padded_bytes_per_row as usize + unpadded_bytes_per_row as usize];
+            let dst_row = &mut rgba8[row * (w as usize * 4)..(row + 1) * (w as usize * 4)];
+            for (px_src, px_dst) in src_row.chunks_exact(8).zip(dst_row.chunks_exact_mut(4)) {
+                for ch in 0..4 {
+                    let bits = u16::from_le_bytes([px_src[ch * 2], px_src[ch * 2 + 1]]);
+                    let v = f16::from_bits(bits).to_f32();
+                    px_dst[ch] = (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+                }
+            }
+        }
+        drop(mapped);
+        readback.unmap();
+        Some(rgba8)
+    }
+
     /// Last-resort 1x1 fallback view so a missing target can never panic the UI thread.
     fn dummy_view_or_create(&mut self, snapshot: bool) -> &wgpu::TextureView {
         let slot = if snapshot {

@@ -32,6 +32,38 @@ fn headless_wgpu_renderer(
     .into()
 }
 
+fn render_preview_pixels_gpu_or_cpu(
+    composition: &kagari_vfx::core::timeline::Composition,
+    frame: u32,
+    width: u32,
+    height: u32,
+    exposure_ev: f32,
+    lut_mode: u32,
+) -> Vec<u8> {
+    if let Ok(mut guard) = headless_wgpu_renderer().lock() {
+        if let Some(renderer) = guard.as_mut() {
+            if let Some(pixels) = renderer.render_frame_to_rgba8_gpu(
+                composition,
+                frame,
+                width,
+                height,
+                exposure_ev,
+                lut_mode,
+            ) {
+                return pixels;
+            }
+        }
+    }
+    kagari_vfx::core::software_renderer::render_frame_to_pixels_preview(
+        composition,
+        frame,
+        width,
+        height,
+        exposure_ev,
+        lut_mode,
+    )
+}
+
 pub(crate) type WaveformDecodeRequest = (String, u64);
 pub(crate) type WaveformDecodeResult = (String, u64, Option<CachedAudioWaveform>);
 const MAX_CACHED_AUDIO_WAVEFORMS: usize = 128;
@@ -63,7 +95,7 @@ pub(crate) fn render_model_preview_pixels(path: &str) -> Option<CachedAssetPrevi
     );
     layer.is_3d = true;
     composition.layers.push(layer);
-    let pixels = kagari_vfx::core::software_renderer::render_frame_to_pixels_preview(
+    let pixels = render_preview_pixels_gpu_or_cpu(
         &composition,
         0,
         WIDTH,
@@ -99,7 +131,7 @@ pub(crate) fn render_composition_preview(
     let height = (f64::from(composition.height.max(1)) * scale)
         .round()
         .max(1.0) as u32;
-    let pixels = kagari_vfx::core::software_renderer::render_frame_to_pixels_preview(
+    let pixels = render_preview_pixels_gpu_or_cpu(
         composition,
         0,
         width,
@@ -124,7 +156,7 @@ fn render_viewport_preview(job: &ViewportPreviewJob) -> Option<std::sync::Arc<Ve
     let cancel = job.cancel.clone();
     let rendered =
         kagari_vfx::core::software_renderer::with_render_cancel_flag(cancel.clone(), || {
-            kagari_vfx::core::software_renderer::render_frame_to_pixels_preview(
+            render_preview_pixels_gpu_or_cpu(
                 &job.composition,
                 job.key.frame,
                 job.key.width,
@@ -520,6 +552,38 @@ fn headless_wgpu_renderer(
         ))
     })
     .into()
+}
+
+fn render_preview_pixels_gpu_or_cpu(
+    composition: &kagari_vfx::core::timeline::Composition,
+    frame: u32,
+    width: u32,
+    height: u32,
+    exposure_ev: f32,
+    lut_mode: u32,
+) -> Vec<u8> {
+    if let Ok(mut guard) = headless_wgpu_renderer().lock() {
+        if let Some(renderer) = guard.as_mut() {
+            if let Some(pixels) = renderer.render_frame_to_rgba8_gpu(
+                composition,
+                frame,
+                width,
+                height,
+                exposure_ev,
+                lut_mode,
+            ) {
+                return pixels;
+            }
+        }
+    }
+    kagari_vfx::core::software_renderer::render_frame_to_pixels_preview(
+        composition,
+        frame,
+        width,
+        height,
+        exposure_ev,
+        lut_mode,
+    )
 }
 
     #[test]
