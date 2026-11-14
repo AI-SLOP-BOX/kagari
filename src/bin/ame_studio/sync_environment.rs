@@ -332,6 +332,8 @@ impl AfterEffectsStudio {
         };
         self.ui
             .set_binding("viewport_exposure_label", Value::String(ev_label.to_string()))?;
+        self.ui
+            .set_binding("viewport_wipe_enabled", Value::Bool(self.viewport_wipe_enabled))?;
         for (name, workspace) in [
             ("is_default_workspace", Workspace::Default),
             ("is_composition_workspace", Workspace::Composition),

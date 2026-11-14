@@ -315,6 +315,16 @@ impl AfterEffectsStudio {
                 Affine::translate((left, top)) * Affine::scale_non_uniform(fit * pixel_aspect, fit),
             );
             let frame = Rect::new(left, top, left + draw_width, top + draw_height);
+            if self.viewport_wipe_enabled {
+                let split_x = left + draw_width * 0.5;
+                scene.stroke(
+                    &Stroke::new(1.5),
+                    Affine::IDENTITY,
+                    Color::from_rgb8(255, 138, 54),
+                    None,
+                    &kurbo::Line::new((split_x, top), (split_x, top + draw_height)),
+                );
+            }
             scene.stroke(
                 &Stroke::new(1.0),
                 Affine::IDENTITY,

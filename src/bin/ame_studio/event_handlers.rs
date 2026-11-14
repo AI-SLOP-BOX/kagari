@@ -316,6 +316,9 @@ impl AfterEffectsStudio {
                     _ => 0.0,
                 };
             }
+            ("viewport_toggle_wipe", _) => {
+                self.viewport_wipe_enabled = !self.viewport_wipe_enabled;
+            }
             _ if self.handle_composition_action(action.name.as_str(), action_val.as_ref(), selected_row_id.as_deref()) => {}
             ("add_solid_layer", _) => self.add_solid_layer(),
             ("add_scene_camera", _) => self.add_scene_camera(),

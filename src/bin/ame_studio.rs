@@ -215,6 +215,7 @@ pub struct AfterEffectsStudio {
     workspace_vertical_ratios: [f64; 15],
     viewport_channel_mode: String,
     viewport_exposure_ev: f64,
+    viewport_wipe_enabled: bool,
     preview_revision: u64,
     preview_cache: std::collections::HashMap<(u64, u32, u32, u32, u64), vello::peniko::ImageData>,
     viewport_preview_request_tx: std::sync::mpsc::SyncSender<ViewportPreviewJob>,

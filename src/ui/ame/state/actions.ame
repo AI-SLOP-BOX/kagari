@@ -89,6 +89,7 @@
   action workspace_vertical_resized;
   action viewport_cycle_channel;
   action viewport_cycle_exposure;
+  action viewport_toggle_wipe;
   action sidebar_vertical_resized;
   action queue_tab;
   action layer_changed;
