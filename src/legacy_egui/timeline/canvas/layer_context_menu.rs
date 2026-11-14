@@ -10,6 +10,7 @@ pub struct LayerContextMenuCtx<'a> {
     pub toasts: &'a mut crate::ui::notification::ToastManager,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn draw_layer_context_menu(
     ui: &mut egui::Ui,
     ctx: &mut LayerContextMenuCtx<'_>,

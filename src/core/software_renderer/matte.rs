@@ -16,7 +16,10 @@ pub(crate) fn render_matte_buffer(
     frame: u32,
     width: u32,
     height: u32,
-) -> Option<Vec<u8>> {
+) -> Result<Option<Vec<u8>>, ()> {
+    if super::render_cancelled() {
+        return Err(());
+    }
     if layer.track_matte != TrackMatteMode::None {
         // Find the matte source layer: explicit track_matte_layer_id or fallback to adjacent layer above (idx - 1)
         let matte_layer_opt = if let Some(target_id) = &layer.track_matte_layer_id {
@@ -45,12 +48,25 @@ pub(crate) fn render_matte_buffer(
                 let m_cy = m_pos[1];
                 let m_bw = width;
                 let m_bh = height;
-                let mut m_buf = vec![0u8; (m_bw * m_bh * 4) as usize];
+                let Some(matte_size) = super::rgba_buffer_size(m_bw, m_bh) else {
+                    log::error!("[Renderer] Invalid track-matte dimensions {m_bw}x{m_bh}");
+                    return Err(());
+                };
+                let Some(mut m_buf) = super::try_zeroed_buffer(matte_size) else {
+                    log::error!(
+                        "[Renderer] Could not allocate {matte_size} bytes for track matte {}",
+                        matte_layer.id
+                    );
+                    return Err(());
+                };
 
                 // Render matte layer to get its alpha/luma
                 match &matte_layer.layer_type {
                     LayerType::Solid { color } => {
                         for py in 0..m_bh {
+                            if super::render_cancelled() {
+                                break;
+                            }
                             for px in 0..m_bw {
                                 let idx = ((py * m_bw + px) * 4) as usize;
                                 if idx + 3 < m_buf.len() {
@@ -88,6 +104,9 @@ pub(crate) fn render_matte_buffer(
                                 let origin_x = (m_cx - tw as f32 * 0.5) as i32;
                                 let origin_y = (m_cy - th as f32 * 0.5) as i32;
                                 for py in 0..m_bh {
+                                    if super::render_cancelled() {
+                                        break;
+                                    }
                                     for px in 0..m_bw {
                                         let tx = px as i32 - origin_x;
                                         let ty = py as i32 - origin_y;
@@ -167,7 +186,6 @@ pub(crate) fn render_matte_buffer(
                         );
                     }
                     LayerType::Image { .. } | LayerType::Video { .. } => {
-                        use crate::core::image_cache::with_image_cache;
                         let (image_path, next_image_path, blend_t) = match &matte_layer.layer_type {
                             LayerType::Image { path } => (path.clone(), None, 0.0),
                             LayerType::Video {
@@ -176,11 +194,16 @@ pub(crate) fn render_matte_buffer(
                                 speed,
                                 ..
                             } => {
-                                let source_position = (match &matte_layer.posterize_time {
+                                let remapped_source_frame = match &matte_layer.posterize_time {
                                     Some(settings) if settings.enabled => source_frame as f32,
                                     _ => matte_layer.remap_frame_f32(frame),
-                                } * speed.max(0.0))
-                                .max(0.0);
+                                };
+                                let source_position = crate::core::timeline::video_sequence_frame(
+                                    remapped_source_frame,
+                                    *speed,
+                                    frames_dir,
+                                    comp.fps,
+                                );
                                 let first = (source_position.floor() as u32)
                                     .min(frame_count.saturating_sub(1));
                                 let second = (first + 1).min(frame_count.saturating_sub(1));
@@ -205,17 +228,17 @@ pub(crate) fn render_matte_buffer(
                             }
                             _ => unreachable!(),
                         };
-                        let images = with_image_cache(|cache| {
-                            let image = cache.load_image(&image_path).cloned()?;
-                            let next_image = next_image_path
-                                .as_deref()
-                                .filter(|path| *path != image_path && blend_t > 0.0)
-                                .and_then(|path| cache.load_image(path).cloned())
-                                .filter(|next| {
-                                    next.width == image.width && next.height == image.height
-                                });
-                            Some((image, next_image))
-                        });
+                        let images =
+                            crate::core::image_cache::load_image_shared(&image_path).map(|image| {
+                                let next_image = next_image_path
+                                    .as_deref()
+                                    .filter(|path| *path != image_path && blend_t > 0.0)
+                                    .and_then(crate::core::image_cache::load_image_shared)
+                                    .filter(|next| {
+                                        next.width == image.width && next.height == image.height
+                                    });
+                                (image, next_image)
+                            });
                         if let Some((image, next_image)) = images {
                             let iw = image.width as f32;
                             let ih = image.height as f32;
@@ -226,6 +249,9 @@ pub(crate) fn render_matte_buffer(
                             let half_h =
                                 (comp.height as f32 * (m_scale[1].abs() / 100.0) * 0.5).max(0.001);
                             for py in 0..m_bh {
+                                if super::render_cancelled() {
+                                    break;
+                                }
                                 for px in 0..m_bw {
                                     let dx = px as f32 + 0.5 - m_cx;
                                     let dy = py as f32 + 0.5 - m_cy;
@@ -241,26 +267,32 @@ pub(crate) fn render_matte_buffer(
                                     let sidx = ((sy * image.width + sx) * 4) as usize;
                                     let didx = ((py * m_bw + px) * 4) as usize;
                                     if sidx + 3 < image.pixels.len() && didx + 3 < m_buf.len() {
-                                        let sample = |channel: usize| -> u8 {
-                                            let a = image.pixels[sidx + channel] as f32;
-                                            let b = next_image
-                                                .as_ref()
-                                                .and_then(|next| {
-                                                    let next_idx =
-                                                        ((sy * next.width + sx) * 4) as usize;
-                                                    next.pixels.get(next_idx + channel).copied()
+                                        let sample_a = std::array::from_fn(|channel| {
+                                            image.pixels[sidx + channel] as f32
+                                        });
+                                        let sample_b = next_image
+                                            .as_ref()
+                                            .filter(|next| {
+                                                next.width == image.width
+                                                    && next.height == image.height
+                                            })
+                                            .map(|next| {
+                                                let next_idx =
+                                                    ((sy * next.width + sx) * 4) as usize;
+                                                std::array::from_fn(|channel| {
+                                                    next.pixels[next_idx + channel] as f32
                                                 })
-                                                .map(f32::from)
-                                                .unwrap_or(a);
-                                            (a + (b - a) * blend_t).round().clamp(0.0, 255.0) as u8
-                                        };
-                                        m_buf[didx] = sample(0);
-                                        m_buf[didx + 1] = sample(1);
-                                        m_buf[didx + 2] = sample(2);
-                                        m_buf[didx + 3] = (sample(3) as f32 * m_opacity)
-                                            .round()
-                                            .clamp(0.0, 255.0)
-                                            as u8;
+                                            })
+                                            .unwrap_or(sample_a);
+                                        let sample =
+                                            crate::core::frame_blending::blend_rgba_samples(
+                                                sample_a, sample_b, blend_t,
+                                            );
+                                        m_buf[didx] = sample[0].round().clamp(0.0, 255.0) as u8;
+                                        m_buf[didx + 1] = sample[1].round().clamp(0.0, 255.0) as u8;
+                                        m_buf[didx + 2] = sample[2].round().clamp(0.0, 255.0) as u8;
+                                        m_buf[didx + 3] =
+                                            (sample[3] * m_opacity).round().clamp(0.0, 255.0) as u8;
                                     }
                                 }
                             }
@@ -274,17 +306,26 @@ pub(crate) fn render_matte_buffer(
                             let sub_buf =
                                 render_precomp_layers(comp, sub_comp, source_frame, m_bw, m_bh);
                             // Copy sub-comp pixels into matte buffer, applying matte layer opacity
-                            for i in (0..m_buf.len()).step_by(4) {
-                                if i + 3 < sub_buf.len() && i + 3 < m_buf.len() {
-                                    m_buf[i] = sub_buf[i];
-                                    m_buf[i + 1] = sub_buf[i + 1];
-                                    m_buf[i + 2] = sub_buf[i + 2];
-                                    m_buf[i + 3] = (sub_buf[i + 3] as f32 * m_opacity) as u8;
+                            for (pixel_index, pixel) in
+                                m_buf.as_chunks_mut::<4>().0.iter_mut().enumerate()
+                            {
+                                if pixel_index % 4096 == 0 && super::render_cancelled() {
+                                    break;
+                                }
+                                let i = pixel_index * 4;
+                                if i + 3 < sub_buf.len() {
+                                    pixel[0] = sub_buf[i];
+                                    pixel[1] = sub_buf[i + 1];
+                                    pixel[2] = sub_buf[i + 2];
+                                    pixel[3] = (sub_buf[i + 3] as f32 * m_opacity) as u8;
                                 }
                             }
                         } else {
                             // Sub-comp not found: fall back to white
                             for py in 0..m_bh {
+                                if super::render_cancelled() {
+                                    break;
+                                }
                                 for px in 0..m_bw {
                                     let idx = ((py * m_bw + px) * 4) as usize;
                                     if idx + 3 < m_buf.len() {
@@ -306,13 +347,22 @@ pub(crate) fn render_matte_buffer(
                             render_frame_to_pixels(&matte_comp, frame, m_bw, m_bh, 0.0, 0);
                         let copy_len = m_buf.len().min(particle_pixels.len());
                         m_buf[..copy_len].copy_from_slice(&particle_pixels[..copy_len]);
-                        for alpha in m_buf[3..].iter_mut().step_by(4) {
-                            *alpha = (*alpha as f32 * m_opacity).round().clamp(0.0, 255.0) as u8;
+                        for (pixel_index, pixel) in
+                            m_buf.as_chunks_mut::<4>().0.iter_mut().enumerate()
+                        {
+                            if pixel_index % 4096 == 0 && super::render_cancelled() {
+                                break;
+                            }
+                            pixel[3] =
+                                (pixel[3] as f32 * m_opacity).round().clamp(0.0, 255.0) as u8;
                         }
                     }
                     _ => {
                         // Unsupported matte sources remain conservative full mattes.
                         for py in 0..m_bh {
+                            if super::render_cancelled() {
+                                break;
+                            }
                             for px in 0..m_bw {
                                 let idx = ((py * m_bw + px) * 4) as usize;
                                 if idx + 3 < m_buf.len() {
@@ -325,14 +375,38 @@ pub(crate) fn render_matte_buffer(
                         }
                     }
                 }
-                Some(m_buf)
+                if super::render_cancelled() {
+                    return Err(());
+                }
+                Ok(Some(m_buf))
             } else {
-                None
+                Ok(None)
             }
         } else {
-            None
+            Ok(None)
         }
     } else {
-        None
+        Ok(None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::timeline::Composition;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
+
+    #[test]
+    fn cancelled_matte_render_returns_without_a_buffer() {
+        let comp = Composition::new("matte-cancel".into(), "Matte Cancel".into(), 8, 8, 24, 1);
+        let layer = Layer::new("content".into(), "Content".into(), LayerType::Null, 24);
+        let flag = Arc::new(AtomicBool::new(true));
+
+        let matte = super::super::with_render_cancel_flag(flag, || {
+            render_matte_buffer(&comp, &layer, 0, 8, 8)
+        });
+
+        assert!(matte.is_err());
     }
 }

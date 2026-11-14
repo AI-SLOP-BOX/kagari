@@ -33,25 +33,75 @@ pub(crate) fn boxes_for_gauss(sigma: f32, n: u32) -> [f32; 3] {
 /// True Gaussian blur via three successive box blurs with optimized radii.
 /// Visually indistinguishable from an exact Gaussian while staying O(n) per pass.
 pub fn apply_gaussian_blur(pixels: &mut [u8], width: u32, height: u32, radius: u32) {
-    if radius == 0 || width == 0 || height == 0 {
+    let Some(expected_len) = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|pixels| pixels.checked_mul(4))
+    else {
+        return;
+    };
+    if radius == 0 || width == 0 || height == 0 || pixels.len() != expected_len {
         return;
     }
-    // The UI's "radius" maps to a Gaussian sigma; 3-box approx covers it well.
+    let cancel_flag = crate::core::software_renderer::get_render_cancel_flag();
+    let is_cancelled = || {
+        cancel_flag
+            .as_ref()
+            .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+    };
+    if is_cancelled() {
+        return;
+    }
+
+    // The input buffer is one side of the ping-pong pair. This needs only two
+    // additional full-frame buffers (temporary output + horizontal scratch),
+    // instead of cloning the input and allocating two more full buffers.
+    // Effects in Kagari expose blur controls up to 1000 px. Clamp the public
+    // helper too, avoiding integer overflow and unbounded work for bad callers.
+    let radius = radius.min(1000);
     let sigma = radius as f32 / 2.0;
     let boxes = boxes_for_gauss(sigma, 3);
-    let mut buf_a = pixels.to_vec();
-    let mut buf_b = vec![0u8; pixels.len()];
+    let mut temp = vec![0u8; pixels.len()];
     let mut scratch = vec![0u8; pixels.len()];
+    let mut source_is_pixels = true;
 
     for &box_w in &boxes {
         let r = ((box_w - 1.0) / 2.0).round().max(1.0) as u32;
-        box_blur_separable(&buf_a, &mut buf_b, &mut scratch, width, height, r);
-        std::mem::swap(&mut buf_a, &mut buf_b);
+        let completed = if source_is_pixels {
+            box_blur_separable(
+                pixels,
+                &mut temp,
+                &mut scratch,
+                width,
+                height,
+                r,
+                cancel_flag.as_ref(),
+            )
+        } else {
+            box_blur_separable(
+                &temp,
+                pixels,
+                &mut scratch,
+                width,
+                height,
+                r,
+                cancel_flag.as_ref(),
+            )
+        };
+        if !completed {
+            return;
+        }
+        source_is_pixels = !source_is_pixels;
     }
-    pixels.copy_from_slice(&buf_a);
+    if is_cancelled() {
+        return;
+    }
+    if !source_is_pixels {
+        pixels.copy_from_slice(&temp);
+    }
 }
 
 /// One separable box blur: horizontal src -> scratch, vertical scratch -> dst.
+/// Returns false when the render cancellation flag is set.
 fn box_blur_separable(
     src: &[u8],
     dst: &mut [u8],
@@ -59,48 +109,79 @@ fn box_blur_separable(
     width: u32,
     height: u32,
     radius: u32,
-) {
-    let r = radius as i32;
+    cancel_flag: Option<&std::sync::Arc<std::sync::atomic::AtomicBool>>,
+) -> bool {
+    let r = i64::from(radius.min(1000));
+    let count = (2 * r + 1) as f32;
+    let cancelled =
+        || cancel_flag.is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed));
 
-    // Horizontal: src -> scratch
+    // Horizontal: src -> scratch. Maintain a rolling channel sum so each
+    // pixel costs O(1), independent of blur radius.
     for y in 0..height {
-        for x in 0..width as i32 {
-            let mut acc = [0f32; 4];
-            let mut count = 0f32;
-            for dx in -r..=r {
-                let px = (x + dx).clamp(0, width as i32 - 1) as u32;
-                let idx = ((y * width + px) * 4) as usize;
-                for ch in 0..4 {
-                    acc[ch] += src[idx + ch] as f32;
-                }
-                count += 1.0;
-            }
-            let oidx = ((y * width + x as u32) * 4) as usize;
+        if cancelled() {
+            return false;
+        }
+        let mut sum = [0u64; 4];
+        for dx in -r..=r {
+            let px = dx.clamp(0, i64::from(width) - 1) as u32;
+            let idx = ((y * width + px) * 4) as usize;
             for ch in 0..4 {
-                scratch[oidx + ch] = (acc[ch] / count).round() as u8;
+                sum[ch] += u64::from(src[idx + ch]);
+            }
+        }
+        for x in 0..width {
+            let oidx = ((y * width + x) * 4) as usize;
+            for ch in 0..4 {
+                scratch[oidx + ch] = (sum[ch] as f32 / count).round() as u8;
+            }
+            if x + 1 < width {
+                let outgoing_x = (i64::from(x) - r).clamp(0, i64::from(width) - 1) as u32;
+                let incoming_x = (i64::from(x) + r + 1).clamp(0, i64::from(width) - 1) as u32;
+                let outgoing_idx = ((y * width + outgoing_x) * 4) as usize;
+                let incoming_idx = ((y * width + incoming_x) * 4) as usize;
+                for ch in 0..4 {
+                    sum[ch] -= u64::from(src[outgoing_idx + ch]);
+                    sum[ch] += u64::from(src[incoming_idx + ch]);
+                }
             }
         }
     }
 
-    // Vertical: scratch -> dst
-    for y in 0..height as i32 {
-        for x in 0..width {
-            let mut acc = [0f32; 4];
-            let mut count = 0f32;
-            for dy in -r..=r {
-                let py = (y + dy).clamp(0, height as i32 - 1) as u32;
-                let idx = ((py * width + x) * 4) as usize;
-                for ch in 0..4 {
-                    acc[ch] += scratch[idx + ch] as f32;
-                }
-                count += 1.0;
-            }
-            let oidx = ((y as u32 * width + x) * 4) as usize;
+    // Vertical: scratch -> dst, using the same rolling-window update.
+    for x in 0..width {
+        if cancelled() {
+            return false;
+        }
+        let mut sum = [0u64; 4];
+        for dy in -r..=r {
+            let py = dy.clamp(0, i64::from(height) - 1) as u32;
+            let idx = ((py * width + x) * 4) as usize;
             for ch in 0..4 {
-                dst[oidx + ch] = (acc[ch] / count).round() as u8;
+                sum[ch] += u64::from(scratch[idx + ch]);
+            }
+        }
+        for y in 0..height {
+            if y % 64 == 0 && cancelled() {
+                return false;
+            }
+            let oidx = ((y * width + x) * 4) as usize;
+            for ch in 0..4 {
+                dst[oidx + ch] = (sum[ch] as f32 / count).round() as u8;
+            }
+            if y + 1 < height {
+                let outgoing_y = (i64::from(y) - r).clamp(0, i64::from(height) - 1) as u32;
+                let incoming_y = (i64::from(y) + r + 1).clamp(0, i64::from(height) - 1) as u32;
+                let outgoing_idx = ((outgoing_y * width + x) * 4) as usize;
+                let incoming_idx = ((incoming_y * width + x) * 4) as usize;
+                for ch in 0..4 {
+                    sum[ch] -= u64::from(scratch[outgoing_idx + ch]);
+                    sum[ch] += u64::from(scratch[incoming_idx + ch]);
+                }
             }
         }
     }
+    true
 }
 
 #[cfg(test)]
@@ -117,6 +198,95 @@ mod gaussian_tests {
         }
         // Widths must be roughly increasing then equal (standard property)
         assert!(w1 <= w2 + 2.0);
+    }
+
+    #[test]
+    fn cancelled_blur_leaves_input_untouched() {
+        let mut pixels = vec![127u8; 32 * 32 * 4];
+        let original = pixels.clone();
+        let flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+
+        crate::core::software_renderer::with_render_cancel_flag(flag, || {
+            apply_gaussian_blur(&mut pixels, 32, 32, 8);
+        });
+
+        assert_eq!(pixels, original);
+    }
+
+    #[test]
+    fn rolling_box_blur_matches_the_naive_reference() {
+        for (width, height, radius) in [(1u32, 1u32, 3u32), (5, 3, 1), (5, 3, 4)] {
+            let mut source = (0..width * height * 4)
+                .map(|index| (index * 37 % 256) as u8)
+                .collect::<Vec<_>>();
+            let mut expected = vec![0u8; source.len()];
+            let mut scratch = vec![0u8; source.len()];
+            naive_box_blur(&source, &mut expected, &mut scratch, width, height, radius);
+            box_blur_separable(
+                &source.clone(),
+                &mut source,
+                &mut scratch,
+                width,
+                height,
+                radius,
+                None,
+            );
+            assert_eq!(source, expected, "{width}x{height} radius {radius}");
+        }
+    }
+
+    fn naive_box_blur(
+        src: &[u8],
+        dst: &mut [u8],
+        scratch: &mut [u8],
+        width: u32,
+        height: u32,
+        radius: u32,
+    ) {
+        let radius = radius as i32;
+        for y in 0..height {
+            for x in 0..width as i32 {
+                let mut sum = [0.0f32; 4];
+                let mut count = 0.0f32;
+                for dx in -radius..=radius {
+                    let px = (x + dx).clamp(0, width as i32 - 1) as u32;
+                    let idx = ((y * width + px) * 4) as usize;
+                    for ch in 0..4 {
+                        sum[ch] += src[idx + ch] as f32;
+                    }
+                    count += 1.0;
+                }
+                let idx = ((y * width + x as u32) * 4) as usize;
+                for ch in 0..4 {
+                    scratch[idx + ch] = (sum[ch] / count).round() as u8;
+                }
+            }
+        }
+        for y in 0..height as i32 {
+            for x in 0..width {
+                let mut sum = [0.0f32; 4];
+                let mut count = 0.0f32;
+                for dy in -radius..=radius {
+                    let py = (y + dy).clamp(0, height as i32 - 1) as u32;
+                    let idx = ((py * width + x) * 4) as usize;
+                    for ch in 0..4 {
+                        sum[ch] += scratch[idx + ch] as f32;
+                    }
+                    count += 1.0;
+                }
+                let idx = ((y as u32 * width + x) * 4) as usize;
+                for ch in 0..4 {
+                    dst[idx + ch] = (sum[ch] / count).round() as u8;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn malformed_dimensions_leave_blur_input_untouched() {
+        let mut pixels = vec![73u8; 12];
+        apply_gaussian_blur(&mut pixels, 4, 4, 8);
+        assert_eq!(pixels, vec![73u8; 12]);
     }
 
     #[test]

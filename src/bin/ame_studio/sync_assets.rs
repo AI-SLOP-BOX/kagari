@@ -1,5 +1,47 @@
 use super::*;
 
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+enum ProjectAssetUsageKey<'a> {
+    Composition(&'a str),
+    Image(&'a str),
+    Video(&'a str),
+    Audio(&'a str),
+    Model3D(&'a str),
+}
+
+fn project_asset_folder_path_indexed(
+    folder_id: Option<&str>,
+    asset_by_id: &std::collections::HashMap<&str, &kagari_vfx::core::timeline::ProjectItem>,
+    cache: &mut std::collections::HashMap<String, String>,
+) -> String {
+    let mut chain = Vec::new();
+    let mut next = folder_id;
+    let mut visited = std::collections::HashSet::new();
+    let mut path = String::new();
+    while let Some(id) = next {
+        if let Some(cached) = cache.get(id) {
+            path.clone_from(cached);
+            break;
+        }
+        if !visited.insert(id) {
+            break;
+        }
+        let Some(folder) = asset_by_id.get(id) else {
+            break;
+        };
+        chain.push((id, folder.name.as_str()));
+        next = folder.parent_folder.as_deref();
+    }
+    for (id, name) in chain.into_iter().rev() {
+        if !path.is_empty() {
+            path.push_str(" / ");
+        }
+        path.push_str(name);
+        cache.insert(id.to_owned(), path.clone());
+    }
+    path
+}
+
 impl AfterEffectsStudio {
     pub(crate) fn sync_project_asset_bindings(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let current_folder = self
@@ -92,12 +134,19 @@ impl AfterEffectsStudio {
                             .map(|size| format!(" · {size}"))
                             .unwrap_or_default()
                     ),
-                    ProjectItemType::Audio { path, duration_sec } => format!(
-                        "{duration_sec:.1} 秒{}",
-                        file_size(path)
-                            .map(|size| format!(" · {size}"))
-                            .unwrap_or_default()
-                    ),
+                    ProjectItemType::Audio { path, duration_sec } => {
+                        let duration_sec = self
+                            .waveform_cache
+                            .get(path)
+                            .map(|waveform| waveform.duration_seconds)
+                            .unwrap_or(*duration_sec);
+                        format!(
+                            "{duration_sec:.1} 秒{}",
+                            file_size(path)
+                                .map(|size| format!(" · {size}"))
+                                .unwrap_or_default()
+                        )
+                    }
                     ProjectItemType::Model3D { path } => file_size(path)
                         .map(|size| format!("3Dモデル · {size}"))
                         .unwrap_or_else(|| "3Dモデル".to_owned()),
@@ -125,8 +174,18 @@ impl AfterEffectsStudio {
             .and_then(|id| self.project_model.assets.iter().find(|item| item.id == id))
             .map(|item| {
                 use kagari_vfx::core::timeline::ProjectItemType;
+                if self.asset_preview_worker_failed
+                    && !matches!(
+                        item.item_type,
+                        ProjectItemType::Audio { .. }
+                            | ProjectItemType::Solid { .. }
+                            | ProjectItemType::Folder { .. }
+                    )
+                {
+                    return "素材プレビュー処理が停止しました。アプリを再起動してください。".to_owned();
+                }
                 if self.asset_preview_failed_asset_id.as_deref() == Some(item.id.as_str()) {
-                    return "プレビューを読み込めません。ファイル形式とパスを確認してください。".to_owned();
+                    return "プレビューを読み込めません。ファイル形式とパスを確認してください。詳細はアプリのログに記録されています。".to_owned();
                 }
                 let preview_state = |cache_key: String| {
                     self.asset_render_preview_cache
@@ -169,7 +228,9 @@ impl AfterEffectsStudio {
                     ProjectItemType::Audio { path, .. } => {
                         if self.waveform_cache.contains_key(path) {
                             "音声波形をプレビュー中。配置するとタイムラインでも編集できます。".to_owned()
-                        } else if self.waveform_failed.contains(path) {
+                        } else if self.waveform_worker_failed {
+                            "音声波形の読み込み処理を開始できません。アプリを再起動してください。".to_owned()
+                        } else if self.waveform_failed.contains_key(path) {
                             "音声をデコードできません。ファイル形式と音声トラックを確認してください。".to_owned()
                         } else {
                             "音声波形をプレビューします。読み込み後に波形が表示されます。".to_owned()
@@ -181,7 +242,7 @@ impl AfterEffectsStudio {
                     ProjectItemType::Model3D { path } => {
                         match preview_state(model_preview_cache_key(path)) {
                             Some(true) => "3Dモデルのサムネイルを表示中。配置後はシーンで調整できます。".to_owned(),
-                            Some(false) => "3Dモデルのプレビューを読み込めません。形式とパスを確認してください。".to_owned(),
+                            Some(false) => "3Dモデルのプレビューを読み込めません。形式とパスを確認してください。詳細はアプリのログに記録されています。".to_owned(),
                             None => "3Dモデルのサムネイルを読み込み中…".to_owned(),
                         }
                     }
@@ -245,7 +306,26 @@ impl AfterEffectsStudio {
                     || item.parent_folder.as_deref() == self.asset_folder_id.as_deref()
             })
             .collect::<Vec<_>>();
-        project_asset_entries.sort_by(|left, right| {
+        let asset_by_id = self
+            .project_model
+            .assets
+            .iter()
+            .map(|item| (item.id.as_str(), item))
+            .collect::<std::collections::HashMap<_, _>>();
+        let mut folder_path_cache = std::collections::HashMap::new();
+        let mut asset_folder_paths = std::collections::HashMap::new();
+        for item in &self.project_model.assets {
+            let Some(parent_folder) = item.parent_folder.as_deref() else {
+                continue;
+            };
+            let path = project_asset_folder_path_indexed(
+                Some(parent_folder),
+                &asset_by_id,
+                &mut folder_path_cache,
+            );
+            asset_folder_paths.insert(item.id.as_str(), path);
+        }
+        project_asset_entries.sort_by_cached_key(|item| {
             use kagari_vfx::core::timeline::ProjectItemType;
             let kind = |item: &kagari_vfx::core::timeline::ProjectItem| match &item.item_type {
                 ProjectItemType::Composition { .. } => "コンポジション",
@@ -256,14 +336,47 @@ impl AfterEffectsStudio {
                 ProjectItemType::Solid { .. } => "平面",
                 ProjectItemType::Folder { .. } => "フォルダー",
             };
-            if self.project_assets_sort_by_type {
-                kind(left)
-                    .cmp(kind(right))
-                    .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
-            } else {
-                left.name.to_lowercase().cmp(&right.name.to_lowercase())
-            }
+            (
+                if self.project_assets_sort_by_type {
+                    kind(item)
+                } else {
+                    ""
+                },
+                item.name.to_lowercase(),
+            )
         });
+        let mut usage_counts = std::collections::HashMap::new();
+        for composition in &self.project_model.compositions {
+            for layer in &composition.layers {
+                let key = match &layer.layer_type {
+                    kagari_vfx::core::timeline::LayerType::PreComp { comp_id } => {
+                        Some(ProjectAssetUsageKey::Composition(comp_id.as_str()))
+                    }
+                    kagari_vfx::core::timeline::LayerType::Image { path } => {
+                        Some(ProjectAssetUsageKey::Image(path.as_str()))
+                    }
+                    kagari_vfx::core::timeline::LayerType::Video { source, .. } => {
+                        Some(ProjectAssetUsageKey::Video(source.as_str()))
+                    }
+                    kagari_vfx::core::timeline::LayerType::Audio { path, .. } => {
+                        Some(ProjectAssetUsageKey::Audio(path.as_str()))
+                    }
+                    kagari_vfx::core::timeline::LayerType::Model3D { path } => {
+                        Some(ProjectAssetUsageKey::Model3D(path.as_str()))
+                    }
+                    _ => None,
+                };
+                if let Some(key) = key {
+                    *usage_counts.entry(key).or_insert(0usize) += 1;
+                }
+            }
+        }
+        let folders_with_children = self
+            .project_model
+            .assets
+            .iter()
+            .filter_map(|item| item.parent_folder.as_deref())
+            .collect::<std::collections::HashSet<_>>();
         let project_assets = project_asset_entries
             .into_iter()
             .filter(|item| {
@@ -284,12 +397,9 @@ impl AfterEffectsStudio {
                     || item
                         .media_path()
                         .is_some_and(|path| path.to_lowercase().contains(&asset_query))
-                    || project_asset_folder_path(
-                        &self.project_model.assets,
-                        item.parent_folder.as_deref(),
-                    )
-                    .to_lowercase()
-                    .contains(&asset_query)
+                    || asset_folder_paths
+                        .get(item.id.as_str())
+                        .is_some_and(|path| path.to_lowercase().contains(&asset_query))
                     || kind.contains(&asset_query)
             })
             .map(|item| {
@@ -304,43 +414,32 @@ impl AfterEffectsStudio {
                     ProjectItemType::Folder { .. } => ("フォルダー", String::new(), false),
                 };
                 let missing = item.is_media_missing();
-                let usage_count =
-                    self.project_model
+                let usage_key = match &item.item_type {
+                    ProjectItemType::Composition { comp_idx } => self
+                        .project_model
                         .compositions
-                        .iter()
-                        .flat_map(|composition| &composition.layers)
-                        .filter(|layer| match (&item.item_type, &layer.layer_type) {
-                            (
-                                ProjectItemType::Composition { comp_idx },
-                                kagari_vfx::core::timeline::LayerType::PreComp { comp_id },
-                            ) => self.project_model.compositions.get(*comp_idx).is_some_and(
-                                |composition| composition.id.as_str() == comp_id.as_str(),
-                            ),
-                            (
-                                ProjectItemType::Image {
-                                    path: asset_path, ..
-                                },
-                                kagari_vfx::core::timeline::LayerType::Image { path },
-                            ) => path == asset_path,
-                            (
-                                ProjectItemType::Video {
-                                    path: asset_path, ..
-                                },
-                                kagari_vfx::core::timeline::LayerType::Video { source, .. },
-                            ) => source == asset_path,
-                            (
-                                ProjectItemType::Audio {
-                                    path: asset_path, ..
-                                },
-                                kagari_vfx::core::timeline::LayerType::Audio { path, .. },
-                            ) => path == asset_path,
-                            (
-                                ProjectItemType::Model3D { path: asset_path },
-                                kagari_vfx::core::timeline::LayerType::Model3D { path },
-                            ) => path == asset_path,
-                            _ => false,
-                        })
-                        .count();
+                        .get(*comp_idx)
+                        .map(|composition| {
+                            ProjectAssetUsageKey::Composition(composition.id.as_str())
+                        }),
+                    ProjectItemType::Image { path, .. } => {
+                        Some(ProjectAssetUsageKey::Image(path.as_str()))
+                    }
+                    ProjectItemType::Video { path, .. } => {
+                        Some(ProjectAssetUsageKey::Video(path.as_str()))
+                    }
+                    ProjectItemType::Audio { path, .. } => {
+                        Some(ProjectAssetUsageKey::Audio(path.as_str()))
+                    }
+                    ProjectItemType::Model3D { path } => {
+                        Some(ProjectAssetUsageKey::Model3D(path.as_str()))
+                    }
+                    _ => None,
+                };
+                let usage_count = usage_key
+                    .and_then(|key| usage_counts.get(&key))
+                    .copied()
+                    .unwrap_or(0);
                 Value::Record(std::collections::BTreeMap::from([
                     ("id".to_owned(), Value::String(item.id.clone())),
                     ("name".to_owned(), Value::String(item.name.clone())),
@@ -352,10 +451,12 @@ impl AfterEffectsStudio {
                     ),
                     (
                         "parent_path".to_owned(),
-                        Value::String(project_asset_folder_path(
-                            &self.project_model.assets,
-                            item.parent_folder.as_deref(),
-                        )),
+                        Value::String(
+                            asset_folder_paths
+                                .get(item.id.as_str())
+                                .cloned()
+                                .unwrap_or_default(),
+                        ),
                     ),
                     ("missing".to_owned(), Value::Bool(missing)),
                     ("placeable".to_owned(), Value::Bool(placeable && !missing)),
@@ -375,9 +476,7 @@ impl AfterEffectsStudio {
                         Value::Bool(match &item.item_type {
                             ProjectItemType::Composition { .. } => false,
                             ProjectItemType::Folder { .. } => {
-                                !self.project_model.assets.iter().any(|child| {
-                                    child.parent_folder.as_deref() == Some(item.id.as_str())
-                                })
+                                !folders_with_children.contains(item.id.as_str())
                             }
                             _ => true,
                         }),

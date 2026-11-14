@@ -21,6 +21,12 @@ pub(in crate::ui::viewport) fn start_roto_segment_job(
         return Err("Roto Brush is still analyzing the previous stroke".into());
     }
     let composition = app.history.current().active_composition().clone();
+    let frame_pixels = (composition.width as usize)
+        .checked_mul(composition.height as usize)
+        .ok_or_else(|| "Composition dimensions exceed supported limits".to_owned())?;
+    if frame_pixels == 0 || frame_pixels > crate::core::roto_brush_engine::MAX_ROTO_FRAME_PIXELS {
+        return Err("Roto Brush supports frames up to about 8.4 megapixels".into());
+    }
     let layer = composition
         .layers
         .get(layer_index)
@@ -78,8 +84,16 @@ pub(in crate::ui::viewport) fn start_roto_segment_job(
                     &worker_strokes,
                     &settings,
                 );
-                let polygon =
-                    trace_contour_to_polygon(&matte, source_comp.width, source_comp.height, 2.0);
+                if matte.len() != expected / 4 {
+                    return Err("Roto Brush frame exceeds the supported pixel limit".into());
+                }
+                let polygon = crate::core::roto_assist::trace_roto_matte_contour(
+                    &matte,
+                    source_comp.width,
+                    source_comp.height,
+                    &worker_strokes,
+                    2.0,
+                );
                 Ok((polygon.len() >= 3).then_some(polygon))
             }))
             .unwrap_or_else(|_| Err("Roto Brush worker encountered an internal error".into()));
@@ -184,13 +198,13 @@ pub(in crate::ui::viewport) fn poll_roto_segment_job(app: &mut KagariApp, ctx: &
         if let Some(mask) = layer
             .masks
             .iter_mut()
-            .find(|mask| mask.name == "Roto Brush Matte")
+            .find(|mask| mask.id == crate::core::roto_assist::ROTO_BRUSH_MATTE_ID)
         {
             crate::core::roto_assist::set_roto_matte_keyframe(mask, completion.frame, polygon);
             mask.feather = Animatable::new_constant(completion.feather);
         } else {
             let mut mask = crate::core::mask::Mask::new_closed(
-                "roto_brush_matte".to_owned(),
+                crate::core::roto_assist::ROTO_BRUSH_MATTE_ID.to_owned(),
                 "Roto Brush Matte".to_owned(),
                 polygon.clone(),
             );

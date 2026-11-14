@@ -432,8 +432,8 @@ impl Camera3D {
 
 /// Project a world-space point through the composition camera to normalized
 /// screen coordinates ([0..1], origin top-left). Returns None when the point is
-/// behind the camera. Mirrors the simplified camera model (translate + Z-rotate)
-/// used by the renderers' `perspective_project_layer`.
+/// behind the camera. Uses the current flat-camera projection model (translate
+/// + Z-rotate).
 pub fn project_point_to_screen(
     cam: &Camera3D,
     point: [f32; 3],
@@ -441,6 +441,48 @@ pub fn project_point_to_screen(
     screen_height: f32,
 ) -> Option<[f32; 2]> {
     project_point_to_screen_at_frame(cam, point, screen_width, screen_height, 0)
+}
+
+/// Build the inverse camera world transform in the shared column-major matrix
+/// convention. `world_unit_scale` maps world-space position units to render
+/// units (the 3D layer renderer uses half the composition height).
+pub(crate) fn camera_view_transform(
+    cam: &Camera3D,
+    frame: u32,
+    world_unit_scale: f32,
+) -> [[f32; 4]; 4] {
+    let unit_scale = world_unit_scale.max(1e-6);
+    let position = cam.transform.position.evaluate(frame);
+    let rotation = cam.transform.rotation.evaluate(frame);
+    let [rx, ry, rz] = rotation.map(f32::to_radians);
+    let (sx, cx) = rx.sin_cos();
+    let (sy, cy) = ry.sin_cos();
+    let (sz, cz) = rz.sin_cos();
+
+    // Camera world rotation Rz * Ry * Rx, then transpose for the inverse view.
+    let camera_rotation = [
+        [cy * cz, cy * sz, -sy, 0.0],
+        [sx * sy * cz - cx * sz, sx * sy * sz + cx * cz, sx * cy, 0.0],
+        [cx * sy * cz + sx * sz, cx * sy * sz - sx * cz, cx * cy, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ];
+    let mut view = [[0.0; 4]; 4];
+    for column in 0..3 {
+        for row in 0..3 {
+            view[column][row] = camera_rotation[row][column];
+        }
+    }
+    let camera_position = position.map(|value| value / unit_scale);
+    let translation: [f32; 3] = std::array::from_fn(|row| {
+        -(view[0][row] * camera_position[0]
+            + view[1][row] * camera_position[1]
+            + view[2][row] * camera_position[2])
+    });
+    for (component, value) in view[3].iter_mut().zip(translation) {
+        *component = value;
+    }
+    view[3][3] = 1.0;
+    view
 }
 
 pub fn project_point_to_screen_at_frame(
@@ -453,19 +495,12 @@ pub fn project_point_to_screen_at_frame(
     if screen_width <= 0.0 || screen_height <= 0.0 {
         return None;
     }
-    let cam_pos = cam.transform.position.evaluate(frame);
-    let cam_rot = cam.transform.rotation.evaluate(frame);
-    let to_rad = |d: f32| d * std::f32::consts::PI / 180.0;
-    let cam_zr = to_rad(cam_rot[2]);
-    let (ccrz, ssrz) = (cam_zr.cos(), cam_zr.sin());
-
-    let dx = point[0] - cam_pos[0];
-    let dy = point[1] - cam_pos[1];
-    let dz = point[2] - cam_pos[2];
-    let cx = dx * ccrz - dy * ssrz;
-    let cy = dx * ssrz + dy * ccrz;
-    let cz = dz;
-    if cz <= 0.1 {
+    let view = camera_view_transform(cam, frame, 1.0);
+    let camera_space: [f32; 3] = std::array::from_fn(|row| {
+        view[0][row] * point[0] + view[1][row] * point[1] + view[2][row] * point[2] + view[3][row]
+    });
+    let [cx, cy, cz] = camera_space;
+    if cz <= screen_height * 0.05 {
         return None;
     }
 

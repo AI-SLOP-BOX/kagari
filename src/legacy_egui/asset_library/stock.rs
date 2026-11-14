@@ -2,6 +2,7 @@
 
 use crate::KagariApp;
 use eframe::egui;
+use std::io::{self, Write};
 
 pub fn draw_stock_assets_dialog(app: &mut KagariApp, ctx: &egui::Context) {
     let dialog_id = egui::Id::new("asset-library-stock-dialog");
@@ -89,12 +90,6 @@ pub fn add_stock_asset_to_project(app: &mut KagariApp, filename: &str, name: &st
         .extension()
         .and_then(|value| value.to_str())
         .unwrap_or("webp");
-    let mut destination = media_dir.join(filename);
-    let mut suffix = 2;
-    while destination.exists() {
-        destination = media_dir.join(format!("{stem}_{suffix}.{extension}"));
-        suffix += 1;
-    }
     let project = app.history.current();
     if project.assets.iter().any(|item| {
         item.name == name
@@ -115,16 +110,31 @@ pub fn add_stock_asset_to_project(app: &mut KagariApp, filename: &str, name: &st
         app.toasts.error("内蔵素材を読み込めませんでした");
         return;
     };
-    if let Err(error) =
-        std::fs::create_dir_all(&media_dir).and_then(|()| std::fs::write(&destination, bytes))
-    {
+    if let Err(error) = std::fs::create_dir_all(&media_dir) {
         app.toasts
             .error(format!("素材をコピーできませんでした: {error}"));
         return;
     }
-    let Ok((width, height)) = image::image_dimensions(&destination) else {
+    let (destination, identity) =
+        match write_stock_asset(&media_dir, filename, stem, extension, bytes) {
+            Ok(asset) => asset,
+            Err(error) => {
+                app.toasts
+                    .error(format!("素材をコピーできませんでした: {error}"));
+                return;
+            }
+        };
+    let dimensions = image::image_dimensions(&destination);
+    let still_ours = crate::core::ffmpeg_export::types::path_file_identity(&destination)
+        .is_ok_and(|current| current == identity);
+    let Ok((width, height)) = dimensions else {
+        let _ = crate::core::atomic_file::remove_file_if_identity(&destination, identity);
         app.toasts
             .error("コピーした素材の画像情報を読み込めませんでした");
+        return;
+    };
+    if !still_ours {
+        app.toasts.error("コピーした素材が処理中に置き換わりました");
         return;
     };
     let path = destination.to_string_lossy().into_owned();
@@ -142,4 +152,44 @@ pub fn add_stock_asset_to_project(app: &mut KagariApp, filename: &str, name: &st
         ));
     });
     app.toasts.info(format!("「{name}」を素材に追加しました"));
+}
+
+fn write_stock_asset(
+    media_dir: &std::path::Path,
+    filename: &str,
+    stem: &str,
+    extension: &str,
+    bytes: &[u8],
+) -> io::Result<(
+    std::path::PathBuf,
+    crate::core::ffmpeg_export::types::FileIdentity,
+)> {
+    for suffix in 1u32..=u32::MAX {
+        let candidate = if suffix == 1 {
+            media_dir.join(filename)
+        } else {
+            media_dir.join(format!("{stem}_{suffix}.{extension}"))
+        };
+        let mut file = match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+        {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        };
+        let identity = crate::core::ffmpeg_export::types::file_identity(&file)?;
+        if let Err(error) = file.write_all(bytes).and_then(|()| file.sync_all()) {
+            drop(file);
+            let _ = crate::core::atomic_file::remove_file_if_identity(&candidate, identity);
+            return Err(error);
+        }
+        drop(file);
+        return Ok((candidate, identity));
+    }
+    Err(io::Error::new(
+        io::ErrorKind::AlreadyExists,
+        "Could not find an unused stock asset filename",
+    ))
 }

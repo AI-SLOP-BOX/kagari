@@ -16,13 +16,9 @@ impl AfterEffectsStudio {
                     self.current_frame = self.current_frame.clamp(start, end);
                 }
             }
-            if self.playback_start_mode == "beginning" {
-                self.current_frame = 0;
-                self.current_time = format_timecode(
-                    self.current_frame,
-                    self.project_model.active_composition().fps.max(1),
-                );
-            } else if !self.playback_loop && self.current_frame >= duration.saturating_sub(1) {
+            if self.playback_start_mode == "beginning"
+                || (!self.playback_loop && self.current_frame >= duration.saturating_sub(1))
+            {
                 self.current_frame = 0;
                 self.current_time = format_timecode(
                     self.current_frame,

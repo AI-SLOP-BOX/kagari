@@ -1,5 +1,13 @@
 use std::path::PathBuf;
 
+const MAX_DISCOVERED_SYSTEM_FONTS: usize = 4_096;
+
+fn push_discovered_font(fonts: &mut Vec<(String, String)>, name: String, path: String) {
+    if fonts.len() < MAX_DISCOVERED_SYSTEM_FONTS && fonts.try_reserve(1).is_ok() {
+        fonts.push((name, path));
+    }
+}
+
 /// System font directory paths per platform.
 pub fn system_font_paths(family_name: &str) -> Vec<PathBuf> {
     let lower = family_name.to_lowercase().replace(' ', "");
@@ -126,6 +134,9 @@ pub fn discover_system_fonts() -> Vec<(String, String)> {
                 if dir.is_dir() {
                     if let Ok(entries) = std::fs::read_dir(dir) {
                         for entry in entries.flatten() {
+                            if fonts.len() >= MAX_DISCOVERED_SYSTEM_FONTS {
+                                break;
+                            }
                             let path = entry.path();
                             let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
                             if matches!(ext, "ttf" | "otf" | "ttc") {
@@ -134,7 +145,11 @@ pub fn discover_system_fonts() -> Vec<(String, String)> {
                                     .and_then(|s| s.to_str())
                                     .unwrap_or("Unknown")
                                     .to_string();
-                                fonts.push((name, path.to_string_lossy().to_string()));
+                                push_discovered_font(
+                                    &mut fonts,
+                                    name,
+                                    path.to_string_lossy().to_string(),
+                                );
                             }
                         }
                     }
@@ -142,8 +157,14 @@ pub fn discover_system_fonts() -> Vec<(String, String)> {
             }
         }
         for dir in &dirs {
+            if fonts.len() >= MAX_DISCOVERED_SYSTEM_FONTS {
+                break;
+            }
             if let Ok(entries) = std::fs::read_dir(dir) {
                 for entry in entries.flatten() {
+                    if fonts.len() >= MAX_DISCOVERED_SYSTEM_FONTS {
+                        break;
+                    }
                     let path = entry.path();
                     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
                     if matches!(ext, "ttf" | "otf" | "ttc") {
@@ -155,12 +176,13 @@ pub fn discover_system_fonts() -> Vec<(String, String)> {
                         if name.contains("ヒラギノ角ゴシック")
                             || name.contains("ヒラギノ角ゴシック")
                         {
-                            fonts.push((
+                            push_discovered_font(
+                                &mut fonts,
                                 "Hiragino Sans".to_string(),
                                 path.to_string_lossy().to_string(),
-                            ));
+                            );
                         }
-                        fonts.push((name, path.to_string_lossy().to_string()));
+                        push_discovered_font(&mut fonts, name, path.to_string_lossy().to_string());
                     }
                 }
             }
@@ -171,12 +193,21 @@ pub fn discover_system_fonts() -> Vec<(String, String)> {
     {
         let dirs = ["/usr/share/fonts", "/usr/local/share/fonts"];
         for dir in &dirs {
+            if fonts.len() >= MAX_DISCOVERED_SYSTEM_FONTS {
+                break;
+            }
             if let Ok(entries) = std::fs::read_dir(dir) {
                 for entry in entries.flatten() {
+                    if fonts.len() >= MAX_DISCOVERED_SYSTEM_FONTS {
+                        break;
+                    }
                     let path = entry.path();
                     if path.is_dir() {
                         if let Ok(sub_entries) = std::fs::read_dir(&path) {
                             for sub_entry in sub_entries.flatten() {
+                                if fonts.len() >= MAX_DISCOVERED_SYSTEM_FONTS {
+                                    break;
+                                }
                                 let sub_path = sub_entry.path();
                                 let ext =
                                     sub_path.extension().and_then(|e| e.to_str()).unwrap_or("");
@@ -186,7 +217,11 @@ pub fn discover_system_fonts() -> Vec<(String, String)> {
                                         .and_then(|s| s.to_str())
                                         .unwrap_or("Unknown")
                                         .to_string();
-                                    fonts.push((name, sub_path.to_string_lossy().to_string()));
+                                    push_discovered_font(
+                                        &mut fonts,
+                                        name,
+                                        sub_path.to_string_lossy().to_string(),
+                                    );
                                 }
                             }
                         }
@@ -202,6 +237,9 @@ pub fn discover_system_fonts() -> Vec<(String, String)> {
             let fonts_dir = PathBuf::from(windir).join("Fonts");
             if let Ok(entries) = std::fs::read_dir(&fonts_dir) {
                 for entry in entries.flatten() {
+                    if fonts.len() >= MAX_DISCOVERED_SYSTEM_FONTS {
+                        break;
+                    }
                     let path = entry.path();
                     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
                     if matches!(ext, "ttf" | "otf" | "ttc") {
@@ -210,7 +248,7 @@ pub fn discover_system_fonts() -> Vec<(String, String)> {
                             .and_then(|s| s.to_str())
                             .unwrap_or("Unknown")
                             .to_string();
-                        fonts.push((name, path.to_string_lossy().to_string()));
+                        push_discovered_font(&mut fonts, name, path.to_string_lossy().to_string());
                     }
                 }
             }

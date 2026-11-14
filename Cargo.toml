@@ -26,6 +26,7 @@ libloading = "0.8"
 env_logger = "0.11.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+base64 = "0.22"
 bytemuck = { version = "1.15.0", features = ["derive"] }
 half = { version = "2", features = ["bytemuck"] }
 wgpu = { version = "22", optional = true }
@@ -72,6 +73,7 @@ ab_glyph = "0.2"
 # formats open for import (writer side lives in core::exr_writer)
 image = { version = "0.25", default-features = false, features = [
     "jpeg",
+    "bmp",
     "png",
     "webp",
     "exr",
@@ -89,12 +91,16 @@ pollster = "0.3"
 
 [features]
 default = ["ame"]
-gui = ["dep:eframe", "dep:egui_extras", "dep:rfd", "dep:rodio", "dep:egui-phosphor", "dep:sys-locale", "wgpu"]
+gui = ["dep:eframe", "dep:egui_extras", "dep:rfd", "dep:rodio", "dep:egui-phosphor", "dep:sys-locale", "wgpu", "exr-compression"]
 preview = ["dep:winit", "dep:pollster", "wgpu"]
-cli = ["dep:clap", "dep:png", "dep:flate2"]
+cli = ["dep:clap", "dep:png", "exr-compression"]
 cli-gpu = ["cli", "dep:pollster", "wgpu"]
 wgpu = ["dep:wgpu"]
-ame = ["dep:ame-ui", "dep:vello", "dep:rfd"]
+ame = ["dep:ame-ui", "dep:vello", "dep:rfd", "exr-compression"]
+exr-compression = ["dep:flate2"]
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
 
 [[bin]]
 name = "kagari"

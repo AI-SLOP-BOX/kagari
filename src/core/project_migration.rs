@@ -9,11 +9,12 @@ pub mod storage;
 
 pub use bundle::collect_production_document;
 pub use schema::{
-    load_project_migrated, migrate_schema_json, save_project_versioned, VersionedProjectFile,
-    CURRENT_SCHEMA_VERSION, MAX_PROJECT_JSON_BYTES,
+    load_project_migrated, migrate_schema_json, save_project_versioned, validate_project_json_size,
+    VersionedProjectFile, CURRENT_SCHEMA_VERSION, MAX_PROJECT_JSON_BYTES,
 };
 pub use storage::{
-    load_project_with_backup, read_bounded_text_file, read_project_json_file, save_project_atomic,
+    load_project_document_or_legacy, load_project_with_backup, read_bounded_text_file,
+    read_project_json_file, save_project_atomic, save_project_atomic_from,
 };
 
 #[cfg(test)]

@@ -1,5 +1,8 @@
 use super::*;
 
+const MAX_ROTO_STROKES_PER_LAYER: usize = 10_000;
+const MAX_ROTO_POINTS_PER_LAYER: usize = 1_000_000;
+
 pub(super) fn metadata_text_is_safe(value: &str) -> bool {
     !value.is_empty() && value == value.trim() && !value.chars().any(char::is_control)
 }
@@ -72,9 +75,27 @@ pub(super) fn validate_camera(camera: &crate::core::timeline::Camera3D) -> Resul
     Ok(())
 }
 
+pub(super) fn mask_maximum_vertex_count(mask: &crate::core::mask::Mask) -> usize {
+    match &mask.path.vertices {
+        crate::core::property::Animatable::Constant(vertices) => vertices.len(),
+        crate::core::property::Animatable::Animated(keyframes) => keyframes
+            .iter()
+            .map(|keyframe| keyframe.value.len())
+            .max()
+            .unwrap_or(0),
+    }
+}
+
 pub(super) fn validate_mask(mask: &crate::core::mask::Mask) -> Result<(), String> {
     let validate_vertices =
         |vertices: &[[f32; 2]]| vertices.iter().flatten().all(|value| value.is_finite());
+    let maximum_vertex_count = mask_maximum_vertex_count(mask);
+    if maximum_vertex_count > crate::core::mask::MAX_MASK_PATH_VERTICES {
+        return Err(format!(
+            "mask path exceeds the {} vertex limit",
+            crate::core::mask::MAX_MASK_PATH_VERTICES
+        ));
+    }
     match &mask.path.vertices {
         crate::core::property::Animatable::Constant(vertices) => {
             if !validate_vertices(vertices) {
@@ -107,6 +128,51 @@ pub(super) fn validate_mask(mask: &crate::core::mask::Mask) -> Result<(), String
     }
     if !scalar_animation_is_percentage(&mask.opacity) {
         return Err("mask opacity must be within 0..100".into());
+    }
+    Ok(())
+}
+
+pub(super) fn validate_roto_strokes(
+    strokes: &[crate::core::roto_brush_engine::RotoStroke],
+    duration_frames: u32,
+) -> Result<(), String> {
+    if strokes.len() > MAX_ROTO_STROKES_PER_LAYER {
+        return Err(format!(
+            "layer contains more than {MAX_ROTO_STROKES_PER_LAYER} Roto Brush strokes"
+        ));
+    }
+    let mut total_points = 0usize;
+    for stroke in strokes {
+        if !stroke.radius.is_finite() || stroke.radius < 0.0 {
+            return Err("Roto Brush stroke radius must be finite and non-negative".into());
+        }
+        if stroke.points.len() > MAX_ROTO_POINTS_PER_LAYER {
+            return Err("Roto Brush stroke exceeds the per-layer point limit".into());
+        }
+        total_points = total_points
+            .checked_add(stroke.points.len())
+            .filter(|&count| count <= MAX_ROTO_POINTS_PER_LAYER)
+            .ok_or_else(|| "layer exceeds the Roto Brush point limit".to_owned())?;
+        if stroke
+            .points
+            .iter()
+            .flatten()
+            .any(|coordinate| !coordinate.is_finite())
+        {
+            return Err("Roto Brush stroke coordinates must be finite".into());
+        }
+        if !stroke.pressures.is_empty()
+            && (stroke.pressures.len() != stroke.points.len()
+                || stroke
+                    .pressures
+                    .iter()
+                    .any(|pressure| !pressure.is_finite() || !(0.0..=1.0).contains(pressure)))
+        {
+            return Err("Roto Brush stroke pressure data is invalid".into());
+        }
+        if stroke.frame.is_some_and(|frame| frame >= duration_frames) {
+            return Err("Roto Brush stroke frame is outside the composition".into());
+        }
     }
     Ok(())
 }
@@ -146,10 +212,14 @@ pub(super) fn index_nested_compositions<'a>(
     }
 }
 
-pub(super) fn precomp_graph_is_acyclic<'a>(
+pub(super) fn validate_precomp_graph<'a>(
     compositions: &HashMap<&'a str, &'a Composition>,
-) -> bool {
+) -> Result<(), String> {
     let mut dependency_count = compositions
+        .keys()
+        .map(|&id| (id, 0usize))
+        .collect::<HashMap<_, _>>();
+    let mut longest_path = compositions
         .keys()
         .map(|&id| (id, 0usize))
         .collect::<HashMap<_, _>>();
@@ -174,8 +244,21 @@ pub(super) fn precomp_graph_is_acyclic<'a>(
         processed += 1;
         if let Some(parents) = dependents.get(id) {
             for &dependent in parents {
+                let candidate_depth = longest_path
+                    .get(id)
+                    .copied()
+                    .unwrap_or_default()
+                    .saturating_add(1);
+                let depth = longest_path.entry(dependent).or_default();
+                *depth = (*depth).max(candidate_depth);
+                if *depth > crate::core::software_renderer::MAX_PRECOMP_DEPTH as usize {
+                    return Err(format!(
+                        "composition precomp nesting exceeds the renderer limit of {}",
+                        crate::core::software_renderer::MAX_PRECOMP_DEPTH
+                    ));
+                }
                 let Some(count) = dependency_count.get_mut(dependent) else {
-                    return false;
+                    return Err("composition precomp graph is inconsistent".into());
                 };
                 *count -= 1;
                 if *count == 0 {
@@ -184,5 +267,8 @@ pub(super) fn precomp_graph_is_acyclic<'a>(
             }
         }
     }
-    processed == compositions.len()
+    if processed != compositions.len() {
+        return Err("composition precomp graph contains a cycle".into());
+    }
+    Ok(())
 }

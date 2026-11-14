@@ -310,7 +310,7 @@ pub fn draw_color_management(app: &mut KagariApp, ui: &mut egui::Ui) {
                             use std::fmt::Write;
                             let _ = writeln!(content, "{:.8} {:.8} {:.8}", rgb[0], rgb[1], rgb[2]);
                         }
-                        match std::fs::write(&path, content) {
+                        match crate::core::atomic_file::write_atomic(&path, content.as_bytes()) {
                             Ok(()) => {
                                 crate::ui::project_io::reveal_in_file_manager(&path);
                                 let path = path.display().to_string();

@@ -7,7 +7,7 @@ component AudioMixerPanel() {
       Caption("音量入力またはキー追加 · ミュートとソロを切り替え")
     }
     If(has_audio_tracks) {
-      ForEach(audio_tracks, track, key: id) {
+      ForEach(audio_tracks, track, key: id, height: 300, row_height: 54, overscan: 4) {
         VStack(spacing: 3) {
           HStack(spacing: 5) {
             If(track.selected) { Button("{track.name}", action: select_layer, tone: primary, size: small) } else { Button("{track.name}", action: select_layer, tone: secondary, size: small) }

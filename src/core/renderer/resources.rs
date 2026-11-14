@@ -200,6 +200,7 @@ impl WgpuRenderer {
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
+        let upload_bytes = rgba8_to_rgba16f_bytes(&pixels)?;
         self.queue.write_texture(
             wgpu::ImageCopyTexture {
                 texture: &texture,
@@ -207,7 +208,7 @@ impl WgpuRenderer {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            &rgba8_to_rgba16f_bytes(&pixels),
+            &upload_bytes,
             wgpu::ImageDataLayout {
                 offset: 0,
                 bytes_per_row: Some(tw * 8),
@@ -225,6 +226,14 @@ impl WgpuRenderer {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
                     resource: wgpu::BindingResource::Sampler(&self.sampler),
                 },
             ],

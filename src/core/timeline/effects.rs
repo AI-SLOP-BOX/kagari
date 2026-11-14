@@ -359,11 +359,16 @@ pub enum EffectType {
         weight: Animatable<f32>,
     },
     /// Audio Spectrum: paint a real-time frequency-bar overlay sourced from
-    /// the current frame's analyzed audio bands (see
-    /// expression_engine::set_audio_data).
+    /// the current frame's analyzed logarithmic spectrum.
     AudioSpectrum {
         enabled: Animatable<f32>,
         bands: Animatable<f32>,
+        /// Lower frequency bound for the visualized logarithmic bands.
+        #[serde(default = "default_spectrum_start_frequency")]
+        start_frequency: f32,
+        /// Upper frequency bound for the visualized logarithmic bands.
+        #[serde(default = "default_spectrum_end_frequency")]
+        end_frequency: f32,
         opacity: Animatable<f32>,
         color_start: [f32; 4],
         color_end: [f32; 4],
@@ -772,6 +777,14 @@ pub enum EffectType {
     CustomPlugin {
         plugin_id: String,
     },
+}
+
+fn default_spectrum_start_frequency() -> f32 {
+    20.0
+}
+
+fn default_spectrum_end_frequency() -> f32 {
+    20_000.0
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

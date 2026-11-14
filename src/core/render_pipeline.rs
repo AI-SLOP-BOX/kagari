@@ -41,6 +41,7 @@ pub struct RenderPipeline {
     command_gate: Mutex<()>,
     /// Kept so `shutdown()` can join the worker instead of detaching it.
     worker: Mutex<Option<std::thread::JoinHandle<()>>>,
+    worker_start_error: Option<String>,
 }
 
 struct QueuedCommand {
@@ -88,20 +89,46 @@ impl RenderPipeline {
                         }
                     }
                 }
-            })
-            .expect("Failed to spawn render worker thread");
+            });
+        let (worker, worker_start_error) = match worker {
+            Ok(worker) => (Some(worker), None),
+            Err(error) => {
+                let message = format!("Failed to spawn render worker thread: {error}");
+                log::error!("{message}");
+                (None, Some(message))
+            }
+        };
 
         Self {
             cmd_tx,
             result_rx,
             generation,
             command_gate: Mutex::new(()),
-            worker: Mutex::new(Some(worker)),
+            worker: Mutex::new(worker),
+            worker_start_error,
         }
+    }
+
+    /// Whether the background render worker started successfully.
+    pub fn is_available(&self) -> bool {
+        self.worker_start_error.is_none()
+            && self
+                .worker
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .is_some()
+    }
+
+    /// Startup failure detail, if the operating system could not create the worker.
+    pub fn worker_start_error(&self) -> Option<&str> {
+        self.worker_start_error.as_deref()
     }
 
     /// Request an asynchronous render of `frame`.
     pub fn request_frame(&self, frame: u32, version: u64) {
+        if !self.is_available() {
+            return;
+        }
         let _gate = self.command_gate.lock().unwrap_or_else(|e| e.into_inner());
         let generation = self.generation.load(Ordering::SeqCst);
         let _ = self.cmd_tx.send(QueuedCommand {
@@ -112,6 +139,9 @@ impl RenderPipeline {
 
     /// Pre-fetch a range of frames in the background.
     pub fn prefetch_range(&self, start: u32, end: u32, version: u64) {
+        if !self.is_available() {
+            return;
+        }
         let _gate = self.command_gate.lock().unwrap_or_else(|e| e.into_inner());
         let generation = self.generation.load(Ordering::SeqCst);
         let _ = self.cmd_tx.send(QueuedCommand {
@@ -126,6 +156,9 @@ impl RenderPipeline {
 
     /// Skip queued commands from earlier generations and accept subsequent requests.
     pub fn flush(&self) {
+        if !self.is_available() {
+            return;
+        }
         let _gate = self.command_gate.lock().unwrap_or_else(|e| e.into_inner());
         let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
         let _ = self.cmd_tx.send(QueuedCommand {

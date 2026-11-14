@@ -10,8 +10,10 @@
 
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
+
+use crate::core::external_tools::{ffmpeg_command, ffprobe_command};
 
 const MAX_IMPORT_FPS: f32 = 240.0;
 const MAX_IMPORT_DURATION_SECONDS: f64 = 24.0 * 60.0 * 60.0;
@@ -27,18 +29,29 @@ const FRAME_CACHE_MANIFEST_FILE: &str = ".kagari-frame-cache-v1.json";
 mod frame_cache;
 #[cfg(test)]
 use frame_cache::video_frame_cache_is_complete;
-use frame_cache::write_frame_cache_manifest;
 pub use frame_cache::{frame_path, frame_path_in_dir, refresh_missing_video_caches};
+use frame_cache::{write_image_sequence_frame_cache_manifest, write_video_frame_cache_manifest};
 mod image_sequence;
 mod process;
 pub use image_sequence::{import_image_sequence, import_image_sequence_with_cancel};
+pub(crate) use process::{available_disk_space, estimate_import_disk_bytes};
 use process::{
-    available_disk_space, dimensions_within_import_budget, estimate_import_disk_bytes,
-    format_disk_bytes, run_ffmpeg, ImportDirectoryGuard, ImportSafety,
+    create_private_import_directory, decode_import_image, dimensions_within_import_budget,
+    format_disk_bytes, run_cancellable_probe, run_ffmpeg, ImportDirectoryGuard, ImportSafety,
 };
 
 static FRAME_CACHE_MANIFEST_SEQUENCE: std::sync::atomic::AtomicU64 =
     std::sync::atomic::AtomicU64::new(0);
+
+pub(crate) fn is_image_sequence_cache(frames_dir: &str, source: &str) -> bool {
+    frame_cache::is_image_sequence_cache(frames_dir, source)
+}
+
+/// Returns the sequence decode rate, stamping old manifests with the current
+/// composition rate so subsequent FPS changes retain the original timebase.
+pub fn extraction_fps(frames_dir: &str, fallback_fps: u32) -> f32 {
+    frame_cache::extraction_fps(frames_dir, fallback_fps)
+}
 
 /// A decoded video asset on disk.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -55,83 +68,117 @@ pub struct VideoAsset {
     pub height: u32,
     /// Extracted audio WAV path, if the source had an audio stream.
     pub audio_wav: Option<String>,
+    /// Why a detected source audio track could not be extracted, if applicable.
+    #[serde(default)]
+    pub audio_warning: Option<String>,
 }
 
-/// True if ffmpeg is available on PATH.
+/// True if ffmpeg is discoverable on PATH or a supported macOS install path.
 pub fn ffmpeg_available() -> bool {
-    Command::new("ffmpeg")
+    ffmpeg_command()
         .arg("-version")
-        .output()
-        .map(|o| o.status.success())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|status| status.success())
         .unwrap_or(false)
 }
 
-fn probe_duration_seconds(path: &Path) -> Option<f64> {
-    let out = Command::new("ffprobe")
-        .args([
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-            "--",
-        ])
-        .arg(path)
-        .output()
-        .ok()?;
+fn probe_duration_seconds(path: &Path, cancel: &AtomicBool) -> Result<f64, String> {
+    let out = run_cancellable_probe(
+        ffprobe_command()
+            .args([
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                "--",
+            ])
+            .arg(path),
+        cancel,
+    )
+    .map_err(|error| format!("could not inspect video duration: {error}"))?;
     if !out.status.success() {
-        return None;
+        return Err("could not determine video duration".to_owned());
     }
     String::from_utf8_lossy(&out.stdout)
         .trim()
         .parse::<f64>()
-        .ok()
+        .map_err(|_| "could not determine video duration".to_owned())
 }
 
-fn probe_dimensions(path: &Path) -> Option<(u32, u32)> {
-    let out = Command::new("ffprobe")
-        .args([
-            "-v",
-            "error",
-            "-select_streams",
-            "v:0",
-            "-show_entries",
-            "stream=width,height",
-            "-of",
-            "csv=s=x:p=0",
-            "--",
-        ])
-        .arg(path)
-        .output()
-        .ok()?;
+fn probe_dimensions(path: &Path, cancel: &AtomicBool) -> Result<(u32, u32), String> {
+    let out = run_cancellable_probe(
+        ffprobe_command()
+            .args([
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=width,height",
+                "-of",
+                "csv=s=x:p=0",
+                "--",
+            ])
+            .arg(path),
+        cancel,
+    )
+    .map_err(|error| format!("could not inspect video dimensions: {error}"))?;
     if !out.status.success() {
-        return None;
+        return Err("could not determine video dimensions".to_owned());
     }
     let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
     let mut it = s.split('x');
-    let w = it.next()?.parse().ok()?;
-    let h = it.next()?.parse().ok()?;
-    Some((w, h))
+    let w = it
+        .next()
+        .and_then(|value| value.parse().ok())
+        .ok_or_else(|| "could not determine video dimensions".to_owned())?;
+    let h = it
+        .next()
+        .and_then(|value| value.parse().ok())
+        .ok_or_else(|| "could not determine video dimensions".to_owned())?;
+    Ok((w, h))
 }
 
-fn probe_has_audio(path: &Path) -> bool {
-    Command::new("ffprobe")
-        .args([
-            "-v",
-            "error",
-            "-select_streams",
-            "a:0",
-            "-show_entries",
-            "stream=codec_type",
-            "-of",
-            "csv=p=0",
-            "--",
-        ])
-        .arg(path)
-        .output()
-        .map(|o| o.status.success() && String::from_utf8_lossy(&o.stdout).contains("audio"))
-        .unwrap_or(false)
+fn probe_has_audio(path: &Path, cancel: &AtomicBool) -> Result<bool, String> {
+    let output = run_cancellable_probe(
+        ffprobe_command()
+            .args([
+                "-v",
+                "error",
+                "-select_streams",
+                "a:0",
+                "-show_entries",
+                "stream=codec_type",
+                "-of",
+                "csv=p=0",
+                "--",
+            ])
+            .arg(path),
+        cancel,
+    )
+    .map_err(|error| format!("could not inspect source audio streams: {error}"))?;
+    if !output.status.success() {
+        return Err("could not inspect source audio streams".to_owned());
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).contains("audio"))
+}
+
+fn audio_fits_decode_limit(duration_seconds: f64) -> bool {
+    let audio_frames = (duration_seconds * 44_100.0).ceil();
+    let decoded_bytes = audio_frames * 2.0 * std::mem::size_of::<f32>() as f64;
+    decoded_bytes <= crate::core::audio_engine::MAX_DECODED_AUDIO_BYTES as f64
+}
+
+fn discard_partial_audio(path: &Path) -> Option<String> {
+    match std::fs::remove_file(path) {
+        Ok(()) => None,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => Some(format!("; partial audio could not be removed: {error}")),
+    }
 }
 
 fn create_unique_import_dir(dest_dir: &Path) -> Result<PathBuf, String> {
@@ -150,7 +197,7 @@ fn create_unique_import_dir(dest_dir: &Path) -> Result<PathBuf, String> {
     let mut candidate = dest_dir.to_path_buf();
     let mut suffix = 1u32;
     loop {
-        match std::fs::create_dir(&candidate) {
+        match create_private_import_directory(&candidate) {
             Ok(()) => return Ok(candidate),
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
                 candidate = parent.join(format!("{stem}_{suffix}"));
@@ -182,7 +229,9 @@ pub fn import_video_with_cancel(
     if cancel.load(Ordering::Relaxed) {
         return Err("video import cancelled".into());
     }
-    if !ffmpeg_available() {
+    let ffmpeg_status = run_cancellable_probe(ffmpeg_command().arg("-version"), cancel)
+        .map_err(|error| format!("could not check FFmpeg availability: {error}"))?;
+    if !ffmpeg_status.status.success() {
         return Err("ffmpeg not found on PATH — install it to import video".into());
     }
     let src = Path::new(src_path);
@@ -195,16 +244,14 @@ pub fn import_video_with_cancel(
             MAX_IMPORT_FPS
         ));
     }
-    let duration = probe_duration_seconds(src)
-        .ok_or_else(|| "could not determine video duration".to_string())?;
+    let duration = probe_duration_seconds(src, cancel)?;
     if !duration.is_finite() || duration <= 0.0 || duration > MAX_IMPORT_DURATION_SECONDS {
         return Err(format!(
             "video duration must be between 0 and {} hours",
             MAX_IMPORT_DURATION_SECONDS / 3600.0
         ));
     }
-    let (source_width, source_height) =
-        probe_dimensions(src).ok_or_else(|| "could not determine video dimensions".to_string())?;
+    let (source_width, source_height) = probe_dimensions(src, cancel)?;
     if !dimensions_within_import_budget(source_width, source_height) {
         return Err(format!(
             "video dimensions exceed the import limit (maximum side {} px and decoded RGBA size {} MiB)",
@@ -219,13 +266,14 @@ pub fn import_video_with_cancel(
             MAX_IMPORT_FRAMES
         ));
     }
-    let has_audio = probe_has_audio(src);
+    let has_audio = probe_has_audio(src, cancel)?;
+    let extract_audio = has_audio && audio_fits_decode_limit(duration);
     let estimated_disk_bytes = estimate_import_disk_bytes(
         source_width,
         source_height,
         estimated_frames,
         duration,
-        has_audio,
+        extract_audio,
     )
     .ok_or_else(|| "could not estimate video import disk usage".to_string())?;
     let minimum_free_bytes = MIN_IMPORT_FREE_BYTES.max(
@@ -249,8 +297,8 @@ pub fn import_video_with_cancel(
         minimum_free_bytes,
     };
     let import_dir = create_unique_import_dir(dest_dir)?;
-    let extracted_width = source_width & !1;
-    let extracted_height = source_height & !1;
+    let extracted_width = source_width;
+    let extracted_height = source_height;
     let mut import_dir_guard = ImportDirectoryGuard {
         path: import_dir.clone(),
         keep: false,
@@ -259,20 +307,17 @@ pub fn import_video_with_cancel(
     std::fs::create_dir_all(&frames_dir)
         .map_err(|e| format!("failed to create media dir: {}", e))?;
 
-    // 1. Decode frames: scale to even dimensions (encoder-safe), numbered from 0.
-    // Lossless WebP keeps imported footage substantially smaller than a PNG
-    // sequence while remaining directly decodable by image_cache.
+    // 1. Decode frames at their source dimensions, numbered from 0. Lossless
+    // WebP keeps imported footage substantially smaller than a PNG sequence
+    // while preserving every source pixel and remaining directly decodable.
     let webp_pattern = frames_dir.join("frame_%05d.webp");
-    let mut decode_webp = Command::new("ffmpeg");
+    let mut decode_webp = ffmpeg_command();
     decode_webp
         .arg("-y")
         .args(["-v", "error"])
         .arg("-i")
         .arg(src)
-        .args([
-            "-vf",
-            &format!("fps={},scale=trunc(iw/2)*2:trunc(ih/2)*2", fps),
-        ])
+        .args(["-vf", &format!("fps={}", fps)])
         .args([
             "-c:v",
             "libwebp",
@@ -310,16 +355,13 @@ pub fn import_video_with_cancel(
             }
         }
         let png_pattern = frames_dir.join("frame_%05d.png");
-        let mut decode_png = Command::new("ffmpeg");
+        let mut decode_png = ffmpeg_command();
         decode_png
             .arg("-y")
             .args(["-v", "error"])
             .arg("-i")
             .arg(src)
-            .args([
-                "-vf",
-                &format!("fps={},scale=trunc(iw/2)*2:trunc(ih/2)*2", fps),
-            ])
+            .args(["-vf", &format!("fps={}", fps)])
             .args(["-start_number", "0"])
             .arg("--")
             .arg(&png_pattern);
@@ -335,9 +377,13 @@ pub fn import_video_with_cancel(
 
     // Count produced frames
     let mut frame_count = 0u32;
-    let entries =
-        std::fs::read_dir(&frames_dir).map_err(|e| format!("failed to read frames dir: {}", e))?;
-    for entry in entries.flatten() {
+    for entry in
+        std::fs::read_dir(&frames_dir).map_err(|e| format!("failed to read frames dir: {}", e))?
+    {
+        if cancel.load(Ordering::Relaxed) {
+            return Err("video import cancelled".into());
+        }
+        let entry = entry.map_err(|e| format!("failed to finish reading frames dir: {}", e))?;
         let name = entry.file_name().to_string_lossy().to_string();
         if name.starts_with("frame_") {
             let is_frame = name.ends_with(".webp") || name.ends_with(".png");
@@ -352,41 +398,79 @@ pub fn import_video_with_cancel(
             }
         }
     }
+    if cancel.load(Ordering::Relaxed) {
+        return Err("video import cancelled".into());
+    }
     if frame_count == 0 {
         return Err("ffmpeg produced no frames".into());
     }
-    write_frame_cache_manifest(&frames_dir, frame_count, extracted_width, extracted_height)
-        .map_err(|error| format!("could not verify extracted video frames: {error}"))?;
+    write_video_frame_cache_manifest(
+        &frames_dir,
+        frame_count,
+        extracted_width,
+        extracted_height,
+        src,
+        fps,
+        cancel,
+    )
+    .map_err(|error| format!("could not verify extracted video frames: {error}"))?;
 
     // 2. Audio extraction (best effort — absence is not fatal)
     let mut audio_wav = None;
+    let mut audio_warning = None;
     if cancel.load(Ordering::Relaxed) {
         return Err("video import cancelled".into());
     }
     if has_audio {
-        let wav = import_dir.join("audio.wav");
-        let mut audio = Command::new("ffmpeg");
-        audio
-            .arg("-y")
-            .args(["-v", "error"])
-            .arg("-i")
-            .arg(src)
-            .args(["-vn", "-acodec", "pcm_s16le", "-ar", "44100", "-ac", "2"])
-            .arg("--")
-            .arg(&wav);
-        let audio = run_ffmpeg(&mut audio, Some(&safety));
-        if cancel.load(Ordering::Relaxed) {
-            return Err("video import cancelled".into());
-        }
-        if audio
-            .as_ref()
-            .is_err_and(|error| error.to_string().contains("minimum free disk space"))
-        {
-            return Err("video import stopped to preserve the minimum free disk space".into());
-        }
-        if let Ok(out) = audio {
-            if out.status.success() && wav.exists() {
-                audio_wav = Some(wav.to_string_lossy().to_string());
+        if !extract_audio {
+            audio_warning = Some(
+                "source audio exceeds Kagari's 512 MiB decoded-audio limit and was not extracted"
+                    .to_owned(),
+            );
+        } else {
+            let wav = import_dir.join("audio.wav");
+            let mut audio = ffmpeg_command();
+            audio
+                .arg("-y")
+                .args(["-v", "error"])
+                .arg("-i")
+                .arg(src)
+                .args(["-vn", "-acodec", "pcm_s16le", "-ar", "44100", "-ac", "2"])
+                .arg("--")
+                .arg(&wav);
+            let audio = run_ffmpeg(&mut audio, Some(&safety));
+            if cancel.load(Ordering::Relaxed) {
+                return Err("video import cancelled".into());
+            }
+            match audio {
+                Err(error) if error.to_string().contains("minimum free disk space") => {
+                    return Err(
+                        "video import stopped to preserve the minimum free disk space".into(),
+                    );
+                }
+                Err(error) => {
+                    let cleanup_warning = discard_partial_audio(&wav).unwrap_or_default();
+                    audio_warning = Some(format!(
+                        "FFmpeg could not extract the source audio: {error}{cleanup_warning}"
+                    ));
+                }
+                Ok(out)
+                    if out.status.success() && wav.metadata().is_ok_and(|meta| meta.len() > 44) =>
+                {
+                    audio_wav = Some(wav.to_string_lossy().to_string());
+                }
+                Ok(out) => {
+                    let detail = out.stderr.trim();
+                    let detail = if detail.is_empty() {
+                        "FFmpeg did not produce a valid WAV file".to_owned()
+                    } else {
+                        detail.chars().take(500).collect::<String>()
+                    };
+                    let cleanup_warning = discard_partial_audio(&wav).unwrap_or_default();
+                    audio_warning = Some(format!(
+                        "source audio was not extracted: {detail}{cleanup_warning}"
+                    ));
+                }
             }
         }
     }
@@ -402,6 +486,7 @@ pub fn import_video_with_cancel(
         width: extracted_width,
         height: extracted_height,
         audio_wav,
+        audio_warning,
     };
     import_dir_guard.keep = true;
     Ok(asset)

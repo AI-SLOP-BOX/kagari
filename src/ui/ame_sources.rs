@@ -1,6 +1,9 @@
 pub const STUDIO_ROOT: &str = include_str!("ame/kagari_studio.ame");
 
 pub const STUDIO_MODULES: &[(&str, &str)] = &[
+    ("state/records.ame", include_str!("ame/state/records.ame")),
+    ("state/bindings.ame", include_str!("ame/state/bindings.ame")),
+    ("state/actions.ame", include_str!("ame/state/actions.ame")),
     (
         "components/navigation.ame",
         include_str!("ame/components/navigation.ame"),

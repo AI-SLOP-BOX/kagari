@@ -65,16 +65,21 @@ pub(super) fn parse_standard_otio(
                 "OTIO stack child '{track_name}' uses unsupported schema '{track_schema}'"
             )));
         }
-        let kind = track
-            .get("kind")
-            .and_then(Value::as_str)
-            .unwrap_or("Video")
-            .to_ascii_lowercase();
         let name = track
             .get("name")
             .and_then(Value::as_str)
             .unwrap_or("Track")
             .to_string();
+        let kind = track
+            .get("kind")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if kind != "audio" && kind != "video" {
+            return Err(invalid(format!(
+                "OTIO track '{name}' has unsupported or missing kind '{kind}'"
+            )));
+        }
         let children = track
             .get("children")
             .and_then(Value::as_array)
@@ -95,7 +100,7 @@ pub(super) fn parse_standard_otio(
             if schema.starts_with("Gap.") {
                 let item_duration = source_range
                     .get("duration")
-                    .map(&rate)
+                    .map(rate)
                     .transpose()?
                     .ok_or_else(|| {
                         invalid(format!("OTIO gap on track '{name}' has no duration"))
@@ -150,14 +155,14 @@ pub(super) fn parse_standard_otio(
             };
             let source_start = source_range
                 .get("start_time")
-                .map(&rate)
+                .map(rate)
                 .transpose()?
                 .ok_or_else(|| {
                     invalid(format!("OTIO clip '{clip_name}' has no source start time"))
                 })?;
             let item_duration = source_range
                 .get("duration")
-                .map(&rate)
+                .map(rate)
                 .transpose()?
                 .ok_or_else(|| {
                     invalid(format!("OTIO clip '{clip_name}' has no source duration"))
@@ -210,6 +215,28 @@ pub(super) fn parse_standard_otio(
     let metadata = value
         .get("metadata")
         .and_then(|metadata| metadata.get("Kagari"));
+    let declared_duration = metadata
+        .and_then(|metadata| metadata.get("duration_frames"))
+        .map(|value| {
+            value
+                .as_u64()
+                .and_then(|value| u32::try_from(value).ok())
+                .ok_or_else(|| {
+                    invalid("OTIO Kagari duration metadata is not a valid frame count".into())
+                })
+        })
+        .transpose()?;
+    if declared_duration == Some(0) {
+        return Err(invalid(
+            "OTIO Kagari duration metadata must be greater than zero".into(),
+        ));
+    }
+    if declared_duration.is_some_and(|declared| declared < duration_frames) {
+        return Err(invalid(format!(
+            "OTIO Kagari duration metadata ({}) is shorter than track content ({duration_frames} frames)",
+            declared_duration.unwrap_or_default()
+        )));
+    }
     Ok(OtioTimeline {
         name: value
             .get("name")
@@ -218,7 +245,7 @@ pub(super) fn parse_standard_otio(
             .into(),
         global_start_time: value
             .get("global_start_time")
-            .map(&rate)
+            .map(rate)
             .transpose()?
             .unwrap_or(0),
         fps,
@@ -232,11 +259,7 @@ pub(super) fn parse_standard_otio(
             .and_then(Value::as_u64)
             .and_then(|value| u32::try_from(value).ok())
             .unwrap_or_else(default_otio_height),
-        duration_frames: metadata
-            .and_then(|metadata| metadata.get("duration_frames"))
-            .and_then(Value::as_u64)
-            .and_then(|value| u32::try_from(value).ok())
-            .unwrap_or(duration_frames.max(1)),
+        duration_frames: declared_duration.unwrap_or_else(|| duration_frames.max(1)),
         tracks,
     })
 }

@@ -289,6 +289,7 @@ impl AfterEffectsStudio {
     }
 
     pub(crate) fn apply_selected_time_remap_preset(&mut self, preset: &str) {
+        let composition_duration = self.project_model.active_composition().duration_frames;
         let Some(id) = self.selected_layer_id.as_deref() else {
             return;
         };
@@ -311,7 +312,18 @@ impl AfterEffectsStudio {
         match preset {
             "reverse" => layer.time_reverse(),
             "freeze" => layer.freeze_at(source_frame_at_playhead),
-            "slow" => layer.time_stretch(2.0),
+            "slow" => {
+                let requested_end = u64::from(layer.in_frame)
+                    .saturating_add(u64::from(layer.duration_frames()).saturating_mul(2));
+                let composition_end = u64::from(composition_duration);
+                if requested_end > composition_end {
+                    self.render_status =
+                        "スロー再生にはコンポジションの尺が足りません。先にコンポジションを延長してください。"
+                            .to_owned();
+                    return;
+                }
+                layer.time_stretch(2.0);
+            }
             "fast" => layer.time_stretch(0.5),
             _ => return,
         }

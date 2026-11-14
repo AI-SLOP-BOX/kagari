@@ -28,9 +28,9 @@
     fn shadow_map_keeps_caster_transform_on_composition_time() {
         let mut comp = shadow_test_comp(true);
         let caster = comp.layers.get_mut(1).expect("caster layer");
-        caster.transform.position = Animatable::new_animated(vec![
-            Keyframe::new(0, [36.0, 36.0], InterpolationType::Linear),
-            Keyframe::new(20, [48.0, 48.0], InterpolationType::Linear),
+        caster.transform_3d.position = Animatable::new_animated(vec![
+            Keyframe::new(0, [36.0, 36.0, 100.0], InterpolationType::Linear),
+            Keyframe::new(20, [48.0, 48.0, 100.0], InterpolationType::Linear),
         ]);
         caster.freeze_at(20);
 
@@ -53,6 +53,191 @@
             "shadow must follow composition-time caster transform"
         );
     }
+
+    #[test]
+    fn shadow_map_uses_3d_caster_transform_not_2d_layer_transform() {
+        let mut comp = shadow_test_comp(true);
+        let caster = comp.layers.get_mut(1).expect("caster layer");
+        // Keep the 2D transform far away and make the actual 3D transform
+        // smaller, rotated, and displaced to a separate shadow location.
+        caster.transform.position = Animatable::new_constant([8.0, 8.0]);
+        caster.transform.scale = Animatable::new_constant([20.0, 20.0]);
+        caster.transform_3d.position = Animatable::new_constant([44.0, 30.0, 100.0]);
+        caster.transform_3d.rotation = Animatable::new_constant([0.0, 0.0, 20.0]);
+        caster.transform_3d.scale = Animatable::new_constant([20.0, 20.0, 100.0]);
+
+        let map = build_shadow_map(&comp, 0, 64, 64);
+        let sum_near = |cx: usize, cy: usize| {
+            let mut sum = 0.0;
+            for y in cy.saturating_sub(2)..=(cy + 2).min(63) {
+                for x in cx.saturating_sub(2)..=(cx + 2).min(63) {
+                    sum += map[y * 64 + x];
+                }
+            }
+            sum
+        };
+        // The 3D center projects from [44,30,100] through light [16,16,400]
+        // to approximately [53,35]. The stale 2D transform would place it
+        // near [5,5] and use the wrong size/orientation.
+        assert!(
+            sum_near(53, 35) > sum_near(5, 5) * 2.0,
+            "shadow should follow the evaluated 3D transform"
+        );
+    }
+
+    #[test]
+    fn spot_light_shadow_respects_its_cone() {
+        let mut comp = Composition::new("spot".into(), "Spot shadow".into(), 128, 64, 30, 30);
+        let mut caster = Layer::new(
+            "card".into(),
+            "Card".into(),
+            LayerType::Solid { color: [1.0; 4] },
+            30,
+        );
+        caster.is_3d = true;
+        caster.material.cast_shadows = true;
+        caster.transform_3d.position = Animatable::new_constant([40.0, 32.0, 100.0]);
+        caster.transform_3d.scale = Animatable::new_constant([6.0, 6.0, 100.0]);
+        comp.layers.push(caster);
+        comp.lights = vec![crate::core::timeline::Light3D {
+            id: "spot".into(),
+            name: "Spot".into(),
+            light_type: crate::core::timeline::LightType::Spot {
+                cone_angle_deg: 20.0,
+                cone_feather_pct: 0.0,
+            },
+            color: [1.0; 4],
+            intensity: 100.0,
+            intensity_animation: None,
+            position: Animatable::new_constant([32.0, 32.0, 300.0]),
+            casts_shadows: true,
+            shadow_darkness: 100.0,
+            falloff: 0.0,
+            max_radius: 0.0,
+        }];
+
+        // This caster projects near [44,32], inside the 20-degree cone.
+        let inside = build_shadow_map(&comp, 0, 128, 64);
+        assert!(inside[32 * 128 + 44] > 0.2, "in-cone shadow should appear");
+
+        // Moving it to x=74 projects the complete card beyond the cone edge.
+        comp.layers[0].transform_3d.position =
+            Animatable::new_constant([74.0, 32.0, 100.0]);
+        let outside = build_shadow_map(&comp, 0, 128, 64);
+        let mut outside_max = 0.0f32;
+        for y in 28..=36 {
+            for x in 90..=100 {
+                outside_max = outside_max.max(outside[y * 128 + x]);
+            }
+        }
+        assert!(outside_max < 0.001, "out-of-cone shadow leaked: {outside_max}");
+    }
+
+    #[test]
+    fn overlapping_shadow_casters_accumulate_density() {
+        let single = shadow_test_comp(true);
+        let single_map = build_shadow_map(&single, 0, 64, 64);
+
+        let mut overlapping = single.clone();
+        let second_caster = overlapping.layers[1].clone();
+        overlapping.layers.push(second_caster);
+        let overlapping_map = build_shadow_map(&overlapping, 0, 64, 64);
+
+        let center = 43 * 64 + 43;
+        assert!(
+            overlapping_map[center] > single_map[center] + 0.1,
+            "overlapping casters should deepen the shared shadow: one={}, two={}",
+            single_map[center],
+            overlapping_map[center]
+        );
+    }
+
+    #[test]
+    fn parallel_light_shadow_uses_parallel_rays_not_light_position() {
+        let mut comp = shadow_test_comp(true);
+        comp.layers[1].transform_3d.position =
+            Animatable::new_constant([16.0, 16.0, 10.0]);
+        comp.layers[1].transform_3d.scale =
+            Animatable::new_constant([20.0, 20.0, 100.0]);
+        comp.lights[0].light_type = crate::core::timeline::LightType::Parallel;
+        // A directional light's location must not steer its rays or attenuate
+        // the shadow; the renderer defines its fixed ray direction as +X,+Y,-Z.
+        comp.lights[0].position = Animatable::new_constant([-1000.0, -1000.0, 100.0]);
+        comp.lights[0].falloff = 2.0;
+        comp.lights[0].max_radius = 1.0;
+
+        let map = build_shadow_map(&comp, 0, 64, 64);
+        assert!(
+            map[26 * 64 + 26] > 0.2,
+            "parallel shadow should shift by caster height along the fixed ray"
+        );
+    }
+
+    #[test]
+    fn parallel_layer_lighting_ignores_light_position() {
+        let mut comp = Composition::new("parallel".into(), "Parallel lighting".into(), 64, 64, 30, 1);
+        comp.lights[0].light_type = crate::core::timeline::LightType::Parallel;
+        comp.lights[0].intensity = 100.0;
+        comp.lights[0].position = Animatable::new_constant([-1000.0, -1000.0, -800.0]);
+        let layer = Layer::new(
+            "solid".into(),
+            "Solid".into(),
+            LayerType::Solid { color: [1.0; 4] },
+            1,
+        );
+        let first = crate::core::software_renderer::layer_3d_shading(&comp, &layer, 0, 32.0, 32.0);
+
+        comp.lights[0].position = Animatable::new_constant([1000.0, 1000.0, 800.0]);
+        let second = crate::core::software_renderer::layer_3d_shading(&comp, &layer, 0, 32.0, 32.0);
+        assert_eq!(first, second);
+        assert!(first[0] > layer.material.ambient);
+    }
+
+    #[test]
+    fn ambient_layer_lighting_ignores_position_and_uses_light_color() {
+        let mut comp = Composition::new("ambient".into(), "Ambient lighting".into(), 64, 64, 30, 1);
+        comp.lights[0].light_type = crate::core::timeline::LightType::Ambient;
+        comp.lights[0].color = [1.0, 0.0, 0.0, 1.0];
+        comp.lights[0].intensity = 50.0;
+        comp.lights[0].position = Animatable::new_constant([-800.0, 1000.0, -500.0]);
+        let layer = Layer::new(
+            "solid".into(),
+            "Solid".into(),
+            LayerType::Solid { color: [1.0; 4] },
+            1,
+        );
+        let first = crate::core::software_renderer::layer_3d_shading(&comp, &layer, 0, 32.0, 32.0);
+
+        comp.lights[0].position = Animatable::new_constant([800.0, -1000.0, 500.0]);
+        let second = crate::core::software_renderer::layer_3d_shading(&comp, &layer, 0, 32.0, 32.0);
+        assert_eq!(first, second);
+        assert!(first[0] > first[1], "ambient light color must tint the layer");
+    }
+
+    #[test]
+    fn layer_metalness_reduces_diffuse_response() {
+        let mut comp = Composition::new("metal-layer".into(), "Metal layer".into(), 64, 64, 30, 1);
+        comp.lights[0].light_type = crate::core::timeline::LightType::Parallel;
+        comp.lights[0].color = [1.0; 4];
+        let mut layer = Layer::new(
+            "solid".into(),
+            "Solid".into(),
+            LayerType::Solid { color: [1.0; 4] },
+            1,
+        );
+        layer.material.ambient = 0.0;
+        layer.material.diffuse = 1.0;
+        layer.material.specular = 0.0;
+        let dielectric = crate::core::software_renderer::layer_3d_shading(
+            &comp, &layer, 0, 32.0, 32.0,
+        );
+        layer.material.metalness = 1.0;
+        let metallic = crate::core::software_renderer::layer_3d_shading(
+            &comp, &layer, 0, 32.0, 32.0,
+        );
+        assert!(dielectric[0] > metallic[0]);
+    }
+
     #[test]
     fn depth_sort_keeps_layer_transform_on_composition_time() {
         let mut comp = Composition::new("depth-remap".into(), "Depth remap".into(), 64, 64, 30, 30);
@@ -306,6 +491,7 @@
         );
         s.transform.scale = Animatable::new_constant([100.0, 100.0]);
         s.transform.position = Animatable::new_constant([8.0, 8.0]);
+        s.transform.anchor_point = Animatable::new_constant([8.0, 8.0]);
         comp.layers.push(s);
 
         let px = render_frame_to_pixels(&comp, 0, 16, 16, 0.0, 2);
@@ -335,6 +521,7 @@
         );
         base.transform.scale = Animatable::new_constant([100.0, 100.0]);
         base.transform.position = Animatable::new_constant([16.0, 16.0]);
+        base.transform.anchor_point = Animatable::new_constant([16.0, 16.0]);
         comp.layers.push(base);
         // Adjustment layer with Invert at the given opacity
         let mut adj = Layer::new("a1".into(), "Adjust".into(), LayerType::AdjustmentLayer, 30);

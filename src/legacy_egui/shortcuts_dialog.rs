@@ -40,7 +40,7 @@ fn valid_shortcut_map(
 }
 
 fn draw_shortcut_row(ui: &mut egui::Ui, name: &str, binding: &str, index: usize, edit: bool) -> u8 {
-    let fill = if index % 2 == 0 {
+    let fill = if index.is_multiple_of(2) {
         crate::ui::theme::colors::BG_PANEL_DEEP
     } else {
         crate::ui::theme::colors::BG_DARKEST
@@ -313,7 +313,9 @@ pub fn draw_shortcuts_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                     }
                     if crate::ui::kui::button(ui, &crate::ui::localization::tr("Export…"), crate::ui::kui::ButtonKind::Default).clicked() {
                         if let Some(path) = rfd::FileDialog::new().add_filter("JSON", &["json"]).set_file_name("kagari-shortcuts.json").save_file() {
-                            if let Ok(json) = serde_json::to_string_pretty(&prefs.shortcut_bindings) { let _ = std::fs::write(path, json); }
+                            if let Ok(json) = serde_json::to_string_pretty(&prefs.shortcut_bindings) {
+                                let _ = crate::core::atomic_file::write_atomic(&path, json.as_bytes());
+                            }
                         }
                     }
                     if crate::ui::kui::button(ui, &crate::ui::localization::tr("Import…"), crate::ui::kui::ButtonKind::Default).clicked() {

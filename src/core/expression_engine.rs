@@ -1,5 +1,4 @@
 use crate::core::property::Animatable;
-use rhai::{export_module, exported_module};
 /// Rhai-powered AE-compatible expression evaluation engine.
 ///
 /// Supports AE-compatible expression APIs:
@@ -9,6 +8,7 @@ use rhai::{export_module, exported_module};
 ///   - `thisComp.layer("Name").transform.position[0]`  (inter-layer reference)
 ///   - Any arbitrary Rhai script that returns a number or array.
 use rhai::{Array, Dynamic, Engine, Scope};
+use rhai::{export_module, exported_module};
 
 mod comp_context;
 mod loops;
@@ -17,6 +17,7 @@ pub use loops::*;
 
 /// Per-frame audio data for expression functions (audioAmplitude, audioSpectrum).
 /// Set by the renderer before evaluating expressions each frame.
+#[derive(Clone, Copy)]
 pub struct AudioExprData {
     /// Overall amplitude 0..1 (from audio mixer).
     pub amplitude: f32,
@@ -63,11 +64,34 @@ fn finite_or_fallback(value: f64, fallback: f32) -> f32 {
 
 thread_local! {
     static AUDIO_DATA: std::cell::RefCell<AudioExprData> = const { std::cell::RefCell::new(AudioExprData { amplitude: 0.0, bands: [0.0; 5] }) };
+    static AUDIO_SPECTRUM: std::cell::RefCell<Vec<f32>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+struct AudioExprDataRestore(AudioExprData);
+
+impl Drop for AudioExprDataRestore {
+    fn drop(&mut self) {
+        AUDIO_DATA.with(|data| *data.borrow_mut() = self.0);
+    }
 }
 
 /// Set the current frame's audio data (call before expression evaluation).
 pub fn set_audio_expr_data(data: AudioExprData) {
     AUDIO_DATA.with(|d| *d.borrow_mut() = data);
+}
+
+/// Copy this thread's audio values so parallel render workers can evaluate
+/// expressions against the same frame context.
+pub fn current_audio_expr_data() -> AudioExprData {
+    AUDIO_DATA.with(|data| *data.borrow())
+}
+
+/// Evaluate work with a frame's audio context installed on the current thread.
+/// The previous context is restored even if the callback panics.
+pub fn with_audio_expr_data<T>(data: AudioExprData, callback: impl FnOnce() -> T) -> T {
+    let previous = AUDIO_DATA.with(|current| current.replace(data));
+    let _restore = AudioExprDataRestore(previous);
+    callback()
 }
 
 /// Get the current amplitude (0..1).
@@ -79,11 +103,51 @@ pub fn get_audio_amplitude() -> f32 {
 pub fn get_audio_band(idx: usize) -> f32 {
     AUDIO_DATA.with(|d| {
         let data = d.borrow();
-        if idx < 5 {
-            data.bands[idx]
-        } else {
-            0.0
-        }
+        if idx < 5 { data.bands[idx] } else { 0.0 }
+    })
+}
+
+/// Replace the current frame's high-resolution spectrum data for Audio Spectrum effects.
+pub fn set_audio_spectrum_bands(bands: Vec<f32>) {
+    AUDIO_SPECTRUM.with(|spectrum| *spectrum.borrow_mut() = bands);
+}
+
+/// Read one logarithmic spectrum bin for a requested frequency range.
+pub fn get_audio_spectrum_band_for_range(
+    index: usize,
+    band_count: usize,
+    start_frequency: f32,
+    end_frequency: f32,
+) -> f32 {
+    const GLOBAL_START_HZ: f32 = 20.0;
+    const GLOBAL_END_HZ: f32 = 20_000.0;
+    if band_count == 0 || index >= band_count {
+        return 0.0;
+    }
+    let low = if start_frequency.is_finite() {
+        start_frequency.clamp(GLOBAL_START_HZ, GLOBAL_END_HZ)
+    } else {
+        GLOBAL_START_HZ
+    };
+    let high = if end_frequency.is_finite() {
+        end_frequency.clamp(low, GLOBAL_END_HZ)
+    } else {
+        GLOBAL_END_HZ
+    };
+    if high <= low {
+        return 0.0;
+    }
+    let position = (index as f32 + 0.5) / band_count as f32;
+    let frequency = low * (high / low).powf(position);
+    let global_position =
+        (frequency / GLOBAL_START_HZ).ln() / (GLOBAL_END_HZ / GLOBAL_START_HZ).ln();
+    AUDIO_SPECTRUM.with(|spectrum| {
+        let spectrum = spectrum.borrow();
+        let bin = (global_position * spectrum.len() as f32) as usize;
+        spectrum
+            .get(bin.min(spectrum.len().saturating_sub(1)))
+            .copied()
+            .unwrap_or(0.0)
     })
 }
 
@@ -118,18 +182,25 @@ pub fn set_audio_from_binding_sources(values: &std::collections::HashMap<String,
     let names = ["bass", "low_mid", "mid", "high_mid", "treble"];
     let mut bands = [0.0; 5];
     for (index, name) in names.iter().enumerate() {
-        bands[index] = values
+        let value = values
             .get(&format!("audio.{name}"))
             .or_else(|| values.get(&format!("audio.band{index}")))
             .copied()
-            .unwrap_or(0.0) as f32;
+            .unwrap_or(0.0);
+        bands[index] = if value.is_finite() {
+            value.clamp(0.0, 1.0) as f32
+        } else {
+            0.0
+        };
     }
-    if amplitude.is_finite() && bands.iter().all(|value| value.is_finite()) {
-        set_audio_expr_data(AudioExprData {
-            amplitude: amplitude.clamp(0.0, 1.0) as f32,
-            bands: bands.map(|value| value.clamp(0.0, 1.0)),
-        });
-    }
+    set_audio_expr_data(AudioExprData {
+        amplitude: if amplitude.is_finite() {
+            amplitude.clamp(0.0, 1.0) as f32
+        } else {
+            0.0
+        },
+        bands,
+    });
 }
 
 /// Build the shared Rhai engine with all AE-compatible functions registered.

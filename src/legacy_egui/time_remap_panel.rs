@@ -2,7 +2,6 @@ use crate::ui::kui::{self, ButtonKind};
 use crate::KagariApp;
 use eframe::egui;
 
-use crate::core::keyframe::{InterpolationType, Keyframe};
 use crate::core::property::Animatable;
 use crate::ui::localization::{tr, tr_format};
 
@@ -28,6 +27,11 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                 comp.layers[idx].name.clone(),
                 comp.layers[idx].in_frame,
                 comp.layers[idx].out_frame,
+                comp.layers[idx].frame_blending,
+                matches!(
+                    &comp.layers[idx].layer_type,
+                    crate::core::timeline::LayerType::Video { .. }
+                ),
             ))
         } else {
             None
@@ -36,7 +40,7 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
         None
     };
 
-    if let Some((idx, layer_name, in_frame, out_frame)) = layer_info {
+    if let Some((idx, layer_name, in_frame, out_frame, frame_blending, is_video)) = layer_info {
         kui::secondary(ui, tr_format("Selected Layer: {}", &[&layer_name]));
 
         ui.add_space(kui::space::XS);
@@ -47,11 +51,7 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
             let mut temp_proj = app.history.current().clone();
             let comp_mut = temp_proj.active_composition_mut();
             if idx < comp_mut.layers.len() {
-                let dur = out_frame - in_frame;
-                comp_mut.layers[idx].time_remap = Some(Animatable::Animated(vec![
-                    Keyframe::new(in_frame, 0.0, InterpolationType::Linear),
-                    Keyframe::new(out_frame, dur as f32, InterpolationType::Linear),
-                ]));
+                comp_mut.layers[idx].enable_time_remapping();
                 app.commit_project(temp_proj);
                 app.toasts
                     .info(tr_format("Enabled Time Remapping on {}", &[&layer_name]));
@@ -66,8 +66,7 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                 let mut temp_proj = app.history.current().clone();
                 let comp_mut = temp_proj.active_composition_mut();
                 if idx < comp_mut.layers.len() {
-                    let cur_f = app.playback.current_frame.saturating_sub(in_frame) as f32;
-                    comp_mut.layers[idx].time_remap = Some(Animatable::new_constant(cur_f));
+                    comp_mut.layers[idx].freeze_at(app.playback.current_frame);
                     app.commit_project(temp_proj);
                     app.toasts.info(tr_format(
                         "Froze {} at frame {}",
@@ -82,11 +81,7 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                 let mut temp_proj = app.history.current().clone();
                 let comp_mut = temp_proj.active_composition_mut();
                 if idx < comp_mut.layers.len() {
-                    let dur = out_frame - in_frame;
-                    comp_mut.layers[idx].time_remap = Some(Animatable::Animated(vec![
-                        Keyframe::new(in_frame, dur as f32, InterpolationType::Linear),
-                        Keyframe::new(out_frame, 0.0, InterpolationType::Linear),
-                    ]));
+                    comp_mut.layers[idx].time_reverse();
                     app.commit_project(temp_proj);
                     app.toasts
                         .info(tr_format("Reversed playback on {}", &[&layer_name]));
@@ -204,22 +199,25 @@ pub fn draw_time_remap_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
         kui::caption(ui, "Keyframe times on Position / Scale / Rotation / Opacity / Anchor / Time Remap are rescaled relative to the layer In point.");
 
         ui.add_space(kui::space::SM);
-        let blend_id = egui::Id::new("ae_frame_blending_mode");
-        let mut blend_idx = ui
-            .ctx()
-            .data_mut(|d| *d.get_temp_mut_or_insert_with(blend_id, || 0));
-        let blend_label = tr("Frame Blending Mode:");
-        let blend_grid = kui::PropertyGrid::new(ui, &[&blend_label]);
-        if blend_grid.row(ui, &blend_label, |ui| {
-            kui::combo(
-                ui,
-                blend_id,
-                &mut blend_idx,
-                &[(0, "Off"), (1, "Frame Mix"), (2, "Pixel Motion")],
-            )
-        }) {
-            ui.ctx()
-                .data_mut(|data| data.insert_temp(blend_id, blend_idx));
+        if is_video {
+            let blend_id = egui::Id::new(format!("ae_frame_blending_mode_{idx}"));
+            let mut blend_idx = usize::from(frame_blending);
+            let blend_label = tr("Frame Blending Mode:");
+            let blend_grid = kui::PropertyGrid::new(ui, &[&blend_label]);
+            if blend_grid.row(ui, &blend_label, |ui| {
+                kui::combo(
+                    ui,
+                    blend_id,
+                    &mut blend_idx,
+                    &[(0, "Off"), (1, "Frame Mix")],
+                )
+            }) {
+                let mut temp_proj = app.history.current().clone();
+                if let Some(layer) = temp_proj.active_composition_mut().layers.get_mut(idx) {
+                    layer.frame_blending = blend_idx == 1;
+                    app.commit_project(temp_proj);
+                }
+            }
         }
 
         ui.add_space(kui::space::XS);

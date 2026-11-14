@@ -9,9 +9,7 @@ pub(super) fn serialize_layer(
 ) -> Value {
     let (ty, extra) = layer_type_code(&layer.layer_type, image_asset_ids);
     let in_frame = layer.in_frame;
-    let out_frame = layer
-        .out_frame
-        .max(comp.duration_frames.min(layer.out_frame));
+    let out_frame = layer.out_frame.min(comp.duration_frames);
 
     let mut l = json!({
         "ddd": 0,

@@ -79,15 +79,22 @@ pub fn apply_deferred(
     if let Some(idx) = actions.pending_create_shapes.take() {
         let comp_mut = app.history.current_mut().active_composition_mut();
         if idx < comp_mut.layers.len() {
-            if let Some(shape_layer) = crate::core::text_to_shapes::convert_text_to_shapes(
+            match crate::core::text_to_shapes::try_convert_text_to_shapes(
                 &comp_mut.layers[idx],
                 comp_mut.width,
                 comp_mut.height,
             ) {
-                let name = comp_mut.layers[idx].name.clone();
-                comp_mut.layers.insert(idx, shape_layer);
-                app.toasts.info(format!("Created shapes from '{}'", name));
-                *project_changed = true;
+                Ok(Some(shape_layer)) => {
+                    let name = comp_mut.layers[idx].name.clone();
+                    comp_mut.layers.insert(idx, shape_layer);
+                    app.toasts.info(format!("Created shapes from '{}'", name));
+                    *project_changed = true;
+                }
+                Err(crate::core::text_to_shapes::TextToShapesError::TooComplex) => {
+                    app.toasts
+                        .error("Text is too large or complex to convert into vector outlines");
+                }
+                Ok(None) => {}
             }
         }
     }
@@ -291,9 +298,11 @@ fn ripple_edit(
         .skip(idx + 1)
     {
         if l2.in_frame >= old_out {
-            l2.in_frame = (l2.in_frame as i64 + shift).max(0) as u32;
-            l2.out_frame = (l2.out_frame as i64 + shift).max(l2.in_frame as i64 + 1) as u32;
-            changed = true;
+            let next_in = (i64::from(l2.in_frame) + shift).clamp(0, i64::from(u32::MAX - 1)) as u32;
+            let next_out = (i64::from(l2.out_frame) + shift)
+                .clamp(i64::from(next_in) + 1, i64::from(u32::MAX))
+                as u32;
+            changed |= l2.move_timeline_range(next_in, next_out);
         }
     }
     if changed {

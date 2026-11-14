@@ -10,6 +10,8 @@ pub mod glyph;
 pub mod rasterizer;
 pub mod types;
 
+pub const MAX_FONT_FAMILY_NAME_BYTES: usize = 256;
+
 pub use animator::{rasterize_text_animated, rasterize_text_animated_stack};
 pub use discovery::{discover_system_fonts, system_font_paths};
 pub use global::{
@@ -19,7 +21,7 @@ pub use glyph::{rasterize_glyph_uncached, GLYPH_CACHE_BUDGET_BYTES, MAX_GLYPH_BI
 pub use rasterizer::FontRasterizer;
 pub use types::{
     apply_faux_bitmap_style, parse_font, styled_text_input, FauxTextStyle, GlyphCache,
-    RasterizedGlyph,
+    RasterizedGlyph, MAX_TEXT_BITMAP_BYTES,
 };
 
 /// Clip a rasterized text bitmap to a centered paragraph box height.

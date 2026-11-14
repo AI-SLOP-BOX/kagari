@@ -8,13 +8,34 @@ pub fn draw_dot(
     a: f32,
     blend_mode: u32,
 ) {
+    draw_dot_with_cancel(buffer, dims, center, half, color, a, blend_mode, None);
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn draw_dot_with_cancel(
+    buffer: &mut [u8],
+    dims: (u32, u32),
+    center: (f32, f32),
+    half: f32,
+    color: [f32; 3],
+    a: f32,
+    blend_mode: u32,
+    cancel_flag: Option<&std::sync::Arc<std::sync::atomic::AtomicBool>>,
+) {
     let [r, g, b] = color;
     let buf_width = dims.0;
     let buf_height = dims.1;
     let cx = center.0;
     let cy = center.1;
+    let Some(expected_len) = (buf_width as usize)
+        .checked_mul(buf_height as usize)
+        .and_then(|pixels| pixels.checked_mul(4))
+    else {
+        return;
+    };
     if buf_width == 0
         || buf_height == 0
+        || buffer.len() < expected_len
         || half < 0.35
         || !half.is_finite()
         || !cx.is_finite()
@@ -31,6 +52,9 @@ pub fn draw_dot(
     let y1 = ((cy + half).min(buf_height as f32 - 1.0)) as u32;
 
     for py in y0..=y1 {
+        if cancel_flag.is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed)) {
+            return;
+        }
         for px in x0..=x1 {
             let dx = px as f32 - cx;
             let dy = py as f32 - cy;
@@ -41,10 +65,7 @@ pub fn draw_dot(
                 continue;
             }
 
-            let idx = ((py * buf_width + px) * 4) as usize;
-            if idx + 3 >= buffer.len() {
-                continue;
-            }
+            let idx = (py as usize * buf_width as usize + px as usize) * 4;
 
             let src_r = r * pixel_a;
             let src_g = g * pixel_a;
@@ -108,5 +129,32 @@ pub fn draw_dot(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::draw_dot_with_cancel;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
+
+    #[test]
+    fn cancelled_dot_draw_leaves_pixels_untouched() {
+        let mut pixels = vec![23u8; 16 * 16 * 4];
+        let original = pixels.clone();
+        let flag = Arc::new(AtomicBool::new(true));
+
+        draw_dot_with_cancel(
+            &mut pixels,
+            (16, 16),
+            (8.0, 8.0),
+            6.0,
+            [1.0; 3],
+            1.0,
+            0,
+            Some(&flag),
+        );
+
+        assert_eq!(pixels, original);
     }
 }

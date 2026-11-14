@@ -394,7 +394,7 @@ impl OtioTimeline {
                         })),
                         None,
                     ),
-                    Some(reference) if !reference.contains(':') => (
+                    Some(reference) if is_local_file_reference(reference) => (
                         Some(json!({
                             "OTIO_SCHEMA": "ExternalReference.1",
                             "target_url": path_to_file_url(reference),
@@ -547,4 +547,13 @@ fn path_to_file_url(path: &str) -> String {
         }
     }
     url
+}
+
+fn is_local_file_reference(reference: &str) -> bool {
+    let bytes = reference.as_bytes();
+    !reference.contains(':')
+        || std::path::Path::new(reference).is_absolute()
+        || (bytes.first().is_some_and(u8::is_ascii_alphabetic)
+            && bytes.get(1) == Some(&b':')
+            && matches!(bytes.get(2), Some(b'/') | Some(b'\\')))
 }

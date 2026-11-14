@@ -10,6 +10,7 @@ use crate::ui::graph_editor::GraphKeyframeDrag;
 use crate::ui::theme::colors;
 use eframe::egui;
 
+#[allow(clippy::too_many_arguments)]
 pub fn handle_anchor_interaction(
     ui: &mut egui::Ui,
     rect: egui::Rect,

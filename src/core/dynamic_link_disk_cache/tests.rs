@@ -102,8 +102,8 @@ mod tests {
                 .as_nanos()
         ));
         let _ = fs::create_dir_all(&tmp_dir);
-        let stale_temp = tmp_dir.join("ab.cache.tmp");
-        fs::write(&stale_temp, [9u8; 32]).unwrap();
+        let active_temp = tmp_dir.join("ab.cache.tmp");
+        fs::write(&active_temp, [9u8; 32]).unwrap();
         let first = PersistentDiskCache::compute_cache_key("a", 0, 1);
         let second = PersistentDiskCache::compute_cache_key("b", 0, 1);
         {
@@ -117,7 +117,10 @@ mod tests {
         }
 
         let mut cache = PersistentDiskCache::with_directory(100, &tmp_dir);
-        assert!(!stale_temp.exists());
+        assert!(
+            active_temp.exists(),
+            "fresh temporary files may belong to active writers"
+        );
         assert_eq!(cache.disk_bytes, 100);
         assert!(cache.get_frame(first, 3).is_none());
         assert_eq!(cache.get_frame(second, 3), Some([2; 100].as_slice()));
@@ -168,6 +171,7 @@ mod tests {
             width: 1,
             height: 1,
             size_bytes: 99,
+            content_hash: None,
             last_access_epoch: 1,
         };
         fs::write(
@@ -202,6 +206,7 @@ mod tests {
             width: 1,
             height: 1,
             size_bytes: 3,
+            content_hash: None,
             last_access_epoch: 1,
         };
         fs::write(

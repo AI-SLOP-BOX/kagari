@@ -148,6 +148,14 @@ pub(crate) fn draw_other_specs(
                 kui::color_rgba(ui, &mut emitter.color_end)
             })
             .changed();
+            changed |= kui::property(ui, "Start Opacity", |ui| {
+                kui::slider(ui, &mut emitter.opacity_start, 0.0..=1.0, "")
+            })
+            .changed();
+            changed |= kui::property(ui, "End Opacity", |ui| {
+                kui::slider(ui, &mut emitter.opacity_end, 0.0..=1.0, "")
+            })
+            .changed();
             if changed {
                 *project_changed = true;
             }

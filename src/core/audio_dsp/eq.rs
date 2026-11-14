@@ -45,6 +45,18 @@ pub(crate) struct Biquad {
     pub y2_r: f64,
 }
 
+/// Persistent filter delay state for continuous block-by-block EQ processing.
+#[derive(Debug, Clone, Default)]
+pub struct EqState {
+    filters: Vec<Biquad>,
+}
+
+impl EqState {
+    pub fn reset(&mut self) {
+        self.filters.clear();
+    }
+}
+
 impl Biquad {
     pub fn new() -> Self {
         Self {
@@ -193,12 +205,27 @@ pub(crate) fn design_biquad(band: &EqBand, sample_rate: f64) -> Biquad {
 
 /// Apply parametric EQ with multiple bands to a stereo interleaved buffer.
 pub fn apply_eq(buf: &mut [f32], bands: &[EqBand], sample_rate: u32) {
-    if bands.is_empty() || buf.is_empty() || sample_rate == 0 {
+    let mut state = EqState::default();
+    apply_eq_with_state(buf, bands, sample_rate, &mut state);
+}
+
+/// Apply parametric EQ while preserving filter history between adjacent blocks.
+pub fn apply_eq_with_state(
+    buf: &mut [f32],
+    bands: &[EqBand],
+    sample_rate: u32,
+    state: &mut EqState,
+) {
+    if buf.is_empty() || sample_rate == 0 {
+        return;
+    }
+    if bands.is_empty() {
+        state.reset();
         return;
     }
     let fs = sample_rate as f64;
     let nyquist = fs * 0.5;
-    let filters: Vec<Biquad> = bands
+    let designed_filters: Vec<Biquad> = bands
         .iter()
         .filter(|b| {
             if !b.freq.is_finite()
@@ -212,13 +239,30 @@ pub fn apply_eq(buf: &mut [f32], bands: &[EqBand], sample_rate: u32) {
             match b.band_type {
                 EqBandType::HighPass => b.freq > 1.0 && (b.freq as f64) < nyquist,
                 EqBandType::LowPass => b.freq > 100.0 && (b.freq as f64) < nyquist,
-                _ => b.gain_db.abs() > 0.01,
+                _ => b.freq > 1.0 && (b.freq as f64) < nyquist && b.gain_db.abs() > 0.01,
             }
         })
         .map(|b| design_biquad(b, fs))
         .collect();
 
-    for mut bq in filters {
-        bq.process_stereo(buf);
+    if designed_filters.is_empty() {
+        state.reset();
+        return;
+    }
+
+    if state.filters.len() != designed_filters.len() {
+        state.filters = designed_filters;
+    } else {
+        for (current, designed) in state.filters.iter_mut().zip(designed_filters) {
+            current.b0 = designed.b0;
+            current.b1 = designed.b1;
+            current.b2 = designed.b2;
+            current.a1 = designed.a1;
+            current.a2 = designed.a2;
+        }
+    }
+
+    for filter in &mut state.filters {
+        filter.process_stereo(buf);
     }
 }

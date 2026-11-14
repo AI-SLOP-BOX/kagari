@@ -93,10 +93,32 @@ pub fn blend_pixel_buffers(buf0: &[u8], w0: f32, buf1: &[u8], w1: f32, out: &mut
     }
 }
 
+/// Mixes straight-alpha RGBA samples in premultiplied space and returns
+/// straight-alpha output. Samples and alpha are expressed in the 0..255 range.
+pub(crate) fn blend_rgba_samples(sample0: [f32; 4], sample1: [f32; 4], t: f32) -> [f32; 4] {
+    let t = if t.is_finite() {
+        t.clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let alpha0 = (sample0[3] / 255.0).clamp(0.0, 1.0) * (1.0 - t);
+    let alpha1 = (sample1[3] / 255.0).clamp(0.0, 1.0) * t;
+    let output_alpha = alpha0 + alpha1;
+    if output_alpha <= 1.0e-6 {
+        return [0.0; 4];
+    }
+    [
+        (sample0[0] * alpha0 + sample1[0] * alpha1) / output_alpha,
+        (sample0[1] * alpha0 + sample1[1] * alpha1) / output_alpha,
+        (sample0[2] * alpha0 + sample1[2] * alpha1) / output_alpha,
+        output_alpha * 255.0,
+    ]
+}
+
 /// Options for the simplified Pixel Motion interpolator.
 #[derive(Debug, Clone, Copy)]
 pub struct PixelMotionOptions {
-    /// Motion estimation block size in pixels (8..64).
+    /// Motion estimation block size in pixels (clamped to 4..=128).
     pub block_size: u32,
     /// Search radius in pixels around each block.
     pub search_radius: u32,
@@ -115,11 +137,40 @@ impl Default for PixelMotionOptions {
     }
 }
 
+fn block_match_bounds(
+    bx: usize,
+    by: usize,
+    dx: i32,
+    dy: i32,
+    width: usize,
+    height: usize,
+    block_size: usize,
+) -> Option<(usize, usize, usize, usize)> {
+    let source_x = bx as i64 + i64::from(dx);
+    let source_y = by as i64 + i64::from(dy);
+    let x_start = 0.max(-source_x) as usize;
+    let y_start = 0.max(-source_y) as usize;
+    let x_end = (block_size as i64)
+        .min(width as i64 - bx as i64)
+        .min(width as i64 - source_x);
+    let y_end = (block_size as i64)
+        .min(height as i64 - by as i64)
+        .min(height as i64 - source_y);
+    if x_end <= x_start as i64 || y_end <= y_start as i64 {
+        return None;
+    }
+    let bounds = (x_start, x_end as usize, y_start, y_end as usize);
+    let overlap = (bounds.1 - bounds.0) * (bounds.3 - bounds.2);
+    let target_area = (block_size.min(width - bx)) * (block_size.min(height - by));
+    (overlap * 2 >= target_area).then_some(bounds)
+}
+
 /// Simplified Pixel Motion interpolation.
 ///
 /// For every block of frame buf0, a translation vector into buf1 is estimated
-/// by exhaustive SAD search. Both frames are then warped toward the
-/// intermediate time t (0..1) using those vectors and alpha-correctly mixed.
+/// by stratified coarse SAD search followed by full-resolution refinement of
+/// the four best candidates. Both frames are then warped toward the intermediate
+/// time t (0..1) using those vectors and alpha-correctly mixed.
 /// Blocks whose best match exceeds the occlusion threshold degrade to a plain
 /// cross-fade, matching the fallback behaviour used for disocclusions.
 pub fn blend_pixel_motion(
@@ -130,6 +181,8 @@ pub fn blend_pixel_motion(
     height: u32,
     options: &PixelMotionOptions,
 ) -> Vec<u8> {
+    use rayon::prelude::*;
+
     let Some(n_bytes) = (width as usize)
         .checked_mul(height as usize)
         .and_then(|count| count.checked_mul(4))
@@ -147,6 +200,12 @@ pub fn blend_pixel_motion(
 
     let bs = options.block_size.clamp(4, 128).max(1) as usize;
     let rad = options.search_radius.min(32) as i32;
+    // Evaluate nearby candidates first. Besides finding likely matches sooner,
+    // this makes ambiguous/flat regions deterministically prefer no motion.
+    let mut offsets: Vec<(i32, i32)> = (-rad..=rad)
+        .flat_map(|dy| (-rad..=rad).map(move |dx| (dx, dy)))
+        .collect();
+    offsets.sort_unstable_by_key(|(dx, dy)| (dx.abs() + dy.abs(), dy.abs(), dx.abs(), *dy, *dx));
     let mut out = vec![0u8; n_bytes];
 
     let sample = |buf: &[u8], fx: f32, fy: f32| -> [f32; 4] {
@@ -182,43 +241,110 @@ pub fn blend_pixel_motion(
         }
     };
 
-    let mut by = 0usize;
-    while by < height as usize {
-        let mut bx = 0usize;
-        while bx < width as usize {
-            // Exhaustive block match: f0 block at (bx,by) to best offset in f1.
-            let mut best_sad = f32::MAX;
-            let mut best_dx = 0i32;
-            let mut best_dy = 0i32;
-            for dy in -rad..=rad {
-                for dx in -rad..=rad {
-                    let sx = bx as i32 + dx;
-                    let sy = by as i32 + dy;
-                    if sx < 0
-                        || sy < 0
-                        || sx + bs as i32 > width as i32
-                        || sy + bs as i32 > height as i32
+    let width = width as usize;
+    let height = height as usize;
+    let chunk_rows = bs.min(height);
+    let chunk_bytes = width * chunk_rows * 4;
+    out.par_chunks_mut(chunk_bytes)
+        .enumerate()
+        .for_each(|(block_row, out_chunk)| {
+            let by = block_row * bs;
+            let mut bx = 0usize;
+            while bx < width {
+                // Rank every displacement on a 4x4 stratified sample, then compute
+                // full-resolution SAD only for the four strongest candidates.
+                // This keeps the exhaustive search's motion radius while bounding
+                // expensive pixel reads to around one tenth of the old workload.
+                let sample_step = (bs / 4).max(1);
+                let mut coarse_candidates = [(u64::MAX, usize::MAX); 4];
+                for (offset_index, &(dx, dy)) in offsets.iter().enumerate() {
+                    let Some((x_start, x_end, y_start, y_end)) =
+                        block_match_bounds(bx, by, dx, dy, width, height, bs)
+                    else {
+                        continue;
+                    };
+                    let mut coarse_sad = 0u64;
+                    let mut coarse_count = 0u64;
+                    for yy in (y_start..y_end).step_by(sample_step) {
+                        for xx in (x_start..x_end).step_by(sample_step) {
+                            let ia = ((by + yy) * width + bx + xx) * 4;
+                            let source_y = (by as i64 + yy as i64 + i64::from(dy)) as usize;
+                            let source_x = (bx as i64 + xx as i64 + i64::from(dx)) as usize;
+                            let ib = (source_y * width + source_x) * 4;
+                            for c in 0..3 {
+                                coarse_sad += (buf0[ia + c] as i32 - buf1[ib + c] as i32)
+                                    .unsigned_abs()
+                                    as u64;
+                            }
+                            coarse_count += 1;
+                        }
+                    }
+                    let candidate = (
+                        coarse_sad.saturating_mul(16) / coarse_count.max(1),
+                        offset_index,
+                    );
+                    let mut insertion = 0;
+                    while insertion < coarse_candidates.len()
+                        && coarse_candidates[insertion] <= candidate
                     {
+                        insertion += 1;
+                    }
+                    if insertion < coarse_candidates.len() {
+                        for slot in (insertion + 1..coarse_candidates.len()).rev() {
+                            coarse_candidates[slot] = coarse_candidates[slot - 1];
+                        }
+                        coarse_candidates[insertion] = candidate;
+                    }
+                }
+
+                let mut best_sad = f32::MAX;
+                let mut best_dx = 0i32;
+                let mut best_dy = 0i32;
+                for (_, offset_index) in coarse_candidates.iter().copied() {
+                    if offset_index == usize::MAX {
                         continue;
                     }
-                    let mut sad = 0.0f64;
+                    let (dx, dy) = offsets[offset_index];
+                    let Some((x_start, x_end, y_start, y_end)) =
+                        block_match_bounds(bx, by, dx, dy, width, height, bs)
+                    else {
+                        continue;
+                    };
+                    let pixel_count = (x_end - x_start) * (y_end - y_start);
+                    let mut sad = 0u64;
                     let mut count = 0u64;
-                    for yy in 0..bs {
+                    let best_total = if best_sad.is_finite() {
+                        (best_sad as f64 * pixel_count as f64 * 3.0).floor() as u64
+                    } else {
+                        u64::MAX
+                    };
+                    let mut abandoned = false;
+                    for yy in y_start..y_end {
                         let ya = by + yy;
-                        let yb = sy as usize + yy;
-                        for xx in 0..bs {
+                        let yb = (by as i64 + yy as i64 + i64::from(dy)) as usize;
+                        for xx in x_start..x_end {
                             let xa = bx + xx;
-                            let xb = sx as usize + xx;
-                            let ia = (ya * width as usize + xa) * 4;
-                            let ib = (yb * width as usize + xb) * 4;
+                            let xb = (bx as i64 + xx as i64 + i64::from(dx)) as usize;
+                            let ia = (ya * width + xa) * 4;
+                            let ib = (yb * width + xb) * 4;
                             for c in 0..3 {
-                                sad += (buf0[ia + c] as i32 - buf1[ib + c] as i32).abs() as f64;
+                                sad += (buf0[ia + c] as i32 - buf1[ib + c] as i32).unsigned_abs()
+                                    as u64;
                             }
                             count += 1;
                         }
+                        // SAD can only increase. Stop once this candidate cannot
+                        // beat the current best, without changing the result.
+                        if sad > best_total {
+                            abandoned = true;
+                            break;
+                        }
+                    }
+                    if abandoned {
+                        continue;
                     }
                     let mean = if count > 0 {
-                        (sad / (count as f64 * 3.0)) as f32
+                        sad as f32 / (count as f32 * 3.0)
                     } else {
                         f32::MAX
                     };
@@ -226,49 +352,52 @@ pub fn blend_pixel_motion(
                         best_sad = mean;
                         best_dx = dx;
                         best_dy = dy;
+                        // SAD cannot be lower than zero, and the ordered search
+                        // guarantees this exact match is the least-motion tie.
+                        if best_sad == 0.0 {
+                            break;
+                        }
                     }
                 }
-            }
 
-            let occluded = best_sad > options.occlusion_threshold;
+                let occluded = best_sad > options.occlusion_threshold;
 
-            for yy in 0..bs {
-                let py = by + yy;
-                if py >= height as usize {
-                    break;
-                }
-                for xx in 0..bs {
-                    let px = bx + xx;
-                    if px >= width as usize {
+                for yy in 0..bs {
+                    let py = by + yy;
+                    if py >= height {
                         break;
                     }
-                    let qx = px as f32;
-                    let qy = py as f32;
-                    let rgba = if occluded {
-                        mix_px(sample(buf0, qx, qy), sample(buf1, qx, qy))
-                    } else {
-                        // Two-sided warp toward the intermediate timestamp.
-                        // A f0 block matching f1 at offset d means its content
-                        // sits at q - d*t (from f0) / q + d*(1-t) (from f1).
-                        let s0 = sample(buf0, qx - best_dx as f32 * t, qy - best_dy as f32 * t);
-                        let s1 = sample(
-                            buf1,
-                            qx + best_dx as f32 * (1.0 - t),
-                            qy + best_dy as f32 * (1.0 - t),
-                        );
-                        mix_px(s0, s1)
-                    };
-                    let idx = (py * width as usize + px) * 4;
-                    for c in 0..4 {
-                        out[idx + c] = rgba[c].round().clamp(0.0, 255.0) as u8;
+                    for xx in 0..bs {
+                        let px = bx + xx;
+                        if px >= width {
+                            break;
+                        }
+                        let qx = px as f32;
+                        let qy = py as f32;
+                        let rgba = if occluded {
+                            mix_px(sample(buf0, qx, qy), sample(buf1, qx, qy))
+                        } else {
+                            // Two-sided warp toward the intermediate timestamp.
+                            // A f0 block matching f1 at offset d means its content
+                            // sits at q - d*t (from f0) / q + d*(1-t) (from f1).
+                            let s0 = sample(buf0, qx - best_dx as f32 * t, qy - best_dy as f32 * t);
+                            let s1 = sample(
+                                buf1,
+                                qx + best_dx as f32 * (1.0 - t),
+                                qy + best_dy as f32 * (1.0 - t),
+                            );
+                            mix_px(s0, s1)
+                        };
+                        let idx = ((py - by) * width + px) * 4;
+                        for c in 0..4 {
+                            out_chunk[idx + c] = rgba[c].round().clamp(0.0, 255.0) as u8;
+                        }
                     }
                 }
-            }
 
-            bx += bs;
-        }
-        by += bs;
-    }
+                bx += bs;
+            }
+        });
 
     out
 }
@@ -316,6 +445,14 @@ mod tests {
         assert!((out[1] as i32 - 100).abs() <= 1);
     }
 
+    #[test]
+    fn frame_mix_ignores_rgb_from_fully_transparent_samples() {
+        let output = blend_rgba_samples([255.0, 0.0, 0.0, 0.0], [0.0, 0.0, 255.0, 255.0], 0.5);
+        assert!(output[0] < 0.01);
+        assert!(output[2] > 254.9);
+        assert!((output[3] - 127.5).abs() < 0.01);
+    }
+
     fn moving_square(x: u32) -> Vec<u8> {
         let mut v = vec![0u8; 32 * 32 * 4];
         for yy in 12..20 {
@@ -358,6 +495,79 @@ mod tests {
             centre,
             crossfade_centre
         );
+    }
+
+    #[test]
+    fn pixel_motion_keeps_static_frames_stationary() {
+        let mut frame = vec![0u8; 32 * 32 * 4];
+        for y in 8..24 {
+            for x in 10..22 {
+                let i = ((y * 32 + x) * 4) as usize;
+                frame[i..i + 4].copy_from_slice(&[220, 90, 40, 255]);
+            }
+        }
+        let output = blend_pixel_motion(
+            &frame,
+            &frame,
+            0.5,
+            32,
+            32,
+            &PixelMotionOptions {
+                block_size: 8,
+                search_radius: 6,
+                ..Default::default()
+            },
+        );
+        assert_eq!(
+            output, frame,
+            "identical frames must not acquire false motion"
+        );
+    }
+
+    #[test]
+    fn pixel_motion_coarse_search_recovers_textured_translation() {
+        let (width, height) = (48usize, 32usize);
+        let mut state = 0x8A5C_3D21_9F07_B64Eu64;
+        let mut next_noise = || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            (state & 0xFF) as u8
+        };
+        let texture: Vec<[u8; 4]> = (0..width * height)
+            .map(|_| [next_noise(), next_noise(), next_noise(), 255])
+            .collect();
+        let translated = |offset: usize| {
+            let mut frame = vec![0u8; width * height * 4];
+            for y in 0..height {
+                for x in offset..width {
+                    let target = (y * width + x) * 4;
+                    frame[target..target + 4].copy_from_slice(&texture[y * width + x - offset]);
+                }
+            }
+            frame
+        };
+        let frame_a = translated(5);
+        let frame_b = translated(7);
+        let output = blend_pixel_motion(
+            &frame_a,
+            &frame_b,
+            0.5,
+            width as u32,
+            height as u32,
+            &PixelMotionOptions {
+                block_size: 8,
+                search_radius: 4,
+                ..Default::default()
+            },
+        );
+        let expected = translated(6);
+        for y in 4..height - 4 {
+            for x in 10..width - 1 {
+                let i = (y * width + x) * 4;
+                assert_eq!(&output[i..i + 3], &expected[i..i + 3], "pixel ({x},{y})");
+            }
+        }
     }
 
     #[test]

@@ -55,18 +55,28 @@ fn draw_layer_waveform(painter: &egui::Painter, params: LayerWaveformParams<'_>)
         return;
     }
     let fps = fps.max(1) as f32;
+    let video_fps = match &layer.layer_type {
+        LayerType::Video { frames_dir, .. } => Some(crate::core::video_import::extraction_fps(
+            frames_dir, fps as u32,
+        )),
+        _ => None,
+    };
     let amp = clip_rect.height() * 0.40;
     let mut x = clip_rect.left() + 2.0;
     while x <= clip_rect.right() - 2.0 {
         let t = (x - timeline_rect.left()) / timeline_rect.width();
         let comp_frame = start_frame as f32 + t * visible_span.max(1) as f32;
         let source_frame = match &layer.layer_type {
-            LayerType::Video { speed, .. } => {
-                layer.remap_frame_f32(comp_frame.round() as u32) * speed.max(0.0)
-            }
+            LayerType::Video { speed, .. } => crate::core::timeline::video_sequence_frame_at_rate(
+                layer.remap_frame_f32(comp_frame.round() as u32),
+                *speed,
+                video_fps.unwrap_or(fps),
+                fps as u32,
+            ),
             _ => comp_frame - layer.in_frame as f32,
         };
-        let seconds = source_frame / fps;
+        let source_fps = video_fps.unwrap_or(fps);
+        let seconds = source_frame / source_fps;
         if seconds >= 0.0 && seconds < waveform.duration_seconds {
             let index =
                 ((seconds / waveform.duration_seconds) * waveform.peaks.len() as f32) as usize;

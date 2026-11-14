@@ -8,6 +8,8 @@ pub struct DiskCacheMetadata {
     pub width: u32,
     pub height: u32,
     pub size_bytes: usize,
+    #[serde(default)]
+    pub content_hash: Option<u64>,
     pub last_access_epoch: u64,
 }
 

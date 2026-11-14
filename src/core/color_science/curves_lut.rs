@@ -124,11 +124,34 @@ pub struct Lut3D {
     pub data: Vec<f32>, // Flat RGB array of length size * size * size * 3
 }
 
+pub const MAX_IDENTITY_LUT_SIZE: usize = 256;
+
 #[allow(dead_code)]
 impl Lut3D {
-    /// Create a flat identity 3D LUT of dimension `size`.
+    /// Create an identity LUT, falling back to a pass-through LUT if unsupported.
     pub fn identity(size: usize) -> Self {
-        let mut data = Vec::with_capacity(size * size * size * 3);
+        Self::try_identity(size).unwrap_or(Self {
+            size: 0,
+            data: Vec::new(),
+        })
+    }
+
+    /// Create an identity LUT with a checked allocation and supported edge limit.
+    pub fn try_identity(size: usize) -> Result<Self, String> {
+        let size = size.max(2);
+        if size > MAX_IDENTITY_LUT_SIZE {
+            return Err(format!(
+                "identity LUT size exceeds the {MAX_IDENTITY_LUT_SIZE} edge limit"
+            ));
+        }
+        let capacity = size
+            .checked_mul(size)
+            .and_then(|count| count.checked_mul(size))
+            .and_then(|count| count.checked_mul(3))
+            .ok_or_else(|| "identity LUT dimensions overflow addressable memory".to_owned())?;
+        let mut data = Vec::new();
+        data.try_reserve_exact(capacity)
+            .map_err(|error| format!("could not allocate identity LUT: {error}"))?;
         let s = (size - 1) as f32;
         for r in 0..size {
             for g in 0..size {
@@ -139,7 +162,7 @@ impl Lut3D {
                 }
             }
         }
-        Self { size, data }
+        Ok(Self { size, data })
     }
 
     /// Tetrahedral 3D LUT interpolation algorithm from NextVFX.
@@ -148,18 +171,32 @@ impl Lut3D {
         if self.size == 0 || self.data.is_empty() {
             return (r, g, b);
         }
+        let Some(expected_len) = self
+            .size
+            .checked_mul(self.size)
+            .and_then(|count| count.checked_mul(self.size))
+            .and_then(|count| count.checked_mul(3))
+        else {
+            return (r, g, b);
+        };
+        if self.data.len() < expected_len {
+            return (r, g, b);
+        }
+        if self.size == 1 {
+            return (self.data[0], self.data[1], self.data[2]);
+        }
         let r_safe = if r.is_nan() { 0.0 } else { r };
         let g_safe = if g.is_nan() { 0.0 } else { g };
         let b_safe = if b.is_nan() { 0.0 } else { b };
 
         let s = (self.size - 1) as f32;
-        let fr = (r_safe * s).clamp(0.0, s - 0.001);
-        let fg = (g_safe * s).clamp(0.0, s - 0.001);
-        let fb = (b_safe * s).clamp(0.0, s - 0.001);
+        let fr = (r_safe * s).clamp(0.0, s);
+        let fg = (g_safe * s).clamp(0.0, s);
+        let fb = (b_safe * s).clamp(0.0, s);
 
-        let ir = fr as usize;
-        let ig = fg as usize;
-        let ib = fb as usize;
+        let ir = (fr as usize).min(self.size - 2);
+        let ig = (fg as usize).min(self.size - 2);
+        let ib = (fb as usize).min(self.size - 2);
 
         let dr = fr - ir as f32;
         let dg = fg - ig as f32;

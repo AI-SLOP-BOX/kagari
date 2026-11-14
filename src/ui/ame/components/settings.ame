@@ -88,12 +88,22 @@ component ExitConfirmModal() {
       Card {
         Padding(22) {
           VStack(spacing: 14) {
-            Text("Kagari VFX を終了しますか？", size: 20)
-            Caption("保存していない変更がある場合は、終了する前に保存してください。")
-            HStack(spacing: 10) {
-              Spacer
-              Button("キャンセル", action: cancel_exit_app, tone: secondary)
-              Button("終了", action: confirm_exit_app, tone: destructive)
+            If(project_is_dirty) {
+              Text("未保存の変更があります", size: 20)
+              Caption("終了前にプロジェクトを保存するか、変更を破棄してください。")
+              HStack(spacing: 10) {
+                Spacer
+                Button("キャンセル", action: cancel_exit_app, tone: secondary)
+                Button("保存せずに終了", action: confirm_exit_app, tone: destructive)
+                Button("保存して終了", action: save_and_exit_app, tone: primary)
+              }
+            } else {
+              Text("Kagari VFX を終了しますか？", size: 20)
+              HStack(spacing: 10) {
+                Spacer
+                Button("キャンセル", action: cancel_exit_app, tone: secondary)
+                Button("終了", action: confirm_exit_app, tone: destructive)
+              }
             }
           }
         }

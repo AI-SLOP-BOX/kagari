@@ -78,11 +78,16 @@ pub fn rasterize_layer_content(
             speed,
             ..
         } => {
-            let source_position = (match &p.layer.posterize_time {
+            let remapped_source_frame = match &p.layer.posterize_time {
                 Some(settings) if settings.enabled => p.source_frame as f32,
                 _ => p.layer.remap_frame_f32(p.frame),
-            } * speed.max(0.0))
-            .max(0.0);
+            };
+            let source_position = crate::core::timeline::video_sequence_frame(
+                remapped_source_frame,
+                *speed,
+                frames_dir,
+                p.comp.fps,
+            );
             let first = (source_position.floor() as u32).min(frame_count.saturating_sub(1));
             let second = (first + 1).min(frame_count.saturating_sub(1));
             let blend_t = if p.layer.frame_blending {
@@ -185,6 +190,9 @@ pub fn rasterize_layer_content(
                         .clamp(tb.min_y as i32, tb.max_y as i32)
                         .max(qy0 as i32) as u32;
                     for py in qy0..qy1 {
+                        if super::super::render_cancelled() {
+                            return;
+                        }
                         for px in qx0..qx1 {
                             let tx = px as i32 - origin_x;
                             let ty = py as i32 - origin_y;
@@ -214,6 +222,9 @@ pub fn rasterize_layer_content(
         }
         _ => {
             for py in tb.min_y..tb.max_y {
+                if super::super::render_cancelled() {
+                    return;
+                }
                 for px in tb.min_x..tb.max_x {
                     let dx = px as f32 - tb.cx;
                     let dy = py as f32 - tb.cy;

@@ -54,11 +54,16 @@ mod tests {
             comp.layers.push(layer);
             app.history = crate::core::history::ProjectHistory::new(project);
             app.active_tool = crate::ui::toolbar::ActiveTool::Selection;
+            app.show_welcome = false;
             app.selection.selected_layer_idx = Some(0);
             app.selection.selected_layers.insert(0);
             app.mask_selected_vertices = Some((0, 0, [1].into_iter().collect()));
             let ctx = egui::Context::default();
             let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(800.0, 600.0),
+                )),
                 events: vec![egui::Event::Key {
                     key,
                     physical_key: None,

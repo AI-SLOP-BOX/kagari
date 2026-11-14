@@ -1,6 +1,12 @@
 use crate::core::particle_forces::LifeCurve;
 use serde::{Deserialize, Serialize};
 
+/// CPU renderer safety ceiling for a single emitter.
+///
+/// Particle state includes a fixed trail buffer, so accepting multi-million
+/// particle emitters can allocate gigabytes before rendering completes.
+pub const MAX_PARTICLES_PER_EMITTER: u32 = 100_000;
+
 /// Emitter shape type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum EmitterShape {

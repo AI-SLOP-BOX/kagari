@@ -1,6 +1,45 @@
 use super::*;
 
 impl WgpuRenderer {
+    fn clear_target_after_mask_failure(&self, target_snapshot: bool, background: [f32; 4]) {
+        let view = if target_snapshot {
+            self.snapshot_view.as_ref()
+        } else {
+            self.target_view.as_ref()
+        };
+        let Some(view) = view else {
+            return;
+        };
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Clear target after mask raster failure"),
+            });
+        let background_alpha = background[3].clamp(0.0, 1.0) as f64;
+        {
+            let _pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Clear target after mask raster failure"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: background[0].clamp(0.0, 1.0) as f64 * background_alpha,
+                            g: background[1].clamp(0.0, 1.0) as f64 * background_alpha,
+                            b: background[2].clamp(0.0, 1.0) as f64 * background_alpha,
+                            a: background_alpha,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+        }
+        self.queue.submit(Some(encoder.finish()));
+    }
+
     /// Internal core rendering implementation for both primary preview and snapshot target views.
     pub(super) fn render_internal(
         &mut self,
@@ -23,9 +62,11 @@ impl WgpuRenderer {
         };
 
         let composition_key = composition_cache_key(comp);
+        let media_revision = composition_media_revision(comp, frame);
         let render_key: RenderKey = (
             crate::core::frame_cache::current_version(),
             composition_key,
+            media_revision,
             frame,
             exposure_ev.to_bits(),
             lut_mode,
@@ -73,6 +114,11 @@ impl WgpuRenderer {
         {
             return false;
         }
+
+        // Expression and Audio Spectrum values are thread-local. Install the
+        // same frame context used by the software renderer before evaluating
+        // any GPU-layer transform or effect parameters.
+        crate::core::software_renderer::inject_audio_reactive_data(comp, frame);
 
         {
             // Viewport projection matrix:
@@ -140,6 +186,7 @@ impl WgpuRenderer {
                 let mut is_video_frame = false;
                 let mut is_precomp_frame = false;
                 let mut is_image_frame = false;
+                let mut video_frame_blend = 0.0;
                 if let LayerType::Image { path } = &layer.layer_type {
                     let image_path = self
                         .preview_proxy_path(layer, 0)
@@ -166,8 +213,23 @@ impl WgpuRenderer {
                         Some(pt) if pt.enabled => effective_frame as f32,
                         _ => layer.remap_frame_f32(frame),
                     };
-                    let seq_frame = (source_frame * speed.max(0.0)).floor().max(0.0) as u32;
-                    let seq_frame = seq_frame.min(frame_count.saturating_sub(1));
+                    let source_position = crate::core::timeline::video_sequence_frame(
+                        source_frame,
+                        *speed,
+                        frames_dir,
+                        comp.fps,
+                    );
+                    let source_floor = source_position.floor();
+                    let seq_frame = (source_floor as u32).min(frame_count.saturating_sub(1));
+                    let blend = if layer.frame_blending {
+                        (source_position - source_floor).clamp(0.0, 1.0)
+                    } else {
+                        0.0
+                    };
+                    let next_frame = (blend > f32::EPSILON
+                        && seq_frame < frame_count.saturating_sub(1)
+                        && self.preview_proxy_path(layer, seq_frame).is_none())
+                    .then_some(seq_frame + 1);
                     let version = crate::core::frame_cache::current_version();
                     let texture =
                         if let Some(proxy_path) = self.preview_proxy_path(layer, seq_frame) {
@@ -178,7 +240,7 @@ impl WgpuRenderer {
                             )
                         } else {
                             self.get_or_create_video_frame_texture(
-                                &layer.id, frames_dir, seq_frame, version,
+                                &layer.id, frames_dir, seq_frame, next_frame, version,
                             )
                         };
                     if let Some((tw, th, bg)) = texture {
@@ -186,6 +248,7 @@ impl WgpuRenderer {
                         layer_h = th as f32;
                         text_bind_group = Some(bg);
                         is_video_frame = true;
+                        video_frame_blend = if next_frame.is_some() { blend } else { 0.0 };
                     }
                 }
                 if let LayerType::PreComp { comp_id } = &layer.layer_type {
@@ -275,6 +338,8 @@ impl WgpuRenderer {
                     [layer_w, 0.0, 0.0, 0.0],
                     [0.0, layer_h, 0.0, 0.0],
                     [0.0, 0.0, 1.0, 0.0],
+                    // Convert the centered unit quad to layer-local pixel
+                    // coordinates; the anchor matrix then places its pivot.
                     [layer_w * 0.5, layer_h * 0.5, 0.0, 1.0],
                 ];
 
@@ -316,7 +381,7 @@ impl WgpuRenderer {
 
                 // Total projection * model matrix
                 let transform_matrix = if layer.is_3d {
-                    comp.resolve_world_transform_3d(layer, frame)
+                    comp.resolve_world_transform_3d(layer, frame, layer_w, layer_h)
                 } else {
                     mat4_mul(m_proj, m_model)
                 };
@@ -329,25 +394,40 @@ impl WgpuRenderer {
                     transform_matrix,
                     opacity,
                     is_textured_text || is_video_frame || is_precomp_frame || is_image_frame,
+                    video_frame_blend,
                 );
 
-                layer_mask_plans.push(
-                    collect_mask_shapes(layer, frame, width, height, comp.width, comp.height).map(
-                        |(key, shapes)| {
-                            if let Some(hit) = self.mask_raster_cache.borrow_mut().get(key) {
-                                return hit;
-                            }
-                            // Drop the short-lived borrow before the (possibly slow)
-                            // raster so we never hold the cache across heavy work.
-                            let raster = std::sync::Arc::new(
-                                rasterize_from_shapes(&shapes, width, height)
-                                    .expect("non-empty shapes always yield coverage"),
+                let mask_plan = if let Some((key, shapes)) =
+                    collect_mask_shapes(layer, frame, width, height, comp.width, comp.height)
+                {
+                    if let Some(hit) = self.mask_raster_cache.borrow_mut().get(key) {
+                        Some(hit)
+                    } else {
+                        // Drop the short-lived borrow before the (possibly slow)
+                        // raster so we never hold the cache across heavy work.
+                        let Some(raster) = rasterize_from_shapes(&shapes, width, height) else {
+                            log::error!(
+                                "[WgpuRenderer] Could not rasterize layer mask within the allocation budget"
                             );
-                            self.mask_raster_cache.borrow_mut().insert(raster.clone());
-                            raster
-                        },
-                    ),
-                );
+                            self.clear_target_after_mask_failure(
+                                target_snapshot,
+                                comp.background_color,
+                            );
+                            if target_snapshot {
+                                self.last_snapshot_key = Some(render_key);
+                            } else {
+                                self.last_main_key = Some(render_key);
+                            }
+                            return true;
+                        };
+                        let raster = std::sync::Arc::new(raster);
+                        self.mask_raster_cache.borrow_mut().insert(raster.clone());
+                        Some(raster)
+                    }
+                } else {
+                    None
+                };
+                layer_mask_plans.push(mask_plan);
                 uniforms.push(layer_uniform);
                 active_layers.push(layer);
             }
@@ -435,14 +515,16 @@ impl WgpuRenderer {
             }
 
             // Step 1b: Prepare track matte textures before the batched upload pass.
-            let matte_resources = self.prepare_track_mattes(
+            let Some(matte_resources) = self.prepare_track_mattes(
                 comp,
                 frame,
                 width,
                 height,
                 &active_layers,
                 &comp_indices,
-            );
+            ) else {
+                return false;
+            };
 
             if !self.upload_and_encode_render_runs(super::render_encoder::EncodeRunsCtx {
                 comp,

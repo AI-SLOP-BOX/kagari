@@ -52,14 +52,22 @@ impl AfterEffectsStudio {
 
     pub(crate) fn mark_project_changed(&mut self) {
         self.preview_revision = self.preview_revision.wrapping_add(1);
+        self.project_is_dirty = true;
         self.save_status = "未保存の変更があります".to_owned();
         let interaction_active = self.timeline_clip_drag.is_some()
             || self.graph_key_drag.is_some()
             || self.viewport_drag.is_some()
-            || self.mask_vertex_drag.is_some();
+            || self.mask_vertex_drag.is_some()
+            || self.light_gizmo_drag.is_some()
+            || self.camera_nav_drag.is_some();
         if interaction_active && self.history_interaction_snapshot.is_none() {
             self.history_interaction_snapshot = Some(self.history.current().clone());
-        } else if !interaction_active && self.history_interaction_snapshot.is_none() {
+        }
+        if self.history_interaction_snapshot.is_some() {
+            // Nested PreComp caches use the shared frame-cache generation.
+            // Invalidate while edits are still inside an open undo transaction.
+            kagari_vfx::core::frame_cache::bump_version();
+        } else {
             self.history
                 .commit_action(self.project_model.clone(), "編集");
         }
@@ -81,10 +89,20 @@ impl AfterEffectsStudio {
 
     pub(crate) fn restore_history_project(&mut self, project: kagari_vfx::core::timeline::Project) {
         self.history_interaction_snapshot = None;
+        self.roto_live_stroke = None;
         self.timeline_clip_drag = None;
+        self.timeline_work_area_drag = None;
+        self.timeline_scrubbing = false;
+        self.timeline_snap_frame = None;
         self.graph_key_drag = None;
         self.viewport_drag = None;
         self.mask_vertex_drag = None;
+        self.viewport_pan_drag = None;
+        self.viewport_pen_start = None;
+        self.viewport_pen_current = None;
+        self.light_gizmo_drag = None;
+        self.camera_nav_drag = None;
+        self.flowchart_wire_drag = None;
         self.project_model = project;
         let composition = self.project_model.active_composition();
         self.project_fps = composition.fps.max(1);
@@ -131,6 +149,7 @@ impl AfterEffectsStudio {
             self.selected_project_asset_id = None;
         }
         self.preview_revision = self.preview_revision.wrapping_add(1);
+        self.project_is_dirty = true;
         self.save_status = "未保存の変更があります".to_owned();
         self.sync_selected_layer_controls();
         self.sync_bindings_logged();

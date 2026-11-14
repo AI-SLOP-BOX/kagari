@@ -39,6 +39,92 @@ fn test_dense_optical_flow_translation() {
     assert_eq!(center_vec[0], 2.0);
     assert_eq!(center_vec[1], 0.0);
 }
+
+#[test]
+fn dense_flow_prefers_zero_motion_when_flat_blocks_are_ambiguous() {
+    let (width, height) = (24u32, 24u32);
+    let flat = vec![96u8; (width * height * 4) as usize];
+
+    let flow = compute_dense_optical_flow(&flat, &flat, width, height, 1, 6);
+
+    assert!(flow.vectors.iter().all(|motion| *motion == [0.0, 0.0]));
+}
+
+#[test]
+fn timewarp_uses_the_reverse_flow_sign_when_sampling_frame_b() {
+    let (width, height) = (16u32, 16u32);
+    let mut frame_a = vec![0u8; (width * height * 4) as usize];
+    let mut frame_b = vec![0u8; (width * height * 4) as usize];
+    for y in 4..12 {
+        for x in 4..8 {
+            let offset = ((y * width + x) * 4) as usize;
+            frame_a[offset..offset + 4].copy_from_slice(&[255; 4]);
+        }
+        for x in 6..10 {
+            let offset = ((y * width + x) * 4) as usize;
+            frame_b[offset..offset + 4].copy_from_slice(&[255; 4]);
+        }
+    }
+    let mut flow_a_to_b = DenseFlowField::new(width, height);
+    flow_a_to_b.vectors.fill([2.0, 0.0]);
+    let mut flow_b_to_a = DenseFlowField::new(width, height);
+    flow_b_to_a.vectors.fill([-2.0, 0.0]);
+    let mut output = vec![0u8; (width * height * 4) as usize];
+
+    interpolate_timewarp_frame(
+        &frame_a,
+        &frame_b,
+        width,
+        height,
+        &flow_a_to_b,
+        &flow_b_to_a,
+        0.5,
+        &mut output,
+    );
+
+    let center = ((8 * width + 5) * 4) as usize;
+    assert_eq!(output[center..center + 4], [255; 4]);
+}
+
+#[test]
+fn test_dense_optical_flow_refines_fractional_translation() {
+    let (width, height) = (64u32, 64u32);
+    let sample = |x: f32, y: f32| {
+        128.0
+            + 48.0 * (x * 0.53 + y * 0.21).sin()
+            + 37.0 * (x * 0.17 - y * 0.61).cos()
+            + 26.0 * (x * 0.83 + y * 0.47).sin()
+    };
+    let make_frame = |offset_x: f32, offset_y: f32| {
+        let mut pixels = vec![0u8; (width * height * 4) as usize];
+        for y in 0..height {
+            for x in 0..width {
+                let value = sample(x as f32 - offset_x, y as f32 - offset_y)
+                    .round()
+                    .clamp(0.0, 255.0) as u8;
+                let index = ((y * width + x) * 4) as usize;
+                pixels[index..index + 4].copy_from_slice(&[value, value, value, 255]);
+            }
+        }
+        pixels
+    };
+    let source = make_frame(0.0, 0.0);
+    let shifted = make_frame(0.5, -0.375);
+
+    let flow = compute_dense_optical_flow(&source, &shifted, width, height, 5, 3);
+    let motion = flow.get(32, 32);
+    assert!(
+        (motion[0] - 0.5).abs() < 0.3,
+        "expected half-pixel horizontal motion, got {:?}",
+        motion
+    );
+    assert!(
+        (motion[1] + 0.375).abs() < 0.4,
+        "expected fractional vertical motion, got {:?}",
+        motion
+    );
+}
+
 #[test]
 fn markerless_tracking_follows_translation_and_bakes_keyframes() {
     let (w, h) = (16u32, 16u32);

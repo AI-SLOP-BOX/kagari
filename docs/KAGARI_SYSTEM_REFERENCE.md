@@ -34,7 +34,7 @@ GUI編集（`kagari-studio`）とヘッドレスCLI自動化（`kagari`）の双
    - プラットフォーム・GPU環境に一切依存せず、1バイトの狂いもなく完全同一の画を出力するリファレンスレンダラー。
    - Rayonによるマルチスレッド並列レンダリング（MFR: Multi-Frame Rendering）に対応。
    - すべてのエフェクト（v1〜v30）、SDFシェイプ、テキストラスタライザ、OBJ 3Dモデル、調整レイヤー、トラックマットが動作。
-2. **GPUプレビューレンダラー（wgpu）** (`src/core/renderer.rs`, `src/core/shader.wgsl`, `src/core/compute_blur.wgsl`)
+2. **GPUプレビューレンダラー（wgpu）** (`src/core/renderer.rs`, `src/core/shader/`, `src/core/compute_blur/`)
    - ビューポート再生時の超高速リアルタイム表示用。macOSではMetal、WindowsではDX12/Vulkanで動作。
    - 未サポートの高度エフェクトや複雑なパス・パペット変形が含まれる場合は、安全にCPUプレビュー（`render_frame_to_pixels_preview`）へフォールバックします。
 

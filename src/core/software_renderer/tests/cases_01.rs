@@ -60,7 +60,9 @@ fn preview_uses_layer_proxy_media_but_final_render_does_not() {
     std::fs::create_dir_all(&frames).unwrap();
     let full_frame = frames.join("frame_00000.png");
     let proxy_frame = dir.join("proxy.webp");
-    write_gray_png(&full_frame, 40);
+    image::GrayImage::from_pixel(12, 12, image::Luma([40]))
+        .save(&full_frame)
+        .unwrap();
     write_gray_webp(&proxy_frame, 200);
 
     let mut comp = Composition::new("proxy_comp".into(), "Proxy".into(), 16, 16, 30, 30);
@@ -79,17 +81,74 @@ fn preview_uses_layer_proxy_media_but_final_render_does_not() {
     );
     layer.proxy.enabled = true;
     layer.proxy.proxy_path = Some(proxy_frame.to_string_lossy().into_owned());
-    layer.transform.position = Animatable::new_constant([8.0, 8.0]);
+    layer.transform.position = Animatable::new_constant([2.0, 2.0]);
     comp.layers.push(layer);
 
     let final_pixels = render_frame_to_pixels(&comp, 0, 16, 16, 0.0, 0);
     let preview_pixels = render_frame_to_pixels_preview(&comp, 0, 16, 16, 0.0, 0);
-    let center = (8 * 16 * 4 + 8 * 4) as usize;
-    assert_eq!(final_pixels[center], 40);
-    assert_eq!(preview_pixels[center], 200);
+    let interior = (10 * 16 * 4 + 10 * 4) as usize;
+    assert_eq!(final_pixels[interior], 40);
+    assert_eq!(
+        preview_pixels[interior], 200,
+        "proxy pixels must retain the full-resolution layer geometry"
+    );
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn offline_video_proxy_preserves_source_geometry_in_preview() {
+    let dir = std::env::temp_dir().join(format!(
+        "kagari_offline_proxy_geometry_{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    let frames = dir.join("missing_frames");
+    std::fs::create_dir_all(&frames).unwrap();
+    let proxy = dir.join("proxy.webp");
+    write_gray_webp(&proxy, 200);
+
+    let mut comp = Composition::new(
+        "offline_proxy".into(),
+        "Offline Proxy".into(),
+        24,
+        24,
+        30,
+        1,
+    );
+    let mut layer = Layer::new(
+        "offline_video".into(),
+        "Offline Video".into(),
+        LayerType::Video {
+            source: "offline.mov".into(),
+            frames_dir: frames.to_string_lossy().into_owned(),
+            frame_count: 1,
+            audio_wav: None,
+            audio_volume: Animatable::new_constant(0.0),
+            speed: 1.0,
+        },
+        1,
+    );
+    layer.proxy.enabled = true;
+    layer.proxy.path_resolution = Some(crate::core::proxy::ProxyResolution::Quarter);
+    layer.proxy.resolution = crate::core::proxy::ProxyResolution::Eighth;
+    layer.proxy.proxy_path = Some(proxy.to_string_lossy().into_owned());
+    layer.transform.position = Animatable::new_constant([2.0, 2.0]);
+    comp.layers.push(layer);
+
+    let preview = render_frame_to_pixels_preview(&comp, 0, 24, 24, 0.0, 0);
+    let inside_full_size = (16 * 24 * 4 + 16 * 4) as usize;
+    let outside_full_size = (20 * 24 * 4 + 20 * 4) as usize;
+    assert_eq!(preview[inside_full_size], 200);
+    assert_eq!(
+        preview[outside_full_size],
+        (comp.background_color[0] * 255.0).round() as u8,
+        "offline proxy must not expand to composition bounds"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn test_video_frame_blending_interpolates_webp_frames() {
     let dir = std::env::temp_dir().join(format!("kagari_blend_test_{}", std::process::id()));
@@ -123,6 +182,43 @@ fn test_video_frame_blending_interpolates_webp_frames() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn video_frame_mix_does_not_leak_color_from_transparent_pixels() {
+    let dir = std::env::temp_dir().join(format!("kagari_alpha_blend_test_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    write_rgba_webp(&dir.join("frame_00000.webp"), [255, 0, 0, 0]);
+    write_rgba_webp(&dir.join("frame_00001.webp"), [0, 0, 255, 255]);
+
+    let mut comp = Composition::new("alpha_blend".into(), "Alpha Blend".into(), 16, 16, 30, 30);
+    comp.background_color = [0.0; 4];
+    let mut layer = Layer::new(
+        "video".into(),
+        "Video".into(),
+        LayerType::Video {
+            source: "test".into(),
+            frames_dir: dir.to_string_lossy().into_owned(),
+            frame_count: 2,
+            audio_wav: None,
+            audio_volume: Animatable::new_constant(0.0),
+            speed: 0.5,
+        },
+        30,
+    );
+    layer.frame_blending = true;
+    layer.transform.position = Animatable::new_constant([8.0, 8.0]);
+    comp.layers.push(layer);
+
+    let pixels = render_frame_to_pixels(&comp, 1, 16, 16, 0.0, 0);
+    let center = (8 * 16 + 8) * 4;
+    assert!(pixels[center] < 5, "transparent red must not tint the mix");
+    assert!(pixels[center + 2] > 245, "opaque blue must retain its hue");
+    assert!((pixels[center + 3] as i16 - 128).abs() < 8);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn test_software_render_frame_to_pixels() {
     let mut comp = Composition::new("c1".to_string(), "Comp".to_string(), 100, 100, 30, 30);
@@ -154,6 +250,7 @@ fn source_layer_effects_keep_original_layer_indices() {
         30,
     );
     source.transform.position = Animatable::new_constant([8.0, 8.0]);
+    source.transform.anchor_point = Animatable::new_constant([8.0, 8.0]);
     comp.layers.push(source);
 
     let mut target = Layer::new(
@@ -165,6 +262,7 @@ fn source_layer_effects_keep_original_layer_indices() {
         30,
     );
     target.transform.position = Animatable::new_constant([8.0, 8.0]);
+    target.transform.anchor_point = Animatable::new_constant([8.0, 8.0]);
     target.effects.push(Effect {
         id: "matte".into(),
         enabled: true,
@@ -246,6 +344,74 @@ fn test_particle_layer_deterministic() {
         "Particle simulation must be deterministic per frame"
     );
 }
+
+#[test]
+fn test_particle_time_remap_freezes_and_reverses_simulation() {
+    let make_comp = || {
+        let mut comp =
+            Composition::new("particle-remap".into(), "Particles".into(), 64, 64, 30, 30);
+        let mut layer = Layer::new(
+            "particles".into(),
+            "Particles".into(),
+            LayerType::Particle {
+                emitter: crate::core::particle_system::ParticleEmitter {
+                    rate: 500.0,
+                    lifetime: 2.0,
+                    speed: 50.0,
+                    size_start: 6.0,
+                    size_end: 3.0,
+                    ..Default::default()
+                },
+            },
+            30,
+        );
+        layer.transform.position = Animatable::new_constant([32.0, 32.0]);
+        comp.layers.push(layer);
+        comp
+    };
+
+    let baseline = make_comp();
+    let baseline_at_zero = render_frame_to_pixels(&baseline, 0, 64, 64, 0.0, 0);
+    let baseline_at_ten = render_frame_to_pixels(&baseline, 10, 64, 64, 0.0, 0);
+
+    let mut frozen = make_comp();
+    frozen.layers[0].time_remap = Some(Animatable::new_constant(10.0));
+    assert_eq!(
+        render_frame_to_pixels(&frozen, 0, 64, 64, 0.0, 0),
+        baseline_at_ten,
+        "a remapped particle layer must show the state at its source frame"
+    );
+    assert_eq!(
+        render_frame_to_pixels(&frozen, 8, 64, 64, 0.0, 0),
+        baseline_at_ten,
+        "a constant remap must freeze the particle simulation"
+    );
+
+    let mut reversed = make_comp();
+    reversed.layers[0].time_remap = Some(Animatable::new_animated(vec![
+        crate::core::keyframe::Keyframe::new(
+            0,
+            10.0,
+            crate::core::keyframe::InterpolationType::Linear,
+        ),
+        crate::core::keyframe::Keyframe::new(
+            10,
+            0.0,
+            crate::core::keyframe::InterpolationType::Linear,
+        ),
+    ]));
+    assert_eq!(
+        render_frame_to_pixels(&reversed, 0, 64, 64, 0.0, 0),
+        baseline_at_ten,
+        "reverse remapping must begin at the requested source state"
+    );
+    assert_eq!(
+        render_frame_to_pixels(&reversed, 10, 64, 64, 0.0, 0),
+        baseline_at_zero,
+        "reverse remapping must rewind to the earlier particle state"
+    );
+}
+
 #[test]
 fn test_motion_blur_smears_moving_layer() {
     let mut comp = Composition::new("c1".to_string(), "Comp".to_string(), 100, 100, 30, 30);
@@ -289,6 +455,8 @@ fn test_3d_light_shading_applied() {
         30,
     );
     layer.is_3d = true;
+    layer.transform.anchor_point = Animatable::new_constant([16.0, 16.0]);
+    layer.transform_3d.position = Animatable::new_constant([0.0, 0.0, 600.0]);
     comp.layers.push(layer);
 
     // Strong light near the layer center should brighten it
@@ -316,12 +484,13 @@ fn test_dof_blurs_off_focus_3d_layer() {
         30,
     );
     layer.is_3d = true;
+    layer.transform.anchor_point = Animatable::new_constant([16.0, 16.0]);
     // Push the layer far from the focus plane
-    layer.transform_3d.position = Animatable::new_constant([16.0, 16.0, -3000.0]);
+    layer.transform_3d.position = Animatable::new_constant([0.0, 0.0, 600.0]);
     comp.layers.push(layer);
 
     comp.active_camera.dof_enabled = true;
-    comp.resolve_camera_mut().focus_distance = 1000.0;
+    comp.resolve_camera_mut().focus_distance = 100.0;
     comp.resolve_camera_mut().aperture = 50.0;
     comp.resolve_camera_mut().dof_max_blur = 24.0;
 

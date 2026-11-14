@@ -115,20 +115,22 @@ pub(super) fn summarize_value(v: &serde_json::Value) -> Option<ProjectSummary> {
             }
             let video = layer_type.get("Video")?;
             let frames_dir = video.get("frames_dir")?.as_str()?;
-            let source_frame = ((in_frame as f64
-                * video
+            let source_position = crate::core::timeline::video_sequence_frame(
+                in_frame as f32,
+                video
                     .get("speed")
                     .and_then(serde_json::Value::as_f64)
-                    .unwrap_or(1.0)
-                    .max(0.0))
-            .floor() as u32)
-                .min(
-                    video
-                        .get("frame_count")
-                        .and_then(serde_json::Value::as_u64)
-                        .unwrap_or(1)
-                        .saturating_sub(1) as u32,
-                );
+                    .unwrap_or(1.0) as f32,
+                frames_dir,
+                fps,
+            );
+            let source_frame = (source_position.floor() as u32).min(
+                video
+                    .get("frame_count")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(1)
+                    .saturating_sub(1) as u32,
+            );
             let frame_path = crate::core::video_import::frame_path_in_dir(frames_dir, source_frame);
             frame_path
                 .is_file()
@@ -220,15 +222,24 @@ pub fn trigger_recent_projects_scan(app: &mut KagariApp, ctx: &egui::Context) {
         })
         .collect();
     let (tx, rx) = std::sync::mpsc::channel();
-    app.home_recent_rx = Some(rx);
     let repaint_ctx = ctx.clone();
-    std::thread::spawn(move || {
-        // `paths` is already ordered by last opened time (newest first).
-        // File modification time is not a reliable proxy for recent usage.
-        let results = scan_recent_projects_sync(&paths, false);
-        let _ = tx.send(results);
-        repaint_ctx.request_repaint();
-    });
+    match std::thread::Builder::new()
+        .name("kagari-recent-project-scan".into())
+        .spawn(move || {
+            // `paths` is already ordered by last opened time (newest first).
+            // File modification time is not a reliable proxy for recent usage.
+            let results = scan_recent_projects_sync(&paths, false);
+            let _ = tx.send(results);
+            repaint_ctx.request_repaint();
+        }) {
+        Ok(handle) => {
+            app.home_recent_rx = Some(rx);
+            app.track_background_thread(handle);
+        }
+        Err(error) => app
+            .toasts
+            .warning(format!("最近使ったプロジェクトを更新できません: {error}")),
+    }
 }
 
 /// Polls for completed background recent projects scan.

@@ -1,6 +1,7 @@
 //! Property sets and C ABI property suite implementations for OpenFX.
 
 use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
 
 /// Property values storable in an OFX property set.
 #[derive(Debug, Clone, PartialEq)]
@@ -89,14 +90,64 @@ impl OfxPropertySet {
 
 // OFX status codes used by the handshake (ofxCore.h)
 pub const K_OFX_STAT_OK: i32 = 0;
-pub const K_OFX_STAT_REPLY_YES: i32 = 1;
-pub const K_OFX_STAT_REPLY_DEFAULT: i32 = 2;
-pub const K_OFX_STAT_ERR_UNSET: i32 = 4; // what plugins return when ignoring an action
+pub const K_OFX_STAT_FAILED: i32 = 1;
+pub const K_OFX_STAT_ERR_FATAL: i32 = 2;
+pub const K_OFX_STAT_ERR_UNKNOWN: i32 = 3;
+pub const K_OFX_STAT_ERR_MISSING_HOST_FEATURE: i32 = 4;
+pub const K_OFX_STAT_ERR_BAD_HANDLE: i32 = 9;
+pub const K_OFX_STAT_ERR_BAD_INDEX: i32 = 10;
+pub const K_OFX_STAT_ERR_VALUE: i32 = 11;
+pub const K_OFX_STAT_REPLY_YES: i32 = 12;
+pub const K_OFX_STAT_REPLY_NO: i32 = 13;
+pub const K_OFX_STAT_REPLY_DEFAULT: i32 = 14;
+const MAX_PROPERTY_INDEX: i32 = 4095;
 
-pub(crate) unsafe fn handle_as_set<'a>(
+fn property_index(index: i32) -> Option<usize> {
+    (0..=MAX_PROPERTY_INDEX)
+        .contains(&index)
+        .then_some(index as usize)
+}
+
+fn property_set_handles() -> &'static Mutex<std::collections::HashSet<usize>> {
+    static HANDLES: OnceLock<Mutex<std::collections::HashSet<usize>>> = OnceLock::new();
+    HANDLES.get_or_init(|| Mutex::new(std::collections::HashSet::new()))
+}
+
+pub(crate) fn register_property_set_handle(handle: *mut OfxPropertySet) {
+    if !handle.is_null() {
+        property_set_handles()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(handle as usize);
+    }
+}
+
+pub(crate) fn unregister_property_set_handle(handle: *mut OfxPropertySet) {
+    if !handle.is_null() {
+        property_set_handles()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&(handle as usize));
+    }
+}
+
+fn with_property_set_handle<R>(
     handle: *mut std::os::raw::c_void,
-) -> Option<&'a mut OfxPropertySet> {
-    (handle as *mut OfxPropertySet).as_mut()
+    apply: impl FnOnce(&mut OfxPropertySet) -> R,
+) -> Option<R> {
+    if handle.is_null() {
+        return None;
+    }
+    let handles = property_set_handles()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if !handles.contains(&(handle as usize)) {
+        return None;
+    }
+    // The registry lock serializes callbacks and unregister-on-drop, so a
+    // registered boxed property set cannot be freed during this access.
+    let set = unsafe { (handle as *mut OfxPropertySet).as_mut()? };
+    Some(apply(set))
 }
 
 pub(crate) unsafe fn cstr<'a>(p: *const std::os::raw::c_char) -> Option<&'a str> {
@@ -112,13 +163,20 @@ pub(crate) unsafe extern "C" fn prop_set_int(
     index: i32,
     value: i32,
 ) -> i32 {
-    let (Some(set), Some(name)) = (handle_as_set(handle), cstr(prop)) else {
-        return 1; // kOfxStatErrBadHandle-ish; real code kept minimal
+    let Some(index) = property_index(index) else {
+        return K_OFX_STAT_ERR_BAD_INDEX;
     };
-    if set.set_int(name, index.max(0) as usize, value) {
+    let Some(name) = (unsafe { cstr(prop) }) else {
+        return K_OFX_STAT_ERR_VALUE;
+    };
+    let Some(result) = with_property_set_handle(handle, |set| set.set_int(name, index, value))
+    else {
+        return K_OFX_STAT_ERR_BAD_HANDLE;
+    };
+    if result {
         K_OFX_STAT_OK
     } else {
-        1
+        K_OFX_STAT_FAILED
     }
 }
 
@@ -128,13 +186,20 @@ pub(crate) unsafe extern "C" fn prop_set_double(
     index: i32,
     value: f64,
 ) -> i32 {
-    let (Some(set), Some(name)) = (handle_as_set(handle), cstr(prop)) else {
-        return 1;
+    let Some(index) = property_index(index) else {
+        return K_OFX_STAT_ERR_BAD_INDEX;
     };
-    if set.set_double(name, index.max(0) as usize, value) {
+    let Some(name) = (unsafe { cstr(prop) }) else {
+        return K_OFX_STAT_ERR_VALUE;
+    };
+    let Some(result) = with_property_set_handle(handle, |set| set.set_double(name, index, value))
+    else {
+        return K_OFX_STAT_ERR_BAD_HANDLE;
+    };
+    if result {
         K_OFX_STAT_OK
     } else {
-        1
+        K_OFX_STAT_FAILED
     }
 }
 
@@ -144,14 +209,20 @@ pub(crate) unsafe extern "C" fn prop_set_string(
     index: i32,
     value: *const std::os::raw::c_char,
 ) -> i32 {
-    let (Some(set), Some(name), Some(val)) = (handle_as_set(handle), cstr(prop), cstr(value))
-    else {
-        return 1;
+    let Some(index) = property_index(index) else {
+        return K_OFX_STAT_ERR_BAD_INDEX;
     };
-    if set.set_string(name, index.max(0) as usize, val) {
+    let (Some(name), Some(val)) = (unsafe { cstr(prop) }, unsafe { cstr(value) }) else {
+        return K_OFX_STAT_ERR_VALUE;
+    };
+    let Some(result) = with_property_set_handle(handle, |set| set.set_string(name, index, val))
+    else {
+        return K_OFX_STAT_ERR_BAD_HANDLE;
+    };
+    if result {
         K_OFX_STAT_OK
     } else {
-        1
+        K_OFX_STAT_FAILED
     }
 }
 

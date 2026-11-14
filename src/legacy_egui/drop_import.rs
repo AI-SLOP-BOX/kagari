@@ -37,6 +37,32 @@ pub struct ImportTarget {
     selected_layer_id: Option<String>,
 }
 
+pub(crate) fn discard_unattached_video_asset(asset: &crate::core::video_import::VideoAsset) {
+    let frames_dir = std::path::Path::new(&asset.frames_dir);
+    if frames_dir.file_name().is_none_or(|name| name != "frames") {
+        return;
+    }
+    let Some(import_dir) = frames_dir.parent() else {
+        return;
+    };
+    let media_root = std::env::temp_dir().join("kagari_media");
+    let Ok(media_root) = std::fs::canonicalize(media_root) else {
+        return;
+    };
+    let Ok(metadata) = std::fs::symlink_metadata(import_dir) else {
+        return;
+    };
+    if !metadata.file_type().is_dir() {
+        return;
+    }
+    let Ok(import_dir) = std::fs::canonicalize(import_dir) else {
+        return;
+    };
+    if import_dir != media_root && import_dir.starts_with(&media_root) {
+        let _ = std::fs::remove_dir_all(import_dir);
+    }
+}
+
 pub fn start_video_import(
     app: &mut KagariApp,
     ctx: &egui::Context,
@@ -67,22 +93,32 @@ pub fn start_image_sequence_import(
         .join("kagari_media")
         .join("image_sequences")
         .join(&name);
+    let label = name.clone();
     let (tx, rx) = std::sync::mpsc::channel();
-    app.import_rx.push(ImportJob {
-        receiver: rx,
-        label: name.clone(),
-        cancel: None,
-    });
-    app.toasts
-        .info(format!("画像シーケンス「{}」を読み込み中…", name));
-    ctx.request_repaint();
-    let handle = std::thread::spawn(move || {
-        let result = crate::core::video_import::import_image_sequence(&path, &destination, fps)
-            .map(|asset| ImportResult::ImageSequence(asset, name, target))
-            .unwrap_or_else(|error| ImportResult::Err(error.to_string()));
-        let _ = tx.send(result);
-    });
-    app.track_background_thread(handle);
+    let handle = std::thread::Builder::new()
+        .name("kagari-image-sequence-import".into())
+        .spawn(move || {
+            let result = crate::core::video_import::import_image_sequence(&path, &destination, fps)
+                .map(|asset| ImportResult::ImageSequence(asset, name, target))
+                .unwrap_or_else(|error| ImportResult::Err(error.to_string()));
+            let _ = tx.send(result);
+        });
+    match handle {
+        Ok(handle) => {
+            app.import_rx.push(ImportJob {
+                receiver: rx,
+                label: label.clone(),
+                cancel: None,
+            });
+            app.toasts
+                .info(format!("画像シーケンス「{}」を読み込み中…", label));
+            app.track_background_thread(handle);
+            ctx.request_repaint();
+        }
+        Err(error) => app
+            .toasts
+            .error(format!("画像シーケンスの読み込みを開始できません: {error}")),
+    }
 }
 
 fn start_video_import_mode(
@@ -91,11 +127,6 @@ fn start_video_import_mode(
     path: std::path::PathBuf,
     name: String,
 ) {
-    if !crate::core::video_import::ffmpeg_available() {
-        app.toasts
-            .error("動画の読み込みにはFFmpegが必要です。PATHを確認してください。");
-        return;
-    }
     let comp = app.history.current().active_composition();
     let fps = comp.fps.max(1) as f32;
     let target = ImportTarget {
@@ -110,23 +141,38 @@ fn start_video_import_mode(
     let dest = std::env::temp_dir().join("kagari_media").join(&name);
     let source = path.to_string_lossy().into_owned();
     let (tx, rx) = std::sync::mpsc::channel();
+    let label = name.clone();
     let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    app.import_rx.push(ImportJob {
-        receiver: rx,
-        label: name.clone(),
-        cancel: Some(cancel.clone()),
-    });
-    app.toasts
-        .info(format!("「{}」のフレームを読み込み中…", name));
-    ctx.request_repaint();
-    let handle = std::thread::spawn(move || {
-        let result =
-            crate::core::video_import::import_video_with_cancel(&source, &dest, fps, &cancel)
-                .map(|asset| ImportResult::Video(asset, name, target))
-                .unwrap_or_else(|error| ImportResult::Err(error.to_string()));
-        let _ = tx.send(result);
-    });
-    app.track_background_thread(handle);
+    let worker_cancel = cancel.clone();
+    let handle = std::thread::Builder::new()
+        .name("kagari-video-import".into())
+        .spawn(move || {
+            let result = crate::core::video_import::import_video_with_cancel(
+                &source,
+                &dest,
+                fps,
+                &worker_cancel,
+            )
+            .map(|asset| ImportResult::Video(asset, name, target))
+            .unwrap_or_else(|error| ImportResult::Err(error.to_string()));
+            let _ = tx.send(result);
+        });
+    match handle {
+        Ok(handle) => {
+            app.import_rx.push(ImportJob {
+                receiver: rx,
+                label: label.clone(),
+                cancel: Some(cancel),
+            });
+            app.toasts
+                .info(format!("「{}」のフレームを読み込み中…", label));
+            app.track_background_thread(handle);
+            ctx.request_repaint();
+        }
+        Err(error) => app
+            .toasts
+            .error(format!("動画の読み込みを開始できません: {error}")),
+    }
 }
 
 fn insert_layer_into_target(
@@ -217,6 +263,7 @@ pub fn handle_dropped_files(app: &mut KagariApp, ctx: &egui::Context) {
             match res {
                 ImportResult::Video(asset, name, target) => {
                     if target.project_session_id != app.project_session_id {
+                        discard_unattached_video_asset(&asset);
                         app.toasts.warning(format!(
                             "プロジェクト切替後に「{}」の読み込みが完了したため、追加を取り消しました。",
                             name
@@ -238,6 +285,7 @@ pub fn handle_dropped_files(app: &mut KagariApp, ctx: &egui::Context) {
                             )
                         })
                     else {
+                        discard_unattached_video_asset(&asset);
                         app.toasts.error(format!(
                             "動画「{}」の読み込み先コンポジションが見つかりません。",
                             name
@@ -269,15 +317,23 @@ pub fn handle_dropped_files(app: &mut KagariApp, ctx: &egui::Context) {
                     let Some(_) =
                         insert_layer_into_target(app, layer, &target, &format!("動画「{}」", name))
                     else {
+                        discard_unattached_video_asset(&asset);
                         app.toasts.error(format!(
                             "動画「{}」を読み込み先へ追加できませんでした。",
                             name
                         ));
                         continue;
                     };
+                    if let Some(warning) = asset.audio_warning.as_deref() {
+                        app.toasts.warning(format!(
+                            "動画「{}」の音声を取り込めませんでした: {}",
+                            name, warning
+                        ));
+                    }
                 }
                 ImportResult::ImageSequence(asset, name, target) => {
                     if target.project_session_id != app.project_session_id {
+                        discard_unattached_video_asset(&asset);
                         app.toasts.warning(format!(
                             "プロジェクト切替後に「{}」の読み込みが完了したため、追加を取り消しました。",
                             name
@@ -299,6 +355,7 @@ pub fn handle_dropped_files(app: &mut KagariApp, ctx: &egui::Context) {
                             )
                         })
                     else {
+                        discard_unattached_video_asset(&asset);
                         app.toasts.error(format!(
                             "画像シーケンス「{}」の読み込み先コンポジションが見つかりません。",
                             name
@@ -336,6 +393,7 @@ pub fn handle_dropped_files(app: &mut KagariApp, ctx: &egui::Context) {
                     )
                     .is_none()
                     {
+                        discard_unattached_video_asset(&asset);
                         app.toasts.error(format!(
                             "画像シーケンス「{}」を読み込み先へ追加できませんでした。",
                             name

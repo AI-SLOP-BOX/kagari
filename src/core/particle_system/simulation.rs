@@ -1,4 +1,4 @@
-use super::raster::draw_dot;
+use super::raster::draw_dot_with_cancel;
 use super::types::{CameraProjection, EmitterShape, Particle, ParticleEmitter};
 use crate::core::particle_forces::{
     apply_drag, resolve_bounds_collision, resolve_pairwise_collisions, wind_with_gust,
@@ -18,7 +18,10 @@ pub struct ParticleSystem {
 }
 
 impl ParticleSystem {
-    pub fn new(emitter: ParticleEmitter) -> Self {
+    pub fn new(mut emitter: ParticleEmitter) -> Self {
+        emitter.max_particles = emitter
+            .max_particles
+            .min(super::types::MAX_PARTICLES_PER_EMITTER);
         Self {
             emitter,
             particles: Vec::new(),
@@ -103,16 +106,33 @@ impl ParticleSystem {
 
     /// Step the particle simulation by dt seconds.
     pub fn update(&mut self, dt: f32, emitter_x: f32, emitter_y: f32) {
+        // Time-remapped rendering advances from deterministic frame zero with
+        // positive frame steps. Reject invalid public API inputs before they
+        // can poison particle positions, lifetimes, or the cached simulation.
+        if !dt.is_finite() || dt <= 0.0 || !emitter_x.is_finite() || !emitter_y.is_finite() {
+            return;
+        }
+
         // Emit new particles
-        self.emit_accumulator += dt * self.emitter.rate;
-        while self.emit_accumulator >= 1.0 {
-            self.emit_particle(emitter_x, emitter_y);
-            self.emit_accumulator -= 1.0;
+        let scheduled = self.emit_accumulator as f64 + (dt * self.emitter.rate) as f64;
+        if scheduled.is_finite() && scheduled >= 0.0 {
+            let due = scheduled.floor();
+            // Keep only the fractional remainder. Whole particles that could not
+            // be emitted because of the cap must not become an unbounded backlog.
+            self.emit_accumulator = scheduled.fract() as f32;
+            let available =
+                (self.emitter.max_particles as usize).saturating_sub(self.particles.len());
+            let emit_count = (due.min(available as f64)) as usize;
+            for _ in 0..emit_count {
+                self.emit_particle(emitter_x, emitter_y);
+            }
+        } else {
+            self.emit_accumulator = 0.0;
         }
         self.elapsed_time += dt;
 
         let gravity = self.emitter.gravity;
-        let gcurve = self.emitter.gravity_curve.clone();
+        let gcurve = &self.emitter.gravity_curve;
         let gust_strength = self.emitter.wind_gust_strength;
         let gust_freq = self.emitter.wind_gust_frequency;
         let base_wind = self.emitter.wind;
@@ -128,6 +148,7 @@ impl ParticleSystem {
         let vortex_center = self.emitter.vortex_center;
         let attract_strength = self.emitter.attract_strength;
         let attract_center = self.emitter.attract_center;
+        let wind = wind_with_gust(base_wind, gust_strength, gust_freq, self.elapsed_time);
 
         // Update existing particles
         for p in &mut self.particles {
@@ -138,7 +159,6 @@ impl ParticleSystem {
 
             let age_t = 1.0 - (p.life / p.max_life).max(0.0);
             let gmul = gcurve.eval(age_t);
-            let wind = wind_with_gust(base_wind, gust_strength, gust_freq, self.elapsed_time);
             p.vx += (gravity[0] * gmul + wind[0]) * dt;
             p.vy += (gravity[1] * gmul + wind[1]) * dt;
 
@@ -169,17 +189,6 @@ impl ParticleSystem {
             p.x += p.vx * dt;
             p.y += p.vy * dt;
 
-            let max_trail = (self.emitter.trail_length as usize).min(8);
-            if max_trail > 0 {
-                for i in (1..max_trail).rev() {
-                    p.trail[i] = p.trail[i - 1];
-                }
-                p.trail[0] = (p.x, p.y);
-                if (p.trail_len as usize) < max_trail {
-                    p.trail_len += 1;
-                }
-            }
-
             if collide {
                 let mut pos = [p.x, p.y];
                 let mut vel = [p.vx, p.vy];
@@ -197,15 +206,34 @@ impl ParticleSystem {
         }
 
         if self.emitter.particle_collisions && self.particles.len() > 1 {
-            let mut pos: Vec<[f32; 2]> = self.particles.iter().map(|p| [p.x, p.y]).collect();
-            let mut vel: Vec<[f32; 2]> = self.particles.iter().map(|p| [p.vx, p.vy]).collect();
+            let live_indices = self
+                .particles
+                .iter()
+                .enumerate()
+                .filter_map(|(index, particle)| (particle.life > 0.0).then_some(index))
+                .collect::<Vec<_>>();
+            let mut pos: Vec<[f32; 2]> = live_indices
+                .iter()
+                .map(|&index| {
+                    let particle = &self.particles[index];
+                    [particle.x, particle.y]
+                })
+                .collect();
+            let mut vel: Vec<[f32; 2]> = live_indices
+                .iter()
+                .map(|&index| {
+                    let particle = &self.particles[index];
+                    [particle.vx, particle.vy]
+                })
+                .collect();
             resolve_pairwise_collisions(
                 &mut pos,
                 &mut vel,
                 self.emitter.particle_diameter.max(0.1),
                 restitution,
             );
-            for (p, (np, nv)) in self.particles.iter_mut().zip(pos.into_iter().zip(vel)) {
+            for (index, (np, nv)) in live_indices.into_iter().zip(pos.into_iter().zip(vel)) {
+                let p = &mut self.particles[index];
                 p.x = np[0];
                 p.y = np[1];
                 p.vx = nv[0];
@@ -213,19 +241,39 @@ impl ParticleSystem {
             }
         }
 
+        // Record the resolved position so trails end at the rendered particle,
+        // including frames where bounds or particle collisions moved it.
+        let max_trail = (self.emitter.trail_length as usize).min(8);
+        if max_trail > 0 {
+            for particle in &mut self.particles {
+                if particle.life <= 0.0 {
+                    continue;
+                }
+                for index in (1..max_trail).rev() {
+                    particle.trail[index] = particle.trail[index - 1];
+                }
+                particle.trail[0] = (particle.x, particle.y);
+                if (particle.trail_len as usize) < max_trail {
+                    particle.trail_len += 1;
+                }
+            }
+        }
+
         if self.emitter.death_spawn_count > 0 {
             let count = self.emitter.death_spawn_count;
             let speed_scale = self.emitter.death_spawn_speed_scale;
             let life_scale = self.emitter.death_spawn_life_scale;
-            let _spread = self.emitter.spread_degrees.to_radians();
             let base_speed = self.emitter.speed * speed_scale;
-            let dead: Vec<(f32, f32, f32)> = self
-                .particles
-                .iter()
-                .filter(|p| p.life <= 0.0)
-                .map(|p| (p.x, p.y, p.z))
-                .collect();
-            for (dx, dy, parent_z) in dead {
+            // Visit only particles that existed before child spawning. Reading
+            // parent data by index lets children append to the same vector
+            // without allocating a temporary list of dead-particle positions.
+            let parent_count = self.particles.len();
+            for parent_index in 0..parent_count {
+                let parent = &self.particles[parent_index];
+                if parent.life > 0.0 {
+                    continue;
+                }
+                let (dx, dy, parent_z) = (parent.x, parent.y, parent.z);
                 for _ in 0..count {
                     if self.particles.len() >= self.emitter.max_particles as usize {
                         break;
@@ -269,7 +317,25 @@ impl ParticleSystem {
         proj: Option<&CameraProjection>,
     ) {
         let e = &self.emitter;
-        for p in &self.particles {
+        let opacity_start = if e.opacity_start.is_finite() {
+            e.opacity_start.clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let opacity_end = if e.opacity_end.is_finite() {
+            e.opacity_end.clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let cancel_flag = crate::core::software_renderer::get_render_cancel_flag();
+        for (particle_index, p) in self.particles.iter().enumerate() {
+            if particle_index % 64 == 0
+                && cancel_flag
+                    .as_ref()
+                    .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+            {
+                break;
+            }
             if p.life <= 0.0 {
                 continue;
             }
@@ -278,8 +344,9 @@ impl ParticleSystem {
             let r = e.color_start[0] + (e.color_end[0] - e.color_start[0]) * t;
             let g = e.color_start[1] + (e.color_end[1] - e.color_start[1]) * t;
             let b = e.color_start[2] + (e.color_end[2] - e.color_start[2]) * t;
-            let a = (e.color_start[3] + (e.color_end[3] - e.color_start[3]) * t)
-                * e.fade_curve.apply(t);
+            let color_alpha = e.color_start[3] + (e.color_end[3] - e.color_start[3]) * t;
+            let emitter_opacity = opacity_start + (opacity_end - opacity_start) * t;
+            let a = color_alpha * emitter_opacity * e.fade_curve.apply(t);
 
             let Some((sx, sy, sscale)) =
                 proj.map_or(Some((p.x, p.y, 1.0)), |cp| cp.project(p.x, p.y, p.z))
@@ -304,7 +371,7 @@ impl ParticleSystem {
                     };
                     let half_t =
                         trail_size * ts_scale * 0.5 * (1.0 - (i as f32 / max_trail as f32) * 0.5);
-                    draw_dot(
+                    draw_dot_with_cancel(
                         buffer,
                         (buf_width, buf_height),
                         (txs, tys),
@@ -312,12 +379,13 @@ impl ParticleSystem {
                         [r, g, b],
                         ta,
                         e.blend_mode,
+                        cancel_flag.as_ref(),
                     );
                 }
             }
 
             let half = p.size * sscale * 0.5;
-            draw_dot(
+            draw_dot_with_cancel(
                 buffer,
                 (buf_width, buf_height),
                 (sx, sy),
@@ -325,6 +393,7 @@ impl ParticleSystem {
                 [r, g, b],
                 a,
                 e.blend_mode,
+                cancel_flag.as_ref(),
             );
         }
     }

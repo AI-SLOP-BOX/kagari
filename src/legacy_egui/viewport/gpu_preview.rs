@@ -3,6 +3,7 @@ use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
 
+#[allow(clippy::too_many_arguments)]
 pub fn render_gpu_preview(
     app: &mut KagariApp,
     ctx: &egui::Context,
@@ -93,10 +94,7 @@ pub fn render_gpu_preview(
                     None
                 };
 
-                if app.playback.is_playing
-                    && ram_id.is_some()
-                    && app.ram_prepass_cursor <= app.ram_prepass_end
-                {
+                if app.playback.is_playing && app.ram_prepass_cursor <= app.ram_prepass_end {
                     let batch_end = app
                         .ram_prepass_cursor
                         .saturating_add(RAM_PREPASS_FRAMES_PER_TICK - 1);

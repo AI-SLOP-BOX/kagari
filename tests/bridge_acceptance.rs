@@ -705,8 +705,7 @@ fn application_connects_the_async_render_worker() {
     let sources = [
         "src/app_state/mod.rs",
         "src/app_state/initialization.rs",
-        "src/ui/viewport.rs",
-        "src/ui/viewport_rendering.rs",
+        "src/bin/ame_studio/preview_workers.rs",
         "src/bin/preview.rs",
     ]
     .map(production_source)
@@ -734,7 +733,7 @@ fn application_connects_native_ae_execution() {
 
 #[test]
 fn file_menu_uses_the_standard_otio_adapter() {
-    let source = production_source("src/ui/menu/file_edit.rs");
+    let source = production_source("src/legacy_egui/menu/file_edit.rs");
     let export = source
         .split("fn draw_export_otio(")
         .nth(1)

@@ -1,5 +1,5 @@
 use super::*;
-use ame_studio_preferences::format_cache_size;
+use ame_studio_preferences_storage::format_cache_size;
 
 impl AfterEffectsStudio {
     pub(crate) fn sync_environment_bindings(&mut self) -> Result<(), Box<dyn std::error::Error>> {
@@ -249,6 +249,8 @@ impl AfterEffectsStudio {
             .set_binding("project_name", Value::String(self.project_name.clone()))?;
         self.ui
             .set_binding("save_status", Value::String(self.save_status.clone()))?;
+        self.ui
+            .set_binding("project_is_dirty", Value::Bool(self.project_is_dirty))?;
 
         // Setup page bindings
         self.ui
@@ -382,6 +384,7 @@ impl AfterEffectsStudio {
             ("selected_tool_text", "Text"),
             ("selected_tool_shape", "Shape"),
             ("selected_tool_pen", "Pen"),
+            ("selected_tool_roto", "RotoBrush"),
         ] {
             self.ui
                 .set_binding(name, Value::Bool(self.selected_tool == tool))?;
@@ -397,12 +400,29 @@ impl AfterEffectsStudio {
             "Text" => "文字",
             "Shape" => "図形",
             "Pen" => "ペン",
+            "RotoBrush" => "ロトブラシ",
             _ => "選択",
         };
         self.ui.set_binding(
             "selected_tool_label",
             Value::String(selected_tool_label.to_owned()),
         )?;
+        self.ui
+            .set_binding("roto_foreground", Value::Bool(self.roto_foreground))?;
+        self.ui.set_binding(
+            "roto_brush_radius",
+            Value::Float(self.roto_brush_radius.clamp(1.0, 128.0)),
+        )?;
+        self.ui.set_binding(
+            "roto_feather_radius",
+            Value::Float(self.roto_feather_radius.clamp(0.0, 32.0)),
+        )?;
+        self.ui.set_binding(
+            "roto_analysis_busy",
+            Value::Bool(self.roto_analysis_job.is_some() || self.roto_propagation_job.is_some()),
+        )?;
+        self.ui
+            .set_binding("roto_status", Value::String(self.roto_status.clone()))?;
 
         Ok(())
     }

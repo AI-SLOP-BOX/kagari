@@ -35,6 +35,9 @@ pub(super) struct QcArgs {
 }
 
 pub(super) fn cmd_qc(args: QcArgs) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(path) = args.output.as_deref() {
+        super::frame::ensure_output_does_not_replace_source(&args.project_path, path)?;
+    }
     let project = load_project(&args.project_path)?;
     let comp = find_comp(&project, args.comp_ref.as_deref())?;
     if comp.duration_frames == 0 {
@@ -90,7 +93,7 @@ pub(super) fn cmd_qc(args: QcArgs) -> Result<(), Box<dyn std::error::Error>> {
         format_qc_batch_report(&batch)
     };
     if let Some(path) = args.output.as_deref() {
-        std::fs::write(path, format!("{rendered}\n"))?;
+        super::frame::write_bytes_atomically(path, format!("{rendered}\n").as_bytes())?;
         eprintln!("QC report saved → {path}");
     } else {
         println!("{rendered}");

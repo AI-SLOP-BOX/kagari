@@ -43,13 +43,18 @@ pub(super) fn timeline_layer_preview_texture(
             speed,
             ..
         } => {
-            let source_position = (match &layer.posterize_time {
+            let remapped_source_frame = match &layer.posterize_time {
                 Some(settings) if settings.enabled => {
                     layer.effective_render_frame(timeline_frame, composition.fps) as f32
                 }
                 _ => layer.remap_frame_f32(timeline_frame),
-            } * speed.max(0.0))
-            .max(0.0);
+            };
+            let source_position = crate::core::timeline::video_sequence_frame(
+                remapped_source_frame,
+                *speed,
+                frames_dir,
+                composition.fps,
+            );
             let source_frame = (source_position.floor() as u32).min(frame_count.saturating_sub(1));
             (
                 crate::core::video_import::frame_path_in_dir(frames_dir, source_frame),

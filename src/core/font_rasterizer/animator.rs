@@ -1,5 +1,25 @@
-use super::types::parse_font;
+use super::types::{
+    checked_animated_glyph_pixels, checked_text_dimensions, parse_font, zeroed_glyph_bitmap,
+    zeroed_glyph_coverage, zeroed_text_bitmap,
+};
 use ab_glyph::{Font, PxScale, ScaleFont};
+
+fn visible_glyph_axis_range(
+    center: f32,
+    destination_extent: i32,
+    output_extent: u32,
+) -> std::ops::Range<i32> {
+    if !center.is_finite() || destination_extent <= 0 || output_extent == 0 {
+        return 0..0;
+    }
+    let half = destination_extent as f64 * 0.5;
+    let center = center as f64;
+    let start = (half - center - 0.5).floor() + 1.0;
+    let end = (output_extent as f64 - 0.5 - center + half).ceil();
+    let start = start.clamp(-2.0, destination_extent as f64) as i32;
+    let end = end.clamp(-2.0, destination_extent as f64) as i32;
+    start..end.max(start)
+}
 
 #[allow(clippy::too_many_arguments)]
 pub fn rasterize_text_animated(
@@ -55,30 +75,53 @@ pub fn rasterize_text_animated(
     }
 
     let pad = (font_size.ceil() as u32 + 96).max(128);
-    let buf_w = (layout.total_width.ceil() as u32).max(1) + pad * 2;
     let line_height = font_size * leading;
-    let buf_h =
-        ((layout.total_height.ceil() as u32) + pad * 2).max(line_height.ceil() as u32 + pad * 2);
-    let mut pixels = vec![0u8; (buf_w * buf_h * 4) as usize];
+    let (buf_w, buf_h) = checked_text_dimensions(
+        layout.total_width.max(box_width),
+        layout.total_height.max(line_height),
+        pad,
+    )?;
+    let mut pixels = zeroed_text_bitmap(buf_w, buf_h)?;
     let r = (color[0].clamp(0.0, 1.0) * 255.0) as u8;
     let g = (color[1].clamp(0.0, 1.0) * 255.0) as u8;
     let b = (color[2].clamp(0.0, 1.0) * 255.0) as u8;
+    let color_alpha = color[3].clamp(0.0, 1.0);
     let max_top = font_size * 0.8;
 
     let mut char_idx: usize = 0;
     for line in &layout.lines {
+        let mut actual_line_width = 0.0f32;
+        let mut measure_characters = line.text.chars().peekable();
+        while let Some(character) = measure_characters.next() {
+            let glyph_id = font.glyph_id(character);
+            actual_line_width += scaled_font.h_advance(glyph_id);
+            if let Some(next) = measure_characters.peek() {
+                actual_line_width += scaled_font.kern(glyph_id, font.glyph_id(*next)) + tracking;
+            }
+        }
         let align_x =
-            crate::core::text_layout::get_alignment_offset(line.width, box_width, alignment);
+            crate::core::text_layout::get_alignment_offset(actual_line_width, box_width, alignment);
+        let justify_space = crate::core::text_layout::justification_space_width(
+            line,
+            actual_line_width,
+            box_width,
+            alignment,
+        );
         let mut cursor_x = align_x;
         let cursor_y = line.y_offset;
 
-        for ch in line.text.chars() {
+        let mut characters = line.text.chars().peekable();
+        while let Some(ch) = characters.next() {
             let c = xforms
                 .get(char_idx)
                 .cloned()
                 .unwrap_or_else(crate::core::text_animator::CharacterTransform::default);
             let glyph_id = font.glyph_id(ch);
             let h_advance = scaled_font.h_advance(glyph_id);
+            let kerning = characters
+                .peek()
+                .map(|next| scaled_font.kern(glyph_id, font.glyph_id(*next)))
+                .unwrap_or(0.0);
 
             if ch != ' ' && (c.opacity_multiplier > 0.01) {
                 let glyph = glyph_id
@@ -87,8 +130,10 @@ pub fn rasterize_text_animated(
                     let bounds = outlined.px_bounds();
                     let bw = bounds.width().ceil() as usize;
                     let bh = bounds.height().ceil() as usize;
-                    if bw > 0 && bh > 0 {
-                        let mut cov = vec![0f32; bw * bh];
+                    if let Some(glyph_pixels) = checked_animated_glyph_pixels(bw, bh) {
+                        let Some(mut cov) = zeroed_glyph_coverage(glyph_pixels) else {
+                            continue;
+                        };
                         {
                             let cov_ref = &mut cov;
                             outlined.draw(|x, y, coverage| {
@@ -100,7 +145,9 @@ pub fn rasterize_text_animated(
                             });
                         }
 
-                        let mut src_rgba = vec![0u8; bw * bh * 4];
+                        let Some(mut src_rgba) = zeroed_glyph_bitmap(bw, bh) else {
+                            continue;
+                        };
                         for (i, cv) in cov.iter().enumerate() {
                             src_rgba[i * 4] = r;
                             src_rgba[i * 4 + 1] = g;
@@ -129,12 +176,14 @@ pub fn rasterize_text_animated(
                         let sy = c.scale_multiplier[1].max(0.01);
                         let rad = c.rotation_deg.to_radians();
                         let (cos_r, sin_r) = (rad.cos(), rad.sin());
-                        let dst_w = (bounds.width() * sx).ceil() as i32 + 4;
-                        let dst_h = (bounds.height() * sy).ceil() as i32 + 4;
+                        let dst_w = ((bounds.width() * sx).ceil() as i32).saturating_add(4);
+                        let dst_h = ((bounds.height() * sy).ceil() as i32).saturating_add(4);
                         let cx_dst = dest_x + dst_w as f32 * 0.5;
                         let cy_dst = dest_y + dst_h as f32 * 0.5;
-                        for dy in -2..dst_h {
-                            for dx in -2..dst_w {
+                        let visible_x = visible_glyph_axis_range(cx_dst, dst_w, buf_w);
+                        let visible_y = visible_glyph_axis_range(cy_dst, dst_h, buf_h);
+                        for dy in visible_y {
+                            for dx in visible_x.clone() {
                                 let rx = dx as f32 - dst_w as f32 * 0.5;
                                 let ry = dy as f32 - dst_h as f32 * 0.5;
                                 let ux = (rx * cos_r + ry * sin_r) / sx + bounds.width() * 0.5;
@@ -157,9 +206,10 @@ pub fn rasterize_text_animated(
                                 {
                                     continue;
                                 }
-                                let out_a =
-                                    (a as f32 * c.opacity_multiplier).round().clamp(0.0, 255.0)
-                                        as u8;
+                                let out_a = (a as f32 * c.opacity_multiplier * color_alpha)
+                                    .round()
+                                    .clamp(0.0, 255.0)
+                                    as u8;
                                 if out_a == 0 {
                                     continue;
                                 }
@@ -174,7 +224,11 @@ pub fn rasterize_text_animated(
                 }
             }
 
-            cursor_x += h_advance + tracking + c.tracking_offset;
+            cursor_x += h_advance
+                + kerning
+                + tracking
+                + c.tracking_offset
+                + if ch == ' ' { justify_space } else { 0.0 };
             char_idx += 1;
         }
     }
@@ -195,6 +249,18 @@ pub fn rasterize_text_animated_stack(
     stack: &crate::core::text_animator_advanced::AnimatorStack,
     _time: f32,
 ) -> Option<(u32, u32, Vec<u8>)> {
+    if !font_size.is_finite()
+        || !(0.1..=8192.0).contains(&font_size)
+        || !tracking.is_finite()
+        || !leading.is_finite()
+        || leading <= 0.0
+        || leading > 100.0
+        || !box_width.is_finite()
+        || box_width < 0.0
+        || !color.iter().all(|value| value.is_finite())
+    {
+        return None;
+    }
     let font = parse_font(font_data)?;
     let scaled_font = font.as_scaled(PxScale::from(font_size));
 
@@ -215,30 +281,53 @@ pub fn rasterize_text_animated_stack(
     }
 
     let pad = (font_size.ceil() as u32 + 96).max(128);
-    let buf_w = (layout.total_width.ceil() as u32).max(1) + pad * 2;
     let line_height = font_size * leading;
-    let buf_h =
-        ((layout.total_height.ceil() as u32) + pad * 2).max(line_height.ceil() as u32 + pad * 2);
-    let mut pixels = vec![0u8; (buf_w * buf_h * 4) as usize];
+    let (buf_w, buf_h) = checked_text_dimensions(
+        layout.total_width.max(box_width),
+        layout.total_height.max(line_height),
+        pad,
+    )?;
+    let mut pixels = zeroed_text_bitmap(buf_w, buf_h)?;
     let r = (color[0].clamp(0.0, 1.0) * 255.0) as u8;
     let g = (color[1].clamp(0.0, 1.0) * 255.0) as u8;
     let b = (color[2].clamp(0.0, 1.0) * 255.0) as u8;
+    let color_alpha = color[3].clamp(0.0, 1.0);
     let max_top = font_size * 0.8;
 
     let mut char_idx: usize = 0;
     for line in &layout.lines {
+        let mut actual_line_width = 0.0f32;
+        let mut measure_characters = line.text.chars().peekable();
+        while let Some(character) = measure_characters.next() {
+            let glyph_id = font.glyph_id(character);
+            actual_line_width += scaled_font.h_advance(glyph_id);
+            if let Some(next) = measure_characters.peek() {
+                actual_line_width += scaled_font.kern(glyph_id, font.glyph_id(*next)) + tracking;
+            }
+        }
         let align_x =
-            crate::core::text_layout::get_alignment_offset(line.width, box_width, alignment);
+            crate::core::text_layout::get_alignment_offset(actual_line_width, box_width, alignment);
+        let justify_space = crate::core::text_layout::justification_space_width(
+            line,
+            actual_line_width,
+            box_width,
+            alignment,
+        );
         let mut cursor_x = align_x;
         let cursor_y = line.y_offset;
 
-        for ch in line.text.chars() {
+        let mut characters = line.text.chars().peekable();
+        while let Some(ch) = characters.next() {
             let c = xforms
                 .get(char_idx)
                 .cloned()
                 .unwrap_or_else(crate::core::text_animator::CharacterTransform::default);
             let glyph_id = font.glyph_id(ch);
             let h_advance = scaled_font.h_advance(glyph_id);
+            let kerning = characters
+                .peek()
+                .map(|next| scaled_font.kern(glyph_id, font.glyph_id(*next)))
+                .unwrap_or(0.0);
 
             if ch != ' ' && (c.opacity_multiplier > 0.01) {
                 let glyph = glyph_id
@@ -247,8 +336,10 @@ pub fn rasterize_text_animated_stack(
                     let bounds = outlined.px_bounds();
                     let bw = bounds.width().ceil() as usize;
                     let bh = bounds.height().ceil() as usize;
-                    if bw > 0 && bh > 0 {
-                        let mut cov = vec![0f32; bw * bh];
+                    if let Some(glyph_pixels) = checked_animated_glyph_pixels(bw, bh) {
+                        let Some(mut cov) = zeroed_glyph_coverage(glyph_pixels) else {
+                            continue;
+                        };
                         outlined.draw(|x, y, coverage| {
                             let xi = x as usize;
                             let yi = y as usize;
@@ -266,7 +357,9 @@ pub fn rasterize_text_animated_stack(
                             } else {
                                 (r, g, b)
                             };
-                        let mut src_rgba = vec![0u8; bw * bh * 4];
+                        let Some(mut src_rgba) = zeroed_glyph_bitmap(bw, bh) else {
+                            continue;
+                        };
                         for (i, cv) in cov.iter().enumerate() {
                             src_rgba[i * 4] = char_r;
                             src_rgba[i * 4 + 1] = char_g;
@@ -295,12 +388,14 @@ pub fn rasterize_text_animated_stack(
                         let sy = c.scale_multiplier[1].max(0.01);
                         let rad = c.rotation_deg.to_radians();
                         let (cos_r, sin_r) = (rad.cos(), rad.sin());
-                        let dst_w = (bounds.width() * sx).ceil() as i32 + 4;
-                        let dst_h = (bounds.height() * sy).ceil() as i32 + 4;
+                        let dst_w = ((bounds.width() * sx).ceil() as i32).saturating_add(4);
+                        let dst_h = ((bounds.height() * sy).ceil() as i32).saturating_add(4);
                         let cx_dst = dest_x + dst_w as f32 * 0.5;
                         let cy_dst = dest_y + dst_h as f32 * 0.5;
-                        for dy in -2..dst_h {
-                            for dx in -2..dst_w {
+                        let visible_x = visible_glyph_axis_range(cx_dst, dst_w, buf_w);
+                        let visible_y = visible_glyph_axis_range(cy_dst, dst_h, buf_h);
+                        for dy in visible_y {
+                            for dx in visible_x.clone() {
                                 let rx = dx as f32 - dst_w as f32 * 0.5;
                                 let ry = dy as f32 - dst_h as f32 * 0.5;
                                 let ux = (rx * cos_r + ry * sin_r) / sx + bounds.width() * 0.5;
@@ -323,7 +418,7 @@ pub fn rasterize_text_animated_stack(
                                 {
                                     continue;
                                 }
-                                let out_a = (sa * 255.0 * c.opacity_multiplier)
+                                let out_a = (sa * 255.0 * c.opacity_multiplier * color_alpha)
                                     .round()
                                     .clamp(0.0, 255.0)
                                     as u8;
@@ -339,9 +434,14 @@ pub fn rasterize_text_animated_stack(
                         }
                     }
                 }
-                cursor_x += h_advance + c.tracking_offset;
+                cursor_x += h_advance
+                    + kerning
+                    + tracking
+                    + c.tracking_offset
+                    + if ch == ' ' { justify_space } else { 0.0 };
             } else {
-                cursor_x += h_advance;
+                cursor_x +=
+                    h_advance + kerning + tracking + if ch == ' ' { justify_space } else { 0.0 };
             }
             char_idx += 1;
         }

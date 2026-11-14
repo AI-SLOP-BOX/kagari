@@ -436,7 +436,8 @@ impl Expression {
                 frequency,
                 amplitude,
             } => {
-                let seed = (frame as f32 * frequency * 1.618_034) % std::f32::consts::TAU;
+                let seed = (frame as f32 * frequency * std::f32::consts::GOLDEN_RATIO)
+                    % std::f32::consts::TAU;
                 let noise = seed.sin() * 0.7 + (seed * 2.1).sin() * 0.2 + (seed * 5.3).sin() * 0.1;
                 base + noise * amplitude
             }
@@ -471,7 +472,7 @@ impl Expression {
                 frequency,
                 amplitude,
             } => {
-                let t = frame as f32 * frequency * 1.618_034;
+                let t = frame as f32 * frequency * std::f32::consts::GOLDEN_RATIO;
                 let nx = t.sin() * 0.7 + (t * 2.1).sin() * 0.2 + (t * 5.3).sin() * 0.1;
                 let ny = (t + 100.0).sin() * 0.7 + ((t + 100.0) * 2.1).sin() * 0.2;
                 [base[0] + nx * amplitude, base[1] + ny * amplitude]

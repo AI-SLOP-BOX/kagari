@@ -7,6 +7,17 @@ use crate::ui::theme::colors;
 use crate::ExportEvent;
 use eframe::egui;
 
+fn preset_resolution_scale(
+    preset: &crate::core::export_presets::ExportPreset,
+    width: u32,
+    height: u32,
+) -> Option<f32> {
+    [1.0f32, 0.5, 1.0 / 3.0, 0.25].into_iter().find(|scale| {
+        (width as f32 * scale).max(2.0) as u32 == preset.width
+            && (height as f32 * scale).max(2.0) as u32 == preset.height
+    })
+}
+
 pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
     // ── Non-blocking Channel Event Receiver ──
     let mut finished_export = false;
@@ -49,17 +60,42 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                     }
                 }
                 ExportEvent::Error(msg) => {
-                    app.export.export_status = Some(format!("Error: {}", msg));
+                    let cancellation_requested = app
+                        .export_cancel_flag
+                        .as_ref()
+                        .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::SeqCst));
+                    let is_canceled =
+                        cancellation_requested && msg.to_ascii_lowercase().contains("cancel");
+                    app.export.export_status = Some(if is_canceled {
+                        tr("Export cancelled")
+                    } else {
+                        format!("Error: {}", msg)
+                    });
                     app.export.is_exporting = false;
                     finished_export = true;
                     if let Some(id) = app.export.export_comp_id.clone() {
-                        app.render_item_status
-                            .insert(id, crate::app_state::QueueItemStatus::Failed);
+                        app.render_item_status.insert(
+                            id,
+                            if is_canceled {
+                                crate::app_state::QueueItemStatus::Cancelled
+                            } else {
+                                crate::app_state::QueueItemStatus::Failed
+                            },
+                        );
                     }
-                    app.toasts.error(tr_format("Export failed: {}", &[&msg]));
+                    if is_canceled {
+                        app.toasts
+                            .info(tr("Export cancelled and output cleanup finished"));
+                    } else {
+                        app.toasts.error(tr_format("Export failed: {}", &[&msg]));
+                    }
                     // A failed item aborts the batch to avoid cascading failures
                     if !app.batch_queue.is_empty() {
-                        app.toasts.error(tr("Batch render aborted"));
+                        app.toasts.error(if is_canceled {
+                            tr("Batch render stopped after cancellation")
+                        } else {
+                            tr("Batch render aborted")
+                        });
                         app.batch_queue.clear();
                         app.batch_idx = 0;
                     }
@@ -87,6 +123,7 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
 
     if finished_export {
         app.export.export_rx = None;
+        app.export_cancel_flag = None;
     }
     if let Some(name) = next_batch_comp {
         start_comp_export(app, ctx, &name);
@@ -135,7 +172,17 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
 
             // ── User Export Presets ──
             {
-                let user_presets = crate::core::export_presets::load_user_presets();
+                let (user_presets, preset_load_error) =
+                    match crate::core::export_presets::try_load_user_presets() {
+                        Ok(presets) => (presets, None),
+                        Err(error) => (Vec::new(), Some(error)),
+                    };
+                if let Some(error) = preset_load_error {
+                    ui.colored_label(
+                        egui::Color32::LIGHT_RED,
+                        format!("{}: {error}", tr("Could not load user export presets")),
+                    );
+                }
                 if !user_presets.is_empty() {
                     ui.horizontal(|ui| {
                         ui.label(tr("User Preset:"));
@@ -143,26 +190,75 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                             .selected_text(tr("Select preset..."))
                             .show_ui(ui, |ui| {
                                 for preset in &user_presets {
-                                    if ui.selectable_label(false, &preset.name).clicked() {
+                                    let codec = preset.export_dialog_codec_index();
+                                    let preset_scale = preset_resolution_scale(
+                                        preset,
+                                        comp.width,
+                                        comp.height,
+                                    );
+                                    let supported = codec.is_some() && preset_scale.is_some();
+                                    let label = if supported {
+                                        preset.name.clone()
+                                    } else {
+                                        format!("{} ({})", preset.name, tr("unsupported settings"))
+                                    };
+                                    if ui
+                                        .add_enabled(
+                                            supported,
+                                            egui::Button::new(label),
+                                        )
+                                        .clicked()
+                                    {
                                         app.export_format_preset = match preset.format {
-                                            crate::core::export_presets::ExportFormat::Mp4 => 0,
                                             crate::core::export_presets::ExportFormat::ProRes => 1,
                                             crate::core::export_presets::ExportFormat::PngSequence => 2,
                                             _ => 0,
                                         };
-                                        app.export_codec_idx = match app.export_format_preset {
-                                            1 => 1,
-                                            2 => 3,
-                                            _ => 0,
+                                        app.export_codec_idx = codec.unwrap_or_default();
+                                        app.export.export_fps = preset.fps.clamp(1, 120);
+                                        let preset_scale = preset_scale.unwrap_or(1.0);
+                                        app.export_resolution_scale = if preset_scale == 1.0 {
+                                            0
+                                        } else if preset_scale == 0.5 {
+                                            1
+                                        } else {
+                                            2
                                         };
-                                        app.export.export_fps = preset.fps;
-                                        app.export_resolution_scale = if preset.width >= 1920 { 0 } else if preset.width >= 1280 { 1 } else { 2 };
-                                        let preset_scale = match app.export_resolution_scale {
-                                            0 => 1.0,
-                                            1 => 0.5,
-                                            _ => 0.25,
-                                        };
-                                        ctx.data_mut(|d| d.insert_temp(egui::Id::new("ae_export_res_scale"), preset_scale));
+                                        ctx.data_mut(|data| {
+                                            data.insert_temp(
+                                                egui::Id::new("ae_export_res_scale"),
+                                                preset_scale,
+                                            );
+                                            data.insert_temp(
+                                                egui::Id::new("ae_export_include_audio"),
+                                                preset.audio_enabled && codec != Some(4),
+                                            );
+                                            data.insert_temp(
+                                                egui::Id::new("ae_export_quality"),
+                                                preset.quality,
+                                            );
+                                            data.insert_temp(
+                                                egui::Id::new("ae_export_audio_bitrate"),
+                                                preset.audio_bitrate,
+                                            );
+                                        });
+                                        if !app.export.export_output_path.trim().is_empty() {
+                                            let mut output_path = std::path::PathBuf::from(
+                                                &app.export.export_output_path,
+                                            );
+                                            let extension = match codec {
+                                                Some(3) => None,
+                                                Some(4) => Some("webp"),
+                                                Some(1 | 2) => Some("mov"),
+                                                _ => Some("mp4"),
+                                            };
+                                            if let Some(extension) = extension {
+                                                output_path.set_extension(extension);
+                                                app.export.export_output_path = output_path
+                                                    .to_string_lossy()
+                                                    .into_owned();
+                                            }
+                                        }
                                     }
                                 }
                             });
@@ -174,6 +270,7 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                 ui.label(tr("Format Preset:"));
                 egui::ComboBox::from_id_salt("export_fmt_combo")
                     .selected_text(match app.export_format_preset {
+                        0 if app.export_codec_idx == 4 => tr("WebP Animation (.webp)"),
                         0 => tr("H.264 / MP4 (Standard)"),
                         1 => tr("Apple ProRes 422 HQ (MOV)"),
                         2 => tr("PNG Image Sequence"),
@@ -269,22 +366,65 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                 if ui.button(tr("Save Current as Preset")).clicked() {
                     let preset = crate::core::export_presets::ExportPreset {
                         name: format!("{} {}", tr("Custom"), { let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs(); format!("{}", t) }),
-                        format: match app.export_format_preset {
-                            1 => crate::core::export_presets::ExportFormat::ProRes,
-                            2 => crate::core::export_presets::ExportFormat::PngSequence,
+                        format: match app.export_codec_idx {
+                            1 | 2 => crate::core::export_presets::ExportFormat::ProRes,
+                            3 => crate::core::export_presets::ExportFormat::PngSequence,
+                            4 => crate::core::export_presets::ExportFormat::Webp,
                             _ => crate::core::export_presets::ExportFormat::Mp4,
                         },
-                        width: comp.width,
-                        height: comp.height,
+                        width: (comp.width as f32
+                            * ctx.data(|data| {
+                                data.get_temp::<f32>(egui::Id::new("ae_export_res_scale"))
+                                    .unwrap_or(1.0)
+                            }))
+                        .max(2.0) as u32,
+                        height: (comp.height as f32
+                            * ctx.data(|data| {
+                                data.get_temp::<f32>(egui::Id::new("ae_export_res_scale"))
+                                    .unwrap_or(1.0)
+                            }))
+                        .max(2.0) as u32,
                         fps: app.export.export_fps,
-                        quality: 85,
-                        codec: "h264".into(),
-                        audio_enabled: true,
-                        audio_bitrate: 192,
+                        quality: ctx.data(|data| {
+                            data.get_temp::<u32>(egui::Id::new("ae_export_quality"))
+                                .unwrap_or(85)
+                        }),
+                        codec: match app.export_codec_idx {
+                            1 => "prores_422",
+                            2 => "prores_4444",
+                            3 => "png",
+                            4 => "webp",
+                            _ => "h264",
+                        }
+                        .into(),
+                        audio_enabled: ctx.data(|data| {
+                            data.get_temp::<bool>(egui::Id::new("ae_export_include_audio"))
+                                .unwrap_or(true)
+                        }) && !matches!(app.export_codec_idx, 3 | 4),
+                        audio_bitrate: ctx.data(|data| {
+                            data.get_temp::<u32>(egui::Id::new("ae_export_audio_bitrate"))
+                                .unwrap_or(192)
+                        }),
                     };
-                    let _ = crate::core::export_presets::add_user_preset(preset);
+                    let status = match crate::core::export_presets::add_user_preset(preset) {
+                        Ok(()) => (true, tr("Export preset saved.")),
+                        Err(error) => (false, format!("Could not save export preset: {error}")),
+                    };
+                    ctx.data_mut(|data| {
+                        data.insert_temp(egui::Id::new("export_preset_save_status"), status);
+                    });
                 }
             });
+            if let Some((saved, message)) = ctx.data(|data| {
+                data.get_temp::<(bool, String)>(egui::Id::new("export_preset_save_status"))
+            }) {
+                let color = if saved {
+                    colors::TEXT_MUTED
+                } else {
+                    egui::Color32::LIGHT_RED
+                };
+                ui.colored_label(color, message);
+            }
 
             ui.add_space(10.0);
             if app.export.is_exporting {
@@ -294,14 +434,18 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                 if let Some(ref status) = app.export.export_status {
                 ui.weak(localized_export_status(status));
                 }
-                if ui.button(tr("Cancel Export")).clicked() {
-                    if let Some(flag) = app.export_cancel_flag.take() {
+                let cancellation_pending = app
+                    .export_cancel_flag
+                    .as_ref()
+                    .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::SeqCst));
+                if cancellation_pending {
+                    ui.weak(tr("Cancellation requested; waiting for output cleanup…"));
+                } else if ui.button(tr("Cancel Export")).clicked() {
+                    if let Some(flag) = &app.export_cancel_flag {
                         flag.store(true, std::sync::atomic::Ordering::SeqCst);
                     }
-                    app.export.export_rx = None;
-                    app.export.is_exporting = false;
-                    app.export.export_status = Some(tr("Export cancelled"));
-                    app.toasts.info(tr("Export cancelled"));
+                    app.export.export_status = Some(tr("Canceling export…"));
+                    app.toasts.info(tr("Cancellation requested; waiting for output cleanup"));
                 }
             } else {
                 if let Some(ref status) = app.export.export_status {
@@ -461,7 +605,10 @@ pub fn draw(app: &mut crate::KagariApp, ctx: &egui::Context) {
                                     if !path.ends_with(".json") {
                                         path.push_str(".json");
                                     }
-                                    match std::fs::write(&path, &json) {
+                                    match crate::core::atomic_file::write_atomic(
+                                        std::path::Path::new(&path),
+                                        json.as_bytes(),
+                                    ) {
                                         Ok(()) => {
                                             app.export.export_status = Some(format!("Lottie export complete → {}", path));
                                             let path = path.to_string();

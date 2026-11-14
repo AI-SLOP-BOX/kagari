@@ -5,6 +5,17 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+static DISK_TEMP_SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn cache_content_hash(bytes: &[u8]) -> u64 {
+    let mut hash = 0xcbf29ce484222325u64;
+    for byte in bytes {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
+}
+
 /// Intelligent persistent disk cache manager with strict byte budget and disk backing.
 pub struct PersistentDiskCache {
     pub budget_bytes: usize,
@@ -72,7 +83,8 @@ impl PersistentDiskCache {
                     fs::metadata(frame_path)
                         .ok()
                         .is_some_and(|frame| frame.len() == metadata.size_bytes as u64)
-                });
+                })
+                .filter(|metadata| metadata.content_hash.is_some());
             if let Some(metadata) = parsed {
                 self.disk_bytes = self.disk_bytes.saturating_add(metadata.size_bytes);
                 self.disk_inventory.insert(metadata.cache_key, metadata);
@@ -85,7 +97,15 @@ impl PersistentDiskCache {
                 let frame_path = file.path();
                 let extension = frame_path.extension().and_then(|ext| ext.to_str());
                 if extension == Some("tmp") {
-                    let _ = fs::remove_file(frame_path);
+                    let is_stale = file
+                        .metadata()
+                        .ok()
+                        .and_then(|metadata| metadata.modified().ok())
+                        .and_then(|modified| modified.elapsed().ok())
+                        .is_some_and(|age| age > std::time::Duration::from_secs(24 * 60 * 60));
+                    if is_stale {
+                        let _ = fs::remove_file(frame_path);
+                    }
                     continue;
                 }
                 if extension != Some("cache") {
@@ -204,7 +224,14 @@ impl PersistentDiskCache {
             }
             if let Some(file_size) = file_size {
                 use std::io::Read;
-                let mut bytes = Vec::with_capacity(file_size as usize);
+                let Ok(capacity) = usize::try_from(file_size) else {
+                    self.discard_disk_entry(key);
+                    return None;
+                };
+                let mut bytes = Vec::new();
+                if bytes.try_reserve_exact(capacity).is_err() {
+                    return None;
+                }
                 let read_result = fs::File::open(&file_path).and_then(|file| {
                     file.take(self.budget_bytes.saturating_add(1) as u64)
                         .read_to_end(&mut bytes)
@@ -222,9 +249,11 @@ impl PersistentDiskCache {
                         .and_then(|_| fs::read_to_string(&meta_path).ok())
                         .and_then(|json| serde_json::from_str::<DiskCacheMetadata>(&json).ok());
 
-                    if let Some(mut meta) =
-                        meta_res.filter(|meta| meta.cache_key == key && meta.size_bytes == size)
-                    {
+                    if let Some(mut meta) = meta_res.filter(|meta| {
+                        meta.cache_key == key
+                            && meta.size_bytes == size
+                            && meta.content_hash == Some(cache_content_hash(&bytes))
+                    }) {
                         meta.last_access_epoch = current_epoch;
                         if let Some(disk_meta) = self.disk_inventory.get_mut(&key) {
                             disk_meta.last_access_epoch = current_epoch;
@@ -311,6 +340,7 @@ impl PersistentDiskCache {
             width,
             height,
             size_bytes: size,
+            content_hash: Some(cache_content_hash(&data)),
             last_access_epoch: current_epoch,
         };
 
@@ -318,32 +348,50 @@ impl PersistentDiskCache {
         if let Some(ref dir) = self.cache_dir {
             let file_path = dir.join(format!("{:016x}.cache", key));
             let meta_path = dir.join(format!("{:016x}.meta", key));
-            let tmp_file_path = dir.join(format!("{:016x}.cache.tmp", key));
-            let tmp_meta_path = dir.join(format!("{:016x}.meta.tmp", key));
+            let sequence = DISK_TEMP_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let temporary_suffix = format!("{}.{}", std::process::id(), sequence);
+            let tmp_file_path = dir.join(format!("{:016x}.cache.{}.tmp", key, temporary_suffix));
+            let tmp_meta_path = dir.join(format!("{:016x}.meta.{}.tmp", key, temporary_suffix));
 
-            // Write to temporary files first
-            if let Err(e) = fs::write(&tmp_file_path, &data) {
-                let _ = fs::remove_file(&tmp_file_path);
-                return Err(e);
-            }
             let meta_json = serde_json::to_string(&meta)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-            if let Err(e) = fs::write(&tmp_meta_path, meta_json) {
-                let _ = fs::remove_file(&tmp_file_path);
-                let _ = fs::remove_file(&tmp_meta_path);
-                return Err(e);
-            }
+            let mut owns_tmp_file = false;
+            let mut owns_tmp_meta = false;
+            let write_result = (|| -> std::io::Result<()> {
+                use std::io::Write;
 
-            // Atomic rename to final file destinations
-            if let Err(e) = fs::rename(&tmp_file_path, &file_path) {
-                let _ = fs::remove_file(&tmp_file_path);
-                let _ = fs::remove_file(&tmp_meta_path);
-                return Err(e);
-            }
-            if let Err(e) = fs::rename(&tmp_meta_path, &meta_path) {
-                let _ = fs::remove_file(&file_path);
-                let _ = fs::remove_file(&tmp_meta_path);
-                return Err(e);
+                let mut frame = fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&tmp_file_path)?;
+                owns_tmp_file = true;
+                frame.write_all(&data)?;
+                frame.sync_all()?;
+                drop(frame);
+
+                let mut metadata = fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&tmp_meta_path)?;
+                owns_tmp_meta = true;
+                metadata.write_all(meta_json.as_bytes())?;
+                metadata.sync_all()?;
+                drop(metadata);
+
+                crate::core::atomic_file::replace_file(&tmp_file_path, &file_path)?;
+                owns_tmp_file = false;
+                crate::core::atomic_file::replace_file(&tmp_meta_path, &meta_path)?;
+                owns_tmp_meta = false;
+                Ok(())
+            })();
+            if let Err(error) = write_result {
+                if owns_tmp_file {
+                    let _ = fs::remove_file(&tmp_file_path);
+                }
+                if owns_tmp_meta {
+                    let _ = fs::remove_file(&tmp_meta_path);
+                }
+                return Err(error);
             }
             self.disk_bytes = self.disk_bytes.saturating_add(size);
             self.disk_inventory.insert(key, meta.clone());
@@ -387,11 +435,17 @@ impl PersistentDiskCache {
         if let Some(ref dir) = self.cache_dir {
             if let Ok(entries) = fs::read_dir(dir) {
                 for entry in entries.flatten() {
-                    if matches!(
-                        entry.path().extension().and_then(|s| s.to_str()),
-                        Some("cache") | Some("meta") | Some("tmp")
-                    ) {
-                        let _ = fs::remove_file(entry.path());
+                    let path = entry.path();
+                    let extension = path.extension().and_then(|s| s.to_str());
+                    let stale_temporary = extension == Some("tmp")
+                        && entry
+                            .metadata()
+                            .ok()
+                            .and_then(|metadata| metadata.modified().ok())
+                            .and_then(|modified| modified.elapsed().ok())
+                            .is_some_and(|age| age > std::time::Duration::from_secs(24 * 60 * 60));
+                    if matches!(extension, Some("cache") | Some("meta")) || stale_temporary {
+                        let _ = fs::remove_file(path);
                     }
                 }
             }

@@ -223,7 +223,7 @@ fn test_pixel_type_codes_match_openexr_spec() {
     assert_eq!(PIXEL_HALF, ExrSampleType::Half.code());
     assert_eq!(PIXEL_FLOAT, ExrSampleType::Float.code());
 
-    let mut img = ExrImage::rgba_f32(1, 1, &[0.5, 0.25, 0.125, 1.0]);
+    let mut img = ExrImage::rgba_f32(1, 1, &[0.5, 0.25, 0.125, 1.0]).expect("valid RGBA image");
     img.compression = ExrCompression::None;
     let bytes = write_to_vec(&img);
     let p = parse(&bytes);
@@ -232,7 +232,7 @@ fn test_pixel_type_codes_match_openexr_spec() {
 
 #[test]
 fn test_header_channels_sorted_and_windows_correct() {
-    let mut img = ExrImage::rgba_f32(3, 2, &ramp(3, 2));
+    let mut img = ExrImage::rgba_f32(3, 2, &ramp(3, 2)).expect("valid RGBA image");
     img.compression = ExrCompression::None;
     let bytes = write_to_vec(&img);
     let p = parse(&bytes);
@@ -247,7 +247,7 @@ fn test_header_channels_sorted_and_windows_correct() {
 fn test_none_compression_roundtrip_is_bit_exact() {
     let (w, h) = (3u32, 2u32);
     let data = ramp(w, h);
-    let mut img = ExrImage::rgba_f32(w, h, &data);
+    let mut img = ExrImage::rgba_f32(w, h, &data).expect("valid RGBA image");
     img.compression = ExrCompression::None;
     let bytes = write_to_vec(&img);
     let ch = decode(&parse(&bytes));
@@ -269,7 +269,7 @@ fn test_none_compression_roundtrip_is_bit_exact() {
 fn test_zip_matches_none_and_preserves_overbright() {
     let (w, h) = (4u32, 2u32);
     let data = ramp(w, h);
-    let mut plain = ExrImage::rgba_f32(w, h, &data);
+    let mut plain = ExrImage::rgba_f32(w, h, &data).expect("valid RGBA image");
     plain.compression = ExrCompression::None;
     let mut zipped = plain.clone();
     zipped.compression = ExrCompression::Zip;
@@ -298,7 +298,7 @@ fn test_zip_predictor_is_invertible() {
 #[test]
 fn test_multiblock_offsets_and_row_labels() {
     let (w, h) = (2u32, 40u32);
-    let mut img = ExrImage::rgba_f32(w, h, &ramp(w, h));
+    let mut img = ExrImage::rgba_f32(w, h, &ramp(w, h)).expect("valid RGBA image");
     img.compression = ExrCompression::Zip;
     let bytes = write_to_vec(&img);
     let p = parse(&bytes);
@@ -313,7 +313,7 @@ fn test_multiblock_offsets_and_row_labels() {
 #[test]
 fn test_multipass_with_depth_channel() {
     let (w, h) = (2u32, 2u32);
-    let mut img = ExrImage::rgba_f32(w, h, &ramp(w, h));
+    let mut img = ExrImage::rgba_f32(w, h, &ramp(w, h)).expect("valid RGBA image");
     img.compression = ExrCompression::None;
     img.channels
         .push(ExrChannel::new("Z", vec![10.0, 500.0, 2500.0, 42.5]));
@@ -339,7 +339,7 @@ fn test_half_channel_is_f16_quantized() {
 
 #[test]
 fn test_validation_rejects_malformed_images() {
-    let ok = ExrImage::rgba_f32(1, 1, &[1.0, 1.0, 1.0, 1.0]);
+    let ok = ExrImage::rgba_f32(1, 1, &[1.0, 1.0, 1.0, 1.0]).expect("valid RGBA image");
     assert!(ok.validate().is_ok());
 
     let mut nan = ok.clone();
@@ -372,7 +372,7 @@ fn test_validation_rejects_malformed_images() {
 fn test_write_to_file_roundtrip() {
     let (w, h) = (3u32, 3u32);
     let data = ramp(w, h);
-    let mut img = ExrImage::rgba_f32(w, h, &data);
+    let mut img = ExrImage::rgba_f32(w, h, &data).expect("valid RGBA image");
     img.compression = ExrCompression::Zip;
     let path =
         std::env::temp_dir().join(format!("kagari_exr_{}_{}.exr", std::process::id(), line!()));

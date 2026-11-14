@@ -71,15 +71,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     comp.layers.push(bg);
 
     // 2. High Density Particle Sparks (Neon & Amber)
-    let mut emitter = ParticleEmitter::default();
-    emitter.rate = 75.0;
-    emitter.lifetime = 2.5;
-    emitter.speed = 85.0;
-    emitter.spread_degrees = 360.0;
-    emitter.color_start = cyan;
-    emitter.color_end = [orange[0], orange[1], orange[2], 0.0];
-    emitter.size_start = 4.5;
-    emitter.size_end = 0.5;
+    let emitter = ParticleEmitter {
+        rate: 75.0,
+        lifetime: 2.5,
+        speed: 85.0,
+        spread_degrees: 360.0,
+        color_start: cyan,
+        color_end: [orange[0], orange[1], orange[2], 0.0],
+        size_start: 4.5,
+        size_end: 0.5,
+        ..ParticleEmitter::default()
+    };
     let mut particle_layer = Layer::new(
         "particles".to_string(),
         "Ambient Core Dust".to_string(),

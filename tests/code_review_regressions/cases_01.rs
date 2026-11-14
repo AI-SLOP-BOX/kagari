@@ -384,7 +384,7 @@ fn layer_is_active_boundary_frames() {
     );
     // Boundary frames
     assert!(layer.is_active(0)); // at in_frame
-    assert!(layer.is_active(100)); // at out_frame
+    assert!(!layer.is_active(100)); // out_frame is exclusive
     assert!(!layer.is_active(101)); // beyond out_frame
     assert!(!layer.is_active(u32::MAX)); // far beyond
 }

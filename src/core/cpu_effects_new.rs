@@ -8,10 +8,31 @@
 
 #![allow(dead_code)]
 
+use crate::core::software_renderer::rgba_buffer_size;
+
 pub mod color;
 pub mod lens;
 pub mod procedural;
 pub mod warp;
+
+pub(super) fn render_cancel_flag() -> Option<std::sync::Arc<std::sync::atomic::AtomicBool>> {
+    crate::core::software_renderer::get_render_cancel_flag()
+}
+
+#[inline]
+pub(super) fn cancellation_requested(
+    flag: &Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+) -> bool {
+    flag.as_ref()
+        .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+}
+
+#[inline]
+pub(super) fn valid_rgba_dimensions(pixels: &[u8], width: u32, height: u32) -> bool {
+    width > 0
+        && height > 0
+        && rgba_buffer_size(width, height).is_some_and(|expected| expected == pixels.len())
+}
 
 // Re-export all public functions to keep full backwards compatibility
 pub use color::{

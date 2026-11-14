@@ -28,6 +28,7 @@ fn recent_project_path_label(path: &std::path::Path) -> String {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(in crate::ui::home_screen) fn draw_landing_recent_work(
     app: &mut KagariApp,
     ui: &mut egui::Ui,
@@ -150,7 +151,7 @@ pub(in crate::ui::home_screen) fn draw_landing_recent_projects(
     }
 
     let gap = 12.0 * density;
-    let columns = columns.max(1).min(3);
+    let columns = columns.clamp(1, 3);
     let card_width =
         ((rect.width() - gap * (columns - 1) as f32) / columns as f32).max(150.0 * density);
     let card_height = 222.0 * density;
@@ -410,14 +411,14 @@ fn fmt_timestamp(time: std::time::SystemTime) -> String {
         if unsafe { libc::localtime_r(&timestamp, &mut local) }.is_null() {
             return fmt_age(time);
         }
-        return format!(
+        format!(
             "{:04}/{:02}/{:02} {:02}:{:02}",
             local.tm_year + 1900,
             local.tm_mon + 1,
             local.tm_mday,
             local.tm_hour,
             local.tm_min,
-        );
+        )
     }
     #[cfg(not(unix))]
     fmt_age(time)

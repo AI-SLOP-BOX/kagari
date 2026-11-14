@@ -1,6 +1,11 @@
 #[test]
 fn shader_wgsl_parses_and_has_both_entry_points() {
-    let source = include_str!("../../src/core/shader.wgsl");
+    let source = concat!(
+        include_str!("../../src/core/shader/types.wgsl"),
+        include_str!("../../src/core/shader/sampling.wgsl"),
+        include_str!("../../src/core/shader/layer_styles.wgsl"),
+        include_str!("../../src/core/shader/fragment.wgsl"),
+    );
     let module = naga::front::wgsl::parse_str(source);
     assert!(
         module.is_ok(),
@@ -18,7 +23,12 @@ fn shader_wgsl_parses_and_has_both_entry_points() {
 }
 #[test]
 fn shader_bind_groups_within_limits() {
-    let source = include_str!("../../src/core/shader.wgsl");
+    let source = concat!(
+        include_str!("../../src/core/shader/types.wgsl"),
+        include_str!("../../src/core/shader/sampling.wgsl"),
+        include_str!("../../src/core/shader/layer_styles.wgsl"),
+        include_str!("../../src/core/shader/fragment.wgsl"),
+    );
     let module = naga::front::wgsl::parse_str(source).unwrap();
     let max_group = module
         .global_variables
@@ -35,7 +45,12 @@ fn shader_bind_groups_within_limits() {
 }
 #[test]
 fn shader_passes_full_validation() {
-    let source = include_str!("../../src/core/shader.wgsl");
+    let source = concat!(
+        include_str!("../../src/core/shader/types.wgsl"),
+        include_str!("../../src/core/shader/sampling.wgsl"),
+        include_str!("../../src/core/shader/layer_styles.wgsl"),
+        include_str!("../../src/core/shader/fragment.wgsl"),
+    );
     let module = naga::front::wgsl::parse_str(source).unwrap();
     let mut validator = naga::valid::Validator::new(
         naga::valid::ValidationFlags::all(),

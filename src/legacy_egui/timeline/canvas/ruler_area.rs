@@ -173,7 +173,7 @@ pub(super) fn draw(ui: &mut egui::Ui, state: &mut RulerAreaState<'_>) -> (f32, f
         if has_explicit_work_area
             && wa_out > wa_in
             && wa_out >= start_frame
-            && wa_in <= start_frame + zoom_span
+            && wa_in <= start_frame.saturating_add(zoom_span)
         {
             let norm_in = (wa_in.saturating_sub(start_frame)) as f32 / zoom_span as f32;
             let norm_out = (wa_out.saturating_sub(start_frame)) as f32 / zoom_span as f32;

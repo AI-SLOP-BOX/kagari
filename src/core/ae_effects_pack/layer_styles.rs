@@ -1,5 +1,12 @@
 use super::*;
 
+#[inline]
+fn cancellation_requested() -> bool {
+    crate::core::software_renderer::get_render_cancel_flag()
+        .as_ref()
+        .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+}
+
 // ── Inner Shadow / Inner Glow (layer styles) ──
 /// Inner Shadow: darkens the inside edges of the layer's alpha, offset in
 /// `angle_deg` (compass convention matching apply_drop_shadow) by `distance`,
@@ -33,7 +40,13 @@ pub fn apply_inner_shadow(
     // back-shifted sample falls outside the shape.
     let mut mask = vec![0u8; pixel_count];
     for y in 0..height {
+        if cancellation_requested() {
+            return;
+        }
         for x in 0..width {
+            if x.is_multiple_of(4096) && cancellation_requested() {
+                return;
+            }
             let idx = ((y * width + x) * 4) as usize;
             let a = pixels[idx + 3] as f32 / 255.0;
             if a <= 0.003 {
@@ -49,6 +62,9 @@ pub fn apply_inner_shadow(
     // Soften the band into an RGBA buffer so gaussian blur can run on alpha.
     let mut soft = vec![shadow_color[0]; pixel_bytes];
     for i in (0..soft.len()).step_by(4) {
+        if i.is_multiple_of(16_384) && cancellation_requested() {
+            return;
+        }
         soft[i] = shadow_color[0];
         soft[i + 1] = shadow_color[1];
         soft[i + 2] = shadow_color[2];
@@ -61,6 +77,9 @@ pub fn apply_inner_shadow(
     // Under-composite: shadow sits beneath the original pixels but only where
     // the original is opaque (inner region), scaled by its own alpha.
     for i in (0..pixels.len()).step_by(4) {
+        if i.is_multiple_of(16_384) && cancellation_requested() {
+            return;
+        }
         let base_a = pixels[i + 3] as f32 / 255.0;
         let sh_a = (soft[i + 3] as f32 / 255.0) * (shadow_color[3] as f32 / 255.0);
         let m = sh_a.min(1.0);
@@ -107,6 +126,9 @@ pub fn apply_inner_glow(
     // inside the edge, fading toward the interior.
     let mut inv = vec![0u8; pixel_bytes];
     for i in (0..inv.len()).step_by(4) {
+        if i.is_multiple_of(16_384) && cancellation_requested() {
+            return;
+        }
         inv[i + 3] = 255 - pixels[i + 3];
     }
     if size > 0 {
@@ -114,6 +136,9 @@ pub fn apply_inner_glow(
     }
 
     for i in (0..pixels.len()).step_by(4) {
+        if i.is_multiple_of(16_384) && cancellation_requested() {
+            return;
+        }
         let base_a = pixels[i + 3] as f32 / 255.0;
         if base_a <= 0.003 {
             continue;
@@ -163,7 +188,11 @@ pub fn apply_bevel_emboss(pixels: &mut [u8], width: u32, height: u32, p: &BevelE
     let size_px = *size_px;
     let highlight_strength = *highlight_strength;
     let shadow_strength = *shadow_strength;
-    if width == 0 || height == 0 || pixels.is_empty() {
+    if width == 0
+        || height == 0
+        || pixels.is_empty()
+        || !super::valid_rgba_dimensions(pixels, width, height)
+    {
         return;
     }
     let hl = (highlight_strength / 100.0).clamp(0.0, 1.0);
@@ -188,7 +217,13 @@ pub fn apply_bevel_emboss(pixels: &mut [u8], width: u32, height: u32, p: &BevelE
     let mut mask_lit = vec![0u8; (width * height) as usize];
     let mut mask_shade = vec![0u8; (width * height) as usize];
     for y in 0..height as i32 {
+        if cancellation_requested() {
+            return;
+        }
         for x in 0..width as i32 {
+            if (x as u32).is_multiple_of(4096) && cancellation_requested() {
+                return;
+            }
             let a = sample_a(x, y);
             if a <= 0.003 {
                 continue;
@@ -204,6 +239,9 @@ pub fn apply_bevel_emboss(pixels: &mut [u8], width: u32, height: u32, p: &BevelE
     let soften = |mask: &[u8], color: [u8; 4]| -> Vec<u8> {
         let mut soft = vec![0u8; (width * height * 4) as usize];
         for i in (0..soft.len()).step_by(4) {
+            if i.is_multiple_of(16_384) && cancellation_requested() {
+                break;
+            }
             soft[i] = color[0];
             soft[i + 1] = color[1];
             soft[i + 2] = color[2];
@@ -215,9 +253,18 @@ pub fn apply_bevel_emboss(pixels: &mut [u8], width: u32, height: u32, p: &BevelE
         soft
     };
     let lit_buf = soften(&mask_lit, *color_light);
+    if cancellation_requested() {
+        return;
+    }
     let shade_buf = soften(&mask_shade, *color_dark);
+    if cancellation_requested() {
+        return;
+    }
 
     for i in (0..pixels.len()).step_by(4) {
+        if i.is_multiple_of(16_384) && cancellation_requested() {
+            return;
+        }
         let base_a = pixels[i + 3] as f32 / 255.0;
         if base_a <= 0.003 {
             continue;
@@ -255,7 +302,11 @@ pub struct SatinParams {
 /// Satin: interior sheen band. Shifts the inverted alpha by the compass
 /// offset, intersects it with the original shape, blurs, then tints.
 pub fn apply_satin(pixels: &mut [u8], width: u32, height: u32, p: &SatinParams) {
-    if width == 0 || height == 0 || p.opacity <= 0.0 {
+    if width == 0
+        || height == 0
+        || p.opacity <= 0.0
+        || !super::valid_rgba_dimensions(pixels, width, height)
+    {
         return;
     }
     let strength = (p.opacity / 100.0).clamp(0.0, 1.0);
@@ -267,7 +318,13 @@ pub fn apply_satin(pixels: &mut [u8], width: u32, height: u32, p: &SatinParams) 
     // forward-shifted sample falls outside the shape.
     let mut mask = vec![0u8; (width * height) as usize];
     for y in 0..height {
+        if cancellation_requested() {
+            return;
+        }
         for x in 0..width {
+            if x.is_multiple_of(4096) && cancellation_requested() {
+                return;
+            }
             let idx = ((y * width + x) * 4) as usize;
             let a = pixels[idx + 3] as f32 / 255.0;
             if a <= 0.003 {
@@ -283,6 +340,9 @@ pub fn apply_satin(pixels: &mut [u8], width: u32, height: u32, p: &SatinParams) 
 
     let mut soft = vec![0u8; (width * height * 4) as usize];
     for i in (0..soft.len()).step_by(4) {
+        if i.is_multiple_of(16_384) && cancellation_requested() {
+            return;
+        }
         soft[i] = p.color[0];
         soft[i + 1] = p.color[1];
         soft[i + 2] = p.color[2];
@@ -293,6 +353,9 @@ pub fn apply_satin(pixels: &mut [u8], width: u32, height: u32, p: &SatinParams) 
     }
 
     for i in (0..pixels.len()).step_by(4) {
+        if i.is_multiple_of(16_384) && cancellation_requested() {
+            return;
+        }
         let base_a = pixels[i + 3] as f32 / 255.0;
         let m = ((soft[i + 3] as f32 / 255.0) * (p.color[3] as f32 / 255.0)).min(1.0) * strength;
         if m <= 0.003 || base_a <= 0.003 {
@@ -320,7 +383,10 @@ pub fn apply_color_overlay(
         return;
     }
     let mix = (opacity / 100.0).clamp(0.0, 1.0);
-    for px in pixels.as_chunks_mut::<4>().0 {
+    for (index, px) in pixels.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+        if index.is_multiple_of(4096) && cancellation_requested() {
+            return;
+        }
         let a = px[3] as f32 / 255.0;
         if a < 0.003 {
             continue;
@@ -354,7 +420,11 @@ pub fn apply_gradient_overlay(
     height: u32,
     p: &GradientOverlayParams,
 ) {
-    if width == 0 || height == 0 || p.opacity <= 0.0 {
+    if width == 0
+        || height == 0
+        || p.opacity <= 0.0
+        || !super::valid_rgba_dimensions(pixels, width, height)
+    {
         return;
     }
     let mix_max = (p.opacity / 100.0).clamp(0.0, 1.0);
@@ -377,7 +447,13 @@ pub fn apply_gradient_overlay(
     let mid = (t_min + t_max) * 0.5;
 
     for y in 0..height {
+        if cancellation_requested() {
+            return;
+        }
         for x in 0..width {
+            if x.is_multiple_of(4096) && cancellation_requested() {
+                return;
+            }
             let idx = ((y * width + x) * 4) as usize;
             if idx + 3 >= pixels.len() {
                 continue;
@@ -419,9 +495,13 @@ pub struct LensFlareParams {
 
 /// Screen-space optical flare: Gaussian core + concentric ring artifacts +
 /// 4-point star streaks, additively tinted onto the buffer.
-/// Mirrors `shader.wgsl` fs_main flare pass for GPU/CPU export parity.
+/// Mirrors `shader/fragment.wgsl` flare pass for GPU/CPU export parity.
 pub fn apply_lens_flare(pixels: &mut [u8], width: u32, height: u32, p: &LensFlareParams) {
-    if width == 0 || height == 0 || p.intensity <= 0.0 {
+    if width == 0
+        || height == 0
+        || p.intensity <= 0.0
+        || !super::valid_rgba_dimensions(pixels, width, height)
+    {
         return;
     }
     let w = width as f32;
@@ -435,8 +515,14 @@ pub fn apply_lens_flare(pixels: &mut [u8], width: u32, height: u32, p: &LensFlar
     let cb = p.color[2] as f32 / 255.0;
 
     for y in 0..height {
+        if cancellation_requested() {
+            return;
+        }
         let ny = (y as f32 + 0.5) / h;
         for x in 0..width {
+            if x.is_multiple_of(4096) && cancellation_requested() {
+                return;
+            }
             let nx = (x as f32 + 0.5) / w;
 
             let dx = nx - cx;

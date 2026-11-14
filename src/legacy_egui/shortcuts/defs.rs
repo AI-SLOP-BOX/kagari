@@ -91,7 +91,9 @@ fn overrides() -> &'static RwLock<HashMap<String, ShortcutBinding>> {
     OVERRIDES.get_or_init(|| RwLock::new(HashMap::new()))
 }
 pub fn set_overrides(bindings: &HashMap<String, ShortcutBinding>) {
-    *overrides().write().unwrap() = bindings.clone();
+    *overrides()
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = bindings.clone();
 }
 pub fn default_binding(id: ShortcutId) -> ShortcutBinding {
     let def = SHORTCUT_REGISTRY
@@ -108,7 +110,7 @@ pub fn default_binding(id: ShortcutId) -> ShortcutBinding {
 pub fn current_binding(id: ShortcutId) -> ShortcutBinding {
     overrides()
         .read()
-        .unwrap()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .get(id.key())
         .cloned()
         .unwrap_or_else(|| default_binding(id))

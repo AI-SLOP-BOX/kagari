@@ -5,18 +5,24 @@ component ExportPanel() {
         MaxWidth(920) {
           VStack(spacing: 14) {
             Card { Padding(18) { VStack(spacing: 12) {
-              HStack(spacing: 8) { Text("動画を書き出す", size: 19) Spacer Button("形式: {video_export_codec}", action: cycle_video_export_codec, tone: secondary, size: small) }
+              HStack(spacing: 8) { Text("動画を書き出す", size: 19) Spacer If(render_running) { Caption("形式: {video_export_codec}") } else { Button("形式: {video_export_codec}", action: cycle_video_export_codec, tone: secondary, size: small) } }
               Caption("{status_resolution} · {fps_label} · {duration_label}")
-              HStack(spacing: 8) { Grow(1) { TextField(video_output_path, "動画の保存先 (.mp4)", action: video_output_changed) } Button("保存先…", action: choose_video_output, tone: secondary, size: small) }
+              If(render_running) { Caption("保存先: {video_output_path}") } else { HStack(spacing: 8) { Grow(1) { TextField(video_output_path, "動画の保存先 (.mp4)", action: video_output_changed) } Button("保存先…", action: choose_video_output, tone: secondary, size: small) } }
+              HStack(spacing: 12) {
+                If(video_export_quality_supported) {
+                  If(render_running) { Caption("画質: {video_export_quality}%") } else { VStack(spacing: 4) { Caption("画質: {video_export_quality}%") Slider(video_export_quality, min: 0.0, max: 100.0, action: video_export_quality_changed) } }
+                } else { Caption("ProResでは画質スライダーは適用されません。") }
+                If(render_running) { If(video_export_audio_enabled) { Caption("音声あり") } else { Caption("音声なし") } } else { Checkbox("音声を含める", video_export_audio_enabled, action: video_export_audio_changed) }
+              }
               ProgressBar(render_progress)
               HStack(spacing: 8) { Caption("{render_status}") Spacer If(render_running) { Button("キャンセル", action: render_stop, tone: destructive) } else { If(video_overwrite_pending) { Button("上書きして書き出す", action: render_overwrite, tone: destructive) Button("戻る", action: render_cancel_overwrite, tone: secondary) } else { Button("書き出しを開始", action: render_start, tone: primary) } } }
             } } }
             Card { Padding(16) { VStack(spacing: 10) {
-              HStack(spacing: 8) { Text("インターチェンジ / テンプレート", size: 17) Spacer Caption("MLT · MOGRT · Lottie") }
-              Caption("選択中のコンポジションを MLT、MOGRT、Lottie、OTIO、または字幕として保存します。MOGRT はテキストレイヤーを編集可能な本質的プロパティとして公開します。OTIO はタイムライン交換用の外向きエンドポイントです。")
+              HStack(spacing: 8) { Text("インターチェンジ / テンプレート", size: 17) Spacer Caption("MLT · Kagari Template · Lottie") }
+              Caption("選択中のコンポジションを MLT、Kagariテンプレート、Lottie、OTIO、または字幕として保存します。Kagariテンプレート(.kgtpl)はKagari独自形式で、Premiere Pro用MOGRTではありません。テキストレイヤーを編集可能なプロパティとして保存します。OTIO はタイムライン交換用の外向きエンドポイントです。EXR 連番は現行の8bitレンダーを線形化して保存し、HDR階調は保持しません。")
               HStack(spacing: 8) {
                 Button("MLT を保存…", action: export_mlt, tone: secondary)
-                Button("MOGRT を保存…", action: export_mogrt, tone: secondary)
+                Button("Kagariテンプレートを保存…", action: export_mogrt, tone: secondary)
                 Button("Lottie を保存…", action: export_lottie, tone: secondary)
                 Button("OTIO を保存…", action: export_otio, tone: secondary)
                 Button("GIF を書き出す", action: export_gif, tone: secondary)

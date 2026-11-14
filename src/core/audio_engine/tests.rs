@@ -26,8 +26,7 @@ fn decoded_audio_cache_enforces_byte_budget_and_lru_order() {
     let key = |path: &str| AudioCacheKey {
         path: path.to_owned(),
         sample_rate: 48_000,
-        file_len: 10,
-        modified_ns: Some(1),
+        media_revision: 1,
     };
 
     cache.insert(key("a.wav"), make_buffer(0.1));
@@ -54,8 +53,7 @@ fn decoded_audio_cache_key_includes_requested_sample_rate() {
         AudioCacheKey {
             path: "same.wav".into(),
             sample_rate: 44_100,
-            file_len: 12,
-            modified_ns: Some(7),
+            media_revision: 7,
         },
         buffer.clone(),
     );
@@ -63,8 +61,7 @@ fn decoded_audio_cache_key_includes_requested_sample_rate() {
         .get(&AudioCacheKey {
             path: "same.wav".into(),
             sample_rate: 48_000,
-            file_len: 12,
-            modified_ns: Some(7),
+            media_revision: 7,
         })
         .is_none());
 }
@@ -75,8 +72,7 @@ fn decoded_audio_cache_key_includes_source_file_revision() {
     let source_key = AudioCacheKey {
         path: "same.wav".into(),
         sample_rate: 48_000,
-        file_len: 100,
-        modified_ns: Some(10),
+        media_revision: 10,
     };
     cache.insert(
         source_key,
@@ -90,8 +86,7 @@ fn decoded_audio_cache_key_includes_source_file_revision() {
         .get(&AudioCacheKey {
             path: "same.wav".into(),
             sample_rate: 48_000,
-            file_len: 101,
-            modified_ns: Some(11),
+            media_revision: 11,
         })
         .is_none());
 }

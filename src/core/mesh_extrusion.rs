@@ -138,11 +138,14 @@ impl ExtrudedMesh {
             vertices: self.vertices.clone(),
             normals: self.normals.clone(),
             uvs: self.uvs.clone(),
+            uv_sets: Vec::new(),
+            colors: Vec::new(),
             indices: self.indices.clone(),
             materials: vec![crate::core::obj_loader::PbrMaterial3D::default()],
             material_indices: vec![0; triangle_count],
             bbox_min,
             bbox_max,
+            embedded_textures: Vec::new(),
         }
     }
 }

@@ -48,7 +48,7 @@ component EffectPanel() {
         }
         If(selected_layer) {
           If(has_effect_items) {
-            ForEach(effect_items, effect, key: id) {
+            ForEach(effect_items, effect, key: id, height: 240, row_height: 28, overscan: 4) {
               HStack(spacing: 5) {
                 If(effect.selected) { Button("{effect.name}", action: select_effect, tone: primary, size: small) } else { Button("{effect.name}", action: select_effect, tone: secondary, size: small) }
                 Spacer

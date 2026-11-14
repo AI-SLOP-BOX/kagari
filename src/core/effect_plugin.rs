@@ -179,15 +179,15 @@ mod tests {
             output_black: constant(0.05),
             output_white: constant(0.95),
         }));
-        assert!(gpu_preview_effect_supported(&EffectType::Twirl {
+        assert!(!gpu_preview_effect_supported(&EffectType::Twirl {
             angle: constant(45.0),
             radius: constant(100.0),
         }));
-        assert!(gpu_preview_effect_supported(&EffectType::Bulge {
+        assert!(!gpu_preview_effect_supported(&EffectType::Bulge {
             amount: constant(0.5),
             radius: constant(100.0),
         }));
-        assert!(gpu_preview_effect_supported(
+        assert!(!gpu_preview_effect_supported(
             &EffectType::TurbulentDisplace {
                 amount: constant(10.0),
                 size: constant(5.0),
@@ -195,7 +195,7 @@ mod tests {
                 complexity: constant(5.0),
             }
         ));
-        assert!(gpu_preview_effect_supported(&EffectType::WaveWarp {
+        assert!(!gpu_preview_effect_supported(&EffectType::WaveWarp {
             wave_height: constant(10.0),
             wave_width: constant(20.0),
             speed: constant(1.0),
@@ -203,11 +203,11 @@ mod tests {
             wave_type: 2,
             pinning: 1,
         }));
-        assert!(gpu_preview_effect_supported(&EffectType::Spherize {
+        assert!(!gpu_preview_effect_supported(&EffectType::Spherize {
             radius: constant(100.0),
             refractive_index: constant(1.5),
         }));
-        assert!(gpu_preview_effect_supported(&EffectType::HeatDistortion {
+        assert!(!gpu_preview_effect_supported(&EffectType::HeatDistortion {
             strength: constant(20.0),
             speed: constant(1.0),
         }));

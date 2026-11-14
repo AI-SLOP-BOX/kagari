@@ -256,40 +256,54 @@ fn start_console_job(app: &mut KagariApp, command: String, automation: bool, con
     let project = automation.then(|| app.history.current().clone());
     let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let (tx, rx) = std::sync::mpsc::channel();
-    app.script_console_rx = Some(rx);
-    app.script_console_cancel = Some(cancel.clone());
-    let handle = std::thread::spawn(move || {
-        let start = std::time::Instant::now();
-        let result = if automation {
-            let Some(project) = project else {
-                let _ = tx.send(crate::app_state::ScriptConsoleCompletion {
-                    command,
-                    project_session_id: session_id,
-                    history_generation,
-                    elapsed: start.elapsed(),
-                    result: Err("Project snapshot is unavailable".to_string()),
-                });
-                return;
-            };
-            match crate::core::automation::run_script_owned(project, &command, cancel.clone()) {
-                Ok((project, logs)) => {
-                    Ok(crate::app_state::ScriptConsoleJobOutput::Automation { project, logs })
+    let worker_cancel = cancel.clone();
+    let handle = std::thread::Builder::new()
+        .name("kagari-script-console".into())
+        .spawn(move || {
+            let start = std::time::Instant::now();
+            let result = if automation {
+                let Some(project) = project else {
+                    let _ = tx.send(crate::app_state::ScriptConsoleCompletion {
+                        command,
+                        project_session_id: session_id,
+                        history_generation,
+                        elapsed: start.elapsed(),
+                        result: Err("Project snapshot is unavailable".to_string()),
+                    });
+                    return;
+                };
+                match crate::core::automation::run_script_owned(
+                    project,
+                    &command,
+                    worker_cancel.clone(),
+                ) {
+                    Ok((project, logs)) => {
+                        Ok(crate::app_state::ScriptConsoleJobOutput::Automation { project, logs })
+                    }
+                    Err(error) => Err(error),
                 }
-                Err(error) => Err(error),
-            }
-        } else {
-            evaluate_script(&command, &context, cancel.clone())
-                .map(crate::app_state::ScriptConsoleJobOutput::Expression)
-        };
-        let _ = tx.send(crate::app_state::ScriptConsoleCompletion {
-            command,
-            project_session_id: session_id,
-            history_generation,
-            elapsed: start.elapsed(),
-            result,
+            } else {
+                evaluate_script(&command, &context, worker_cancel.clone())
+                    .map(crate::app_state::ScriptConsoleJobOutput::Expression)
+            };
+            let _ = tx.send(crate::app_state::ScriptConsoleCompletion {
+                command,
+                project_session_id: session_id,
+                history_generation,
+                elapsed: start.elapsed(),
+                result,
+            });
         });
-    });
-    app.track_background_thread(handle);
+    match handle {
+        Ok(handle) => {
+            app.script_console_rx = Some(rx);
+            app.script_console_cancel = Some(cancel);
+            app.track_background_thread(handle);
+        }
+        Err(error) => app
+            .toasts
+            .error(format!("スクリプト実行を開始できませんでした: {error}")),
+    }
 }
 
 fn poll_console_job(app: &mut KagariApp, ctx: &egui::Context, output: &mut Vec<String>) {

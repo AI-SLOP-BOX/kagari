@@ -3,6 +3,22 @@ use super::types::{BezierControlPoint, InterpolationType, Keyframe};
 /// Evaluates a cubic bezier curve at x using Newton-Raphson or binary search.
 /// Control points are (0,0), (x1, y1), (x2, y2), (1,1).
 pub fn solve_bezier_eased_time(x: f32, x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
+    if !x.is_finite() {
+        return 0.0;
+    }
+    let x1 = if x1.is_finite() {
+        x1.clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let x2 = if x2.is_finite() {
+        x2.clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
+    let y1 = if y1.is_finite() { y1 } else { 0.0 };
+    let y2 = if y2.is_finite() { y2 } else { 1.0 };
+
     if x <= 0.0 {
         return 0.0;
     }

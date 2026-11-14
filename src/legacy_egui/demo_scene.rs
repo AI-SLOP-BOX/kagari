@@ -29,7 +29,7 @@ fn c(v: f32) -> Animatable<f32> {
 
 pub fn build(app: &mut crate::KagariApp) {
     let comp_id = app.history.current().next_composition_id("comp_demo");
-    let mut comp = Composition::new(comp_id, "main_comp".to_string(), 3840, 2160, 30, 150);
+    let mut comp = Composition::new(comp_id, "main_comp".to_string(), 1280, 720, 30, 150);
     comp.blend_linear = false;
     comp.dither_output = true;
 
@@ -43,6 +43,7 @@ pub fn build(app: &mut crate::KagariApp) {
         },
         comp.duration_frames,
     );
+    bg.transform.anchor_point = Animatable::new_constant([640.0, 360.0]);
     bg.transform.position = Animatable::new_constant([640.0, 360.0]);
     bg.effects.push(fx(
         "demo_vignette",

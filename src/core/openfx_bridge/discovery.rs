@@ -31,7 +31,7 @@ pub fn ofx_search_paths() -> Vec<PathBuf> {
     }
     #[cfg(windows)]
     {
-        if let Some(pf) = std::env::var("ProgramFiles").ok() {
+        if let Ok(pf) = std::env::var("ProgramFiles") {
             paths.push(
                 PathBuf::from(pf)
                     .join("Common Files")

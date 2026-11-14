@@ -5,6 +5,7 @@ use crate::ui::graph_editor::keyframe_access::bezier_control_points;
 use crate::ui::theme::colors;
 use eframe::egui;
 
+#[allow(clippy::too_many_arguments)]
 pub fn handle_tangent_handles(
     ui: &mut egui::Ui,
     layer: &mut Layer,

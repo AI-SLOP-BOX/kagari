@@ -362,7 +362,7 @@ impl Layer {
     }
 
     pub fn is_active(&self, frame: u32) -> bool {
-        self.visible && frame >= self.in_frame && frame <= self.out_frame
+        self.visible && frame >= self.in_frame && frame < self.out_frame
     }
 
     pub fn duration_frames(&self) -> u32 {
@@ -391,9 +391,23 @@ impl Layer {
     /// Evaluate time remapping without losing the fractional source frame.
     /// Video rasterization uses this for optional frame blending.
     pub fn remap_frame_f32(&self, frame: u32) -> f32 {
+        self.remap_frame_at_time(frame as f32)
+    }
+
+    pub fn remap_frame_at_time(&self, frame: f32) -> f32 {
+        if !frame.is_finite() {
+            return 0.0;
+        }
         match &self.time_remap {
-            Some(anim) => anim.evaluate(frame).max(0.0),
-            None => frame as f32,
+            Some(anim) => {
+                let remapped = anim.value_at_f32(frame);
+                if remapped.is_finite() {
+                    remapped.max(0.0)
+                } else {
+                    frame
+                }
+            }
+            None => frame.max(0.0),
         }
     }
 
@@ -416,15 +430,21 @@ impl Layer {
     /// playback consistent via a linear remap (source advances at `factor`).
     /// factor > 1 slows the source down; factor < 1 speeds it up.
     pub fn time_stretch(&mut self, factor: f32) {
-        if factor <= 0.001 {
+        if !factor.is_finite() || factor <= 0.001 {
             return;
         }
         let in_f = self.in_frame;
-        let duration = self.duration_frames() as f32;
-        let new_duration = ((duration * factor).round() as u32).max(1);
+        let duration = f64::from(self.duration_frames());
+        let requested_duration = duration * f64::from(factor);
+        let maximum_duration = f64::from(u32::MAX.saturating_sub(in_f));
+        if !requested_duration.is_finite() || requested_duration.round().max(1.0) > maximum_duration
+        {
+            return;
+        }
+        let new_duration = requested_duration.round().max(1.0) as u32;
         self.out_frame = in_f.saturating_add(new_duration);
 
-        let end_source = in_f as f32 + new_duration as f32 / factor;
+        let end_source = (f64::from(in_f) + f64::from(new_duration) / f64::from(factor)) as f32;
         let linear = crate::core::keyframe::InterpolationType::Linear;
         self.time_remap = Some(Animatable::Animated(vec![
             crate::core::keyframe::Keyframe::new(in_f, in_f as f32, linear),
@@ -441,9 +461,18 @@ impl Layer {
         let in_f = self.in_frame;
         let out_f = self.out_frame;
         let linear = crate::core::keyframe::InterpolationType::Linear;
+        if out_f <= in_f {
+            self.time_remap = Some(Animatable::new_constant(in_f as f32));
+            return;
+        }
+        if in_f == 0 && out_f == 1 {
+            self.time_remap = Some(Animatable::new_constant(0.0));
+            return;
+        }
+        let final_key_frame = out_f.saturating_sub(1);
         self.time_remap = Some(Animatable::Animated(vec![
-            crate::core::keyframe::Keyframe::new(in_f, out_f as f32, linear),
-            crate::core::keyframe::Keyframe::new(out_f, in_f as f32, linear),
+            crate::core::keyframe::Keyframe::new(in_f, out_f.saturating_sub(1) as f32, linear),
+            crate::core::keyframe::Keyframe::new(final_key_frame, in_f as f32, linear),
         ]));
     }
 
@@ -455,6 +484,247 @@ impl Layer {
     /// Remove time remapping so the source plays at comp time again.
     pub fn clear_time_remap(&mut self) {
         self.time_remap = None;
+    }
+
+    /// Move a layer range while keeping its animation and source content aligned.
+    /// Returns false when the requested range is unchanged.
+    pub fn move_timeline_range(&mut self, new_in: u32, new_out: u32) -> bool {
+        let old_in = self.in_frame;
+        let old_out = self.out_frame;
+        if old_in == new_in && old_out == new_out {
+            return false;
+        }
+        let shift = i64::from(new_in) - i64::from(old_in);
+        if shift != 0 {
+            self.preserve_source_time_after_slide(old_in, old_out);
+            self.shift_timeline_animation_frames(shift);
+        }
+        self.in_frame = new_in;
+        self.out_frame = new_out;
+        true
+    }
+
+    /// Slip the source window for media layers. For other layers, shift their
+    /// animated content in the opposite direction while keeping the clip fixed.
+    pub fn slip_timeline_content(&mut self, delta_frames: i32, precomp_source_frames: Option<u32>) {
+        if matches!(
+            self.layer_type,
+            LayerType::Video { .. } | LayerType::PreComp { .. }
+        ) {
+            self.slip_media_source_time(delta_frames, precomp_source_frames);
+        } else {
+            self.shift_timeline_animation_frames(-i64::from(delta_frames));
+        }
+    }
+
+    fn preserve_source_time_after_slide(&mut self, old_in: u32, old_out: u32) {
+        if self.time_remap.is_some()
+            || !matches!(
+                self.layer_type,
+                LayerType::Video { .. } | LayerType::PreComp { .. }
+            )
+        {
+            return;
+        }
+        self.time_remap = Some(Animatable::Animated(vec![
+            crate::core::keyframe::Keyframe::new(
+                old_in,
+                old_in as f32,
+                crate::core::keyframe::InterpolationType::Linear,
+            ),
+            crate::core::keyframe::Keyframe::new(
+                old_out,
+                old_out as f32,
+                crate::core::keyframe::InterpolationType::Linear,
+            ),
+        ]));
+    }
+
+    fn slip_media_source_time(&mut self, delta_frames: i32, precomp_source_frames: Option<u32>) {
+        let (speed, frame_count) = match &self.layer_type {
+            LayerType::Video {
+                speed, frame_count, ..
+            } => (*speed, Some(*frame_count)),
+            LayerType::PreComp { .. } => {
+                let Some(source_frames) = precomp_source_frames.filter(|frames| *frames > 0) else {
+                    return;
+                };
+                (1.0, Some(source_frames))
+            }
+            _ => return,
+        };
+        if !speed.is_finite() || speed <= 0.0 {
+            return;
+        }
+
+        if self.time_remap.is_none() {
+            self.time_remap = Some(Animatable::Animated(vec![
+                crate::core::keyframe::Keyframe::new(
+                    self.in_frame,
+                    self.in_frame as f32,
+                    crate::core::keyframe::InterpolationType::Linear,
+                ),
+                crate::core::keyframe::Keyframe::new(
+                    self.out_frame,
+                    self.out_frame as f32,
+                    crate::core::keyframe::InterpolationType::Linear,
+                ),
+            ]));
+        }
+
+        let Some(remap) = self.time_remap.as_mut() else {
+            return;
+        };
+        let (minimum, maximum) = match remap {
+            Animatable::Constant(value) => (*value, *value),
+            Animatable::Animated(keyframes) if keyframes.is_empty() => {
+                (self.in_frame as f32, self.out_frame as f32)
+            }
+            Animatable::Animated(keyframes) => keyframes.iter().fold(
+                (f32::INFINITY, f32::NEG_INFINITY),
+                |(minimum, maximum), keyframe| {
+                    (minimum.min(keyframe.value), maximum.max(keyframe.value))
+                },
+            ),
+        };
+        let minimum_source = minimum.max(0.0) * speed;
+        let maximum_source = maximum.max(0.0) * speed;
+        let minimum_shift = -minimum_source;
+        let maximum_shift = frame_count
+            .filter(|count| *count > 0)
+            .map_or(f32::INFINITY, |count| {
+                count.saturating_sub(1) as f32 - maximum_source
+            });
+        if minimum_shift > maximum_shift {
+            return;
+        }
+        let source_shift = (delta_frames as f32).clamp(minimum_shift, maximum_shift);
+        let remap_shift = source_shift / speed;
+        match remap {
+            Animatable::Constant(value) => *value = (*value + remap_shift).max(0.0),
+            Animatable::Animated(keyframes) => {
+                for keyframe in keyframes {
+                    keyframe.value = (keyframe.value + remap_shift).max(0.0);
+                }
+            }
+        }
+    }
+
+    fn shift_timeline_animation_frames(&mut self, frame_delta: i64) {
+        fn shift_track_frames<T: Clone>(track: &mut Animatable<T>, frame_delta: i64) {
+            if let Some(keyframes) = track.keyframes_mut() {
+                for keyframe in keyframes.iter_mut() {
+                    keyframe.frame = (i64::from(keyframe.frame) + frame_delta)
+                        .clamp(0, i64::from(u32::MAX)) as u32;
+                }
+                keyframes.sort_by_key(|keyframe| keyframe.frame);
+            }
+        }
+
+        shift_track_frames(&mut self.transform.anchor_point, frame_delta);
+        shift_track_frames(&mut self.transform.position, frame_delta);
+        shift_track_frames(&mut self.transform.scale, frame_delta);
+        shift_track_frames(&mut self.transform.rotation, frame_delta);
+        shift_track_frames(&mut self.transform.opacity, frame_delta);
+        shift_track_frames(&mut self.transform_3d.position, frame_delta);
+        shift_track_frames(&mut self.transform_3d.rotation, frame_delta);
+        shift_track_frames(&mut self.transform_3d.scale, frame_delta);
+        if let Some(time_remap) = &mut self.time_remap {
+            shift_track_frames(time_remap, frame_delta);
+        }
+        if let Some(trim_paths) = &mut self.trim_paths {
+            shift_track_frames(&mut trim_paths.start, frame_delta);
+            shift_track_frames(&mut trim_paths.end, frame_delta);
+            shift_track_frames(&mut trim_paths.offset, frame_delta);
+        }
+        for mask in &mut self.masks {
+            shift_track_frames(&mut mask.path.vertices, frame_delta);
+            shift_track_frames(&mut mask.feather, frame_delta);
+            shift_track_frames(&mut mask.opacity, frame_delta);
+            shift_track_frames(&mut mask.expansion, frame_delta);
+        }
+        for pin in &mut self.puppet_pins {
+            shift_track_frames(&mut pin.position, frame_delta);
+        }
+        if let Some(animator) = &mut self.text_animator {
+            if let Some(offset) = &mut animator.selector.offset_anim {
+                shift_track_frames(offset, frame_delta);
+            }
+        }
+        if let Some(stack) = &mut self.text_animator_stack {
+            for animator in &mut stack.animators {
+                if let Some(offset) = &mut animator.selector.offset_anim {
+                    shift_track_frames(offset, frame_delta);
+                }
+            }
+        }
+        for stroke in &mut self.paint_strokes {
+            stroke.start_frame =
+                (i64::from(stroke.start_frame) + frame_delta).clamp(0, i64::from(u32::MAX)) as u32;
+            if stroke.end_frame != 0 {
+                stroke.end_frame = (i64::from(stroke.end_frame) + frame_delta)
+                    .clamp(0, i64::from(u32::MAX)) as u32;
+            }
+        }
+        for stroke in &mut self.roto_brush_strokes {
+            if let Some(frame) = &mut stroke.frame {
+                *frame = (i64::from(*frame) + frame_delta).clamp(0, i64::from(u32::MAX)) as u32;
+            }
+        }
+        for marker in &mut self.markers {
+            marker.frame =
+                (i64::from(marker.frame) + frame_delta).clamp(0, i64::from(u32::MAX)) as u32;
+        }
+        match &mut self.layer_type {
+            LayerType::Video { audio_volume, .. }
+            | LayerType::Audio {
+                volume: audio_volume,
+                ..
+            } => {
+                shift_track_frames(audio_volume, frame_delta);
+            }
+            LayerType::Shape { shape_type, .. } => match shape_type {
+                crate::core::timeline::ShapeType::Rectangle {
+                    width,
+                    height,
+                    corner_radius,
+                } => {
+                    shift_track_frames(width, frame_delta);
+                    shift_track_frames(height, frame_delta);
+                    shift_track_frames(corner_radius, frame_delta);
+                }
+                crate::core::timeline::ShapeType::Ellipse { width, height } => {
+                    shift_track_frames(width, frame_delta);
+                    shift_track_frames(height, frame_delta);
+                }
+                crate::core::timeline::ShapeType::Star {
+                    points,
+                    inner_radius,
+                    outer_radius,
+                } => {
+                    shift_track_frames(points, frame_delta);
+                    shift_track_frames(inner_radius, frame_delta);
+                    shift_track_frames(outer_radius, frame_delta);
+                }
+                crate::core::timeline::ShapeType::Polygon { sides, radius } => {
+                    shift_track_frames(sides, frame_delta);
+                    shift_track_frames(radius, frame_delta);
+                }
+                crate::core::timeline::ShapeType::FreeformBezier { .. } => {}
+            },
+            _ => {}
+        }
+        use crate::core::effect_params::ParamRef;
+        for effect in &mut self.effects {
+            for (_, parameter) in effect.effect_type.animatable_params() {
+                match parameter {
+                    ParamRef::Scalar(track) => shift_track_frames(track, frame_delta),
+                    ParamRef::Vec2(track) => shift_track_frames(track, frame_delta),
+                    ParamRef::Vec3(track) => shift_track_frames(track, frame_delta),
+                    ParamRef::Vec4Color(track) => shift_track_frames(track, frame_delta),
+                }
+            }
+        }
     }
 
     /// AE "Easy Ease" (F9): apply smooth bezier interpolation to every

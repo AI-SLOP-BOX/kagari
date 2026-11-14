@@ -1,5 +1,5 @@
 use crate::ui::custom_widgets;
-use crate::ui::localization::tr;
+use crate::ui::localization::{tr, tr_format};
 use crate::KagariApp;
 use eframe::egui;
 
@@ -102,20 +102,31 @@ pub(crate) fn draw_camera_tracker_section(app: &mut KagariApp, ui: &mut egui::Ui
                 let feature_count = features.len();
                 let (tx, rx) = std::sync::mpsc::channel();
                 let repaint_ctx = ui.ctx().clone();
-                app.camera_solve_rx = Some(rx);
-                app.camera_solve_target = Some((target_name, width, height, fov, feature_count));
-                app.toasts
-                    .info(tr("Solving 3D camera on a background worker…"));
-                ui.ctx()
-                    .request_repaint_after(std::time::Duration::from_millis(100));
-                let handle = std::thread::spawn(move || {
-                    let result = crate::core::camera_track::solve_3d_camera_from_tracks(
-                        &features, width, height, fov,
-                    );
-                    let _ = tx.send(result);
-                    repaint_ctx.request_repaint();
-                });
-                app.track_background_thread(handle);
+                let handle = std::thread::Builder::new()
+                    .name("kagari-camera-solve".into())
+                    .spawn(move || {
+                        let result = crate::core::camera_track::solve_3d_camera_from_tracks(
+                            &features, width, height, fov,
+                        );
+                        let _ = tx.send(result);
+                        repaint_ctx.request_repaint();
+                    });
+                match handle {
+                    Ok(handle) => {
+                        app.camera_solve_rx = Some(rx);
+                        app.camera_solve_target =
+                            Some((target_name, width, height, fov, feature_count));
+                        app.toasts
+                            .info(tr("Solving 3D camera on a background worker…"));
+                        ui.ctx()
+                            .request_repaint_after(std::time::Duration::from_millis(100));
+                        app.track_background_thread(handle);
+                    }
+                    Err(error) => app.toasts.error(tr_format(
+                        "Could not start camera solve: {}",
+                        &[&error.to_string()],
+                    )),
+                }
             }
         });
     });

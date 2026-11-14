@@ -36,6 +36,9 @@ fn repeated_comp(options: ShapeRepeaterOptions) -> Composition {
         30,
     );
     layer.transform.position = Animatable::new_constant([16.0, 32.0]);
+    // Shape layers use a square composition-width source space. Center the
+    // layer anchor so the requested position is the shape's visible center.
+    layer.transform.anchor_point = Animatable::new_constant([64.0, 64.0]);
     layer.shape_repeater = Some(options);
     comp.layers.push(layer);
     comp

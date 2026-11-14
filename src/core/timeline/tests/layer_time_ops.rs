@@ -39,12 +39,24 @@ mod layer_time_ops_tests {
     }
 
     #[test]
-    fn test_time_reverse_flaps_endpoints() {
+    fn test_time_reverse_maps_the_active_span_backwards() {
         let mut l = test_layer();
         l.time_reverse();
-        assert_eq!(l.remap_frame(10), 40);
-        assert_eq!(l.remap_frame(25), 25);
+        assert_eq!(l.remap_frame(10), 39);
+        assert_eq!(l.remap_frame(25), 24);
+        assert_eq!(l.remap_frame(39), 10);
         assert_eq!(l.remap_frame(40), 10);
+    }
+
+    #[test]
+    fn test_time_reverse_zero_based_span_ends_at_source_frame_zero() {
+        let mut l = test_layer();
+        l.in_frame = 0;
+        l.out_frame = 10;
+        l.time_reverse();
+        assert_eq!(l.remap_frame(0), 9);
+        assert_eq!(l.remap_frame(9), 0);
+        assert_eq!(l.remap_frame(10), 0);
     }
 
     #[test]

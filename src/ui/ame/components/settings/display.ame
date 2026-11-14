@@ -51,24 +51,8 @@ component SettingsDisplayPage() {
     }
 
     Card(padding: 12, spacing: 10) {
-      Text("カラーと表示効果", size: 13)
-      SettingsRow("カラーマネジメント", label_width: 180) {
-        Select(color_management, action: setting_color_management_changed) {
-          Option("project", "プロジェクトの設定に従う")
-          Option("acescg", "ACEScg")
-          Option("srgb", "sRGB")
-        }
-      }
-      SettingsRow("ガンマ補正", label_width: 180) {
-        Select(gamma, action: setting_gamma_changed) {
-          Option("1.8", "1.8")
-          Option("2.2", "2.2")
-          Option("2.4", "2.4")
-        }
-      }
-      SettingsRow("HDR 表示を有効化", label_width: 180) {
-        Checkbox("対応するディスプレイで HDR を使用する", hdr_enabled, action: setting_hdr_changed)
-      }
+      Text("カラー出力", size: 13)
+      Caption("プロジェクトの色空間変換、出力ガンマ、HDRディスプレイ連携は未実装です。プレビューと書き出しは現在8-bit SDRを使用します。")
     }
   }
 }

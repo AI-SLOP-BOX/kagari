@@ -27,7 +27,7 @@ component ProjectPanel() {
           }
           TextField(search, "シーン内を検索", action: search_changed)
           If(has_scene_layers) {
-            ForEach(scene_layers, layer, key: id) {
+            ForEach(scene_layers, layer, key: id, height: 360, row_height: 58, overscan: 6) {
               VStack(spacing: 1) {
                 HStack(spacing: 5) {
                   Caption("{layer.indent}")

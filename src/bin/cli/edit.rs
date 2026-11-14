@@ -1,5 +1,39 @@
+#[path = "edit/mask.rs"]
+mod mask;
+pub(crate) use mask::cmd_mask;
+
 use super::*;
 use kagari_vfx::core::timeline::{Composition, Layer, LayerType, Project};
+
+fn save_project(project_path: &str, project: &Project) -> Result<(), Box<dyn std::error::Error>> {
+    kagari_vfx::core::project_migration::save_project_atomic(project, project_path)
+        .map_err(|error| format!("Failed to save project '{}': {error}", project_path).into())
+}
+
+fn parse_finite_components(
+    value: &str,
+    description: &str,
+) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
+    value
+        .split(',')
+        .map(|component| {
+            let parsed = component.trim().parse::<f32>().map_err(|_| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("{description} contains an invalid number: '{component}'"),
+                )
+            })?;
+            if !parsed.is_finite() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("{description} values must be finite"),
+                )
+                .into());
+            }
+            Ok(parsed)
+        })
+        .collect()
+}
 
 pub(super) fn cmd_init(
     project_path: &str,
@@ -39,8 +73,7 @@ pub(super) fn cmd_init(
         kagari_vfx::core::property::Animatable::new_constant([width as f32, height as f32]);
     project.compositions[0].add_layer(bg);
 
-    let json = serde_json::to_string_pretty(&project)?;
-    std::fs::write(project_path, json)?;
+    save_project(project_path, &project)?;
     eprintln!(
         "Created new project: {} ({}x{} @ {}fps, {} frames)",
         project_path, width, height, fps, duration
@@ -98,18 +131,11 @@ pub(super) fn cmd_add_layer(
         "solid" => {
             let mut col = [0.2, 0.2, 0.2, 1.0];
             if let Some(c_str) = content {
-                let parts: Vec<f32> = c_str
-                    .split(',')
-                    .filter_map(|s| s.trim().parse::<f32>().ok())
-                    .collect();
-                if parts.len() >= 3 {
-                    col[0] = parts[0];
-                    col[1] = parts[1];
-                    col[2] = parts[2];
-                    if parts.len() >= 4 {
-                        col[3] = parts[3];
-                    }
+                let parts = parse_finite_components(c_str, "Solid color")?;
+                if !matches!(parts.len(), 3 | 4) {
+                    return Err("Solid color requires 'r,g,b' or 'r,g,b,a'".into());
                 }
+                col[..parts.len()].copy_from_slice(&parts);
             }
             LayerType::Solid { color: col }
         }
@@ -148,8 +174,7 @@ pub(super) fn cmd_add_layer(
     let comp_name = comp.name.clone();
     comp.add_layer(layer);
 
-    let json = serde_json::to_string_pretty(&project)?;
-    std::fs::write(project_path, json)?;
+    save_project(project_path, &project)?;
     eprintln!(
         "Added layer '{}' ({}) to '{}' in {}",
         name, kind, comp_name, project_path
@@ -185,6 +210,7 @@ pub(crate) fn find_comp_mut<'a>(
         .ok_or_else(|| "Project contains no compositions".into())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn cmd_animate(
     project_path: &str,
     layer_ref: &str,
@@ -203,10 +229,7 @@ pub(super) fn cmd_animate(
     }
 
     let custom_bezier = if let Some(b_str) = custom_bezier_str {
-        let parts: Vec<f32> = b_str
-            .split(',')
-            .filter_map(|s| s.trim().parse::<f32>().ok())
-            .collect();
+        let parts = parse_finite_components(b_str, "Custom bezier")?;
         if parts.len() == 4 {
             Some([parts[0], parts[1], parts[2], parts[3]])
         } else {
@@ -290,11 +313,8 @@ pub(super) fn cmd_animate(
             for raw in keyframes_raw {
                 let (f_str, v_str) = raw.split_once('=').ok_or("Keyframe must use frame=x,y")?;
                 let frame: u32 = f_str.trim().parse().map_err(|_| "Invalid frame number")?;
-                let coords: Vec<f32> = v_str
-                    .split(',')
-                    .filter_map(|s| s.trim().parse::<f32>().ok())
-                    .collect();
-                if coords.len() < 2 {
+                let coords = parse_finite_components(v_str, "Position keyframe")?;
+                if coords.len() != 2 {
                     return Err(format!("Position keyframe requires x,y coords: '{raw}'").into());
                 }
                 kfs.push(Keyframe::new(frame, [coords[0], coords[1]], interp));
@@ -309,13 +329,10 @@ pub(super) fn cmd_animate(
                     .split_once('=')
                     .ok_or("Keyframe must use frame=x,y or frame=uniform")?;
                 let frame: u32 = f_str.trim().parse().map_err(|_| "Invalid frame number")?;
-                let coords: Vec<f32> = v_str
-                    .split(',')
-                    .filter_map(|s| s.trim().parse::<f32>().ok())
-                    .collect();
+                let coords = parse_finite_components(v_str, "Scale keyframe")?;
                 let scale = if coords.len() == 1 {
                     [coords[0], coords[0]]
-                } else if coords.len() >= 2 {
+                } else if coords.len() == 2 {
                     [coords[0], coords[1]]
                 } else {
                     return Err(format!("Invalid scale keyframe: '{raw}'").into());
@@ -360,8 +377,7 @@ pub(super) fn cmd_animate(
         }
     }
 
-    let json = serde_json::to_string_pretty(&project)?;
-    std::fs::write(project_path, json)?;
+    save_project(project_path, &project)?;
     eprintln!(
         "Animated '{}.{}' with {} keyframes (easing: {}) in {}",
         layer_ref,
@@ -465,8 +481,7 @@ pub(super) fn cmd_add_effect(
     let layer_name = layer.name.clone();
     layer.effects.push(effect);
 
-    let json = serde_json::to_string_pretty(&project)?;
-    std::fs::write(project_path, json)?;
+    save_project(project_path, &project)?;
     eprintln!(
         "Added effect '{}' ({}) to layer '{}' in {}",
         effect_name, kind, layer_name, project_path
@@ -505,8 +520,7 @@ pub(super) fn cmd_trim(
     let in_f = layer.in_frame;
     let out_f = layer.out_frame;
 
-    let json = serde_json::to_string_pretty(&project)?;
-    std::fs::write(project_path, json)?;
+    save_project(project_path, &project)?;
     eprintln!(
         "Trimmed layer '{}' span to {}..={} in {}",
         layer_name, in_f, out_f, project_path
@@ -608,8 +622,7 @@ pub(super) fn cmd_transition(
     }
 
     let layer_name = layer.name.clone();
-    let json = serde_json::to_string_pretty(&project)?;
-    std::fs::write(project_path, json)?;
+    save_project(project_path, &project)?;
     eprintln!(
         "Applied transition '{}' ({} frames) to layer '{}' in {}",
         kind, dur, layer_name, project_path
@@ -641,8 +654,7 @@ pub(super) fn cmd_parent(
 
     if parent_ref.eq_ignore_ascii_case("none") {
         comp.layers[child_idx].parent_id = None;
-        let json = serde_json::to_string_pretty(&project)?;
-        std::fs::write(project_path, json)?;
+        save_project(project_path, &project)?;
         eprintln!("Unparented layer '{}' in {}", child_name, project_path);
         return Ok(());
     }
@@ -666,8 +678,7 @@ pub(super) fn cmd_parent(
     }
 
     comp.layers[child_idx].parent_id = Some(parent_id);
-    let json = serde_json::to_string_pretty(&project)?;
-    std::fs::write(project_path, json)?;
+    save_project(project_path, &project)?;
     eprintln!(
         "Parented layer '{}' → '{}' in {}",
         child_name, parent_name, project_path
@@ -732,93 +743,10 @@ pub(super) fn cmd_matte(
     comp.layers[layer_idx].track_matte = mode;
     comp.layers[layer_idx].track_matte_layer_id = source_id.clone();
 
-    let json = serde_json::to_string_pretty(&project)?;
-    std::fs::write(project_path, json)?;
+    save_project(project_path, &project)?;
     eprintln!(
         "Set Track Matte on '{}': mode={:?}, source={:?} in {}",
         layer_name, mode, source_id, project_path
-    );
-    Ok(())
-}
-
-pub(super) fn cmd_mask(
-    project_path: &str,
-    layer_ref: &str,
-    shape: &str,
-    coords: &str,
-    feather: f32,
-    inverted: bool,
-    comp_ref: Option<&str>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    use kagari_vfx::core::mask::Mask;
-    use kagari_vfx::core::property::Animatable;
-
-    let mut project = load_project(project_path)?;
-    let comp = find_comp_mut(&mut project, comp_ref)?;
-
-    let layer = comp
-        .layers
-        .iter_mut()
-        .find(|l| l.name == layer_ref || l.id == layer_ref)
-        .ok_or_else(|| {
-            format!(
-                "Layer '{layer_ref}' not found in composition '{}'",
-                comp.name
-            )
-        })?;
-
-    let parts: Vec<f32> = coords
-        .split(',')
-        .filter_map(|s| s.trim().parse::<f32>().ok())
-        .collect();
-    let mask_id = format!("mask_{}", layer.masks.len());
-    let mask_name = format!("Mask {}", layer.masks.len() + 1);
-
-    let mut mask = match shape.to_lowercase().as_str() {
-        "rect" | "rectangle" => {
-            if parts.len() < 4 {
-                return Err("Rect mask requires coords 'x,y,w,h'".into());
-            }
-            Mask::new_rect(mask_id, mask_name, parts[0], parts[1], parts[2], parts[3])
-        }
-        "ellipse" | "circle" => {
-            if parts.len() < 4 {
-                return Err("Ellipse mask requires coords 'cx,cy,rx,ry'".into());
-            }
-            Mask::new_ellipse(mask_id, mask_name, parts[0], parts[1], parts[2], parts[3])
-        }
-        "polygon" | "poly" | "path" => {
-            if parts.len() < 6 || parts.len() % 2 != 0 {
-                return Err(
-                    "Polygon mask requires at least 3 points 'x1,y1,x2,y2,x3,y3...'".into(),
-                );
-            }
-            let mut verts = Vec::with_capacity(parts.len() / 2);
-            for chunk in parts.chunks_exact(2) {
-                verts.push([chunk[0], chunk[1]]);
-            }
-            Mask::new_closed(mask_id, mask_name, verts)
-        }
-        other => {
-            return Err(format!(
-                "Unknown mask shape '{}'. Valid: rect, ellipse, polygon",
-                other
-            )
-            .into())
-        }
-    };
-
-    mask.feather = Animatable::new_constant(feather.max(0.0));
-    mask.inverted = inverted;
-
-    let layer_name = layer.name.clone();
-    layer.masks.push(mask);
-
-    let json = serde_json::to_string_pretty(&project)?;
-    std::fs::write(project_path, json)?;
-    eprintln!(
-        "Added {} mask (feather: {}px, inverted: {}) to layer '{}' in {}",
-        shape, feather, inverted, layer_name, project_path
     );
     Ok(())
 }

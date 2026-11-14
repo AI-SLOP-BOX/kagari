@@ -32,10 +32,15 @@ pub fn draw_render_queue_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
     let comp_name = comp.name.clone();
 
     ui.horizontal_wrapped(|ui| {
-        if custom_widgets::ae_button_accent(ui, &tr("Render All Queue (Cmd+M)"))
-            .on_hover_text(tr("Sequentially export every queued composition to video"))
-            .clicked()
-        {
+        let render_all_enabled = !app.export.is_exporting;
+        let render_all_clicked = ui
+            .add_enabled_ui(render_all_enabled, |ui| {
+                custom_widgets::ae_button_accent(ui, &tr("Render All Queue (Cmd+M)"))
+                    .on_hover_text(tr("Sequentially export every queued composition to video"))
+            })
+            .inner
+            .clicked();
+        if render_all_clicked {
             if app.render_queue_items.is_empty() {
                 app.render_queue_items.push(comp_id.clone());
                 app.render_item_status
@@ -153,8 +158,10 @@ pub fn draw_render_queue_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                 });
                 match serde_json::to_string_pretty(&manifest)
                     .map_err(|error| error.to_string())
-                    .and_then(|json| std::fs::write(&path, json).map_err(|error| error.to_string()))
-                {
+                    .and_then(|json| {
+                        crate::core::atomic_file::write_atomic(&path, json.as_bytes())
+                            .map_err(|error| error.to_string())
+                    }) {
                     Ok(()) => {
                         crate::ui::project_io::reveal_in_file_manager(&path);
                         app.toasts.info(tr_format(
@@ -175,30 +182,38 @@ pub fn draw_render_queue_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
 
     // Queue Items List Display
     if !app.render_queue_items.is_empty() {
-        let (done, rendering, failed) = app.render_queue_items.iter().fold(
-            (0, 0, 0),
-            |(done, rendering, failed), composition_id| match app
+        let (done, rendering, failed, cancelled) = app.render_queue_items.iter().fold(
+            (0, 0, 0, 0),
+            |(done, rendering, failed, cancelled), composition_id| match app
                 .render_item_status
                 .get(composition_id)
                 .copied()
                 .unwrap_or(crate::app_state::QueueItemStatus::Queued)
             {
-                crate::app_state::QueueItemStatus::Done => (done + 1, rendering, failed),
-                crate::app_state::QueueItemStatus::Rendering => (done, rendering + 1, failed),
-                crate::app_state::QueueItemStatus::Failed => (done, rendering, failed + 1),
-                crate::app_state::QueueItemStatus::Queued => (done, rendering, failed),
+                crate::app_state::QueueItemStatus::Done => (done + 1, rendering, failed, cancelled),
+                crate::app_state::QueueItemStatus::Rendering => {
+                    (done, rendering + 1, failed, cancelled)
+                }
+                crate::app_state::QueueItemStatus::Failed => {
+                    (done, rendering, failed + 1, cancelled)
+                }
+                crate::app_state::QueueItemStatus::Cancelled => {
+                    (done, rendering, failed, cancelled + 1)
+                }
+                crate::app_state::QueueItemStatus::Queued => (done, rendering, failed, cancelled),
             },
         );
-        let queued = app.render_queue_items.len() - done - rendering - failed;
+        let queued = app.render_queue_items.len() - done - rendering - failed - cancelled;
         ui.label(
             egui::RichText::new(tr_format(
-                "QUEUED COMPOSITIONS ({}) — {} done · {} rendering · {} queued · {} failed",
+                "QUEUED COMPOSITIONS ({}) — {} done · {} rendering · {} queued · {} failed · {} canceled",
                 &[
                     &app.render_queue_items.len().to_string(),
                     &done.to_string(),
                     &rendering.to_string(),
                     &queued.to_string(),
                     &failed.to_string(),
+                    &cancelled.to_string(),
                 ],
             ))
             .small()
@@ -233,6 +248,9 @@ pub fn draw_render_queue_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                         }
                         crate::app_state::QueueItemStatus::Done => ("Done", colors::ACCENT_CYAN),
                         crate::app_state::QueueItemStatus::Failed => ("Failed", colors::ACCENT_RED),
+                        crate::app_state::QueueItemStatus::Cancelled => {
+                            ("Canceled", colors::TEXT_MUTED)
+                        }
                     };
                     ui.horizontal(|ui| {
                         let display_name = if q_name == "Missing composition" {

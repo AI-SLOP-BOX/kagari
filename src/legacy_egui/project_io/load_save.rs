@@ -69,13 +69,9 @@ pub fn open_project_from_path(app: &mut KagariApp, path: &std::path::Path) -> Re
 fn load_project_for_open(path: &std::path::Path) -> Result<ProjectLoadResult, String> {
     let json = crate::core::project_migration::read_project_json_file(path)
         .map_err(|e| format!("Could not access project file: {}", e))?;
-    let mut production_document =
-        crate::core::production_document::ProductionDocument::from_json(&json).ok();
-    let mut project = match &production_document {
-        Some(document) => document.project().clone(),
-        None => crate::core::project_migration::load_project_migrated(&json)
-            .map_err(|e| format!("Failed to parse project file: {}", e))?,
-    };
+    let (mut project, mut production_document) =
+        crate::core::project_migration::load_project_document_or_legacy(&json)
+            .map_err(|error| format!("Failed to parse project file: {error}"))?;
     let saved_lut_path = production_document
         .as_ref()
         .and_then(|document| document.color_lut_path.as_deref());

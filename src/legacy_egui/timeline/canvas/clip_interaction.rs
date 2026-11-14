@@ -8,6 +8,27 @@ use crate::ui::timeline::{
 };
 use eframe::egui;
 
+fn trim_layer_to_frame(layer: &mut Layer, frame: u32, trim_in: bool, total_frames: u32) {
+    if total_frames == 0 {
+        layer.in_frame = 0;
+        layer.out_frame = 0;
+        return;
+    }
+
+    let max_in = total_frames - 1;
+    let in_frame = layer.in_frame.min(max_in);
+    let out_frame = layer
+        .out_frame
+        .clamp(in_frame.saturating_add(1), total_frames);
+    if trim_in {
+        layer.in_frame = frame.min(max_in).min(out_frame.saturating_sub(1));
+        layer.out_frame = out_frame;
+    } else {
+        layer.in_frame = in_frame;
+        layer.out_frame = frame.clamp(in_frame.saturating_add(1), total_frames);
+    }
+}
+
 pub struct LayerBarDragParams<'a> {
     pub layer: &'a mut Layer,
     pub i: usize,
@@ -21,6 +42,7 @@ pub struct LayerBarDragParams<'a> {
     pub snap_to_keyframes: bool,
     pub layer_edges: &'a [(u32, usize)],
     pub current_frame: u32,
+    pub precomp_source_frames: Option<u32>,
 }
 
 pub fn handle_layer_bar_drag(
@@ -42,6 +64,7 @@ pub fn handle_layer_bar_drag(
         snap_to_keyframes,
         layer_edges,
         current_frame,
+        precomp_source_frames,
     } = params;
 
     fn handle_rect_of(is_in: bool, lr: &egui::Rect) -> egui::Rect {
@@ -126,122 +149,26 @@ pub fn handle_layer_bar_drag(
             if delta_frames != 0 {
                 let alt_held = ui.input(|inp| inp.modifiers.alt);
                 if alt_held {
-                    // ── Slip edit: bar stays, content timing shifts ──
-                    let shift = -delta_frames;
-                    for kf in layer
-                        .transform
-                        .position
-                        .keyframes_mut()
-                        .into_iter()
-                        .flatten()
-                    {
-                        kf.frame =
-                            (kf.frame as i64 + shift as i64).clamp(0, u32::MAX as i64) as u32;
-                    }
-                    if let Some(kfs) = layer.transform.position.keyframes_mut() {
-                        kfs.sort_by_key(|k| k.frame);
-                    }
-                    for kf in layer.transform.scale.keyframes_mut().into_iter().flatten() {
-                        kf.frame =
-                            (kf.frame as i64 + shift as i64).clamp(0, u32::MAX as i64) as u32;
-                    }
-                    if let Some(kfs) = layer.transform.scale.keyframes_mut() {
-                        kfs.sort_by_key(|k| k.frame);
-                    }
-                    for kf in layer
-                        .transform
-                        .rotation
-                        .keyframes_mut()
-                        .into_iter()
-                        .flatten()
-                    {
-                        kf.frame =
-                            (kf.frame as i64 + shift as i64).clamp(0, u32::MAX as i64) as u32;
-                    }
-                    if let Some(kfs) = layer.transform.rotation.keyframes_mut() {
-                        kfs.sort_by_key(|k| k.frame);
-                    }
-                    for kf in layer
-                        .transform
-                        .opacity
-                        .keyframes_mut()
-                        .into_iter()
-                        .flatten()
-                    {
-                        kf.frame =
-                            (kf.frame as i64 + shift as i64).clamp(0, u32::MAX as i64) as u32;
-                    }
-                    if let Some(kfs) = layer.transform.opacity.keyframes_mut() {
-                        kfs.sort_by_key(|k| k.frame);
-                    }
-                    for m in layer.markers.iter_mut() {
-                        m.frame = (m.frame as i64 + shift as i64).clamp(0, u32::MAX as i64) as u32;
-                    }
-                    // Slip effect keyframes too
-                    use crate::core::effect_params::ParamRef;
-                    for effect in layer.effects.iter_mut() {
-                        for (_, param) in effect.effect_type.animatable_params() {
-                            match param {
-                                ParamRef::Scalar(anim) => {
-                                    if let Some(kfs) = anim.keyframes_mut() {
-                                        for kf in kfs.iter_mut() {
-                                            kf.frame = (kf.frame as i64 + shift as i64)
-                                                .clamp(0, u32::MAX as i64)
-                                                as u32;
-                                        }
-                                        kfs.sort_by_key(|k| k.frame);
-                                    }
-                                }
-                                ParamRef::Vec2(anim) => {
-                                    if let Some(kfs) = anim.keyframes_mut() {
-                                        for kf in kfs.iter_mut() {
-                                            kf.frame = (kf.frame as i64 + shift as i64)
-                                                .clamp(0, u32::MAX as i64)
-                                                as u32;
-                                        }
-                                        kfs.sort_by_key(|k| k.frame);
-                                    }
-                                }
-                                ParamRef::Vec3(anim) => {
-                                    if let Some(kfs) = anim.keyframes_mut() {
-                                        for kf in kfs.iter_mut() {
-                                            kf.frame = (kf.frame as i64 + shift as i64)
-                                                .clamp(0, u32::MAX as i64)
-                                                as u32;
-                                        }
-                                        kfs.sort_by_key(|k| k.frame);
-                                    }
-                                }
-                                ParamRef::Vec4Color(anim) => {
-                                    if let Some(kfs) = anim.keyframes_mut() {
-                                        for kf in kfs.iter_mut() {
-                                            kf.frame = (kf.frame as i64 + shift as i64)
-                                                .clamp(0, u32::MAX as i64)
-                                                as u32;
-                                        }
-                                        kfs.sort_by_key(|k| k.frame);
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    layer.slip_timeline_content(delta_frames, precomp_source_frames);
                 } else {
                     // Slide: move the whole bar
-                    let span = layer.out_frame - layer.in_frame;
-                    let raw_in = (layer.in_frame as i32 + delta_frames)
-                        .clamp(0, (total_frames - span) as i32)
-                        as u32;
+                    let old_in = layer.in_frame;
+                    let old_out = layer.out_frame;
+                    let span = old_out.saturating_sub(old_in);
+                    let max_in = total_frames.saturating_sub(span);
+                    let raw_in = (i64::from(old_in) + i64::from(delta_frames))
+                        .clamp(0, i64::from(max_in)) as u32;
                     let new_in = if snap_to_keyframes {
-                        crate::ui::timeline::snapping::snap_to_sorted_layer_edges(
+                        crate::ui::timeline::snapping::snap_to_sorted_layer_edges_in_range(
                             raw_in,
                             i,
                             layer_edges,
+                            max_in,
                         )
                     } else {
                         raw_in
                     };
-                    layer.in_frame = new_in;
-                    layer.out_frame = new_in + span;
+                    layer.move_timeline_range(new_in, new_in + span);
                 }
                 *project_changed = true;
             }
@@ -282,10 +209,10 @@ pub fn handle_layer_bar_drag(
                 let frame = (start_frame as f32 + norm * zoom_span as f32).round() as u32;
                 let frame = frame.min(total_frames);
                 if is_in {
-                    layer.in_frame = frame.min(layer.out_frame.saturating_sub(1));
+                    trim_layer_to_frame(layer, frame, true, total_frames);
                 } else {
                     let old_out = layer.out_frame;
-                    layer.out_frame = frame.max(layer.in_frame + 1);
+                    trim_layer_to_frame(layer, frame, false, total_frames);
                     // ── Shift+drag Out = ripple edit: close gaps for layers below ──
                     if ui.input(|inp| inp.modifiers.shift) && layer.out_frame != old_out {
                         let shift = layer.out_frame as i64 - old_out as i64;
@@ -299,7 +226,7 @@ pub fn handle_layer_bar_drag(
 
     // ── Layer markers: small triangles on the bar (AE parity) ──
     for marker in &layer.markers {
-        if marker.frame < start_frame || marker.frame > start_frame + zoom_span {
+        if marker.frame < start_frame || marker.frame > start_frame.saturating_add(zoom_span) {
             continue;
         }
         let norm = (marker.frame - start_frame) as f32 / zoom_span as f32;
@@ -367,5 +294,45 @@ pub fn handle_layer_bar_drag(
             ],
             egui::Stroke::new(1.5_f32, colors::TIMELINE_PLAYHEAD),
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::trim_layer_to_frame;
+    use crate::core::timeline::{Layer, LayerType};
+
+    fn layer(in_frame: u32, out_frame: u32) -> Layer {
+        let mut layer = Layer::new("trim".into(), "Trim".into(), LayerType::Null, 1);
+        layer.in_frame = in_frame;
+        layer.out_frame = out_frame;
+        layer
+    }
+
+    #[test]
+    fn trim_out_normalizes_inverted_range_at_u32_limit_without_overflow() {
+        let mut layer = layer(u32::MAX, 0);
+
+        trim_layer_to_frame(&mut layer, u32::MAX, false, u32::MAX);
+
+        assert_eq!((layer.in_frame, layer.out_frame), (u32::MAX - 1, u32::MAX));
+    }
+
+    #[test]
+    fn trim_in_preserves_a_nonempty_range_inside_the_composition() {
+        let mut layer = layer(4, 30);
+
+        trim_layer_to_frame(&mut layer, 20, true, 16);
+
+        assert_eq!((layer.in_frame, layer.out_frame), (15, 16));
+    }
+
+    #[test]
+    fn trim_with_zero_duration_produces_an_empty_safe_range() {
+        let mut layer = layer(10, 20);
+
+        trim_layer_to_frame(&mut layer, u32::MAX, false, 0);
+
+        assert_eq!((layer.in_frame, layer.out_frame), (0, 0));
     }
 }

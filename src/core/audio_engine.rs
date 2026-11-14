@@ -12,7 +12,7 @@ mod wav;
 use cache::load_cached_audio;
 pub use mixing::*;
 
-const MAX_DECODED_AUDIO_BYTES: usize = 512 * 1024 * 1024;
+pub(crate) const MAX_DECODED_AUDIO_BYTES: usize = 512 * 1024 * 1024;
 const MAX_AUDIO_CACHE_BYTES: usize = 256 * 1024 * 1024;
 const MAX_AUDIO_CACHE_ENTRIES: usize = 4096;
 
@@ -87,7 +87,16 @@ impl AudioBuffer {
             return Err("audio sample rate must be positive".into());
         }
         if self.sample_rate == target_sample_rate {
-            return Ok(self.clone());
+            let mut samples = Vec::new();
+            samples
+                .try_reserve_exact(self.samples.len())
+                .map_err(|error| format!("cannot allocate audio samples: {error}"))?;
+            samples.extend_from_slice(&self.samples);
+            return Ok(Self {
+                samples,
+                sample_rate: self.sample_rate,
+                channels: self.channels,
+            });
         }
         if self.samples.is_empty() {
             return Ok(Self {
@@ -112,7 +121,13 @@ impl AudioBuffer {
         }
         let new_frames = new_frames as usize;
         let ratio = self.sample_rate as f64 / target_sample_rate as f64;
-        let mut out = Vec::with_capacity(new_frames.saturating_mul(channels));
+        let sample_count = new_frames
+            .checked_mul(channels)
+            .filter(|count| *count <= max_samples)
+            .ok_or_else(|| "resampled audio would exceed the 512 MiB memory limit".to_owned())?;
+        let mut out = Vec::new();
+        out.try_reserve_exact(sample_count)
+            .map_err(|error| format!("cannot allocate resampled audio: {error}"))?;
 
         for i in 0..new_frames {
             let src_f = i as f64 * ratio;
@@ -245,8 +260,14 @@ impl MasterDspParams {
 #[derive(Debug, Clone, Default)]
 pub struct MasterDspState {
     pub auto_gain: crate::core::audio_dsp::AutoGainState,
+    pub eq: crate::core::audio_dsp::EqState,
     pub compressor: crate::core::audio_dsp::CompressorState,
     pub limiter: crate::core::audio_dsp::CompressorState,
+    pub layer_eq:
+        std::collections::HashMap<(String, String, usize), (u32, crate::core::audio_dsp::EqState)>,
+    pub last_frame: Option<u32>,
+    pub composition_id: Option<String>,
+    pub sample_rate: Option<u32>,
 }
 
 pub fn mix_audio_for_frame(

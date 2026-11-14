@@ -257,6 +257,8 @@ pub(super) fn apply(
         EffectType::AudioSpectrum {
             enabled,
             bands,
+            start_frequency,
+            end_frequency,
             opacity,
             color_start,
             color_end,
@@ -268,7 +270,7 @@ pub(super) fn apply(
             if enabled.evaluate(frame) <= 0.5 || opacity.evaluate(frame) <= 0.01 {
                 return true;
             }
-            let bands_n = bands.evaluate(frame).clamp(1.0, 5.0) as usize;
+            let bands_n = bands.evaluate(frame).round().clamp(1.0, 256.0) as usize;
             let opacity_n = opacity.evaluate(frame).clamp(0.0, 1.0);
             let cs = *color_start;
             let ce = *color_end;
@@ -285,7 +287,13 @@ pub(super) fn apply(
             }
             let strip_h = y1 - y0;
             for b in 0..bands_n {
-                let amp = crate::core::expression_engine::get_audio_band(b).clamp(0.0, 1.0);
+                let amp = crate::core::expression_engine::get_audio_spectrum_band_for_range(
+                    b,
+                    bands_n,
+                    *start_frequency,
+                    *end_frequency,
+                )
+                .clamp(0.0, 1.0);
                 let bar_h = (amp * strip_h as f32) as u32;
                 let bx0 = x0 + (b as u32) * (x1 - x0) / bands_n as u32;
                 let bx1 = x0 + (b as u32 + 1) * (x1 - x0) / bands_n as u32;

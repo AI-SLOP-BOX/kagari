@@ -75,6 +75,8 @@ impl AfterEffectsStudio {
             "lifetime" => emitter.lifetime = value.clamp(0.01, 10_000.0),
             "size_start" => emitter.size_start = value.clamp(0.0, 100_000.0),
             "size_end" => emitter.size_end = value.clamp(0.0, 100_000.0),
+            "opacity_start" => emitter.opacity_start = value.clamp(0.0, 1.0),
+            "opacity_end" => emitter.opacity_end = value.clamp(0.0, 1.0),
             "gravity_y" => emitter.gravity[1] = value.clamp(-100_000.0, 100_000.0),
             "wind_x" => emitter.wind[0] = value.clamp(-100_000.0, 100_000.0),
             "turbulence" => emitter.turbulence = value.clamp(0.0, 100_000.0),

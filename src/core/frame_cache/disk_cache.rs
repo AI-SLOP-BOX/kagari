@@ -21,12 +21,7 @@ pub fn cache_directory() -> PathBuf {
 }
 
 pub fn set_cache_directory(path: Option<PathBuf>) -> Result<(), String> {
-    if let Some(dir) = path.as_ref() {
-        std::fs::create_dir_all(dir).map_err(|error| error.to_string())?;
-        let probe = dir.join(format!(".kagari-cache-write-{}", std::process::id()));
-        std::fs::write(&probe, []).map_err(|error| error.to_string())?;
-        let _ = std::fs::remove_file(probe);
-    }
+    validate_cache_directory(path.as_deref())?;
     let mut configured = CACHE_DIRECTORY
         .get_or_init(|| RwLock::new(None))
         .write()
@@ -35,12 +30,94 @@ pub fn set_cache_directory(path: Option<PathBuf>) -> Result<(), String> {
     Ok(())
 }
 
+pub fn validate_cache_directory(path: Option<&std::path::Path>) -> Result<(), String> {
+    use std::io::Write;
+    use std::sync::atomic::Ordering;
+
+    static PROBE_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    if let Some(dir) = path {
+        std::fs::create_dir_all(dir).map_err(|error| error.to_string())?;
+        let probe = dir.join(format!(
+            ".kagari-cache-write-{}.{}",
+            std::process::id(),
+            PROBE_COUNTER.fetch_add(1, Ordering::Relaxed)
+        ));
+        let mut owns_probe = false;
+        let result = (|| {
+            let mut options = std::fs::OpenOptions::new();
+            options.write(true).create_new(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600);
+            }
+            let mut file = options.open(&probe).map_err(|error| error.to_string())?;
+            owns_probe = true;
+            file.write_all(&[]).map_err(|error| error.to_string())?;
+            file.sync_all().map_err(|error| error.to_string())
+        })();
+        if owns_probe {
+            if let Err(error) = std::fs::remove_file(&probe) {
+                if result.is_ok() {
+                    return Err(format!("could not remove cache directory probe: {error}"));
+                }
+            }
+        }
+        result?;
+    }
+    Ok(())
+}
+
 fn default_cache_dir() -> PathBuf {
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(home) = std::env::var_os("HOME") {
+            return PathBuf::from(home).join("Library/Caches/Kagari/FrameCache");
+        }
+        std::env::temp_dir().join(format!("kagari_frame_cache_{}", std::process::id()))
+    }
+    #[cfg(target_os = "linux")]
+    {
+        if let Some(cache_home) =
+            std::env::var_os("XDG_CACHE_HOME").filter(|path| PathBuf::from(path).is_absolute())
+        {
+            return PathBuf::from(cache_home).join("kagari/frame-cache");
+        }
+        if let Some(home) = std::env::var_os("HOME") {
+            return PathBuf::from(home).join(".cache/kagari/frame-cache");
+        }
+        std::env::temp_dir().join(format!("kagari_frame_cache_{}", std::process::id()))
+    }
+    #[cfg(all(unix, not(any(target_os = "macos", target_os = "linux"))))]
+    {
+        if let Some(home) = std::env::var_os("HOME") {
+            return PathBuf::from(home).join(".cache/kagari/frame-cache");
+        }
+        std::env::temp_dir().join(format!("kagari_frame_cache_{}", std::process::id()))
+    }
+    #[cfg(not(unix))]
     std::env::temp_dir().join("kagari_frame_cache")
 }
 
 fn cache_dir() -> PathBuf {
     let dir = cache_directory();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+        if dir == default_cache_dir() && !dir.exists() {
+            let _ = std::fs::DirBuilder::new()
+                .recursive(true)
+                .mode(0o700)
+                .create(&dir);
+        }
+        if dir == default_cache_dir() {
+            let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
+        } else {
+            let _ = std::fs::create_dir_all(&dir);
+        }
+    }
+    #[cfg(not(unix))]
     let _ = std::fs::create_dir_all(&dir);
     dir
 }
@@ -55,6 +132,19 @@ fn frame_path_in_dir(dir: &std::path::Path, key: &(u32, u64), namespace: u128) -
     } else {
         dir.join(format!("frame_{namespace:032x}_{}_{}.rgba", key.0, key.1))
     }
+}
+
+fn frame_content_hash(width: u32, height: u32, pixels: &[u8]) -> u64 {
+    let mut hash = 0xcbf29ce484222325u64;
+    for byte in width.to_le_bytes().into_iter().chain(height.to_le_bytes()) {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    for byte in pixels {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
 }
 
 /// Current total bytes on disk across all cached frames.
@@ -156,13 +246,18 @@ pub fn write_frame_in_namespace(
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let dir = cache_dir();
-    let lock_file = match std::fs::OpenOptions::new()
+    let mut lock_options = std::fs::OpenOptions::new();
+    lock_options
         .read(true)
         .write(true)
         .create(true)
-        .truncate(false)
-        .open(dir.join(".budget.lock"))
+        .truncate(false);
+    #[cfg(unix)]
     {
+        use std::os::unix::fs::OpenOptionsExt;
+        lock_options.mode(0o600);
+    }
+    let lock_file = match lock_options.open(dir.join(".budget.lock")) {
         Ok(file) if file.lock().is_ok() => file,
         _ => return false,
     };
@@ -172,7 +267,7 @@ pub fn write_frame_in_namespace(
     if pixels.len() != pixel_bytes {
         return false;
     }
-    let Some(frame_bytes) = pixel_bytes.checked_add(8) else {
+    let Some(frame_bytes) = pixel_bytes.checked_add(16) else {
         return false;
     };
     let frame_bytes = frame_bytes as u64;
@@ -198,21 +293,34 @@ pub fn write_frame_in_namespace(
         std::process::id(),
         WRITE_COUNTER.fetch_add(1, Ordering::Relaxed)
     ));
+    let mut owns_temporary = false;
     let write_result = (|| {
         use std::io::Write;
 
-        let file = std::fs::File::create(&tmp_path).ok()?;
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let file = options.open(&tmp_path).ok()?;
+        owns_temporary = true;
         let mut writer = std::io::BufWriter::new(file);
         writer.write_all(&width.to_le_bytes()).ok()?;
         writer.write_all(&height.to_le_bytes()).ok()?;
+        writer
+            .write_all(&frame_content_hash(width, height, pixels).to_le_bytes())
+            .ok()?;
         writer.write_all(pixels).ok()?;
         writer.flush().ok()?;
         writer.get_ref().sync_all().ok()?;
         drop(writer);
-        std::fs::rename(&tmp_path, &path).ok()?;
+        crate::core::atomic_file::replace_file(&tmp_path, &path).ok()?;
+        owns_temporary = false;
         Some(())
     })();
-    if write_result.is_none() {
+    if write_result.is_none() && owns_temporary {
         let _ = std::fs::remove_file(&tmp_path);
     }
     drop(lock_file);
@@ -235,37 +343,42 @@ pub fn read_frame_in_namespace_with_limit(
 ) -> Option<(Vec<u8>, u32, u32)> {
     use std::io::Read;
     let path = frame_path(key, namespace);
-    let mut file = std::fs::File::open(&path).ok()?;
-    let file_len = file.metadata().ok()?.len();
-    if file_len < 8 || file_len > (max_pixel_bytes as u64).saturating_add(8) {
-        return None;
+    let result = (|| {
+        let mut file = std::fs::File::open(&path).ok()?;
+        let file_len = file.metadata().ok()?.len();
+        if file_len < 16 || file_len > (max_pixel_bytes as u64).saturating_add(16) {
+            return None;
+        }
+        let mut header = [0u8; 8];
+        file.read_exact(&mut header).ok()?;
+        let width = u32::from_le_bytes(header[0..4].try_into().ok()?);
+        let height = u32::from_le_bytes(header[4..8].try_into().ok()?);
+        if width == 0 || height == 0 {
+            return None;
+        }
+        let pixel_bytes = (width as usize)
+            .checked_mul(height as usize)
+            .and_then(|pixels| pixels.checked_mul(4))?;
+        let expected = pixel_bytes.checked_add(8)?.checked_add(8)?;
+        if expected as u64 != file_len || pixel_bytes > max_pixel_bytes {
+            return None;
+        }
+        let mut checksum_bytes = [0u8; 8];
+        file.read_exact(&mut checksum_bytes).ok()?;
+        let checksum = u64::from_le_bytes(checksum_bytes);
+        let mut pixels = Vec::new();
+        pixels.try_reserve_exact(pixel_bytes).ok()?;
+        pixels.resize(pixel_bytes, 0);
+        file.read_exact(&mut pixels).ok()?;
+        if checksum != frame_content_hash(width, height, &pixels) {
+            return None;
+        }
+        Some((pixels, width, height))
+    })();
+    if result.is_none() {
+        let _ = std::fs::remove_file(path);
     }
-    let mut header = [0u8; 8];
-    file.read_exact(&mut header).ok()?;
-    let width = u32::from_le_bytes(header[0..4].try_into().ok()?);
-    let height = u32::from_le_bytes(header[4..8].try_into().ok()?);
-    if width == 0 || height == 0 {
-        let _ = std::fs::remove_file(&path);
-        return None;
-    }
-    let Some(pixel_bytes) = (width as usize)
-        .checked_mul(height as usize)
-        .and_then(|pixels| pixels.checked_mul(4))
-    else {
-        let _ = std::fs::remove_file(&path);
-        return None;
-    };
-    let Some(expected) = pixel_bytes.checked_add(8) else {
-        let _ = std::fs::remove_file(&path);
-        return None;
-    };
-    if expected as u64 != file_len || pixel_bytes > max_pixel_bytes {
-        let _ = std::fs::remove_file(&path);
-        return None;
-    }
-    let mut pixels = vec![0u8; pixel_bytes];
-    file.read_exact(&mut pixels).ok()?;
-    Some((pixels, width, height))
+    result
 }
 
 /// Remove a frame from disk.

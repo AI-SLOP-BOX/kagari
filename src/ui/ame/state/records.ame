@@ -1,0 +1,151 @@
+  record SceneLayer {
+    id: String;
+    name: String;
+    kind: String;
+    label: String;
+    indent: String;
+    selected: Bool;
+    align_selected: Bool;
+    has_children: Bool;
+    collapsed: Bool;
+    visible: Bool;
+    locked: Bool;
+    solo: Bool;
+    motion_blur: Bool;
+    has_audio: Bool;
+    audio_muted: Bool;
+    blend_mode: String;
+    track_matte: String;
+  }
+  record AudioTrack {
+    id: String;
+    name: String;
+    source_kind: String;
+    selected: Bool;
+    locked: Bool;
+    solo: Bool;
+    muted: Bool;
+    has_volume: Bool;
+    volume: String;
+    keyframe_here: Bool;
+  }
+  record CompositionItem {
+    id: String;
+    name: String;
+    selected: Bool;
+  }
+  record TextFontFamily {
+    id: String;
+    name: String;
+    selected: Bool;
+  }
+  record ParentCandidate {
+    id: String;
+    name: String;
+    selected: Bool;
+  }
+  record GraphChannelItem {
+    id: String;
+    label: String;
+    selected: Bool;
+  }
+  record GraphParameterItem {
+    id: String;
+    label: String;
+    selected: Bool;
+  }
+  record SceneAsset {
+    id: String;
+    name: String;
+    kind: String;
+    source: String;
+    source_path: String;
+    selected: Bool;
+    locked: Bool;
+    missing: Bool;
+  }
+  record ProjectAssetItem {
+    id: String;
+    name: String;
+    kind: String;
+    source: String;
+    usage_count: String;
+    parent_path: String;
+    missing: Bool;
+    placeable: Bool;
+    is_folder: Bool;
+    is_composition: Bool;
+    removable: Bool;
+    selected: Bool;
+  }
+  record EffectItem {
+    id: String;
+    name: String;
+    kind: String;
+    enabled: Bool;
+    selected: Bool;
+    can_move_up: Bool;
+    can_move_down: Bool;
+  }
+  record EffectCatalogItem {
+    id: String;
+    label: String;
+  }
+  record AnimationPresetItem {
+    id: String;
+    label: String;
+    category: String;
+  }
+  record EffectParameter {
+    id: String;
+    label: String;
+    value: String;
+    unit: String;
+  }
+  record LayerStyleItem {
+    id: String;
+    label: String;
+    enabled: Bool;
+  }
+  record TimelineMarkerItem {
+    id: String;
+    label: String;
+    time: String;
+    selected: Bool;
+  }
+  record MatteSourceItem {
+    id: String;
+    name: String;
+    selected: Bool;
+  }
+  record MaskItem {
+    id: String;
+    name: String;
+    selected: Bool;
+    enabled: Bool;
+    mode: String;
+    inverted: Bool;
+  }
+  record RecentProject {
+    path: String;
+    name: String;
+    info: String;
+    specs: String;
+    location: String;
+    date: String;
+  }
+  record DetectedOfxPlugin {
+    name: String;
+    path: String;
+  }
+  record TrackerItem {
+    id: String;
+    name: String;
+    points_count: String;
+    selected: Bool;
+  }
+  record TargetLayerCandidate {
+    id: String;
+    name: String;
+    selected: Bool;
+  }

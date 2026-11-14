@@ -212,37 +212,49 @@ pub(crate) fn start_quad_track(
     let worker_cancel_flag = cancel_flag.clone();
     let (tx, rx) = std::sync::mpsc::channel();
     let repaint_ctx = ctx.clone();
-    app.quad_track_cancel_flag = Some(cancel_flag);
-    app.quad_track_rx = Some(rx);
-    app.toasts
-        .info(tr("Analyzing quad tracking on a background worker…"));
-    ctx.request_repaint_after(std::time::Duration::from_millis(100));
-
-    let handle = std::thread::spawn(move || {
-        let track = crate::core::tracker_engine::TrackerEngine::analyze_quad_track_cancellable(
-            &snapshot,
-            layer_idx,
-            [0, 1, 2, 3],
-            start_frame,
-            end_frame,
-            Some(worker_cancel_flag),
-        );
-        let average_confidence =
-            crate::core::tracker_engine::quad_track_confidence(&track, src_rect)
-                .iter()
-                .sum::<f32>()
-                / track.frames.len().max(1) as f32;
-        let _ = tx.send(crate::app_state::QuadTrackJobResult {
-            purpose,
-            composition_name,
-            composition_size,
-            layer_id,
-            layer_idx,
-            track,
-            average_confidence,
+    let handle = std::thread::Builder::new()
+        .name("kagari-quad-track".into())
+        .spawn(move || {
+            let track = crate::core::tracker_engine::TrackerEngine::analyze_quad_track_cancellable(
+                &snapshot,
+                layer_idx,
+                [0, 1, 2, 3],
+                start_frame,
+                end_frame,
+                Some(worker_cancel_flag),
+            );
+            let average_confidence =
+                crate::core::tracker_engine::quad_track_confidence(&track, src_rect)
+                    .iter()
+                    .sum::<f32>()
+                    / track.frames.len().max(1) as f32;
+            let _ = tx.send(crate::app_state::QuadTrackJobResult {
+                purpose,
+                composition_name,
+                composition_size,
+                layer_id,
+                layer_idx,
+                track,
+                average_confidence,
+            });
+            repaint_ctx.request_repaint();
         });
-        repaint_ctx.request_repaint();
-    });
-    app.track_background_thread(handle);
-    true
+    match handle {
+        Ok(handle) => {
+            app.quad_track_cancel_flag = Some(cancel_flag);
+            app.quad_track_rx = Some(rx);
+            app.toasts
+                .info(tr("Analyzing quad tracking on a background worker…"));
+            ctx.request_repaint_after(std::time::Duration::from_millis(100));
+            app.track_background_thread(handle);
+            true
+        }
+        Err(error) => {
+            app.toasts.error(tr_format(
+                "Could not start quad tracking: {}",
+                &[&error.to_string()],
+            ));
+            false
+        }
+    }
 }

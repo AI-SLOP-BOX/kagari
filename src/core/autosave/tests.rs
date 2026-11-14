@@ -174,7 +174,7 @@ fn legacy_project_snapshot_remains_recoverable() {
 }
 
 #[test]
-fn invalid_production_snapshot_is_not_returned_as_recovery() {
+fn invalid_production_metadata_does_not_block_project_recovery() {
     let dir = std::env::temp_dir().join(format!(
         "kagari_autosave_invalid_production_{}",
         std::process::id()
@@ -197,6 +197,15 @@ fn invalid_production_snapshot_is_not_returned_as_recovery() {
 
     let manager = AutosaveManager::new(&dir);
     assert!(manager.load_latest_production().is_none());
+    let (recovered, document) = manager
+        .load_latest_snapshot()
+        .expect("valid project remains recoverable without invalid metadata");
+    assert_eq!(recovered.active_composition().name, "AutoSaveComp");
+    assert!(document.is_none());
+    let stateless = super::manager::load_snapshot_file(&dir.join("recovery_0.json"))
+        .expect("background recovery loader preserves the project");
+    assert_eq!(stateless.0.active_composition().name, "AutoSaveComp");
+    assert!(stateless.1.is_none());
     let _ = std::fs::remove_dir_all(dir);
 }
 

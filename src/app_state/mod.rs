@@ -66,11 +66,11 @@ fn process_is_running(process_id: u32) -> bool {
             return true;
         };
         let text = String::from_utf8_lossy(&output.stdout);
-        return text.lines().any(|line| {
+        text.lines().any(|line| {
             line.split(',')
                 .nth(1)
                 .is_some_and(|field| field.trim().trim_matches('"') == process_id.to_string())
-        });
+        })
     }
     #[cfg(not(any(unix, windows)))]
     {
@@ -152,13 +152,15 @@ pub struct KagariApp {
     /// (e.g. Content-Aware Fill / Roto Brush job starters) can still register
     /// their handles via [`KagariApp::track_background_thread`].
     pub background_threads: std::sync::Mutex<Vec<std::thread::JoinHandle<()>>>,
+    /// Remembers whether a background worker panicked after its handle was reaped.
+    pub background_worker_panicked: std::sync::atomic::AtomicBool,
     /// Cooperative-cancel flags for background jobs, registered at spawn time.
     ///
     /// `on_exit()` sets every registered flag **before** joining
     /// [`KagariApp::background_threads`] so long-running workers (export,
     /// proxy bake, CAF, roto, …) abort promptly instead of blocking shutdown
     /// until they finish naturally.
-    pub exit_cancel_flags: std::sync::Mutex<Vec<std::sync::Arc<std::sync::atomic::AtomicBool>>>,
+    pub exit_cancel_flags: std::sync::Mutex<Vec<std::sync::Weak<std::sync::atomic::AtomicBool>>>,
     /// Playback domain state (transport, frame, work area, volume)
     pub playback: PlaybackDomainState,
     /// Selection domain state (selected layers, expanded, property)
@@ -458,14 +460,48 @@ impl KagariApp {
             .push(handle);
     }
 
+    /// Join workers that have already finished so long sessions do not retain
+    /// joinable OS threads until application shutdown.
+    pub fn reap_finished_background_threads(&self) {
+        let finished = {
+            let mut handles = self
+                .background_threads
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut finished = Vec::new();
+            let mut index = 0;
+            while index < handles.len() {
+                if handles[index].is_finished() {
+                    finished.push(handles.swap_remove(index));
+                } else {
+                    index += 1;
+                }
+            }
+            finished
+        };
+        for handle in finished {
+            if handle.join().is_err() {
+                self.background_worker_panicked
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
+                log::error!("A background worker panicked during the session");
+            }
+        }
+        self.exit_cancel_flags
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retain(|flag| flag.strong_count() > 0);
+    }
+
     /// Register a cooperative-cancel flag that `on_exit()` flips before
     /// joining background threads, so long jobs abort instead of hanging
     /// shutdown.
     pub fn register_exit_cancel_flag(&self, flag: std::sync::Arc<std::sync::atomic::AtomicBool>) {
-        self.exit_cancel_flags
+        let mut flags = self
+            .exit_cancel_flags
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .push(flag);
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        flags.retain(|registered| registered.strong_count() > 0);
+        flags.push(std::sync::Arc::downgrade(&flag));
     }
 }
 

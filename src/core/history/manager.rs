@@ -92,8 +92,14 @@ impl ProjectHistory {
 
     fn enforce_budget(&mut self) {
         while self.stack.len() > self.max_history_entries {
-            self.stack.pop_front();
-            self.current_idx = self.current_idx.saturating_sub(1);
+            if self.current_idx + 1 < self.stack.len() {
+                // Prefer keeping recent undo states and discard the furthest
+                // redo states when a user lowers the history limit mid-branch.
+                self.stack.pop_back();
+            } else {
+                self.stack.pop_front();
+                self.current_idx -= 1;
+            }
         }
         loop {
             self.recalculate_retained_bytes();
@@ -200,9 +206,10 @@ impl ProjectHistory {
         &mut self.current_project
     }
 
-    /// Adjust the undo-step cap. Takes effect on the next commit.
+    /// Adjust the undo-step cap immediately while preserving the current state.
     pub fn set_max_history_entries(&mut self, n: usize) {
         self.max_history_entries = n.max(10);
+        self.enforce_budget();
     }
 
     /// Current undo-step cap.

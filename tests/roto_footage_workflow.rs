@@ -36,11 +36,18 @@ impl Drop for TestWorkspace {
     }
 }
 
-fn write_subject_frame(path: &Path, left: u32) {
-    let mut image = image::RgbaImage::from_pixel(24, 16, image::Rgba([0, 0, 0, 0]));
-    for y in 5..11 {
-        for x in left..left + 6 {
+fn write_subject_frame(path: &Path, left: u32, occluded: bool) {
+    let mut image = image::RgbaImage::from_pixel(128, 96, image::Rgba([0, 0, 0, 255]));
+    for y in 28..69 {
+        for x in left..left + 45 {
             image.put_pixel(x, y, image::Rgba([230, 35, 20, 255]));
+        }
+    }
+    if occluded {
+        for y in 20..77 {
+            for x in 70..79 {
+                image.put_pixel(x, y, image::Rgba([20, 220, 20, 255]));
+            }
         }
     }
     image
@@ -74,9 +81,9 @@ fn imported_webp_footage_roto_propagates_persists_and_previews() {
     let source_dir = workspace.path().join("source");
     std::fs::create_dir_all(&source_dir).expect("source directory should be writable");
     let first_frame = source_dir.join("subject_0001.png");
-    write_subject_frame(&first_frame, 4);
-    write_subject_frame(&source_dir.join("subject_0002.png"), 6);
-    write_subject_frame(&source_dir.join("subject_0003.png"), 8);
+    write_subject_frame(&first_frame, 40, false);
+    write_subject_frame(&source_dir.join("subject_0002.png"), 46, false);
+    write_subject_frame(&source_dir.join("subject_0003.png"), 52, true);
     let source_video = workspace.path().join("subject.mp4");
     let encoded = Command::new("ffmpeg")
         .args(["-y", "-framerate", "24", "-i"])
@@ -123,30 +130,46 @@ fn imported_webp_footage_roto_propagates_persists_and_previews() {
         },
         3,
     );
-    layer.transform.position = Animatable::new_constant([12.0, 8.0]);
     layer.roto_brush_strokes = vec![
         RotoStroke {
             stroke_type: RotoStrokeType::Foreground,
-            points: vec![[6.0, 7.0]],
-            radius: 2.0,
+            points: vec![[52.0, 48.0]],
+            pressures: Vec::new(),
+            radius: 4.0,
             frame: Some(0),
         },
         RotoStroke {
             stroke_type: RotoStrokeType::Background,
-            points: vec![[1.0, 7.0], [16.0, 7.0]],
-            radius: 2.0,
+            points: vec![[30.0, 48.0]],
+            pressures: Vec::new(),
+            radius: 4.0,
             frame: Some(0),
         },
         RotoStroke {
             stroke_type: RotoStrokeType::Background,
-            points: vec![[20.0, 7.0]],
-            radius: 2.0,
+            points: vec![[92.0, 48.0]],
+            pressures: Vec::new(),
+            radius: 4.0,
+            frame: Some(0),
+        },
+        RotoStroke {
+            stroke_type: RotoStrokeType::Background,
+            points: vec![[74.0, 48.0]],
+            pressures: Vec::new(),
+            radius: 4.0,
             frame: Some(2),
         },
     ];
-    let mut mask = Mask::new_rect("roto".into(), "Roto Brush Matte".into(), 3.0, 4.0, 9.0, 8.0);
+    let mut mask = Mask::new_rect(
+        "roto".into(),
+        "Roto Brush Matte".into(),
+        36.0,
+        24.0,
+        52.0,
+        48.0,
+    );
     let strokes = layer.roto_brush_strokes.clone();
-    let mut comp = Composition::new("main".into(), "Main".into(), 24, 16, 24, 3);
+    let mut comp = Composition::new("main".into(), "Main".into(), 128, 96, 24, 3);
     comp.background_color = [0.0; 4];
     let mut source_comp = comp.clone();
     source_comp.background_color = [0.0; 4];
@@ -157,13 +180,13 @@ fn imported_webp_footage_roto_propagates_persists_and_previews() {
         ..Default::default()
     };
     let propagated =
-        bake_optical_flow_roto_matte(&mask, &strokes, &settings, 0, 0, 2, 24, 16, |frame| {
+        bake_optical_flow_roto_matte(&mask, &strokes, &settings, 0, 0, 2, 128, 96, |frame| {
             Some(
                 kagari_vfx::core::software_renderer::render_frame_to_pixels_preview(
                     &source_comp,
                     frame,
-                    24,
-                    16,
+                    128,
+                    96,
                     0.0,
                     0,
                 ),
@@ -180,8 +203,8 @@ fn imported_webp_footage_roto_propagates_persists_and_previews() {
     let vertex_count = keyframes[0].value.len();
     assert!(keyframes.iter().all(|key| key.value.len() == vertex_count));
     let last_polygon = &keyframes[2].value;
-    assert!(polygon_contains(last_polygon, [10.0, 7.0]));
-    assert!(!polygon_contains(last_polygon, [20.0, 7.0]));
+    assert!(polygon_contains(last_polygon, [60.0, 48.0]));
+    assert!(!polygon_contains(last_polygon, [74.0, 48.0]));
 
     for keyframe in keyframes {
         assert!(set_roto_matte_keyframe(
@@ -197,15 +220,15 @@ fn imported_webp_footage_roto_propagates_persists_and_previews() {
     let reopened: Composition =
         serde_json::from_slice(&serialized).expect("roto project should reopen");
     let preview = kagari_vfx::core::software_renderer::render_frame_to_pixels_preview(
-        &reopened, 2, 24, 16, 0.0, 0,
+        &reopened, 2, 128, 96, 0.0, 0,
     );
-    let pixel = |x: usize, y: usize| &preview[(y * 24 + x) * 4..(y * 24 + x + 1) * 4];
+    let pixel = |x: usize, y: usize| &preview[(y * 128 + x) * 4..(y * 128 + x + 1) * 4];
     assert!(
-        pixel(10, 7)[3] > 200,
+        pixel(60, 48)[3] > 200,
         "propagated subject should remain visible"
     );
     assert!(
-        pixel(20, 7)[3] < 5,
+        pixel(74, 48)[3] < 5,
         "background should be removed by the matte"
     );
 }

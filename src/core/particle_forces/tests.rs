@@ -227,6 +227,37 @@ mod tests {
     }
 
     #[test]
+    fn dense_pairwise_collisions_stop_at_the_configured_work_budget() {
+        let mut first_positions = vec![[0.0, 0.0]; 128];
+        let mut first_velocities = vec![[0.0, 0.0]; 128];
+        let mut second_positions = first_positions.clone();
+        let mut second_velocities = first_velocities.clone();
+
+        let first =
+            crate::core::particle_forces::collision::resolve_pairwise_collisions_with_budget(
+                &mut first_positions,
+                &mut first_velocities,
+                16.0,
+                0.9,
+                32,
+            );
+        let second =
+            crate::core::particle_forces::collision::resolve_pairwise_collisions_with_budget(
+                &mut second_positions,
+                &mut second_velocities,
+                16.0,
+                0.9,
+                32,
+            );
+
+        assert_eq!(first.pair_tests, 32);
+        assert!(first.capped);
+        assert_eq!(first, second);
+        assert_eq!(first_positions, second_positions);
+        assert_eq!(first_velocities, second_velocities);
+    }
+
+    #[test]
     fn test_vortex_force_pulls_inward_and_tangential() {
         let f = vortex_force([100.0, 0.0], [0.0, 0.0], 10.0, 20.0);
         // Point is on +X axis relative to center (0,0)

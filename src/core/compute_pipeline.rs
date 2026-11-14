@@ -18,7 +18,13 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::OnceLock;
 use std::sync::{Arc, Mutex};
 
-const SHADER: &str = include_str!("compute_blur.wgsl");
+const SHADER: &str = concat!(
+    include_str!("compute_blur/common.wgsl"),
+    include_str!("compute_blur/spatial_effects.wgsl"),
+    include_str!("compute_blur/stylize_effects.wgsl"),
+    include_str!("compute_blur/lens_effects.wgsl"),
+    include_str!("compute_blur/main.wgsl"),
+);
 
 mod context;
 pub(crate) use context::ParamsUniform;

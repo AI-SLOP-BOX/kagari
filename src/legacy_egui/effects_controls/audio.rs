@@ -14,6 +14,8 @@ pub fn draw(
         EffectType::AudioSpectrum {
             enabled: _,
             bands,
+            start_frequency,
+            end_frequency,
             opacity,
             color_start: _,
             color_end: _,
@@ -30,9 +32,28 @@ pub fn draw(
                 "Bands",
                 bands,
                 |ui, v| {
-                    crate::ui::kui::slider(ui, v, 1.0..=5.0, "");
+                    crate::ui::kui::slider(ui, v, 1.0..=256.0, "");
                 },
             );
+            ui.horizontal(|ui| {
+                ui.label("Frequency range (Hz)");
+                let start_changed = ui
+                    .add(egui::DragValue::new(start_frequency).range(20.0..=19_999.0))
+                    .changed();
+                let end_changed = ui
+                    .add(egui::DragValue::new(end_frequency).range(21.0..=20_000.0))
+                    .changed();
+                if start_changed || end_changed {
+                    if *start_frequency >= *end_frequency {
+                        if start_changed {
+                            *end_frequency = (*start_frequency + 1.0).min(20_000.0);
+                        } else {
+                            *start_frequency = (*end_frequency - 1.0).max(20.0);
+                        }
+                    }
+                    *project_changed = true;
+                }
+            });
             draw_prop(
                 ui,
                 current_frame,

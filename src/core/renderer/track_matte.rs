@@ -14,7 +14,7 @@ impl WgpuRenderer {
         height: u32,
         active_layers: &[&Layer],
         comp_indices: &[usize],
-    ) -> TrackMatteResources {
+    ) -> Option<TrackMatteResources> {
         let mut matte_bind_groups = Vec::with_capacity(active_layers.len());
         let mut matte_textures_owned = Vec::with_capacity(active_layers.len());
         for (layer, &comp_idx) in active_layers.iter().zip(comp_indices) {
@@ -76,6 +76,7 @@ impl WgpuRenderer {
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                 view_formats: &[],
             });
+            let upload_bytes = rgba8_to_rgba16f_bytes(&matte_rgba)?;
             self.queue.write_texture(
                 wgpu::ImageCopyTexture {
                     texture: &texture,
@@ -83,7 +84,7 @@ impl WgpuRenderer {
                     origin: wgpu::Origin3d::ZERO,
                     aspect: wgpu::TextureAspect::All,
                 },
-                &rgba8_to_rgba16f_bytes(&matte_rgba),
+                &upload_bytes,
                 wgpu::ImageDataLayout {
                     offset: 0,
                     bytes_per_row: Some(width * 8),
@@ -131,9 +132,9 @@ impl WgpuRenderer {
             matte_textures_owned.push(Some((texture, view)));
             matte_bind_groups.push(Some(bind_group));
         }
-        TrackMatteResources {
+        Some(TrackMatteResources {
             bind_groups: matte_bind_groups,
             _owned_textures: matte_textures_owned,
-        }
+        })
     }
 }

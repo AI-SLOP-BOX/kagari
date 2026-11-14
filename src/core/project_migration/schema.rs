@@ -1,5 +1,6 @@
 use crate::core::timeline::Project;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 pub const CURRENT_SCHEMA_VERSION: u32 = 1;
 pub const MAX_PROJECT_JSON_BYTES: usize = 100 * 1024 * 1024;
@@ -10,13 +11,74 @@ pub struct VersionedProjectFile {
     pub project_data: serde_json::Value,
 }
 
-/// Load a project JSON string safely, executing schema migrations if needed.
-pub fn load_project_migrated(json_str: &str) -> Result<Project, String> {
-    if json_str.len() > MAX_PROJECT_JSON_BYTES {
+struct ProjectSchemaVersion(Option<u64>);
+
+impl<'de> Deserialize<'de> for ProjectSchemaVersion {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct SchemaVersionVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for SchemaVersionVisitor {
+            type Value = ProjectSchemaVersion;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str("a project JSON object")
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                let mut schema_version = None;
+                let mut schema_version_seen = false;
+                while let Some(key) = map.next_key::<String>()? {
+                    if key == "schema_version" {
+                        if schema_version_seen {
+                            return Err(serde::de::Error::duplicate_field("schema_version"));
+                        }
+                        schema_version_seen = true;
+                        schema_version = Some(map.next_value::<u64>()?);
+                    } else {
+                        map.next_value::<serde::de::IgnoredAny>()?;
+                    }
+                }
+                Ok(ProjectSchemaVersion(schema_version))
+            }
+        }
+
+        deserializer.deserialize_map(SchemaVersionVisitor)
+    }
+}
+
+pub fn validate_project_json_size(json: &str) -> Result<(), String> {
+    if json.len() > MAX_PROJECT_JSON_BYTES {
         return Err(format!(
             "Project JSON exceeds the {} MiB limit",
             MAX_PROJECT_JSON_BYTES / (1024 * 1024)
         ));
+    }
+    Ok(())
+}
+
+/// Load a project JSON string safely, executing schema migrations if needed.
+pub fn load_project_migrated(json_str: &str) -> Result<Project, String> {
+    validate_project_json_size(json_str)?;
+
+    // Inspect only top-level keys before parsing the project. Project's
+    // default Serde behavior ignores unknown fields, so a flat future-version
+    // project could otherwise deserialize as the current schema and lose data
+    // when saved. IgnoredAny skips the rest without building a second JSON tree.
+    let ProjectSchemaVersion(schema_version) = serde_json::from_str(json_str)
+        .map_err(|error| format!("Invalid project JSON metadata: {error}"))?;
+    if let Some(schema_version) = schema_version {
+        if schema_version > u64::from(CURRENT_SCHEMA_VERSION) {
+            return Err(format!(
+                "Project schema version {} is newer than supported version {}",
+                schema_version, CURRENT_SCHEMA_VERSION
+            ));
+        }
     }
 
     let mut proj: Project = if let Ok(proj) = serde_json::from_str::<Project>(json_str) {
@@ -50,12 +112,15 @@ pub fn load_project_migrated(json_str: &str) -> Result<Project, String> {
 
 /// Serialize a Project to versioned JSON string.
 pub fn save_project_versioned(proj: &Project) -> Result<String, String> {
+    crate::core::production_document::ProductionDocument::new(proj.clone()).validate()?;
     let proj_val = serde_json::to_value(proj).map_err(|e| e.to_string())?;
     let wrapper = VersionedProjectFile {
         schema_version: CURRENT_SCHEMA_VERSION,
         project_data: proj_val,
     };
-    serde_json::to_string_pretty(&wrapper).map_err(|e| e.to_string())
+    let json = serde_json::to_string_pretty(&wrapper).map_err(|e| e.to_string())?;
+    validate_project_json_size(&json)?;
+    Ok(json)
 }
 
 /// Migrate JSON schema from `from_version` to `CURRENT_SCHEMA_VERSION`.

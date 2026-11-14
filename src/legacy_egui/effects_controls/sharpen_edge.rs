@@ -122,7 +122,7 @@ pub fn draw(
                 "Radius",
                 radius,
                 |ui, v| {
-                    crate::ui::kui::slider(ui, v, 1.0..=50.0, "");
+                    crate::ui::kui::slider(ui, v, 1.0..=16.0, "");
                 },
             );
         }

@@ -202,45 +202,48 @@ pub fn start_sync_server(
 
     let listener = TcpListener::bind(format!("127.0.0.1:{}", port))?;
     let bound_port = listener.local_addr()?.port();
-    log::info!("Dynamic Link Sync Server listening on port {}", bound_port);
     let client_active = Arc::new(AtomicBool::new(false));
 
-    thread::spawn(move || {
-        for stream in listener.incoming() {
-            let stream = match stream {
-                Ok(s) => s,
-                Err(_) => continue,
-            };
-            if client_active
-                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-                .is_err()
-            {
-                let response = DynamicLinkMessage::Error {
-                    message: "Only one Dynamic Link client can be connected at a time".into(),
+    let server = thread::Builder::new()
+        .name("kagari-dynamic-link-server".into())
+        .spawn(move || {
+            for stream in listener.incoming() {
+                let stream = match stream {
+                    Ok(s) => s,
+                    Err(_) => continue,
                 };
-                if let Ok(json) = serde_json::to_vec(&response) {
-                    let mut stream = stream;
-                    let _ = stream.write_all(&json);
-                    let _ = stream.write_all(b"\n");
-                    let _ = stream.flush();
+                if client_active
+                    .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                    .is_err()
+                {
+                    let response = DynamicLinkMessage::Error {
+                        message: "Only one Dynamic Link client can be connected at a time".into(),
+                    };
+                    if let Ok(json) = serde_json::to_vec(&response) {
+                        let mut stream = stream;
+                        let _ = stream.write_all(&json);
+                        let _ = stream.write_all(b"\n");
+                        let _ = stream.flush();
+                    }
+                    continue;
                 }
-                continue;
+                let frame_tx = frame_tx.clone();
+                let connection_tx = connection_tx.clone();
+                let client_active_for_worker = client_active.clone();
+                if let Err(error) = thread::Builder::new()
+                    .name("kagari-dynamic-link-client".into())
+                    .spawn(move || {
+                        handle_sync_client(stream, frame_tx, connection_tx);
+                        client_active_for_worker.store(false, Ordering::Release);
+                    })
+                {
+                    client_active.store(false, Ordering::Release);
+                    log::error!("Could not start Dynamic Link client worker: {error}");
+                }
             }
-            let frame_tx = frame_tx.clone();
-            let connection_tx = connection_tx.clone();
-            let client_active_for_worker = client_active.clone();
-            if let Err(error) = thread::Builder::new()
-                .name("kagari-dynamic-link-client".into())
-                .spawn(move || {
-                    handle_sync_client(stream, frame_tx, connection_tx);
-                    client_active_for_worker.store(false, Ordering::Release);
-                })
-            {
-                client_active.store(false, Ordering::Release);
-                log::error!("Could not start Dynamic Link client worker: {error}");
-            }
-        }
-    });
+        })?;
+    log::info!("Dynamic Link Sync Server listening on port {}", bound_port);
+    drop(server);
 
     Ok(bound_port)
 }

@@ -11,7 +11,7 @@ impl TrackerEngine {
     ) -> Option<[f32; 2]> {
         // Real image-based tracking when pixel sources are available
         if let Some((curr_img, next_img, img_w, img_h)) =
-            Self::load_tracker_frames(layer, current_frame)
+            Self::load_tracker_frames(layer, current_frame, fps)
         {
             return Self::track_next_frame_pixels(
                 layer,
@@ -32,17 +32,27 @@ impl TrackerEngine {
     pub(super) fn load_tracker_frames(
         layer: &Layer,
         frame: u32,
+        fps: u32,
     ) -> Option<(Vec<u8>, Vec<u8>, usize, usize)> {
-        use crate::core::image_cache::with_image_cache;
-
         let (dir_a, dir_b): (Option<String>, Option<String>) = match &layer.layer_type {
             crate::core::timeline::LayerType::Video {
                 frames_dir,
                 frame_count,
+                speed,
                 ..
             } => {
-                let seq_a = frame.min(frame_count.saturating_sub(1));
-                let seq_b = (frame + 1).min(frame_count.saturating_sub(1));
+                let mapped_frame = |sample_frame| {
+                    let source_frame = layer.remap_frame_f32(sample_frame);
+                    crate::core::timeline::video_sequence_frame(
+                        source_frame,
+                        *speed,
+                        frames_dir,
+                        fps,
+                    )
+                };
+                let seq_a = (mapped_frame(frame).floor() as u32).min(frame_count.saturating_sub(1));
+                let seq_b = (mapped_frame(frame.saturating_add(1)).floor() as u32)
+                    .min(frame_count.saturating_sub(1));
                 (
                     Some(
                         crate::core::video_import::frame_path_in_dir(frames_dir, seq_a)
@@ -62,17 +72,14 @@ impl TrackerEngine {
             _ => (None, None),
         };
 
-        with_image_cache(|cache| {
-            let a = cache.load_image(&dir_a?)?;
-            let w = a.width as usize;
-            let h = a.height as usize;
-            let buf_a = a.pixels.clone();
-            let b = cache.load_image(&dir_b?)?;
-            if b.width as usize != w || b.height as usize != h {
-                return None;
-            }
-            Some((buf_a, b.pixels.clone(), w, h))
-        })
+        let a = crate::core::image_cache::load_image_shared(&dir_a?)?;
+        let w = a.width as usize;
+        let h = a.height as usize;
+        let b = crate::core::image_cache::load_image_shared(&dir_b?)?;
+        if b.width as usize != w || b.height as usize != h {
+            return None;
+        }
+        Some((a.pixels.clone(), b.pixels.clone(), w, h))
     }
 
     /// Real SAD block matching over decoded frames, with subpixel refinement.

@@ -16,4 +16,6 @@ mod tests;
 
 pub use raster::draw_dot;
 pub use simulation::ParticleSystem;
-pub use types::{CameraProjection, EmitterShape, FadeCurve, Particle, ParticleEmitter};
+pub use types::{
+    CameraProjection, EmitterShape, FadeCurve, Particle, ParticleEmitter, MAX_PARTICLES_PER_EMITTER,
+};

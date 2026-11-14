@@ -1,11 +1,487 @@
 use super::*;
 
+pub(crate) struct AudioMixFileGuard(Option<std::path::PathBuf>);
+
+impl AudioMixFileGuard {
+    pub(crate) fn new(path: Option<std::path::PathBuf>) -> Self {
+        Self(path)
+    }
+}
+
+impl Drop for AudioMixFileGuard {
+    fn drop(&mut self) {
+        if let Some(path) = self.0.take() {
+            if let Err(error) = std::fs::remove_file(&path) {
+                if error.kind() != std::io::ErrorKind::NotFound {
+                    log::warn!(
+                        "could not remove temporary audio mix {}: {error}",
+                        path.display()
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn write_text_file_atomically(path: &std::path::Path, text: &str) -> Result<(), String> {
+    kagari_vfx::core::atomic_file::write_atomic(path, text.as_bytes())
+        .map_err(|error| format!("書き出しファイルを確定できません: {error}"))
+}
+
+pub(crate) fn find_existing_sequence_frame(
+    directory: &std::path::Path,
+    prefix: &str,
+    extension: &str,
+) -> Result<Option<std::path::PathBuf>, std::io::Error> {
+    let file_prefix = format!("{prefix}_");
+    let file_suffix = format!(".{extension}");
+    for entry in std::fs::read_dir(directory)? {
+        let entry = entry?;
+        let file_name = entry.file_name();
+        let Some(file_name) = file_name.to_str() else {
+            continue;
+        };
+        let Some(frame_text) = file_name
+            .strip_prefix(&file_prefix)
+            .and_then(|name| name.strip_suffix(&file_suffix))
+        else {
+            continue;
+        };
+        let Ok(frame) = frame_text.parse::<u32>() else {
+            continue;
+        };
+        if frame_text == format!("{frame:05}") {
+            return Ok(Some(entry.path()));
+        }
+    }
+    Ok(None)
+}
+
+pub(crate) fn sequence_prefix(project_name: &str) -> String {
+    let prefix = project_name
+        .trim()
+        .chars()
+        .map(|character| match character {
+            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
+            character if character.is_control() => '_',
+            character => character,
+        })
+        .collect::<String>();
+    if prefix.trim().is_empty() {
+        "frame".to_owned()
+    } else {
+        prefix
+    }
+}
+
+pub(crate) fn write_png_file_new(
+    path: &std::path::Path,
+    pixels: &[u8],
+    width: u32,
+    height: u32,
+) -> Result<kagari_vfx::core::ffmpeg_export::FileIdentity, String> {
+    write_png_file(path, pixels, width, height, false, None)
+}
+
+pub(crate) fn write_png_file_overwriting(
+    path: &std::path::Path,
+    pixels: &[u8],
+    width: u32,
+    height: u32,
+    expected_identity: Option<kagari_vfx::core::ffmpeg_export::FileIdentity>,
+) -> Result<(), String> {
+    write_png_file(path, pixels, width, height, true, expected_identity).map(|_| ())
+}
+
+fn write_png_file(
+    path: &std::path::Path,
+    pixels: &[u8],
+    width: u32,
+    height: u32,
+    overwrite: bool,
+    expected_identity: Option<kagari_vfx::core::ffmpeg_export::FileIdentity>,
+) -> Result<kagari_vfx::core::ffmpeg_export::FileIdentity, String> {
+    use std::io::Write;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static TEMP_FILE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+    let file_name = path
+        .file_name()
+        .ok_or_else(|| "PNG output path must include a filename".to_owned())?
+        .to_string_lossy();
+    let parent = path.parent().unwrap_or_else(|| std::path::Path::new("."));
+    let mut temporary = None;
+    #[cfg(unix)]
+    let mut original_permissions = None;
+    #[cfg(unix)]
+    let mut temporary_identity = None;
+    let mut owns_temporary = false;
+    let result = (|| {
+        let mut staged = None;
+        for _ in 0..100 {
+            let candidate = parent.join(format!(
+                ".{file_name}.kagari-tmp-{}-{}",
+                std::process::id(),
+                TEMP_FILE_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+            ));
+            match std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&candidate)
+            {
+                Ok(file) => {
+                    temporary = Some(candidate.clone());
+                    owns_temporary = true;
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::fs::PermissionsExt;
+                        original_permissions = Some(
+                            file.metadata()
+                                .map_err(|error| {
+                                    format!("failed to inspect temporary PNG permissions: {error}")
+                                })?
+                                .permissions(),
+                        );
+                        let identity = kagari_vfx::core::ffmpeg_export::types::file_identity(&file)
+                            .map_err(|error| {
+                                format!("failed to identify temporary PNG: {error}")
+                            })?;
+                        temporary_identity = Some(identity);
+                        let mut private_permissions = original_permissions
+                            .as_ref()
+                            .expect("temporary PNG permissions were just captured")
+                            .clone();
+                        private_permissions.set_mode(0o600);
+                        file.set_permissions(private_permissions)
+                            .map_err(|error| format!("failed to secure temporary PNG: {error}"))?;
+                    }
+                    staged = Some(file);
+                    break;
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => {
+                    return Err(format!("failed to create temporary PNG: {error}"));
+                }
+            }
+        }
+        let Some(file) = staged else {
+            return Err("could not reserve a unique temporary PNG after 100 attempts".to_owned());
+        };
+        let temporary_path = temporary
+            .as_deref()
+            .expect("staged PNG file has a temporary path");
+        let mut writer = std::io::BufWriter::new(file);
+        image::write_buffer_with_format(
+            &mut writer,
+            pixels,
+            width,
+            height,
+            image::ColorType::Rgba8,
+            image::ImageFormat::Png,
+        )
+        .map_err(|error| error.to_string())?;
+        writer
+            .flush()
+            .map_err(|error| format!("failed to flush temporary PNG: {error}"))?;
+        writer
+            .get_ref()
+            .sync_all()
+            .map_err(|error| format!("failed to sync temporary PNG: {error}"))?;
+        drop(writer);
+
+        #[cfg(unix)]
+        {
+            let file = std::fs::File::open(temporary_path)
+                .map_err(|error| format!("failed to verify temporary PNG: {error}"))?;
+            if Some(
+                kagari_vfx::core::ffmpeg_export::types::file_identity(&file).map_err(|error| {
+                    format!("failed to identify temporary PNG before publish: {error}")
+                })?,
+            ) != temporary_identity
+            {
+                return Err("temporary PNG changed before publication".to_owned());
+            }
+            file.set_permissions(
+                original_permissions
+                    .take()
+                    .expect("temporary PNG permissions were captured"),
+            )
+            .map_err(|error| format!("failed to restore PNG output permissions: {error}"))?;
+        }
+
+        let published_identity = if overwrite {
+            if let Some(expected) = expected_identity {
+                let current =
+                    kagari_vfx::core::ffmpeg_export::path_file_identity(path).map_err(|error| {
+                        format!("failed to verify PNG output before replacement: {error}")
+                    })?;
+                if current != expected {
+                    return Err("PNG destination changed after overwrite confirmation; leaving it untouched".to_owned());
+                }
+                kagari_vfx::core::atomic_file::replace_file_with_identity(temporary_path, path)
+                    .map_err(|error| format!("failed to replace PNG output: {error}"))?
+            } else {
+                kagari_vfx::core::ffmpeg_export::publish_file_no_replace(temporary_path, path)
+                    .map_err(|error| {
+                        format!("failed to publish PNG output without overwriting: {error}")
+                    })?
+            }
+        } else {
+            kagari_vfx::core::ffmpeg_export::publish_file_no_replace(temporary_path, path).map_err(
+                |error| format!("failed to create PNG output without overwriting: {error}"),
+            )?
+        };
+        if std::fs::remove_file(temporary_path).is_ok() {
+            owns_temporary = false;
+        }
+        if let Ok(directory) = std::fs::File::open(parent) {
+            let _ = directory.sync_all();
+        }
+        Ok(published_identity)
+    })();
+
+    match result {
+        Ok(identity) => Ok(identity),
+        Err(error) if owns_temporary => match std::fs::remove_file(
+            temporary
+                .as_deref()
+                .expect("owned temporary PNG has a path"),
+        ) {
+            Ok(()) => Err(error),
+            Err(cleanup_error) if cleanup_error.kind() == std::io::ErrorKind::NotFound => {
+                Err(error)
+            }
+            Err(cleanup_error) => Err(format!(
+                "{error}; failed to remove temporary PNG {}: {cleanup_error}",
+                temporary
+                    .as_deref()
+                    .expect("owned temporary PNG has a path")
+                    .display()
+            )),
+        },
+        Err(error) => Err(error),
+    }
+}
+
+const SEQUENCE_OWNERSHIP_CHUNK_SIZE: usize = 4096;
+static SEQUENCE_OWNERSHIP_FILE_SEQUENCE: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
+pub(crate) struct SequenceFileOwnership {
+    manifest: Option<std::fs::File>,
+    manifest_path: std::path::PathBuf,
+    manifest_count: usize,
+    recent: Vec<kagari_vfx::core::ffmpeg_export::FileIdentity>,
+    directory: std::path::PathBuf,
+    prefix: String,
+    extension: String,
+    rollback_attempted: bool,
+    committed: bool,
+}
+
+impl SequenceFileOwnership {
+    pub(crate) fn new(
+        directory: &std::path::Path,
+        prefix: &str,
+        extension: &str,
+    ) -> std::io::Result<Self> {
+        use std::sync::atomic::Ordering;
+
+        let manifest_directory = std::env::temp_dir();
+        for _ in 0..100 {
+            let sequence = SEQUENCE_OWNERSHIP_FILE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+            let path = manifest_directory.join(format!(
+                "kagari-sequence-ownership-{}-{sequence}.tmp",
+                std::process::id()
+            ));
+            match std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create_new(true)
+                .open(&path)
+            {
+                Ok(manifest) => {
+                    return Ok(Self {
+                        manifest: Some(manifest),
+                        manifest_path: path,
+                        manifest_count: 0,
+                        recent: Vec::with_capacity(SEQUENCE_OWNERSHIP_CHUNK_SIZE),
+                        directory: directory.to_path_buf(),
+                        prefix: prefix.to_owned(),
+                        extension: extension.to_owned(),
+                        rollback_attempted: false,
+                        committed: false,
+                    });
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => return Err(error),
+            }
+        }
+        Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            "could not allocate a unique sequence ownership manifest",
+        ))
+    }
+
+    pub(crate) fn record(
+        &mut self,
+        identity: kagari_vfx::core::ffmpeg_export::FileIdentity,
+    ) -> std::io::Result<()> {
+        self.recent.push(identity);
+        if self.recent.len() == SEQUENCE_OWNERSHIP_CHUNK_SIZE {
+            self.flush_recent()?;
+        }
+        Ok(())
+    }
+
+    fn flush_recent(&mut self) -> std::io::Result<()> {
+        use std::io::{Seek, SeekFrom, Write};
+
+        let record_size = kagari_vfx::core::ffmpeg_export::FileIdentity::RECORD_SIZE;
+        let manifest = self
+            .manifest
+            .as_mut()
+            .expect("manifest remains open until drop");
+        let start = manifest.seek(SeekFrom::End(0))?;
+        let mut records = Vec::with_capacity(self.recent.len() * record_size);
+        for identity in &self.recent {
+            records.extend_from_slice(&identity.to_record());
+        }
+        if let Err(error) = manifest.write_all(&records) {
+            let _ = manifest.set_len(start);
+            let _ = manifest.seek(SeekFrom::End(0));
+            return Err(error);
+        }
+        self.manifest_count += self.recent.len();
+        self.recent.clear();
+        Ok(())
+    }
+
+    pub(crate) fn cleanup(&mut self) -> Option<String> {
+        use std::io::{Read, Seek, SeekFrom};
+
+        if self.rollback_attempted || self.committed {
+            return None;
+        }
+        self.rollback_attempted = true;
+        let mut first_failure = None;
+        let manifest = self
+            .manifest
+            .as_mut()
+            .expect("manifest remains open until drop");
+        for (index, identity) in self.recent.iter().enumerate().rev() {
+            let sequence_index = self.manifest_count + index;
+            remove_owned_sequence_frame(
+                &self.directory,
+                &self.prefix,
+                &self.extension,
+                sequence_index,
+                *identity,
+                &mut first_failure,
+            );
+        }
+
+        let record_size = kagari_vfx::core::ffmpeg_export::FileIdentity::RECORD_SIZE;
+        let mut sequence_end = self.manifest_count;
+        while sequence_end > 0 {
+            let sequence_start = sequence_end.saturating_sub(SEQUENCE_OWNERSHIP_CHUNK_SIZE);
+            let record_count = sequence_end - sequence_start;
+            let offset = (sequence_start * record_size) as u64;
+            if let Err(error) = manifest.seek(SeekFrom::Start(offset)) {
+                first_failure.get_or_insert_with(|| {
+                    format!("sequence ownership manifest seek failed: {error}")
+                });
+                break;
+            }
+            let mut records = vec![0; record_count * record_size];
+            if let Err(error) = manifest.read_exact(&mut records) {
+                first_failure.get_or_insert_with(|| {
+                    format!("sequence ownership manifest read failed: {error}")
+                });
+                break;
+            }
+            for record_index in (0..record_count).rev() {
+                let start = record_index * record_size;
+                let record = records[start..start + record_size]
+                    .try_into()
+                    .expect("fixed identity record");
+                remove_owned_sequence_frame(
+                    &self.directory,
+                    &self.prefix,
+                    &self.extension,
+                    sequence_start + record_index,
+                    kagari_vfx::core::ffmpeg_export::FileIdentity::from_record(record),
+                    &mut first_failure,
+                );
+            }
+            sequence_end = sequence_start;
+        }
+        first_failure
+    }
+
+    pub(crate) fn commit(&mut self) {
+        self.committed = true;
+    }
+}
+
+impl Drop for SequenceFileOwnership {
+    fn drop(&mut self) {
+        if let Some(error) = self.cleanup() {
+            log::error!("failed to roll back incomplete image sequence export: {error}");
+        }
+        drop(self.manifest.take());
+        if let Err(error) = std::fs::remove_file(&self.manifest_path) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                log::warn!(
+                    "could not remove sequence ownership manifest {}: {error}",
+                    self.manifest_path.display()
+                );
+            }
+        }
+    }
+}
+
+fn remove_owned_sequence_frame(
+    directory: &std::path::Path,
+    prefix: &str,
+    extension: &str,
+    index: usize,
+    expected_identity: kagari_vfx::core::ffmpeg_export::FileIdentity,
+    first_failure: &mut Option<String>,
+) {
+    let path = directory.join(format!("{prefix}_{:05}.{extension}", index + 1));
+    match kagari_vfx::core::atomic_file::remove_file_if_identity(&path, expected_identity) {
+        Ok(true) => {}
+        Ok(false) if std::fs::symlink_metadata(&path).is_ok() => {
+            first_failure.get_or_insert_with(|| {
+                format!(
+                    "{} が別のファイルに置き換わったため削除しませんでした",
+                    path.display()
+                )
+            });
+        }
+        Ok(false) => {}
+        Err(error) => {
+            first_failure.get_or_insert_with(|| format!("{}: {error}", path.display()));
+        }
+    }
+}
+
+impl AfterEffectsStudio {
+    pub(crate) fn export_in_progress(&self) -> bool {
+        self.render_events.is_some()
+            || self.still_export_events.is_some()
+            || self.render_worker.is_some()
+            || self.still_export_worker.is_some()
+    }
+}
 impl AfterEffectsStudio {
     pub(crate) fn export_mogrt(&mut self) {
         let Some(path) = rfd::FileDialog::new()
-            .add_filter("Essential Graphics Template", &["mogrt"])
-            .set_file_name(&format!(
-                "{}.mogrt",
+            .add_filter("Kagari Motion Template", &["kgtpl"])
+            .set_file_name(format!(
+                "{}.kgtpl",
                 self.project_name.trim().replace(['/', '\\', ':'], "_")
             ))
             .save_file()
@@ -49,18 +525,26 @@ impl AfterEffectsStudio {
             properties,
         );
         match kagari_vfx::core::mogrt_engine::MogrtPackage::new(manifest, project_json).to_json() {
-            Ok(json) => match std::fs::write(&path, json) {
-                Ok(()) => self.render_status = format!("MOGRT を保存しました: {}", path.display()),
-                Err(error) => self.render_status = format!("MOGRT を保存できませんでした: {error}"),
+            Ok(json) => match write_text_file_atomically(&path, &json) {
+                Ok(()) => {
+                    self.render_status =
+                        format!("Kagari テンプレートを保存しました: {}", path.display())
+                }
+                Err(error) => {
+                    self.render_status =
+                        format!("Kagari テンプレートを保存できませんでした: {error}")
+                }
             },
-            Err(error) => self.render_status = format!("MOGRT を生成できませんでした: {error}"),
+            Err(error) => {
+                self.render_status = format!("Kagari テンプレートを生成できませんでした: {error}")
+            }
         }
     }
 
     pub(crate) fn export_lottie(&mut self) {
         let Some(path) = rfd::FileDialog::new()
             .add_filter("Lottie Animation", &["json"])
-            .set_file_name(&format!(
+            .set_file_name(format!(
                 "{}.json",
                 self.project_name.trim().replace(['/', '\\', ':'], "_")
             ))
@@ -69,7 +553,7 @@ impl AfterEffectsStudio {
             return;
         };
         match kagari_vfx::core::lottie_exporter::export_project_to_json(&self.project_model) {
-            Ok(json) => match std::fs::write(&path, json) {
+            Ok(json) => match write_text_file_atomically(&path, &json) {
                 Ok(()) => self.render_status = format!("Lottie を保存しました: {}", path.display()),
                 Err(error) => {
                     self.render_status = format!("Lottie を保存できませんでした: {error}")
@@ -82,7 +566,7 @@ impl AfterEffectsStudio {
     pub(crate) fn export_mlt(&mut self) {
         let Some(path) = rfd::FileDialog::new()
             .add_filter("MLT XML", &["mlt"])
-            .set_file_name(&format!(
+            .set_file_name(format!(
                 "{}.mlt",
                 self.project_name.trim().replace(['/', '\\', ':'], "_")
             ))
@@ -92,7 +576,7 @@ impl AfterEffectsStudio {
         };
         let composition = self.project_model.active_composition();
         match kagari_vfx::core::mlt_export::MltExporter::export_to_xml(composition) {
-            Ok(xml) => match std::fs::write(&path, xml) {
+            Ok(xml) => match write_text_file_atomically(&path, &xml) {
                 Ok(()) => self.render_status = format!("MLT を保存しました: {}", path.display()),
                 Err(error) => self.render_status = format!("MLT を保存できませんでした: {error}"),
             },
@@ -103,7 +587,7 @@ impl AfterEffectsStudio {
     pub(crate) fn export_subtitles(&mut self) {
         let Some(path) = rfd::FileDialog::new()
             .add_filter("SubRip 字幕", &["srt"])
-            .set_file_name(&format!(
+            .set_file_name(format!(
                 "{}.srt",
                 self.project_name.trim().replace(['/', '\\', ':'], "_")
             ))
@@ -119,7 +603,7 @@ impl AfterEffectsStudio {
         } else {
             srt
         };
-        match std::fs::write(&path, export_path) {
+        match write_text_file_atomically(&path, &export_path) {
             Ok(()) => self.render_status = format!("字幕を保存しました: {}", path.display()),
             Err(error) => self.render_status = format!("字幕を保存できませんでした: {error}"),
         }
@@ -128,7 +612,7 @@ impl AfterEffectsStudio {
     pub(crate) fn export_otio(&mut self) {
         let Some(path) = rfd::FileDialog::new()
             .add_filter("OpenTimelineIO", &["otio", "json"])
-            .set_file_name(&format!(
+            .set_file_name(format!(
                 "{}.otio",
                 self.project_name.trim().replace(['/', '\\', ':'], "_")
             ))
@@ -139,7 +623,7 @@ impl AfterEffectsStudio {
         let composition = self.project_model.active_composition();
         let timeline = kagari_vfx::core::integration::OtioTimeline::from_composition(composition);
         match timeline.to_json() {
-            Ok(json) => match std::fs::write(&path, json) {
+            Ok(json) => match write_text_file_atomically(&path, &json) {
                 Ok(()) => self.render_status = format!("OTIO を保存しました: {}", path.display()),
                 Err(error) => self.render_status = format!("OTIO を保存できませんでした: {error}"),
             },
@@ -148,12 +632,12 @@ impl AfterEffectsStudio {
     }
 
     pub(crate) fn export_gif(&mut self) {
-        if self.render_events.is_some() {
+        if self.export_in_progress() {
             return;
         }
         let Some(path) = rfd::FileDialog::new()
             .add_filter("GIF Animation", &["gif"])
-            .set_file_name(&format!(
+            .set_file_name(format!(
                 "{}.gif",
                 self.project_name.trim().replace(['/', '\\', ':'], "_")
             ))
@@ -161,11 +645,10 @@ impl AfterEffectsStudio {
         else {
             return;
         };
-        if path
+        if !path
             .extension()
             .and_then(|extension| extension.to_str())
             .is_some_and(|extension| extension.eq_ignore_ascii_case("gif"))
-            == false
         {
             self.render_status = "GIF の拡張子は .gif にしてください。".to_owned();
             return;
@@ -187,18 +670,14 @@ impl AfterEffectsStudio {
                     .to_owned();
             return;
         }
-        if !kagari_vfx::core::ffmpeg_export::is_ffmpeg_available() {
-            self.render_status =
-                "FFmpegが見つかりません。FFmpegをインストールしてから再試行してください。"
-                    .to_owned();
-            return;
-        }
         let config = kagari_vfx::core::ffmpeg_export::ExportConfig {
             output_path: path.to_string_lossy().into_owned(),
             width: composition.width.max(1),
             height: composition.height.max(1),
             fps: composition.fps.max(1),
             total_frames: composition.duration_frames.max(1),
+            quality: 85,
+            audio_bitrate_kbps: 192,
             audio_wav: None,
             codec: kagari_vfx::core::ffmpeg_export::VideoCodec::Gif,
         };
@@ -207,27 +686,36 @@ impl AfterEffectsStudio {
         let (sender, receiver) = std::sync::mpsc::channel();
         let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let worker_cancel = cancel.clone();
-        std::thread::spawn(move || {
-            let (progress_sender, progress_receiver) = std::sync::mpsc::channel();
-            let render_composition = composition.clone();
-            let result = kagari_vfx::core::ffmpeg_export::start_gif_export(
-                config,
-                progress_sender,
-                worker_cancel.clone(),
-                move |frame| {
-                    kagari_vfx::core::software_renderer::render_frame_to_pixels(
-                        &render_composition,
-                        frame,
-                        width,
-                        height,
-                        0.0,
-                        0,
-                    )
-                },
-            );
-            if let Err(error) = result {
-                let _ = sender.send(kagari_vfx::core::ffmpeg_export::ExportEvent::Error(error));
-            } else {
+        let spawn_result = std::thread::Builder::new()
+            .name("kagari-gif-export".to_owned())
+            .spawn(move || {
+                let (progress_sender, progress_receiver) = std::sync::mpsc::channel();
+                let render_composition = composition.clone();
+                let result =
+                    kagari_vfx::core::ffmpeg_export::start_gif_export_with_overwrite_tracked(
+                        config,
+                        progress_sender,
+                        worker_cancel.clone(),
+                        false,
+                        move |frame| {
+                            kagari_vfx::core::software_renderer::render_frame_to_pixels(
+                                &render_composition,
+                                frame,
+                                width,
+                                height,
+                                0.0,
+                                0,
+                            )
+                        },
+                    );
+                let worker = match result {
+                    Ok(worker) => worker,
+                    Err(error) => {
+                        let _ =
+                            sender.send(kagari_vfx::core::ffmpeg_export::ExportEvent::Error(error));
+                        return;
+                    }
+                };
                 for event in progress_receiver {
                     let terminal = matches!(
                         &event,
@@ -239,470 +727,25 @@ impl AfterEffectsStudio {
                         break;
                     }
                 }
+                if worker.join().is_err() {
+                    let _ = sender.send(kagari_vfx::core::ffmpeg_export::ExportEvent::Error(
+                        "GIF書き出しworkerが異常終了しました。出力を確認してください。".to_owned(),
+                    ));
+                }
+            });
+        let worker = match spawn_result {
+            Ok(worker) => worker,
+            Err(error) => {
+                self.render_status = format!("GIF 書き出しを開始できませんでした: {error}");
+                return;
             }
-        });
+        };
         self.video_output_path = path.to_string_lossy().into_owned();
         self.render_progress = 0;
         self.render_status = "GIF を書き出しています…".to_owned();
         self.render_events = Some(receiver);
         self.render_cancel = Some(cancel);
+        self.render_worker = Some(worker);
         self.render_refresh_ticks = 0;
-    }
-
-    pub(crate) fn export_png_sequence(&mut self) {
-        if self.render_events.is_some() {
-            return;
-        }
-        let Some(directory) = rfd::FileDialog::new().pick_folder() else {
-            return;
-        };
-        let prefix = self
-            .project_name
-            .trim()
-            .chars()
-            .map(|character| match character {
-                '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
-                character if character.is_control() => '_',
-                character => character,
-            })
-            .collect::<String>();
-        let prefix = if prefix.trim().is_empty() {
-            "frame".to_owned()
-        } else {
-            prefix
-        };
-        let composition = self.project_model.active_composition().clone();
-        let width = composition.width.max(1);
-        let height = composition.height.max(1);
-        let frame_count = composition.duration_frames.max(1);
-        let first_path = directory.join(format!("{prefix}_00001.png"));
-        if first_path.exists() {
-            self.render_status = format!(
-                "{} が既にあります。同一フォルダでの連番上書きを避けるため中止しました。",
-                first_path.display()
-            );
-            return;
-        }
-        let frame_bytes = u64::from(width)
-            .checked_mul(u64::from(height))
-            .and_then(|pixels| pixels.checked_mul(4));
-        if frame_bytes.is_none_or(|bytes| bytes > 256 * 1024 * 1024) {
-            self.render_status =
-                "1フレームが256 MiBを超えるため書き出せません。コンポジションの解像度を下げてください。"
-                    .to_owned();
-            return;
-        }
-        let (sender, receiver) = std::sync::mpsc::channel();
-        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let worker_cancel = cancel.clone();
-        let target = directory.clone();
-        std::thread::spawn(move || {
-            for frame in 0..frame_count {
-                if worker_cancel.load(std::sync::atomic::Ordering::SeqCst) {
-                    let _ = sender.send(kagari_vfx::core::ffmpeg_export::ExportEvent::Error(
-                        "Export canceled by user".to_owned(),
-                    ));
-                    return;
-                }
-                let pixels = kagari_vfx::core::software_renderer::render_frame_to_pixels(
-                    &composition,
-                    frame,
-                    width,
-                    height,
-                    0.0,
-                    0,
-                );
-                let path = target.join(format!("{prefix}_{:05}.png", frame + 1));
-                if let Err(error) = image::save_buffer_with_format(
-                    &path,
-                    &pixels,
-                    width,
-                    height,
-                    image::ColorType::Rgba8,
-                    image::ImageFormat::Png,
-                ) {
-                    let _ = sender.send(kagari_vfx::core::ffmpeg_export::ExportEvent::Error(
-                        format!("{} を書き出せませんでした: {error}", path.display()),
-                    ));
-                    return;
-                }
-                let _ = sender.send(kagari_vfx::core::ffmpeg_export::ExportEvent::Progress(
-                    (frame + 1) as f32 / frame_count as f32,
-                    format!("{} / {}", frame + 1, frame_count),
-                ));
-            }
-            let _ = sender.send(kagari_vfx::core::ffmpeg_export::ExportEvent::Finished(
-                format!("PNG 連番を書き出しました: {}", target.display()),
-            ));
-        });
-        self.video_output_path = directory.to_string_lossy().into_owned();
-        self.render_progress = 0;
-        self.render_status = "PNG 連番を書き出しています…".to_owned();
-        self.render_events = Some(receiver);
-        self.render_cancel = Some(cancel);
-        self.render_refresh_ticks = 0;
-    }
-
-    pub(crate) fn export_exr_sequence(&mut self) {
-        if self.render_events.is_some() {
-            return;
-        }
-        let Some(directory) = rfd::FileDialog::new().pick_folder() else {
-            return;
-        };
-        let prefix = self
-            .project_name
-            .trim()
-            .chars()
-            .map(|character| match character {
-                '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
-                character if character.is_control() => '_',
-                character => character,
-            })
-            .collect::<String>();
-        let prefix = if prefix.trim().is_empty() {
-            "frame".to_owned()
-        } else {
-            prefix
-        };
-        let composition = self.project_model.active_composition().clone();
-        let width = composition.width.max(1);
-        let height = composition.height.max(1);
-        let frame_count = composition.duration_frames.max(1);
-        let first_path = directory.join(format!("{prefix}_00001.exr"));
-        if first_path.exists() {
-            self.render_status = format!(
-                "{} が既にあります。同一フォルダでの連番上書きを避けるため中止しました。",
-                first_path.display()
-            );
-            return;
-        }
-        let frame_bytes = u64::from(width)
-            .checked_mul(u64::from(height))
-            .and_then(|pixels| pixels.checked_mul(4));
-        if frame_bytes.is_none_or(|bytes| bytes > 256 * 1024 * 1024) {
-            self.render_status =
-                "1フレームが256 MiBを超えるため書き出せません。コンポジションの解像度を下げてください。"
-                    .to_owned();
-            return;
-        }
-        let (sender, receiver) = std::sync::mpsc::channel();
-        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let worker_cancel = cancel.clone();
-        let target = directory.clone();
-        std::thread::spawn(move || {
-            for frame in 0..frame_count {
-                if worker_cancel.load(std::sync::atomic::Ordering::SeqCst) {
-                    let _ = sender.send(kagari_vfx::core::ffmpeg_export::ExportEvent::Error(
-                        "Export canceled by user".to_owned(),
-                    ));
-                    return;
-                }
-                let hdr = kagari_vfx::core::software_renderer::render_frame_to_hdr_f32(
-                    &composition,
-                    frame,
-                    width,
-                    height,
-                    0.0,
-                    0,
-                );
-                let image =
-                    kagari_vfx::core::exr_writer::ExrImage::rgba_f32(width, height, &hdr.data);
-                let path = target.join(format!("{prefix}_{:05}.exr", frame + 1));
-                if let Err(error) = kagari_vfx::core::exr_writer::write_exr_file(&path, &image) {
-                    let _ = sender.send(kagari_vfx::core::ffmpeg_export::ExportEvent::Error(
-                        format!("EXR を書き出せませんでした: {error}"),
-                    ));
-                    return;
-                }
-                let _ = sender.send(kagari_vfx::core::ffmpeg_export::ExportEvent::Progress(
-                    (frame + 1) as f32 / frame_count as f32,
-                    format!("{} / {}", frame + 1, frame_count),
-                ));
-            }
-            let _ = sender.send(kagari_vfx::core::ffmpeg_export::ExportEvent::Finished(
-                format!("EXR 連番を書き出しました: {}", target.display()),
-            ));
-        });
-        self.video_output_path = directory.to_string_lossy().into_owned();
-        self.render_progress = 0;
-        self.render_status = "EXR 連番を書き出しています…".to_owned();
-        self.render_events = Some(receiver);
-        self.render_cancel = Some(cancel);
-        self.render_refresh_ticks = 0;
-    }
-
-    pub(crate) fn export_current_frame_png(&mut self, overwrite_confirmed: bool) {
-        let raw_path = self.output_path.trim();
-        if raw_path.is_empty() {
-            self.still_status = "先にPNGの保存先を選んでください。".to_owned();
-            return;
-        }
-        let path = expand_home_path(raw_path);
-        let path = if path.extension().is_some_and(|extension| extension != "png") {
-            path.with_extension("png")
-        } else {
-            path
-        };
-        if path.exists() && !overwrite_confirmed {
-            self.still_overwrite_pending = true;
-            self.still_status = format!(
-                "{} は既にあります。上書きしますか？",
-                path.file_name().unwrap_or_default().to_string_lossy()
-            );
-            return;
-        }
-        let composition = self.project_model.active_composition();
-        let (width, height) = (composition.width.max(1), composition.height.max(1));
-        let byte_len = u64::from(width)
-            .checked_mul(u64::from(height))
-            .and_then(|pixels| pixels.checked_mul(4));
-        if byte_len.is_none_or(|bytes| bytes > 128 * 1024 * 1024) {
-            self.still_status =
-                "画像が大きすぎます。解像度を下げてください（上限128 MiB）。".to_owned();
-            return;
-        }
-        let frame = self
-            .current_frame
-            .min(composition.duration_frames.saturating_sub(1));
-        let pixels = kagari_vfx::core::software_renderer::render_frame_to_pixels(
-            composition,
-            frame,
-            width,
-            height,
-            0.0,
-            0,
-        );
-        if pixels.len() as u64 != byte_len.unwrap_or_default() {
-            self.still_status = "フレームを描画できませんでした。".to_owned();
-            return;
-        }
-        let result = image::save_buffer_with_format(
-            &path,
-            &pixels,
-            width,
-            height,
-            image::ColorType::Rgba8,
-            image::ImageFormat::Png,
-        );
-        self.still_status = match result {
-            Ok(()) => format!("PNGを書き出しました: {}", path.display()),
-            Err(error) => format!("PNGを書き出せませんでした: {error}"),
-        };
-        self.still_overwrite_pending = false;
-    }
-
-    pub(crate) fn cycle_video_export_codec(&mut self) {
-        self.video_export_codec_idx = (self.video_export_codec_idx + 1) % 4;
-        let mut path = expand_home_path(self.video_output_path.trim());
-        path.set_extension(if self.video_export_codec_idx >= 2 {
-            "mov"
-        } else {
-            "mp4"
-        });
-        self.video_output_path = path.to_string_lossy().into_owned();
-        self.video_overwrite_pending = false;
-        self.render_status.clear();
-    }
-
-    pub(crate) fn start_video_export(&mut self, overwrite_confirmed: bool) {
-        if self.render_events.is_some() {
-            return;
-        }
-        if self.video_output_path.trim().is_empty() {
-            self.render_status = "動画の保存先を指定してください。".to_owned();
-            return;
-        }
-        let mut path = expand_home_path(self.video_output_path.trim());
-        let codec_index = self.video_export_codec_idx % 4;
-        if matches!(codec_index, 2 | 3) {
-            if !path
-                .extension()
-                .and_then(|extension| extension.to_str())
-                .is_some_and(|extension| extension.eq_ignore_ascii_case("mov"))
-            {
-                path.set_extension("mov");
-            }
-        } else if !matches!(
-            path.extension().and_then(|extension| extension.to_str()),
-            Some("mp4" | "mov" | "m4v")
-        ) {
-            path.set_extension("mp4");
-        }
-        if path.exists() && !overwrite_confirmed {
-            self.video_overwrite_pending = true;
-            self.render_status = format!("同名ファイルがあります: {}", path.display());
-            return;
-        }
-        self.video_overwrite_pending = false;
-        let composition = self.project_model.active_composition().clone();
-        let frame_bytes = u64::from(composition.width.max(1))
-            .checked_mul(u64::from(composition.height.max(1)))
-            .and_then(|pixels| pixels.checked_mul(4));
-        if frame_bytes.is_none_or(|bytes| bytes > 256 * 1024 * 1024) {
-            self.render_status =
-                "1フレームが256 MiBを超えるため書き出せません。コンポジションの解像度を下げてください。"
-                    .to_owned();
-            return;
-        }
-        if !kagari_vfx::core::ffmpeg_export::is_ffmpeg_available() {
-            self.render_status =
-                "FFmpegが見つかりません。FFmpegをインストールしてから再試行してください。"
-                    .to_owned();
-            return;
-        }
-
-        let config = kagari_vfx::core::ffmpeg_export::ExportConfig {
-            output_path: path.to_string_lossy().into_owned(),
-            width: composition.width.max(1),
-            height: composition.height.max(1),
-            fps: composition.fps.max(1),
-            total_frames: composition.duration_frames.max(1),
-            audio_wav: None,
-            codec: match codec_index {
-                0 => kagari_vfx::core::ffmpeg_export::VideoCodec::H264,
-                1 => kagari_vfx::core::ffmpeg_export::VideoCodec::H265,
-                2 => kagari_vfx::core::ffmpeg_export::VideoCodec::ProRes422,
-                _ => kagari_vfx::core::ffmpeg_export::VideoCodec::ProRes4444,
-            },
-        };
-        let width = config.width;
-        let height = config.height;
-        let (sender, receiver) = std::sync::mpsc::channel();
-        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let worker_cancel = cancel.clone();
-        std::thread::spawn(move || {
-            let master_dsp = kagari_vfx::core::audio_engine::MasterDspParams::default();
-            let audio_wav = match kagari_vfx::core::audio_engine::mix_composition_to_wav(
-                &composition,
-                0,
-                config.total_frames,
-                48_000,
-                None,
-                &master_dsp,
-            ) {
-                Ok(audio) => audio,
-                Err(error) => {
-                    let _ = sender.send(kagari_vfx::core::ffmpeg_export::ExportEvent::Error(
-                        format!("音声を合成できませんでした: {error}"),
-                    ));
-                    return;
-                }
-            };
-            if worker_cancel.load(std::sync::atomic::Ordering::SeqCst) {
-                if let Some(audio_path) = audio_wav {
-                    let _ = std::fs::remove_file(audio_path);
-                }
-                let _ = sender.send(kagari_vfx::core::ffmpeg_export::ExportEvent::Error(
-                    "Export canceled by user".to_owned(),
-                ));
-                return;
-            }
-            let mut config = config;
-            config.audio_wav = audio_wav
-                .as_ref()
-                .map(|audio_path| audio_path.to_string_lossy().into_owned());
-            let (progress_sender, progress_receiver) = std::sync::mpsc::channel();
-            let render_composition = composition.clone();
-            let result = kagari_vfx::core::ffmpeg_export::start_export_cancelable(
-                config,
-                progress_sender,
-                worker_cancel.clone(),
-                move |frame| {
-                    kagari_vfx::core::software_renderer::render_frame_to_pixels(
-                        &render_composition,
-                        frame,
-                        width,
-                        height,
-                        0.0,
-                        0,
-                    )
-                },
-            );
-            if let Err(error) = result {
-                let _ = sender.send(kagari_vfx::core::ffmpeg_export::ExportEvent::Error(error));
-            } else {
-                for event in progress_receiver {
-                    let terminal = matches!(
-                        &event,
-                        kagari_vfx::core::ffmpeg_export::ExportEvent::Finished(_)
-                            | kagari_vfx::core::ffmpeg_export::ExportEvent::Error(_)
-                    );
-                    let _ = sender.send(event);
-                    if terminal {
-                        break;
-                    }
-                }
-            }
-            if let Some(audio_path) = audio_wav {
-                let _ = std::fs::remove_file(audio_path);
-            }
-        });
-        self.video_output_path = path.to_string_lossy().into_owned();
-        self.render_progress = 0;
-        self.render_status = "音声を準備し、動画を書き出しています…".to_owned();
-        self.render_events = Some(receiver);
-        self.render_cancel = Some(cancel);
-        self.render_refresh_ticks = 0;
-    }
-
-    pub(crate) fn cancel_video_export(&mut self) {
-        if let Some(cancel) = &self.render_cancel {
-            cancel.store(true, std::sync::atomic::Ordering::SeqCst);
-            self.render_status = "書き出しをキャンセルしています…".to_owned();
-        }
-    }
-
-    pub(crate) fn receive_video_export_events(&mut self) -> bool {
-        let mut events = Vec::new();
-        let mut disconnected = false;
-        if let Some(receiver) = &self.render_events {
-            loop {
-                match receiver.try_recv() {
-                    Ok(event) => events.push(event),
-                    Err(std::sync::mpsc::TryRecvError::Empty) => break,
-                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                        disconnected = true;
-                        break;
-                    }
-                }
-            }
-        }
-        let had_events = !events.is_empty();
-        let mut finished = disconnected;
-        for event in events {
-            match event {
-                kagari_vfx::core::ffmpeg_export::ExportEvent::Progress(progress, _detail) => {
-                    self.render_progress =
-                        (f64::from(progress).clamp(0.0, 1.0) * 100.0).round() as i64;
-                    self.render_status =
-                        format!("動画を書き出しています… {}%", self.render_progress);
-                }
-                kagari_vfx::core::ffmpeg_export::ExportEvent::Finished(_detail) => {
-                    self.render_progress = 100;
-                    self.render_status =
-                        format!("書き出しが完了しました: {}", self.video_output_path);
-                    finished = true;
-                }
-                kagari_vfx::core::ffmpeg_export::ExportEvent::Error(error) => {
-                    self.render_status = if error.to_ascii_lowercase().contains("cancel") {
-                        "動画の書き出しをキャンセルしました。".to_owned()
-                    } else {
-                        format!("動画を書き出せませんでした: {error}")
-                    };
-                    finished = true;
-                }
-            }
-        }
-        if disconnected && !had_events {
-            self.render_status =
-                "書き出し処理との接続が終了しました。もう一度お試しください。".to_owned();
-        }
-        if finished {
-            self.render_events = None;
-            self.render_cancel = None;
-            self.render_refresh_ticks = 2;
-        }
-        had_events || disconnected
     }
 }

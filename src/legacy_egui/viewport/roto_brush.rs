@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::roto_assist::prepare_roto_brush_source;
 
 #[cfg(test)]
 pub(super) fn software_preview_required(
@@ -6,19 +7,6 @@ pub(super) fn software_preview_required(
     frame: u32,
 ) -> bool {
     crate::ui::viewport_rendering::software_preview_required(comp, frame)
-}
-
-fn prepare_roto_brush_source(
-    comp: &crate::core::timeline::Composition,
-    layer_index: usize,
-) -> Option<crate::core::timeline::Composition> {
-    let mut source_comp = comp.clone();
-    source_comp.background_color = [0.0; 4];
-    for layer in &mut source_comp.layers {
-        layer.track_matte = crate::core::timeline::TrackMatteMode::None;
-    }
-    source_comp.layers.get_mut(layer_index)?.masks.clear();
-    Some(source_comp)
 }
 
 #[cfg(test)]

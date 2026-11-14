@@ -21,6 +21,7 @@ fn test_precomp_nested_rendering() {
         30,
     );
     shape.transform.position = Animatable::new_constant([32.0, 32.0]);
+    shape.transform.anchor_point = Animatable::new_constant([32.0, 32.0]);
     sub.layers.push(shape);
 
     // Main comp: pre-comp layer referencing the sub-comp
@@ -35,6 +36,7 @@ fn test_precomp_nested_rendering() {
         30,
     );
     pc.transform.position = Animatable::new_constant([32.0, 32.0]);
+    pc.transform.anchor_point = Animatable::new_constant([32.0, 32.0]);
     comp.layers.push(pc);
 
     let pixels = render_frame_to_pixels(&comp, 0, 64, 64, 0.0, 0);
@@ -120,6 +122,7 @@ fn test_precomp_recurses_through_two_nested_compositions() {
         30,
     );
     solid.transform.position = Animatable::new_constant([16.0, 16.0]);
+    solid.transform.anchor_point = Animatable::new_constant([16.0, 16.0]);
     inner.layers.push(solid);
 
     let mut middle = Composition::new("middle".into(), "Middle".into(), 32, 32, 30, 30);
@@ -134,6 +137,7 @@ fn test_precomp_recurses_through_two_nested_compositions() {
         30,
     );
     inner_layer.transform.position = Animatable::new_constant([16.0, 16.0]);
+    inner_layer.transform.anchor_point = Animatable::new_constant([16.0, 16.0]);
     middle.layers.push(inner_layer);
 
     let mut outer = Composition::new("outer".into(), "Outer".into(), 32, 32, 30, 30);
@@ -148,6 +152,7 @@ fn test_precomp_recurses_through_two_nested_compositions() {
         30,
     );
     middle_layer.transform.position = Animatable::new_constant([16.0, 16.0]);
+    middle_layer.transform.anchor_point = Animatable::new_constant([16.0, 16.0]);
     outer.layers.push(middle_layer);
 
     let pixels = render_frame_to_pixels(&outer, 0, 32, 32, 0.0, 0);
@@ -342,7 +347,9 @@ fn test_video_frame_blending_works_for_luma_matte() {
     content.track_matte = TrackMatteMode::LumaMatte;
     comp.layers.push(content);
 
-    let matte = render_matte_buffer(&comp, &comp.layers[1], 1, 16, 16).unwrap();
+    let matte = render_matte_buffer(&comp, &comp.layers[1], 1, 16, 16)
+        .unwrap()
+        .expect("active matte source should render");
     let matte_center = (8 * 16 * 4 + 8 * 4) as usize;
     assert!((120..=136).contains(&matte[matte_center]));
 
@@ -356,6 +363,111 @@ fn test_video_frame_blending_works_for_luma_matte() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn luma_matte_ignores_color_hidden_by_zero_alpha() {
+    let dir = std::env::temp_dir().join(format!(
+        "kagari_transparent_luma_matte_test_{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    write_rgba_webp(&dir.join("frame_00000.webp"), [255, 255, 255, 0]);
+    write_rgba_webp(&dir.join("frame_00001.webp"), [0, 0, 0, 255]);
+
+    let mut comp = Composition::new(
+        "transparent_luma".into(),
+        "Transparent Luma".into(),
+        16,
+        16,
+        30,
+        30,
+    );
+    comp.background_color = [0.0; 4];
+    let mut matte = Layer::new(
+        "matte".into(),
+        "Matte".into(),
+        LayerType::Video {
+            source: "test".into(),
+            frames_dir: dir.to_string_lossy().into_owned(),
+            frame_count: 2,
+            audio_wav: None,
+            audio_volume: Animatable::new_constant(0.0),
+            speed: 0.5,
+        },
+        30,
+    );
+    matte.frame_blending = true;
+    matte.transform.position = Animatable::new_constant([8.0, 8.0]);
+    comp.layers.push(matte);
+    let mut content = Layer::new(
+        "content".into(),
+        "Content".into(),
+        LayerType::Solid {
+            color: [1.0, 0.0, 0.0, 1.0],
+        },
+        30,
+    );
+    content.transform.position = Animatable::new_constant([8.0, 8.0]);
+    content.track_matte = TrackMatteMode::LumaMatte;
+    comp.layers.push(content);
+
+    let pixels = render_frame_to_pixels(&comp, 1, 16, 16, 0.0, 0);
+    let center = (8 * 16 + 8) * 4;
+    assert_eq!(pixels[center + 3], 0);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn luma_matte_uses_alpha_when_source_rgb_is_fully_transparent() {
+    let dir = std::env::temp_dir().join(format!(
+        "kagari_transparent_image_luma_matte_test_{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let matte_path = dir.join("transparent_white.webp");
+    write_rgba_webp(&matte_path, [255, 255, 255, 0]);
+
+    let mut comp = Composition::new(
+        "transparent_image_luma".into(),
+        "Transparent Image Luma".into(),
+        16,
+        16,
+        30,
+        30,
+    );
+    comp.background_color = [0.0; 4];
+    let mut matte = Layer::new(
+        "matte".into(),
+        "Matte".into(),
+        LayerType::Image {
+            path: matte_path.to_string_lossy().into_owned(),
+        },
+        30,
+    );
+    matte.transform.position = Animatable::new_constant([8.0, 8.0]);
+    comp.layers.push(matte);
+    let mut content = Layer::new(
+        "content".into(),
+        "Content".into(),
+        LayerType::Solid {
+            color: [1.0, 0.0, 0.0, 1.0],
+        },
+        30,
+    );
+    content.transform.position = Animatable::new_constant([8.0, 8.0]);
+    content.track_matte = TrackMatteMode::LumaMatte;
+    comp.layers.push(content);
+
+    let pixels = render_frame_to_pixels(&comp, 0, 16, 16, 0.0, 0);
+    let center = (8 * 16 + 8) * 4;
+    assert_eq!(pixels[center + 3], 0);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn test_precomp_self_reference_cycle_is_safe() {
     // A comp whose pre-comp layer references ITSELF must render empty

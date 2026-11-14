@@ -126,6 +126,12 @@ pub fn apply_layer_effects_with_context(
     }
 
     for effect in effects {
+        if crate::core::software_renderer::get_render_cancel_flag()
+            .as_ref()
+            .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+        {
+            return;
+        }
         if !effect.enabled {
             continue;
         }
@@ -204,11 +210,15 @@ fn apply_one_ctx(
         EffectType::DirectionalBlur { angle, length } => {
             let a = angle.evaluate(frame);
             let len = length.evaluate(frame);
+            if !len.is_finite() || len <= 0.01 {
+                return;
+            }
+            let len = len.clamp(2.0, 256.0);
             if !crate::core::compute_pipeline::try_gpu_directional_blur(
                 pixels,
                 width,
                 height,
-                len.round().clamp(2.0, 256.0) as u32,
+                len.round() as u32,
                 a,
             ) {
                 pack::apply_directional_blur(pixels, width, height, a, len);
@@ -397,7 +407,10 @@ fn apply_one_ctx(
                 bottom_right: bottom_right.evaluate(frame),
                 bottom_left: bottom_left.evaluate(frame),
             };
-            let mut out = vec![0u8; pixels.len()];
+            let Some(mut out) = crate::core::software_renderer::try_zeroed_buffer(pixels.len())
+            else {
+                return;
+            };
             crate::core::corner_pin::apply_corner_pin_warp(
                 pixels, width, height, &mut out, width, height, &quad,
             );
@@ -411,26 +424,25 @@ fn apply_one_ctx(
             if !lut_path.is_empty() && intensity > 0.0 {
                 use std::cell::RefCell;
                 thread_local! { static LUT_CACHE: RefCell<crate::core::lut_cache::LutCache> = RefCell::new(crate::core::lut_cache::LutCache::new(512)); }
-                if let Ok(text) = std::fs::read_to_string(lut_path) {
-                    if let Ok(lut) = crate::core::ocio_color::Lut3D::parse_cube(&text) {
-                        for p in pixels.as_chunks_mut::<4>().0 {
-                            let r = p[0] as f32 / 255.0;
-                            let g = p[1] as f32 / 255.0;
-                            let b = p[2] as f32 / 255.0;
-                            let (lr, lg, lb) = LUT_CACHE.with(|cache| {
-                                let mut c = cache.borrow_mut();
-                                c.get_or_insert(r, g, b, lut.size, |r, g, b| lut.apply(r, g, b))
-                            });
-                            let t = intensity;
-                            p[0] = ((r * (1.0 - t) + lr * t).clamp(0.0, 1.0) * 255.0).round() as u8;
-                            p[1] = ((g * (1.0 - t) + lg * t).clamp(0.0, 1.0) * 255.0).round() as u8;
-                            p[2] = ((b * (1.0 - t) + lb * t).clamp(0.0, 1.0) * 255.0).round() as u8;
-                        }
-                    } else {
-                        log::warn!("ColorGradeLUT: failed to parse LUT from {}", lut_path);
+                if let Ok((lut, lut_id)) = crate::core::ocio_color::load_cube_file_cached(lut_path)
+                {
+                    for p in pixels.as_chunks_mut::<4>().0 {
+                        let r = p[0] as f32 / 255.0;
+                        let g = p[1] as f32 / 255.0;
+                        let b = p[2] as f32 / 255.0;
+                        let (lr, lg, lb) = LUT_CACHE.with(|cache| {
+                            let mut c = cache.borrow_mut();
+                            c.get_or_insert_for_lut(lut_id, r, g, b, lut.size, |r, g, b| {
+                                lut.apply(r, g, b)
+                            })
+                        });
+                        let t = intensity;
+                        p[0] = ((r * (1.0 - t) + lr * t).clamp(0.0, 1.0) * 255.0).round() as u8;
+                        p[1] = ((g * (1.0 - t) + lg * t).clamp(0.0, 1.0) * 255.0).round() as u8;
+                        p[2] = ((b * (1.0 - t) + lb * t).clamp(0.0, 1.0) * 255.0).round() as u8;
                     }
                 } else {
-                    log::warn!("ColorGradeLUT: cannot read LUT file {}", lut_path);
+                    log::warn!("ColorGradeLUT: cannot load LUT file {}", lut_path);
                 }
             }
         }
@@ -566,7 +578,7 @@ fn apply_one_ctx(
         }
         EffectType::Minimax { operation, radius } => {
             let op = operation.evaluate(frame);
-            let r = radius.evaluate(frame).clamp(0.0, 100.0) as u32;
+            let r = radius.evaluate(frame).clamp(1.0, 16.0) as u32;
             let maximize = op > 0.5;
             if !crate::core::compute_pipeline::try_gpu_minimax(pixels, width, height, r, maximize) {
                 crate::core::cpu_effects_new::apply_minimax(pixels, width, height, op, r as f32);

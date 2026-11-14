@@ -3,9 +3,22 @@ use crate::core::timeline::{Composition, Layer, LayerType, TrackMatteMode};
 
 mod api;
 mod audio_reactive;
+#[cfg(feature = "wgpu")]
+pub(crate) use audio_reactive::inject_audio_reactive_data;
+mod buffer;
 pub use api::*;
+pub(crate) use buffer::{
+    mark_render_allocation_failed, try_clone_buffer, try_vec_with_capacity, try_zeroed_buffer,
+    RenderAllocationScope,
+};
+pub(super) use cancel::render_cancelled;
+pub(crate) use cancel::RenderCancelFlagGuard;
+pub use cancel::{get_render_cancel_flag, set_render_cancel_flag, with_render_cancel_flag};
+mod cancel;
 mod composite;
 mod flatten;
+mod frame;
+pub use frame::render_frame_to_pixels_filtered;
 mod layer_prepare;
 mod mask;
 mod matte;
@@ -13,14 +26,21 @@ mod model3d_raster;
 mod output;
 mod particle_layer;
 mod postfx;
+#[cfg(any(feature = "wgpu", test))]
+pub(crate) use postfx::layer_3d_shading;
 mod precomp;
 mod precomp_layer;
+mod projective;
 mod raster;
 mod render_order;
+mod resolution;
+mod sampling;
 mod shadow;
 mod shape_raster;
 mod text_raster;
 
+#[cfg(feature = "wgpu")]
+pub(crate) use mask::{distance_to_polygon, polygon_bounds};
 pub(crate) use mask::{offset_polygon_vertices, CpuMaskEntry};
 
 pub use shadow::{build_shadow_map, light_attenuation, spot_cone_factor};
@@ -36,7 +56,6 @@ fn layer_depth_for_sort(_comp: &Composition, layer: &Layer, frame: u32) -> f32 {
 }
 
 pub use flatten::flatten_collapsed;
-use flatten::perspective_project_layer;
 
 pub(crate) use precomp::render_single_layer_pixels;
 pub use precomp::{render_precomp_layers, MAX_PRECOMP_DEPTH};
@@ -69,6 +88,42 @@ pub fn rgba_buffer_size(width: u32, height: u32) -> Option<usize> {
 pub const MAX_RENDER_DIMENSION: u32 = 16384;
 /// Maximum size of one RGBA8 render buffer (512 MiB).
 pub const MAX_RENDER_BYTES: usize = 512 * 1024 * 1024;
+/// Peak working memory allowed when converting an RGBA8 render to float RGBA.
+pub const MAX_FLOAT_RENDER_WORKING_BYTES: usize = 512 * 1024 * 1024;
+
+/// Resolve the transformed layer center from an AE-style anchor point.
+/// Position marks the anchor in composition space; raster bounds are centered
+/// around the layer, so shift that center by the rotated/scaled anchor offset.
+pub(crate) fn layer_center_from_anchor(
+    position: [f32; 2],
+    scale: [f32; 2],
+    rotation_degrees: f32,
+    anchor: [f32; 2],
+    layer_size: [f32; 2],
+) -> [f32; 2] {
+    let rad = rotation_degrees.to_radians();
+    let (sin_r, cos_r) = rad.sin_cos();
+    let offset_x = (layer_size[0] * 0.5 - anchor[0]) * (scale[0] / 100.0);
+    let offset_y = (layer_size[1] * 0.5 - anchor[1]) * (scale[1] / 100.0);
+    [
+        position[0] + cos_r * offset_x - sin_r * offset_y,
+        position[1] + sin_r * offset_x + cos_r * offset_y,
+    ]
+}
+
+/// Estimated peak bytes for a float render, including its RGBA8 source buffer.
+pub fn float_render_working_set_size(width: u32, height: u32) -> Option<usize> {
+    let pixels = (width as usize).checked_mul(height as usize)?;
+    let bytes = pixels.checked_mul(std::mem::size_of::<[f32; 4]>() + 4)?;
+    (width > 0 && height > 0 && bytes <= MAX_FLOAT_RENDER_WORKING_BYTES).then_some(bytes)
+}
+
+/// Estimated peak bytes while converting a float render into four EXR channels.
+pub fn exr_rgba_working_set_size(width: u32, height: u32) -> Option<usize> {
+    let pixels = (width as usize).checked_mul(height as usize)?;
+    let bytes = pixels.checked_mul(std::mem::size_of::<[f32; 4]>() * 2)?;
+    (width > 0 && height > 0 && bytes <= MAX_FLOAT_RENDER_WORKING_BYTES).then_some(bytes)
+}
 
 #[inline]
 fn is_sane_render_size(width: u32, height: u32) -> bool {
@@ -79,50 +134,45 @@ fn is_sane_render_size(width: u32, height: u32) -> bool {
         && rgba_buffer_size(width, height).is_some()
 }
 
-/// Memoized particle simulation: (version, layer id, frame, emitter fingerprint, state).
-type ParticleSimCacheEntry = (
-    u64,
-    String,
-    u32,
-    [u32; 15],
-    crate::core::particle_system::ParticleSystem,
-);
-
-// ── Cooperative render cancellation ─────────────────────────────────────────
-// A shared flag checked between layers and periodically inside pixel loops.
-// Lets export pipelines and future watchdogs abort a long render without
-// killing the process. The flag is thread-local so parallel renders don't
-// cancel each other.
+/// Memoized particle simulation with bounded rewind checkpoints.
+pub(crate) struct ParticleSimCacheEntry {
+    pub(crate) version: u64,
+    pub(crate) composition_id: String,
+    pub(crate) composition_instance_id: usize,
+    pub(crate) layer_id: String,
+    pub(crate) fps: u32,
+    pub(crate) emitter_fingerprint: u64,
+    pub(crate) frame: u32,
+    pub(crate) system: crate::core::particle_system::ParticleSystem,
+    pub(crate) checkpoints: Vec<(u32, crate::core::particle_system::ParticleSystem)>,
+}
 
 thread_local! {
-    static RENDER_CANCEL: std::cell::RefCell<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>> =
-        const { std::cell::RefCell::new(None) };
     static RENDER_PREVIEW: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
-/// Installs a cancellation flag for renders on the current thread.
-/// Pass `None` to clear. Returns true if cancellation was requested during render.
-pub fn set_render_cancel_flag(flag: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>) {
-    RENDER_CANCEL.with(|f| *f.borrow_mut() = flag);
+struct RenderPreviewGuard {
+    previous: bool,
 }
 
-/// Retrieves a clone of the currently installed cancellation flag for the current thread, if any.
-pub fn get_render_cancel_flag() -> Option<std::sync::Arc<std::sync::atomic::AtomicBool>> {
-    RENDER_CANCEL.with(|f| f.borrow().clone())
+impl RenderPreviewGuard {
+    fn install() -> Self {
+        let previous = RENDER_PREVIEW.with(|preview| preview.replace(true));
+        Self { previous }
+    }
 }
 
-/// True if the installed flag has been set (or no flag — never cancelled).
-#[inline]
-fn render_cancelled() -> bool {
-    RENDER_CANCEL.with(|f| {
-        f.borrow()
-            .as_ref()
-            .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
-    })
+impl Drop for RenderPreviewGuard {
+    fn drop(&mut self) {
+        RENDER_PREVIEW.with(|preview| preview.set(self.previous));
+    }
 }
 
-/// Render through the software path in preview mode. Layer proxy media is
+/// Render the full composition through the software path, then resize the
+/// finished frame to the requested preview dimensions. Layer proxy media is
 /// scoped to this entry point so exports and CLI renders stay full quality.
+/// Rendering in composition coordinates before resizing avoids cropping layers
+/// when the preview dimensions are smaller than the composition.
 pub fn render_frame_to_pixels_preview(
     comp: &Composition,
     frame: u32,
@@ -131,12 +181,119 @@ pub fn render_frame_to_pixels_preview(
     exposure_ev: f32,
     lut_mode: u32,
 ) -> Vec<u8> {
-    RENDER_PREVIEW.with(|preview| {
-        let was_preview = preview.replace(true);
-        let pixels = render_frame_to_pixels(comp, frame, width, height, exposure_ev, lut_mode);
-        preview.set(was_preview);
-        pixels
-    })
+    let _preview_guard = RenderPreviewGuard::install();
+    if comp.width == width && comp.height == height {
+        render_frame_to_pixels(comp, frame, width, height, exposure_ev, lut_mode)
+    } else if preview_can_render_at_target_resolution(comp) {
+        let Some(render_scale) =
+            resolution::RenderScale::from_dimensions([comp.width, comp.height], [width, height])
+        else {
+            return Vec::new();
+        };
+        frame::render_frame_to_pixels_filtered_scaled(
+            comp,
+            frame,
+            frame::RenderFrameConfig {
+                width,
+                height,
+                exposure_ev,
+                lut_mode,
+                only_layer_idx: None,
+                render_scale,
+            },
+        )
+    } else if width <= MAX_RENDER_DIMENSION
+        && height <= MAX_RENDER_DIMENSION
+        && rgba_buffer_size(width, height).is_some()
+        && comp.width <= MAX_RENDER_DIMENSION
+        && comp.height <= MAX_RENDER_DIMENSION
+        && rgba_buffer_size(comp.width, comp.height).is_some()
+    {
+        let full =
+            render_frame_to_pixels(comp, frame, comp.width, comp.height, exposure_ev, lut_mode);
+        if rgba_buffer_size(comp.width, comp.height) == Some(full.len()) {
+            resize_preview_rgba(full, comp.width, comp.height, width, height).unwrap_or_default()
+        } else {
+            Vec::new()
+        }
+    } else {
+        Vec::new()
+    }
+}
+
+fn preview_can_render_at_target_resolution(comp: &Composition) -> bool {
+    !comp.layers.iter().any(|layer| {
+        !layer.paint_strokes.is_empty()
+            || !layer.roto_brush_strokes.is_empty()
+            || layer.is_3d
+            || layer.motion_blur
+            || layer.shape_repeater.is_some()
+            || layer.track_matte != TrackMatteMode::None
+            || layer.style.drop_shadow.enabled
+            || layer.style.inner_shadow.enabled
+            || layer.style.outer_glow.enabled
+            || layer.style.inner_glow.enabled
+            || layer.style.satin.enabled
+            || layer.style.bevel_emboss.enabled
+            || layer.style.stroke.enabled
+            || layer.style.gradient_overlay.enabled
+            || layer.style.color_overlay.enabled
+            || matches!(
+                &layer.layer_type,
+                LayerType::Shape { stroke_width, .. } if *stroke_width > 0.0
+            )
+            || (layer.effects_enabled && layer.effects.iter().any(|effect| effect.enabled))
+            || matches!(
+                layer.layer_type,
+                LayerType::Particle { .. }
+                    | LayerType::PreComp { .. }
+                    | LayerType::Model3D { .. }
+                    | LayerType::AdjustmentLayer
+            )
+            || (layer.is_collapsed && matches!(layer.layer_type, LayerType::PreComp { .. }))
+    }) && !comp.lights.iter().any(|light| light.casts_shadows)
+}
+
+fn resize_preview_rgba(
+    mut pixels: Vec<u8>,
+    source_width: u32,
+    source_height: u32,
+    target_width: u32,
+    target_height: u32,
+) -> Option<Vec<u8>> {
+    if rgba_buffer_size(source_width, source_height) != Some(pixels.len())
+        || rgba_buffer_size(target_width, target_height).is_none()
+    {
+        return None;
+    }
+
+    // Filter in premultiplied-alpha space so RGB in transparent pixels cannot
+    // bleed into visible edge pixels during downsampling.
+    for pixel in pixels.as_chunks_mut::<4>().0 {
+        let alpha = u16::from(pixel[3]);
+        for channel in &mut pixel[..3] {
+            *channel = ((u16::from(*channel) * alpha + 127) / 255) as u8;
+        }
+    }
+    let image = image::RgbaImage::from_raw(source_width, source_height, pixels)?;
+    let mut resized = image::imageops::resize(
+        &image,
+        target_width,
+        target_height,
+        image::imageops::FilterType::Triangle,
+    )
+    .into_raw();
+    for pixel in resized.as_chunks_mut::<4>().0 {
+        let alpha = u16::from(pixel[3]);
+        if alpha == 0 {
+            pixel[..3].fill(0);
+            continue;
+        }
+        for channel in &mut pixel[..3] {
+            *channel = ((u16::from(*channel) * 255 + alpha / 2) / alpha).min(255) as u8;
+        }
+    }
+    Some(resized)
 }
 
 pub(crate) fn preview_proxy_path(layer: &Layer, sequence_frame: u32) -> Option<String> {
@@ -168,20 +325,36 @@ pub(crate) fn preview_proxy_active() -> bool {
 
 fn source_media_dimensions(layer: &Layer) -> Option<(f32, f32)> {
     let path = match &layer.layer_type {
-        LayerType::Image { path } => preview_proxy_path(layer, 0).unwrap_or_else(|| path.clone()),
-        LayerType::Video { frames_dir, .. } => preview_proxy_path(layer, 0).unwrap_or_else(|| {
+        LayerType::Image { path } => path.clone(),
+        LayerType::Video { frames_dir, .. } => {
             crate::core::video_import::frame_path_in_dir(frames_dir, 0)
                 .to_string_lossy()
                 .to_string()
-        }),
+        }
         _ => return None,
     };
 
-    crate::core::image_cache::with_image_cache(|cache| {
-        cache
-            .load_image(&path)
-            .map(|image| (image.width as f32, image.height as f32))
-    })
+    let source_dimensions = crate::core::image_cache::load_image_shared(&path)
+        .map(|image| (image.width as f32, image.height as f32));
+    if source_dimensions.is_some() {
+        return source_dimensions;
+    }
+
+    let proxy_path = preview_proxy_path(layer, 0)?;
+    let proxy_image = crate::core::image_cache::load_image_shared(&proxy_path)?;
+    let proxy_dimensions = (proxy_image.width as f32, proxy_image.height as f32);
+    let proxy_scale = layer
+        .proxy
+        .path_resolution
+        .unwrap_or(layer.proxy.resolution)
+        .factor();
+    if !proxy_scale.is_finite() || proxy_scale <= 0.0 {
+        return Some(proxy_dimensions);
+    }
+    Some((
+        (proxy_dimensions.0 / proxy_scale).round().max(1.0),
+        (proxy_dimensions.1 / proxy_scale).round().max(1.0),
+    ))
 }
 
 pub fn render_frame_to_pixels(
@@ -193,402 +366,6 @@ pub fn render_frame_to_pixels(
     lut_mode: u32,
 ) -> Vec<u8> {
     render_frame_to_pixels_filtered(comp, frame, width, height, exposure_ev, lut_mode, None)
-}
-
-/// Render a frame while optionally limiting the top-level pass to one layer.
-///
-/// Source-layer effects need a layer's pixels without losing the original
-/// composition, because the selected layer's effect parameters still refer to
-/// the original layer indices. Keeping the full composition here preserves
-/// those references while the filter prevents unrelated layers from being
-/// composited into the source buffer.
-pub(crate) fn render_frame_to_pixels_filtered(
-    comp: &Composition,
-    frame: u32,
-    width: u32,
-    height: u32,
-    exposure_ev: f32,
-    lut_mode: u32,
-    only_layer_idx: Option<usize>,
-) -> Vec<u8> {
-    // Collapse Transformations: expand collapsed precomps into parent space
-    // so their 3D children join the parent camera / z-sort / shadow passes.
-    let owned;
-    let comp = if only_layer_idx.is_none()
-        && comp
-            .layers
-            .iter()
-            .any(|l| l.is_collapsed && matches!(l.layer_type, LayerType::PreComp { .. }))
-    {
-        owned = flatten_collapsed(comp, frame);
-        &owned
-    } else {
-        comp
-    };
-    if !is_sane_render_size(width, height) {
-        log::warn!(
-            "[Renderer] Rejecting render with dimensions {}x{} (max {})",
-            width,
-            height,
-            MAX_RENDER_DIMENSION
-        );
-        return Vec::new();
-    }
-    let size = rgba_buffer_size(width, height).unwrap_or(0);
-    if size == 0 {
-        return Vec::new();
-    }
-    let render_camera = comp.resolve_camera_at();
-    // Composition background colour (Comp Settings > Background Color).
-    let (bg_r, bg_g, bg_b, bg_a) = {
-        let bg = comp.background_color;
-        (
-            (bg[0].clamp(0.0, 1.0) * 255.0).round() as u8,
-            (bg[1].clamp(0.0, 1.0) * 255.0).round() as u8,
-            (bg[2].clamp(0.0, 1.0) * 255.0).round() as u8,
-            (bg[3].clamp(0.0, 1.0) * 255.0).round() as u8,
-        )
-    };
-    let mut buffer = vec![0u8; size];
-    for p in buffer.as_chunks_mut::<4>().0 {
-        p[0] = bg_r;
-        p[1] = bg_g;
-        p[2] = bg_b;
-        p[3] = bg_a;
-    }
-
-    audio_reactive::inject_audio_reactive_data(comp, frame);
-
-    let has_solo =
-        only_layer_idx.is_none() && comp.layers.iter().any(|l| l.is_active(frame) && l.solo);
-
-    // ── Phase 1: Parallel layer data preparation ──
-    // Multi-frame rendering support: parallel render queue initialized for MFR pipeline.
-    // Note: sequential compositing remains the reference implementation; MFR enabled for batch exports.
-    // Pre-compute transform/mask/effect data for all visible layers at once,
-    // eliminating redundant property evaluation during the sequential pass.
-    let layer_data =
-        layer_prepare::prepare_layer_render_data(comp, frame, &render_camera, has_solo);
-
-    // ── Z-depth sort for 3D layers ──
-    let has_3d = comp.layers.iter().any(|l| l.is_3d);
-    // Shadow map: orthographic-along-ray accumulation of caster quads onto
-    // the z=0 receiver plane, per shadow-casting light. Empty when no light
-    // casts shadows (zero cost for legacy comps).
-    let any_shadow_light = comp
-        .lights
-        .iter()
-        .any(|l| l.casts_shadows && l.intensity_at(frame) > 0.0);
-    let shadow_map: Vec<f32> = if any_shadow_light {
-        build_shadow_map(comp, frame, width, height)
-    } else {
-        Vec::new()
-    };
-    let sorted_layer_indices: Vec<usize> = if has_3d {
-        let mut indexed: Vec<(usize, f32)> = comp
-            .layers
-            .iter()
-            .enumerate()
-            .map(|(i, l)| {
-                let z = render_order::layer_depth_for_sort(l, frame);
-                (i, z)
-            })
-            .collect();
-        // Sort back-to-front: smaller z first (further from camera)
-        indexed.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
-        indexed.into_iter().map(|(i, _)| i).collect()
-    } else {
-        (0..comp.layers.len()).collect()
-    };
-
-    for &sorted_idx in &sorted_layer_indices {
-        let layer = &comp.layers[sorted_idx];
-        if only_layer_idx.is_some_and(|target_idx| target_idx != sorted_idx) {
-            continue;
-        }
-        // Cooperative cancellation: checked once per layer
-        if render_cancelled() {
-            break;
-        }
-        // If this layer serves as a track matte source for another layer, it should not draw directly to the composition
-        let is_matte_source = comp.layers.iter().any(|consumer| {
-            if consumer.track_matte == TrackMatteMode::None {
-                return false;
-            }
-            if let Some(target_id) = &consumer.track_matte_layer_id {
-                target_id == &layer.id
-            } else {
-                comp.layers
-                    .get(sorted_idx + 1)
-                    .is_some_and(|next| next.id == consumer.id)
-            }
-        });
-        if is_matte_source {
-            continue;
-        }
-        if !layer.is_active(frame) || (has_solo && !layer.solo) || !layer.visible {
-            // layer handled via sorted_idx;
-            continue;
-        }
-
-        // Linear-light blending flag (hoisted once per frame)
-        let blend_linear = comp.blend_linear;
-
-        // Use precomputed data from the parallel phase
-        let ld = &layer_data[sorted_idx];
-        if ld.skip {
-            // layer handled via sorted_idx;
-            continue;
-        }
-        let source_frame = ld.source_frame;
-        let pos = ld.pos;
-        let scale = ld.scale;
-        let rotation = ld.rotation;
-        let l_opacity = ld.l_opacity;
-        let masks = &ld.masks;
-
-        // Adjustment Layer: apply effects to the composite below, blended by
-        // this layer's opacity and clipped to its mask region when present.
-        if matches!(layer.layer_type, LayerType::AdjustmentLayer) {
-            apply_adjustment_layer(
-                &mut buffer,
-                AdjustmentLayerCtx {
-                    comp,
-                    layer,
-                    sorted_idx,
-                    source_frame,
-                    width,
-                    height,
-                    opacity: l_opacity,
-                    masks,
-                },
-            );
-            continue;
-        }
-
-        if render_precomp_layer(
-            &mut buffer,
-            PreCompLayerCtx {
-                comp,
-                layer,
-                frame,
-                source_frame,
-                width,
-                height,
-                position: pos,
-                scale,
-                rotation,
-                opacity: l_opacity,
-                masks,
-                blend_linear,
-                sorted_idx,
-            },
-        ) {
-            continue;
-        }
-
-        if render_particle_layer(
-            &mut buffer,
-            ParticleLayerCtx {
-                comp,
-                layer,
-                frame,
-                sorted_idx,
-                source_frame,
-                position: pos,
-                opacity: l_opacity,
-                width,
-                height,
-                camera: &render_camera,
-            },
-        ) {
-            continue;
-        }
-
-        let (base_w, base_h) = match &layer.layer_type {
-            LayerType::Solid { .. } | LayerType::PreComp { .. } => {
-                (comp.width as f32, comp.height as f32)
-            }
-            LayerType::Text { .. } => (comp.width as f32, comp.height as f32),
-            LayerType::Shape { .. } => {
-                // Shape units are uniform (composition-width referenced) so
-                // circles stay circular on non-square compositions.
-                (comp.width as f32, comp.width as f32)
-            }
-            LayerType::Model3D { .. } => (comp.width as f32, comp.height as f32),
-            LayerType::Image { .. } | LayerType::Video { .. } => {
-                source_media_dimensions(layer).unwrap_or((comp.width as f32, comp.height as f32))
-            }
-            _ => continue, // Null or audio layers don't output visual pixels
-        };
-
-        let w = (scale[0].abs() / 100.0) * base_w;
-        let h = (scale[1].abs() / 100.0) * base_h;
-
-        let base_color = match &layer.layer_type {
-            LayerType::Solid { color } | LayerType::Text { color, .. } => *color,
-            LayerType::Shape { color, .. } => *color,
-            LayerType::Model3D { .. } => [0.72, 0.78, 0.9, 1.0],
-            LayerType::Image { .. } | LayerType::Video { .. } => [0.2, 0.6, 0.9, 1.0], // fallback image color
-            LayerType::PreComp { .. } => [1.0, 1.0, 1.0, 1.0],
-            _ => continue,
-        };
-
-        // Extract layer transform matrix metrics for pixel boundaries
-        let rad = rotation.to_radians();
-        let cos_r = rad.cos();
-        let sin_r = rad.sin();
-
-        let cx = pos[0];
-        let cy = pos[1];
-
-        // For 3D layers, use perspective projection from camera
-        let (bounds_x, bounds_y, _perspective_uvs) = if layer.is_3d {
-            let cam = &render_camera;
-            let layer_rot_3d = layer.transform_3d.rotation.evaluate(frame);
-            if let Some(projected) = perspective_project_layer(
-                cam.fov_at(frame),
-                cam.transform.position.evaluate(frame),
-                cam.transform.rotation.evaluate(frame),
-                layer.transform_3d.position.evaluate(frame),
-                layer_rot_3d,
-                scale,
-                base_w,
-                base_h,
-                width as f32,
-                height as f32,
-            ) {
-                // Compute bounding box from projected corners
-                let min_sx = projected.iter().map(|c| c[0]).fold(f32::INFINITY, f32::min);
-                let max_sx = projected
-                    .iter()
-                    .map(|c| c[0])
-                    .fold(f32::NEG_INFINITY, f32::max);
-                let min_sy = projected.iter().map(|c| c[1]).fold(f32::INFINITY, f32::min);
-                let max_sy = projected
-                    .iter()
-                    .map(|c| c[1])
-                    .fold(f32::NEG_INFINITY, f32::max);
-                let bx = (max_sx - min_sx) * 0.5;
-                let by = (max_sy - min_sy) * 0.5;
-                (bx, by, Some(projected))
-            } else {
-                // Behind camera: fall back to flat 2D rendering
-                (w * 0.5, h * 0.5, None)
-            }
-        } else {
-            (w * 0.5, h * 0.5, None)
-        };
-        // abs(): negative scale flips w/h sign — must not invert the bounding box
-        let mut ext = bounds_x.max(bounds_y).abs() * 1.5;
-        if let Some(repeater) = &layer.shape_repeater {
-            // Reserve a conservative raster bounds for every repeated copy. The
-            // previous bounds only covered the source shape, so translated copies
-            // were silently clipped at the local-buffer edge.
-            let instances = crate::core::shape_repeater::evaluate_shape_repeater_at_frame(
-                repeater,
-                source_frame,
-            );
-            for instance in instances {
-                let m = instance.transform_matrix;
-                let tx = m[0][2].abs();
-                let ty = m[1][2].abs();
-                let half_x = bounds_x.abs() * m[0][0].hypot(m[1][0]);
-                let half_y = bounds_y.abs() * m[0][1].hypot(m[1][1]);
-                if tx.is_finite() && ty.is_finite() && half_x.is_finite() && half_y.is_finite() {
-                    ext = ext.max(half_x.hypot(half_y) + tx.hypot(ty));
-                }
-            }
-        }
-
-        // Render loop over the target bounding box (NaN-safe: `as u32` saturates NaN/inf)
-        let min_x = ((cx - ext).max(0.0) as u32).min(width);
-        let max_x = ((cx + ext).max(0.0) as u32).min(width);
-        let min_y = ((cy - ext).max(0.0) as u32).min(height);
-        let max_y = ((cy + ext).max(0.0) as u32).min(height);
-
-        let bw = max_x.saturating_sub(min_x).max(1);
-        let bh = max_y.saturating_sub(min_y).max(1);
-
-        // Phase 1: rasterize the layer into a local buffer.
-        let mut layer_buf = vec![0u8; (bw * bh * 4) as usize];
-
-        // Shape layers: use SDF rasterization instead of flat fill
-        raster::rasterize_layer_content(raster::RasterCtx {
-            comp,
-            layer,
-            frame,
-            effective_frame: source_frame,
-            source_frame: match &layer.posterize_time {
-                Some(pt) if pt.enabled => layer.effective_render_frame(frame, comp.fps) as f32,
-                _ => layer.remap_frame_f32(frame),
-            },
-            masks,
-            min_x,
-            min_y,
-            max_x,
-            max_y,
-            bw,
-            bh,
-            width,
-            height,
-            cx,
-            cy,
-            cos_r,
-            sin_r,
-            bounds_x,
-            bounds_y,
-            base_color,
-            l_opacity,
-            buffer: &mut buffer[..],
-            layer_buf: &mut layer_buf[..],
-        });
-
-        postfx::apply_post_fx(postfx::PostFxCtx {
-            comp,
-            layer,
-            effective_frame: source_frame,
-            frame,
-            sorted_idx,
-            layer_buf: &mut layer_buf[..],
-            min_x,
-            min_y,
-            bw,
-            bh,
-            width,
-            height,
-            masks,
-            cx,
-            cy,
-            shadow_map: &shadow_map[..],
-            dof_blur: ld.dof_blur,
-        });
-
-        // Phase 3: composite the (effect-processed) buffer over the frame.
-        // First, check if this layer uses a track matte from the layer below.
-        let matte_pixels = render_matte_buffer(comp, layer, frame, width, height);
-
-        composite_layer_buffer(
-            &mut buffer[..],
-            &layer_buf,
-            &CompositeCtx {
-                layer,
-                matte: matte_pixels.as_deref(),
-                min_x,
-                min_y,
-                bw,
-                bh,
-                width,
-                height,
-                blend_linear,
-                l_opacity,
-            },
-        );
-    }
-
-    output::apply_output_transform(comp, &mut buffer, exposure_ev, lut_mode);
-
-    buffer
 }
 
 /// Calculate the shortest distance from point (px, py) to the polygon boundary.

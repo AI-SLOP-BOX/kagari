@@ -1,6 +1,6 @@
 use crate::core::timeline::Composition;
 
-pub(super) fn inject_audio_reactive_data(comp: &Composition, frame: u32) {
+pub(crate) fn inject_audio_reactive_data(comp: &Composition, frame: u32) {
     // If there are no audio-bearing layers (Audio, Video, or PreComp) in the composition,
     // skip the heavy audio mixing and FFT spectrum analysis entirely.
     let has_audio_bearing_layers = comp.layers.iter().any(|l| {
@@ -11,11 +11,24 @@ pub(super) fn inject_audio_reactive_data(comp: &Composition, frame: u32) {
                 | crate::core::timeline::LayerType::PreComp { .. }
         )
     });
+    let needs_visualizer_spectrum = comp.layers.iter().any(|layer| {
+        layer.is_active(frame)
+            && layer.visible
+            && layer.effects.iter().any(|effect| {
+                effect.enabled
+                    && matches!(
+                        &effect.effect_type,
+                        crate::core::timeline::EffectType::AudioSpectrum { enabled, .. }
+                            if enabled.evaluate(frame) > 0.5
+                    )
+            })
+    });
 
     if !has_audio_bearing_layers {
         crate::core::expression_engine::set_audio_expr_data(
             crate::core::expression_engine::AudioExprData::default(),
         );
+        crate::core::expression_engine::set_audio_spectrum_bands(Vec::new());
         return;
     }
 
@@ -56,5 +69,24 @@ pub(super) fn inject_audio_reactive_data(comp: &Composition, frame: u32) {
         crate::core::expression_engine::set_audio_expr_data(
             crate::core::expression_engine::AudioExprData { amplitude, bands },
         );
+
+        if needs_visualizer_spectrum {
+            let spectrum_options = crate::core::audio_spectrum::AudioSpectrumOptions {
+                fft_size: 2048,
+                frequency_bands: 512,
+                start_frequency: 20.0,
+                end_frequency: 20_000.0,
+                smoothing: 0.0,
+                ..Default::default()
+            };
+            let spectrum = crate::core::audio_spectrum::generate_audio_spectrum_bands(
+                &pcm,
+                sample_rate,
+                &spectrum_options,
+            );
+            crate::core::expression_engine::set_audio_spectrum_bands(spectrum);
+        } else {
+            crate::core::expression_engine::set_audio_spectrum_bands(Vec::new());
+        }
     }
 }

@@ -69,4 +69,30 @@ mod projection_tests {
         assert!((p0[0] - 0.5).abs() < 1e-4);
         assert!(p10[0] < p0[0]);
     }
+
+    #[test]
+    fn projection_uses_camera_pitch_and_yaw() {
+        let mut cam = Camera3D::default();
+        cam.transform.rotation = Animatable::new_constant([0.0, 10.0, 0.0]);
+        let yawed = project_point_to_screen_at_frame(
+            &cam,
+            [0.0, 0.0, 1000.0],
+            1920.0,
+            1080.0,
+            0,
+        )
+        .expect("a point on the camera's viewing axis should project");
+        assert!(yawed[0] < 0.5, "positive camera yaw should move center left");
+
+        cam.transform.rotation = Animatable::new_constant([10.0, 0.0, 0.0]);
+        let pitched = project_point_to_screen_at_frame(
+            &cam,
+            [0.0, 0.0, 1000.0],
+            1920.0,
+            1080.0,
+            0,
+        )
+        .expect("a point on the camera's viewing axis should project");
+        assert!(pitched[1] < 0.5, "positive camera pitch should move center up");
+    }
 }

@@ -1,5 +1,156 @@
 use super::*;
 
+#[derive(Clone, Default)]
+struct RotoLiveStroke {
+    points: Vec<[f32; 2]>,
+    radius: f32,
+    is_foreground: bool,
+}
+
+fn roto_canvas_point(
+    pointer: egui::Pos2,
+    origin_x: f32,
+    origin_y: f32,
+    draw_w: f32,
+    draw_h: f32,
+    comp_w: f32,
+    comp_h: f32,
+) -> Option<[f32; 2]> {
+    if ![origin_x, origin_y, draw_w, draw_h, comp_w, comp_h]
+        .into_iter()
+        .all(f32::is_finite)
+        || draw_w <= 0.0
+        || draw_h <= 0.0
+        || comp_w <= 0.0
+        || comp_h <= 0.0
+    {
+        return None;
+    }
+    let u = (pointer.x - origin_x) / draw_w;
+    let v = (pointer.y - origin_y) / draw_h;
+    if !(0.0..=1.0).contains(&u) || !(0.0..=1.0).contains(&v) {
+        return None;
+    }
+    Some([u * comp_w, v * comp_h])
+}
+
+fn matte_preview_polygon(path: &crate::core::mask::MaskPath, frame: u32) -> Option<Vec<[f32; 2]>> {
+    const MAX_PREVIEW_POINTS: usize = 4096;
+    let source_points = match &path.vertices {
+        crate::core::property::Animatable::Constant(points) => points.len(),
+        crate::core::property::Animatable::Animated(keyframes) => keyframes
+            .iter()
+            .map(|keyframe| keyframe.value.len())
+            .max()
+            .unwrap_or(0),
+    };
+    if !(3..=MAX_PREVIEW_POINTS).contains(&source_points) {
+        return None;
+    }
+
+    // `to_polygon` can produce `source_points * segments` points. Select the
+    // highest curve quality that stays within the preview triangulator's cap.
+    let segments = (MAX_PREVIEW_POINTS / source_points)
+        .min(crate::core::mask::MASK_CURVE_SEGMENTS as usize)
+        .max(1) as u32;
+    let polygon = path.to_polygon(frame, segments);
+    (polygon.len() <= MAX_PREVIEW_POINTS + 1).then_some(polygon)
+}
+
+fn triangulate_matte_preview(points: &[egui::Pos2]) -> Option<egui::Mesh> {
+    const MAX_TRIANGULATED_POINTS: usize = 4096;
+    const EPSILON: f32 = 1.0e-5;
+
+    if points
+        .iter()
+        .any(|point| !point.x.is_finite() || !point.y.is_finite())
+    {
+        return None;
+    }
+    let mut unique_points = Vec::with_capacity(points.len());
+    for &point in points {
+        if unique_points.last().is_none_or(|last: &egui::Pos2| {
+            (last.x - point.x).abs() > EPSILON || (last.y - point.y).abs() > EPSILON
+        }) {
+            unique_points.push(point);
+        }
+    }
+    let mut points = unique_points;
+    if points.len() > 1 {
+        let first = points[0];
+        let last = *points.last()?;
+        if (first.x - last.x).abs() <= EPSILON && (first.y - last.y).abs() <= EPSILON {
+            points.pop();
+        }
+    }
+    if points.len() < 3 || points.len() > MAX_TRIANGULATED_POINTS {
+        return None;
+    }
+
+    let cross = |a: egui::Pos2, b: egui::Pos2, c: egui::Pos2| {
+        (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+    };
+    let area: f32 = (0..points.len())
+        .map(|index| {
+            let a = points[index];
+            let b = points[(index + 1) % points.len()];
+            a.x * b.y - b.x * a.y
+        })
+        .sum();
+    if !area.is_finite() || area.abs() <= EPSILON {
+        return None;
+    }
+
+    let mut remaining: Vec<usize> = (0..points.len()).collect();
+    if area < 0.0 {
+        remaining.reverse();
+    }
+    let mut triangles = Vec::with_capacity(points.len().saturating_sub(2));
+    while remaining.len() > 3 {
+        let mut ear = None;
+        for current in 0..remaining.len() {
+            let previous = remaining[(current + remaining.len() - 1) % remaining.len()];
+            let vertex = remaining[current];
+            let next = remaining[(current + 1) % remaining.len()];
+            let (a, b, c) = (points[previous], points[vertex], points[next]);
+            if cross(a, b, c) <= EPSILON {
+                continue;
+            }
+            let contains_vertex = remaining.iter().copied().any(|candidate| {
+                if candidate == previous || candidate == vertex || candidate == next {
+                    return false;
+                }
+                let point = points[candidate];
+                cross(a, b, point) >= -EPSILON
+                    && cross(b, c, point) >= -EPSILON
+                    && cross(c, a, point) >= -EPSILON
+            });
+            if !contains_vertex {
+                ear = Some((current, [previous as u32, vertex as u32, next as u32]));
+                break;
+            }
+        }
+        let (current, triangle) = ear?;
+        triangles.push(triangle);
+        remaining.remove(current);
+    }
+    triangles.push([
+        remaining[0] as u32,
+        remaining[1] as u32,
+        remaining[2] as u32,
+    ]);
+
+    let fill = egui::Color32::from_rgba_unmultiplied(80, 220, 120, 52);
+    let mut mesh = egui::Mesh::default();
+    for point in points {
+        mesh.colored_vertex(point, fill);
+    }
+    for [a, b, c] in triangles {
+        mesh.add_triangle(a, b, c);
+    }
+    Some(mesh)
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(in crate::ui::viewport) fn draw_roto_brush_interaction(
     app: &mut KagariApp,
@@ -19,6 +170,15 @@ pub(in crate::ui::viewport) fn draw_roto_brush_interaction(
         let mut clear_roto = false;
         let mut propagate_roto = false;
         let mut propagate_roto_flow = false;
+        let segment_busy = ctx
+            .data(|data| {
+                data.get_temp::<std::sync::Arc<RotoSegmentJob>>(egui::Id::new("roto_segment_job"))
+            })
+            .is_some();
+        let flow_job = ctx.data(|data| {
+            data.get_temp::<std::sync::Arc<RotoFlowJob>>(egui::Id::new("roto_flow_bake_job"))
+        });
+        let propagation_busy = segment_busy || flow_job.is_some();
         // Radius HUD
         {
             let hud_id = egui::Id::new("roto_brush_hud");
@@ -116,28 +276,30 @@ pub(in crate::ui::viewport) fn draw_roto_brush_interaction(
                                 d.insert_temp(egui::Id::new("roto_contrast"), contrast)
                             });
                         }
-                        if ui.button("Clear strokes and matte").clicked() {
+                        if ui
+                            .add_enabled(
+                                !propagation_busy,
+                                egui::Button::new("Clear strokes and matte"),
+                            )
+                            .clicked()
+                        {
                             clear_roto = true;
                         }
-                        if ui.button("Propagate with layer tracker").clicked() {
+                        if ui
+                            .add_enabled(
+                                !propagation_busy,
+                                egui::Button::new("Propagate with layer tracker"),
+                            )
+                            .clicked()
+                        {
                             propagate_roto = true;
                         }
-                        let segment_job = ctx.data(|data| {
-                            data.get_temp::<std::sync::Arc<RotoSegmentJob>>(egui::Id::new(
-                                "roto_segment_job",
-                            ))
-                        });
-                        if segment_job.is_some() {
+                        if segment_busy {
                             ui.horizontal(|ui| {
                                 ui.spinner();
                                 ui.label("Analyzing matte…");
                             });
                         }
-                        let flow_job = ctx.data(|data| {
-                            data.get_temp::<std::sync::Arc<RotoFlowJob>>(egui::Id::new(
-                                "roto_flow_bake_job",
-                            ))
-                        });
                         if let Some(job) = flow_job {
                             ui.horizontal(|ui| {
                                 ui.spinner();
@@ -147,7 +309,13 @@ pub(in crate::ui::viewport) fn draw_roto_brush_interaction(
                                         .store(true, std::sync::atomic::Ordering::Relaxed);
                                 }
                             });
-                        } else if ui.button("Propagate with optical flow").clicked() {
+                        } else if ui
+                            .add_enabled(
+                                !segment_busy,
+                                egui::Button::new("Propagate with optical flow"),
+                            )
+                            .clicked()
+                        {
                             propagate_roto_flow = true;
                         }
                     });
@@ -181,7 +349,9 @@ pub(in crate::ui::viewport) fn draw_roto_brush_interaction(
                 ctx.data_mut(|d| d.remove::<Vec<EngineRotoStroke>>(stroke_list_id));
                 let mut cleared = app.history.current().clone();
                 if let Some(layer) = cleared.active_composition_mut().layers.get_mut(sel_li) {
-                    layer.masks.retain(|mask| mask.name != "Roto Brush Matte");
+                    layer
+                        .masks
+                        .retain(|mask| mask.id != crate::core::roto_assist::ROTO_BRUSH_MATTE_ID);
                     layer.roto_brush_strokes.clear();
                 }
                 app.commit_project(cleared);
@@ -202,7 +372,9 @@ pub(in crate::ui::viewport) fn draw_roto_brush_interaction(
                         let mask_idx = layer
                             .masks
                             .iter()
-                            .position(|mask| mask.name == "Roto Brush Matte")
+                            .position(|mask| {
+                                mask.id == crate::core::roto_assist::ROTO_BRUSH_MATTE_ID
+                            })
                             .ok_or_else(|| {
                                 "Create a Roto Brush Matte before propagation".to_owned()
                             })?;
@@ -211,7 +383,7 @@ pub(in crate::ui::viewport) fn draw_roto_brush_interaction(
                             &layer.trackers,
                             active_tracker_idx,
                             layer.in_frame,
-                            layer.out_frame.max(layer.in_frame.saturating_add(1)),
+                            layer.out_frame.saturating_sub(1).max(layer.in_frame),
                         )?;
                         layer.masks[mask_idx].path.vertices = baked;
                         Ok(())
@@ -232,13 +404,6 @@ pub(in crate::ui::viewport) fn draw_roto_brush_interaction(
                 }
             }
             let stroke_id = egui::Id::new(("roto_live_stroke", sel_li));
-            let segment_busy = ctx
-                .data(|data| {
-                    data.get_temp::<std::sync::Arc<RotoSegmentJob>>(egui::Id::new(
-                        "roto_segment_job",
-                    ))
-                })
-                .is_some();
             let alt_held = ctx.input(|i| i.modifiers.alt);
             let fg_pref = ctx.data_mut(|d| {
                 d.get_temp::<bool>(egui::Id::new("roto_fg_mode"))
@@ -247,42 +412,57 @@ pub(in crate::ui::viewport) fn draw_roto_brush_interaction(
             let is_fg = if alt_held { false } else { fg_pref };
             if !segment_busy && viewport_response.drag_started() {
                 if let Some(pp) = viewport_response.interact_pointer_pos() {
-                    let cx = (pp.x - origin_x) / draw_w * comp_w;
-                    let cy = (pp.y - origin_y) / draw_h * comp_h;
-                    ctx.data_mut(|d| d.insert_temp(stroke_id, vec![[cx, cy]]));
+                    if let Some(point) =
+                        roto_canvas_point(pp, origin_x, origin_y, draw_w, draw_h, comp_w, comp_h)
+                    {
+                        let radius = ctx.data(|data| {
+                            data.get_temp::<f32>(egui::Id::new("roto_brush_radius"))
+                                .unwrap_or(8.0)
+                        });
+                        ctx.data_mut(|d| {
+                            d.insert_temp(
+                                stroke_id,
+                                RotoLiveStroke {
+                                    points: vec![point],
+                                    radius,
+                                    is_foreground: is_fg,
+                                },
+                            )
+                        });
+                    }
                 }
             }
             if !segment_busy && viewport_response.dragged() {
                 if let Some(pp) = viewport_response.interact_pointer_pos() {
-                    let cx = (pp.x - origin_x) / draw_w * comp_w;
-                    let cy = (pp.y - origin_y) / draw_h * comp_h;
-                    let mut pts = ctx
-                        .data_mut(|d| d.get_temp::<Vec<[f32; 2]>>(stroke_id).unwrap_or_default());
-                    pts.push([cx, cy]);
-                    ctx.data_mut(|d| d.insert_temp(stroke_id, pts));
+                    if let Some(point) =
+                        roto_canvas_point(pp, origin_x, origin_y, draw_w, draw_h, comp_w, comp_h)
+                    {
+                        let mut stroke = ctx.data_mut(|d| {
+                            d.get_temp::<RotoLiveStroke>(stroke_id).unwrap_or_default()
+                        });
+                        stroke.points.push(point);
+                        ctx.data_mut(|d| d.insert_temp(stroke_id, stroke));
+                    }
                 }
             }
             if !segment_busy && viewport_response.drag_stopped() {
-                let pts_opt = ctx.data_mut(|d| d.remove_temp::<Vec<[f32; 2]>>(stroke_id));
-                if let Some(pts) = pts_opt {
-                    if pts.len() >= 2 {
-                        let radius = ctx.data_mut(|data| {
-                            data.get_temp::<f32>(egui::Id::new("roto_brush_radius"))
-                                .unwrap_or(8.0)
-                        });
+                let stroke_opt = ctx.data_mut(|d| d.remove_temp::<RotoLiveStroke>(stroke_id));
+                if let Some(stroke) = stroke_opt {
+                    if stroke.points.len() >= 2 {
                         let previous_strokes = ctx.data_mut(|data| {
                             data.get_temp::<Vec<EngineRotoStroke>>(stroke_list_id)
                                 .unwrap_or_default()
                         });
                         let mut all_strokes = previous_strokes.clone();
                         all_strokes.push(EngineRotoStroke {
-                            stroke_type: if is_fg {
+                            stroke_type: if stroke.is_foreground {
                                 RotoStrokeType::Foreground
                             } else {
                                 RotoStrokeType::Background
                             },
-                            points: pts,
-                            radius,
+                            points: stroke.points,
+                            pressures: Vec::new(),
+                            radius: stroke.radius,
                             frame: Some(current_frame),
                         });
                         ctx.data_mut(|data| data.insert_temp(stroke_list_id, all_strokes.clone()));
@@ -324,15 +504,16 @@ pub(in crate::ui::viewport) fn draw_roto_brush_interaction(
             }
 
             // Render live green (FG) or red (BG) stroke preview
-            let preview = ctx.data(|d| d.get_temp::<Vec<[f32; 2]>>(stroke_id));
-            if let Some(pts) = preview {
-                if pts.len() >= 2 {
-                    let stroke_col = if is_fg {
+            let preview = ctx.data(|d| d.get_temp::<RotoLiveStroke>(stroke_id));
+            if let Some(stroke) = preview {
+                if stroke.points.len() >= 2 {
+                    let stroke_col = if stroke.is_foreground {
                         colors::ACCENT_GREEN
                     } else {
                         colors::ACCENT_RED
                     };
-                    let screen_pts: Vec<egui::Pos2> = pts
+                    let screen_pts: Vec<egui::Pos2> = stroke
+                        .points
                         .iter()
                         .map(|p| {
                             egui::pos2(
@@ -341,9 +522,26 @@ pub(in crate::ui::viewport) fn draw_roto_brush_interaction(
                             )
                         })
                         .collect();
+                    let screen_scale = if comp_w > 0.0 && comp_h > 0.0 {
+                        ((draw_w / comp_w) * (draw_h / comp_h)).sqrt()
+                    } else {
+                        1.0
+                    };
+                    let screen_scale = if screen_scale.is_finite() {
+                        screen_scale
+                    } else {
+                        1.0
+                    };
+                    let radius = if stroke.radius.is_finite() {
+                        stroke.radius.max(0.0)
+                    } else {
+                        0.0
+                    };
+                    let max_brush_width = (2.0 * draw_w.max(draw_h)).max(1.0);
+                    let brush_width = (2.0 * radius * screen_scale).clamp(1.0, max_brush_width);
                     for w in screen_pts.windows(2) {
                         ui.painter()
-                            .line_segment([w[0], w[1]], egui::Stroke::new(6.0_f32, stroke_col));
+                            .line_segment([w[0], w[1]], egui::Stroke::new(brush_width, stroke_col));
                     }
                 }
             }
@@ -361,24 +559,30 @@ pub(in crate::ui::viewport) fn draw_roto_brush_interaction(
                     layer
                         .masks
                         .iter()
-                        .find(|mask| mask.name == "Roto Brush Matte")
+                        .find(|mask| mask.id == crate::core::roto_assist::ROTO_BRUSH_MATTE_ID)
                 }) {
-                    let verts = mask.path.vertices_at_frame(current_frame);
-                    if verts.len() >= 3 {
-                        let screen_verts: Vec<egui::Pos2> = verts
-                            .iter()
-                            .map(|p| {
-                                egui::pos2(
-                                    origin_x + p[0] / comp_w * draw_w,
-                                    origin_y + p[1] / comp_h * draw_h,
-                                )
-                            })
-                            .collect();
-                        ui.painter().add(egui::Shape::convex_polygon(
-                            screen_verts,
-                            egui::Color32::from_rgba_unmultiplied(80, 220, 120, 52),
-                            egui::Stroke::new(1.0_f32, colors::ACCENT_GREEN.linear_multiply(0.8)),
-                        ));
+                    if let Some(polygon) = matte_preview_polygon(&mask.path, current_frame) {
+                        if polygon.len() >= 3 {
+                            let screen_verts: Vec<egui::Pos2> = polygon
+                                .iter()
+                                .map(|p| {
+                                    egui::pos2(
+                                        origin_x + p[0] / comp_w * draw_w,
+                                        origin_y + p[1] / comp_h * draw_h,
+                                    )
+                                })
+                                .collect();
+                            if let Some(mesh) = triangulate_matte_preview(&screen_verts) {
+                                ui.painter().add(mesh);
+                            }
+                            ui.painter().add(egui::Shape::closed_line(
+                                screen_verts,
+                                egui::Stroke::new(
+                                    1.0_f32,
+                                    colors::ACCENT_GREEN.linear_multiply(0.8),
+                                ),
+                            ));
+                        }
                     }
                 }
             }

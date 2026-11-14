@@ -53,6 +53,8 @@ mod tests {
             height: 1080,
             fps: 30,
             total_frames: 90,
+            quality: 85,
+            audio_bitrate_kbps: 192,
         };
         let cfg2 = cfg.clone();
         assert_eq!(cfg.output_path, cfg2.output_path);

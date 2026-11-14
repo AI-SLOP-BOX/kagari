@@ -303,16 +303,209 @@ pub fn apply_stroke_effect(
     stroke_color: [u8; 4],
     stroke_width: u32,
 ) {
-    apply_find_edges(pixels, width, height);
-    apply_simple_choker_alpha(pixels, stroke_color, stroke_width);
+    apply_stroke_effect_position(pixels, width, height, stroke_color, stroke_width, 0);
 }
 
-fn apply_simple_choker_alpha(pixels: &mut [u8], color: [u8; 4], _width: u32) {
-    for i in (0..pixels.len()).step_by(4) {
-        if pixels[i] > 50 {
-            pixels[i..i + 4].copy_from_slice(&color);
+pub fn apply_stroke_effect_position(
+    pixels: &mut [u8],
+    width: u32,
+    height: u32,
+    stroke_color: [u8; 4],
+    stroke_width: u32,
+    position: u32,
+) {
+    let Some(pixel_count) = (width as usize).checked_mul(height as usize) else {
+        return;
+    };
+    let Some(byte_count) = pixel_count.checked_mul(4) else {
+        return;
+    };
+    if width == 0 || height == 0 || pixels.len() != byte_count || stroke_width == 0 {
+        return;
+    }
+
+    let mut alpha = Vec::new();
+    if alpha.try_reserve_exact(pixel_count).is_err() {
+        return;
+    }
+    alpha.extend(pixels.as_chunks::<4>().0.iter().map(|pixel| pixel[3]));
+    let Some(mut distances) = try_filled_vec(pixel_count, f32::INFINITY) else {
+        return;
+    };
+    let Some(mut scratch) = try_filled_vec(pixel_count, f32::INFINITY) else {
+        return;
+    };
+    let max_dimension = width.max(height) as usize;
+    let Some(mut line_input) = try_filled_vec(max_dimension, f32::INFINITY) else {
+        return;
+    };
+    let Some(mut line_output) = try_filled_vec(max_dimension, f32::INFINITY) else {
+        return;
+    };
+    let Some(mut sites) = try_filled_vec(max_dimension, 0usize) else {
+        return;
+    };
+    let Some(boundary_count) = max_dimension.checked_add(1) else {
+        return;
+    };
+    let Some(mut boundaries) = try_filled_vec(boundary_count, 0.0f64) else {
+        return;
+    };
+
+    let (outside_radius, inside_radius) = match position {
+        1 => (0.0, stroke_width as f32),
+        2 => (
+            (stroke_width as f32 * 0.5).ceil(),
+            (stroke_width as f32 * 0.5).floor(),
+        ),
+        _ => (stroke_width as f32, 0.0),
+    };
+    let color_rgb = [
+        stroke_color[0] as f32,
+        stroke_color[1] as f32,
+        stroke_color[2] as f32,
+    ];
+    let color_alpha = stroke_color[3] as f32 / 255.0;
+
+    if outside_radius > 0.0 {
+        if !stroke_distance_transform(
+            &alpha,
+            width as usize,
+            height as usize,
+            &mut distances,
+            &mut scratch,
+            &mut line_input,
+            &mut line_output,
+            &mut sites,
+            &mut boundaries,
+            |value| value > 0,
+        ) {
+            return;
+        }
+        for (index, pixel) in pixels.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+            let fill_alpha = alpha[index] as f32 / 255.0;
+            let distance = distances[index].sqrt();
+            let coverage = if distance.is_finite() {
+                (outside_radius + 0.5 - distance).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            let stroke_alpha = coverage * color_alpha * (1.0 - fill_alpha);
+            let out_alpha = fill_alpha + stroke_alpha;
+            if stroke_alpha > 0.0 && out_alpha > 0.0 {
+                for channel in 0..3 {
+                    pixel[channel] = ((color_rgb[channel] * stroke_alpha
+                        + pixel[channel] as f32 * fill_alpha)
+                        / out_alpha)
+                        .round()
+                        .clamp(0.0, 255.0) as u8;
+                }
+                pixel[3] = (out_alpha * 255.0).round().clamp(0.0, 255.0) as u8;
+            }
         }
     }
+
+    if inside_radius > 0.0 {
+        if !stroke_distance_transform(
+            &alpha,
+            width as usize,
+            height as usize,
+            &mut distances,
+            &mut scratch,
+            &mut line_input,
+            &mut line_output,
+            &mut sites,
+            &mut boundaries,
+            |value| value < 255,
+        ) {
+            return;
+        }
+        for (index, pixel) in pixels.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+            let fill_alpha = alpha[index] as f32 / 255.0;
+            if fill_alpha <= 0.0 {
+                continue;
+            }
+            let distance = distances[index].sqrt();
+            let coverage = if distance.is_finite() {
+                (inside_radius + 0.5 - distance).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            let stroke_alpha = coverage * color_alpha * fill_alpha;
+            if stroke_alpha > 0.0 {
+                for channel in 0..3 {
+                    pixel[channel] = (color_rgb[channel] * stroke_alpha
+                        + pixel[channel] as f32 * (1.0 - stroke_alpha))
+                        .round()
+                        .clamp(0.0, 255.0) as u8;
+                }
+            }
+        }
+    }
+}
+
+fn try_filled_vec<T: Clone>(len: usize, value: T) -> Option<Vec<T>> {
+    let mut values = Vec::new();
+    values.try_reserve_exact(len).ok()?;
+    values.resize(len, value);
+    Some(values)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn stroke_distance_transform(
+    alpha: &[u8],
+    width: usize,
+    height: usize,
+    result: &mut [f32],
+    scratch: &mut [f32],
+    line_input: &mut [f32],
+    line_output: &mut [f32],
+    sites: &mut [usize],
+    boundaries: &mut [f64],
+    is_seed: impl Fn(u8) -> bool,
+) -> bool {
+    if alpha.len() != width.saturating_mul(height)
+        || result.len() != alpha.len()
+        || scratch.len() != alpha.len()
+        || line_input.len() < width.max(height)
+        || line_output.len() < width.max(height)
+        || sites.len() < width.max(height)
+        || boundaries.len() <= width.max(height)
+    {
+        return false;
+    }
+    result.fill(f32::INFINITY);
+    scratch.fill(f32::INFINITY);
+    for y in 0..height {
+        for x in 0..width {
+            line_input[x] = if is_seed(alpha[y * width + x]) {
+                0.0
+            } else {
+                f32::INFINITY
+            };
+        }
+        crate::core::roto_brush_engine::filter::squared_distance_transform_1d_into(
+            &line_input[..width],
+            &mut scratch[y * width..(y + 1) * width],
+            &mut sites[..width],
+            &mut boundaries[..=width],
+        );
+    }
+    for x in 0..width {
+        for y in 0..height {
+            line_input[y] = scratch[y * width + x];
+        }
+        crate::core::roto_brush_engine::filter::squared_distance_transform_1d_into(
+            &line_input[..height],
+            &mut line_output[..height],
+            &mut sites[..height],
+            &mut boundaries[..=height],
+        );
+        for (y, &distance_squared) in line_output[..height].iter().enumerate() {
+            result[y * width + x] = distance_squared;
+        }
+    }
+    true
 }
 
 // 35. Vignette

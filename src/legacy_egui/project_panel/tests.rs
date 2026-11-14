@@ -73,6 +73,7 @@ mod tests {
                 width: 64,
                 height: 64,
                 audio_wav: Some("/new/audio.wav".into()),
+                audio_warning: None,
             },
         );
 

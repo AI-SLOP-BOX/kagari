@@ -150,6 +150,7 @@ component CompositionSettingsPanel() {
 component CompositionViewerPanel() {
   Card { Padding(5) { VStack(spacing: 4) {
     If(compact) { Canvas("kagari.viewport").frame(height: 360) } else { Grow(1) { Canvas("kagari.viewport") } }
+    If(preview_worker_failed) { Caption("プレビュー処理が停止しました。アプリを再起動してください。") }
     HStack(spacing: 6) { Icon("grid", 14) Caption("コンポジション") Spacer Caption("{status_resolution}") Caption("{fps_label}") }
   } } }
 }

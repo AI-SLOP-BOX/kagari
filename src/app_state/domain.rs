@@ -280,6 +280,7 @@ pub enum QueueItemStatus {
     Rendering,
     Done,
     Failed,
+    Cancelled,
 }
 pub struct ExportDomainState {
     pub show_export_dialog: bool,

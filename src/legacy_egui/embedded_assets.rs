@@ -16,10 +16,7 @@ pub fn open_image(path: impl AsRef<std::path::Path>) -> image::ImageResult<image
             return Ok(image);
         }
     }
-    match image::open(path) {
-        Ok(image) => Ok(image),
-        Err(file_error) => Err(file_error),
-    }
+    image::open(path)
 }
 
 #[cfg(test)]

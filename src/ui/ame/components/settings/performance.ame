@@ -3,35 +3,16 @@ component SettingsPerformancePage() {
     VStack(spacing: 4) { Title("パフォーマンス") Caption("メモリの使用方法や処理の設定を調整します。") }
 
     Card(padding: 12, spacing: 10) {
-      Text("メモリ", size: 13)
-      HStack(spacing: 8) {
-        Caption("メモリ使用量")
-        Spacer
-        Text("{memory_limit_gb:.0f} GB", size: 12)
-      }
-      Slider(memory_limit_gb, min: 1.0, max: 64.0, action: setting_memory_changed)
-      Caption("再生やレンダリングで使えるメモリの上限です。複数の処理が同時に走る場合は余裕を持たせてください。")
-    }
-
-    Card(padding: 12, spacing: 10) {
-      Text("レンダリング", size: 13)
-      SettingsRow("レンダラー", label_width: 170) {
+      Text("エフェクト計算", size: 13)
+      SettingsRow("GPU計算", label_width: 170) {
         Select(renderer, action: setting_renderer_changed) {
-          Option("gpu", "GPU (推奨)")
-          Option("cpu", "CPU")
+          Option("gpu", "GPU（対応エフェクトのみ）")
+          Option("cpu", "CPU（標準）")
         }
       }
-      SettingsRow("プレビューの品質", label_width: 170) {
-        Select(preview_quality, action: setting_preview_quality_changed) {
-          Option("auto", "自動 (バランス)")
-          Option("performance", "パフォーマンス優先")
-          Option("quality", "品質優先")
-        }
-      }
-      SettingsRow("バックグラウンド", label_width: 170) {
-        Checkbox("アイドル時にレンダリングを実行する", background_render, action: setting_background_render_changed)
-      }
+      Caption("GPU計算は対応する一部エフェクトで使用します。コンポジット本体と最終書き出しは現在CPUレンダー経路です。")
       Checkbox("再生中の解像度自動低下（アダプティブプレビュー）", adaptive_preview, action: setting_adaptive_preview_changed)
+      Caption("総メモリ上限とアイドル時の事前レンダーは、まだ処理に接続されていません。")
     }
 
     Card(padding: 12, spacing: 10) {

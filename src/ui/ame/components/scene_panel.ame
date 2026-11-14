@@ -2,9 +2,7 @@ component SceneAssetPanel() {
   Card { Padding(8) { VStack(spacing: 5) {
     Text("シーン内の素材", size: 14)
     If(has_scene_assets) {
-      ScrollView(260) {
-        VStack(spacing: 2) {
-          ForEach(scene_assets, asset, key: id) {
+      VirtualList(scene_assets, asset, key: id, height: 260, row_height: 48, overscan: 5, variable_height: true) {
             HStack(spacing: 5) {
               If(asset.kind == "動画" || asset.kind == "画像") { Icon("film", 13) } else {
                 If(asset.kind == "音声") { Icon("music", 13) } else {
@@ -31,8 +29,6 @@ component SceneAssetPanel() {
                 If(asset.locked) { Caption("ロック中") }
               }
             }
-          }
-        }
       }
     } else {
       Caption("読み込み済みの画像・動画・音声・3Dモデル素材はありません。")
@@ -78,9 +74,7 @@ component SceneHierarchyPanel() {
       If(search != "") { Button("検索解除", action: clear_scene_search, tone: secondary, size: small) }
     }
     If(has_scene_layers) {
-      ScrollView(360) {
-        VStack(spacing: 2) {
-          ForEach(scene_layers, layer, key: id) {
+      ForEach(scene_layers, layer, key: id, height: 360, row_height: 76, overscan: 5) {
             VStack(spacing: 1) {
               HStack(spacing: 4) {
                 Caption("{layer.indent}")
@@ -102,9 +96,7 @@ component SceneHierarchyPanel() {
                 Caption("並び順")
                 Button("1段", action: move_timeline_layer_up, tone: secondary, size: small, disabled: layer.locked)
                 Button("1段", action: move_timeline_layer_down, tone: secondary, size: small, disabled: layer.locked)
-              }
-            }
-          }
+      }
           If(!has_scene_layer_matches) { Caption("検索条件に一致するレイヤーはありません。") }
         }
       }

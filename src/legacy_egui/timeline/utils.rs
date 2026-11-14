@@ -5,6 +5,7 @@ pub use super::keyframe_tick::{draw_keyframe_tick, KeyframeTickResult};
 pub use super::ruler::{format_timecode_label, ruler_label_step, ruler_tick_frames};
 pub use super::snapping::{
     collect_all_kf_frames, maybe_snap_frame, snap_to_layer_edges, snap_to_sorted_layer_edges,
+    snap_to_sorted_layer_edges_in_range,
 };
 use crate::core::property::Animatable;
 
@@ -38,6 +39,16 @@ mod tests {
         assert_eq!(
             snap_to_sorted_layer_edges(100, 1, &[(94, 1), (105, 2)]),
             105
+        );
+    }
+
+    #[test]
+    fn sorted_layer_snap_clamps_to_the_clip_start_range() {
+        let edges = [(100, 1), (104, 2)];
+        assert_eq!(snap_to_sorted_layer_edges_in_range(101, 0, &edges, 99), 99);
+        assert_eq!(
+            snap_to_sorted_layer_edges_in_range(101, 0, &edges, 103),
+            100
         );
     }
 
@@ -86,6 +97,16 @@ mod tests {
         let rect = egui::Rect::from_min_size(egui::pos2(100.0, 0.0), egui::vec2(400.0, 20.0));
         let f = x_to_frame(300.0, 0, 100, rect);
         assert_eq!(f, 50);
+    }
+
+    #[test]
+    fn timeline_viewport_end_saturates_at_u32_limit() {
+        let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(100.0, 20.0));
+        let viewport = TimelineViewport::new(u32::MAX - 5, 10, rect);
+
+        assert_eq!(viewport.end_frame(), u32::MAX);
+        assert!(viewport.contains(u32::MAX));
+        assert_eq!(viewport.x_to_frame(rect.right()), u32::MAX);
     }
 
     #[test]
@@ -165,13 +186,13 @@ mod tests {
                     crate::ui::theme::configure_ae_theme(context);
                     egui::CentralPanel::default().show(context, |ui| {
                         for (width, start_frame, span, fps) in
-                            [(260.0, 37, 900, 24), (720.0, 137, 2400, 30), (1400.0, 59, 12000, 60)]
+                            [(260.0, 37_u32, 900_u32, 24_u32), (720.0, 137, 2400, 30), (1400.0, 59, 12000, 60)]
                         {
                             let font = egui::FontId::new(
                                 ui.text_style_height(&egui::TextStyle::Small) * 0.78,
                                 egui::FontFamily::Monospace,
                             );
-                            let end_frame = start_frame + span;
+                            let end_frame = start_frame.saturating_add(span);
                             let measured_width = [start_frame, end_frame]
                                 .into_iter()
                                 .map(|frame| {

@@ -23,13 +23,13 @@ impl LutCache {
     }
 
     #[inline]
-    fn cache_key(r: f32, g: f32, b: f32, size: usize) -> u64 {
+    fn cache_key(r: f32, g: f32, b: f32, size: usize, lut_id: u64) -> u64 {
         let s = size.saturating_sub(1) as f32;
         let ri = ((r * s).clamp(0.0, s) * 1000.0) as u32;
         let gi = ((g * s).clamp(0.0, s) * 1000.0) as u32;
         let bi = ((b * s).clamp(0.0, s) * 1000.0) as u32;
         let mut hash = 0xcbf29ce484222325u64;
-        for value in [size as u64, ri as u64, gi as u64, bi as u64] {
+        for value in [lut_id, size as u64, ri as u64, gi as u64, bi as u64] {
             for byte in value.to_le_bytes() {
                 hash ^= u64::from(byte);
                 hash = hash.wrapping_mul(0x100000001b3);
@@ -46,10 +46,22 @@ impl LutCache {
         size: usize,
         f: impl FnOnce(f32, f32, f32) -> (f32, f32, f32),
     ) -> (f32, f32, f32) {
+        self.get_or_insert_for_lut(0, r, g, b, size, f)
+    }
+
+    pub fn get_or_insert_for_lut(
+        &mut self,
+        lut_id: u64,
+        r: f32,
+        g: f32,
+        b: f32,
+        size: usize,
+        f: impl FnOnce(f32, f32, f32) -> (f32, f32, f32),
+    ) -> (f32, f32, f32) {
         if self.capacity == 0 || size == 0 {
             return f(r, g, b);
         }
-        let key = Self::cache_key(r, g, b, size);
+        let key = Self::cache_key(r, g, b, size, lut_id);
         if let Some(&cached) = self.entries.get(&key) {
             // Move to most-recently-used (O(n) scan but small n in practice)
             self.order.retain(|&k| k != key);
@@ -82,6 +94,7 @@ pub fn apply_lut_batch_cached(
     cache: &mut LutCache,
 ) {
     let size = lut.size;
+    cache.clear();
     for pixel in pixels.as_chunks_mut::<4>().0 {
         let r = pixel[0] as f32 / 255.0;
         let g = pixel[1] as f32 / 255.0;
@@ -100,6 +113,7 @@ pub fn apply_lut_batch_f32(
     cache: &mut LutCache,
 ) {
     let size = lut.size;
+    cache.clear();
     for pixel in pixels.iter_mut() {
         let input =
             [pixel[0], pixel[1], pixel[2]].map(|value| if value.is_finite() { value } else { 0.0 });
@@ -153,7 +167,7 @@ mod tests {
         // First entry should have been evicted
         assert!(!cache
             .entries
-            .contains_key(&LutCache::cache_key(0.1, 0.1, 0.1, 33)));
+            .contains_key(&LutCache::cache_key(0.1, 0.1, 0.1, 33, 0)));
     }
 
     #[test]
@@ -167,20 +181,20 @@ mod tests {
 
     #[test]
     fn test_cache_key_deterministic() {
-        let k1 = LutCache::cache_key(0.5, 0.3, 0.7, 33);
-        let k2 = LutCache::cache_key(0.5, 0.3, 0.7, 33);
+        let k1 = LutCache::cache_key(0.5, 0.3, 0.7, 33, 0);
+        let k2 = LutCache::cache_key(0.5, 0.3, 0.7, 33, 0);
         assert_eq!(k1, k2);
     }
 
     #[test]
     fn cache_key_includes_lut_size_and_full_quantized_channels() {
         assert_ne!(
-            LutCache::cache_key(0.5, 0.3, 0.7, 33),
-            LutCache::cache_key(0.5, 0.3, 0.7, 34)
+            LutCache::cache_key(0.5, 0.3, 0.7, 33, 0),
+            LutCache::cache_key(0.5, 0.3, 0.7, 34, 0)
         );
         assert_ne!(
-            LutCache::cache_key(0.5, 0.3, 0.7, 33),
-            LutCache::cache_key(0.5, 0.3, 0.8, 33)
+            LutCache::cache_key(0.5, 0.3, 0.7, 33, 0),
+            LutCache::cache_key(0.5, 0.3, 0.8, 33, 0)
         );
     }
 

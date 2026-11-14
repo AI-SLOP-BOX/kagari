@@ -190,28 +190,38 @@ fn draw_layer_create_submenu(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
 fn draw_create_shapes_from_text_full(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
     if ui
         .button("Create Shapes from Text")
-        .on_hover_text("Decompose selected Text layer into animatable vector Bezier Shape paths")
+        .on_hover_text("Convert the selected text into editable vector outline masks")
         .clicked()
     {
         let mut created = false;
+        let mut too_complex = false;
         let selected_idx = app.selection.selected_layer_idx;
         app.modify_project(|p| {
             let comp = p.active_composition_mut();
             if let Some(idx) = selected_idx {
                 if idx < comp.layers.len() {
-                    if let Some(shape_layer) = crate::core::text_to_shapes::convert_text_to_shapes(
+                    match crate::core::text_to_shapes::try_convert_text_to_shapes(
                         &comp.layers[idx],
                         comp.width,
                         comp.height,
                     ) {
-                        comp.layers.insert(idx, shape_layer);
-                        created = true;
+                        Ok(Some(shape_layer)) => {
+                            comp.layers.insert(idx, shape_layer);
+                            created = true;
+                        }
+                        Err(crate::core::text_to_shapes::TextToShapesError::TooComplex) => {
+                            too_complex = true;
+                        }
+                        Ok(None) => {}
                     }
                 }
             }
         });
         if created {
             app.toasts.info("Created Shapes from Text layer");
+        } else if too_complex {
+            app.toasts
+                .error("Text is too large or complex to convert into vector outlines");
         } else {
             app.toasts.warning("Please select a Text layer first");
         }

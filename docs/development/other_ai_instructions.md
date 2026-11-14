@@ -39,7 +39,7 @@
   - `src/ui/timeline.rs`: 下部パネルのタイムライン（Time Ruler, Playhead scrub, expanded sub-properties）。
   - `src/ui/viewport.rs`: 中央のビューポート（GPU テクスチャ / CPU フォールバック描画）。
 - `src/core/mod.rs`: `keyframe`, `property`, `timeline`, `renderer`, `integration`, `tracker_engine` のモジュールを公開。
-- `src/core/shader.wgsl`: GPUプレビュー用のシェーダーコード。
+- `src/core/shader/`: GPUプレビュー用のシェーダーコード。
 - `src/core/integration.rs`: 外部連携のためのデータ構造（`OtioTimeline`, `DynamicLinkMessage`）およびバックエンドTCPサーバー (`start_sync_server`) が実装されています。
 - `src/core/tracker_engine.rs`: モーショントラッキング(SADパターンマッチング)用計算モジュール。
 

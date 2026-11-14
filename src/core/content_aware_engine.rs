@@ -25,19 +25,16 @@ pub fn generate_content_aware_fill_frame(
     alpha_expansion: f32,
     method: FillMethod,
 ) -> Vec<u8> {
-    let size = crate::core::software_renderer::rgba_buffer_size(width, height).unwrap_or(0);
+    let Some(size) = crate::core::software_renderer::rgba_buffer_size(width, height) else {
+        return Vec::new();
+    };
     let mut out_buffer = if src_pixels.len() == size {
         src_pixels.to_vec()
     } else {
         vec![0u8; size]
     };
 
-    if mask_polygon.is_empty()
-        || width == 0
-        || height == 0
-        || width > i32::MAX as u32
-        || height > i32::MAX as u32
-    {
+    if mask_polygon.is_empty() || width > i32::MAX as u32 || height > i32::MAX as u32 {
         return out_buffer;
     }
 

@@ -14,6 +14,7 @@ fn shadow_test_comp(caster_casts: bool) -> Composition {
     );
     recv.transform.scale = Animatable::new_constant([100.0, 100.0]);
     recv.transform.position = Animatable::new_constant([32.0, 32.0]);
+    recv.transform.anchor_point = Animatable::new_constant([32.0, 32.0]);
     comp.layers.push(recv);
 
     // Caster: red solid raised on +z between light and floor plane
@@ -30,6 +31,7 @@ fn shadow_test_comp(caster_casts: bool) -> Composition {
     caster.transform.scale = Animatable::new_constant([20.0, 20.0]);
     caster.transform.position = Animatable::new_constant([36.0, 36.0]);
     caster.transform_3d.position = Animatable::new_constant([36.0, 36.0, 100.0]);
+    caster.transform_3d.scale = Animatable::new_constant([20.0, 20.0, 100.0]);
     comp.layers.push(caster);
 
     // Point light upper-left of the caster, above the plane (+z), casting

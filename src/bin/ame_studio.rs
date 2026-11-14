@@ -3,8 +3,8 @@
 
 use ame_ui::{
     app::{
-        self, App, CanvasBounds, CanvasContext, CanvasPointerEvent, CanvasPointerPhase, Viewport,
-        WindowConfig,
+        self, App, CanvasBounds, CanvasContext, CanvasPointerEvent, CanvasPointerPhase,
+        CanvasScrollEvent, Viewport, WindowConfig,
     },
     asset::{AssetData, AssetKey, AssetMime, AssetStore},
     event::{ActionValue, AmeEvent},
@@ -20,12 +20,44 @@ use vello::{
 
 #[path = "../ui/ame_sources.rs"]
 mod ame_sources;
+#[path = "ame_studio/asset_placement.rs"]
+mod ame_studio_asset_placement;
+#[path = "ame_studio/effect_edit_ops.rs"]
+mod ame_studio_effect_edit_ops;
 #[path = "ame_studio/effect_ops.rs"]
 mod ame_studio_effect_ops;
+#[path = "ame_studio/event_editor_workspace_handlers.rs"]
+mod ame_studio_event_editor_workspace_handlers;
+#[path = "ame_studio/event_effect_handlers.rs"]
+mod ame_studio_event_effect_handlers;
+#[path = "ame_studio/event_graph_handlers.rs"]
+mod ame_studio_event_graph_handlers;
 #[path = "ame_studio/event_handlers.rs"]
 mod ame_studio_event_handlers;
+#[path = "ame_studio/event_layer_keyframe_handlers.rs"]
+mod ame_studio_event_layer_keyframe_handlers;
+#[path = "ame_studio/event_mask_handlers.rs"]
+mod ame_studio_event_mask_handlers;
+#[path = "ame_studio/event_navigation_setup_handlers.rs"]
+mod ame_studio_event_navigation_setup_handlers;
+#[path = "ame_studio/event_project_asset_handlers.rs"]
+mod ame_studio_event_project_asset_handlers;
+#[path = "ame_studio/event_project_export_actions.rs"]
+mod ame_studio_event_project_export_actions;
+#[path = "ame_studio/event_scene_layer_handlers.rs"]
+mod ame_studio_event_scene_layer_handlers;
+#[path = "ame_studio/event_text_shape_handlers.rs"]
+mod ame_studio_event_text_shape_handlers;
+#[path = "ame_studio/event_time_transform_actions.rs"]
+mod ame_studio_event_time_transform_actions;
+#[path = "ame_studio/event_timeline_markers.rs"]
+mod ame_studio_event_timeline_markers;
 #[path = "ame_studio/export.rs"]
 mod ame_studio_export;
+#[path = "ame_studio/export_stills.rs"]
+mod ame_studio_export_stills;
+#[path = "ame_studio/export_video.rs"]
+mod ame_studio_export_video;
 #[allow(dead_code)]
 #[path = "ame_studio/icons.rs"]
 mod ame_studio_icons;
@@ -33,10 +65,16 @@ mod ame_studio_icons;
 mod ame_studio_layer_controls;
 #[path = "ame_studio/media_import.rs"]
 mod ame_studio_media_import;
+#[path = "ame_studio/media_proxy.rs"]
+mod ame_studio_media_proxy;
 #[path = "ame_studio/preset_ops.rs"]
 mod ame_studio_preset_ops;
 #[path = "ame_studio/project_io.rs"]
 mod ame_studio_project_io;
+#[path = "ame_studio/roto_brush.rs"]
+mod ame_studio_roto_brush;
+#[path = "ame_studio/roto_brush_messages.rs"]
+mod ame_studio_roto_brush_messages;
 #[path = "ame_studio/sync_assets.rs"]
 mod ame_studio_sync_assets;
 #[path = "ame_studio/sync_bindings.rs"]
@@ -45,17 +83,32 @@ mod ame_studio_sync_bindings;
 mod ame_studio_sync_effects;
 #[path = "ame_studio/sync_environment.rs"]
 mod ame_studio_sync_environment;
+#[path = "ame_studio/sync_graph_layer_bindings.rs"]
+mod ame_studio_sync_graph_layer_bindings;
 #[path = "ame_studio/sync_layer_styles.rs"]
 mod ame_studio_sync_layer_styles;
+#[path = "ame_studio/sync_media_layer_bindings.rs"]
+mod ame_studio_sync_media_layer_bindings;
+#[path = "ame_studio/sync_particle_bindings.rs"]
+mod ame_studio_sync_particle_bindings;
+#[path = "ame_studio/sync_project_timeline.rs"]
+mod ame_studio_sync_project_timeline;
 #[path = "ame_studio/sync_recents.rs"]
 mod ame_studio_sync_recents;
+#[path = "ame_studio/sync_scene_assets.rs"]
+mod ame_studio_sync_scene_assets;
 #[path = "ame_studio/sync_shapes.rs"]
 mod ame_studio_sync_shapes;
+#[path = "ame_studio/sync_text_layer_bindings.rs"]
+mod ame_studio_sync_text_layer_bindings;
 #[path = "ame_studio/viewport.rs"]
 mod ame_studio_viewport;
+#[path = "ame_studio/viewport_overlays.rs"]
+mod ame_studio_viewport_overlays;
 
 pub struct AfterEffectsStudio {
     ui: AmeRuntime,
+    app_event_sender: Option<ame_ui::app::AppEventSender>,
     assets: AssetStore,
     asset_preview_image: Option<(String, Option<vello::peniko::ImageData>)>,
     asset_preview_failed_asset_id: Option<String>,
@@ -64,6 +117,7 @@ pub struct AfterEffectsStudio {
     asset_render_preview_pending: std::collections::HashMap<String, AssetPreviewJob>,
     asset_render_preview_request_tx: std::sync::mpsc::SyncSender<(String, AssetPreviewJob)>,
     asset_render_preview_result_rx: std::sync::mpsc::Receiver<(String, Option<CachedAssetPreview>)>,
+    asset_preview_worker_failed: bool,
     text_font_families: Vec<String>,
     screen: Screen,
     docs_detail_page: bool,
@@ -139,6 +193,10 @@ pub struct AfterEffectsStudio {
     render_queue: bool,
     workspace: Workspace,
     selected_tool: &'static str,
+    roto_foreground: bool,
+    roto_brush_radius: f64,
+    roto_feather_radius: f64,
+    roto_status: String,
     layer_name: String,
     search: String,
     project_search: String,
@@ -146,17 +204,23 @@ pub struct AfterEffectsStudio {
     zoom_manually_adjusted: bool,
     current_frame: u32,
     timeline_width: f64,
+    timeline_canvas_height: f64,
+    graph_canvas_width: f64,
     graph_canvas_height: f64,
     timeline_zoom: f64,
     timeline_start_frame: f64,
+    timeline_vertical_scroll: f64,
     workspace_left_ratios: [f64; 15],
     workspace_center_ratios: [f64; 15],
     workspace_vertical_ratios: [f64; 15],
     preview_revision: u64,
-    preview_cache: std::collections::HashMap<(u64, u32, u32, u32), vello::peniko::ImageData>,
+    preview_cache: std::collections::HashMap<(u64, u32, u32, u32, u64), vello::peniko::ImageData>,
     viewport_preview_request_tx: std::sync::mpsc::SyncSender<ViewportPreviewJob>,
     viewport_preview_result_rx: std::sync::mpsc::Receiver<ViewportPreviewResult>,
     viewport_preview_inflight: bool,
+    viewport_preview_active_key: Option<ViewportPreviewKey>,
+    viewport_preview_cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    viewport_preview_worker_failed: bool,
     viewport_preview_failed: Option<ViewportPreviewKey>,
     viewport_mapping: Option<(f64, f64, f64, f64)>,
     viewport_drag: Option<(String, [f32; 2], [f64; 2])>,
@@ -165,6 +229,9 @@ pub struct AfterEffectsStudio {
     viewport_pan_drag: Option<([f64; 2], [f64; 2])>,
     viewport_pen_start: Option<[f64; 2]>,
     viewport_pen_current: Option<[f64; 2]>,
+    roto_live_stroke: Option<RotoLiveStroke>,
+    roto_analysis_job: Option<RotoAnalysisJob>,
+    roto_propagation_job: Option<RotoPropagationJob>,
     light_gizmo_drag: Option<LightGizmoDrag>,
     camera_nav_drag: Option<CameraNavDrag>,
     timeline_scrubbing: bool,
@@ -179,12 +246,17 @@ pub struct AfterEffectsStudio {
     flowchart_wire_drag: Option<FlowchartWireDrag>,
     hide_shy_layers: bool,
     waveform_cache: std::collections::HashMap<String, std::sync::Arc<CachedAudioWaveform>>,
-    waveform_requested: std::collections::HashSet<String>,
-    waveform_failed: std::collections::HashSet<String>,
-    waveform_request_tx: std::sync::mpsc::SyncSender<String>,
-    waveform_result_rx: std::sync::mpsc::Receiver<(String, Option<CachedAudioWaveform>)>,
+    waveform_cache_revisions: std::collections::HashMap<String, u64>,
+    waveform_cache_last_used: std::collections::HashMap<String, u64>,
+    waveform_cache_use_clock: u64,
+    waveform_requested: std::collections::HashMap<String, u64>,
+    waveform_failed: std::collections::HashMap<String, u64>,
+    waveform_worker_failed: bool,
+    waveform_request_tx: std::sync::mpsc::SyncSender<(String, u64)>,
+    waveform_result_rx: std::sync::mpsc::Receiver<(String, u64, Option<CachedAudioWaveform>)>,
     playback_anchor: Option<(std::time::Instant, u32)>,
     last_autosave_at: std::time::Instant,
+    autosave_job: Option<AutosaveJob>,
     zoom: String,
     position_x: f64,
     position_y: f64,
@@ -220,13 +292,19 @@ pub struct AfterEffectsStudio {
     selected_layer_marker_frame: Option<u32>,
     output_path: String,
     still_overwrite_pending: bool,
+    still_overwrite_identity_pending: Option<Option<kagari_vfx::core::ffmpeg_export::FileIdentity>>,
     still_status: String,
+    still_export_events: Option<std::sync::mpsc::Receiver<Result<std::path::PathBuf, String>>>,
     video_output_path: String,
     video_export_codec_idx: usize,
+    video_export_quality: u8,
+    video_export_audio_enabled: bool,
     video_overwrite_pending: bool,
+    video_overwrite_identity_pending: Option<Option<kagari_vfx::core::ffmpeg_export::FileIdentity>>,
     project_name: String,
     project_file_path: Option<std::path::PathBuf>,
     save_status: String,
+    project_is_dirty: bool,
     setup_name: String,
     setup_width: String,
     setup_height: String,
@@ -245,8 +323,14 @@ pub struct AfterEffectsStudio {
     render_progress: i64,
     render_status: String,
     render_events: Option<std::sync::mpsc::Receiver<kagari_vfx::core::ffmpeg_export::ExportEvent>>,
+    render_terminal_event: Option<
+        std::sync::Arc<std::sync::Mutex<Option<kagari_vfx::core::ffmpeg_export::ExportEvent>>>,
+    >,
     render_cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    render_worker: Option<std::thread::JoinHandle<()>>,
     render_refresh_ticks: u8,
+    still_export_worker: Option<std::thread::JoinHandle<()>>,
+    still_export_cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     video_import: Option<VideoImportJob>,
     proxy_generation: Option<LayerProxyGenerationJob>,
     proxy_status: String,
@@ -255,642 +339,15 @@ pub struct AfterEffectsStudio {
     exit_requested: bool,
 }
 
-#[derive(Clone, Copy)]
-enum TimelineClipDragMode {
-    Move,
-    TrimStart,
-    TrimEnd,
-    Keyframe,
-}
+#[path = "ame_studio/types.rs"]
+mod ame_studio_types;
+pub(crate) use ame_studio_types::*;
 
-#[derive(Clone, Copy)]
-enum TimelineWorkAreaDragMode {
-    Start,
-    End,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum TimelineView {
-    All,
-    Animation,
-    CurrentKeyframes,
-    Audio,
-    Media,
-    Text,
-    Shapes,
-    ThreeD,
-    Cameras,
-    Lights,
-    Markers,
-    Graph,
-    Flowchart,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum PropertiesSection {
-    Transform,
-    Content,
-    Composite,
-    Advanced,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum GraphChannel {
-    PositionX,
-    PositionY,
-    AnchorX,
-    AnchorY,
-    ScaleX,
-    ScaleY,
-    Rotation,
-    Opacity,
-    Position3DX,
-    Position3DY,
-    Position3DZ,
-    Rotation3DX,
-    Rotation3DY,
-    Rotation3DZ,
-    Scale3DX,
-    Scale3DY,
-    Scale3DZ,
-    AudioVolume,
-    TimeRemap,
-    CameraFov,
-    CameraFocus,
-    CameraAperture,
-    CameraDofBlur,
-    CameraDofEnabled,
-    LightIntensity,
-    MaskFeather,
-    MaskOpacity,
-    MaskExpansion,
-    ShapeWidth,
-    ShapeHeight,
-    ShapeCornerRadius,
-    ShapePoints,
-    ShapeInnerRadius,
-    ShapeOuterRadius,
-    ShapeSides,
-    ShapeRadius,
-    EffectParameter,
-    EffectColorRed,
-    EffectColorGreen,
-    EffectColorBlue,
-    EffectColorAlpha,
-}
-
-fn action_edits_selected_layer(action: &str) -> bool {
-    const PREFIXES: &[&str] = &[
-        "position_",
-        "anchor_",
-        "scale_",
-        "rotation_",
-        "opacity_",
-        "material_",
-        "toggle_material_",
-        "text_",
-        "shape_",
-        "toggle_shape_",
-        "selected_camera_",
-        "selected_light_",
-        "toggle_selected_camera_",
-        "toggle_selected_light_",
-        "solid_color_",
-        "mask_",
-        "toggle_mask_",
-        "cycle_mask_",
-        "effect_parameter_",
-        "effect_color_",
-        "emitter_",
-        "audio_volume_",
-        "video_speed_",
-        "video_posterize_",
-        "time_remap_",
-        "cycle_layer_",
-        "auto_orient_",
-        "graph_add_",
-        "keyframe_",
-        "graph_cycle_",
-        "text_animator_",
-    ];
-    if PREFIXES.iter().any(|prefix| action.starts_with(prefix)) {
-        return true;
-    }
-    matches!(
-        action,
-        "cycle_selected_light_type"
-            | "cycle_shape_fill_type"
-            | "toggle_video_time_remap"
-            | "toggle_video_posterize"
-            | "toggle_frame_blending"
-            | "toggle_preserve_transparency"
-            | "toggle_guide_layer"
-            | "toggle_shy_layer"
-            | "toggle_layer_effects"
-            | "toggle_selected_layer_motion_blur"
-            | "toggle_precomp_collapse_transforms"
-            | "toggle_layer_style"
-            | "layer_style_parameter_changed"
-            | "cycle_constraint_horizontal"
-            | "cycle_constraint_vertical"
-            | "layer_in_frame_changed"
-            | "layer_out_frame_changed"
-            | "layer_in_to_playhead"
-            | "layer_out_to_playhead"
-            | "cycle_auto_orient"
-            | "select_track_matte_source"
-            | "clear_track_matte_source"
-            | "add_layer_marker"
-            | "remove_layer_marker"
-            | "layer_marker_label_changed"
-            | "layer_marker_frame_changed"
-            | "add_keyframe"
-            | "graph_remove_keyframe"
-            | "ease_selected_layer"
-            | "split_selected_layer_at_playhead"
-            | "set_selected_layer_in_to_playhead"
-            | "set_selected_layer_out_to_playhead"
-            | "parent_selected_layer"
-            | "set_layer_parent"
-            | "unparent_selected_layer"
-            | "layer_changed"
-            | "move_layer_up"
-            | "move_layer_down"
-            | "duplicate_selected_layer"
-            | "toggle_effect"
-            | "fit_selected_image_to_composition"
-            | "fill_selected_image_to_composition"
-            | "cycle_layer_proxy_resolution"
-            | "toggle_layer_proxy"
-            | "clear_layer_proxy"
-            | "generate_layer_proxy"
-            | "remove_effect"
-            | "move_effect_up"
-            | "move_effect_down"
-            | "add_gaussian_blur"
-            | "add_effect_catalog"
-            | "add_color_tint"
-            | "add_drop_shadow"
-            | "add_glow"
-            | "add_vignette"
-            | "add_hue_saturation"
-            | "add_levels"
-            | "add_motion_blur"
-            | "add_film_grain"
-            | "add_posterize"
-            | "add_directional_blur"
-            | "add_radial_blur"
-            | "add_sharpen"
-            | "add_rect_mask"
-            | "add_ellipse_mask"
-            | "remove_mask"
-    )
-}
-
-impl GraphChannel {
-    const ALL: [Self; 41] = [
-        Self::PositionX,
-        Self::PositionY,
-        Self::AnchorX,
-        Self::AnchorY,
-        Self::ScaleX,
-        Self::ScaleY,
-        Self::Rotation,
-        Self::Opacity,
-        Self::Position3DX,
-        Self::Position3DY,
-        Self::Position3DZ,
-        Self::Rotation3DX,
-        Self::Rotation3DY,
-        Self::Rotation3DZ,
-        Self::Scale3DX,
-        Self::Scale3DY,
-        Self::Scale3DZ,
-        Self::AudioVolume,
-        Self::TimeRemap,
-        Self::CameraFov,
-        Self::CameraFocus,
-        Self::CameraAperture,
-        Self::CameraDofBlur,
-        Self::CameraDofEnabled,
-        Self::LightIntensity,
-        Self::MaskFeather,
-        Self::MaskOpacity,
-        Self::MaskExpansion,
-        Self::ShapeWidth,
-        Self::ShapeHeight,
-        Self::ShapeCornerRadius,
-        Self::ShapePoints,
-        Self::ShapeInnerRadius,
-        Self::ShapeOuterRadius,
-        Self::ShapeSides,
-        Self::ShapeRadius,
-        Self::EffectParameter,
-        Self::EffectColorRed,
-        Self::EffectColorGreen,
-        Self::EffectColorBlue,
-        Self::EffectColorAlpha,
-    ];
-
-    fn is_3d(self) -> bool {
-        matches!(
-            self,
-            Self::Position3DX
-                | Self::Position3DY
-                | Self::Position3DZ
-                | Self::Rotation3DX
-                | Self::Rotation3DY
-                | Self::Rotation3DZ
-                | Self::Scale3DX
-                | Self::Scale3DY
-                | Self::Scale3DZ
-        )
-    }
-
-    fn supports(self, layer: &kagari_vfx::core::timeline::Layer) -> bool {
-        use kagari_vfx::core::timeline::LayerType;
-        if self.is_3d() {
-            return layer.is_3d;
-        }
-        match self {
-            Self::AudioVolume => matches!(
-                &layer.layer_type,
-                LayerType::Audio { .. }
-                    | LayerType::Video {
-                        audio_wav: Some(_),
-                        ..
-                    }
-            ),
-            Self::TimeRemap => layer.time_remap.is_some(),
-            Self::CameraFov
-            | Self::CameraFocus
-            | Self::CameraAperture
-            | Self::CameraDofBlur
-            | Self::CameraDofEnabled => {
-                matches!(
-                    layer.scene_object.as_ref(),
-                    Some(kagari_vfx::core::timeline::SceneObjectRef::Camera { .. })
-                )
-            }
-            Self::LightIntensity => matches!(
-                layer.scene_object.as_ref(),
-                Some(kagari_vfx::core::timeline::SceneObjectRef::Light { .. })
-            ),
-            Self::MaskFeather | Self::MaskOpacity | Self::MaskExpansion => !layer.masks.is_empty(),
-            Self::ShapeWidth
-            | Self::ShapeHeight
-            | Self::ShapeCornerRadius
-            | Self::ShapePoints
-            | Self::ShapeInnerRadius
-            | Self::ShapeOuterRadius
-            | Self::ShapeSides
-            | Self::ShapeRadius => shape_parameter_track(layer, self).is_some(),
-            Self::EffectParameter => !layer.effects.is_empty(),
-            Self::EffectColorRed
-            | Self::EffectColorGreen
-            | Self::EffectColorBlue
-            | Self::EffectColorAlpha => layer
-                .effects
-                .iter()
-                .any(|effect| !effect_color_parameters(&effect.effect_type).is_empty()),
-            _ => true,
-        }
-    }
-
-    fn label(self) -> &'static str {
-        match self {
-            Self::PositionX => "位置 X",
-            Self::PositionY => "位置 Y",
-            Self::AnchorX => "基準点 X",
-            Self::AnchorY => "基準点 Y",
-            Self::ScaleX => "倍率 X",
-            Self::ScaleY => "倍率 Y",
-            Self::Rotation => "回転",
-            Self::Opacity => "不透明度",
-            Self::Position3DX => "3D位置 X",
-            Self::Position3DY => "3D位置 Y",
-            Self::Position3DZ => "3D位置 Z",
-            Self::Rotation3DX => "3D回転 X",
-            Self::Rotation3DY => "3D回転 Y",
-            Self::Rotation3DZ => "3D回転 Z",
-            Self::Scale3DX => "3D倍率 X",
-            Self::Scale3DY => "3D倍率 Y",
-            Self::Scale3DZ => "3D倍率 Z",
-            Self::AudioVolume => "音量",
-            Self::TimeRemap => "ソースフレーム",
-            Self::CameraFov => "画角",
-            Self::CameraFocus => "焦点距離",
-            Self::CameraAperture => "絞り",
-            Self::CameraDofBlur => "最大ぼけ",
-            Self::CameraDofEnabled => "被写界深度",
-            Self::LightIntensity => "ライト強度",
-            Self::MaskFeather => "マスクぼかし",
-            Self::MaskOpacity => "マスク不透明度",
-            Self::MaskExpansion => "マスク拡張",
-            Self::ShapeWidth => "シェイプ幅",
-            Self::ShapeHeight => "シェイプ高さ",
-            Self::ShapeCornerRadius => "角丸",
-            Self::ShapePoints => "星の頂点数",
-            Self::ShapeInnerRadius => "星の内半径",
-            Self::ShapeOuterRadius => "星の外半径",
-            Self::ShapeSides => "多角形の辺数",
-            Self::ShapeRadius => "多角形の半径",
-            Self::EffectParameter => "エフェクト値",
-            Self::EffectColorRed => "色 R",
-            Self::EffectColorGreen => "色 G",
-            Self::EffectColorBlue => "色 B",
-            Self::EffectColorAlpha => "色 A",
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-enum MaskValueChannel {
-    Feather,
-    Opacity,
-    Expansion,
-}
-
-#[derive(Clone, Copy)]
-enum LayerToggle {
-    FrameBlending,
-    MotionBlur,
-    PreserveTransparency,
-    Guide,
-    Shy,
-    Effects,
-}
-
-#[derive(Clone)]
-struct GraphKeyDrag {
-    layer_id: String,
-    channel: GraphChannel,
-    current_frame: u32,
-    min_value: f32,
-    max_value: f32,
-    mask_id: Option<String>,
-    effect_id: Option<String>,
-    effect_parameter_id: Option<String>,
-    snap_points: Vec<u32>,
-}
-
-#[derive(Clone)]
-struct MaskVertexDrag {
-    layer_id: String,
-    mask_id: String,
-    vertex_index: usize,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum CameraNavMode {
-    Orbit,
-    Pan,
-    Dolly,
-}
-
-#[derive(Clone, Debug)]
-struct CameraNavDrag {
-    mode: CameraNavMode,
-    start_pos: [f32; 3],
-    start_rot: [f32; 3],
-    start_screen_point: [f64; 2],
-}
-
-#[derive(Clone, Debug)]
-struct LightGizmoDrag {
-    light_id: String,
-    start_pos_3d: [f32; 3],
-    start_point: [f64; 2],
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum FlowchartWireKind {
-    Parent,
-    Matte,
-}
-
-#[derive(Clone, Debug)]
-struct FlowchartWireDrag {
-    source_layer_id: String,
-    kind: FlowchartWireKind,
-    start_pos: (f64, f64),
-    current_pos: (f64, f64),
-}
-
-#[derive(Clone)]
-struct TimelineClipDrag {
-    layer_id: String,
-    start_x: f64,
-    initial_in: u32,
-    initial_out: u32,
-    keyframe_source: Option<u32>,
-    keyframe_current: Option<u32>,
-    mode: TimelineClipDragMode,
-}
-
-struct VideoImportJob {
-    receiver: std::sync::mpsc::Receiver<Result<kagari_vfx::core::video_import::VideoAsset, String>>,
-    cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
-    cancel_supported: bool,
-    is_image_sequence: bool,
-    source_name: String,
-    layer_id: String,
-    replace_layer_id: Option<String>,
-    replace_project_asset_id: Option<String>,
-    register_project_asset: bool,
-    composition_id: String,
-    project_file_path: Option<std::path::PathBuf>,
-    project_name: String,
-    fps: u32,
-    project_generation: u64,
-    asset_parent_folder: Option<String>,
-}
-
-struct LayerProxyGenerationJob {
-    receiver: std::sync::mpsc::Receiver<LayerProxyGenerationMessage>,
-    cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
-    layer_id: String,
-    composition_id: String,
-    project_file_path: Option<std::path::PathBuf>,
-    project_name: String,
-    project_generation: u64,
-}
-
-enum LayerProxyGenerationMessage {
-    Progress { done: u32, total: u32 },
-    Finished(Result<String, String>),
-}
-
-#[derive(Clone)]
-struct DetectedOfxPlugin {
-    name: String,
-    path: String,
-}
-
-#[derive(Clone, Debug)]
-pub struct RecentProjectItem {
-    pub path: std::path::PathBuf,
-    pub name: String,
-    pub path_label: String,
-    pub date: String,
-    pub duration: String,
-    pub fps: String,
-    pub resolution: String,
-    pub layer_count: usize,
-    pub comps_info: String,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Screen {
-    Home,
-    Projects,
-    Activity,
-    Documents,
-    ProjectSetup,
-    Editor,
-    Export,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Workspace {
-    Default,
-    Composition,
-    Scene,
-    Timeline,
-    Animation,
-    Graph,
-    Effects,
-    Audio,
-    TimeRemap,
-    Mask,
-    Assets,
-    Text,
-    LayerStyle,
-    Color,
-    CameraLight,
-}
-
-const WORKSPACE_LEFT_DEFAULTS: [f64; 15] = [
-    0.22, 0.22, 0.30, 0.20, 0.22, 0.22, 0.22, 0.22, 0.22, 0.22, 0.34, 0.22, 0.22, 0.22, 0.22,
-];
-const WORKSPACE_CENTER_DEFAULTS: [f64; 15] = [
-    0.70, 0.62, 0.72, 0.72, 0.70, 0.70, 0.70, 0.70, 0.70, 0.70, 0.70, 0.70, 0.70, 0.70, 0.70,
-];
-const WORKSPACE_VERTICAL_DEFAULT: f64 = 0.54;
-
-impl Workspace {
-    fn index(self) -> usize {
-        match self {
-            Self::Default => 0,
-            Self::Composition => 1,
-            Self::Scene => 2,
-            Self::Timeline => 3,
-            Self::Animation => 4,
-            Self::Graph => 5,
-            Self::Effects => 6,
-            Self::Audio => 7,
-            Self::TimeRemap => 8,
-            Self::Mask => 9,
-            Self::Assets => 10,
-            Self::Text => 11,
-            Self::LayerStyle => 12,
-            Self::Color => 13,
-            Self::CameraLight => 14,
-        }
-    }
-}
-
-struct CachedAudioWaveform {
-    peaks: Vec<f32>,
-    duration_seconds: f32,
-}
-
-struct CachedAssetPreview {
-    pixels: std::sync::Arc<Vec<u8>>,
-    width: u32,
-    height: u32,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-struct ViewportPreviewKey {
-    revision: u64,
-    frame: u32,
-    width: u32,
-    height: u32,
-}
-
-struct ViewportPreviewJob {
-    key: ViewportPreviewKey,
-    composition: Box<kagari_vfx::core::timeline::Composition>,
-}
-
-struct ViewportPreviewResult {
-    key: ViewportPreviewKey,
-    pixels: Option<std::sync::Arc<Vec<u8>>>,
-}
-
-#[derive(Clone)]
-enum AssetPreviewJob {
-    Image(String),
-    Model3D(String),
-    Composition(Box<kagari_vfx::core::timeline::Composition>),
-}
-
-#[derive(Clone)]
-struct SettingsDraft {
-    restore_previous_state: bool,
-    confirm_close_project: bool,
-    confirm_exit: bool,
-    adaptive_preview: bool,
-    audio_preview: bool,
-    show_home_on_startup: bool,
-    autosave_secs: u64,
-    gpu_enabled: bool,
-    memory_limit_gb: f64,
-    undo_steps: usize,
-    recovery_slots: usize,
-    cache_path: String,
-    cache_limit: String,
-    accent_color: String,
-    auto_project_names: bool,
-    renderer: String,
-    background_render: bool,
-    preview_quality: String,
-    high_quality_preview: bool,
-    preview_resolution: String,
-    still_duration_secs: f64,
-    image_sequence_detect: bool,
-    proxy_auto_generate: bool,
-    hardware_decode: bool,
-    preferred_decoder: String,
-    media_color_space: String,
-    grid_visible: bool,
-    grid_spacing: f64,
-    safe_area_visible: bool,
-    color_management: String,
-    gamma: String,
-    hdr_enabled: bool,
-    playback_quality: String,
-    playback_start_mode: String,
-    pre_roll_secs: f64,
-    post_roll_secs: f64,
-    playback_volume: f64,
-    playback_cache: bool,
-    scrub_audio: bool,
-    show_audio_peaks: bool,
-    project_dir: String,
-    preview_cache_dir: String,
-    temp_dir: String,
-    autosave_dir: String,
-    backup_dir: String,
-    backup_generations: u64,
-    asset_library_dir: String,
-    shortcut_filter: String,
-}
-
+#[path = "ame_studio/preferences_storage.rs"]
+mod ame_studio_preferences_storage;
+pub(crate) use ame_studio_preferences_storage::*;
 #[path = "ame_studio/preferences.rs"]
 mod ame_studio_preferences;
-pub(crate) use ame_studio_preferences::*;
 
 #[path = "ame_studio/app_init.rs"]
 mod ame_studio_app_init;
@@ -922,6 +379,8 @@ mod ame_studio_timeline_ops;
 mod ame_studio_preview_workers;
 pub(crate) use ame_studio_preview_workers::*;
 
+#[path = "ame_studio/shape_creation.rs"]
+mod ame_studio_shape_creation;
 #[path = "ame_studio/shape_ops.rs"]
 mod ame_studio_shape_ops;
 
@@ -939,6 +398,26 @@ mod ame_studio_playback_ops;
 
 impl Drop for AfterEffectsStudio {
     fn drop(&mut self) {
+        if let Some(cancel) = &self.render_cancel {
+            cancel.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+        if let Some(cancel) = &self.still_export_cancel {
+            cancel.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+        if let Some(job) = &self.video_import {
+            job.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        if let Some(job) = &self.proxy_generation {
+            job.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        if let Some(job) = &self.roto_analysis_job {
+            job.cancelled
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        if let Some(job) = &self.roto_propagation_job {
+            job.cancelled
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+        }
         let _ = write_preference(
             "workspace_left_ratios",
             serde_json::json!(self.workspace_left_ratios),
@@ -951,25 +430,73 @@ impl Drop for AfterEffectsStudio {
             "workspace_vertical_ratios",
             serde_json::json!(self.workspace_vertical_ratios),
         );
-        if let Some(cancel) = &self.render_cancel {
-            cancel.store(true, std::sync::atomic::Ordering::SeqCst);
+        if let Some(job) = self.video_import.take() {
+            if let Some(worker) = job.worker {
+                let _ = worker.join();
+            }
         }
-        if let Some(job) = &self.video_import {
-            job.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        if let Some(job) = self.proxy_generation.take() {
+            if let Some(worker) = job.worker {
+                let _ = worker.join();
+            }
         }
-        if let Some(job) = &self.proxy_generation {
-            job.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        if let Some(job) = self.autosave_job.take() {
+            if let Some(worker) = job.worker {
+                let _ = worker.join();
+            }
+        }
+        if let Some(worker) = self.render_worker.take() {
+            let _ = worker.join();
+        }
+        if let Some(worker) = self.still_export_worker.take() {
+            let _ = worker.join();
         }
     }
 }
 
+#[path = "ame_studio/helpers_effects.rs"]
+mod ame_studio_helpers_effects;
+pub(crate) use ame_studio_helpers_effects::*;
+#[path = "ame_studio/helpers_keyframes.rs"]
+mod ame_studio_helpers_keyframes;
+pub(crate) use ame_studio_helpers_keyframes::*;
+#[path = "ame_studio/helpers_scene.rs"]
+mod ame_studio_helpers_scene;
+pub(crate) use ame_studio_helpers_scene::*;
 #[path = "ame_studio/app.rs"]
 mod ame_studio_app;
-pub(crate) use ame_studio_app::*;
+#[path = "ame_studio/app_canvas_draw.rs"]
+mod ame_studio_app_canvas_draw;
+#[path = "ame_studio/app_canvas_pointer_graph_viewport.rs"]
+mod ame_studio_app_canvas_pointer_graph_viewport;
+#[path = "ame_studio/app_canvas_pointer_timeline_flowchart.rs"]
+mod ame_studio_app_canvas_pointer_timeline_flowchart;
+pub(crate) use ame_studio_roto_brush::*;
 
-#[path = "ame_studio/timeline_canvas.rs"]
-mod ame_studio_timeline_canvas;
-pub(crate) use ame_studio_timeline_canvas::*;
+#[path = "ame_studio/timeline_asset_preview.rs"]
+mod ame_studio_timeline_asset_preview;
+pub(crate) use ame_studio_timeline_asset_preview::*;
+#[path = "ame_studio/timeline_drawing.rs"]
+mod ame_studio_timeline_drawing;
+pub(crate) use ame_studio_timeline_drawing::*;
+#[path = "ame_studio/timeline_flowchart.rs"]
+mod ame_studio_timeline_flowchart;
+pub(crate) use ame_studio_timeline_flowchart::*;
+#[path = "ame_studio/timeline_graph_channels.rs"]
+mod ame_studio_timeline_graph_channels;
+pub(crate) use ame_studio_timeline_graph_channels::*;
+#[path = "ame_studio/timeline_graph_interpolation.rs"]
+mod ame_studio_timeline_graph_interpolation;
+pub(crate) use ame_studio_timeline_graph_interpolation::*;
+#[path = "ame_studio/timeline_graph_keyframes.rs"]
+mod ame_studio_timeline_graph_keyframes;
+pub(crate) use ame_studio_timeline_graph_keyframes::*;
+#[path = "ame_studio/timeline_graph_render.rs"]
+mod ame_studio_timeline_graph_render;
+pub(crate) use ame_studio_timeline_graph_render::*;
+#[path = "ame_studio/timeline_waveform.rs"]
+mod ame_studio_timeline_waveform;
+pub(crate) use ame_studio_timeline_waveform::*;
 
 fn parse_timecode(value: &str, fps: u32) -> Option<u32> {
     let [hours, minutes, seconds, frames] = value
@@ -989,27 +516,6 @@ fn parse_timecode(value: &str, fps: u32) -> Option<u32> {
         .checked_add(seconds)?
         .checked_mul(fps)?
         .checked_add(frames)
-}
-
-fn project_asset_folder_path(
-    assets: &[kagari_vfx::core::timeline::ProjectItem],
-    folder_id: Option<&str>,
-) -> String {
-    let mut names = Vec::new();
-    let mut next = folder_id;
-    let mut visited = std::collections::HashSet::new();
-    while let Some(id) = next {
-        if !visited.insert(id) {
-            break;
-        }
-        let Some(folder) = assets.iter().find(|item| item.id == id) else {
-            break;
-        };
-        names.push(folder.name.as_str());
-        next = folder.parent_folder.as_deref();
-    }
-    names.reverse();
-    names.join(" / ")
 }
 
 fn project_asset_can_move_to_folder(

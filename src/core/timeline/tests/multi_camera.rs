@@ -325,8 +325,8 @@ mod multi_camera_tests {
             },
             30,
         );
-        let near = comp.resolve_world_transform_3d(&layer, 0);
-        let far = comp.resolve_world_transform_3d(&layer, 10);
+        let near = comp.resolve_world_transform_3d(&layer, 0, 640.0, 360.0);
+        let far = comp.resolve_world_transform_3d(&layer, 10, 640.0, 360.0);
         assert_ne!(near[0][0], far[0][0]);
         assert!((comp.resolve_camera().fov_at(5) - 60.0).abs() < 1e-4);
     }

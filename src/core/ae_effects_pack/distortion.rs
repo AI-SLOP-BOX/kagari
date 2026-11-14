@@ -2,6 +2,10 @@ use super::*;
 
 // 16. Twirl
 pub fn apply_twirl(pixels: &mut [u8], width: u32, height: u32, angle_deg: f32, radius: f32) {
+    if width == 0 || height == 0 || !super::valid_rgba_dimensions(pixels, width, height) {
+        return;
+    }
+    let cancel_flag = crate::core::software_renderer::get_render_cancel_flag();
     let cx = width as f32 * 0.5;
     let cy = height as f32 * 0.5;
     let max_r = radius.max(1.0);
@@ -14,6 +18,9 @@ pub fn apply_twirl(pixels: &mut [u8], width: u32, height: u32, angle_deg: f32, r
         .par_chunks_exact_mut(4)
         .enumerate()
         .for_each(|(i, out)| {
+            if i.is_multiple_of(4096) && super::render_cancelled(&cancel_flag) {
+                return;
+            }
             let x = i % width as usize;
             let y = i / width as usize;
             let rx = x as f32 - cx;
@@ -39,6 +46,10 @@ pub fn apply_twirl(pixels: &mut [u8], width: u32, height: u32, angle_deg: f32, r
 
 // 17. Bulge
 pub fn apply_bulge(pixels: &mut [u8], width: u32, height: u32, amount: f32, radius: f32) {
+    if width == 0 || height == 0 || !super::valid_rgba_dimensions(pixels, width, height) {
+        return;
+    }
+    let cancel_flag = crate::core::software_renderer::get_render_cancel_flag();
     let cx = width as f32 * 0.5;
     let cy = height as f32 * 0.5;
     let temp = pixels.to_vec();
@@ -47,6 +58,9 @@ pub fn apply_bulge(pixels: &mut [u8], width: u32, height: u32, amount: f32, radi
         .par_chunks_exact_mut(4)
         .enumerate()
         .for_each(|(i, out)| {
+            if i.is_multiple_of(4096) && super::render_cancelled(&cancel_flag) {
+                return;
+            }
             let x = i % width as usize;
             let y = i / width as usize;
             let rx = x as f32 - cx;
@@ -69,11 +83,18 @@ pub fn apply_bulge(pixels: &mut [u8], width: u32, height: u32, amount: f32, radi
 
 // 18. Offset
 pub fn apply_offset(pixels: &mut [u8], width: u32, height: u32, shift_x: i32, shift_y: i32) {
+    if width == 0 || height == 0 || !super::valid_rgba_dimensions(pixels, width, height) {
+        return;
+    }
     let temp = pixels.to_vec();
     let w = width as i32;
     let h = height as i32;
+    let cancel_flag = crate::core::software_renderer::get_render_cancel_flag();
 
     for y in 0..h {
+        if super::render_cancelled(&cancel_flag) {
+            return;
+        }
         for x in 0..w {
             let sx = ((x - shift_x) % w + w) % w;
             let sy = ((y - shift_y) % h + h) % h;
@@ -93,13 +114,22 @@ pub fn apply_venetian_blinds(
     completion: f32,
     width_px: u32,
 ) {
-    if completion <= 0.0 || width_px == 0 || width == 0 || height == 0 {
+    if completion <= 0.0
+        || width_px == 0
+        || width == 0
+        || height == 0
+        || !super::valid_rgba_dimensions(pixels, width, height)
+    {
         return;
     }
     let blind_w = width_px as usize;
     let cut_w = (blind_w as f32 * (completion * 0.01)) as usize;
+    let cancel_flag = crate::core::software_renderer::get_render_cancel_flag();
 
     for y in 0..height as usize {
+        if super::render_cancelled(&cancel_flag) {
+            return;
+        }
         for x in 0..width as usize {
             if (x % blind_w) < cut_w {
                 let idx = (y * width as usize + x) * 4;
@@ -117,11 +147,18 @@ pub fn apply_linear_wipe(
     completion: f32,
     angle_deg: f32,
 ) {
+    if width == 0 || height == 0 || !super::valid_rgba_dimensions(pixels, width, height) {
+        return;
+    }
     if completion <= 0.0 {
         return;
     }
     if completion >= 100.0 {
+        let cancel_flag = crate::core::software_renderer::get_render_cancel_flag();
         for i in (3..pixels.len()).step_by(4) {
+            if i.is_multiple_of(4096 * 4) && super::render_cancelled(&cancel_flag) {
+                return;
+            }
             pixels[i] = 0;
         }
         return;
@@ -137,8 +174,12 @@ pub fn apply_linear_wipe(
     ];
     let min_proj = corners.iter().copied().fold(f32::INFINITY, f32::min);
     let max_proj = corners.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+    let cancel_flag = crate::core::software_renderer::get_render_cancel_flag();
 
     for y in 0..height {
+        if super::render_cancelled(&cancel_flag) {
+            return;
+        }
         for x in 0..width {
             let proj = x as f32 * dir[0] + y as f32 * dir[1];
             let normalized = if max_proj > min_proj {

@@ -1,4 +1,4 @@
-//! Intelligent RotoBrush & Automated Boundary Propagation Engine (AE Parity).
+//! Roto Brush matte generation and temporal boundary propagation.
 //!
 //! Provides automatic object cutout segmentation, foreground/background color
 //! distribution modeling, edge-gradient snap refinement, and temporal frame propagation.

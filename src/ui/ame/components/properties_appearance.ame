@@ -12,7 +12,7 @@ component LayerCompositeProperties() {
     If(selected_has_track_matte) {
       Caption("マット元レイヤー")
       Button("直上のレイヤーを使用", action: clear_track_matte_source, tone: secondary, size: small, disabled: selected_layer_locked)
-      ForEach(matte_source_layers, source, key: id) {
+      ForEach(matte_source_layers, source, key: id, height: 180, row_height: 28, overscan: 4) {
         Button("{source.name}", action: select_track_matte_source, tone: secondary, size: small, disabled: selected_layer_locked)
       }
     }
@@ -30,7 +30,7 @@ component MotionTrackerProperties() {
     }
     If(has_tracker_items) {
       Caption("アクティブトラッカー")
-      ForEach(tracker_items, item, key: id) {
+      ForEach(tracker_items, item, key: id, height: 150, row_height: 28, overscan: 4) {
         HStack(spacing: 4) {
           If(item.selected) {
             Button("{item.name}", action: select_motion_tracker, tone: primary, size: small)
@@ -41,7 +41,7 @@ component MotionTrackerProperties() {
         }
       }
       Caption("ターゲット先レイヤーへ適用")
-      ForEach(tracker_target_layers, target, key: id) {
+      ForEach(tracker_target_layers, target, key: id, height: 180, row_height: 28, overscan: 4) {
         HStack(spacing: 4) {
           If(target.selected) {
             Button("{target.name}", action: select_motion_tracker_target, tone: primary, size: small)

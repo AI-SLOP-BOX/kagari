@@ -272,7 +272,7 @@ fn disk_budget_lock_serializes_separate_processes() {
 fn malformed_dimensions_do_not_overflow_or_panic() {
     let key = (u32::MAX, u64::MAX);
     let path = {
-        let dir = std::env::temp_dir().join("kagari_frame_cache");
+        let dir = disk_cache::cache_directory();
         std::fs::create_dir_all(&dir).unwrap();
         dir.join(format!("frame_{}_{}.rgba", key.0, key.1))
     };
@@ -285,7 +285,7 @@ fn malformed_dimensions_do_not_overflow_or_panic() {
 fn trailing_disk_data_is_rejected() {
     let key = (u32::MAX - 1, u64::MAX - 1);
     let path = {
-        let dir = std::env::temp_dir().join("kagari_frame_cache");
+        let dir = disk_cache::cache_directory();
         std::fs::create_dir_all(&dir).unwrap();
         dir.join(format!("frame_{}_{}.rgba", key.0, key.1))
     };
@@ -300,7 +300,7 @@ fn trailing_disk_data_is_rejected() {
 #[test]
 fn zero_dimension_disk_frame_is_rejected_and_removed() {
     let key = (u32::MAX - 2, u64::MAX - 2);
-    let dir = std::env::temp_dir().join("kagari_frame_cache");
+    let dir = disk_cache::cache_directory();
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join(format!("frame_{}_{}.rgba", key.0, key.1));
     std::fs::write(&path, [0, 0, 0, 0, 0, 0, 0, 0]).unwrap();

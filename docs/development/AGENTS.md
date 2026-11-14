@@ -29,7 +29,7 @@ cargo run --features cli --bin kagari -- frame --project tests/fixtures/test_pro
 ### Rendering Pipeline
 - `src/core/software_renderer.rs` — CPU compositor (layer-by-layer, rayon-parallelized effects)
 - `src/core/renderer.rs` — GPU renderer (wgpu 22, Metal backend on macOS)
-- `src/core/shader.wgsl` — WGSL shader (all layer types, effects, mesh warp, glow)
+- `src/core/shader/` — WGSL shader (all layer types, effects, mesh warp, glow)
 
 ### Key Modules
 - `src/core/timeline.rs` — Composition/Layer/Keyframe data model (47 EffectType variants, MaterialOptions, Camera3D DOF)
@@ -78,6 +78,7 @@ These modules back only the optional `kagari-studio-egui` binary. The public Rus
 
 ## Coding Style
 - No comments unless explaining non-obvious logic
+- Keep each hand-written source file at or below 800 lines. CI enforces this for Rust, Ame, WGSL, Python, and shell sources under `src/`, `tests/`, `examples/`, and `scripts/`. Split larger existing files by responsibility in small, behavior-preserving steps; do not meet the limit by moving unrelated code into arbitrary buckets. Put large unit-test groups in focused child modules when that keeps implementation files readable.
 - Prefer `impl Trait` over `dyn Trait` in hot paths
 - Use `#[derive(Serialize, Deserialize)]` with `#[serde(default)]` for backward compat
 - All new effects go in `src/core/ae_effects_pack.rs` or a new `v*.rs` file
@@ -94,7 +95,7 @@ These modules back only the optional `kagari-studio-egui` binary. The public Rus
 - 8bpc pipeline (16/32bpc is a future goal)
 - Layer compositing is sequential (bottom-up blend order)
 - No real-time GPU effects processing (effects run on CPU)
-- Puppet tool, roto brush, paint tools are UI stubs only
+- The default AmeUI Studio has a partial Roto Brush workflow (mouse strokes, current-frame matte analysis, and optical-flow propagation). A public pedestrian-footage probe shows severe scene leakage by frames 12–24; a matte-area growth guard reduces it but does not pass subject-isolation acceptance. Paint/clone and full Puppet workflows are still incomplete.
 
 ---
 

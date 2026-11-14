@@ -197,15 +197,17 @@ contract_test!(particles_negative_lifespan_does_not_survive, {
     );
     assert!(s.particles.is_empty());
 });
-contract_test!(obj_face_with_too_few_vertices_has_no_indices, {
-    let m = parse_obj_str("v 0 0 0\nv 1 0 0\nf 1 2\n").unwrap();
-    assert!(m.indices.is_empty());
+contract_test!(obj_face_with_too_few_vertices_is_rejected, {
+    let error = parse_obj_str("v 0 0 0\nv 1 0 0\nf 1 2\n").unwrap_err();
+    assert!(error.contains("at least three vertices"));
 });
-contract_test!(obj_extra_face_components_are_accepted, {
-    assert!(parse_obj_str("v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1/1/1/extra 2/2/1 3/3/1\n").is_ok());
+contract_test!(obj_extra_face_components_are_rejected, {
+    let error =
+        parse_obj_str("v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1/1/1/extra 2/2/1 3/3/1\n").unwrap_err();
+    assert!(error.contains("invalid face vertex reference"));
 });
 contract_test!(obj_generated_bounds_are_finite, {
-    let m = parse_obj_str("v -1 -2 -3\nv 4 5 6\n").unwrap();
+    let m = parse_obj_str("v -1 -2 -3\nv 4 5 6\nv 0 1 2\nf 1 2 3\n").unwrap();
     assert!(m
         .bbox_min
         .iter()
@@ -240,6 +242,7 @@ contract_test!(roto_out_of_bounds_stroke_is_safe, {
     let stroke = RotoStroke {
         stroke_type: RotoStrokeType::Foreground,
         points: vec![[999.0, -999.0]],
+        pressures: Vec::new(),
         radius: 5.0,
         frame: None,
     };
@@ -250,6 +253,7 @@ contract_test!(roto_negative_radius_is_safe, {
     let stroke = RotoStroke {
         stroke_type: RotoStrokeType::Foreground,
         points: vec![[1.0, 1.0]],
+        pressures: Vec::new(),
         radius: -5.0,
         frame: None,
     };

@@ -76,6 +76,18 @@ pub fn draw_software_canvas(
                 exposure_ev,
                 lut_mode,
             );
+            let expected_len = (render_width as usize)
+                .checked_mul(render_height as usize)
+                .and_then(|pixel_count| pixel_count.checked_mul(4));
+            if !matches!(expected_len, Some(len) if len > 0 && len == pixels.len()) {
+                // Invalid project dimensions or a renderer allocation failure
+                // produce an empty frame. Never pass malformed pixel data into
+                // egui's image constructor, which expects the full RGBA buffer.
+                ui.painter()
+                    .rect_filled(draw_rect, 0.0, egui::Color32::BLACK);
+                ui.set_clip_rect(prev_clip);
+                return;
+            }
             let image = egui::ColorImage::from_rgba_unmultiplied(
                 [render_width as usize, render_height as usize],
                 &pixels,

@@ -19,14 +19,15 @@ mod setup;
 mod text_raster;
 mod track_matte;
 mod uniform_builder;
+pub use crate::core::media_revision::composition_media_revision;
+pub(crate) use crate::core::media_revision::media_file_revision;
+pub(crate) use crate::core::text_stroke::bake_text_stroke;
 use cache::VideoFrameKey;
 pub(crate) use cache::{RenderKey, TextTextureCache, TextTextureKey, VideoFrameCache};
-pub(crate) use cache_identity::{
-    composition_cache_key, composition_media_revision, media_file_revision,
-};
+pub(crate) use cache_identity::composition_cache_key;
 use helpers::*;
 pub(crate) use mask_raster::*;
-pub(crate) use text_raster::{bake_text_stroke, TextRasterParams};
+pub(crate) use text_raster::TextRasterParams;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -36,22 +37,24 @@ struct Vertex {
 }
 
 const VERTICES: &[Vertex] = &[
+    // The projection maps positive composition Y downward, so flip the UV
+    // assignment to keep top-left-origin image rows upright on screen.
     Vertex {
         position: [-0.5, 0.5],
-        tex_coords: [0.0, 0.0],
-    }, // Top-Left
-    Vertex {
-        position: [-0.5, -0.5],
         tex_coords: [0.0, 1.0],
     }, // Bottom-Left
     Vertex {
-        position: [0.5, -0.5],
-        tex_coords: [1.0, 1.0],
-    }, // Bottom-Right
+        position: [-0.5, -0.5],
+        tex_coords: [0.0, 0.0],
+    }, // Top-Left
     Vertex {
-        position: [0.5, 0.5],
+        position: [0.5, -0.5],
         tex_coords: [1.0, 0.0],
     }, // Top-Right
+    Vertex {
+        position: [0.5, 0.5],
+        tex_coords: [1.0, 1.0],
+    }, // Bottom-Right
 ];
 
 const INDICES: &[u16] = &[0, 1, 2, 0, 2, 3];
@@ -278,9 +281,12 @@ struct LayerUniform {
     sim_p5: f32,
     sim_p6: f32,
 
-    _padding_align: [f32; 4],
-    _ls_pad4: f32,
+    three_d_shade: [f32; 3],
+    three_d_lighting_enabled: u32,
+    accepts_shadows: u32,
     _ls_pad5: f32,
+    video_frame_blend: f32,
+    _video_frame_blend_padding: [f32; 3],
 }
 
 // ─── GPU Layer Mask Rasterization (CPU-baked coverage → group(3) texture) ──
@@ -446,7 +452,9 @@ impl WgpuRenderer {
     ) -> (&wgpu::TextureView, bool) {
         let recreated = self.render_internal(comp, frame, exposure_ev, lut_mode, true);
         if self.snapshot_view.is_none() {
-            log::error!("[WgpuRenderer] render_snapshot_frame(): snapshot view missing; using fallback view");
+            log::error!(
+                "[WgpuRenderer] render_snapshot_frame(): snapshot view missing; using fallback view"
+            );
             self.dummy_view_or_create(true);
         }
         (

@@ -1,6 +1,36 @@
 use crate::core::timeline::{Composition, LayerType, ProjectItemType};
 use std::collections::{BTreeSet, HashMap};
+use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
+
+mod model_companions;
+pub(super) use model_companions::{model_companion_references, rewrite_model_companions};
+
+const MAX_MODEL_COMPANION_LINE_BYTES: u64 = 1024 * 1024;
+
+fn read_model_line(
+    reader: &mut BufReader<std::fs::File>,
+    line: &mut Vec<u8>,
+) -> Result<usize, String> {
+    line.clear();
+    let bytes_read = reader
+        .take(MAX_MODEL_COMPANION_LINE_BYTES + 1)
+        .read_until(b'\n', line)
+        .map_err(|error| format!("Cannot read model companion text: {error}"))?;
+    if bytes_read as u64 > MAX_MODEL_COMPANION_LINE_BYTES {
+        return Err(format!(
+            "Model companion contains a line longer than {} MiB",
+            MAX_MODEL_COMPANION_LINE_BYTES / (1024 * 1024)
+        ));
+    }
+    Ok(bytes_read)
+}
+
+fn model_line_text(line: &[u8]) -> Result<&str, String> {
+    let line = line.strip_suffix(b"\n").unwrap_or(line);
+    let line = line.strip_suffix(b"\r").unwrap_or(line);
+    std::str::from_utf8(line).map_err(|error| format!("Model companion is not UTF-8 text: {error}"))
+}
 
 pub fn collect_production_document(
     document: &crate::core::production_document::ProductionDocument,
@@ -34,6 +64,10 @@ pub fn collect_production_document(
         }
         for composition in &document.project.compositions {
             collect_composition_paths(composition, &mut raw_paths);
+        }
+        let mut sequence_cache_dirs = BTreeSet::new();
+        for composition in &document.project.compositions {
+            collect_image_sequence_cache_dirs(composition, &mut sequence_cache_dirs);
         }
 
         let mut inspected = BTreeSet::new();
@@ -130,6 +164,30 @@ pub fn collect_production_document(
         for (canonical, name) in &canonical_names {
             rewrite_model_companions(canonical, &footage_dir.join(name), &canonical_names)?;
         }
+        for (index, raw_cache_dir) in sequence_cache_dirs.iter().enumerate() {
+            let raw_path = Path::new(raw_cache_dir);
+            let source = if raw_path.is_absolute() {
+                raw_path.to_path_buf()
+            } else {
+                source_project_dir.join(raw_path)
+            };
+            let canonical = std::fs::canonicalize(&source).map_err(|error| {
+                format!(
+                    "Cannot collect image-sequence cache '{}': {error}",
+                    source.display()
+                )
+            })?;
+            if !canonical.is_dir() {
+                return Err(format!(
+                    "Image-sequence cache is not a directory: {}",
+                    canonical.display()
+                ));
+            }
+            let collected_name = format!("_sequence_cache_{:04}", index + 1);
+            let collected_path = footage_dir.join(&collected_name);
+            file_count += copy_directory_tree(&canonical, &collected_path)?;
+            raw_names.insert(raw_cache_dir.clone(), collected_name);
+        }
 
         let mut collected = document.clone();
         for asset in &mut collected.project_mut().assets {
@@ -197,176 +255,80 @@ fn collect_composition_paths(composition: &Composition, paths: &mut BTreeSet<Str
     }
 }
 
-fn model_companion_references(path: &Path) -> Result<Vec<String>, String> {
-    let extension = path
-        .extension()
-        .and_then(std::ffi::OsStr::to_str)
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    if extension != "obj" && extension != "mtl" {
-        return Ok(Vec::new());
-    }
-    let text = std::fs::read_to_string(path).map_err(|error| {
-        format!(
-            "Cannot inspect model companion file '{}': {error}",
-            path.display()
-        )
-    })?;
-    let mut references = Vec::new();
-    for line in text.lines() {
-        let content = line.split('#').next().unwrap_or_default().trim();
-        let mut parts = content.split_whitespace();
-        let Some(tag) = parts.next() else { continue };
-        if extension == "obj" && tag == "mtllib" {
-            let rest = content[tag.len()..].trim();
-            if let Some(quoted) = rest
-                .strip_prefix('"')
-                .and_then(|value| value.split_once('"'))
-            {
-                references.push(quoted.0.to_string());
-            } else {
-                references.extend(rest.split_whitespace().map(str::to_string));
-            }
-        } else if extension == "mtl"
-            && (tag.to_ascii_lowercase().starts_with("map_")
-                || matches!(
-                    tag.to_ascii_lowercase().as_str(),
-                    "bump" | "norm" | "disp" | "decal" | "refl"
-                ))
+fn collect_image_sequence_cache_dirs(composition: &Composition, paths: &mut BTreeSet<String>) {
+    for layer in &composition.layers {
+        if let LayerType::Video {
+            source, frames_dir, ..
+        } = &layer.layer_type
         {
-            let rest = content[tag.len()..].trim();
-            if let Some(start) = rest.find('"') {
-                if let Some(end) = rest[start + 1..].find('"') {
-                    references.push(rest[start + 1..start + 1 + end].to_string());
-                }
-            } else if let Some(filename) = rest.split_whitespace().last() {
-                references.push(filename.to_string());
+            if !frames_dir.is_empty()
+                && crate::core::video_import::is_image_sequence_cache(frames_dir, source)
+            {
+                paths.insert(frames_dir.clone());
             }
         }
     }
-    Ok(references)
+    for child in &composition.sub_compositions {
+        collect_image_sequence_cache_dirs(child, paths);
+    }
 }
 
-fn rewrite_model_companions(
-    source: &Path,
-    destination: &Path,
-    canonical_names: &HashMap<PathBuf, String>,
-) -> Result<(), String> {
-    let extension = source
-        .extension()
-        .and_then(std::ffi::OsStr::to_str)
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    if extension != "obj" && extension != "mtl" {
-        return Ok(());
-    }
-    let source_text = std::fs::read_to_string(source)
-        .map_err(|error| format!("Cannot rewrite model file '{}': {error}", source.display()))?;
-    let mut rewritten = String::with_capacity(source_text.len());
-    for line in source_text.lines() {
-        let content = line.split('#').next().unwrap_or_default();
-        let trimmed = content.trim_start();
-        let indent = &line[..line.len() - trimmed.len()];
-        let mut parts = trimmed.split_whitespace();
-        let Some(tag) = parts.next() else {
-            rewritten.push_str(line);
-            rewritten.push('\n');
-            continue;
-        };
-        if extension == "obj" && tag == "mtllib" {
-            let rest = trimmed[tag.len()..].trim();
-            let references = if let Some(start) = rest.find('"') {
-                rest[start + 1..]
-                    .find('"')
-                    .map(|end| vec![rest[start + 1..start + 1 + end].to_string()])
-                    .unwrap_or_default()
-            } else {
-                rest.split_whitespace().map(str::to_string).collect()
-            };
-            let mut names = Vec::with_capacity(references.len());
-            for reference in references {
-                let canonical = std::fs::canonicalize(
-                    source
-                        .parent()
-                        .unwrap_or_else(|| Path::new("."))
-                        .join(&reference),
-                )
-                .map_err(|error| format!("Cannot resolve OBJ material '{reference}': {error}"))?;
-                names.push(
-                    canonical_names
-                        .get(&canonical)
-                        .ok_or_else(|| {
-                            format!("Collected OBJ material is missing for '{reference}'")
-                        })?
-                        .clone(),
-                );
-            }
-            rewritten.push_str(indent);
-            rewritten.push_str("mtllib");
-            for name in names {
-                rewritten.push(' ');
-                rewritten.push_str(&name);
-            }
-            rewritten.push('\n');
-            continue;
-        }
-        let is_mtl_map = extension == "mtl"
-            && (tag.to_ascii_lowercase().starts_with("map_")
-                || matches!(
-                    tag.to_ascii_lowercase().as_str(),
-                    "bump" | "norm" | "disp" | "decal" | "refl"
-                ));
-        if is_mtl_map {
-            let rest_start = indent.len() + tag.len();
-            let rest = line[rest_start..].trim_start();
-            let quote_start = rest.find('"');
-            let (reference, line_start, line_end) = if let Some(start) = quote_start {
-                if let Some(end) = rest[start + 1..].find('"') {
-                    (
-                        rest[start + 1..start + 1 + end].to_string(),
-                        rest_start + (line[rest_start..].len() - rest.len()) + start + 1,
-                        rest_start + (line[rest_start..].len() - rest.len()) + start + 1 + end,
-                    )
-                } else {
-                    rewritten.push_str(line);
-                    rewritten.push('\n');
-                    continue;
-                }
-            } else if let Some(filename) = rest.split_whitespace().last() {
-                let start = content
-                    .rfind(filename)
-                    .unwrap_or(content.len() - filename.len());
-                (filename.to_string(), start, start + filename.len())
-            } else {
-                rewritten.push_str(line);
-                rewritten.push('\n');
-                continue;
-            };
-            let canonical = std::fs::canonicalize(
-                source
-                    .parent()
-                    .unwrap_or_else(|| Path::new("."))
-                    .join(&reference),
-            )
-            .map_err(|error| format!("Cannot resolve MTL texture '{reference}': {error}"))?;
-            let name = canonical_names
-                .get(&canonical)
-                .ok_or_else(|| format!("Collected MTL texture is missing for '{reference}'"))?;
-            rewritten.push_str(&line[..line_start]);
-            rewritten.push_str(name);
-            rewritten.push_str(&line[line_end..]);
-            rewritten.push('\n');
-        } else {
-            rewritten.push_str(line);
-            rewritten.push('\n');
-        }
-    }
-    std::fs::write(destination, rewritten).map_err(|error| {
+fn copy_directory_tree(source: &Path, destination: &Path) -> Result<usize, String> {
+    std::fs::create_dir(destination).map_err(|error| {
         format!(
-            "Cannot save collected model file '{}': {error}",
+            "Cannot create collected media directory '{}': {error}",
             destination.display()
         )
-    })
+    })?;
+    let mut pending = vec![(source.to_path_buf(), destination.to_path_buf())];
+    let mut file_count = 0usize;
+    while let Some((current_source, current_destination)) = pending.pop() {
+        let entries = std::fs::read_dir(&current_source).map_err(|error| {
+            format!(
+                "Cannot read media directory '{}': {error}",
+                current_source.display()
+            )
+        })?;
+        for entry in entries {
+            let entry = entry.map_err(|error| {
+                format!(
+                    "Cannot enumerate media directory '{}': {error}",
+                    current_source.display()
+                )
+            })?;
+            let entry_path = entry.path();
+            let entry_type = entry.file_type().map_err(|error| {
+                format!(
+                    "Cannot inspect media item '{}': {error}",
+                    entry_path.display()
+                )
+            })?;
+            let target = current_destination.join(entry.file_name());
+            if entry_type.is_dir() {
+                std::fs::create_dir(&target).map_err(|error| {
+                    format!(
+                        "Cannot create collected media directory '{}': {error}",
+                        target.display()
+                    )
+                })?;
+                pending.push((entry_path, target));
+            } else if entry_type.is_file() {
+                std::fs::copy(&entry_path, &target).map_err(|error| {
+                    format!(
+                        "Cannot collect media file '{}': {error}",
+                        entry_path.display()
+                    )
+                })?;
+                file_count = file_count.saturating_add(1);
+            } else {
+                return Err(format!(
+                    "Unsupported item in media directory: {}",
+                    entry_path.display()
+                ));
+            }
+        }
+    }
+    Ok(file_count)
 }
 
 fn rewrite_composition_paths(
@@ -391,9 +353,15 @@ fn rewrite_composition_paths(
                 audio_wav,
                 ..
             } => {
+                let is_image_sequence =
+                    crate::core::video_import::is_image_sequence_cache(frames_dir, source);
                 rewrite(source)?;
-                *frames_dir = "cache_pending".to_string();
-                *audio_wav = None;
+                if is_image_sequence {
+                    rewrite(frames_dir)?;
+                } else {
+                    *frames_dir = "cache_pending".to_string();
+                    *audio_wav = None;
+                }
             }
             _ => {}
         }

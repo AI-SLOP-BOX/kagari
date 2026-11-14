@@ -74,7 +74,7 @@ fn draw_export_captions(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
             if srt.is_empty() {
                 app.toasts.error("No caption layers found");
             } else {
-                match std::fs::write(&path, &srt) {
+                match crate::core::atomic_file::write_atomic(&path, srt.as_bytes()) {
                     Ok(_) => app
                         .toasts
                         .info(format!("Captions exported: {}", path.display())),

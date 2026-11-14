@@ -1,6 +1,68 @@
 use ab_glyph::FontRef;
 use std::collections::HashMap;
 
+pub const MAX_TEXT_BITMAP_BYTES: usize = 256 * 1024 * 1024;
+
+pub(super) fn checked_text_bitmap_len(width: u32, height: u32) -> Option<usize> {
+    let bytes = (width as usize)
+        .checked_mul(height as usize)?
+        .checked_mul(4)?;
+    (bytes <= MAX_TEXT_BITMAP_BYTES).then_some(bytes)
+}
+
+pub(super) fn checked_text_dimensions(width: f32, height: f32, padding: u32) -> Option<(u32, u32)> {
+    if !width.is_finite() || !height.is_finite() || width < 0.0 || height < 0.0 {
+        return None;
+    }
+    let padding = padding as f32 * 2.0;
+    let width = width.ceil() + padding;
+    let height = height.ceil() + padding;
+    if width > u32::MAX as f32 || height > u32::MAX as f32 {
+        return None;
+    }
+    let dimensions = (width.max(1.0) as u32, height.max(1.0) as u32);
+    if dimensions.0 > crate::core::software_renderer::MAX_RENDER_DIMENSION
+        || dimensions.1 > crate::core::software_renderer::MAX_RENDER_DIMENSION
+    {
+        return None;
+    }
+    checked_text_bitmap_len(dimensions.0, dimensions.1).map(|_| dimensions)
+}
+
+pub(super) fn zeroed_text_bitmap(width: u32, height: u32) -> Option<Vec<u8>> {
+    let byte_len = checked_text_bitmap_len(width, height)?;
+    let mut pixels = Vec::new();
+    pixels.try_reserve_exact(byte_len).ok()?;
+    pixels.resize(byte_len, 0);
+    Some(pixels)
+}
+
+pub(super) fn checked_animated_glyph_pixels(width: usize, height: usize) -> Option<usize> {
+    let pixel_count = width.checked_mul(height)?;
+    let byte_count = pixel_count.checked_mul(4)?;
+    (byte_count <= super::glyph::MAX_GLYPH_BITMAP_BYTES).then_some(pixel_count)
+}
+
+pub(super) fn zeroed_glyph_coverage(pixel_count: usize) -> Option<Vec<f32>> {
+    let bytes = pixel_count.checked_mul(std::mem::size_of::<f32>())?;
+    if bytes > super::glyph::MAX_GLYPH_BITMAP_BYTES {
+        return None;
+    }
+    let mut coverage = Vec::new();
+    coverage.try_reserve_exact(pixel_count).ok()?;
+    coverage.resize(pixel_count, 0.0);
+    Some(coverage)
+}
+
+pub(super) fn zeroed_glyph_bitmap(width: usize, height: usize) -> Option<Vec<u8>> {
+    let pixels = checked_animated_glyph_pixels(width, height)?;
+    let byte_count = pixels.checked_mul(4)?;
+    let mut bitmap = Vec::new();
+    bitmap.try_reserve_exact(byte_count).ok()?;
+    bitmap.resize(byte_count, 0);
+    Some(bitmap)
+}
+
 /// Parses raw font bytes, supporting TrueType Collections (.ttc) via index fallback.
 pub fn parse_font(data: &[u8]) -> Option<FontRef<'_>> {
     if let Ok(f) = FontRef::try_from_slice(data) {
@@ -25,7 +87,7 @@ pub struct RasterizedGlyph {
     pub width: u32,
     /// Height of the glyph bitmap in pixels
     pub height: u32,
-    /// RGBA pixel data (premultiplied alpha)
+    /// RGBA pixel data with straight (unpremultiplied) alpha
     pub pixels: Vec<u8>,
 }
 
@@ -59,30 +121,46 @@ pub fn apply_faux_bitmap_style(
     (mut width, mut height, mut pixels): (u32, u32, Vec<u8>),
     style: FauxTextStyle,
 ) -> (u32, u32, Vec<u8>) {
+    let Some(input_len) = checked_text_bitmap_len(width, height) else {
+        return (width, height, pixels);
+    };
+    if pixels.len() < input_len {
+        return (width, height, pixels);
+    }
+    pixels.truncate(input_len);
+
     if style.small_caps && width > 0 && height > 0 {
         let new_width = ((width as f32) * 0.84).round().max(1.0) as u32;
         let new_height = ((height as f32) * 0.84).round().max(1.0) as u32;
-        let mut scaled = vec![0u8; (new_width * new_height * 4) as usize];
-        for y in 0..new_height {
-            for x in 0..new_width {
-                let sx = ((x as f32 / new_width as f32) * width as f32)
-                    .floor()
-                    .min(width.saturating_sub(1) as f32) as u32;
-                let sy = ((y as f32 / new_height as f32) * height as f32)
-                    .floor()
-                    .min(height.saturating_sub(1) as f32) as u32;
-                let src = ((sy * width + sx) * 4) as usize;
-                let dst = ((y * new_width + x) * 4) as usize;
-                scaled[dst..dst + 4].copy_from_slice(&pixels[src..src + 4]);
+        if checked_text_bitmap_len(new_width, new_height).is_some() {
+            let Some(mut scaled) = zeroed_text_bitmap(new_width, new_height) else {
+                return (width, height, pixels);
+            };
+            for y in 0..new_height {
+                for x in 0..new_width {
+                    let sx = ((x as f32 / new_width as f32) * width as f32)
+                        .floor()
+                        .min(width.saturating_sub(1) as f32) as u32;
+                    let sy = ((y as f32 / new_height as f32) * height as f32)
+                        .floor()
+                        .min(height.saturating_sub(1) as f32) as u32;
+                    let src = ((sy * width + sx) * 4) as usize;
+                    let dst = ((y * new_width + x) * 4) as usize;
+                    scaled[dst..dst + 4].copy_from_slice(&pixels[src..src + 4]);
+                }
             }
+            width = new_width;
+            height = new_height;
+            pixels = scaled;
         }
-        width = new_width;
-        height = new_height;
-        pixels = scaled;
     }
 
     if style.bold {
-        let source = pixels.clone();
+        let mut source = Vec::new();
+        if source.try_reserve_exact(pixels.len()).is_err() {
+            return (width, height, pixels);
+        }
+        source.extend_from_slice(&pixels);
         for y in 0..height {
             for x in 0..width {
                 let mut best = 0u8;
@@ -111,19 +189,24 @@ pub fn apply_faux_bitmap_style(
 
     if style.italic && width > 0 && height > 0 {
         let shear = (height as f32 * 0.22).ceil() as u32;
-        let new_width = width.saturating_add(shear).max(1);
-        let mut slanted = vec![0u8; (new_width * height * 4) as usize];
-        for y in 0..height {
-            let shift = ((height - 1 - y) as f32 * 0.22).round() as u32;
-            for x in 0..width {
-                let dst_x = x.saturating_add(shift);
-                let src = ((y * width + x) * 4) as usize;
-                let dst = ((y * new_width + dst_x) * 4) as usize;
-                slanted[dst..dst + 4].copy_from_slice(&pixels[src..src + 4]);
+        if let Some(new_width) = width.checked_add(shear) {
+            if checked_text_bitmap_len(new_width, height).is_some() {
+                let Some(mut slanted) = zeroed_text_bitmap(new_width, height) else {
+                    return (width, height, pixels);
+                };
+                for y in 0..height {
+                    let shift = ((height - 1 - y) as f32 * 0.22).round() as u32;
+                    for x in 0..width {
+                        let dst_x = x.saturating_add(shift);
+                        let src = ((y * width + x) * 4) as usize;
+                        let dst = ((y * new_width + dst_x) * 4) as usize;
+                        slanted[dst..dst + 4].copy_from_slice(&pixels[src..src + 4]);
+                    }
+                }
+                width = new_width;
+                pixels = slanted;
             }
         }
-        width = new_width;
-        pixels = slanted;
     }
 
     (width, height, pixels)

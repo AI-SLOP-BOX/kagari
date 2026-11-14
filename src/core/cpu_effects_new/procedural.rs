@@ -1,4 +1,3 @@
-use crate::core::software_renderer::rgba_buffer_size;
 use rayon::prelude::*;
 
 // ──────────────────────────── FractalNoise ─────────────────────────────
@@ -59,10 +58,7 @@ pub fn apply_fractal_noise(
     complexity: f32,
     evolution: f32,
 ) {
-    let Some(expected) = rgba_buffer_size(width, height) else {
-        return;
-    };
-    if pixels.len() < expected {
+    if !super::valid_rgba_dimensions(pixels, width, height) {
         return;
     }
     let w = width as f32;
@@ -73,8 +69,22 @@ pub fn apply_fractal_noise(
     let evo = evolution * 0.1; // slow down evolution
     let seed = (evo * 1000.0) as u32;
 
+    let cancel_flag = crate::core::software_renderer::get_render_cancel_flag();
     for py in 0..height {
+        if cancel_flag
+            .as_ref()
+            .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+        {
+            return;
+        }
         for px in 0..width {
+            if px.is_multiple_of(4096)
+                && cancel_flag
+                    .as_ref()
+                    .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+            {
+                return;
+            }
             let nx = px as f32 / w * scale;
             let ny = py as f32 / h * scale;
             let mut n = 0.0f32;
@@ -182,24 +192,51 @@ pub fn apply_compound_blur_with_map(
     blur_map: Option<&[u8]>,
     max_blur: f32,
 ) {
-    if max_blur < 0.5 {
+    if !max_blur.is_finite() || max_blur < 0.5 || width == 0 || height == 0 {
         return;
     }
     let expected = (width as usize)
         .checked_mul(height as usize)
         .and_then(|n| n.checked_mul(4))
         .unwrap_or(0);
+    if expected == 0 || pixels.len() != expected {
+        return;
+    }
+    let Some(row_stride) = (width as usize).checked_mul(4) else {
+        return;
+    };
     let map = blur_map.filter(|candidate| candidate.len() == expected);
-    let radius = max_blur.round() as u32;
+    // Keep the public kernel aligned with the UI's 0–100 px control range.
+    let radius = max_blur.clamp(0.0, 100.0).round() as u32;
+    let cancel_flag = crate::core::software_renderer::get_render_cancel_flag();
+    if cancel_flag
+        .as_ref()
+        .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+    {
+        return;
+    }
     let orig = pixels.to_vec();
 
     // Parallel per-row processing
     pixels
-        .par_chunks_mut((width * 4) as usize)
+        .par_chunks_mut(row_stride)
         .enumerate()
         .for_each(|(row, row_chunk)| {
+            if cancel_flag
+                .as_ref()
+                .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+            {
+                return;
+            }
             let py = row as u32;
             for px in 0..width {
+                if px.is_multiple_of(16)
+                    && cancel_flag
+                        .as_ref()
+                        .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+                {
+                    return;
+                }
                 let idx = (px * 4) as usize;
                 if idx + 3 >= row_chunk.len() {
                     continue;
@@ -225,6 +262,13 @@ pub fn apply_compound_blur_with_map(
                 let mut count = 0.0f32;
 
                 for dy in -(r as i32)..=r as i32 {
+                    if (dy as u32).is_multiple_of(32)
+                        && cancel_flag
+                            .as_ref()
+                            .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+                    {
+                        return;
+                    }
                     for dx in -(r as i32)..=r as i32 {
                         if dx * dx + dy * dy > (r as i32 * r as i32) {
                             continue;
@@ -251,55 +295,88 @@ pub fn apply_compound_blur_with_map(
 
 // ──────────────────────────── Minimax ─────────────────────────────
 
-/// Minimax - dilate (max) or erode (min) based on luminance.
-/// operation: 0=Min (erode), 1=Max (dilate)
-/// Apply minimax (dilate/erode) matte operation.
-/// operation: 0=Min (erode dark areas), 1=Max (dilate bright areas).
-/// radius: operation radius in pixels.
+/// Apply per-channel RGB dilation (max) or erosion (min) over a square neighborhood.
+/// `operation`: 0 = minimum (erode), 1 = maximum (dilate).
+/// `radius`: neighborhood radius in pixels, clamped to the GPU limit of 16.
 pub fn apply_minimax(pixels: &mut [u8], width: u32, height: u32, operation: f32, radius: f32) {
-    let r = radius.round() as u32;
+    if width == 0 || height == 0 {
+        return;
+    }
+    let expected = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|count| count.checked_mul(4));
+    if expected != Some(pixels.len()) {
+        return;
+    }
+    let Some(row_stride) = (width as usize).checked_mul(4) else {
+        return;
+    };
+    let r = radius.clamp(0.0, 16.0).round() as u32;
     if r < 1 {
+        return;
+    }
+    let cancel_flag = crate::core::software_renderer::get_render_cancel_flag();
+    if cancel_flag
+        .as_ref()
+        .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+    {
         return;
     }
     let orig = pixels.to_vec();
     let use_max = operation > 0.5;
 
     pixels
-        .par_chunks_mut((width * 4) as usize)
+        .par_chunks_mut(row_stride)
         .enumerate()
         .for_each(|(row, row_chunk)| {
+            if cancel_flag
+                .as_ref()
+                .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+            {
+                return;
+            }
             let py = row as u32;
             for px in 0..width {
+                if px.is_multiple_of(16)
+                    && cancel_flag
+                        .as_ref()
+                        .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+                {
+                    return;
+                }
                 let idx = (px * 4) as usize;
                 if idx + 3 >= row_chunk.len() {
                     continue;
                 }
 
-                let mut best = orig[((py * width + px) * 4) as usize] as f32;
+                let center_idx = ((py * width + px) * 4) as usize;
+                let mut best = [orig[center_idx], orig[center_idx + 1], orig[center_idx + 2]];
                 for dy in -(r as i32)..=r as i32 {
+                    if (dy as u32).is_multiple_of(32)
+                        && cancel_flag
+                            .as_ref()
+                            .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+                    {
+                        return;
+                    }
                     for dx in -(r as i32)..=r as i32 {
-                        if dx * dx + dy * dy > (r as i32 * r as i32) {
-                            continue;
-                        }
                         let sx = (px as i32 + dx).max(0).min(width as i32 - 1) as u32;
                         let sy = (py as i32 + dy).max(0).min(height as i32 - 1) as u32;
                         let sidx = ((sy * width + sx) * 4) as usize;
                         if sidx + 3 < orig.len() {
-                            let lum =
-                                (orig[sidx] as f32 + orig[sidx + 1] as f32 + orig[sidx + 2] as f32)
-                                    / 3.0;
-                            if use_max {
-                                best = best.max(lum);
-                            } else {
-                                best = best.min(lum);
+                            for channel in 0..3 {
+                                if use_max {
+                                    best[channel] = best[channel].max(orig[sidx + channel]);
+                                } else {
+                                    best[channel] = best[channel].min(orig[sidx + channel]);
+                                }
                             }
                         }
                     }
                 }
-                let v = best as u8;
-                row_chunk[idx] = v;
-                row_chunk[idx + 1] = v;
-                row_chunk[idx + 2] = v;
+                row_chunk[idx] = best[0];
+                row_chunk[idx + 1] = best[1];
+                row_chunk[idx + 2] = best[2];
                 // Keep alpha
             }
         });
@@ -325,7 +402,15 @@ pub fn apply_shift_channels(
     let src_b = take_blue as usize;
     let src_a = take_alpha as usize;
 
-    for px in pixels.as_chunks_mut::<4>().0 {
+    let cancel_flag = crate::core::software_renderer::get_render_cancel_flag();
+    for (i, px) in pixels.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+        if i.is_multiple_of(4096)
+            && cancel_flag
+                .as_ref()
+                .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+        {
+            return;
+        }
         let orig = [px[0], px[1], px[2], px[3]];
         px[0] = match src_r {
             0..=3 => orig[src_r],

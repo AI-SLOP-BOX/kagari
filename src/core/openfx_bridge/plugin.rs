@@ -1,6 +1,8 @@
 //! OpenFX host/plugin loading, probing, and execution interface.
 
-use super::properties::{cstr, OfxPropertySet};
+use super::properties::{
+    cstr, register_property_set_handle, unregister_property_set_handle, OfxPropertySet,
+};
 use std::path::Path;
 
 #[repr(C)]
@@ -58,7 +60,8 @@ pub struct LoadedOfxPlugin {
     pub name: String,
     library: libloading::Library,
     /// Per-instance property sets the plugin may have requested during Load.
-    instance_props: Vec<OfxPropertySet>,
+    #[allow(clippy::vec_box)]
+    instance_props: Vec<Box<OfxPropertySet>>,
 }
 
 impl LoadedOfxPlugin {
@@ -72,15 +75,25 @@ impl LoadedOfxPlugin {
     /// The returned pointer stays valid for the plugin's lifetime (the set is
     /// owned by the LoadedOfxPlugin and freed on drop).
     pub fn new_property_set(&mut self) -> *mut OfxPropertySet {
-        self.instance_props.push(OfxPropertySet::new());
-        let last = self.instance_props.last_mut().unwrap() as *mut OfxPropertySet;
-        last
+        let mut property_set = Box::new(OfxPropertySet::new());
+        let pointer = property_set.as_mut() as *mut OfxPropertySet;
+        self.instance_props.push(property_set);
+        register_property_set_handle(pointer);
+        pointer
     }
 
     /// Rendering stays unavailable until plugin attachment and image handles
     /// can be provided through a complete OFX Image Effect Suite.
     pub fn render(&mut self, _req: &mut OfxRenderRequest<'_>) -> Result<(), String> {
         Err("OpenFX rendering is unavailable until the Image Effect Suite is implemented".into())
+    }
+}
+
+impl Drop for LoadedOfxPlugin {
+    fn drop(&mut self) {
+        for property_set in &mut self.instance_props {
+            unregister_property_set_handle(property_set.as_mut());
+        }
     }
 }
 

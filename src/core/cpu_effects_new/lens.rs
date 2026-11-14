@@ -1,5 +1,4 @@
 use crate::core::cpu_effects_new::warp::sample_bilinear;
-use crate::core::software_renderer::rgba_buffer_size;
 use rayon::prelude::*;
 
 /// Apply chromatic aberration by shifting R and B channels.
@@ -13,10 +12,11 @@ pub fn apply_chromatic_aberration(
     shift_b: f32,
     edge_falloff: f32,
 ) {
-    let Some(expected) = rgba_buffer_size(width, height) else {
+    if !super::valid_rgba_dimensions(pixels, width, height) {
         return;
-    };
-    if pixels.len() < expected {
+    }
+    let cancel_flag = super::render_cancel_flag();
+    if super::cancellation_requested(&cancel_flag) {
         return;
     }
     let mut tmp = vec![0u8; pixels.len()];
@@ -27,6 +27,9 @@ pub fn apply_chromatic_aberration(
     tmp.par_chunks_exact_mut(4)
         .enumerate()
         .for_each(|(i, out)| {
+            if i.is_multiple_of(4096) && super::cancellation_requested(&cancel_flag) {
+                return;
+            }
             let x = (i % width as usize) as f32;
             let y = (i / width as usize) as f32;
             let dx = (x - cx) / cx;
@@ -64,6 +67,9 @@ pub fn apply_chromatic_aberration(
             out[2] = b_sample[2];
             out[3] = g_sample[3];
         });
+    if super::cancellation_requested(&cancel_flag) {
+        return;
+    }
     pixels[..tmp.len()].copy_from_slice(&tmp);
 }
 
@@ -81,17 +87,18 @@ pub fn apply_vignette(
     feather: f32,
     color: [f32; 4],
 ) {
-    let Some(expected) = rgba_buffer_size(width, height) else {
-        return;
-    };
-    if pixels.len() < expected {
+    if !super::valid_rgba_dimensions(pixels, width, height) {
         return;
     }
     let cx = width as f32 * 0.5;
     let cy = height as f32 * 0.5;
     let aspect = width as f32 / height as f32;
+    let cancel_flag = super::render_cancel_flag();
 
     pixels.par_chunks_mut(4).enumerate().for_each(|(i, chunk)| {
+        if i.is_multiple_of(4096) && super::cancellation_requested(&cancel_flag) {
+            return;
+        }
         if chunk.len() < 4 {
             return;
         }
@@ -133,18 +140,24 @@ pub fn apply_film_grain(
     grain_size: u32,
     seed: u32,
 ) {
-    let Some(expected) = rgba_buffer_size(width, height) else {
+    if !super::valid_rgba_dimensions(pixels, width, height) || grain_size == 0 {
         return;
-    };
-    if pixels.len() < expected || grain_size == 0 {
+    }
+    let cancel_flag = super::render_cancel_flag();
+    if super::cancellation_requested(&cancel_flag) {
         return;
     }
     let gs = grain_size.max(1);
     let blocks_w = width.div_ceil(gs);
     let blocks_h = height.div_ceil(gs);
-    let mut noise_map = vec![0i16; (blocks_w * blocks_h) as usize];
-
+    let Some(noise_count) = (blocks_w as usize).checked_mul(blocks_h as usize) else {
+        return;
+    };
+    let mut noise_map = vec![0i16; noise_count];
     for by in 0..blocks_h {
+        if super::cancellation_requested(&cancel_flag) {
+            return;
+        }
         for bx in 0..blocks_w {
             let hash = pcg_hash(seed.wrapping_add(by * blocks_w + bx));
             let val = ((hash as i32).rem_euclid(512)) - 256;
@@ -156,6 +169,9 @@ pub fn apply_film_grain(
     }
 
     pixels.par_chunks_mut(4).enumerate().for_each(|(i, chunk)| {
+        if i.is_multiple_of(4096) && super::cancellation_requested(&cancel_flag) {
+            return;
+        }
         if chunk.len() < 4 {
             return;
         }

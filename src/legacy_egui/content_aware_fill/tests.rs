@@ -16,6 +16,7 @@ fn fill_source_isolated_to_selected_layer_and_ignores_the_selection_mask() {
         30,
     );
     selected.transform.position = crate::core::property::Animatable::new_constant([8.0, 8.0]);
+    selected.transform.anchor_point = crate::core::property::Animatable::new_constant([8.0, 8.0]);
     selected.masks.push(Mask::new_rect(
         "selection".into(),
         "Selection".into(),

@@ -18,9 +18,17 @@ pub fn apply_paint_strokes(
     bh: u32,
     layer_buf: &mut [u8],
 ) {
+    let scale_x = pt.scale[0] / 100.0;
+    let scale_y = pt.scale[1] / 100.0;
+    let brush_scale = pt.scale[0].abs().max(pt.scale[1].abs()) / 100.0;
     let to_buf_local = |lp: [f32; 2]| -> [f32; 2] {
-        let wx = pt.cx + (lp[0] * pt.cos_r - lp[1] * pt.sin_r) * pt.scale[0] / 100.0;
-        let wy = pt.cy + (lp[0] * pt.sin_r + lp[1] * pt.cos_r) * pt.scale[1] / 100.0;
+        // Layer-local points are scaled on their own axes, then rotated into
+        // composition space. Scaling the already-rotated coordinates distorts
+        // the transform whenever a non-uniformly scaled layer is rotated.
+        let x = lp[0] * scale_x;
+        let y = lp[1] * scale_y;
+        let wx = pt.cx + x * pt.cos_r - y * pt.sin_r;
+        let wy = pt.cy + x * pt.sin_r + y * pt.cos_r;
         [wx - pt.min_x as f32, wy - pt.min_y as f32]
     };
     let mut dirty_min_x = bw as f32;
@@ -36,7 +44,7 @@ pub fn apply_paint_strokes(
         if source_frame < stroke.start_frame || source_frame > end_f {
             continue;
         }
-        let half = stroke.size * 0.5;
+        let half = stroke.size * brush_scale * 0.5;
         for &p in &stroke.points {
             let bp = to_buf_local(p);
             dirty_min_x = dirty_min_x.min(bp[0] - half);
@@ -58,18 +66,20 @@ pub fn apply_paint_strokes(
         if source_frame < stroke.start_frame || source_frame > end_f {
             continue;
         }
-        let stroke_min = stroke.points.iter().fold([f32::MAX, f32::MAX], |acc, p| {
-            [acc[0].min(p[0]), acc[1].min(p[1])]
-        });
-        let stroke_max = stroke.points.iter().fold([f32::MIN, f32::MIN], |acc, p| {
-            [acc[0].max(p[0]), acc[1].max(p[1])]
-        });
-        let sb_min = to_buf_local(stroke_min);
-        let sb_max = to_buf_local(stroke_max);
-        let s_min_x = sb_min[0] - stroke.size * 0.5;
-        let s_min_y = sb_min[1] - stroke.size * 0.5;
-        let s_max_x = sb_max[0] + stroke.size * 0.5;
-        let s_max_y = sb_max[1] + stroke.size * 0.5;
+        let brush_radius = stroke.size * brush_scale * 0.5;
+        let (stroke_min, stroke_max) = stroke.points.iter().map(|&p| to_buf_local(p)).fold(
+            ([f32::MAX, f32::MAX], [f32::MIN, f32::MIN]),
+            |(min, max), p| {
+                (
+                    [min[0].min(p[0]), min[1].min(p[1])],
+                    [max[0].max(p[0]), max[1].max(p[1])],
+                )
+            },
+        );
+        let s_min_x = stroke_min[0] - brush_radius;
+        let s_min_y = stroke_min[1] - brush_radius;
+        let s_max_x = stroke_max[0] + brush_radius;
+        let s_max_y = stroke_max[1] + brush_radius;
         if s_max_x < dr_x0 as f32
             || s_min_x > dr_x1 as f32
             || s_max_y < dr_y0 as f32
@@ -80,7 +90,13 @@ pub fn apply_paint_strokes(
         let buf_pts: Vec<[f32; 2]> = stroke.points.iter().map(|&p| to_buf_local(p)).collect();
         let col = stroke.color;
         if stroke.mode == crate::core::timeline::PaintStrokeMode::CloneStamp {
-            let source_buf = layer_buf.to_vec();
+            let Some(source_buf) = super::super::try_clone_buffer(layer_buf) else {
+                log::error!(
+                    "[Renderer] Could not allocate clone-stamp source for layer {}",
+                    layer.id
+                );
+                return;
+            };
             let source_pts: Vec<[f32; 2]> = stroke
                 .points
                 .iter()
@@ -95,7 +111,7 @@ pub fn apply_paint_strokes(
                 bh,
                 &buf_pts,
                 &source_pts,
-                stroke.size.max(1.0),
+                (stroke.size * brush_scale).max(1.0),
                 stroke.hardness,
                 stroke.opacity,
                 stroke.flow,
@@ -107,7 +123,7 @@ pub fn apply_paint_strokes(
                 bh,
                 &buf_pts,
                 col,
-                stroke.size.max(1.0),
+                (stroke.size * brush_scale).max(1.0),
                 stroke.hardness,
                 stroke.opacity,
                 stroke.flow,

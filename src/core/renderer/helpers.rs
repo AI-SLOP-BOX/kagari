@@ -1,7 +1,9 @@
 use super::*;
 
-/// Precomputed lookup table mapping 0..=255 u8 values to their little-endian f16 bytes (normalized 0.0..1.0).
+/// Precomputed 0..=255 values as little-endian f16 bytes.
 static F16_LUT: std::sync::OnceLock<[[u8; 2]; 256]> = std::sync::OnceLock::new();
+static PREMULTIPLIED_F16_LUT: std::sync::OnceLock<[[[u8; 2]; 256]; 256]> =
+    std::sync::OnceLock::new();
 
 fn get_f16_lut() -> &'static [[u8; 2]; 256] {
     F16_LUT.get_or_init(|| {
@@ -14,24 +16,34 @@ fn get_f16_lut() -> &'static [[u8; 2]; 256] {
     })
 }
 
-/// Convert RGBA8 pixel data to RGBA16Float bytes for HDR texture upload.
+/// Convert straight-alpha RGBA8 pixels to premultiplied RGBA16Float bytes.
 /// Each pixel: 4 channels × 2 bytes (f16) = 8 bytes.
-pub(super) fn rgba8_to_rgba16f_bytes(pixels: &[u8]) -> Vec<u8> {
-    let lut = get_f16_lut();
-    let num_pixels = pixels.len() / 4;
-    let mut out = Vec::with_capacity(num_pixels * 8);
-    let chunks = pixels.as_chunks::<4>().0;
-    for chunk in chunks {
-        let r_bytes = lut[chunk[0] as usize];
-        let g_bytes = lut[chunk[1] as usize];
-        let b_bytes = lut[chunk[2] as usize];
-        let a_bytes = lut[chunk[3] as usize];
-        out.extend_from_slice(&r_bytes);
-        out.extend_from_slice(&g_bytes);
-        out.extend_from_slice(&b_bytes);
-        out.extend_from_slice(&a_bytes);
+pub(super) fn rgba8_to_rgba16f_bytes(pixels: &[u8]) -> Option<Vec<u8>> {
+    let alpha_lut = get_f16_lut();
+    let premultiplied_lut = PREMULTIPLIED_F16_LUT.get_or_init(|| {
+        let mut lut = [[[0u8; 2]; 256]; 256];
+        for (alpha, row) in lut.iter_mut().enumerate() {
+            let alpha = alpha as f32 / 255.0;
+            for (channel, bytes) in row.iter_mut().enumerate() {
+                *bytes = f16::from_f32(channel as f32 / 255.0 * alpha).to_le_bytes();
+            }
+        }
+        lut
+    });
+    let num_pixels = pixels.len().checked_div(4)?;
+    if !pixels.len().is_multiple_of(4) {
+        return None;
     }
-    out
+    let output_len = num_pixels.checked_mul(8)?;
+    let mut out = Vec::new();
+    out.try_reserve_exact(output_len).ok()?;
+    for pixel in pixels.as_chunks::<4>().0 {
+        for channel in 0..3 {
+            out.extend_from_slice(&premultiplied_lut[pixel[3] as usize][pixel[channel] as usize]);
+        }
+        out.extend_from_slice(&alpha_lut[pixel[3] as usize]);
+    }
+    Some(out)
 }
 
 /// Convert a single RGBA8 color to RGBA16Float bytes.

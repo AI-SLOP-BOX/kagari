@@ -1,6 +1,20 @@
 #![allow(dead_code)]
 use rayon::prelude::*;
 
+#[inline]
+fn render_cancelled(flag: &Option<std::sync::Arc<std::sync::atomic::AtomicBool>>) -> bool {
+    flag.as_ref()
+        .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+}
+
+#[inline]
+fn valid_rgba_dimensions(pixels: &[u8], width: u32, height: u32) -> bool {
+    (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|count| count.checked_mul(4))
+        == Some(pixels.len())
+}
+
 mod gaussian_blur;
 #[cfg(test)]
 pub(crate) use gaussian_blur::boxes_for_gauss;
@@ -12,7 +26,7 @@ pub use distortion::*;
 /// Pack of 20 Additional Essential VFX Effects & Filters (Part 2).
 // 1. Fast Box Blur (Separable 2-pass with O(n) sliding window per pass)
 pub fn apply_fast_box_blur(pixels: &mut [u8], width: u32, height: u32, radius: u32) {
-    if radius == 0 || width == 0 || height == 0 {
+    if radius == 0 || width == 0 || height == 0 || !valid_rgba_dimensions(pixels, width, height) {
         return;
     }
     let r = radius as i32;
@@ -21,8 +35,15 @@ pub fn apply_fast_box_blur(pixels: &mut [u8], width: u32, height: u32, radius: u
     let stride = w * 4;
 
     // --- Horizontal pass: pixels -> temp_h (sliding window) ---
+    let cancel_flag = crate::core::software_renderer::get_render_cancel_flag();
+    if render_cancelled(&cancel_flag) {
+        return;
+    }
     let mut temp_h = vec![0u8; pixels.len()];
     for y in 0..h {
+        if render_cancelled(&cancel_flag) {
+            return;
+        }
         let row = y * stride;
         // Initialize accumulator for x=0
         let mut acc = [0f32; 4];
@@ -41,6 +62,9 @@ pub fn apply_fast_box_blur(pixels: &mut [u8], width: u32, height: u32, radius: u
 
         // Slide the window across the row
         for x in 1..w {
+            if x.is_multiple_of(4096) && render_cancelled(&cancel_flag) {
+                return;
+            }
             // Add new right edge
             let add_px = (x as i32 + r).min(w as i32 - 1) as usize;
             let add_idx = row + add_px * 4;
@@ -64,6 +88,9 @@ pub fn apply_fast_box_blur(pixels: &mut [u8], width: u32, height: u32, radius: u
 
     // --- Vertical pass: temp_h -> pixels (sliding window) ---
     for x in 0..w {
+        if render_cancelled(&cancel_flag) {
+            return;
+        }
         let col = x * 4;
         // Initialize accumulator for y=0
         let mut acc = [0f32; 4];
@@ -83,6 +110,9 @@ pub fn apply_fast_box_blur(pixels: &mut [u8], width: u32, height: u32, radius: u
 
         // Slide the window down the column
         for y in 1..h {
+            if y.is_multiple_of(4096) && render_cancelled(&cancel_flag) {
+                return;
+            }
             // Add new bottom edge
             let add_py = (y as i32 + r).min(h as i32 - 1) as usize;
             let add_idx = add_py * stride + col;
@@ -113,14 +143,21 @@ pub fn apply_directional_blur(
     angle_deg: f32,
     length: f32,
 ) {
-    if length <= 0.01 || width == 0 || height == 0 {
+    if length <= 0.01
+        || !length.is_finite()
+        || width == 0
+        || height == 0
+        || !valid_rgba_dimensions(pixels, width, height)
+    {
         return;
     }
+    let length = length.clamp(2.0, 256.0);
     let rad = angle_deg.to_radians();
     let dx = rad.sin();
     let dy = -rad.cos();
 
     let temp = pixels.to_vec();
+    let cancel_flag = crate::core::software_renderer::get_render_cancel_flag();
     let samples = ((length * 2.0) as usize).max(4).next_power_of_two();
 
     let sigma = (samples as f32 * 0.5 / 3.0).max(1.0);
@@ -139,6 +176,9 @@ pub fn apply_directional_blur(
         .par_chunks_exact_mut(4)
         .enumerate()
         .for_each(|(i, px)| {
+            if i.is_multiple_of(4096) && render_cancelled(&cancel_flag) {
+                return;
+            }
             let x = (i % width as usize) as u32;
             let y = (i / width as usize) as u32;
             let mut acc = [0f32; 4];
@@ -163,12 +203,17 @@ pub fn apply_directional_blur(
 
 // 3. Radial Blur (Spin) (rayon-parallelized)
 pub fn apply_radial_blur(pixels: &mut [u8], width: u32, height: u32, amount: f32) {
-    if amount.abs() < 0.01 || width == 0 || height == 0 {
+    if amount.abs() < 0.01
+        || width == 0
+        || height == 0
+        || !valid_rgba_dimensions(pixels, width, height)
+    {
         return;
     }
     let cx = width as f32 * 0.5;
     let cy = height as f32 * 0.5;
     let temp = pixels.to_vec();
+    let cancel_flag = crate::core::software_renderer::get_render_cancel_flag();
 
     let steps = 16;
     let mut weights = [0f32; 16];
@@ -187,6 +232,9 @@ pub fn apply_radial_blur(pixels: &mut [u8], width: u32, height: u32, amount: f32
         .par_chunks_exact_mut(4)
         .enumerate()
         .for_each(|(i, px)| {
+            if i.is_multiple_of(4096) && render_cancelled(&cancel_flag) {
+                return;
+            }
             let x = (i % width as usize) as u32;
             let y = (i / width as usize) as u32;
             let mut acc = [0f32; 4];
@@ -213,11 +261,22 @@ pub fn apply_radial_blur(pixels: &mut [u8], width: u32, height: u32, amount: f32
 
 // 4. Unsharp Mask
 pub fn apply_unsharp_mask(pixels: &mut [u8], width: u32, height: u32, amount: f32, radius: u32) {
+    if !valid_rgba_dimensions(pixels, width, height) {
+        return;
+    }
     let mut blurred = pixels.to_vec();
     apply_fast_box_blur(&mut blurred, width, height, radius);
+    if render_cancelled(&crate::core::software_renderer::get_render_cancel_flag()) {
+        return;
+    }
 
     let k = amount * 0.01;
     for i in (0..pixels.len()).step_by(4) {
+        if i.is_multiple_of(16_384)
+            && render_cancelled(&crate::core::software_renderer::get_render_cancel_flag())
+        {
+            return;
+        }
         for c in 0..3 {
             let orig = pixels[i + c] as f32;
             let blur = blurred[i + c] as f32;
@@ -240,13 +299,20 @@ pub fn apply_glow(
     radius: u32,
     intensity: f32,
 ) {
+    if !valid_rgba_dimensions(pixels, width, height) {
+        return;
+    }
     let num_bytes = pixels.len();
     let mut glow_map = vec![0u8; num_bytes];
 
     // Soft threshold: pixels near the cutoff get partial weight, which removes
     // the harsh banding edge a hard binary threshold produces.
     let soft_width = (radius.max(2) as f32 * 8.0).min(64.0);
+    let cancel_flag = crate::core::software_renderer::get_render_cancel_flag();
     for i in (0..num_bytes).step_by(4) {
+        if i.is_multiple_of(16_384) && render_cancelled(&cancel_flag) {
+            return;
+        }
         let luma =
             pixels[i] as f32 * 0.299 + pixels[i + 1] as f32 * 0.587 + pixels[i + 2] as f32 * 0.114;
         let t = ((luma - threshold * 255.0) / soft_width + 0.5).clamp(0.0, 1.0);
@@ -260,8 +326,14 @@ pub fn apply_glow(
 
     // True Gaussian on the glow map: bloom quality depends directly on this blur
     apply_gaussian_blur(&mut glow_map, width, height, radius);
+    if render_cancelled(&cancel_flag) {
+        return;
+    }
 
     for i in (0..num_bytes).step_by(4) {
+        if i.is_multiple_of(16_384) && render_cancelled(&cancel_flag) {
+            return;
+        }
         for c in 0..3 {
             let base = pixels[i + c] as f32;
             let g = glow_map[i + c] as f32 * intensity;
@@ -304,8 +376,12 @@ pub fn apply_drop_shadow(
     let dy = (-rad.cos() * distance).round() as i32;
 
     let mut shadow_buf = vec![0u8; pixels.len()];
+    let cancel_flag = crate::core::software_renderer::get_render_cancel_flag();
 
     for y in 0..height {
+        if render_cancelled(&cancel_flag) {
+            return;
+        }
         for x in 0..width {
             let idx = ((y * width + x) * 4) as usize;
             let alpha = pixels[idx + 3];
@@ -325,9 +401,15 @@ pub fn apply_drop_shadow(
     // True Gaussian blur on the shadow alpha gives soft, smooth edges
     // (a single box blur produces visible hard banding rings).
     apply_gaussian_blur(&mut shadow_buf, width, height, softness);
+    if render_cancelled(&cancel_flag) {
+        return;
+    }
 
     // Composite original over shadow
     for i in (0..pixels.len()).step_by(4) {
+        if i.is_multiple_of(16_384) && render_cancelled(&cancel_flag) {
+            return;
+        }
         let fg_a = pixels[i + 3] as f32 / 255.0;
         let bg_a = shadow_buf[i + 3] as f32 / 255.0;
         let out_a = fg_a + bg_a * (1.0 - fg_a);
@@ -352,7 +434,11 @@ pub fn apply_radial_fast_blur(pixels: &mut [u8], width: u32, height: u32, amount
 // 9. Simple Choker
 pub fn apply_simple_choker(pixels: &mut [u8], choke_amount: f32) {
     let k = 1.0 - (choke_amount * 0.01).clamp(-1.0, 1.0);
+    let cancel_flag = crate::core::software_renderer::get_render_cancel_flag();
     for i in (3..pixels.len()).step_by(4) {
+        if i.is_multiple_of(16_384) && render_cancelled(&cancel_flag) {
+            return;
+        }
         let a = pixels[i] as f32 / 255.0;
         pixels[i] = (a * k * 255.0).round().clamp(0.0, 255.0) as u8;
     }
@@ -361,8 +447,15 @@ pub fn apply_simple_choker(pixels: &mut [u8], choke_amount: f32) {
 // 10. Matte Choker
 pub fn apply_matte_choker(pixels: &mut [u8], choke_amount: f32, gray_level: f32) {
     apply_simple_choker(pixels, choke_amount);
+    let cancel_flag = crate::core::software_renderer::get_render_cancel_flag();
+    if render_cancelled(&cancel_flag) {
+        return;
+    }
     let thresh = (gray_level * 255.0) as u8;
     for i in (3..pixels.len()).step_by(4) {
+        if i.is_multiple_of(16_384) && render_cancelled(&cancel_flag) {
+            return;
+        }
         if pixels[i] < thresh {
             pixels[i] = 0;
         }
@@ -372,7 +465,11 @@ pub fn apply_matte_choker(pixels: &mut [u8], choke_amount: f32, gray_level: f32)
 // 11. Tint
 pub fn apply_tint(pixels: &mut [u8], black_to: [u8; 3], white_to: [u8; 3], amount: f32) {
     let k = amount.clamp(0.0, 1.0);
+    let cancel_flag = crate::core::software_renderer::get_render_cancel_flag();
     for i in (0..pixels.len()).step_by(4) {
+        if i.is_multiple_of(16_384) && render_cancelled(&cancel_flag) {
+            return;
+        }
         let luma = (pixels[i] as f32 * 0.299
             + pixels[i + 1] as f32 * 0.587
             + pixels[i + 2] as f32 * 0.114)
@@ -387,7 +484,11 @@ pub fn apply_tint(pixels: &mut [u8], black_to: [u8; 3], white_to: [u8; 3], amoun
 
 // 12. Tritone
 pub fn apply_tritone(pixels: &mut [u8], shadow_c: [u8; 3], mid_c: [u8; 3], high_c: [u8; 3]) {
+    let cancel_flag = crate::core::software_renderer::get_render_cancel_flag();
     for i in (0..pixels.len()).step_by(4) {
+        if i.is_multiple_of(16_384) && render_cancelled(&cancel_flag) {
+            return;
+        }
         let luma = (pixels[i] as f32 * 0.299
             + pixels[i + 1] as f32 * 0.587
             + pixels[i + 2] as f32 * 0.114)
@@ -406,7 +507,11 @@ pub fn apply_tritone(pixels: &mut [u8], shadow_c: [u8; 3], mid_c: [u8; 3], high_
 // 13. Posterize
 pub fn apply_posterize(pixels: &mut [u8], levels: u32) {
     let l = levels.max(2) as f32;
+    let cancel_flag = crate::core::software_renderer::get_render_cancel_flag();
     for i in (0..pixels.len()).step_by(4) {
+        if i.is_multiple_of(16_384) && render_cancelled(&cancel_flag) {
+            return;
+        }
         for c in 0..3 {
             let norm = pixels[i + c] as f32 / 255.0;
             pixels[i + c] = ((norm * l).floor() / l * 255.0).round() as u8;
@@ -416,7 +521,11 @@ pub fn apply_posterize(pixels: &mut [u8], levels: u32) {
 
 // 14. Invert
 pub fn apply_invert(pixels: &mut [u8], invert_alpha: bool) {
+    let cancel_flag = crate::core::software_renderer::get_render_cancel_flag();
     for i in (0..pixels.len()).step_by(4) {
+        if i.is_multiple_of(16_384) && render_cancelled(&cancel_flag) {
+            return;
+        }
         pixels[i] = 255 - pixels[i];
         pixels[i + 1] = 255 - pixels[i + 1];
         pixels[i + 2] = 255 - pixels[i + 2];
@@ -428,7 +537,11 @@ pub fn apply_invert(pixels: &mut [u8], invert_alpha: bool) {
 
 // 15. Threshold
 pub fn apply_threshold(pixels: &mut [u8], threshold: u8) {
+    let cancel_flag = crate::core::software_renderer::get_render_cancel_flag();
     for i in (0..pixels.len()).step_by(4) {
+        if i.is_multiple_of(16_384) && render_cancelled(&cancel_flag) {
+            return;
+        }
         let luma =
             (pixels[i] as u32 * 299 + pixels[i + 1] as u32 * 587 + pixels[i + 2] as u32 * 114)
                 / 1000;

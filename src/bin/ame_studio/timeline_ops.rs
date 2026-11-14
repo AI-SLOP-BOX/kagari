@@ -59,11 +59,45 @@ impl AfterEffectsStudio {
         use kagari_vfx::core::timeline::LayerType;
         let composition = self.project_model.active_composition();
         let marker_view = self.timeline_view == TimelineView::Markers;
-        let mut layers: Vec<_> = composition
+        let mut hidden_layers = std::collections::HashSet::new();
+        if !marker_view && !self.collapsed_scene_layers.is_empty() {
+            let mut children_by_parent: std::collections::HashMap<&str, Vec<&str>> =
+                std::collections::HashMap::with_capacity(composition.layers.len());
+            for layer in &composition.layers {
+                if let Some(parent_id) = layer.parent_id.as_deref() {
+                    children_by_parent
+                        .entry(parent_id)
+                        .or_default()
+                        .push(layer.id.as_str());
+                }
+            }
+            let mut pending: Vec<&str> = composition
+                .layers
+                .iter()
+                .filter(|layer| {
+                    layer
+                        .parent_id
+                        .as_deref()
+                        .is_some_and(|parent_id| self.collapsed_scene_layers.contains(parent_id))
+                })
+                .map(|layer| layer.id.as_str())
+                .collect();
+            while let Some(layer_id) = pending.pop() {
+                if !hidden_layers.insert(layer_id) {
+                    continue;
+                }
+                if let Some(children) = children_by_parent.get(layer_id) {
+                    pending.extend(children.iter().copied());
+                }
+            }
+        }
+
+        composition
             .layers
             .iter()
             .filter(|layer| {
-                (marker_view || !self.hide_shy_layers || !layer.is_shy)
+                !hidden_layers.contains(layer.id.as_str())
+                    && (marker_view || !self.hide_shy_layers || !layer.is_shy)
                     && match self.timeline_view {
                         TimelineView::All => true,
                         TimelineView::Animation => {
@@ -106,28 +140,7 @@ impl AfterEffectsStudio {
                     }
             })
             .cloned()
-            .collect();
-        if !marker_view {
-            layers.retain(|layer| {
-                let mut parent_id = layer.parent_id.as_deref();
-                let mut visited = std::collections::HashSet::new();
-                while let Some(id) = parent_id {
-                    if !visited.insert(id) {
-                        break;
-                    }
-                    if self.collapsed_scene_layers.contains(id) {
-                        return false;
-                    }
-                    parent_id = composition
-                        .layers
-                        .iter()
-                        .find(|candidate| candidate.id == id)
-                        .and_then(|candidate| candidate.parent_id.as_deref());
-                }
-                true
-            });
-        }
-        layers
+            .collect()
     }
 
     pub(crate) fn update_timeline_clip_drag(&mut self, pointer_x: f64) {
@@ -328,14 +341,19 @@ impl AfterEffectsStudio {
                 TimelineClipDragMode::Keyframe => {}
             }
         }
-        let changed = self
-            .project_model
-            .active_composition_mut()
+        let composition = self.project_model.active_composition_mut();
+        let layer_index = composition
             .layers
-            .iter_mut()
-            .find(|layer| layer.id == drag.layer_id && !layer.locked)
-            .map(|layer| {
-                if layer.in_frame == next_in && layer.out_frame == next_out {
+            .iter()
+            .position(|layer| layer.id == drag.layer_id && !layer.locked);
+        let scene_object =
+            layer_index.and_then(|index| composition.layers[index].scene_object.clone());
+        let changed = layer_index
+            .map(|index| {
+                let layer = &mut composition.layers[index];
+                if matches!(drag.mode, TimelineClipDragMode::Move) {
+                    layer.move_timeline_range(next_in, next_out)
+                } else if layer.in_frame == next_in && layer.out_frame == next_out {
                     false
                 } else {
                     layer.in_frame = next_in;
@@ -344,9 +362,59 @@ impl AfterEffectsStudio {
                 }
             })
             .unwrap_or(false);
+        if changed && matches!(drag.mode, TimelineClipDragMode::Move) {
+            if let Some(scene_object) = scene_object {
+                let shift = i64::from(next_in) - i64::from(drag.initial_in);
+                let ref_count = composition
+                    .layers
+                    .iter()
+                    .filter(|layer| layer.scene_object.as_ref() == Some(&scene_object))
+                    .count();
+                // A scene object can be shared by multiple layers. Its own tracks
+                // belong to the object, so only move them with an unambiguous owner.
+                if ref_count == 1 {
+                    match scene_object {
+                        kagari_vfx::core::timeline::SceneObjectRef::Camera { id } => {
+                            if let Some(camera) =
+                                composition.cameras.iter_mut().find(|c| c.id == id)
+                            {
+                                for track in [
+                                    &mut camera.fov_animation,
+                                    &mut camera.focus_distance_animation,
+                                    &mut camera.aperture_animation,
+                                    &mut camera.dof_max_blur_animation,
+                                    &mut camera.dof_enabled_animation,
+                                ] {
+                                    shift_optional_track_frames(track, shift);
+                                }
+                            }
+                        }
+                        kagari_vfx::core::timeline::SceneObjectRef::Light { id } => {
+                            if let Some(light) = composition.lights.iter_mut().find(|l| l.id == id)
+                            {
+                                shift_optional_track_frames(&mut light.intensity_animation, shift);
+                            }
+                        }
+                    }
+                }
+            }
+        }
         if changed {
             self.mark_project_changed();
             self.sync_bindings_logged();
         }
+    }
+}
+
+fn shift_optional_track_frames<T: Clone>(
+    track: &mut Option<kagari_vfx::core::property::Animatable<T>>,
+    shift: i64,
+) {
+    if let Some(keyframes) = track.as_mut().and_then(|track| track.keyframes_mut()) {
+        for keyframe in keyframes.iter_mut() {
+            keyframe.frame =
+                (i64::from(keyframe.frame) + shift).clamp(0, i64::from(u32::MAX)) as u32;
+        }
+        keyframes.sort_by_key(|keyframe| keyframe.frame);
     }
 }

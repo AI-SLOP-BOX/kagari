@@ -116,7 +116,7 @@ fn compressed_audio_asset_survives_project_reload_and_mixes() {
 
 #[cfg(feature = "gui")]
 #[test]
-fn project_bin_add_button_inserts_audio_layer_from_pointer_input() {
+fn project_bin_double_click_inserts_audio_layer_from_pointer_input() {
     use eframe::egui::{self, CentralPanel, Event, PointerButton, RawInput, Shape};
     use kagari_vfx::core::history::ProjectHistory;
     use kagari_vfx::KagariApp;
@@ -148,8 +148,7 @@ fn project_bin_add_button_inserts_audio_layer_from_pointer_input() {
         ..Default::default()
     };
     let ctx = egui::Context::default();
-    ctx.data_mut(|data| data.insert_temp(egui::Id::new("selected_project_asset"), 0usize));
-    let screen_rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 800.0));
+    let screen_rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 1200.0));
 
     let output = ctx.run(
         RawInput {
@@ -157,6 +156,9 @@ fn project_bin_add_button_inserts_audio_layer_from_pointer_input() {
             ..Default::default()
         },
         |ctx| {
+            ctx.data_mut(|data| {
+                data.insert_temp(egui::Id::new("selected_project_asset"), Some(0usize))
+            });
             CentralPanel::default().show(ctx, |ui| {
                 kagari_vfx::ui::project_panel::draw(&mut app, ui);
             });
@@ -166,14 +168,16 @@ fn project_bin_add_button_inserts_audio_layer_from_pointer_input() {
         .shapes
         .iter()
         .find_map(|clipped| match &clipped.shape {
-            Shape::Text(text) if text.galley.text() == "Add to Active Comp" => {
+            Shape::Text(text) if text.galley.text() == "00:00" => {
                 Some(text.visual_bounding_rect().center())
             }
             _ => None,
         })
-        .expect("project bin should render its add-to-composition button label");
+        .expect("project bin should render the audio asset card");
 
-    let click_input = |pressed| RawInput {
+    let mut input_time = 0.0;
+    let click_input = |pressed, input_time| RawInput {
+        time: Some(input_time),
         screen_rect: Some(screen_rect),
         events: vec![
             Event::PointerMoved(click_pos),
@@ -186,16 +190,17 @@ fn project_bin_add_button_inserts_audio_layer_from_pointer_input() {
         ],
         ..Default::default()
     };
-    let _ = ctx.run(click_input(true), |ctx| {
-        CentralPanel::default().show(ctx, |ui| {
-            kagari_vfx::ui::project_panel::draw(&mut app, ui);
+    for pressed in [true, false, true, false] {
+        input_time += 0.1;
+        let _ = ctx.run(click_input(pressed, input_time), |ctx| {
+            ctx.data_mut(|data| {
+                data.insert_temp(egui::Id::new("selected_project_asset"), Some(0usize))
+            });
+            CentralPanel::default().show(ctx, |ui| {
+                kagari_vfx::ui::project_panel::draw(&mut app, ui);
+            });
         });
-    });
-    let _ = ctx.run(click_input(false), |ctx| {
-        CentralPanel::default().show(ctx, |ui| {
-            kagari_vfx::ui::project_panel::draw(&mut app, ui);
-        });
-    });
+    }
 
     let layers = &app.history.current().active_composition().layers;
     assert_eq!(

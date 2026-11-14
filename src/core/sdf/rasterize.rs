@@ -67,6 +67,15 @@ pub fn rasterize_shape_sdf_with_rotation(
     trim_paths: Option<&TrimPaths>,
     rotation_deg: f32,
 ) -> bool {
+    let cancel_flag = crate::core::software_renderer::get_render_cancel_flag();
+    let is_cancelled = || {
+        cancel_flag
+            .as_ref()
+            .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+    };
+    if is_cancelled() {
+        return false;
+    }
     let rotation = (-rotation_deg).to_radians();
     let (sin_rotation, cos_rotation) = rotation.sin_cos();
     let mut any_written = false;
@@ -152,7 +161,13 @@ pub fn rasterize_shape_sdf_with_rotation(
     // units; degenerate bounds yield +inf, i.e. never skip).
     let reach_x = (stroke_width.max(0.0) + 4.0) / bounds_x;
     let reach_y = (stroke_width.max(0.0) + 4.0) / bounds_y;
+    if is_cancelled() {
+        return any_written;
+    }
     for py in 0..bh {
+        if is_cancelled() {
+            return any_written;
+        }
         for px in 0..bw {
             let world_x = min_x + px;
             let world_y = min_y + py;
@@ -239,4 +254,48 @@ pub fn rasterize_shape_sdf_with_rotation(
         }
     }
     any_written
+}
+
+#[cfg(test)]
+mod tests {
+    use super::rasterize_shape_sdf;
+    use crate::core::property::Animatable;
+    use crate::core::timeline::{ShapeFillType, ShapeType};
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
+
+    #[test]
+    fn cancelled_shape_raster_leaves_buffer_untouched() {
+        let mut pixels = vec![37u8; 16 * 16 * 4];
+        let original = pixels.clone();
+        let shape = ShapeType::Ellipse {
+            width: Animatable::new_constant(100.0),
+            height: Animatable::new_constant(100.0),
+        };
+        let flag = Arc::new(AtomicBool::new(true));
+
+        crate::core::software_renderer::with_render_cancel_flag(flag, || {
+            rasterize_shape_sdf(
+                &mut pixels,
+                16,
+                16,
+                0,
+                0,
+                8.0,
+                8.0,
+                8.0,
+                8.0,
+                [1.0; 4],
+                &ShapeFillType::Solid,
+                [0.0; 4],
+                0.0,
+                1.0,
+                &shape,
+                0,
+                None,
+            );
+        });
+
+        assert_eq!(pixels, original);
+    }
 }

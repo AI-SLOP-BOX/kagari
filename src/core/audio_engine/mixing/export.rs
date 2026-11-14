@@ -10,11 +10,52 @@ pub fn mix_composition_to_wav(
     mixer: Option<&[crate::core::audio_types::MixerChannel]>,
     dsp: &MasterDspParams,
 ) -> std::io::Result<Option<std::path::PathBuf>> {
+    mix_composition_to_wav_inner(comp, start_frame, end_frame, sample_rate, mixer, dsp, None)
+}
+
+/// Mix a composition to a temporary WAV while allowing the caller to cancel
+/// between video frames. The temporary file is removed when cancellation is
+/// observed.
+pub fn mix_composition_to_wav_cancelable(
+    comp: &Composition,
+    start_frame: u32,
+    end_frame: u32,
+    sample_rate: u32,
+    mixer: Option<&[crate::core::audio_types::MixerChannel]>,
+    dsp: &MasterDspParams,
+    cancel_flag: &std::sync::atomic::AtomicBool,
+) -> std::io::Result<Option<std::path::PathBuf>> {
+    mix_composition_to_wav_inner(
+        comp,
+        start_frame,
+        end_frame,
+        sample_rate,
+        mixer,
+        dsp,
+        Some(cancel_flag),
+    )
+}
+
+fn mix_composition_to_wav_inner(
+    comp: &Composition,
+    start_frame: u32,
+    end_frame: u32,
+    sample_rate: u32,
+    mixer: Option<&[crate::core::audio_types::MixerChannel]>,
+    dsp: &MasterDspParams,
+    cancel_flag: Option<&std::sync::atomic::AtomicBool>,
+) -> std::io::Result<Option<std::path::PathBuf>> {
     use std::io::{BufWriter, Error, ErrorKind, Write};
 
     let fps = comp.fps.max(1);
     if end_frame <= start_frame {
         return Ok(None);
+    }
+    if sample_rate == 0 || sample_rate > 384_000 {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            "audio sample rate must be between 1 and 384000 Hz",
+        ));
     }
     let sample_boundary =
         |frame: u32| -> u64 { u64::from(frame) * u64::from(sample_rate) / u64::from(fps) };
@@ -39,10 +80,14 @@ pub fn mix_composition_to_wav(
         std::process::id(),
         sequence
     ));
-    let f = std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&path)?;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let f = options.open(&path)?;
     let mut has_loaded_source = false;
     let result = (|| -> std::io::Result<()> {
         let mut writer = BufWriter::new(f);
@@ -63,6 +108,9 @@ pub fn mix_composition_to_wav(
         let mut dsp_state = MasterDspState::default();
         let mut encoded = Vec::new();
         for frame in start_frame..end_frame {
+            if cancel_flag.is_some_and(|flag| flag.load(std::sync::atomic::Ordering::SeqCst)) {
+                return Err(Error::new(ErrorKind::Interrupted, "audio mix canceled"));
+            }
             let frame_samples = sample_boundary(frame + 1).saturating_sub(sample_boundary(frame));
             let frame_samples = usize::try_from(frame_samples)
                 .map_err(|_| Error::new(ErrorKind::InvalidInput, "audio frame is too large"))?;
@@ -95,6 +143,9 @@ pub fn mix_composition_to_wav(
                 encoded.extend_from_slice(&value.to_le_bytes());
             }
             writer.write_all(&encoded)?;
+        }
+        if cancel_flag.is_some_and(|flag| flag.load(std::sync::atomic::Ordering::SeqCst)) {
+            return Err(Error::new(ErrorKind::Interrupted, "audio mix canceled"));
         }
         writer.flush()
     })();

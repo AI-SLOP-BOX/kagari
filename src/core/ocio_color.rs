@@ -3,6 +3,29 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 const MAX_OCIO_CONFIG_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_OCIO_LUT_CANDIDATES: usize = 4096;
+
+fn read_bounded_text_file(path: &Path, max_bytes: u64) -> std::io::Result<String> {
+    let mut file = std::fs::File::open(path)?;
+    if file.metadata()?.len() > max_bytes {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "file exceeds configured size limit",
+        ));
+    }
+    let mut text = String::new();
+    file.by_ref()
+        .take(max_bytes.saturating_add(1))
+        .read_to_string(&mut text)?;
+    if text.len() as u64 > max_bytes {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "file exceeds configured size limit",
+        ));
+    }
+    Ok(text)
+}
+
 /// Supported Color Spaces matching OpenColorIO (OCIO) / ACES standard.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OcioColorSpace {
@@ -107,12 +130,7 @@ pub struct LoadedOcioConfig {
 
 impl LoadedOcioConfig {
     pub fn load(path: &Path) -> Result<Self, String> {
-        let metadata = std::fs::metadata(path)
-            .map_err(|error| format!("could not access config.ocio: {error}"))?;
-        if metadata.len() > MAX_OCIO_CONFIG_BYTES {
-            return Err("config.ocio is larger than 64 MiB".into());
-        }
-        let config = std::fs::read_to_string(path)
+        let config = read_bounded_text_file(path, MAX_OCIO_CONFIG_BYTES)
             .map_err(|error| format!("could not read config.ocio: {error}"))?;
         if !config.contains("ocio_profile_version")
             && !config.contains("colorspaces:")
@@ -143,16 +161,13 @@ impl LoadedOcioConfig {
                     .unwrap_or_else(|| Path::new("."))
                     .join(lut_path)
             });
+            if candidates.len() >= MAX_OCIO_LUT_CANDIDATES {
+                break;
+            }
         }
 
         for lut_path in candidates {
-            let Ok(lut_metadata) = std::fs::metadata(&lut_path) else {
-                continue;
-            };
-            if lut_metadata.len() > MAX_OCIO_CONFIG_BYTES {
-                continue;
-            }
-            let contents = match std::fs::read_to_string(&lut_path) {
+            let contents = match read_bounded_text_file(&lut_path, MAX_OCIO_CONFIG_BYTES) {
                 Ok(contents) => contents,
                 Err(_) => continue,
             };
@@ -225,14 +240,32 @@ impl Lut3D {
     /// Tetrahedral interpolation: highest-quality trilinear alternative,
     /// branch-light in the hot loop.
     pub fn apply(&self, r: f32, g: f32, b: f32) -> (f32, f32, f32) {
-        let s = (self.size - 1) as f32;
-        let fr = (r * s).clamp(0.0, s - 0.001);
-        let fg = (g * s).clamp(0.0, s - 0.001);
-        let fb = (b * s).clamp(0.0, s - 0.001);
+        let Some(expected_len) = self
+            .size
+            .checked_mul(self.size)
+            .and_then(|count| count.checked_mul(self.size))
+            .and_then(|count| count.checked_mul(3))
+        else {
+            return (r, g, b);
+        };
+        if self.size == 0 || self.data.len() < expected_len {
+            return (r, g, b);
+        }
+        if self.size == 1 {
+            return (self.data[0], self.data[1], self.data[2]);
+        }
 
-        let ir = fr as usize;
-        let ig = fg as usize;
-        let ib = fb as usize;
+        let r = if r.is_nan() { 0.0 } else { r };
+        let g = if g.is_nan() { 0.0 } else { g };
+        let b = if b.is_nan() { 0.0 } else { b };
+        let s = (self.size - 1) as f32;
+        let fr = (r * s).clamp(0.0, s);
+        let fg = (g * s).clamp(0.0, s);
+        let fb = (b * s).clamp(0.0, s);
+
+        let ir = (fr as usize).min(self.size - 2);
+        let ig = (fg as usize).min(self.size - 2);
+        let ib = (fb as usize).min(self.size - 2);
         let dr = fr - ir as f32;
         let dg = fg - ig as f32;
         let db = fb - ib as f32;
@@ -355,6 +388,143 @@ impl Lut3D {
         }
         Ok(Self { size, data: values })
     }
+}
+
+/// Load and share parsed LUTs across preview/export calls. The file stamp is
+/// part of the cache identity so edits on disk invalidate both this cache and
+/// the per-thread pixel-result cache.
+pub fn load_cube_file_cached(
+    path: impl AsRef<Path>,
+) -> Result<(std::sync::Arc<Lut3D>, u64), String> {
+    let source = path.as_ref();
+    let metadata =
+        std::fs::metadata(source).map_err(|error| format!("could not access LUT file: {error}"))?;
+    if metadata.len() > MAX_OCIO_CONFIG_BYTES {
+        return Err(".cube LUT exceeds the 64 MiB size limit".into());
+    }
+    let modified_ns = metadata
+        .modified()
+        .ok()
+        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or(0, |duration| duration.as_nanos());
+    let stamp = LutFileStamp {
+        len: metadata.len(),
+        modified_ns,
+    };
+    let key = std::fs::canonicalize(source).unwrap_or_else(|_| source.to_path_buf());
+    if let Some(lut) = cached_lut(&key, stamp) {
+        return Ok((lut, lut_file_identity(&key, stamp)));
+    }
+    let load_lock = lut_file_load_lock(&key);
+    let _load_guard = load_lock
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some(lut) = cached_lut(&key, stamp) {
+        return Ok((lut, lut_file_identity(&key, stamp)));
+    }
+
+    let lut = std::sync::Arc::new(Lut3D::load_cube_file(source)?);
+    let bytes = lut.data.len().saturating_mul(std::mem::size_of::<f32>());
+    cache_lut(key.clone(), stamp, std::sync::Arc::clone(&lut), bytes);
+    Ok((lut, lut_file_identity(&key, stamp)))
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct LutFileStamp {
+    len: u64,
+    modified_ns: u128,
+}
+
+struct ParsedLutEntry {
+    stamp: LutFileStamp,
+    lut: std::sync::Arc<Lut3D>,
+    bytes: usize,
+}
+
+#[derive(Default)]
+struct ParsedLutCache {
+    entries: std::collections::HashMap<PathBuf, ParsedLutEntry>,
+    order: std::collections::VecDeque<PathBuf>,
+    bytes: usize,
+}
+
+fn parsed_lut_cache() -> &'static std::sync::Mutex<ParsedLutCache> {
+    static CACHE: std::sync::OnceLock<std::sync::Mutex<ParsedLutCache>> =
+        std::sync::OnceLock::new();
+    CACHE.get_or_init(|| std::sync::Mutex::new(ParsedLutCache::default()))
+}
+
+fn lut_file_load_lock(path: &Path) -> std::sync::Arc<std::sync::Mutex<()>> {
+    type Locks =
+        std::sync::Mutex<std::collections::HashMap<PathBuf, std::sync::Weak<std::sync::Mutex<()>>>>;
+    static LOCKS: std::sync::OnceLock<Locks> = std::sync::OnceLock::new();
+    let locks = LOCKS.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+    let mut locks = locks
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    locks.retain(|_, lock| lock.strong_count() > 0);
+    if let Some(lock) = locks.get(path).and_then(std::sync::Weak::upgrade) {
+        return lock;
+    }
+    let lock = std::sync::Arc::new(std::sync::Mutex::new(()));
+    locks.insert(path.to_path_buf(), std::sync::Arc::downgrade(&lock));
+    lock
+}
+
+fn cached_lut(path: &Path, stamp: LutFileStamp) -> Option<std::sync::Arc<Lut3D>> {
+    let cache = parsed_lut_cache();
+    let mut cache = cache
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if !cache
+        .entries
+        .get(path)
+        .is_some_and(|entry| entry.stamp == stamp)
+    {
+        if let Some(old) = cache.entries.remove(path) {
+            cache.bytes = cache.bytes.saturating_sub(old.bytes);
+        }
+        cache.order.retain(|entry_path| entry_path != path);
+        return None;
+    }
+    let lut = std::sync::Arc::clone(&cache.entries.get(path)?.lut);
+    cache.order.retain(|entry_path| entry_path != path);
+    cache.order.push_back(path.to_path_buf());
+    Some(lut)
+}
+
+fn cache_lut(path: PathBuf, stamp: LutFileStamp, lut: std::sync::Arc<Lut3D>, bytes: usize) {
+    const MAX_CACHE_BYTES: usize = 64 * 1024 * 1024;
+    if bytes > MAX_CACHE_BYTES {
+        return;
+    }
+    let cache = parsed_lut_cache();
+    let mut cache = cache
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    while cache.bytes.saturating_add(bytes) > MAX_CACHE_BYTES {
+        let Some(oldest) = cache.order.pop_front() else {
+            break;
+        };
+        if let Some(old) = cache.entries.remove(&oldest) {
+            cache.bytes = cache.bytes.saturating_sub(old.bytes);
+        }
+    }
+    cache.bytes = cache.bytes.saturating_add(bytes);
+    cache
+        .entries
+        .insert(path.clone(), ParsedLutEntry { stamp, lut, bytes });
+    cache.order.retain(|entry_path| entry_path != &path);
+    cache.order.push_back(path);
+}
+
+fn lut_file_identity(path: &Path, stamp: LutFileStamp) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    path.hash(&mut hasher);
+    stamp.len.hash(&mut hasher);
+    stamp.modified_ns.hash(&mut hasher);
+    hasher.finish()
 }
 
 static ACTIVE_LUT: std::sync::OnceLock<std::sync::RwLock<Option<std::sync::Arc<Lut3D>>>> =

@@ -3,6 +3,7 @@ use crate::app_state::KagariApp;
 use crate::core::property::Animatable;
 use eframe::egui;
 
+#[allow(clippy::too_many_arguments)]
 pub fn handle_active_drag_step(
     app: &mut KagariApp,
     ctx: &egui::Context,

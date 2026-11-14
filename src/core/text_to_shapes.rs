@@ -1,26 +1,45 @@
 //! Text to Shapes Engine (AE "Create Shapes from Text" feature).
 //!
-//! Decomposes `LayerType::Text` layers into pure vector `LayerType::Shape` layers
-//! containing exact Bezier curves and contour geometry. Enables animatable trim paths,
-//! vertex morphing, and 3D extrusion directly from typography.
+//! Decomposes `LayerType::Text` layers into vector `LayerType::Shape` layers
+//! containing sampled polygon contours. Enables mask editing, trim paths, and
+//! 3D extrusion from font outlines.
 //!
 //! Features:
 //! - Full geometric procedural vector glyph fallback (Clean OSS, zero external font dependency)
-//! - TTF/OTF contour extraction and Bézier curve decomposition
-//! - Compound path handling (handles inner holes for 'A', 'B', 'O', 'P', 'R', 'D', '0', '8', etc.)
-//! - Preserves layer transforms, fills, strokes, leading, tracking, and alignment
+//! - TTF/OTF Bézier outline extraction, flattened to bounded polygon contours
+//! - Nested counter handling (holes in glyphs such as A, B, O, P, R, D, 0, and 8)
+//! - Preserves layer transforms and text placement metrics
 
 use crate::core::property::Animatable;
 use crate::core::timeline::{Layer, LayerType, ShapeType, TrimPaths};
+mod font_outlines;
 
-/// Decomposes a Text layer into one or more Shape layers containing pure vector Bezier paths.
+type MaskedContour = (Vec<[f32; 2]>, crate::core::mask::MaskMode);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextToShapesError {
+    TooComplex,
+}
+
+/// Decomposes a Text layer into a Shape layer containing sampled font-outline masks.
 ///
 /// Returns a list of new Shape layers (one unified layer or character-by-character group).
 pub fn convert_text_to_shapes(
     text_layer: &Layer,
+    comp_width: u32,
+    comp_height: u32,
+) -> Option<Layer> {
+    try_convert_text_to_shapes(text_layer, comp_width, comp_height)
+        .ok()
+        .flatten()
+}
+
+/// Fallible form that distinguishes an unsupported layer from outline limits.
+pub fn try_convert_text_to_shapes(
+    text_layer: &Layer,
     _comp_width: u32,
     _comp_height: u32,
-) -> Option<Layer> {
+) -> Result<Option<Layer>, TextToShapesError> {
     if let LayerType::Text {
         text,
         font_size,
@@ -30,18 +49,72 @@ pub fn convert_text_to_shapes(
         tracking,
         leading,
         align,
+        font_family: base_family,
         ..
     } = &text_layer.layer_type
     {
         let fs = *font_size as f32;
-        let tk = *tracking;
-        let ld = *leading;
         let fill_color = *color;
-        let stroke_c = *stroke_color;
-        let stroke_w = *stroke_width;
+        let (family, tk, ld, alignment, box_width, stroke_c, stroke_w, faux_style) =
+            if let Some(formatting) = &text_layer.text_formatting {
+                (
+                    formatting.font_family.as_str(),
+                    formatting.tracking,
+                    formatting.leading,
+                    formatting.alignment as usize,
+                    formatting.box_width,
+                    formatting.stroke_color.unwrap_or([0.0; 4]),
+                    if formatting.stroke_color.is_some() {
+                        formatting.stroke_width
+                    } else {
+                        0.0
+                    },
+                    crate::core::font_rasterizer::FauxTextStyle {
+                        bold: formatting.faux_bold,
+                        italic: formatting.faux_italic,
+                        all_caps: formatting.all_caps,
+                        small_caps: formatting.small_caps,
+                    },
+                )
+            } else {
+                (
+                    base_family.as_str(),
+                    *tracking,
+                    *leading,
+                    *align,
+                    0.0,
+                    *stroke_color,
+                    *stroke_width,
+                    crate::core::font_rasterizer::FauxTextStyle::default(),
+                )
+            };
+        let styled_text = crate::core::font_rasterizer::styled_text_input(text, faux_style);
+        let stroke_w = if faux_style.small_caps {
+            stroke_w * 0.84
+        } else {
+            stroke_w
+        };
 
-        // Generate vector polygon contours for the entire text string
-        let (contours, bounds) = generate_text_contours(text, fs, tk, ld, *align);
+        // Use the selected font's real outlines when it is available. Keep the
+        // procedural path as a deterministic fallback for missing fonts.
+        let (mut contours, mut bounds) = match font_outlines::generate(
+            &styled_text,
+            family,
+            font_outlines::FontOutlineLayout {
+                font_size: fs,
+                tracking: tk,
+                leading: ld,
+                alignment,
+                box_width,
+            },
+        ) {
+            Ok(Some(outlines)) => outlines,
+            Ok(None) => {
+                generate_text_contours_with_modes(&styled_text, fs, tk, ld, alignment, box_width)
+            }
+            Err(()) => return Err(TextToShapesError::TooComplex),
+        };
+        font_outlines::apply_faux_outline_style(&mut contours, &mut bounds, faux_style);
 
         let shape_name = format!("{} Outlines", text_layer.name);
         let shape_id = format!("{}_shapes", text_layer.id);
@@ -56,8 +129,8 @@ pub fn convert_text_to_shapes(
                     corner_radius: Animatable::new_constant(0.0),
                 },
                 color: fill_color,
-                stroke_color: stroke_c,
-                stroke_width: stroke_w,
+                stroke_color: [0.0; 4],
+                stroke_width: 0.0,
                 fill_type: crate::core::timeline::ShapeFillType::Solid,
                 extrusion_depth: 0.0,
                 bevel_depth: 0.0,
@@ -72,6 +145,12 @@ pub fn convert_text_to_shapes(
         shape_layer.out_frame = text_layer.out_frame;
         shape_layer.is_3d = text_layer.is_3d;
         shape_layer.blend_mode = text_layer.blend_mode;
+        if stroke_w.is_finite() && stroke_w > 0.0 && stroke_c[3] > 0.0 {
+            shape_layer.style.stroke.enabled = true;
+            shape_layer.style.stroke.size = stroke_w;
+            shape_layer.style.stroke.color = stroke_c;
+            shape_layer.style.stroke.position = 0;
+        }
 
         // Initialize TrimPaths with default full-path range
         shape_layer.trim_paths = Some(TrimPaths {
@@ -81,22 +160,67 @@ pub fn convert_text_to_shapes(
         });
 
         // Add extracted contours as vector masks for fine-grained per-curve control
-        for (i, contour) in contours.iter().enumerate() {
+        for (i, (contour, mode)) in contours.iter().enumerate() {
             if contour.len() < 3 {
                 continue;
             }
-            let mask = crate::core::mask::Mask::new_closed(
+            let mut mask = crate::core::mask::Mask::new_closed(
                 format!("mask_{}", i + 1),
                 format!("Glyph Path {}", i + 1),
                 contour.clone(),
             );
+            mask.mode = *mode;
             shape_layer.masks.push(mask);
         }
 
-        Some(shape_layer)
+        Ok(Some(shape_layer))
     } else {
-        None
+        Ok(None)
     }
+}
+
+pub(super) fn classify_glyph_contours(
+    contours: &[Vec<[f32; 2]>],
+) -> Vec<crate::core::mask::MaskMode> {
+    contours
+        .iter()
+        .map(|contour| {
+            if contour.len() < 3 {
+                return crate::core::mask::MaskMode::Add;
+            }
+            let area = polygon_area(contour);
+            let nesting_depth = contours
+                .iter()
+                .filter(|candidate| {
+                    candidate.len() >= 3
+                        && polygon_area(candidate) > area
+                        && crate::core::mask::point_in_polygon(
+                            contour[0][0],
+                            contour[0][1],
+                            candidate,
+                        )
+                })
+                .count();
+            if nesting_depth % 2 == 1 {
+                crate::core::mask::MaskMode::Subtract
+            } else {
+                crate::core::mask::MaskMode::Add
+            }
+        })
+        .collect()
+}
+
+fn polygon_area(points: &[[f32; 2]]) -> f32 {
+    if points.len() < 3 {
+        return 0.0;
+    }
+    let twice_area = points
+        .iter()
+        .zip(points.iter().cycle().skip(1))
+        .take(points.len())
+        .map(|(current, next)| current[0] * next[1] - next[0] * current[1])
+        .sum::<f32>();
+    twice_area.abs() * 0.5
 }
 
 /// Generates 2D vector point contours for a formatted string.
@@ -108,35 +232,60 @@ pub fn generate_text_contours(
     leading: f32,
     align: usize,
 ) -> (Vec<Vec<[f32; 2]>>, (f32, f32)) {
+    let (contours, bounds) =
+        generate_text_contours_with_modes(text, font_size, tracking, leading, align, 0.0);
+    (
+        contours.into_iter().map(|(contour, _)| contour).collect(),
+        bounds,
+    )
+}
+
+fn generate_text_contours_with_modes(
+    text: &str,
+    font_size: f32,
+    tracking: f32,
+    leading: f32,
+    align: usize,
+    box_width: f32,
+) -> (Vec<MaskedContour>, (f32, f32)) {
     let line_height = font_size * leading.max(0.5);
-    let lines: Vec<&str> = text.split('\n').collect();
+    let alignment = match align {
+        1 => crate::core::text_layout::TextAlign::Center,
+        2 => crate::core::text_layout::TextAlign::Right,
+        3 => crate::core::text_layout::TextAlign::Justify,
+        _ => crate::core::text_layout::TextAlign::Left,
+    };
+    let layout = crate::core::text_layout::layout_text(
+        text, font_size, tracking, leading, box_width, alignment,
+    );
     let mut all_contours = Vec::new();
+    let line_widths = layout
+        .lines
+        .iter()
+        .map(|line| {
+            let count = line.text.chars().count();
+            count as f32 * font_size * 0.6 + count.saturating_sub(1) as f32 * tracking * 0.1
+        })
+        .collect::<Vec<_>>();
+    let max_w = layout.total_width.max(box_width).max(0.0);
+    let total_h = layout.total_height.max(line_height);
 
-    let mut line_widths = Vec::new();
-    for line in &lines {
-        let char_count = line.chars().count() as f32;
-        let char_w = font_size * 0.6;
-        let w = char_count * char_w + (char_count - 1.0).max(0.0) * tracking * 0.1;
-        line_widths.push(w);
-    }
-    let max_w = line_widths.iter().copied().fold(0.0f32, f32::max);
-    let total_h = lines.len() as f32 * line_height;
-
-    for (row, line) in lines.iter().enumerate() {
+    for (row, line) in layout.lines.iter().enumerate() {
         let line_w = line_widths[row];
-        let start_x = match align {
-            1 => (max_w - line_w) * 0.5 - max_w * 0.5, // Center
-            2 => (max_w - line_w) - max_w * 0.5,       // Right
-            _ => -max_w * 0.5,                         // Left
-        };
-        let start_y = (row as f32 * line_height) - (total_h * 0.5) + (font_size * 0.8);
+        let alignment_offset =
+            crate::core::text_layout::get_alignment_offset(line_w, box_width, alignment);
+        let justify_space =
+            crate::core::text_layout::justification_space_width(line, line_w, box_width, alignment);
+        let start_x = alignment_offset - max_w * 0.5;
+        let start_y = line.y_offset - (total_h * 0.5) + (font_size * 0.8);
 
         let mut curr_x = start_x;
-        for ch in line.chars() {
+        for ch in line.text.chars() {
             let advance = font_size * 0.6 + tracking * 0.1;
             let glyph_contours = get_procedural_glyph_contours(ch, curr_x, start_y, font_size);
-            all_contours.extend(glyph_contours);
-            curr_x += advance;
+            let modes = classify_glyph_contours(&glyph_contours);
+            all_contours.extend(glyph_contours.into_iter().zip(modes));
+            curr_x += advance + if ch == ' ' { justify_space } else { 0.0 };
         }
     }
 

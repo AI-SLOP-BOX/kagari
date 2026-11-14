@@ -25,8 +25,8 @@
 //!   [`ExrSampleType::Float`](crate::core::exr_writer::ExrSampleType::Float).
 //! - Channel metadata outside RGB(RGBA) is discarded on import. To preserve arbitrary
 //!   channel names, route that file through `exr_writer` separately.
-//! - Large multi-gigabyte EXRs are decoded into memory; treat this as an import
-//!   utility, not a streaming pipeline component.
+//! - Decoding and converted channel planes each have a 256 MiB limit, bounding
+//!   their combined image working set to approximately 512 MiB.
 //!
 //! Non-EXR formats (`.tif` / `.tiff` / `.png` / `.jpg` …) must go through
 //! [`read_image_any`], which decodes through `image`'s codec set.
@@ -40,6 +40,22 @@ use image::{DynamicImage, ImageBuffer, Rgb, Rgba};
 use crate::core::exr_writer::{ExrChannel, ExrCompression, ExrImage};
 
 const EXR_MAGIC_LE: [u8; 4] = *b"\x76\x2F\x31\x01"; // 0x01312F76, little-endian
+const MAX_IMPORTED_WORKING_BYTES: usize = 512 * 1024 * 1024;
+const MAX_IMAGE_DECODE_BYTES: usize = MAX_IMPORTED_WORKING_BYTES / 2;
+const MAX_IMPORTED_CHANNEL_BYTES: usize = MAX_IMPORTED_WORKING_BYTES / 2;
+
+fn decode_image_with_limits(path: &Path) -> Result<DynamicImage, String> {
+    let mut reader = image::ImageReader::open(path)
+        .map_err(|error| format!("cannot open image {}: {error}", path.display()))?;
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(crate::core::software_renderer::MAX_RENDER_DIMENSION);
+    limits.max_image_height = Some(crate::core::software_renderer::MAX_RENDER_DIMENSION);
+    limits.max_alloc = Some(MAX_IMAGE_DECODE_BYTES as u64);
+    reader.limits(limits);
+    reader
+        .decode()
+        .map_err(|error| format!("image decode failed for {}: {error}", path.display()))
+}
 
 /// Read an OpenEXR file into Kagari's domain [`ExrImage`](crate::core::exr_writer::ExrImage).
 ///
@@ -51,7 +67,7 @@ pub fn read_exr(path: impl AsRef<Path>) -> Result<ExrImage, String> {
     validate_exr_magic(path)?;
 
     let img =
-        image::open(path).map_err(|e| format!("EXR open failed for {}: {e}", path.display()))?;
+        decode_image_with_limits(path).map_err(|error| format!("EXR open failed: {error}"))?;
 
     dynamic_to_exr_image(img, path)
 }
@@ -67,7 +83,7 @@ pub fn read_exr(path: impl AsRef<Path>) -> Result<ExrImage, String> {
 pub fn read_image_any(path: impl AsRef<Path>) -> Result<ExrImage, String> {
     let path = path.as_ref();
 
-    let img = image::open(path).map_err(|e| format!("failed to open {}: {e}", path.display()))?;
+    let img = decode_image_with_limits(path)?;
 
     dynamic_to_exr_image(img, path)
 }
@@ -79,19 +95,46 @@ pub fn read_image_any(path: impl AsRef<Path>) -> Result<ExrImage, String> {
 fn dynamic_to_exr_image(img: DynamicImage, path: &Path) -> Result<ExrImage, String> {
     let width = img.width();
     let height = img.height();
-    let n = (width as usize) * (height as usize);
+    let n = (width as usize)
+        .checked_mul(height as usize)
+        .ok_or_else(|| "image dimensions overflow address space".to_owned())?;
+    let output_channels = match &img {
+        DynamicImage::ImageRgb32F(_) | DynamicImage::ImageRgb8(_) | DynamicImage::ImageRgb16(_) => {
+            3
+        }
+        DynamicImage::ImageRgba32F(_)
+        | DynamicImage::ImageLumaA8(_)
+        | DynamicImage::ImageRgba8(_)
+        | DynamicImage::ImageLumaA16(_)
+        | DynamicImage::ImageRgba16(_) => 4,
+        DynamicImage::ImageLuma8(_) | DynamicImage::ImageLuma16(_) => 3,
+        _ => {
+            return Err(format!(
+                "image {} has unsupported pixel format for import: {:?}",
+                path.display(),
+                img.color()
+            ))
+        }
+    };
+    let output_bytes = n
+        .checked_mul(output_channels)
+        .and_then(|samples| samples.checked_mul(std::mem::size_of::<f32>()))
+        .ok_or_else(|| "decoded image size overflows address space".to_owned())?;
+    if output_bytes > MAX_IMPORTED_CHANNEL_BYTES {
+        return Err("decoded image channel data exceeds the 256 MiB import limit".into());
+    }
 
     let channels = match &img {
-        DynamicImage::ImageRgb32F(buf) => rgb_channels(buf),
-        DynamicImage::ImageRgba32F(buf) => rgba_channels(buf),
-        DynamicImage::ImageLuma8(buf) => planes_from_u8(buf.as_raw(), 1, n),
-        DynamicImage::ImageLumaA8(buf) => planes_from_u8(buf.as_raw(), 2, n),
-        DynamicImage::ImageRgb8(buf) => planes_from_u8(buf.as_raw(), 3, n),
-        DynamicImage::ImageRgba8(buf) => planes_from_u8(buf.as_raw(), 4, n),
-        DynamicImage::ImageLuma16(buf) => planes_from_u16(buf.as_raw(), 1, n),
-        DynamicImage::ImageLumaA16(buf) => planes_from_u16(buf.as_raw(), 2, n),
-        DynamicImage::ImageRgb16(buf) => planes_from_u16(buf.as_raw(), 3, n),
-        DynamicImage::ImageRgba16(buf) => planes_from_u16(buf.as_raw(), 4, n),
+        DynamicImage::ImageRgb32F(buf) => rgb_channels(buf)?,
+        DynamicImage::ImageRgba32F(buf) => rgba_channels(buf)?,
+        DynamicImage::ImageLuma8(buf) => planes_from_u8(buf.as_raw(), 1, n)?,
+        DynamicImage::ImageLumaA8(buf) => planes_from_u8(buf.as_raw(), 2, n)?,
+        DynamicImage::ImageRgb8(buf) => planes_from_u8(buf.as_raw(), 3, n)?,
+        DynamicImage::ImageRgba8(buf) => planes_from_u8(buf.as_raw(), 4, n)?,
+        DynamicImage::ImageLuma16(buf) => planes_from_u16(buf.as_raw(), 1, n)?,
+        DynamicImage::ImageLumaA16(buf) => planes_from_u16(buf.as_raw(), 2, n)?,
+        DynamicImage::ImageRgb16(buf) => planes_from_u16(buf.as_raw(), 3, n)?,
+        DynamicImage::ImageRgba16(buf) => planes_from_u16(buf.as_raw(), 4, n)?,
         other => {
             return Err(format!(
                 "image {} has unsupported pixel format for import: {:?}",
@@ -130,54 +173,65 @@ fn validate_exr_magic(path: &Path) -> Result<(), String> {
 
 /// De-interleave an RGBA f32 buffer into per-channel planes, listed in
 /// alphabetical order (`A`, `B`, `G`, `R`) like an OpenEXR channel list.
-fn rgba_channels(img: &ImageBuffer<Rgba<f32>, Vec<f32>>) -> Vec<ExrChannel> {
+fn rgba_channels(img: &ImageBuffer<Rgba<f32>, Vec<f32>>) -> Result<Vec<ExrChannel>, String> {
     let n = (img.width() as usize) * (img.height() as usize);
-    let mut a = Vec::with_capacity(n);
-    let mut b = Vec::with_capacity(n);
-    let mut g = Vec::with_capacity(n);
-    let mut r = Vec::with_capacity(n);
+    let mut a = channel_buffer(n)?;
+    let mut b = channel_buffer(n)?;
+    let mut g = channel_buffer(n)?;
+    let mut r = channel_buffer(n)?;
     for px in img.pixels() {
         r.push(px.0[0]);
         g.push(px.0[1]);
         b.push(px.0[2]);
         a.push(px.0[3]);
     }
-    vec![
+    Ok(vec![
         ExrChannel::new("A", a),
         ExrChannel::new("B", b),
         ExrChannel::new("G", g),
         ExrChannel::new("R", r),
-    ]
+    ])
 }
 
 /// De-interleave an RGB f32 buffer into per-channel planes, listed in
 /// alphabetical order (`B`, `G`, `R`) like an OpenEXR channel list.
-fn rgb_channels(img: &ImageBuffer<Rgb<f32>, Vec<f32>>) -> Vec<ExrChannel> {
+fn rgb_channels(img: &ImageBuffer<Rgb<f32>, Vec<f32>>) -> Result<Vec<ExrChannel>, String> {
     let n = (img.width() as usize) * (img.height() as usize);
-    let mut b = Vec::with_capacity(n);
-    let mut g = Vec::with_capacity(n);
-    let mut r = Vec::with_capacity(n);
+    let mut b = channel_buffer(n)?;
+    let mut g = channel_buffer(n)?;
+    let mut r = channel_buffer(n)?;
     for px in img.pixels() {
         r.push(px.0[0]);
         g.push(px.0[1]);
         b.push(px.0[2]);
     }
-    vec![
+    Ok(vec![
         ExrChannel::new("B", b),
         ExrChannel::new("G", g),
         ExrChannel::new("R", r),
-    ]
+    ])
+}
+
+fn channel_buffer(samples: usize) -> Result<Vec<f32>, String> {
+    let mut data = Vec::new();
+    data.try_reserve_exact(samples)
+        .map_err(|error| format!("could not allocate decoded image channel: {error}"))?;
+    Ok(data)
 }
 
 /// Pack interleaved 8-bit samples (1=gray, 2=gray+alpha, 3=RGB, 4=RGBA) into
 /// normalized `f32` planes. Grayscale is expanded to R=G=B.
-fn planes_from_u8(raw: &[u8], components: usize, n: usize) -> Vec<ExrChannel> {
+fn planes_from_u8(raw: &[u8], components: usize, n: usize) -> Result<Vec<ExrChannel>, String> {
     debug_assert_eq!(raw.len(), n * components);
     let scale = 1.0 / 255.0;
-    let mut r = Vec::with_capacity(n);
-    let mut g = Vec::with_capacity(n);
-    let mut b = Vec::with_capacity(n);
-    let mut a = Vec::with_capacity(if components >= 2 { n } else { 0 });
+    let mut r = channel_buffer(n)?;
+    let mut g = channel_buffer(n)?;
+    let mut b = channel_buffer(n)?;
+    let mut a = if components >= 2 {
+        channel_buffer(n)?
+    } else {
+        Vec::new()
+    };
     for px in raw.chunks_exact(components) {
         match components {
             1 => {
@@ -207,17 +261,21 @@ fn planes_from_u8(raw: &[u8], components: usize, n: usize) -> Vec<ExrChannel> {
             _ => unreachable!("planes_from_u8 only handles 1..=4 components"),
         }
     }
-    assemble_planes(r, g, b, a, components >= 2)
+    Ok(assemble_planes(r, g, b, a, components >= 2))
 }
 
 /// Same as [`planes_from_u8`] for 16-bit samples (normalized by 65535).
-fn planes_from_u16(raw: &[u16], components: usize, n: usize) -> Vec<ExrChannel> {
+fn planes_from_u16(raw: &[u16], components: usize, n: usize) -> Result<Vec<ExrChannel>, String> {
     debug_assert_eq!(raw.len(), n * components);
     let scale = 1.0 / 65_535.0;
-    let mut r = Vec::with_capacity(n);
-    let mut g = Vec::with_capacity(n);
-    let mut b = Vec::with_capacity(n);
-    let mut a = Vec::with_capacity(if components >= 2 { n } else { 0 });
+    let mut r = channel_buffer(n)?;
+    let mut g = channel_buffer(n)?;
+    let mut b = channel_buffer(n)?;
+    let mut a = if components >= 2 {
+        channel_buffer(n)?
+    } else {
+        Vec::new()
+    };
     for px in raw.chunks_exact(components) {
         match components {
             1 => {
@@ -247,7 +305,7 @@ fn planes_from_u16(raw: &[u16], components: usize, n: usize) -> Vec<ExrChannel> 
             _ => unreachable!("planes_from_u16 only handles 1..=4 components"),
         }
     }
-    assemble_planes(r, g, b, a, components >= 2)
+    Ok(assemble_planes(r, g, b, a, components >= 2))
 }
 
 /// Order the planes alphabetically like an OpenEXR channel list, dropping the
@@ -314,7 +372,8 @@ mod tests {
             std::process::id()
         ));
 
-        let mut image = ExrImage::rgba_f32(width, height, &rgba);
+        #[allow(unused_mut)]
+        let mut image = ExrImage::rgba_f32(width, height, &rgba).expect("valid RGBA image");
         #[cfg(not(feature = "cli"))]
         {
             image.compression = crate::core::exr_writer::ExrCompression::None;
@@ -503,7 +562,7 @@ mod tests {
         ));
         std::fs::write(&tmp, b"this is not an image").unwrap();
         let err = read_image_any(&tmp).unwrap_err();
-        assert!(err.contains("failed to open"));
+        assert!(err.contains("image decode failed") || err.contains("cannot open image"));
         std::fs::remove_file(&tmp).ok();
     }
 }

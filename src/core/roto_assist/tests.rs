@@ -10,9 +10,261 @@ use crate::core::timeline::TrackerPoint;
 mod tests {
     use super::*;
 
+    #[test]
+    fn roto_resegmentation_rejects_catastrophic_area_jumps() {
+        let previous = [[10.0, 10.0], [30.0, 10.0], [30.0, 30.0], [10.0, 30.0]];
+        let stable = [[11.0, 10.0], [31.0, 10.0], [31.0, 30.0], [11.0, 30.0]];
+        let inflated = [[5.0, 5.0], [35.0, 5.0], [35.0, 35.0], [5.0, 35.0]];
+        let runaway = [[0.0, 0.0], [100.0, 0.0], [100.0, 100.0], [0.0, 100.0]];
+
+        assert!(is_plausible_resegment_area(&previous, &stable));
+        assert!(!is_plausible_resegment_area(&previous, &inflated));
+        assert!(!is_plausible_resegment_area(&previous, &runaway));
+        assert!(!is_plausible_resegment_area(&previous, &[]));
+    }
+
+    #[test]
+    fn roto_propagation_rejects_oversized_frames_before_requesting_pixels() {
+        let mask = square_mask();
+        let provider_called = std::cell::Cell::new(false);
+        let result = bake_optical_flow_roto_matte(
+            &mask,
+            &[],
+            &crate::core::roto_brush_engine::RotoBrushSettings::default(),
+            0,
+            0,
+            0,
+            crate::core::roto_brush_engine::MAX_ROTO_FRAME_PIXELS as u32 + 1,
+            1,
+            |_| {
+                provider_called.set(true);
+                Some(Vec::new())
+            },
+        );
+
+        assert!(result.is_err());
+        assert!(!provider_called.get());
+    }
+
+    #[test]
+    fn roto_propagation_cancels_during_matte_resegmentation() {
+        use crate::core::roto_brush_engine::{RotoStroke, RotoStrokeType};
+
+        let mask = Mask::new_rect("roto".into(), "Roto".into(), 8.0, 8.0, 16.0, 16.0);
+        let width = 32;
+        let height = 32;
+        let mut pixels = vec![96u8; width * height * 4];
+        for alpha in pixels.iter_mut().skip(3).step_by(4) {
+            *alpha = 255;
+        }
+        let strokes = [
+            RotoStroke {
+                stroke_type: RotoStrokeType::Foreground,
+                points: vec![[16.0, 16.0]],
+                pressures: Vec::new(),
+                radius: 3.0,
+                frame: Some(0),
+            },
+            RotoStroke {
+                stroke_type: RotoStrokeType::Background,
+                points: vec![[2.0, 2.0]],
+                pressures: Vec::new(),
+                radius: 3.0,
+                frame: Some(0),
+            },
+        ];
+        let provider_calls = std::cell::Cell::new(0);
+        let cancellation_checks = std::cell::Cell::new(0);
+        let result = bake_optical_flow_roto_matte_cancellable(
+            &mask,
+            &strokes,
+            &crate::core::roto_brush_engine::RotoBrushSettings::default(),
+            0,
+            0,
+            1,
+            width as u32,
+            height as u32,
+            |_| {
+                provider_calls.set(provider_calls.get() + 1);
+                Some(pixels.clone())
+            },
+            || {
+                let checks = cancellation_checks.get() + 1;
+                cancellation_checks.set(checks);
+                checks >= 20
+            },
+        );
+
+        assert!(result.is_err_and(|error| error.contains("cancelled")));
+        assert_eq!(provider_calls.get(), 2, "cancel inside re-segmentation");
+        assert!(cancellation_checks.get() >= 20);
+    }
+
+    #[test]
+    fn roto_resegmentation_is_limited_to_dilated_motion_prior() {
+        let mut matte = vec![255; 20 * 20];
+        let boundary = [[6.0, 6.0], [13.0, 6.0], [13.0, 13.0], [6.0, 13.0]];
+
+        assert!(constrain_matte_to_dilated_boundary(
+            &mut matte,
+            20,
+            20,
+            &boundary,
+            2,
+            &[],
+        ));
+        assert_eq!(matte[0], 0);
+        assert_eq!(matte[3 * 20 + 3], 0);
+        assert_eq!(matte[8 * 20 + 8], 255);
+        assert_eq!(matte[15 * 20 + 15], 0);
+    }
+
+    #[test]
+    fn roto_motion_prior_margin_stays_local_at_hd_and_uhd() {
+        assert_eq!(roto_motion_prior_margin(1280, 720), 7);
+        assert_eq!(roto_motion_prior_margin(1920, 1080), 10);
+        assert_eq!(roto_motion_prior_margin(3840, 2160), 20);
+        assert_eq!(roto_motion_prior_margin(128, 96), 2);
+    }
+
+    #[test]
+    fn roto_resegmentation_seeds_from_the_latest_foreground_correction() {
+        use crate::core::roto_brush_engine::{RotoStroke, RotoStrokeType};
+
+        let strokes = [
+            RotoStroke {
+                stroke_type: RotoStrokeType::Foreground,
+                points: vec![[20.0, 20.0]],
+                pressures: Vec::new(),
+                radius: 4.0,
+                frame: Some(0),
+            },
+            RotoStroke {
+                stroke_type: RotoStrokeType::Foreground,
+                points: vec![[70.0, 40.0]],
+                pressures: Vec::new(),
+                radius: 4.0,
+                frame: Some(12),
+            },
+        ];
+
+        assert_eq!(latest_foreground_seed(&strokes), Some([70.0, 40.0]));
+    }
+
     fn square_mask() -> Mask {
         // 12x12 square at origin
         crate::core::mask::Mask::new_rect("m".into(), "M".into(), 0.0, 0.0, 12.0, 12.0)
+    }
+
+    #[test]
+    fn contour_tracing_thresholds_soft_alpha_instead_of_only_full_coverage() {
+        let mut alpha = vec![0u8; 64 * 64];
+        for y in 20..40 {
+            for x in 20..40 {
+                alpha[y * 64 + x] = 192;
+            }
+        }
+        alpha[30 * 64 + 19] = 127;
+
+        let polygon = trace_contour_to_polygon(&alpha, 64, 64, 0.0);
+
+        assert!(polygon.len() >= 3);
+        assert!(crate::core::mask::point_in_polygon(30.0, 30.0, &polygon));
+        assert!(!crate::core::mask::point_in_polygon(19.0, 30.0, &polygon));
+    }
+
+    #[test]
+    fn contour_tracing_caps_vertices_for_cpu_mask_rendering() {
+        let (width, height) = (256usize, 256usize);
+        let mut alpha = vec![0u8; width * height];
+        for y in 8..248 {
+            for x in 8..248 {
+                let dx = x as f32 - 128.0;
+                let dy = y as f32 - 128.0;
+                if dx * dx + dy * dy <= 120.0 * 120.0 {
+                    alpha[y * width + x] = 255;
+                }
+            }
+        }
+
+        let polygon = trace_contour_to_polygon(&alpha, width as u32, height as u32, 0.0);
+
+        assert!(polygon.len() >= 3);
+        assert!(polygon.len() <= 512);
+        assert!(crate::core::mask::point_in_polygon(128.0, 128.0, &polygon));
+    }
+
+    #[test]
+    fn roto_contour_uses_the_component_under_the_foreground_stroke() {
+        let mut alpha = vec![0u8; 64 * 64];
+        for y in 5..15 {
+            for x in 5..15 {
+                alpha[y * 64 + x] = 255;
+            }
+        }
+        for y in 30..50 {
+            for x in 30..50 {
+                alpha[y * 64 + x] = 192;
+            }
+        }
+        let strokes = [crate::core::roto_brush_engine::RotoStroke {
+            stroke_type: crate::core::roto_brush_engine::RotoStrokeType::Foreground,
+            points: vec![[40.0, 40.0]],
+            pressures: Vec::new(),
+            radius: 4.0,
+            frame: Some(0),
+        }];
+
+        let polygon = trace_roto_matte_contour(&alpha, 64, 64, &strokes, 0.0);
+
+        assert!(polygon.len() >= 3);
+        assert!(crate::core::mask::point_in_polygon(40.0, 40.0, &polygon));
+        assert!(!crate::core::mask::point_in_polygon(10.0, 10.0, &polygon));
+    }
+
+    #[test]
+    fn roto_source_composition_clears_only_input_mattes_and_background() {
+        use crate::core::timeline::{Composition, Layer, LayerType, TrackMatteMode};
+
+        let mut composition =
+            Composition::new("roto-source".into(), "Roto source".into(), 32, 32, 30, 3);
+        composition.background_color = [0.0, 1.0, 0.0, 1.0];
+        let mut target = Layer::new(
+            "target".into(),
+            "Target".into(),
+            LayerType::Solid {
+                color: [1.0, 0.0, 0.0, 1.0],
+            },
+            3,
+        );
+        target.masks.push(Mask::new_rect(
+            "existing".into(),
+            "Existing mask".into(),
+            0.0,
+            0.0,
+            2.0,
+            2.0,
+        ));
+        target.track_matte = TrackMatteMode::AlphaMatte;
+        composition.layers.push(target);
+
+        let source = crate::core::roto_assist::prepare_roto_brush_source(&composition, 0)
+            .expect("selected source layer should exist");
+        assert_eq!(source.background_color, [0.0; 4]);
+        assert!(source.layers[0].masks.is_empty());
+        assert_eq!(source.layers[0].track_matte, TrackMatteMode::None);
+
+        let pixels = crate::core::software_renderer::render_frame_to_pixels_filtered(
+            &source,
+            0,
+            source.width,
+            source.height,
+            0.0,
+            0,
+            Some(0),
+        );
+        let center = ((16 * 32 + 16) * 4) as usize;
+        assert_eq!(&pixels[center..center + 4], &[255, 0, 0, 255]);
     }
 
     fn moving_tracker() -> TrackerPoint {
@@ -62,6 +314,40 @@ mod tests {
         let error = bake_tracked_mask_from_trackers(&square_mask(), &[], 0, 0, 10)
             .expect_err("missing tracker must be reported");
         assert!(error.contains("tracker point 1"));
+    }
+
+    #[test]
+    fn bake_tracked_mask_rejects_non_finite_tracker_data() {
+        let mask = square_mask();
+        let mut invalid_mask = mask.clone();
+        invalid_mask.path.vertices =
+            Animatable::new_constant(vec![[f32::NAN, 10.0], [20.0, 10.0], [20.0, 20.0]]);
+        assert!(bake_tracked_mask(&invalid_mask, &moving_tracker(), 0, 1)
+            .expect_err("non-finite mask vertices must fail")
+            .contains("base mask contains non-finite"));
+
+        let non_finite = TrackerPoint::new("bad".into(), "Bad tracker".into(), [f32::NAN, 10.0]);
+        assert!(bake_tracked_mask(&mask, &non_finite, 0, 1)
+            .expect_err("non-finite anchor must fail")
+            .contains("not finite"));
+
+        let mut non_finite_later = TrackerPoint::new("later".into(), "Later".into(), [0.0, 0.0]);
+        non_finite_later.position = Animatable::Animated(vec![
+            Keyframe::new(0, [0.0, 0.0], InterpolationType::Linear),
+            Keyframe::new(1, [f32::INFINITY, 0.0], InterpolationType::Linear),
+        ]);
+        assert!(bake_tracked_mask(&mask, &non_finite_later, 0, 1)
+            .expect_err("non-finite later position must fail")
+            .contains("frame 1"));
+
+        let mut overflowing = TrackerPoint::new("overflow".into(), "Overflow".into(), [0.0, 0.0]);
+        overflowing.position = Animatable::Animated(vec![
+            Keyframe::new(0, [-f32::MAX, 0.0], InterpolationType::Linear),
+            Keyframe::new(1, [f32::MAX, 0.0], InterpolationType::Linear),
+        ]);
+        assert!(bake_tracked_mask(&mask, &overflowing, 0, 1)
+            .expect_err("overflowing displacement must fail")
+            .contains("displacement is not finite"));
     }
 
     #[test]
@@ -175,24 +461,28 @@ mod tests {
             crate::core::roto_brush_engine::RotoStroke {
                 stroke_type: crate::core::roto_brush_engine::RotoStrokeType::Foreground,
                 points: vec![[48.0, 48.0], [52.0, 48.0]],
+                pressures: Vec::new(),
                 radius: 4.0,
                 frame: Some(1),
             },
             crate::core::roto_brush_engine::RotoStroke {
                 stroke_type: crate::core::roto_brush_engine::RotoStrokeType::Background,
                 points: vec![[30.0, 48.0]],
+                pressures: Vec::new(),
                 radius: 4.0,
                 frame: Some(1),
             },
             crate::core::roto_brush_engine::RotoStroke {
                 stroke_type: crate::core::roto_brush_engine::RotoStrokeType::Background,
                 points: vec![[92.0, 48.0]],
+                pressures: Vec::new(),
                 radius: 4.0,
                 frame: Some(1),
             },
             crate::core::roto_brush_engine::RotoStroke {
                 stroke_type: crate::core::roto_brush_engine::RotoStrokeType::Background,
                 points: vec![[64.0, 48.0]],
+                pressures: Vec::new(),
                 radius: 6.0,
                 frame: Some(2),
             },

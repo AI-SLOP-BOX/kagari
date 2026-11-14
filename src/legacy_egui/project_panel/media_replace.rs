@@ -168,9 +168,7 @@ pub(crate) fn discard_replacement_video_caches(
     videos: &std::collections::HashMap<u32, crate::core::video_import::VideoAsset>,
 ) {
     for video in videos.values() {
-        if let Some(import_dir) = std::path::Path::new(&video.frames_dir).parent() {
-            let _ = std::fs::remove_dir_all(import_dir);
-        }
+        crate::ui::drop_import::discard_unattached_video_asset(video);
     }
 }
 
@@ -208,11 +206,6 @@ pub(crate) fn start_replace_footage_import(
         }
     };
     let is_video = matches!(&asset.item_type, ProjectItemType::Video { .. });
-    if is_video && !crate::core::video_import::ffmpeg_available() {
-        app.toasts
-            .error("動画の置き換えにはFFmpegが必要です。PATHを確認してください。");
-        return;
-    }
     let mut required_fps = std::collections::HashSet::new();
     if is_video {
         for comp in &app.history.current().compositions {
@@ -223,14 +216,8 @@ pub(crate) fn start_replace_footage_import(
     required_fps.sort_unstable();
     let (tx, rx) = std::sync::mpsc::channel();
     let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    app.import_rx.push(crate::ui::drop_import::ImportJob {
-        receiver: rx,
-        label: new_name.clone(),
-        cancel: is_video.then(|| cancel.clone()),
-    });
-    app.toasts
-        .info(format!("素材「{}」を読み込み中…", new_name));
-    ctx.request_repaint();
+    let label = new_name.clone();
+    let worker_cancel = cancel.clone();
 
     let payload = crate::ui::drop_import::ReplaceFootageImport {
         project_session_id: app.project_session_id,
@@ -242,52 +229,68 @@ pub(crate) fn start_replace_footage_import(
         replacement_item_type,
         imported_video_by_fps: std::collections::HashMap::new(),
     };
-    let handle = std::thread::spawn(move || {
-        let result = (|| {
-            let mut payload = payload;
-            if is_video {
-                let stem = std::path::Path::new(&payload.new_path)
-                    .file_stem()
-                    .map(|value| value.to_string_lossy())
-                    .unwrap_or_else(|| std::borrow::Cow::Borrowed("video"));
-                let safe_stem: String = stem
-                    .chars()
-                    .map(|ch| {
-                        if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_') {
-                            ch
-                        } else {
-                            '_'
-                        }
-                    })
-                    .collect();
-                for fps in required_fps {
-                    let destination = std::env::temp_dir()
-                        .join("kagari_media")
-                        .join("relinked")
-                        .join(format!(
-                            "asset_{}_{}fps_{}",
-                            payload.asset_id, fps, safe_stem
-                        ));
-                    let imported = match crate::core::video_import::import_video_with_cancel(
-                        &payload.new_path,
-                        &destination,
-                        fps as f32,
-                        &cancel,
-                    ) {
-                        Ok(imported) => imported,
-                        Err(error) => {
-                            discard_replacement_video_caches(&payload.imported_video_by_fps);
-                            return Err(error.to_string());
-                        }
-                    };
-                    payload.imported_video_by_fps.insert(fps, imported);
+    let handle = std::thread::Builder::new()
+        .name("kagari-footage-replace".into())
+        .spawn(move || {
+            let result = (|| {
+                let mut payload = payload;
+                if is_video {
+                    let stem = std::path::Path::new(&payload.new_path)
+                        .file_stem()
+                        .map(|value| value.to_string_lossy())
+                        .unwrap_or_else(|| std::borrow::Cow::Borrowed("video"));
+                    let safe_stem: String = stem
+                        .chars()
+                        .map(|ch| {
+                            if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_') {
+                                ch
+                            } else {
+                                '_'
+                            }
+                        })
+                        .collect();
+                    for fps in required_fps {
+                        let destination = std::env::temp_dir()
+                            .join("kagari_media")
+                            .join("relinked")
+                            .join(format!(
+                                "asset_{}_{}fps_{}",
+                                payload.asset_id, fps, safe_stem
+                            ));
+                        let imported = match crate::core::video_import::import_video_with_cancel(
+                            &payload.new_path,
+                            &destination,
+                            fps as f32,
+                            &worker_cancel,
+                        ) {
+                            Ok(imported) => imported,
+                            Err(error) => {
+                                discard_replacement_video_caches(&payload.imported_video_by_fps);
+                                return Err(error.to_string());
+                            }
+                        };
+                        payload.imported_video_by_fps.insert(fps, imported);
+                    }
                 }
-            }
-            Ok(payload)
-        })();
-        let _ = tx.send(crate::ui::drop_import::ImportResult::ReplaceFootage(result));
-    });
-    app.track_background_thread(handle);
+                Ok(payload)
+            })();
+            let _ = tx.send(crate::ui::drop_import::ImportResult::ReplaceFootage(result));
+        });
+    match handle {
+        Ok(handle) => {
+            app.import_rx.push(crate::ui::drop_import::ImportJob {
+                receiver: rx,
+                label: label.clone(),
+                cancel: is_video.then_some(cancel),
+            });
+            app.toasts.info(format!("素材「{}」を読み込み中…", label));
+            app.track_background_thread(handle);
+            ctx.request_repaint();
+        }
+        Err(error) => app
+            .toasts
+            .error(format!("素材の置き換えを開始できませんでした: {error}")),
+    }
 }
 
 pub(crate) fn complete_replace_footage(
@@ -339,4 +342,13 @@ pub(crate) fn complete_replace_footage(
         "素材「{}」を「{}」に置き換えました。",
         replacement.old_name, replacement.new_name
     ));
+    if let Some(warning) = replacement
+        .imported_video_by_fps
+        .values()
+        .find_map(|asset| asset.audio_warning.as_deref())
+    {
+        app.toasts.warning(format!(
+            "置き換えた動画の音声を取り込めませんでした: {warning}"
+        ));
+    }
 }

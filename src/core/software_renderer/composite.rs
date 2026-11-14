@@ -10,6 +10,12 @@ use crate::core::timeline::{BlendMode, Composition, Layer, TrackMatteMode};
 use blend_modes::{evaluate_blend_mode, overlay, soft_light};
 use rayon::prelude::*;
 
+#[inline]
+fn cancellation_requested(flag: &Option<std::sync::Arc<std::sync::atomic::AtomicBool>>) -> bool {
+    flag.as_ref()
+        .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+}
+
 pub(crate) struct AdjustmentLayerCtx<'a> {
     pub comp: &'a Composition,
     pub layer: &'a Layer,
@@ -22,7 +28,10 @@ pub(crate) struct AdjustmentLayerCtx<'a> {
 }
 
 #[allow(clippy::chunks_exact_to_as_chunks)]
-pub(crate) fn apply_adjustment_layer(buffer: &mut [u8], ctx: AdjustmentLayerCtx<'_>) {
+pub(crate) fn apply_adjustment_layer(
+    buffer: &mut [u8],
+    ctx: AdjustmentLayerCtx<'_>,
+) -> Result<(), ()> {
     let AdjustmentLayerCtx {
         comp,
         layer,
@@ -34,9 +43,16 @@ pub(crate) fn apply_adjustment_layer(buffer: &mut [u8], ctx: AdjustmentLayerCtx<
         masks,
     } = ctx;
     if !layer.effects_enabled || layer.effects.is_empty() || opacity <= 0.003 {
-        return;
+        return Ok(());
     }
-    let mut adjusted = buffer.to_vec();
+    let Some(mut adjusted) = super::try_clone_buffer(buffer) else {
+        log::error!(
+            "[Renderer] Could not allocate {} bytes for adjustment layer {}",
+            buffer.len(),
+            layer.id
+        );
+        return Err(());
+    };
     crate::core::cpu_effects::apply_layer_effects(
         Some(comp),
         Some(sorted_idx),
@@ -49,16 +65,24 @@ pub(crate) fn apply_adjustment_layer(buffer: &mut [u8], ctx: AdjustmentLayerCtx<
     );
     let use_mask = !masks.is_empty();
     let adj_blend = layer.blend_mode;
+    let cancel_flag = super::get_render_cancel_flag();
 
     if !use_mask && (opacity - 1.0).abs() < 0.003 && adj_blend == BlendMode::Normal {
         for (dst_chunk, src_chunk) in buffer.chunks_exact_mut(4).zip(adjusted.chunks_exact(4)) {
+            if cancellation_requested(&cancel_flag) {
+                return Err(());
+            }
             dst_chunk[0] = src_chunk[0];
             dst_chunk[1] = src_chunk[1];
             dst_chunk[2] = src_chunk[2];
             // Preserve dst_chunk[3] (the composition alpha) so effects on adjustment layers
             // do not zero out comp transparency or reveal background checkerboard!
         }
-        return;
+        return if cancellation_requested(&cancel_flag) {
+            Err(())
+        } else {
+            Ok(())
+        };
     }
 
     if !use_mask {
@@ -67,6 +91,9 @@ pub(crate) fn apply_adjustment_layer(buffer: &mut [u8], ctx: AdjustmentLayerCtx<
             .par_chunks_exact_mut(4)
             .zip(adjusted.par_chunks_exact(4))
             .for_each(|(dst_chunk, src_chunk)| {
+                if cancellation_requested(&cancel_flag) {
+                    return;
+                }
                 let src_r = src_chunk[0] as f32 / 255.0;
                 let src_g = src_chunk[1] as f32 / 255.0;
                 let src_b = src_chunk[2] as f32 / 255.0;
@@ -107,7 +134,11 @@ pub(crate) fn apply_adjustment_layer(buffer: &mut [u8], ctx: AdjustmentLayerCtx<
                     .round()
                     .clamp(0.0, 255.0) as u8;
             });
-        return;
+        return if cancellation_requested(&cancel_flag) {
+            Err(())
+        } else {
+            Ok(())
+        };
     }
 
     use rayon::prelude::*;
@@ -117,8 +148,14 @@ pub(crate) fn apply_adjustment_layer(buffer: &mut [u8], ctx: AdjustmentLayerCtx<
         .zip(adjusted.par_chunks_exact(row_stride))
         .enumerate()
         .for_each(|(py_idx, (dst_row, src_row))| {
+            if cancellation_requested(&cancel_flag) {
+                return;
+            }
             let py = py_idx as u32;
             for px in 0..width {
+                if px.is_multiple_of(256) && cancellation_requested(&cancel_flag) {
+                    return;
+                }
                 let mask_alpha = super::mask::compute_combined_mask_coverage(
                     px as f32 + 0.5,
                     py as f32 + 0.5,
@@ -173,6 +210,11 @@ pub(crate) fn apply_adjustment_layer(buffer: &mut [u8], ctx: AdjustmentLayerCtx<
                         .clamp(0.0, 255.0) as u8;
             }
         });
+    if cancellation_requested(&cancel_flag) {
+        Err(())
+    } else {
+        Ok(())
+    }
 }
 
 /// Everything [`composite_layer_buffer`] needs that is not the two
@@ -207,6 +249,7 @@ pub(crate) fn composite_layer_buffer(buffer: &mut [u8], layer_buf: &[u8], ctx: &
     } = ctx;
     let (min_x, min_y, bw, bh, width, height) = (*min_x, *min_y, *bw, *bh, *width, *height);
     let (blend_linear, l_opacity) = (*blend_linear, *l_opacity);
+    let cancel_flag = super::get_render_cancel_flag();
 
     let row_stride = (width * 4) as usize;
     let sub_start = (min_y * width * 4) as usize;
@@ -226,9 +269,15 @@ pub(crate) fn composite_layer_buffer(buffer: &mut [u8], layer_buf: &[u8], ctx: &
             .par_chunks_exact_mut(row_stride)
             .enumerate()
             .for_each(|(ly, dst_row)| {
+                if cancellation_requested(&cancel_flag) {
+                    return;
+                }
                 let l_row_idx = ly * (bw * 4) as usize;
                 let min_x_offset = (min_x * 4) as usize;
                 for lx in 0..bw as usize {
+                    if lx.is_multiple_of(256) && cancellation_requested(&cancel_flag) {
+                        return;
+                    }
                     let lidx = l_row_idx + lx * 4;
                     let src_a_byte = layer_buf[lidx + 3];
                     if src_a_byte == 0 {
@@ -271,9 +320,15 @@ pub(crate) fn composite_layer_buffer(buffer: &mut [u8], layer_buf: &[u8], ctx: &
             .par_chunks_exact_mut(row_stride)
             .enumerate()
             .for_each(|(ly, dst_row)| {
+                if cancellation_requested(&cancel_flag) {
+                    return;
+                }
                 let l_row_idx = ly * (bw * 4) as usize;
                 let min_x_offset = (min_x * 4) as usize;
                 for lx in 0..bw as usize {
+                    if lx.is_multiple_of(256) && cancellation_requested(&cancel_flag) {
+                        return;
+                    }
                     let lidx = l_row_idx + lx * 4;
                     let src_a_byte = layer_buf[lidx + 3];
                     if src_a_byte == 0 {
@@ -316,10 +371,16 @@ pub(crate) fn composite_layer_buffer(buffer: &mut [u8], layer_buf: &[u8], ctx: &
         .par_chunks_exact_mut(row_stride)
         .enumerate()
         .for_each(|(ly, dst_row)| {
+            if cancellation_requested(&cancel_flag) {
+                return;
+            }
             let py = min_y + ly as u32;
             let l_row_idx = ly * (bw * 4) as usize;
             let min_x_offset = (min_x * 4) as usize;
             for lx in 0..bw as usize {
+                if lx.is_multiple_of(256) && cancellation_requested(&cancel_flag) {
+                    return;
+                }
                 let px = min_x + lx as u32;
                 let lidx = l_row_idx + lx * 4;
                 // Composite-time opacity: applied once here so effect stacks cannot destroy it,
@@ -340,10 +401,13 @@ pub(crate) fn composite_layer_buffer(buffer: &mut [u8], layer_buf: &[u8], ctx: &
                     let midx = ((my * width + mx) * 4) as usize;
                     if midx + 3 < matte_buf.len() {
                         let matte_a = matte_buf[midx + 3] as f32 / 255.0;
+                        // Luma in transparent pixels is undefined hidden RGB;
+                        // include matte alpha so it cannot reveal the layer.
                         let matte_luma = (matte_buf[midx] as f32 * 0.299
                             + matte_buf[midx + 1] as f32 * 0.587
                             + matte_buf[midx + 2] as f32 * 0.114)
-                            / 255.0;
+                            / 255.0
+                            * matte_a;
                         src_a = match layer.track_matte {
                             TrackMatteMode::AlphaMatte => src_a * matte_a,
                             TrackMatteMode::AlphaMatteInverted => src_a * (1.0 - matte_a),
@@ -380,7 +444,7 @@ pub(crate) fn composite_layer_buffer(buffer: &mut [u8], layer_buf: &[u8], ctx: &
                 }
 
                 // Compute BlendMode calculations
-                let (blended_r, blended_g, blended_b) = evaluate_blend_mode(
+                let (overlap_r, overlap_g, overlap_b) = evaluate_blend_mode(
                     layer.blend_mode,
                     src_r,
                     src_g,
@@ -391,6 +455,24 @@ pub(crate) fn composite_layer_buffer(buffer: &mut [u8], layer_buf: &[u8], ctx: &
                     dst_b,
                     dst_a,
                 );
+                // Blend modes only mix colors where the backdrop contributes.
+                // Outside that overlap, the source color must remain unchanged;
+                // otherwise a Multiply layer over transparent black turns black.
+                let (blended_r, blended_g, blended_b) = match layer.blend_mode {
+                    // These modes encode custom alpha/coverage operations rather
+                    // than a color blend that can be interpolated over backdrop alpha.
+                    BlendMode::StencilAlpha
+                    | BlendMode::StencilLuma
+                    | BlendMode::SilhouetteAlpha
+                    | BlendMode::SilhouetteLuma
+                    | BlendMode::Behind
+                    | BlendMode::AlphaAdd => (overlap_r, overlap_g, overlap_b),
+                    _ => (
+                        src_r * (1.0 - dst_a) + overlap_r * dst_a,
+                        src_g * (1.0 - dst_a) + overlap_g * dst_a,
+                        src_b * (1.0 - dst_a) + overlap_b * dst_a,
+                    ),
+                };
 
                 // Preserve Underlying Transparency (AE 'T' switch)
                 if layer.preserve_transparency {

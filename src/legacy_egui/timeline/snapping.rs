@@ -55,6 +55,15 @@ pub fn snap_to_sorted_layer_edges(
     best.map_or(frame, |(_, edge)| edge)
 }
 
+pub fn snap_to_sorted_layer_edges_in_range(
+    frame: u32,
+    exclude_idx: usize,
+    sorted_edges: &[(u32, usize)],
+    max_frame: u32,
+) -> u32 {
+    snap_to_sorted_layer_edges(frame, exclude_idx, sorted_edges).min(max_frame)
+}
+
 pub fn snap_to_layer_edges(
     frame: u32,
     exclude_idx: usize,

@@ -58,16 +58,26 @@ pub fn draw_file_menu(app: &mut crate::KagariApp, ctx: &egui::Context, ui: &mut 
                 .unwrap_or_else(|| std::path::Path::new("."))
                 .to_path_buf();
             let (sender, receiver) = std::sync::mpsc::channel();
-            app.collect_files_rx = Some(receiver);
-            let handle = std::thread::spawn(move || {
-                let result = crate::core::project_migration::collect_production_document(
-                    &document,
-                    &folder,
-                    &source_project_dir,
-                );
-                let _ = sender.send(result);
-            });
-            app.track_background_thread(handle);
+            let handle = std::thread::Builder::new()
+                .name("kagari-collect-files".into())
+                .spawn(move || {
+                    let result = crate::core::project_migration::collect_production_document(
+                        &document,
+                        &folder,
+                        &source_project_dir,
+                    );
+                    let _ = sender.send(result);
+                });
+            match handle {
+                Ok(handle) => {
+                    app.collect_files_rx = Some(receiver);
+                    app.track_background_thread(handle);
+                    app.toasts.info("素材を収集しています…");
+                }
+                Err(error) => app
+                    .toasts
+                    .error(format!("素材収集を開始できませんでした: {error}")),
+            }
         }
         ui.close_menu();
     }
@@ -254,7 +264,10 @@ fn draw_export_otio(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
         let comp = app.history.current().active_composition();
         let otio = crate::core::integration::OtioTimeline::from_composition(comp);
         match otio.to_json() {
-            Ok(json) => match std::fs::write(&app.otio_path, json) {
+            Ok(json) => match crate::core::atomic_file::write_atomic(
+                std::path::Path::new(&app.otio_path),
+                json.as_bytes(),
+            ) {
                 Ok(_) => app.toasts.info(format!("Exported OTIO: {}", app.otio_path)),
                 Err(err) => app
                     .toasts
@@ -321,14 +334,12 @@ fn draw_import_obj(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
             .add_filter("3D Models (*.obj, *.glb, *.gltf)", &["obj", "glb", "gltf"])
             .pick_file()
         {
-            let res = if path.extension().and_then(|s| s.to_str()) == Some("glb") {
-                std::fs::read(&path)
-                    .map_err(|e| e.to_string())
-                    .and_then(|b| crate::core::gltf_loader::parse_glb(&b))
-            } else if path.extension().and_then(|s| s.to_str()) == Some("gltf") {
-                std::fs::read(&path)
-                    .map_err(|e| e.to_string())
-                    .and_then(|b| crate::core::gltf_loader::parse_gltf_json_with_binary(&b, &[]))
+            let extension = path
+                .extension()
+                .and_then(|value| value.to_str())
+                .map(str::to_ascii_lowercase);
+            let res = if matches!(extension.as_deref(), Some("glb" | "gltf")) {
+                crate::core::gltf_loader::load_gltf_asset(&path)
             } else {
                 crate::core::project_migration::read_bounded_text_file(&path, 128 * 1024 * 1024)
                     .and_then(|obj| crate::core::obj_loader::parse_obj_str(&obj))
@@ -384,7 +395,7 @@ fn draw_export_mlt(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
         {
             let comp = app.history.current().active_composition();
             match crate::core::mlt_export::MltExporter::export_to_xml(comp) {
-                Ok(xml) => match std::fs::write(&path, xml) {
+                Ok(xml) => match crate::core::atomic_file::write_atomic(&path, xml.as_bytes()) {
                     Ok(_) => app
                         .toasts
                         .info(format!("Exported MLT XML: {}", path.to_string_lossy())),
@@ -433,8 +444,10 @@ fn draw_export_exr(app: &mut crate::KagariApp, ui: &mut egui::Ui) {
                 for px in f32_pixels {
                     flat_rgba.extend_from_slice(&px);
                 }
-                let image = crate::core::exr_writer::ExrImage::rgba_f32(width, height, &flat_rgba);
-                match crate::core::exr_writer::write_exr_file(&path, &image) {
+                let write_result =
+                    crate::core::exr_writer::ExrImage::rgba_f32(width, height, &flat_rgba)
+                        .and_then(|image| crate::core::exr_writer::write_exr_file(&path, &image));
+                match write_result {
                     Ok(()) => {
                         app.toasts.info(format!(
                             "Exported OpenEXR frame {}: {}",

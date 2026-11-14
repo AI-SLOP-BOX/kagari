@@ -4,6 +4,7 @@ use super::*;
 impl eframe::App for KagariApp {
     fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
         self.repaint_context = Some(ctx.clone());
+        self.reap_finished_background_threads();
         let close_requested = ctx.input(|input| {
             input
                 .viewport()
@@ -92,16 +93,18 @@ impl eframe::App for KagariApp {
             self.quad_track_cancel_flag.as_ref(),
             self.proxy_job_cancel_flag.as_ref(),
             self.script_console_cancel.as_ref(),
-        ] {
-            if let Some(flag) = flag {
-                flag.store(true, std::sync::atomic::Ordering::SeqCst);
-            }
+        ]
+        .into_iter()
+        .flatten()
+        {
+            flag.store(true, std::sync::atomic::Ordering::SeqCst);
         }
         for flag in self
             .exit_cancel_flags
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .iter()
+            .filter_map(std::sync::Weak::upgrade)
         {
             flag.store(true, std::sync::atomic::Ordering::SeqCst);
         }
@@ -132,9 +135,6 @@ impl eframe::App for KagariApp {
                 }
             }
         }
-        if autosave_succeeded {
-            let _ = std::fs::remove_file(dirty_exit_marker_path(std::process::id()));
-        }
         // Join any remaining background threads so detached threads don't
         // outlive the process (recovery load, project open, LUT restore, ...).
         let handles = std::mem::take(
@@ -143,9 +143,18 @@ impl eframe::App for KagariApp {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner),
         );
+        let mut workers_joined_cleanly = !self
+            .background_worker_panicked
+            .load(std::sync::atomic::Ordering::Relaxed);
         for handle in handles {
-            let _ = handle.join();
+            if handle.join().is_err() {
+                workers_joined_cleanly = false;
+                log::error!("A background worker panicked during shutdown");
+            }
         }
         log::info!("Joined background threads on exit");
+        if autosave_succeeded && workers_joined_cleanly {
+            let _ = std::fs::remove_file(dirty_exit_marker_path(std::process::id()));
+        }
     }
 }

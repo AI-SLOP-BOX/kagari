@@ -51,6 +51,21 @@ impl AfterEffectsStudio {
                 format!("{label}は{minimum}〜{maximum}の範囲で入力してください。");
             return;
         }
+        if matches!(field, "width" | "height") {
+            let composition = self.project_model.active_composition();
+            let (width, height) = if field == "width" {
+                (value, composition.height)
+            } else {
+                (composition.width, value)
+            };
+            if kagari_vfx::core::software_renderer::rgba_buffer_size(width, height).is_none() {
+                self.composition_settings_status = format!(
+                    "このサイズは1フレームの上限（{} MiB）を超えます。幅と高さを小さくしてください。",
+                    kagari_vfx::core::software_renderer::MAX_RENDER_BYTES / (1024 * 1024)
+                );
+                return;
+            }
+        }
         let unchanged = match field {
             "width" => self.project_model.active_composition().width == value,
             "height" => self.project_model.active_composition().height == value,
@@ -124,9 +139,16 @@ impl AfterEffectsStudio {
     }
 
     pub(crate) fn set_composition_preset(&mut self, width: u32, height: u32) {
+        let size = (width.clamp(1, 16_384), height.clamp(1, 16_384));
+        if kagari_vfx::core::software_renderer::rgba_buffer_size(size.0, size.1).is_none() {
+            self.composition_settings_status = format!(
+                "このサイズは1フレームの上限（{} MiB）を超えます。",
+                kagari_vfx::core::software_renderer::MAX_RENDER_BYTES / (1024 * 1024)
+            );
+            return;
+        }
         self.composition_settings_status.clear();
         let composition = self.project_model.active_composition_mut();
-        let size = (width.clamp(1, 16_384), height.clamp(1, 16_384));
         if (composition.width, composition.height) == size {
             return;
         }

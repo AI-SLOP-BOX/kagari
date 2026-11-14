@@ -1,5 +1,4 @@
 use crate::core::property::Animatable;
-use crate::core::roto_assist::trace_contour_to_polygon;
 use crate::core::roto_brush_engine::{
     generate_rotobrush_matte, RotoBrushSettings, RotoStroke as EngineRotoStroke, RotoStrokeType,
 };
@@ -23,6 +22,7 @@ mod navigation;
 mod toolbar;
 mod transport_bar;
 mod view_menu;
+mod viewer_controls;
 use gpu_preview::render_gpu_preview;
 use inline_text_editor::{draw_inline_text_editor, InlineTextEditorGeometry};
 use transport_bar::draw_viewport_transport_bar;
@@ -92,113 +92,18 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
         // ── Comp Settings Modal ──────────────────────────────────────────────
         crate::ui::comp_settings_dialog::draw_comp_settings_dialog(app, ctx);
 
-        // ── AE Viewport Composition Top Tabs & Breadcrumbs Bar ──
-        if app.history.current().active_composition().id != "comp_empty_start"
-            && app.history.current().compositions.len() > 1
-        {
-            let active_comp_idx = app.history.current().active_composition_idx;
-            let comps_count = app.history.current().compositions.len();
-            ui.allocate_ui_with_layout(
-                egui::vec2(
-                    ui.available_width(),
-                    crate::ui::theme::layout::PANEL_HEADER_HEIGHT,
-                ),
-                egui::Layout::left_to_right(egui::Align::Center),
-                |ui| {
-                    egui::ScrollArea::horizontal()
-                        .id_salt("viewer_composition_tabs")
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| {
-                            ui.horizontal(|ui| {
-                                for idx in 0..comps_count {
-                                    let is_active = idx == active_comp_idx;
-                                    let c_name =
-                                        app.history.current().compositions[idx].name.clone();
-                                    if crate::ui::theme::draw_custom_tab(ui, is_active, &c_name)
-                                        .clicked()
-                                        && idx != active_comp_idx
-                                    {
-                                        app.dispatch(
-                                            crate::app_state::AppCommand::SelectComposition(idx),
-                                        );
-                                    }
-                                }
-                            });
-                        });
-                },
-            );
-            crate::ui::theme::draw_separator(ui);
-        }
+        viewer_controls::draw_composition_tabs(app, ui);
 
         let size = ui.available_size();
         let bottom_transport_h = 36.0_f32;
         let canvas_h = (size.y - bottom_transport_h).max(60.0);
 
         // Canvas Area
-        let (rect, mut viewport_response) =
+        let (rect, viewport_response) =
             ui.allocate_exact_size(egui::vec2(size.x, canvas_h), egui::Sense::click_and_drag());
 
-        // Floating Modern Tool Strip (Glassmorphism Pill directly inside viewer top-left)
-        let tool_rect = {
-            let tool_strip_w = 34.0_f32;
-            let tool_strip_h = 240.0_f32;
-            let float_margin = 12.0_f32;
-            let tool_rect = egui::Rect::from_min_size(
-                rect.min + egui::vec2(float_margin, float_margin),
-                egui::vec2(tool_strip_w, tool_strip_h),
-            );
-            ui.painter().rect_filled(
-                tool_rect,
-                8.0,
-                egui::Color32::from_rgba_premultiplied(16, 18, 24, 230),
-            );
-            ui.painter().rect_stroke(
-                tool_rect,
-                8.0,
-                egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE),
-            );
-            let mut tool_ui = ui.new_child(egui::UiBuilder::new().max_rect(tool_rect));
-            crate::ui::toolbar::draw_viewer_tool_strip_vertical(app, &mut tool_ui);
-            tool_rect
-        };
-
-        // If pointer is inside the floating tool strip, do not allow canvas viewport_response
-        // to steal or trigger pan/zoom/selection clicks.
-        let pointer_over_tool_strip = ui.input(|i| {
-            i.pointer
-                .hover_pos()
-                .is_some_and(|pos| tool_rect.contains(pos))
-                || i.pointer
-                    .interact_pos()
-                    .is_some_and(|pos| tool_rect.contains(pos))
-        });
-        if pointer_over_tool_strip {
-            viewport_response.clicked = false;
-            viewport_response.dragged = false;
-        }
-        viewport_response.context_menu(|ui| {
-            let layer_count = app.history.current().active_composition().layers.len();
-            if ui.button("Select All Layers").clicked() {
-                app.selection.selected_layers = (0..layer_count).collect();
-                app.selection.selected_layer_idx = (layer_count > 0).then_some(0);
-                ui.close_menu();
-            }
-            if ui.button("Deselect Layers").clicked() {
-                app.selection.selected_layers.clear();
-                app.selection.selected_layer_idx = None;
-                app.mask_selected_vertices = None;
-                ui.close_menu();
-            }
-            ui.separator();
-            if ui.button("Fit Composition to Viewer").clicked() {
-                app.ui_tabs.viewport_mag_ratio = 0.0;
-                app.playback.viewport_pan = egui::Vec2::ZERO;
-                ui.close_menu();
-            }
-            ui.checkbox(&mut app.show_grid, "Show Grid");
-            ui.checkbox(&mut app.show_guides, "Show Guides");
-            ui.checkbox(&mut app.snap_to_keyframes, "Snap to Keyframes");
-        });
+        let viewport_response =
+            viewer_controls::draw_overlay_controls(app, ui, rect, viewport_response);
 
         navigation::handle_navigation(app, ui, &viewport_response, rect);
 
@@ -230,23 +135,44 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: u32) {
             .iter()
             .filter(|layer| layer.is_active(current_frame))
             .find_map(|layer| {
-                let path = match &layer.layer_type {
-                    crate::core::timeline::LayerType::Image { path } => Some(path),
-                    crate::core::timeline::LayerType::Model3D { path } => Some(path),
-                    crate::core::timeline::LayerType::Video { source, .. } => Some(source),
-                    _ => None,
-                }?;
-                // If it's a video layer and frames_dir exists or source exists, it's not missing.
-                // Use revision cache / fast check instead of uncached disk syscall
-                let is_file = if matches!(
-                    layer.layer_type,
-                    crate::core::timeline::LayerType::Video { .. }
-                ) {
-                    std::path::Path::new(path).exists()
-                } else {
-                    std::path::Path::new(path).is_file()
+                let media_available = match &layer.layer_type {
+                    crate::core::timeline::LayerType::Image { path }
+                    | crate::core::timeline::LayerType::Model3D { path } => {
+                        std::path::Path::new(path).is_file()
+                    }
+                    crate::core::timeline::LayerType::Video {
+                        source,
+                        frames_dir,
+                        frame_count,
+                        speed,
+                        ..
+                    } => {
+                        if std::path::Path::new(source).is_file() {
+                            true
+                        } else if *frame_count > 0 && !frames_dir.is_empty() {
+                            let source_frame = match &layer.posterize_time {
+                                Some(settings) if settings.enabled => {
+                                    layer.effective_render_frame(current_frame, comp_fps) as f32
+                                }
+                                _ => layer.remap_frame_f32(current_frame),
+                            };
+                            let source_position = crate::core::timeline::video_sequence_frame(
+                                source_frame,
+                                *speed,
+                                frames_dir,
+                                comp_fps,
+                            );
+                            let frame =
+                                (source_position.floor() as u32).min(frame_count.saturating_sub(1));
+                            crate::core::video_import::frame_path_in_dir(frames_dir, frame)
+                                .is_file()
+                        } else {
+                            false
+                        }
+                    }
+                    _ => return None,
                 };
-                if is_file {
+                if media_available {
                     None
                 } else {
                     Some(layer.name.clone())

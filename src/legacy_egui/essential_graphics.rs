@@ -201,8 +201,10 @@ fn export_mogrt(app: &mut KagariApp) {
     match package
         .to_json()
         .map_err(|error| error.to_string())
-        .and_then(|json| std::fs::write(&path, json).map_err(|error| error.to_string()))
-    {
+        .and_then(|json| {
+            crate::core::atomic_file::write_atomic(&path, json.as_bytes())
+                .map_err(|error| error.to_string())
+        }) {
         Ok(()) => {
             crate::ui::project_io::reveal_in_file_manager(&path);
             app.toasts

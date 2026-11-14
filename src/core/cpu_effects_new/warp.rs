@@ -15,20 +15,35 @@ pub fn apply_motion_blur(pixels: &mut [u8], width: u32, height: u32, angle: f32,
     let Some(expected) = rgba_buffer_size(width, height) else {
         return;
     };
-    if pixels.len() < expected || length < 1.0 {
+    if !super::valid_rgba_dimensions(pixels, width, height) || !length.is_finite() || length < 1.0 {
         return;
     }
-    let rad = angle.to_radians();
+    let cancel_flag = super::render_cancel_flag();
+    if super::cancellation_requested(&cancel_flag) {
+        return;
+    }
+    // Bound work for projects that contain extreme imported values. Keep the
+    // radius integral so the divisor exactly matches the inclusive loop.
+    let radius = length.ceil().clamp(1.0, 64.0) as i32;
+    let sample_count = (radius * 2 + 1) as f32;
+    let normalized_angle = if angle.is_finite() {
+        angle.rem_euclid(360.0)
+    } else {
+        0.0
+    };
+    let rad = normalized_angle.to_radians();
     let dir_x = rad.cos();
     let dir_y = rad.sin();
-    let samples = (length * 2.0 + 1.0).ceil() as i32;
-    let inv_samples = 1.0 / samples as f32;
-    let mut tmp = vec![0u8; pixels.len()];
+    let inv_samples = 1.0 / sample_count;
+    let mut tmp = vec![0u8; expected];
 
     // Directional blur is sample-heavy: parallelize per pixel with rayon.
     tmp.par_chunks_exact_mut(4)
         .enumerate()
         .for_each(|(i, out)| {
+            if i.is_multiple_of(4096) && super::cancellation_requested(&cancel_flag) {
+                return;
+            }
             let x = (i % width as usize) as f32;
             let y = (i / width as usize) as f32;
             let mut sum_r = 0f32;
@@ -36,7 +51,7 @@ pub fn apply_motion_blur(pixels: &mut [u8], width: u32, height: u32, angle: f32,
             let mut sum_b = 0f32;
             let mut sum_a = 0f32;
 
-            for s in -samples / 2..=samples / 2 {
+            for s in -radius..=radius {
                 let offset = s as f32;
                 let sx = x + dir_x * offset;
                 let sy = y + dir_y * offset;
@@ -52,7 +67,10 @@ pub fn apply_motion_blur(pixels: &mut [u8], width: u32, height: u32, angle: f32,
             out[2] = (sum_b * inv_samples) as u8;
             out[3] = (sum_a * inv_samples) as u8;
         });
-    pixels[..tmp.len()].copy_from_slice(&tmp);
+    if super::cancellation_requested(&cancel_flag) {
+        return;
+    }
+    pixels[..expected].copy_from_slice(&tmp);
 }
 
 /// Apply 4-corner mesh warp displacement.
@@ -66,10 +84,11 @@ pub fn apply_mesh_warp(
     bottom_left: [f32; 2],
     bottom_right: [f32; 2],
 ) {
-    let Some(expected) = rgba_buffer_size(width, height) else {
+    if !super::valid_rgba_dimensions(pixels, width, height) {
         return;
-    };
-    if pixels.len() < expected {
+    }
+    let cancel_flag = super::render_cancel_flag();
+    if super::cancellation_requested(&cancel_flag) {
         return;
     }
     let mut tmp = vec![0u8; pixels.len()];
@@ -80,6 +99,9 @@ pub fn apply_mesh_warp(
     tmp.par_chunks_exact_mut(4)
         .enumerate()
         .for_each(|(i, out)| {
+            if i.is_multiple_of(4096) && super::cancellation_requested(&cancel_flag) {
+                return;
+            }
             let out_x = i % width as usize;
             let out_y = i / width as usize;
             let u = out_x as f32 / w;
@@ -106,6 +128,9 @@ pub fn apply_mesh_warp(
             let ch = sample_bilinear(pixels, width, height, src_x, src_y);
             out.copy_from_slice(&ch);
         });
+    if super::cancellation_requested(&cancel_flag) {
+        return;
+    }
     pixels[..tmp.len()].copy_from_slice(&tmp);
 }
 
@@ -122,6 +147,13 @@ pub fn apply_displacement_map(
     max_horizontal: f32,
     max_vertical: f32,
 ) {
+    if !super::valid_rgba_dimensions(pixels, width, height) {
+        return;
+    }
+    let cancel_flag = super::render_cancel_flag();
+    if super::cancellation_requested(&cancel_flag) {
+        return;
+    }
     let options = crate::core::displacement_map::DisplacementMapOptions {
         max_horizontal_displacement: max_horizontal,
         max_vertical_displacement: max_vertical,

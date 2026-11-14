@@ -1,5 +1,5 @@
 use super::*;
-use ame_studio_app::rgba_to_hex;
+use ame_studio_helpers_effects::rgba_to_hex;
 
 impl AfterEffectsStudio {
     pub(crate) fn sync_layer_styles_bindings(&mut self) -> Result<(), Box<dyn std::error::Error>> {
@@ -358,6 +358,7 @@ impl AfterEffectsStudio {
             });
 
             let matte_sources = selected_layer
+                .filter(|_| has_matte)
                 .map(|selected| {
                     active_comp
                         .layers

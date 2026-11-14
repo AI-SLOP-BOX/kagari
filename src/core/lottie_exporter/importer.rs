@@ -1,4 +1,10 @@
 use super::*;
+use std::io::Read;
+
+const MAX_LOTTIE_JSON_BYTES: usize = 32 * 1024 * 1024;
+const MAX_LOTTIE_LAYERS_PER_COMP: usize = 20_000;
+const MAX_LOTTIE_PROJECT_LAYERS: usize = 50_000;
+const MAX_LOTTIE_PROJECT_COMPS: usize = 1_000;
 
 // ─────────────────────── Lottie / Bodymovin Import ───────────────────────
 
@@ -12,11 +18,27 @@ pub struct LottieImporter;
 
 impl LottieImporter {
     pub fn import_from_file(path: &str) -> Option<Composition> {
-        let json = std::fs::read_to_string(path).ok()?;
+        let file = std::fs::File::open(path).ok()?;
+        let size = file.metadata().ok()?.len();
+        if size > MAX_LOTTIE_JSON_BYTES as u64 {
+            return None;
+        }
+        let mut bytes = Vec::new();
+        bytes.try_reserve_exact(usize::try_from(size).ok()?).ok()?;
+        file.take(MAX_LOTTIE_JSON_BYTES as u64 + 1)
+            .read_to_end(&mut bytes)
+            .ok()?;
+        if bytes.len() > MAX_LOTTIE_JSON_BYTES {
+            return None;
+        }
+        let json = String::from_utf8(bytes).ok()?;
         Self::import_from_str(&json)
     }
 
     pub fn import_from_str(json: &str) -> Option<Composition> {
+        if json.len() > MAX_LOTTIE_JSON_BYTES {
+            return None;
+        }
         let v: Value = serde_json::from_str(json).ok()?;
         Self::from_value(&v)
     }
@@ -29,6 +51,9 @@ impl LottieImporter {
     /// `id_override` lets asset entries keep their published bodymovin id.
     fn parse_comp(v: &Value, id_override: Option<&str>) -> Option<Composition> {
         let layers_src = v.get("layers")?.as_array()?;
+        if layers_src.len() > MAX_LOTTIE_LAYERS_PER_COMP {
+            return None;
+        }
         let fps = v
             .get("fr")
             .and_then(Value::as_f64)
@@ -185,11 +210,27 @@ impl LottieImporter {
     /// Imports a full bodymovin project: the root composition plus every
     /// precomp asset, preserving `ty:0` references as [`LayerType::PreComp`].
     pub fn import_project_from_str(json: &str) -> Option<crate::core::timeline::Project> {
+        if json.len() > MAX_LOTTIE_JSON_BYTES {
+            return None;
+        }
         let v: Value = serde_json::from_str(json).ok()?;
+        let root_layers = v.get("layers")?.as_array()?.len();
+        if root_layers > MAX_LOTTIE_PROJECT_LAYERS {
+            return None;
+        }
+        let mut total_layers = root_layers;
         let mut comps = vec![Self::parse_comp(&v, None)?];
         if let Some(assets) = v.get("assets").and_then(Value::as_array) {
             for a in assets {
                 if a.get("layers").and_then(Value::as_array).is_some() {
+                    if comps.len() >= MAX_LOTTIE_PROJECT_COMPS {
+                        return None;
+                    }
+                    let layer_count = a.get("layers")?.as_array()?.len();
+                    total_layers = total_layers.checked_add(layer_count)?;
+                    if total_layers > MAX_LOTTIE_PROJECT_LAYERS {
+                        return None;
+                    }
                     let id = a.get("id").and_then(Value::as_str);
                     if let Some(c) = Self::parse_comp(a, id) {
                         comps.push(c);

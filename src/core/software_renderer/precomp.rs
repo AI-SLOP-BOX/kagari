@@ -37,6 +37,27 @@ fn with_precomp_cache<R>(f: impl FnOnce(&mut crate::core::precomp_cache::Precomp
 
 const MAX_SOURCE_LAYER_RENDER_DEPTH: u32 = 16;
 
+struct PrecompRenderGuard {
+    previous_depth: u32,
+}
+
+impl Drop for PrecompRenderGuard {
+    fn drop(&mut self) {
+        PRECOMP_DEPTH.with(|depth| depth.set(self.previous_depth));
+        PRECOMP_STACK.with(|stack| {
+            stack.borrow_mut().pop();
+        });
+    }
+}
+
+struct SourceLayerRenderDepthGuard(u32);
+
+impl Drop for SourceLayerRenderDepthGuard {
+    fn drop(&mut self) {
+        SOURCE_LAYER_RENDER_DEPTH.with(|depth| depth.set(self.0));
+    }
+}
+
 /// Render a pre-comp by recursively rendering its layers into a pixel buffer.
 /// This is the core of pre-comp nesting support. Uses a thread-local cache
 /// to avoid redundant re-renders when the same pre-comp is referenced by
@@ -48,6 +69,7 @@ pub fn render_precomp_layers(
     width: u32,
     height: u32,
 ) -> Arc<[u8]> {
+    let allocation_scope = super::RenderAllocationScope::install();
     let content_revision = composition_content_revision(precomp_comp, frame);
     // Cache check: skip full render if we already have this precomp's pixels
     let cached = with_precomp_cache(|cache| {
@@ -75,23 +97,17 @@ pub fn render_precomp_layers(
         );
         return Arc::from([]);
     }
+
+    let current_depth = PRECOMP_DEPTH.with(std::cell::Cell::get);
+    let _render_guard = PrecompRenderGuard {
+        previous_depth: current_depth,
+    };
     // Guard against pathologically deep (but acyclic) pre-comp nesting
-    let overflow = PRECOMP_DEPTH.with(|d| {
-        let cur = d.get();
-        if cur >= MAX_PRECOMP_DEPTH {
-            true
-        } else {
-            d.set(cur + 1);
-            false
-        }
-    });
-    if overflow {
+    if current_depth >= MAX_PRECOMP_DEPTH {
         log::warn!("[Renderer] Pre-comp nesting depth limit exceeded; skipping nested render");
-        PRECOMP_STACK.with(|s| {
-            s.borrow_mut().pop();
-        });
         return Arc::from([]);
     }
+    PRECOMP_DEPTH.with(|depth| depth.set(current_depth + 1));
     let result = Arc::<[u8]>::from(render_precomp_layers_inner(
         _comp,
         precomp_comp,
@@ -99,10 +115,9 @@ pub fn render_precomp_layers(
         width,
         height,
     ));
-    PRECOMP_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
-    PRECOMP_STACK.with(|s| {
-        s.borrow_mut().pop();
-    });
+    if allocation_scope.failed() {
+        return Arc::from([]);
+    }
     // Cache the result for future lookups at the same (comp, frame, resolution)
     if !result.is_empty() {
         with_precomp_cache(|cache| {
@@ -130,8 +145,14 @@ pub(crate) fn render_single_layer_pixels(
     height: u32,
 ) -> Vec<u8> {
     let size = rgba_buffer_size(width, height).unwrap_or(0);
-    if size == 0 || layer_idx >= comp.layers.len() {
-        return vec![0u8; size];
+    if size == 0 {
+        return Vec::new();
+    }
+    if layer_idx >= comp.layers.len() {
+        return super::try_zeroed_buffer(size).unwrap_or_default();
+    }
+    if super::render_cancelled() {
+        return super::try_zeroed_buffer(size).unwrap_or_default();
     }
 
     SOURCE_LAYER_RENDER_DEPTH.with(|depth| {
@@ -141,13 +162,11 @@ pub(crate) fn render_single_layer_pixels(
                 "[Renderer] source-layer effect recursion exceeded {} levels",
                 MAX_SOURCE_LAYER_RENDER_DEPTH
             );
-            return vec![0u8; size];
+            return super::try_zeroed_buffer(size).unwrap_or_default();
         }
 
         depth.set(current + 1);
-        let pixels =
-            render_frame_to_pixels_filtered(comp, frame, width, height, 0.0, 0, Some(layer_idx));
-        depth.set(current);
-        pixels
+        let _depth_guard = SourceLayerRenderDepthGuard(current);
+        render_frame_to_pixels_filtered(comp, frame, width, height, 0.0, 0, Some(layer_idx))
     })
 }

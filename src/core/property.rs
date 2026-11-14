@@ -62,6 +62,8 @@ impl<T: Clone> Animatable<T> {
     }
 
     pub fn new_animated(keyframes: Vec<Keyframe<T>>) -> Self {
+        let mut keyframes = keyframes;
+        keyframes.sort_by_key(|keyframe| keyframe.frame);
         Animatable::Animated(keyframes)
     }
 
@@ -286,7 +288,7 @@ impl<T: Interpolate> Animatable<T> {
                     && frame < keyframes[(*hint + 1).min(last_kf_idx)].frame as f32
                 {
                     *hint
-                } else if *hint + 1 < last_kf_idx
+                } else if hint.saturating_add(1) < last_kf_idx
                     && frame >= keyframes[*hint + 1].frame as f32
                     && frame < keyframes[(*hint + 2).min(last_kf_idx)].frame as f32
                 {
@@ -313,12 +315,27 @@ impl<T: Interpolate> Animatable<T> {
                 match &start_kf.interpolation {
                     InterpolationType::Hold => start_kf.value.clone(),
                     InterpolationType::Linear => T::interpolate(&start_kf.value, &end_kf.value, t),
-                    InterpolationType::Bezier { custom_bezier, .. } => {
-                        let eased_t = if let Some(coords) = custom_bezier {
-                            solve_bezier_eased_time(t, coords[0], coords[1], coords[2], coords[3])
-                        } else {
-                            solve_bezier_eased_time(t, 0.25, 0.1, 0.25, 1.0)
-                        };
+                    InterpolationType::Bezier {
+                        outgoing,
+                        incoming,
+                        custom_bezier,
+                    } => {
+                        let coords = custom_bezier.unwrap_or_else(|| {
+                            if outgoing.speed.abs() <= f32::EPSILON
+                                && incoming.speed.abs() <= f32::EPSILON
+                            {
+                                [
+                                    outgoing.influence.clamp(0.0, 1.0),
+                                    0.0,
+                                    1.0 - incoming.influence.clamp(0.0, 1.0),
+                                    1.0,
+                                ]
+                            } else {
+                                [0.25, 0.1, 0.25, 1.0]
+                            }
+                        });
+                        let eased_t =
+                            solve_bezier_eased_time(t, coords[0], coords[1], coords[2], coords[3]);
                         T::interpolate(&start_kf.value, &end_kf.value, eased_t)
                     }
                 }

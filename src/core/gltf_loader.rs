@@ -8,6 +8,291 @@
 use crate::core::obj_loader::{Mesh3D, PbrMaterial3D};
 use serde::{Deserialize, Serialize};
 
+mod container;
+mod parse;
+mod parse_materials;
+mod parse_normals;
+mod parse_scene;
+mod parse_texture;
+pub use container::{parse_glb, parse_gltf_json_with_binary};
+pub use parse::parse_gltf_json_with_buffers;
+use parse_texture::apply_gltf_sampler;
+
+pub const MAX_GLTF_FILE_BYTES: u64 = 128 * 1024 * 1024;
+const MAX_GLTF_EXPANDED_BYTES: usize = 256 * 1024 * 1024;
+const MAX_GLTF_MESH_INSTANCES: usize = 100_000;
+
+/// Read a GLB/glTF file without allowing an imported asset to allocate
+/// unbounded memory before the parser can validate its contents.
+pub fn read_gltf_file(path: impl AsRef<std::path::Path>) -> Result<Vec<u8>, String> {
+    use std::io::Read;
+
+    let path = path.as_ref();
+    let file = std::fs::File::open(path)
+        .map_err(|error| format!("Could not open 3D model {}: {error}", path.display()))?;
+    let size = file
+        .metadata()
+        .map_err(|error| format!("Could not inspect 3D model {}: {error}", path.display()))?
+        .len();
+    if size > MAX_GLTF_FILE_BYTES {
+        return Err(format!(
+            "3D model exceeds the {} MiB import limit",
+            MAX_GLTF_FILE_BYTES / (1024 * 1024)
+        ));
+    }
+    let initial_capacity = usize::try_from(size)
+        .map_err(|_| "3D model size exceeds this platform's address space".to_string())?;
+    let mut bytes = Vec::new();
+    bytes
+        .try_reserve_exact(initial_capacity)
+        .map_err(|error| format!("Could not reserve 3D model import memory: {error}"))?;
+    file.take(MAX_GLTF_FILE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("Could not read 3D model {}: {error}", path.display()))?;
+    if bytes.len() as u64 > MAX_GLTF_FILE_BYTES {
+        return Err(format!(
+            "3D model exceeds the {} MiB import limit",
+            MAX_GLTF_FILE_BYTES / (1024 * 1024)
+        ));
+    }
+    Ok(bytes)
+}
+
+fn read_gltf_buffer_file(
+    path: impl AsRef<std::path::Path>,
+    expected: usize,
+) -> Result<Vec<u8>, String> {
+    use std::io::Read;
+    let path = path.as_ref();
+    let file = std::fs::File::open(path)
+        .map_err(|error| format!("Could not open glTF buffer {}: {error}", path.display()))?;
+    let available = file
+        .metadata()
+        .map_err(|error| format!("Could not inspect glTF buffer {}: {error}", path.display()))?
+        .len();
+    if available < expected as u64 {
+        return Err("glTF binary buffer is shorter than its declared byteLength".into());
+    }
+    let mut bytes = Vec::new();
+    bytes
+        .try_reserve_exact(expected)
+        .map_err(|error| format!("Could not reserve glTF buffer memory: {error}"))?;
+    file.take(expected as u64)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("Could not read glTF buffer {}: {error}", path.display()))?;
+    if bytes.len() != expected {
+        return Err("glTF binary buffer changed or ended while it was being read".into());
+    }
+    Ok(bytes)
+}
+
+/// Load a GLB or glTF model, including its declared external or embedded binary
+/// buffers. The combined decoded buffer size is bounded by the import limit.
+pub fn load_gltf_asset(path: impl AsRef<std::path::Path>) -> Result<Mesh3D, String> {
+    let path = path.as_ref();
+    let bytes = read_gltf_file(path)?;
+    let mut mesh = match path
+        .extension()
+        .and_then(std::ffi::OsStr::to_str)
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+    {
+        Some("glb") => parse_glb(&bytes),
+        Some("gltf") => {
+            let root: GltfRootJson = serde_json::from_slice(&bytes)
+                .map_err(|error| format!("Failed to parse glTF JSON: {error}"))?;
+            validate_gltf_asset_version(root.asset.as_ref())?;
+            validate_gltf_feature_support(&root)?;
+            let mut total_declared_bytes = 0usize;
+            let mut binary_buffers = Vec::with_capacity(root.buffers.len());
+            for buffer in &root.buffers {
+                if buffer.byte_length == 0 {
+                    return Err("glTF buffers must declare a nonzero byteLength".into());
+                }
+                total_declared_bytes = total_declared_bytes
+                    .checked_add(buffer.byte_length)
+                    .filter(|&size| size <= MAX_GLTF_FILE_BYTES as usize)
+                    .ok_or_else(|| {
+                        "Combined glTF buffers exceed the 128 MiB import limit".to_string()
+                    })?;
+                let uri = buffer
+                    .uri
+                    .as_deref()
+                    .ok_or_else(|| "glTF JSON buffer must declare a URI".to_string())?;
+                let binary = if let Some(data_uri) = uri.strip_prefix("data:") {
+                    let (metadata, payload) = data_uri
+                        .split_once(',')
+                        .ok_or_else(|| "Malformed glTF data URI".to_string())?;
+                    if metadata.to_ascii_lowercase().ends_with(";base64") {
+                        let max_encoded = buffer
+                            .byte_length
+                            .checked_add(2)
+                            .and_then(|size| size.checked_div(3))
+                            .and_then(|groups| groups.checked_mul(4))
+                            .ok_or("glTF data URI size overflows address space")?;
+                        if payload.len() > max_encoded {
+                            return Err(
+                                "glTF data URI exceeds its declared buffer byteLength".into()
+                            );
+                        }
+                        use base64::Engine;
+                        base64::engine::general_purpose::STANDARD
+                            .decode(payload)
+                            .map_err(|error| format!("Invalid base64 glTF buffer: {error}"))?
+                    } else {
+                        let max_encoded = buffer
+                            .byte_length
+                            .checked_mul(3)
+                            .ok_or("glTF data URI size overflows address space")?;
+                        if payload.len() > max_encoded {
+                            return Err(
+                                "glTF data URI exceeds its declared buffer byteLength".into()
+                            );
+                        }
+                        percent_decode_uri_component(payload)?
+                    }
+                } else {
+                    let buffer_path = resolve_gltf_buffer_path(path, uri)?;
+                    read_gltf_buffer_file(buffer_path, buffer.byte_length)?
+                };
+                if binary.len() != buffer.byte_length {
+                    return Err("glTF buffer length does not match its declared byteLength".into());
+                }
+                binary_buffers.push(binary);
+            }
+            let binary_slices = binary_buffers.iter().map(Vec::as_slice).collect::<Vec<_>>();
+            parse_gltf_json_with_buffers(&bytes, &binary_slices)
+        }
+        _ => Err("3D model must use the .glb or .gltf extension".to_string()),
+    }?;
+    {
+        let json = if path
+            .extension()
+            .and_then(std::ffi::OsStr::to_str)
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("glb"))
+        {
+            glb_json_chunk(&bytes)?
+        } else {
+            bytes.as_slice()
+        };
+        let root: GltfRootJson =
+            serde_json::from_slice(json).map_err(|e| format!("Failed to parse glTF JSON: {e}"))?;
+        for (material_index, material) in mesh.materials.iter_mut().enumerate() {
+            let Some(texture_index) = root
+                .materials
+                .get(material_index)
+                .and_then(|m| m.pbr_metallic_roughness.as_ref())
+                .and_then(|p| p.base_color_texture.as_ref())
+                .map(|info| info.index)
+            else {
+                continue;
+            };
+            let image_index = root
+                .textures
+                .get(texture_index)
+                .and_then(|t| t.source)
+                .ok_or_else(|| {
+                    format!("glTF texture {texture_index} has no supported image source")
+                })?;
+            material.albedo_texture_index = Some(image_index);
+            let sampler = root
+                .textures
+                .get(texture_index)
+                .and_then(|texture| texture.sampler)
+                .map(|index| {
+                    root.samplers
+                        .get(index)
+                        .ok_or_else(|| format!("Invalid glTF sampler index {index}"))
+                })
+                .transpose()?;
+            apply_gltf_sampler(material, sampler)?;
+            let image = root
+                .images
+                .get(image_index)
+                .ok_or_else(|| format!("Invalid glTF image index {image_index}"))?;
+            if let Some(uri) = image.uri.as_deref().filter(|u| !u.starts_with("data:")) {
+                material.albedo_texture = Some(
+                    resolve_gltf_buffer_path(path, uri)?
+                        .to_string_lossy()
+                        .into_owned(),
+                );
+            }
+        }
+    }
+    Ok(mesh)
+}
+
+pub(crate) fn glb_json_chunk(bytes: &[u8]) -> Result<&[u8], String> {
+    if bytes.len() < 12 || u32::from_le_bytes(bytes[0..4].try_into().unwrap()) != 0x46546C67 {
+        return Err("Invalid GLB header".into());
+    }
+    let declared = u32::from_le_bytes(bytes[8..12].try_into().unwrap()) as usize;
+    if declared != bytes.len() {
+        return Err("GLB declared length does not match file length".into());
+    }
+    let mut offset = 12usize;
+    while offset < bytes.len() {
+        let header_end = offset
+            .checked_add(8)
+            .filter(|&end| end <= bytes.len())
+            .ok_or("Truncated GLB chunk header")?;
+        let length = u32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap()) as usize;
+        let kind = u32::from_le_bytes(bytes[offset + 4..header_end].try_into().unwrap());
+        let end = header_end
+            .checked_add(length)
+            .filter(|&end| end <= bytes.len())
+            .ok_or("GLB chunk is out of bounds")?;
+        if kind == 0x4E4F534A {
+            return Ok(&bytes[header_end..end]);
+        }
+        offset = end;
+    }
+    Err("Missing JSON chunk in GLB".into())
+}
+
+pub(crate) fn resolve_gltf_buffer_path(
+    model_path: &std::path::Path,
+    uri: &str,
+) -> Result<std::path::PathBuf, String> {
+    if uri.starts_with("data:") || uri.contains('?') || uri.contains('#') || uri.contains(':') {
+        return Err("Only relative file paths are supported for external glTF buffers".to_string());
+    }
+    let decoded_uri = percent_decode_uri_component(uri)?;
+    let decoded_uri = std::str::from_utf8(&decoded_uri)
+        .map_err(|_| "glTF buffer URI is not valid UTF-8".to_string())?;
+    let relative_path = std::path::Path::new(decoded_uri);
+    if relative_path.is_absolute() {
+        return Err("Absolute paths are not allowed for external glTF buffers".to_string());
+    }
+    Ok(model_path
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."))
+        .join(relative_path))
+}
+
+fn percent_decode_uri_component(value: &str) -> Result<Vec<u8>, String> {
+    let input = value.as_bytes();
+    let mut decoded = Vec::with_capacity(input.len());
+    let mut offset = 0;
+    while offset < input.len() {
+        if input[offset] == b'%' {
+            let hex = input
+                .get(offset + 1..offset + 3)
+                .ok_or_else(|| "Malformed percent escape in glTF buffer URI".to_string())?;
+            let hex = std::str::from_utf8(hex)
+                .map_err(|_| "Malformed percent escape in glTF buffer URI".to_string())?;
+            let byte = u8::from_str_radix(hex, 16)
+                .map_err(|_| "Malformed percent escape in glTF buffer URI".to_string())?;
+            decoded.push(byte);
+            offset += 3;
+        } else {
+            decoded.push(input[offset]);
+            offset += 1;
+        }
+    }
+    Ok(decoded)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GltfBufferView {
@@ -26,6 +311,8 @@ pub struct GltfAccessor {
     #[serde(default)]
     pub byte_offset: usize,
     pub component_type: u32, // 5120=BYTE, 5121=UBYTE, 5122=SHORT, 5123=USHORT, 5125=UINT, 5126=FLOAT
+    #[serde(default)]
+    pub normalized: bool,
     pub count: usize,
     #[serde(rename = "type")]
     pub accessor_type: String, // "SCALAR", "VEC2", "VEC3", "VEC4", "MAT4"
@@ -33,6 +320,33 @@ pub struct GltfAccessor {
     pub min: Option<Vec<f32>>,
     #[serde(default)]
     pub max: Option<Vec<f32>>,
+    #[serde(default)]
+    pub sparse: Option<GltfSparseAccessor>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GltfSparseAccessor {
+    pub count: usize,
+    pub indices: GltfSparseIndices,
+    pub values: GltfSparseValues,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GltfSparseIndices {
+    pub buffer_view: usize,
+    #[serde(default)]
+    pub byte_offset: usize,
+    pub component_type: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GltfSparseValues {
+    pub buffer_view: usize,
+    #[serde(default)]
+    pub byte_offset: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -41,6 +355,14 @@ pub struct GltfPrimitive {
     pub attributes: std::collections::HashMap<String, usize>, // "POSITION", "NORMAL", "TEXCOORD_0"
     pub indices: Option<usize>,
     pub material: Option<usize>,
+    #[serde(default = "default_primitive_mode")]
+    pub mode: u32,
+    #[serde(default)]
+    pub targets: Vec<serde_json::Value>,
+}
+
+fn default_primitive_mode() -> u32 {
+    4 // TRIANGLES
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -48,6 +370,7 @@ pub struct GltfPrimitive {
 pub struct GltfMeshJson {
     pub name: Option<String>,
     pub primitives: Vec<GltfPrimitive>,
+    pub weights: Option<Vec<f32>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -59,6 +382,58 @@ pub struct GltfPbrMetallicRoughness {
     pub metallic_factor: f32,
     #[serde(default = "default_factor_one")]
     pub roughness_factor: f32,
+    pub base_color_texture: Option<GltfTextureInfo>,
+    pub metallic_roughness_texture: Option<GltfTextureInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GltfTextureInfo {
+    pub index: usize,
+    #[serde(default)]
+    pub tex_coord: u32,
+    #[serde(default)]
+    pub extensions: Option<GltfTextureInfoExtensions>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GltfTextureInfoExtensions {
+    #[serde(rename = "KHR_texture_transform")]
+    pub texture_transform: Option<GltfTextureTransform>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GltfTextureTransform {
+    pub offset: Option<[f32; 2]>,
+    pub rotation: Option<f32>,
+    pub scale: Option<[f32; 2]>,
+    pub tex_coord: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GltfTextureJson {
+    pub source: Option<usize>,
+    pub sampler: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GltfSamplerJson {
+    pub mag_filter: Option<u32>,
+    pub min_filter: Option<u32>,
+    pub wrap_s: Option<u32>,
+    pub wrap_t: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GltfImageJson {
+    pub uri: Option<String>,
+    pub buffer_view: Option<usize>,
+    pub mime_type: Option<String>,
 }
 
 fn default_base_color_factor() -> [f32; 4] {
@@ -69,6 +444,21 @@ fn default_factor_one() -> f32 {
     1.0
 }
 
+fn decode_gltf_component(bytes: &[u8], component_type: u32, normalized: bool) -> Option<f32> {
+    match (component_type, normalized) {
+        (5126, false) if bytes.len() == 4 => Some(f32::from_le_bytes(bytes.try_into().ok()?)),
+        (5120, true) if bytes.len() == 1 => Some(((bytes[0] as i8 as f32) / 127.0).max(-1.0)),
+        (5121, true) if bytes.len() == 1 => Some(bytes[0] as f32 / 255.0),
+        (5122, true) if bytes.len() == 2 => {
+            Some(((i16::from_le_bytes(bytes.try_into().ok()?) as f32) / 32767.0).max(-1.0))
+        }
+        (5123, true) if bytes.len() == 2 => {
+            Some(u16::from_le_bytes(bytes.try_into().ok()?) as f32 / 65535.0)
+        }
+        _ => None,
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct GltfMaterialJson {
@@ -76,11 +466,55 @@ pub struct GltfMaterialJson {
     pub pbr_metallic_roughness: Option<GltfPbrMetallicRoughness>,
     #[serde(default)]
     pub emissive_factor: [f32; 3],
+    pub alpha_mode: Option<String>,
+    pub alpha_cutoff: Option<f32>,
+    pub normal_texture: Option<GltfTextureInfo>,
+    pub occlusion_texture: Option<GltfTextureInfo>,
+    pub emissive_texture: Option<GltfTextureInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GltfNodeJson {
+    pub mesh: Option<usize>,
+    pub skin: Option<usize>,
+    pub weights: Option<Vec<f32>>,
+    #[serde(default)]
+    pub children: Vec<usize>,
+    pub translation: Option<[f32; 3]>,
+    pub rotation: Option<[f32; 4]>,
+    pub scale: Option<[f32; 3]>,
+    pub matrix: Option<Vec<f32>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GltfSceneJson {
+    #[serde(default)]
+    pub nodes: Vec<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GltfBuffer {
+    pub byte_length: usize,
+    #[serde(default)]
+    pub uri: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GltfAssetInfo {
+    pub version: Option<String>,
+    pub min_version: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct GltfRootJson {
+    pub asset: Option<GltfAssetInfo>,
+    #[serde(default)]
+    pub buffers: Vec<GltfBuffer>,
     #[serde(default)]
     pub accessors: Vec<GltfAccessor>,
     #[serde(default)]
@@ -89,247 +523,114 @@ pub struct GltfRootJson {
     pub meshes: Vec<GltfMeshJson>,
     #[serde(default)]
     pub materials: Vec<GltfMaterialJson>,
+    #[serde(default)]
+    pub images: Vec<GltfImageJson>,
+    #[serde(default)]
+    pub textures: Vec<GltfTextureJson>,
+    #[serde(default)]
+    pub samplers: Vec<GltfSamplerJson>,
+    #[serde(default)]
+    pub nodes: Vec<GltfNodeJson>,
+    #[serde(default)]
+    pub scenes: Vec<GltfSceneJson>,
+    pub scene: Option<usize>,
+    #[serde(default)]
+    pub animations: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub extensions_required: Vec<String>,
 }
 
-/// Parses binary GLB (glTF 2.0 Binary container format).
-pub fn parse_glb(bytes: &[u8]) -> Result<Mesh3D, String> {
-    if bytes.len() < 12 {
-        return Err("File too small for GLB header".to_string());
+fn gltf_default_material(name: &str) -> PbrMaterial3D {
+    PbrMaterial3D {
+        name: name.to_string(),
+        albedo_color: default_base_color_factor(),
+        metallic: default_factor_one(),
+        roughness: default_factor_one(),
+        ..Default::default()
     }
-
-    // 1. Header: magic (0x46546C67 = "glTF"), version (2), length
-    let magic = u32::from_le_bytes(bytes[0..4].try_into().unwrap());
-    if magic != 0x46546C67 {
-        return Err("Invalid GLB magic header; not a binary glTF file".to_string());
-    }
-    let version = u32::from_le_bytes(bytes[4..8].try_into().unwrap());
-    if version != 2 {
-        return Err(format!("Unsupported GLB version: {version}. Expected 2"));
-    }
-    let total_length = u32::from_le_bytes(bytes[8..12].try_into().unwrap()) as usize;
-    if bytes.len() < total_length {
-        return Err("Truncated GLB container".to_string());
-    }
-
-    // 2. Chunks
-    let mut offset = 12;
-    let mut json_bytes: Option<&[u8]> = None;
-    let mut bin_bytes: Option<&[u8]> = None;
-
-    while offset + 8 <= total_length {
-        let chunk_len = u32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap()) as usize;
-        let chunk_type = u32::from_le_bytes(bytes[offset + 4..offset + 8].try_into().unwrap());
-        offset += 8;
-
-        if offset + chunk_len > total_length {
-            return Err("GLB chunk length exceeds file bounds".to_string());
-        }
-
-        let chunk_data = &bytes[offset..offset + chunk_len];
-        match chunk_type {
-            0x4E4F534A => {
-                // "JSON"
-                json_bytes = Some(chunk_data);
-            }
-            0x004E4942 => {
-                // "BIN\0"
-                bin_bytes = Some(chunk_data);
-            }
-            _ => {
-                // Other extension chunks can be skipped
-            }
-        }
-        offset += chunk_len;
-    }
-
-    let json_slice = json_bytes.ok_or_else(|| "Missing JSON chunk in GLB".to_string())?;
-    let bin_slice = bin_bytes.unwrap_or(&[]);
-
-    parse_gltf_json_with_binary(json_slice, bin_slice)
 }
 
-/// Parses glTF JSON paired with a binary buffer payload.
-pub fn parse_gltf_json_with_binary(
-    json_data: &[u8],
-    binary_payload: &[u8],
-) -> Result<Mesh3D, String> {
-    let root: GltfRootJson =
-        serde_json::from_slice(json_data).map_err(|e| format!("Failed to parse glTF JSON: {e}"))?;
-
-    let Some(first_mesh) = root.meshes.first() else {
-        return Err("glTF contains no meshes".to_string());
-    };
-
-    let mut mesh = Mesh3D::new(
-        first_mesh
-            .name
-            .clone()
-            .unwrap_or_else(|| "glTF_Model".to_string()),
-    );
-
-    // Map PBR materials
-    mesh.materials.clear();
-    if root.materials.is_empty() {
-        mesh.materials.push(PbrMaterial3D::default());
-    } else {
-        for mat_json in &root.materials {
-            let mut mat = PbrMaterial3D {
-                name: mat_json
-                    .name
-                    .clone()
-                    .unwrap_or_else(|| "Material".to_string()),
-                ..Default::default()
-            };
-            if let Some(pbr) = &mat_json.pbr_metallic_roughness {
-                mat.albedo_color = pbr.base_color_factor;
-                mat.metallic = pbr.metallic_factor;
-                mat.roughness = pbr.roughness_factor;
-            }
-            mat.emission = mat_json.emissive_factor;
-            mesh.materials.push(mat);
+fn validate_gltf_asset_version(asset: Option<&GltfAssetInfo>) -> Result<(), String> {
+    let asset = asset.ok_or("glTF JSON is missing the required asset declaration")?;
+    let version = asset
+        .version
+        .as_deref()
+        .ok_or("glTF asset is missing its version")?;
+    if version != "2.0" {
+        return Err(format!(
+            "Unsupported glTF asset version `{version}`; expected 2.0"
+        ));
+    }
+    if let Some(minimum) = asset.min_version.as_deref() {
+        let (major, minor) = minimum
+            .split_once('.')
+            .and_then(|(major, minor)| {
+                Some((major.parse::<u32>().ok()?, minor.parse::<u32>().ok()?))
+            })
+            .ok_or_else(|| format!("Invalid glTF minimum version `{minimum}`"))?;
+        if major > 2 || (major == 2 && minor > 0) {
+            return Err(format!(
+                "Unsupported glTF minimum version `{minimum}`; this importer supports 2.0"
+            ));
         }
     }
+    Ok(())
+}
 
-    let read_buffer = |view_idx: usize, offset: usize, len: usize| -> Result<&[u8], String> {
-        let view = root
-            .buffer_views
-            .get(view_idx)
-            .ok_or_else(|| "Invalid buffer view index".to_string())?;
-        let start = view.byte_offset + offset;
-        let end = start + len;
-        if end > binary_payload.len() {
-            return Err("Buffer view out of binary payload range".to_string());
-        }
-        Ok(&binary_payload[start..end])
-    };
-
-    for prim in &first_mesh.primitives {
-        let base_vertex = mesh.vertices.len() as u32;
-
-        // 1. POSITION attribute
-        let pos_accessor_idx = prim
-            .attributes
-            .get("POSITION")
-            .copied()
-            .ok_or_else(|| "Missing POSITION attribute in glTF primitive".to_string())?;
-        let pos_acc = root
-            .accessors
-            .get(pos_accessor_idx)
-            .ok_or_else(|| "Invalid POSITION accessor".to_string())?;
-        let pos_view_idx = pos_acc
-            .buffer_view
-            .ok_or_else(|| "POSITION accessor has no bufferView".to_string())?;
-
-        let vertex_count = pos_acc.count;
-        let pos_bytes = read_buffer(pos_view_idx, pos_acc.byte_offset, vertex_count * 12)?;
-        for chunk in pos_bytes.as_chunks::<12>().0 {
-            let x = f32::from_le_bytes(chunk[0..4].try_into().unwrap());
-            let y = f32::from_le_bytes(chunk[4..8].try_into().unwrap());
-            let z = f32::from_le_bytes(chunk[8..12].try_into().unwrap());
-            mesh.vertices.push([x, y, z]);
-            mesh.bbox_min[0] = mesh.bbox_min[0].min(x);
-            mesh.bbox_min[1] = mesh.bbox_min[1].min(y);
-            mesh.bbox_min[2] = mesh.bbox_min[2].min(z);
-            mesh.bbox_max[0] = mesh.bbox_max[0].max(x);
-            mesh.bbox_max[1] = mesh.bbox_max[1].max(y);
-            mesh.bbox_max[2] = mesh.bbox_max[2].max(z);
-        }
-
-        // 2. NORMAL attribute (optional)
-        if let Some(&norm_acc_idx) = prim.attributes.get("NORMAL") {
-            if let Some(norm_acc) = root.accessors.get(norm_acc_idx) {
-                if let Some(norm_view_idx) = norm_acc.buffer_view {
-                    if let Ok(norm_bytes) =
-                        read_buffer(norm_view_idx, norm_acc.byte_offset, vertex_count * 12)
-                    {
-                        for chunk in norm_bytes.as_chunks::<12>().0 {
-                            let nx = f32::from_le_bytes(chunk[0..4].try_into().unwrap());
-                            let ny = f32::from_le_bytes(chunk[4..8].try_into().unwrap());
-                            let nz = f32::from_le_bytes(chunk[8..12].try_into().unwrap());
-                            mesh.normals.push([nx, ny, nz]);
-                        }
-                    }
-                }
-            }
-        }
-        // Pad normals if missing
-        while mesh.normals.len() < mesh.vertices.len() {
-            mesh.normals.push([0.0, 1.0, 0.0]);
-        }
-
-        // 3. TEXCOORD_0 attribute (optional)
-        if let Some(&uv_acc_idx) = prim.attributes.get("TEXCOORD_0") {
-            if let Some(uv_acc) = root.accessors.get(uv_acc_idx) {
-                if let Some(uv_view_idx) = uv_acc.buffer_view {
-                    if let Ok(uv_bytes) =
-                        read_buffer(uv_view_idx, uv_acc.byte_offset, vertex_count * 8)
-                    {
-                        for chunk in uv_bytes.as_chunks::<8>().0 {
-                            let u = f32::from_le_bytes(chunk[0..4].try_into().unwrap());
-                            let v = f32::from_le_bytes(chunk[4..8].try_into().unwrap());
-                            mesh.uvs.push([u, v]);
-                        }
-                    }
-                }
-            }
-        }
-        // Pad UVs if missing
-        while mesh.uvs.len() < mesh.vertices.len() {
-            mesh.uvs.push([0.0, 0.0]);
-        }
-
-        // 4. Indices (Triangles)
-        let mat_idx = prim.material.unwrap_or(0);
-        if let Some(idx_acc_idx) = prim.indices {
-            let idx_acc = root
-                .accessors
-                .get(idx_acc_idx)
-                .ok_or_else(|| "Invalid index accessor".to_string())?;
-            let idx_view_idx = idx_acc
-                .buffer_view
-                .ok_or_else(|| "Index accessor has no bufferView".to_string())?;
-
-            match idx_acc.component_type {
-                5123 => {
-                    // USHORT (16-bit)
-                    let raw = read_buffer(idx_view_idx, idx_acc.byte_offset, idx_acc.count * 2)?;
-                    for chunk in raw.as_chunks::<2>().0 {
-                        let i = u16::from_le_bytes(*chunk) as u32;
-                        mesh.indices.push(base_vertex + i);
-                    }
-                }
-                5125 => {
-                    // UINT (32-bit)
-                    let raw = read_buffer(idx_view_idx, idx_acc.byte_offset, idx_acc.count * 4)?;
-                    for chunk in raw.as_chunks::<4>().0 {
-                        let i = u32::from_le_bytes(*chunk);
-                        mesh.indices.push(base_vertex + i);
-                    }
-                }
-                5121 => {
-                    // UBYTE (8-bit)
-                    let raw = read_buffer(idx_view_idx, idx_acc.byte_offset, idx_acc.count)?;
-                    for &b in raw {
-                        mesh.indices.push(base_vertex + b as u32);
-                    }
-                }
-                other => return Err(format!("Unsupported index component type: {other}")),
-            }
-        } else {
-            // Non-indexed: sequentially generate triangles
-            for i in 0..vertex_count as u32 {
-                mesh.indices.push(base_vertex + i);
-            }
-        }
-
-        // Record material indices for triangles
-        let tri_count = mesh.indices.len() / 3;
-        while mesh.material_indices.len() < tri_count {
-            mesh.material_indices.push(mat_idx);
+fn validate_gltf_feature_support(root: &GltfRootJson) -> Result<(), String> {
+    if root.accessors.iter().any(|accessor| accessor.count == 0) {
+        return Err("glTF accessors must contain at least one element".into());
+    }
+    for extension in &root.extensions_required {
+        if extension != "KHR_texture_transform" {
+            return Err(format!("glTF requires unsupported extension `{extension}`"));
         }
     }
-
-    Ok(mesh)
+    if !root.animations.is_empty() {
+        return Err(
+            "Animated glTF assets are not supported by the static 3D layer importer".into(),
+        );
+    }
+    if root.nodes.iter().any(|node| node.skin.is_some()) {
+        return Err("Skinned glTF assets are not supported by the static 3D layer importer".into());
+    }
+    if root.nodes.iter().any(|node| node.weights.is_some())
+        || root.meshes.iter().any(|mesh| mesh.weights.is_some())
+        || root
+            .meshes
+            .iter()
+            .flat_map(|mesh| &mesh.primitives)
+            .any(|primitive| !primitive.targets.is_empty())
+    {
+        return Err("glTF morph targets are not supported by the static 3D layer importer".into());
+    }
+    if root
+        .meshes
+        .iter()
+        .flat_map(|mesh| &mesh.primitives)
+        .any(|primitive| {
+            primitive.attributes.keys().any(|attribute| {
+                attribute.starts_with("JOINTS_") || attribute.starts_with("WEIGHTS_")
+            })
+        })
+    {
+        return Err(
+            "glTF vertex skinning attributes are not supported by the static 3D layer importer"
+                .into(),
+        );
+    }
+    if root.materials.iter().any(|material| {
+        material.normal_texture.is_some()
+            || material.occlusion_texture.is_some()
+            || material.emissive_texture.is_some()
+            || material
+                .pbr_metallic_roughness
+                .as_ref()
+                .is_some_and(|pbr| pbr.metallic_roughness_texture.is_some())
+    }) {
+        return Err("glTF normal, occlusion, emissive, and metallic-roughness textures are not supported by the 3D renderer".into());
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -344,8 +645,15 @@ mod tests {
                 "name": "Triangle",
                 "primitives": [{
                     "attributes": {"POSITION": 0},
-                    "indices": 1
+                    "indices": 1,
+                    "material": 0
                 }]
+            }],
+            "materials": [{
+                "pbrMetallicRoughness": {
+                    "metallicFactor": 0.73,
+                    "roughnessFactor": 0.21
+                }
             }],
             "accessors": [
                 {
@@ -401,6 +709,9 @@ mod tests {
         assert_eq!(mesh.indices, vec![0, 1, 2]);
         assert_eq!(mesh.bbox_min, [0.0, 0.0, 0.0]);
         assert_eq!(mesh.bbox_max, [1.0, 1.0, 0.0]);
+        assert_eq!(mesh.material_indices, vec![0]);
+        assert_eq!(mesh.materials[0].metallic, 0.73);
+        assert_eq!(mesh.materials[0].roughness, 0.21);
     }
 
     #[test]
@@ -418,7 +729,7 @@ mod tests {
 
         // Pad JSON to 4-byte alignment
         let mut json_bytes = json_str.as_bytes().to_vec();
-        while json_bytes.len() % 4 != 0 {
+        while !json_bytes.len().is_multiple_of(4) {
             json_bytes.push(0x20); // space padding for JSON
         }
         // Pad BIN to 4-byte alignment

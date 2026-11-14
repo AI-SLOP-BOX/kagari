@@ -18,6 +18,13 @@ fn write_gray_webp(path: &std::path::Path, gray: u8) {
         .expect("save webp");
 }
 
+fn write_rgba_webp(path: &std::path::Path, color: [u8; 4]) {
+    let image = image::RgbaImage::from_pixel(4, 4, image::Rgba(color));
+    image::DynamicImage::ImageRgba8(image)
+        .save_with_format(path, image::ImageFormat::WebP)
+        .expect("save RGBA WebP");
+}
+
 include!("tests/cases_01.rs");
 include!("tests/cases_02.rs");
 include!("tests/cases_03.rs");
@@ -114,6 +121,19 @@ mod cancel_tests {
             .filter(|&i| pixels2[i] > 100)
             .count();
         assert!(bright2 > 0, "un-cancelled render must composite layers");
+    }
+
+    #[test]
+    fn pre_cancelled_render_returns_the_composition_background() {
+        let mut comp = busy_comp(10);
+        comp.background_color = [0.2, 0.4, 0.6, 0.8];
+        let flag = Arc::new(AtomicBool::new(true));
+
+        let pixels =
+            with_render_cancel_flag(flag, || render_frame_to_pixels(&comp, 0, 64, 64, 0.0, 0));
+
+        assert_eq!(pixels.len(), 64 * 64 * 4);
+        assert_eq!(&pixels[..4], &[51, 102, 153, 204]);
     }
 
     #[test]

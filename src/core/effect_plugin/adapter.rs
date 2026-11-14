@@ -301,19 +301,19 @@ pub fn evaluate_effects(effects: &[crate::core::timeline::Effect], frame: u32) -
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GpuEffectSlot {
-    // Execution order in fs_main:
-    // 0. Spatial UV distortion (sample_layer_color line 359)
+    // Reserved until spatial effects pass full-frame GPU/software parity for
+    // every animated parameter. They currently use the CPU preview fallback.
     Distortion = 0,
-    // 1. ColorTint (line 777)
-    ColorTint = 1,
-    // 2. Levels (line 868)
-    Levels = 2,
-    // 3. Invert (line 930)
-    Invert = 3,
-    // 4. Posterize (line 940)
-    Posterize = 4,
-    // LensFlare is handled as additive lighting pass
-    LensFlare = 5,
+    // 1. Lens flare inside sample_layer_color (line 655)
+    LensFlare = 1,
+    // 2. ColorTint after sample_layer_color (line 777)
+    ColorTint = 2,
+    // 3. Levels (line 868)
+    Levels = 3,
+    // 4. Invert (line 930)
+    Invert = 4,
+    // 5. Posterize (line 940)
+    Posterize = 5,
 }
 
 impl GpuEffectSlot {
@@ -332,22 +332,16 @@ pub fn gpu_preview_effect_supported(effect: &EffectType) -> bool {
 /// Returns the specific GPU shader pipeline slot for an effect, or None if unsupported on GPU preview.
 pub fn gpu_preview_effect_slot(effect: &EffectType) -> Option<GpuEffectSlot> {
     match effect {
-        EffectType::TurbulentDisplace { .. }
-        | EffectType::WaveWarp { .. }
-        | EffectType::Twirl { .. }
-        | EffectType::Bulge { .. }
-        | EffectType::Spherize { .. }
-        | EffectType::HeatDistortion { .. } => Some(GpuEffectSlot::Distortion),
+        EffectType::LensFlare {
+            link_to_light: None,
+            ..
+        } => Some(GpuEffectSlot::LensFlare),
         EffectType::ColorTint { .. } => Some(GpuEffectSlot::ColorTint),
         EffectType::Levels { .. } => Some(GpuEffectSlot::Levels),
         EffectType::Invert {
             invert_alpha: false,
         } => Some(GpuEffectSlot::Invert),
         EffectType::Posterize { .. } => Some(GpuEffectSlot::Posterize),
-        EffectType::LensFlare {
-            link_to_light: None,
-            ..
-        } => Some(GpuEffectSlot::LensFlare),
         _ => None,
     }
 }

@@ -8,13 +8,23 @@ impl WgpuRenderer {
         layer_id: &str,
         frames_dir: &str,
         frame_idx: u32,
+        next_frame_idx: Option<u32>,
         version: u64,
     ) -> Option<(u32, u32, std::sync::Arc<wgpu::BindGroup>)> {
         let frame_path = crate::core::video_import::frame_path_in_dir(frames_dir, frame_idx);
         let source_revision = media_file_revision(&frame_path);
+        let next_frame_path = next_frame_idx.map(|index| {
+            crate::core::video_import::frame_path_in_dir(frames_dir, index)
+                .to_string_lossy()
+                .into_owned()
+        });
+        let next_revision = next_frame_path
+            .as_deref()
+            .map(|path| media_file_revision(std::path::Path::new(path)))
+            .unwrap_or_default();
         let key: VideoFrameKey = (
             layer_id.to_string(),
-            format!("{frames_dir}:{source_revision}"),
+            format!("{frames_dir}:{source_revision}:{next_revision}"),
             frame_idx,
         );
         // Re-imports write into the same frames_dir; the version check ensures
@@ -27,14 +37,14 @@ impl WgpuRenderer {
             return Some((width, height, bg));
         }
         let frame_path = frame_path.to_string_lossy().to_string();
-        let (tw, th, pixels) = {
-            use crate::core::image_cache::with_image_cache;
-            with_image_cache(|cache| {
-                cache
-                    .load_image(&frame_path)
-                    .map(|img| (img.width, img.height, img.pixels.clone()))
-            })
-        }?;
+        let first = crate::core::image_cache::load_image_shared(&frame_path)?;
+        let (tw, th) = (first.width, first.height);
+        let pixels = first.pixels.clone();
+        let next_pixels = next_frame_path
+            .as_deref()
+            .and_then(crate::core::image_cache::load_image_shared)
+            .filter(|image| image.width == tw && image.height == th)
+            .map(|image| image.pixels.clone());
 
         let size = wgpu::Extent3d {
             width: tw,
@@ -51,6 +61,7 @@ impl WgpuRenderer {
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
+        let upload_bytes = rgba8_to_rgba16f_bytes(&pixels)?;
         self.queue.write_texture(
             wgpu::ImageCopyTexture {
                 texture: &texture,
@@ -58,7 +69,7 @@ impl WgpuRenderer {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            &rgba8_to_rgba16f_bytes(&pixels),
+            &upload_bytes,
             wgpu::ImageDataLayout {
                 offset: 0,
                 bytes_per_row: Some(tw * 8),
@@ -67,6 +78,38 @@ impl WgpuRenderer {
             size,
         );
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let (next_texture, next_view) = if let Some(next_pixels) = next_pixels {
+            let next_texture = self.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("Video Frame Blend Texture"),
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba16Float,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            });
+            let next_upload_bytes = rgba8_to_rgba16f_bytes(&next_pixels)?;
+            self.queue.write_texture(
+                wgpu::ImageCopyTexture {
+                    texture: &next_texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                &next_upload_bytes,
+                wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(tw * 8),
+                    rows_per_image: Some(th),
+                },
+                size,
+            );
+            let next_view = next_texture.create_view(&wgpu::TextureViewDescriptor::default());
+            (Some(std::sync::Arc::new(next_texture)), Some(next_view))
+        } else {
+            (None, None)
+        };
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &self.texture_bind_group_layout,
             entries: &[
@@ -78,6 +121,16 @@ impl WgpuRenderer {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(&self.sampler),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(
+                        next_view.as_ref().unwrap_or(&view),
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
             ],
             label: Some("video_frame_bind_group"),
         });
@@ -86,6 +139,7 @@ impl WgpuRenderer {
             self.video_frame_cache.borrow_mut().insert(
                 key,
                 std::sync::Arc::new(texture),
+                next_texture,
                 bind_group.clone(),
                 tw,
                 th,
@@ -117,14 +171,9 @@ impl WgpuRenderer {
             return Some((width, height, bg));
         }
 
-        let (tw, th, pixels) = {
-            use crate::core::image_cache::with_image_cache;
-            with_image_cache(|cache| {
-                cache
-                    .load_image(path)
-                    .map(|img| (img.width, img.height, img.pixels.clone()))
-            })?
-        };
+        let image = crate::core::image_cache::load_image_shared(path)?;
+        let (tw, th, pixels) = (image.width, image.height, image.pixels.clone());
+        let upload_bytes = rgba8_to_rgba16f_bytes(&pixels)?;
         let size = wgpu::Extent3d {
             width: tw,
             height: th,
@@ -147,7 +196,7 @@ impl WgpuRenderer {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            &rgba8_to_rgba16f_bytes(&pixels),
+            &upload_bytes,
             wgpu::ImageDataLayout {
                 offset: 0,
                 bytes_per_row: Some(tw * 8),
@@ -167,6 +216,14 @@ impl WgpuRenderer {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(&self.sampler),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
             ],
             label: Some("image_layer_bind_group"),
         });
@@ -174,6 +231,7 @@ impl WgpuRenderer {
         self.video_frame_cache.borrow_mut().insert(
             key,
             std::sync::Arc::new(texture),
+            None,
             bind_group.clone(),
             tw,
             th,
@@ -220,6 +278,7 @@ impl WgpuRenderer {
         if pixels.len() != crate::core::software_renderer::rgba_buffer_size(width, height)? {
             return None;
         }
+        let upload_bytes = rgba8_to_rgba16f_bytes(&pixels)?;
 
         let size = wgpu::Extent3d {
             width,
@@ -243,7 +302,7 @@ impl WgpuRenderer {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            &rgba8_to_rgba16f_bytes(&pixels),
+            &upload_bytes,
             wgpu::ImageDataLayout {
                 offset: 0,
                 bytes_per_row: Some(width * 8),
@@ -263,6 +322,14 @@ impl WgpuRenderer {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(&self.sampler),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
             ],
             label: Some("precomp_frame_bind_group"),
         });
@@ -270,6 +337,7 @@ impl WgpuRenderer {
         self.video_frame_cache.borrow_mut().insert(
             key,
             std::sync::Arc::new(texture),
+            None,
             bind_group.clone(),
             width,
             height,

@@ -115,6 +115,7 @@ fn roto_output_is_binary_for_binary_input() {
     let stroke = RotoStroke {
         stroke_type: RotoStrokeType::Background,
         points: vec![[1.0, 1.0]],
+        pressures: Vec::new(),
         radius: 1.0,
         frame: None,
     };
@@ -315,10 +316,8 @@ fn particle_sphere_emitter_positions_are_within_radius() {
 }
 #[test]
 fn obj_empty_and_comments_are_safe() {
-    let mesh = parse_obj_str("# only comments\n\n").unwrap();
-    assert!(mesh.vertices.is_empty());
-    assert!(mesh.indices.is_empty());
-    assert!(mesh.ray_intersect([0.0; 3], [1.0, 0.0, 0.0]).is_none());
+    let error = parse_obj_str("# only comments\n\n").unwrap_err();
+    assert!(error.contains("no renderable faces"));
 }
 #[test]
 fn color_16_bit_expansion_is_exact() {
@@ -338,6 +337,7 @@ fn roto_matte_is_deterministic() {
     let strokes = vec![RotoStroke {
         stroke_type: RotoStrokeType::Foreground,
         points: vec![[4.0, 4.0], [8.0, 8.0]],
+        pressures: Vec::new(),
         radius: 2.0,
         frame: None,
     }];

@@ -277,6 +277,7 @@ fn test_shape_ellipse_renders_pixels() {
         30,
     );
     layer.transform.position = crate::core::property::Animatable::new_constant([32.0, 32.0]);
+    layer.transform.anchor_point = crate::core::property::Animatable::new_constant([32.0, 32.0]);
     comp.layers.push(layer);
 
     let pixels = render_frame_to_pixels(&comp, 0, 64, 64, 0.0, 0);
@@ -318,6 +319,7 @@ fn test_shape_rectangle_renders_pixels() {
         30,
     );
     layer.transform.position = crate::core::property::Animatable::new_constant([32.0, 32.0]);
+    layer.transform.anchor_point = crate::core::property::Animatable::new_constant([32.0, 32.0]);
     comp.layers.push(layer);
 
     let pixels = render_frame_to_pixels(&comp, 0, 64, 64, 0.0, 0);

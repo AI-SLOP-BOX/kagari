@@ -49,7 +49,10 @@ pub(super) fn apply(
                     );
                 }
                 None => {
-                    let fallback = pixels.to_vec();
+                    let Some(fallback) = crate::core::software_renderer::try_clone_buffer(pixels)
+                    else {
+                        return true;
+                    };
                     crate::core::set_matte::apply_set_matte(
                         pixels, width, height, &fallback, width, height, &params,
                     );
@@ -94,7 +97,10 @@ pub(super) fn apply(
                         *operator,
                     );
                 } else {
-                    let echo_copy = pixels.to_vec();
+                    let Some(echo_copy) = crate::core::software_renderer::try_clone_buffer(pixels)
+                    else {
+                        return true;
+                    };
                     crate::core::echo_effect::blend_echo_frame(
                         pixels, &echo_copy, width, height, weight, *operator,
                     );

@@ -8,7 +8,7 @@ mod gpu_mask_tests {
 
     #[test]
     fn evenodd_fill_rect_interior_only() {
-        let cov = rasterize_polygon_evenodd(&rect(2.0, 2.0, 4.0, 4.0), 8, 8);
+        let cov = rasterize_polygon_evenodd(&rect(2.0, 2.0, 4.0, 4.0), 8, 8).unwrap();
         assert_eq!(cov.len(), 64);
         let get = |px: usize, py: usize| cov[py * 8 + px];
         assert_eq!(get(3, 3), 1.0, "interior must be covered");
@@ -17,8 +17,24 @@ mod gpu_mask_tests {
     }
 
     #[test]
+    fn evenodd_fill_includes_pixel_centers_on_polygon_boundaries() {
+        let poly = rect(2.5, 2.5, 3.005, 3.0);
+        let cov = rasterize_polygon_evenodd(&poly, 8, 8).unwrap();
+        assert_eq!(
+            cov[3 * 8 + 5],
+            1.0,
+            "a pixel center within the CPU's boundary tolerance is covered"
+        );
+        assert_eq!(
+            cov[5 * 8 + 3],
+            1.0,
+            "a pixel center exactly on the bottom edge is covered by the CPU reference"
+        );
+    }
+
+    #[test]
     fn degenerate_polygon_yields_no_coverage() {
-        let cov = rasterize_polygon_evenodd(&[[0.0, 0.0], [5.0, 5.0]], 8, 8);
+        let cov = rasterize_polygon_evenodd(&[[0.0, 0.0], [5.0, 5.0]], 8, 8).unwrap();
         assert!(cov.iter().all(|&c| c == 0.0));
     }
 
@@ -167,7 +183,7 @@ mod gpu_mask_tests {
             false, false, false, false, false, true, false, false, false, false, false, false,
             false, false, false, false,
         ];
-        let d = edt_2d(&bin, 4, 4, true);
+        let d = edt_2d(&bin, 4, 4, true).unwrap();
         assert_eq!(d[4 + 1], 0.0);
         assert_eq!(d[4 + 2], 1.0);
         assert!((d[2 * 4 + 2] - std::f32::consts::SQRT_2).abs() < 1e-5);
@@ -184,7 +200,7 @@ mod gpu_mask_tests {
             feather: 0.0,
         }];
         let out = combine_mask_shapes(&shapes, 8, 8).expect("mask present");
-        let raw = rasterize_polygon_evenodd(&rect(2.0, 2.0, 4.0, 4.0), 8, 8);
+        let raw = rasterize_polygon_evenodd(&rect(2.0, 2.0, 4.0, 4.0), 8, 8).unwrap();
         for (a, b) in raw.iter().zip(out.iter()) {
             assert_eq!(a, b, "zero feather must keep binary coverage intact");
         }
@@ -192,8 +208,8 @@ mod gpu_mask_tests {
 
     #[test]
     fn feather_creates_ramp_centered_on_boundary() {
-        // Rect with > feather/2 margins on every side so the probe saturates.
-        let poly = rect(4.0, 4.0, 14.0, 8.0);
+        // Keep the probe more than one feather radius from every side.
+        let poly = rect(4.0, 2.0, 14.0, 12.0);
         let shapes = [MaskShape {
             poly,
             mode: crate::core::mask::MaskMode::Add,
@@ -213,15 +229,28 @@ mod gpu_mask_tests {
             "ramp symmetric around edge"
         );
     }
+
+    #[test]
+    fn feather_keeps_subpixel_width_paths_visible() {
+        let poly = [[3.1, 1.0], [3.2, 1.0], [3.2, 7.0], [3.1, 7.0]];
+        let binary = rasterize_polygon_evenodd(&poly, 8, 8).unwrap();
+        assert!(binary.iter().all(|coverage| *coverage == 0.0));
+
+        let feathered = feather_coverage(&binary, &poly, 8, 8, 1.0).unwrap();
+
+        assert!(feathered[3 * 8 + 3] > 0.0);
+        assert_eq!(feathered[3 * 8 + 5], 0.0);
+    }
 }
 
 /// End-to-end parity checks between the CPU reference renderer's mask
 /// handling and this file's coverage rasterizer (which feeds the GPU path).
 ///
-/// Known CPU divergences (documented, not asserted here): the software
-/// renderer honors only the FIRST enabled non-None mask and ignores
-/// mode-based combining, per-mask opacity, expansion, and wiggle — the GPU
-/// rasterizer implements the full superset.
+/// CPU and GPU both combine mask modes and per-mask opacity. Expansion and
+/// wiggle require the software path, as enforced by `render_capability`.
+/// Their base rasterization and feathering use different sampling methods
+/// (continuous polygon distance on CPU, pixel-grid distance transform on GPU),
+/// so these checks assert interior/exterior semantics rather than edge parity.
 #[cfg(test)]
 mod cpu_parity_tests {
     use super::*;
@@ -243,6 +272,8 @@ mod cpu_parity_tests {
             30,
         );
         layer.transform.position = crate::core::property::Animatable::new_constant([32.0, 32.0]);
+        layer.transform.anchor_point =
+            crate::core::property::Animatable::new_constant([32.0, 32.0]);
         let mut mask = Mask::new_rect("m".into(), "M".into(), 8.0, 8.0, 24.0, 40.0);
         mask.mode = mode;
         mask.inverted = inverted;

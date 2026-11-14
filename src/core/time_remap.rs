@@ -50,19 +50,45 @@ pub fn loop_keyframes(
     let mut keyframes = Vec::with_capacity(key_count as usize);
     let mut time = u64::from(in_frame);
     for _ in 0..iterations {
-        let push = |frame: u64, value: f32, keyframes: &mut Vec<Keyframe<f32>>| {
+        let push = |frame: u64,
+                    value: f32,
+                    interpolation: InterpolationType,
+                    keyframes: &mut Vec<Keyframe<f32>>| {
             keyframes.push(Keyframe::new(
                 frame.min(u64::from(u32::MAX)) as u32,
                 value,
-                InterpolationType::Linear,
+                interpolation,
             ));
         };
-        push(time, 0.0, &mut keyframes);
-        push(time + source_duration - 1, source_end, &mut keyframes);
+        push(time, 0.0, InterpolationType::Linear, &mut keyframes);
+        // A cycle is discontinuous at the wrap point. Holding the last source
+        // frame until the next cycle starts prevents fractional-time sampling
+        // from interpolating backwards through the entire source in one frame.
+        let cycle_end_interpolation = if mode == LoopMode::Cycle {
+            InterpolationType::Hold
+        } else {
+            InterpolationType::Linear
+        };
+        push(
+            time + source_duration - 1,
+            source_end,
+            cycle_end_interpolation,
+            &mut keyframes,
+        );
         if mode == LoopMode::PingPong {
             let reverse_start = time + source_duration;
-            push(reverse_start, source_end, &mut keyframes);
-            push(reverse_start + source_duration - 1, 0.0, &mut keyframes);
+            push(
+                reverse_start,
+                source_end,
+                InterpolationType::Linear,
+                &mut keyframes,
+            );
+            push(
+                reverse_start + source_duration - 1,
+                0.0,
+                InterpolationType::Linear,
+                &mut keyframes,
+            );
         }
         time += step;
     }

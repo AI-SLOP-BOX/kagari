@@ -5,7 +5,15 @@ impl WgpuRenderer {
         // Shaders compile
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Renderer Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../shader.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                concat!(
+                    include_str!("../shader/types.wgsl"),
+                    include_str!("../shader/sampling.wgsl"),
+                    include_str!("../shader/layer_styles.wgsl"),
+                    include_str!("../shader/fragment.wgsl"),
+                )
+                .into(),
+            ),
         });
 
         // Buffers
@@ -84,6 +92,22 @@ impl WgpuRenderer {
                     // Diffuse sampler
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
                         visibility: wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
@@ -360,6 +384,14 @@ impl WgpuRenderer {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(&sampler),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&dummy_texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
             ],
             label: Some("dummy_texture_bind_group"),
         });
@@ -436,11 +468,14 @@ impl WgpuRenderer {
         let render_pipeline =
             create_pipeline("Render Pipeline", Some(wgpu::BlendState::ALPHA_BLENDING));
 
-        // Pipeline (Screen: final = S*Sa + D*(1 - S*Sa))
+        // Screen in premultiplied form is `D + S_premul * (1 - D)`.
+        // The shader premultiplies the source, so the source factor must use
+        // the destination color; using OneMinusSrc incorrectly implements an
+        // opacity-dependent additive blend instead of Screen.
         let screen_blend = wgpu::BlendState {
             color: wgpu::BlendComponent {
-                src_factor: wgpu::BlendFactor::One,
-                dst_factor: wgpu::BlendFactor::OneMinusSrc,
+                src_factor: wgpu::BlendFactor::OneMinusDst,
+                dst_factor: wgpu::BlendFactor::One,
                 operation: wgpu::BlendOperation::Add,
             },
             alpha: wgpu::BlendComponent::OVER,

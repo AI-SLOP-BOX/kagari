@@ -14,12 +14,14 @@ fn roto_brush_strokes_survive_layer_roundtrip() {
     layer.roto_brush_strokes.push(RotoStroke {
         stroke_type: RotoStrokeType::Foreground,
         points: vec![[12.0, 8.0], [14.0, 9.0]],
+        pressures: vec![0.25, 0.7],
         radius: 6.0,
         frame: Some(12),
     });
     layer.roto_brush_strokes.push(RotoStroke {
         stroke_type: RotoStrokeType::Background,
         points: vec![[2.0, 4.0]],
+        pressures: Vec::new(),
         radius: 3.0,
         frame: Some(13),
     });
@@ -35,6 +37,7 @@ fn roto_brush_strokes_survive_layer_roundtrip() {
         restored.roto_brush_strokes[0].points,
         vec![[12.0, 8.0], [14.0, 9.0]]
     );
+    assert_eq!(restored.roto_brush_strokes[0].pressures, vec![0.25, 0.7]);
     assert_eq!(restored.roto_brush_strokes[0].frame, Some(12));
 }
 

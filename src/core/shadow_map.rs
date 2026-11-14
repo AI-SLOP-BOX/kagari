@@ -174,7 +174,7 @@ pub fn calculate_surface_shading(
         }
 
         // Shadow factor
-        let shadow = if material.cast_shadows && light.casts_shadows {
+        let shadow = if material.accepts_shadows && light.casts_shadows {
             if let Some(sm) = shadow_map {
                 sm.sample_shadow_pcf(world_pos[0], world_pos[1], world_pos[2], 0.05)
             } else {
@@ -285,11 +285,7 @@ pub fn ray_intersect_quad(
         }
     }
 
-    if inside {
-        Some(t)
-    } else {
-        None
-    }
+    if inside { Some(t) } else { None }
 }
 
 /// Evaluates ray-traced soft shadows with penumbra from area lights by shooting stochastic shadow rays.

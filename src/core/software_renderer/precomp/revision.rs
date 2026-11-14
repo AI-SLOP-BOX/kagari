@@ -7,28 +7,16 @@ pub(crate) fn composition_content_revision(comp: &Composition, frame: u32) -> u6
         path: &std::path::Path,
         hasher: &mut std::collections::hash_map::DefaultHasher,
     ) {
-        path.hash(hasher);
-        match std::fs::metadata(path) {
-            Ok(metadata) => {
-                metadata.len().hash(hasher);
-                metadata
-                    .modified()
-                    .ok()
-                    .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
-                    .map(|duration| duration.as_nanos())
-                    .hash(hasher);
-            }
-            Err(error) => error.kind().hash(hasher),
-        }
+        crate::core::media_revision::media_file_revision(path).hash(hasher);
     }
 
     fn hash_composition_media(
         comp: &Composition,
         frame: u32,
-        visited: &mut std::collections::HashSet<String>,
+        recursion_stack: &mut std::collections::HashSet<String>,
         hasher: &mut std::collections::hash_map::DefaultHasher,
     ) {
-        if !visited.insert(comp.id.clone()) {
+        if !recursion_stack.insert(comp.id.clone()) {
             return;
         }
         let has_solo = comp
@@ -53,14 +41,37 @@ pub(crate) fn composition_content_revision(comp: &Composition, frame: u32) -> u6
                         }
                     }
                 }
-                LayerType::Video { frames_dir, .. } => {
-                    let frame_path =
-                        crate::core::video_import::frame_path_in_dir(frames_dir, source_frame);
-                    hash_media_path(&frame_path, hasher);
-                    if super::super::preview_proxy_active() {
-                        if let Some(proxy) = super::super::preview_proxy_path(layer, source_frame) {
-                            hash_media_path(std::path::Path::new(&proxy), hasher);
-                        }
+                LayerType::Video {
+                    frames_dir,
+                    frame_count,
+                    speed,
+                    ..
+                } => {
+                    let remapped_source_frame = match &layer.posterize_time {
+                        Some(settings) if settings.enabled => source_frame as f32,
+                        _ => layer.remap_frame_f32(frame),
+                    };
+                    let source_position = crate::core::timeline::video_sequence_frame(
+                        remapped_source_frame,
+                        *speed,
+                        frames_dir,
+                        comp.fps,
+                    );
+                    let last_frame = frame_count.saturating_sub(1);
+                    let first_frame = (source_position.floor() as u32).min(last_frame);
+                    let second_frame = first_frame.saturating_add(1).min(last_frame);
+                    let proxy = super::super::preview_proxy_active()
+                        .then(|| super::super::preview_proxy_path(layer, first_frame))
+                        .flatten();
+                    let first_path = proxy.as_deref().map_or_else(
+                        || crate::core::video_import::frame_path_in_dir(frames_dir, first_frame),
+                        std::path::PathBuf::from,
+                    );
+                    hash_media_path(&first_path, hasher);
+                    if layer.frame_blending && proxy.is_none() && second_frame != first_frame {
+                        let second_path =
+                            crate::core::video_import::frame_path_in_dir(frames_dir, second_frame);
+                        hash_media_path(&second_path, hasher);
                     }
                 }
                 LayerType::Model3D { path } => {
@@ -68,12 +79,13 @@ pub(crate) fn composition_content_revision(comp: &Composition, frame: u32) -> u6
                 }
                 LayerType::PreComp { comp_id } => {
                     if let Some(nested) = comp.find_sub_comp(comp_id) {
-                        hash_composition_media(nested, source_frame, visited, hasher);
+                        hash_composition_media(nested, source_frame, recursion_stack, hasher);
                     }
                 }
                 _ => {}
             }
         }
+        recursion_stack.remove(&comp.id);
     }
 
     let mut hasher = std::collections::hash_map::DefaultHasher::new();

@@ -12,6 +12,9 @@ pub enum RotoStrokeType {
 pub struct RotoStroke {
     pub stroke_type: RotoStrokeType,
     pub points: Vec<[f32; 2]>,
+    /// Per-point normalized pressure. Empty means legacy/full-pressure input.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pressures: Vec<f32>,
     pub radius: f32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub frame: Option<u32>,

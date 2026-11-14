@@ -1,5 +1,8 @@
 use super::*;
 
+const MAX_SUBTITLE_FILE_BYTES: u64 = 4 * 1024 * 1024;
+const MAX_SUBTITLE_CUES: usize = 20_000;
+
 impl AfterEffectsStudio {
     pub(crate) fn toggle_selected_text_on_path(&mut self) {
         let Some(id) = self.selected_layer_id.clone() else {
@@ -36,14 +39,49 @@ impl AfterEffectsStudio {
         else {
             return;
         };
-        let Ok(content) = std::fs::read_to_string(&path).map_err(|error| error) else {
-            self.asset_status = "字幕ファイルを読み込めませんでした。".to_owned();
-            return;
+        use std::io::Read;
+        let mut file = match std::fs::File::open(&path) {
+            Ok(file) => file,
+            Err(_) => {
+                self.asset_status = "字幕ファイルを読み込めませんでした。".to_owned();
+                return;
+            }
         };
+        let file_size = match file.metadata() {
+            Ok(metadata) => metadata.len(),
+            Err(_) => {
+                self.asset_status = "字幕ファイルのサイズを確認できませんでした。".to_owned();
+                return;
+            }
+        };
+        if file_size > MAX_SUBTITLE_FILE_BYTES {
+            self.asset_status = format!(
+                "字幕ファイルが上限の{} MiBを超えています。",
+                MAX_SUBTITLE_FILE_BYTES / (1024 * 1024)
+            );
+            return;
+        }
+        let mut content = String::new();
+        if Read::take(&mut file, MAX_SUBTITLE_FILE_BYTES + 1)
+            .read_to_string(&mut content)
+            .is_err()
+            || content.len() as u64 > MAX_SUBTITLE_FILE_BYTES
+        {
+            self.asset_status = format!(
+                "字幕ファイルは{} MiB以内のUTF-8テキストである必要があります。",
+                MAX_SUBTITLE_FILE_BYTES / (1024 * 1024)
+            );
+            return;
+        }
         let fps = self.project_model.active_composition().fps;
         let cues = kagari_vfx::core::subtitles::parse_srt(&content, fps.max(1));
         if cues.is_empty() {
             self.asset_status = "字幕キューが見つかりませんでした。".to_owned();
+            return;
+        }
+        if cues.len() > MAX_SUBTITLE_CUES {
+            self.asset_status =
+                format!("字幕キューが上限の{}件を超えています。", MAX_SUBTITLE_CUES);
             return;
         }
         let (width, height) = {

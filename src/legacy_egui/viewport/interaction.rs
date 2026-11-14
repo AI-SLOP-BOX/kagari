@@ -545,23 +545,37 @@ pub fn handle_viewport_interaction(
                     if let Some((composition_id, layer_id)) = target {
                         let project_session_id = app.project_session_id;
                         let history_generation = app.history.generation();
+                        let retry_recording = recording.clone();
                         let (sender, receiver) = std::sync::mpsc::channel();
-                        app.motion_sketch_bake_rx = Some(receiver);
-                        app.toasts.info("Motion Sketchをベイクしています…");
-                        let handle = std::thread::spawn(move || {
-                            let keyframes = crate::core::motion_sketch::build_position_keyframes(
-                                &recording, 2.0,
-                            );
-                            let _ = sender.send(crate::app_state::MotionSketchBakeResult {
-                                project_session_id,
-                                history_generation,
-                                composition_id,
-                                layer_id,
-                                raw_sample_count: recording_count,
-                                keyframes,
+                        let handle = std::thread::Builder::new()
+                            .name("kagari-motion-sketch-bake".into())
+                            .spawn(move || {
+                                let keyframes =
+                                    crate::core::motion_sketch::build_position_keyframes(
+                                        &recording, 2.0,
+                                    );
+                                let _ = sender.send(crate::app_state::MotionSketchBakeResult {
+                                    project_session_id,
+                                    history_generation,
+                                    composition_id,
+                                    layer_id,
+                                    raw_sample_count: recording_count,
+                                    keyframes,
+                                });
                             });
-                        });
-                        app.track_background_thread(handle);
+                        match handle {
+                            Ok(handle) => {
+                                app.motion_sketch_bake_rx = Some(receiver);
+                                app.toasts.info("Motion Sketchをベイクしています…");
+                                app.track_background_thread(handle);
+                            }
+                            Err(error) => {
+                                app.motion_sketch_recording = retry_recording;
+                                app.toasts.error(format!(
+                                    "Motion Sketchのベイクを開始できませんでした: {error}"
+                                ));
+                            }
+                        }
                     } else {
                         app.toasts
                             .warning("Motion Sketchの対象レイヤーが見つかりませんでした。");

@@ -14,6 +14,28 @@ pub(super) fn keyframes_are_strictly_ordered<T>(keyframes: &[Keyframe<T>]) -> bo
     keyframes
         .windows(2)
         .all(|pair| pair[0].frame < pair[1].frame)
+        && keyframes
+            .iter()
+            .all(|keyframe| match &keyframe.interpolation {
+                InterpolationType::Linear | InterpolationType::Hold => true,
+                InterpolationType::Bezier {
+                    outgoing,
+                    incoming,
+                    custom_bezier,
+                } => {
+                    outgoing.influence.is_finite()
+                        && (0.0..=1.0).contains(&outgoing.influence)
+                        && outgoing.speed.is_finite()
+                        && incoming.influence.is_finite()
+                        && (0.0..=1.0).contains(&incoming.influence)
+                        && incoming.speed.is_finite()
+                        && custom_bezier.is_none_or(|points| {
+                            points.iter().all(|point| point.is_finite())
+                                && (0.0..=1.0).contains(&points[0])
+                                && (0.0..=1.0).contains(&points[2])
+                        })
+                }
+            })
 }
 
 pub(super) fn scalar_animation_is_nonnegative(
@@ -159,11 +181,12 @@ pub(crate) fn particle_emitter_is_valid(
     finite.iter().all(|value| value.is_finite())
         && emitter.rate >= 0.0
         && emitter.max_particles > 0
-        && emitter.max_particles <= 10_000_000
+        && emitter.max_particles <= crate::core::particle_system::MAX_PARTICLES_PER_EMITTER
         && emitter.lifetime > 0.0
-        && emitter.lifetime_variance >= 0.0
+        && (0.0..=1.0).contains(&emitter.lifetime_variance)
         && emitter.speed >= 0.0
-        && emitter.speed_variance >= 0.0
+        && (0.0..=1.0).contains(&emitter.speed_variance)
+        && (0.0..=1.0).contains(&emitter.rotation_speed_variance)
         && (0.0..=360.0).contains(&emitter.spread_degrees)
         && emitter.emitter_size.iter().all(|value| *value >= 0.0)
         && (0.0..=1.0).contains(&emitter.color_start[3])

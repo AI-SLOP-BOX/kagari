@@ -57,9 +57,7 @@ component ProjectAssetPanel() {
       Caption("{selected_project_asset_details}")
     }
     If(has_project_assets) {
-      ScrollView(340) {
-        VStack(spacing: 2) {
-          ForEach(project_assets, asset, key: id) {
+      VirtualList(project_assets, asset, key: id, height: 340, row_height: 76, overscan: 5, variable_height: true) {
             HStack(spacing: 5) {
               If(asset.is_folder) { Icon("folder", 13) } else {
                 If(asset.kind == "動画" || asset.kind == "画像") { Icon("film", 13) } else {
@@ -93,8 +91,6 @@ component ProjectAssetPanel() {
               If(!asset.missing) { Caption("{asset.source}") } else { Caption("素材ファイルが見つかりません: {asset.source}") }
               If(asset.usage_count != "0") { Caption("{asset.usage_count} レイヤーで使用中") }
             }
-          }
-        }
       }
     } else {
       If(project_asset_search != "") { Caption("検索条件に一致するプロジェクト素材はありません。") } else {

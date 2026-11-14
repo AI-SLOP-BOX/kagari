@@ -93,21 +93,22 @@ fn multiple_gpu_effects_use_software_preview_to_preserve_stack_order() {
         30,
     );
     layer.effects.push(crate::core::timeline::Effect {
-        id: "invert".to_string(),
-        name: "Invert".to_string(),
-        effect_type: crate::core::timeline::EffectType::Invert {
-            invert_alpha: false,
-        },
-        enabled: true,
-    });
-    comp.layers.push(layer);
-    assert!(!software_preview_required(&comp, 0));
-
-    comp.layers[0].effects.push(crate::core::timeline::Effect {
         id: "posterize".to_string(),
         name: "Posterize".to_string(),
         effect_type: crate::core::timeline::EffectType::Posterize {
             levels: crate::core::property::Animatable::new_constant(8.0),
+        },
+        enabled: true,
+    });
+    layer.effects_enabled = true;
+    comp.layers.push(layer);
+    assert!(!software_preview_required(&comp, 0));
+
+    comp.layers[0].effects.push(crate::core::timeline::Effect {
+        id: "invert".to_string(),
+        name: "Invert".to_string(),
+        effect_type: crate::core::timeline::EffectType::Invert {
+            invert_alpha: false,
         },
         enabled: true,
     });
@@ -249,6 +250,7 @@ fn roto_stroke_analysis_runs_async_and_commits_strokes_with_the_matte() {
     let stroke = EngineRotoStroke {
         stroke_type: RotoStrokeType::Foreground,
         points: vec![[8.0, 16.0], [24.0, 16.0]],
+        pressures: Vec::new(),
         radius: 4.0,
         frame: Some(frame),
     };
@@ -318,6 +320,7 @@ fn roto_stroke_analysis_discards_results_if_the_source_layer_changes() {
     let stroke = EngineRotoStroke {
         stroke_type: RotoStrokeType::Foreground,
         points: vec![[8.0, 16.0], [24.0, 16.0]],
+        pressures: Vec::new(),
         radius: 4.0,
         frame: Some(frame),
     };

@@ -28,11 +28,11 @@ fn test_layer_uniform_memory_alignment() {
     let stride = LAYER_UNIFORM_STRIDE;
     assert!(size <= stride);
     assert_eq!(
-            stride % 256,
-            0,
-            "Layer uniform stride ({} bytes) must be a multiple of 256 for WGPU dynamic uniform offset alignment",
-            stride
-        );
+        stride % 256,
+        0,
+        "Layer uniform stride ({} bytes) must be a multiple of 256 for WGPU dynamic uniform offset alignment",
+        stride
+    );
     for align in [64, 256, 512] {
         assert_eq!(
             align_uniform_buffer_offset(stride as u64, align) % align as u64,
@@ -50,6 +50,26 @@ fn composition_cache_key_is_deterministic_and_separates_comps() {
     assert_ne!(
         composition_cache_key(&first),
         composition_cache_key(&changed)
+    );
+}
+
+#[test]
+fn composition_cache_key_changes_when_layer_blend_mode_changes() {
+    let mut normal = Composition::new("blend-key".into(), "Blend Key".into(), 16, 16, 30, 1);
+    normal.layers.push(crate::core::timeline::Layer::new(
+        "layer".into(),
+        "Layer".into(),
+        LayerType::Solid {
+            color: [0.2, 0.4, 0.6, 0.5],
+        },
+        1,
+    ));
+    let mut screen = normal.clone();
+    screen.layers[0].blend_mode = crate::core::timeline::BlendMode::Screen;
+
+    assert_ne!(
+        composition_cache_key(&normal),
+        composition_cache_key(&screen)
     );
 }
 

@@ -79,7 +79,7 @@ pub fn draw_particle_emitter_controls(app: &mut KagariApp, ui: &mut egui::Ui) {
             ui,
             "Speed Variation",
             &mut em.speed_variance,
-            0.0..=2.0,
+            0.0..=1.0,
             0.01,
             "",
         );

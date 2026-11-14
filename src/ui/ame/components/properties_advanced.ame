@@ -9,7 +9,7 @@ component MaskProperties() {
       Button("楕円", action: add_ellipse_mask, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
     }
     If(has_layer_masks) {
-      ForEach(layer_masks, mask, key: id) {
+      ForEach(layer_masks, mask, key: id, height: 150, row_height: 32, overscan: 4) {
         HStack(spacing: 4) {
           Button("{mask.name}", action: select_mask, tone: secondary, size: small, disabled: selected_layer_locked)
           Caption("{mask.mode}")
@@ -46,7 +46,7 @@ component LayerOptionsProperties() {
     HStack(spacing: 4) {
       Button("ガイドレイヤー", action: toggle_guide_layer, tone: secondary, size: small, disabled: selected_layer_locked)
       Button("シャイ", action: toggle_shy_layer, tone: secondary, size: small, disabled: selected_layer_locked)
-      If(selected_is_video) { Button("フレーム補間", action: toggle_frame_blending, tone: secondary, size: small, disabled: selected_layer_locked) }
+      If(selected_is_video) { If(layer_frame_blending) { Button("フレーム補間: ON", action: toggle_frame_blending, tone: secondary, size: small, disabled: selected_layer_locked) } else { Button("フレーム補間: OFF", action: toggle_frame_blending, tone: secondary, size: small, disabled: selected_layer_locked) } }
     }
     HStack(spacing: 4) {
       Button("モーションブラー", action: toggle_selected_layer_motion_blur, tone: secondary, size: small, disabled: selected_layer_locked)

@@ -65,6 +65,12 @@ pub fn start_comp_export(app: &mut crate::KagariApp, ctx: &egui::Context, comp_i
     let res_scale = ctx.data_mut(|d| {
         *d.get_temp_mut_or_insert_with(egui::Id::new("ae_export_res_scale"), || 1.0f32)
     });
+    let quality = ctx.data_mut(|data| {
+        *data.get_temp_mut_or_insert_with(egui::Id::new("ae_export_quality"), || 85u32)
+    });
+    let audio_bitrate_kbps = ctx.data_mut(|data| {
+        *data.get_temp_mut_or_insert_with(egui::Id::new("ae_export_audio_bitrate"), || 192u32)
+    });
 
     let output_path = if app.batch_queue.len() > 1 {
         batch_output_path(&app.export.export_output_path, &comp.name, &comp.id)
@@ -107,7 +113,7 @@ pub fn start_comp_export(app: &mut crate::KagariApp, ctx: &egui::Context, comp_i
         let (tx_ui, rx_ui) = std::sync::mpsc::channel();
         app.export.export_rx = Some(rx_ui);
         let export_document = production_document.clone();
-        crate::core::ffmpeg_export::start_png_sequence_export(
+        if let Some(handle) = crate::core::ffmpeg_export::start_png_sequence_export_tracked(
             dir,
             stem,
             render_w,
@@ -135,7 +141,9 @@ pub fn start_comp_export(app: &mut crate::KagariApp, ctx: &egui::Context, comp_i
                     px
                 }
             },
-        );
+        ) {
+            app.track_background_thread(handle);
+        }
         log::info!(
             "Spawned PNG sequence export for {}",
             app.export.export_output_path
@@ -157,6 +165,8 @@ pub fn start_comp_export(app: &mut crate::KagariApp, ctx: &egui::Context, comp_i
         fps: export_fps,
         total_frames: total_frames.max(1),
         codec,
+        quality: quality.min(100) as u8,
+        audio_bitrate_kbps: audio_bitrate_kbps.clamp(32, 512),
     };
 
     if let Some(old_flag) = app.export_cancel_flag.take() {
@@ -165,9 +175,8 @@ pub fn start_comp_export(app: &mut crate::KagariApp, ctx: &egui::Context, comp_i
     let cancel_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     app.export_cancel_flag = Some(cancel_flag.clone());
 
-    if crate::core::ffmpeg_export::is_ffmpeg_available() {
+    {
         let (tx_ui, rx_ui) = std::sync::mpsc::channel();
-        app.export.export_rx = Some(rx_ui);
         let audio_comp = comp.clone();
         let mixer_channels = app.audio_mixer_channels.clone();
         let master_dsp = app.master_dsp_params();
@@ -192,77 +201,99 @@ pub fn start_comp_export(app: &mut crate::KagariApp, ctx: &egui::Context, comp_i
                 px
             }
         };
-        let handle = std::thread::spawn(move || {
-            let mut config = config;
-            if include_audio && has_audio {
-                let audio_path = match crate::core::audio_engine::mix_composition_to_wav(
-                    &audio_comp,
-                    frame_offset,
-                    audio_end_frame,
-                    48_000,
-                    Some(&mixer_channels),
-                    &master_dsp,
+        let handle = std::thread::Builder::new()
+            .name("kagari-video-export-prepare".into())
+            .spawn(move || {
+                let mut config = config;
+                if include_audio && has_audio {
+                    let audio_path = match crate::core::audio_engine::mix_composition_to_wav_cancelable(
+                        &audio_comp,
+                        frame_offset,
+                        audio_end_frame,
+                        48_000,
+                        Some(&mixer_channels),
+                        &master_dsp,
+                        &cancel_flag,
+                    ) {
+                        Ok(Some(path)) => path,
+                        Ok(None) => {
+                            let _ = tx_ui.send(ExportEvent::Error(tr(
+                                "Audio sources were present, but no audio samples were produced",
+                            )));
+                            return;
+                        }
+                        Err(error) => {
+                            if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
+                                let _ = tx_ui.send(ExportEvent::Error(tr("Export canceled by user")));
+                                return;
+                            }
+                            let error = error.to_string();
+                            let _ = tx_ui.send(ExportEvent::Error(tr_format(
+                                "Unable to prepare the audio mix for export: {}",
+                                &[&error],
+                            )));
+                            return;
+                        }
+                    };
+                    config.audio_wav = Some(audio_path.to_string_lossy().into_owned());
+                }
+
+                let (tx_ff, rx_ff) = std::sync::mpsc::channel();
+                let mixed_wav = config.audio_wav.clone();
+                let ffmpeg_worker = match crate::core::ffmpeg_export::start_export_cancelable_with_overwrite_tracked(
+                    config,
+                    tx_ff,
+                    cancel_flag,
+                    true,
+                    frame_renderer,
                 ) {
-                    Ok(Some(path)) => path,
-                    Ok(None) => {
-                        let _ = tx_ui.send(ExportEvent::Error(tr(
-                            "Audio sources were present, but no audio samples were produced",
-                        )));
-                        return;
-                    }
+                    Ok(worker) => worker,
                     Err(error) => {
-                        let error = error.to_string();
-                        let _ = tx_ui.send(ExportEvent::Error(tr_format(
-                            "Unable to prepare the audio mix for export: {}",
-                            &[&error],
-                        )));
+                        if let Some(path) = mixed_wav {
+                            let _ = std::fs::remove_file(path);
+                        }
+                        let _ = tx_ui.send(ExportEvent::Error(error.to_string()));
                         return;
                     }
                 };
-                config.audio_wav = Some(audio_path.to_string_lossy().into_owned());
-            }
-
-            let (tx_ff, rx_ff) = std::sync::mpsc::channel();
-            let mixed_wav = config.audio_wav.clone();
-            if let Err(error) = crate::core::ffmpeg_export::start_export_cancelable(
-                config,
-                tx_ff,
-                cancel_flag,
-                frame_renderer,
-            ) {
+                while let Ok(evt) = rx_ff.recv() {
+                    let mapped = match evt {
+                        crate::core::ffmpeg_export::ExportEvent::Progress(p, m) => {
+                            ExportEvent::Progress(p, m)
+                        }
+                        crate::core::ffmpeg_export::ExportEvent::Finished(m) => {
+                            ExportEvent::Finished(m)
+                        }
+                        crate::core::ffmpeg_export::ExportEvent::Error(m) => ExportEvent::Error(m),
+                    };
+                    if tx_ui.send(mapped).is_err() {
+                        break;
+                    }
+                }
+                if ffmpeg_worker.join().is_err() {
+                    let _ = tx_ui.send(ExportEvent::Error(tr(
+                        "The FFmpeg export worker stopped unexpectedly",
+                    )));
+                }
                 if let Some(path) = mixed_wav {
                     let _ = std::fs::remove_file(path);
                 }
-                let _ = tx_ui.send(ExportEvent::Error(error.to_string()));
+            });
+        match handle {
+            Ok(handle) => {
+                app.export.export_rx = Some(rx_ui);
+                app.track_background_thread(handle);
+            }
+            Err(error) => {
+                app.export.is_exporting = false;
+                app.export.export_rx = None;
+                app.export_cancel_flag = None;
+                let message = tr_format("Could not start export worker: {}", &[&error.to_string()]);
+                app.export.export_status = Some(format!("Error: {message}"));
+                app.toasts.error(message);
                 return;
             }
-            while let Ok(evt) = rx_ff.recv() {
-                let mapped = match evt {
-                    crate::core::ffmpeg_export::ExportEvent::Progress(p, m) => {
-                        ExportEvent::Progress(p, m)
-                    }
-                    crate::core::ffmpeg_export::ExportEvent::Finished(m) => {
-                        ExportEvent::Finished(m)
-                    }
-                    crate::core::ffmpeg_export::ExportEvent::Error(m) => ExportEvent::Error(m),
-                };
-                if tx_ui.send(mapped).is_err() {
-                    break;
-                }
-            }
-            if let Some(path) = mixed_wav {
-                let _ = std::fs::remove_file(path);
-            }
-        });
-        app.track_background_thread(handle);
-    } else {
-        // A transform-only preview is not an export. Reporting success here
-        // used to leave users with a green toast and no file on disk.
-        app.export.is_exporting = false;
-        let message = tr("FFmpeg is required for video export. Install it and try again.");
-        app.export.export_status = Some(format!("Error: {message}"));
-        app.toasts.error(message);
-        return;
+        }
     }
 
     log::info!(

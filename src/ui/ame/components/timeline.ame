@@ -8,7 +8,7 @@ component TimelineRows() {
         Spacer
         Caption("スイッチ")
       }.frame(height: 22)
-      ForEach(timeline_layers, layer, key: id) {
+      ForEach(timeline_layers, layer, key: id, height: 420, row_height: 28, overscan: 8) {
         HStack(spacing: 1) {
           Caption("{layer.indent}")
           If(layer.has_children) { If(layer.collapsed) { IconButton("chevron_right", action: toggle_scene_group, tone: secondary, size: small) } else { IconButton("chevron_down", action: toggle_scene_group, tone: secondary, size: small) } } else { Icon("tree_branch", 12) }

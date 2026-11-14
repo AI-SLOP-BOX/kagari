@@ -37,7 +37,7 @@ pub fn save_custom_text(key: &str, replacement: &str) {
     }
     let path = overrides_file_path();
     if let Ok(json) = serde_json::to_string_pretty(&map) {
-        let _ = std::fs::write(&path, json);
+        let _ = crate::core::atomic_file::write_atomic(&path, json.as_bytes());
     }
     if let Ok(mut lock) = CUSTOM_OVERRIDES.write() {
         *lock = Some(map);

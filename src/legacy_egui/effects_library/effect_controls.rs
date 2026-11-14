@@ -459,7 +459,7 @@ pub(crate) fn draw_effect_controls(
         // Show saved presets from default directory
         let preset_dir = crate::core::effect_presets::default_preset_dir();
         if preset_dir.is_dir() {
-            let presets = crate::core::effect_presets::discover_presets_in_dir(&preset_dir);
+            let presets = crate::core::effect_presets::discover_presets_in_dir_cached(&preset_dir);
             if !presets.is_empty() {
                 ui.collapsing(format!("Saved Presets ({})", presets.len()), |ui| {
                     for (name, path) in &presets {

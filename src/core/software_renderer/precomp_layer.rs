@@ -20,7 +20,10 @@ pub(crate) struct PreCompLayerCtx<'a> {
     pub sorted_idx: usize,
 }
 
-pub(crate) fn render_precomp_layer(buffer: &mut [u8], ctx: PreCompLayerCtx<'_>) -> bool {
+pub(crate) fn render_precomp_layer(
+    buffer: &mut [u8],
+    ctx: PreCompLayerCtx<'_>,
+) -> Result<bool, ()> {
     let PreCompLayerCtx {
         comp,
         layer,
@@ -44,10 +47,37 @@ pub(crate) fn render_precomp_layer(buffer: &mut [u8], ctx: PreCompLayerCtx<'_>) 
                 &mut resolved_sub_comp,
                 &layer.essential_properties,
             );
-            let mut sub_pixels =
-                render_precomp_layers(comp, &resolved_sub_comp, source_frame, width, height)
-                    .to_vec();
+            let source_pixels =
+                render_precomp_layers(comp, &resolved_sub_comp, source_frame, width, height);
+            let Some(mut sub_pixels) = super::try_clone_buffer(&source_pixels) else {
+                log::error!(
+                    "[Renderer] Could not allocate {} bytes for pre-comp layer {}",
+                    source_pixels.len(),
+                    layer.id
+                );
+                return Err(());
+            };
             if !sub_pixels.is_empty() {
+                if !layer.paint_strokes.is_empty() {
+                    let paint_transform =
+                        crate::core::software_renderer::precomp::paint::PaintTransform {
+                            scale: [100.0, 100.0],
+                            cos_r: 1.0,
+                            sin_r: 0.0,
+                            cx: width as f32 * 0.5,
+                            cy: height as f32 * 0.5,
+                            min_x: 0,
+                            min_y: 0,
+                        };
+                    crate::core::software_renderer::precomp::paint::apply_paint_strokes(
+                        layer,
+                        source_frame,
+                        &paint_transform,
+                        width,
+                        height,
+                        &mut sub_pixels,
+                    );
+                }
                 if !layer.effects.is_empty() && layer.effects_enabled {
                     crate::core::cpu_effects::apply_layer_effects(
                         Some(comp),
@@ -82,22 +112,44 @@ pub(crate) fn render_precomp_layer(buffer: &mut [u8], ctx: PreCompLayerCtx<'_>) 
                 if pc_bx > 0.0 && pc_by > 0.0 && lo_x <= hi_x && lo_y <= hi_y {
                     let precomp_width = hi_x - lo_x + 1;
                     let precomp_height = hi_y - lo_y + 1;
-                    let mut precomp_buf = vec![0u8; (precomp_width * precomp_height * 4) as usize];
+                    let Some(precomp_size) = (precomp_width as usize)
+                        .checked_mul(precomp_height as usize)
+                        .and_then(|pixels| pixels.checked_mul(4))
+                    else {
+                        log::error!(
+                            "[Renderer] Pre-comp raster dimensions overflow for {}",
+                            layer.id
+                        );
+                        return Err(());
+                    };
+                    let Some(mut precomp_buf) = super::try_zeroed_buffer(precomp_size) else {
+                        log::error!(
+                            "[Renderer] Could not allocate {precomp_size} bytes for pre-comp layer {}",
+                            layer.id
+                        );
+                        return Err(());
+                    };
 
                     for py in lo_y..=hi_y {
+                        if super::render_cancelled() {
+                            return Ok(true);
+                        }
                         for px in lo_x..=hi_x {
                             let mut mask_alpha = 1.0;
                             if !masks.is_empty() {
-                                mask_alpha =
-                                    compute_combined_mask_coverage(px as f32, py as f32, masks);
+                                mask_alpha = compute_combined_mask_coverage(
+                                    px as f32 + 0.5,
+                                    py as f32 + 0.5,
+                                    masks,
+                                );
                             }
                             if mask_alpha <= 0.001 {
                                 continue;
                             }
 
                             // Inverse rotation into local space, then UV over sub-comp frame.
-                            let dx = px as f32 - pc_cx;
-                            let dy = py as f32 - pc_cy;
+                            let dx = px as f32 + 0.5 - pc_cx;
+                            let dy = py as f32 + 0.5 - pc_cy;
                             let lx = dx * pc_cos + dy * pc_sin;
                             let ly = -dx * pc_sin + dy * pc_cos;
                             let u = (lx / pc_bx + 1.0) * 0.5;
@@ -126,7 +178,11 @@ pub(crate) fn render_precomp_layer(buffer: &mut [u8], ctx: PreCompLayerCtx<'_>) 
                         }
                     }
 
-                    let matte_pixels = render_matte_buffer(comp, layer, frame, width, height);
+                    let matte_pixels = match render_matte_buffer(comp, layer, frame, width, height)
+                    {
+                        Ok(matte) => matte,
+                        Err(()) => return Err(()),
+                    };
                     composite_layer_buffer(
                         &mut buffer[..],
                         &precomp_buf,
@@ -146,7 +202,7 @@ pub(crate) fn render_precomp_layer(buffer: &mut [u8], ctx: PreCompLayerCtx<'_>) 
                 }
             }
         }
-        return true;
+        return Ok(true);
     }
-    false
+    Ok(false)
 }

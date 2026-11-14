@@ -13,11 +13,25 @@ impl DenseFlowField {
             .checked_mul(height as usize)
             .filter(|&count| count <= MAX_DENSE_FLOW_PIXELS)
             .unwrap_or(0);
+        let mut vectors = Vec::new();
+        if vectors.try_reserve_exact(size).is_ok() {
+            vectors.resize(size, [0.0, 0.0]);
+        }
         Self {
             width,
             height,
-            vectors: vec![[0.0, 0.0]; size],
+            vectors,
         }
+    }
+
+    pub fn is_complete(&self) -> bool {
+        self.width > 0
+            && self.height > 0
+            && (self.width as usize)
+                .checked_mul(self.height as usize)
+                .is_some_and(|pixels| {
+                    pixels <= MAX_DENSE_FLOW_PIXELS && self.vectors.len() == pixels
+                })
     }
 
     #[inline]
@@ -42,18 +56,45 @@ pub fn compute_dense_optical_flow(
     block_radius: i32,
     search_radius: i32,
 ) -> DenseFlowField {
+    compute_dense_optical_flow_cancellable(
+        src_rgba,
+        tgt_rgba,
+        width,
+        height,
+        block_radius,
+        search_radius,
+        &mut || false,
+    )
+    .unwrap_or(DenseFlowField {
+        width,
+        height,
+        vectors: Vec::new(),
+    })
+}
+
+/// Computes dense block-matching flow and stops between block rows when
+/// `is_cancelled` returns true. `None` indicates cancellation.
+pub fn compute_dense_optical_flow_cancellable(
+    src_rgba: &[u8],
+    tgt_rgba: &[u8],
+    width: u32,
+    height: u32,
+    block_radius: i32,
+    search_radius: i32,
+    is_cancelled: &mut impl FnMut() -> bool,
+) -> Option<DenseFlowField> {
     let mut flow = DenseFlowField::new(width, height);
     let Some(size) = (width as usize)
         .checked_mul(height as usize)
         .and_then(|v| v.checked_mul(4))
     else {
-        return flow;
+        return Some(flow);
     };
     if width == 0 || height == 0 || src_rgba.len() != size || tgt_rgba.len() != size {
-        return flow;
+        return Some(flow);
     }
-    if flow.vectors.len() != (width as usize).saturating_mul(height as usize) {
-        return flow;
+    if !flow.is_complete() {
+        return Some(flow);
     }
     let w = width as i32;
     let h = height as i32;
@@ -70,6 +111,9 @@ pub fn compute_dense_optical_flow(
     // Subsampled dense matching for high performance
     let step = 4;
     for by in (0..h).step_by(step as usize) {
+        if is_cancelled() {
+            return None;
+        }
         for bx in (0..w).step_by(step as usize) {
             let mut best_sad = f32::INFINITY;
             let mut best_dx = 0.0f32;
@@ -86,12 +130,42 @@ pub fn compute_dense_optical_flow(
                         }
                     }
 
-                    if sad < best_sad {
+                    let candidate_motion_sq = (sdx * sdx + sdy * sdy) as f32;
+                    let best_motion_sq = best_dx * best_dx + best_dy * best_dy;
+                    if sad < best_sad || (sad == best_sad && candidate_motion_sq < best_motion_sq) {
                         best_sad = sad;
                         best_dx = sdx as f32;
                         best_dy = sdy as f32;
                     }
                 }
+            }
+
+            let integer_dx = best_dx as i32;
+            let integer_dy = best_dy as i32;
+            let block_cost = |shift_x: i32, shift_y: i32| {
+                let mut sad = 0.0f32;
+                for py in -block_radius..=block_radius {
+                    for px in -block_radius..=block_radius {
+                        let source = get_luma(src_rgba, bx + px, by + py);
+                        let target = get_luma(tgt_rgba, bx + px + shift_x, by + py + shift_y);
+                        sad += (source - target).abs();
+                    }
+                }
+                sad
+            };
+            if integer_dx > -search_radius && integer_dx < search_radius {
+                best_dx += parabolic_minimum_offset(
+                    block_cost(integer_dx - 1, integer_dy),
+                    best_sad,
+                    block_cost(integer_dx + 1, integer_dy),
+                );
+            }
+            if integer_dy > -search_radius && integer_dy < search_radius {
+                best_dy += parabolic_minimum_offset(
+                    block_cost(integer_dx, integer_dy - 1),
+                    best_sad,
+                    block_cost(integer_dx, integer_dy + 1),
+                );
             }
 
             // Populate block cells
@@ -111,5 +185,13 @@ pub fn compute_dense_optical_flow(
         }
     }
 
-    flow
+    Some(flow)
+}
+
+fn parabolic_minimum_offset(before: f32, center: f32, after: f32) -> f32 {
+    let curvature = before - 2.0 * center + after;
+    if !before.is_finite() || !center.is_finite() || !after.is_finite() || curvature <= 1.0e-6 {
+        return 0.0;
+    }
+    (0.5 * (before - after) / curvature).clamp(-0.5, 0.5)
 }

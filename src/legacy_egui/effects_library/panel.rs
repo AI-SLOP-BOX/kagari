@@ -132,19 +132,47 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                 .show(ui, |ui| {
                     let mut next_frame = None;
                     let mut current_frame_reset = None;
-                    let edit_input = ui.input(|input| {
-                        input.pointer.any_pressed()
-                            || input.pointer.any_down()
-                            || input.pointer.any_released()
-                            || input.events.iter().any(|event| {
-                                matches!(
-                                    event,
-                                    egui::Event::Text(_)
-                                        | egui::Event::Key { pressed: true, .. }
-                                        | egui::Event::MouseWheel { .. }
-                                )
-                            })
-                    });
+                    let panel_rect = ui.max_rect();
+                    let captures_continuous_project_edits = matches!(
+                        app.ui_tabs.right_panel,
+                        crate::app_state::RightPanel::Effects
+                            | crate::app_state::RightPanel::Properties
+                            | crate::app_state::RightPanel::Other(_)
+                    );
+                    let keyboard_input_in_panel = ui.ctx().wants_keyboard_input()
+                        && ui
+                            .ctx()
+                            .memory(|memory| memory.focused())
+                            .and_then(|id| ui.ctx().read_response(id))
+                            .is_some_and(|response| panel_rect.intersects(response.rect));
+                    let edit_input = captures_continuous_project_edits
+                        && ui.input(|input| {
+                            let pointer_over_panel = input
+                                .pointer
+                                .hover_pos()
+                                .is_some_and(|position| panel_rect.contains(position));
+                            let pointer_started_in_panel = input
+                                .pointer
+                                .press_origin()
+                                .is_some_and(|position| panel_rect.contains(position));
+                            (pointer_over_panel
+                                && (input.pointer.any_pressed() || input.pointer.any_released()))
+                                || (pointer_started_in_panel && input.pointer.any_down())
+                                || (pointer_over_panel
+                                    && input.events.iter().any(|event| {
+                                        matches!(event, egui::Event::MouseWheel { .. })
+                                    }))
+                                || (keyboard_input_in_panel
+                                    && input.events.iter().any(|event| {
+                                        matches!(
+                                            event,
+                                            egui::Event::Text(_)
+                                                | egui::Event::Key { pressed: true, .. }
+                                                | egui::Event::Paste(_)
+                                                | egui::Event::Cut
+                                        )
+                                    }))
+                        });
                     let pre_edit_snapshot = if !app.drag_active() && edit_input {
                         Some(app.history.current().clone())
                     } else {
@@ -347,7 +375,12 @@ pub fn draw(app: &mut KagariApp, ctx: &egui::Context, current_frame: &mut u32) {
                                         active_comp,
                                     );
                                 if let Ok(json_str) = otio_timeline.to_json() {
-                                    if std::fs::write(&app.otio_path, json_str).is_ok() {
+                                    if crate::core::atomic_file::write_atomic(
+                                        std::path::Path::new(&app.otio_path),
+                                        json_str.as_bytes(),
+                                    )
+                                    .is_ok()
+                                    {
                                         log::info!(
                                             "Successfully exported OTIO composition to: {}",
                                             app.otio_path

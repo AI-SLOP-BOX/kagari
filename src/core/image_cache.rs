@@ -3,8 +3,8 @@
 /// Loads image files from disk, decodes them to RGBA pixel buffers,
 /// and caches them for use by the software renderer.
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::sync::OnceLock;
-use std::time::SystemTime;
 
 /// Cached decoded image data.
 #[derive(Debug, Clone)]
@@ -14,15 +14,9 @@ pub struct CachedImage {
     pub pixels: Vec<u8>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct FileRevision {
-    len: u64,
-    modified: Option<SystemTime>,
-}
-
 struct CachedFile {
-    revision: FileRevision,
-    image: CachedImage,
+    revision: u64,
+    image: Arc<CachedImage>,
     lru_stamp: u64,
     byte_size: usize,
 }
@@ -43,6 +37,7 @@ impl Default for ImageCache {
 
 impl ImageCache {
     const DEFAULT_MAX_BYTES: usize = 1024 * 1024 * 1024;
+    const MAX_DECODE_BYTES: u64 = 512 * 1024 * 1024;
     const MAX_SVG_SOURCE_BYTES: u64 = 32 * 1024 * 1024;
     const MAX_SVG_BITMAP_BYTES: usize = 256 * 1024 * 1024;
 
@@ -98,7 +93,7 @@ impl ImageCache {
             if let Some(entry) = self.cache.get_mut(path) {
                 entry.lru_stamp = self.lru_clock;
             }
-            return self.cache.get(path).map(|cached| &cached.image);
+            return self.cache.get(path).map(|cached| cached.image.as_ref());
         }
 
         let img = match Self::decode_image_file(path, self.max_bytes) {
@@ -120,14 +115,21 @@ impl ImageCache {
             path.to_string(),
             CachedFile {
                 revision,
-                image: img,
+                image: Arc::new(img),
                 lru_stamp: self.lru_clock,
                 byte_size,
             },
         );
         self.current_bytes += byte_size;
         self.evict_if_over_budget();
-        self.cache.get(path).map(|cached| &cached.image)
+        self.cache.get(path).map(|cached| cached.image.as_ref())
+    }
+
+    /// Load an image and return a shared handle so renderers can retain pixels
+    /// after releasing the global cache lock without copying the bitmap.
+    pub fn load_image_shared(&mut self, path: &str) -> Option<Arc<CachedImage>> {
+        self.load_image(path)?;
+        self.cache.get(path).map(|cached| Arc::clone(&cached.image))
     }
 
     /// Maximum pixels per image (16384 x 16384): guards against decompression bombs
@@ -146,7 +148,12 @@ impl ImageCache {
         let reader = image::ImageReader::open(path).ok()?;
         let (declared_w, declared_h) = reader.into_dimensions().ok()?;
         let total = declared_w as u64 * declared_h as u64;
-        if total == 0 || total > Self::MAX_IMAGE_PIXELS {
+        if declared_w == 0
+            || declared_h == 0
+            || declared_w > crate::core::software_renderer::MAX_RENDER_DIMENSION
+            || declared_h > crate::core::software_renderer::MAX_RENDER_DIMENSION
+            || total > Self::MAX_IMAGE_PIXELS
+        {
             log::warn!(
                 "[ImageCache] Rejecting image {} with dimensions {}x{} ({} px > limit)",
                 path,
@@ -167,17 +174,29 @@ impl ImageCache {
             return None;
         }
 
-        let img = image::open(path).ok()?;
-        let rgba = img.to_rgba8();
-        let (width, height) = rgba.dimensions();
-        let expected_bytes = (width as usize)
-            .checked_mul(height as usize)
-            .and_then(|pixels| pixels.checked_mul(4))?;
+        let mut reader = image::ImageReader::open(path).ok()?;
+        let mut limits = image::Limits::default();
+        limits.max_image_width = Some(crate::core::software_renderer::MAX_RENDER_DIMENSION);
+        limits.max_image_height = Some(crate::core::software_renderer::MAX_RENDER_DIMENSION);
+        limits.max_alloc = Some(Self::MAX_DECODE_BYTES.min(max_bytes as u64));
+        reader.limits(limits);
+        let img = reader.decode().ok()?;
+        let (width, height) = (img.width(), img.height());
+        let pixel_count = u64::from(width).checked_mul(u64::from(height))?;
+        let decoded_rgba_bytes = pixel_count.checked_mul(4)?;
         if width == 0
             || height == 0
-            || (width as u64).saturating_mul(height as u64) > Self::MAX_IMAGE_PIXELS
-            || rgba.as_raw().len() != expected_bytes
+            || width > crate::core::software_renderer::MAX_RENDER_DIMENSION
+            || height > crate::core::software_renderer::MAX_RENDER_DIMENSION
+            || pixel_count > Self::MAX_IMAGE_PIXELS
+            || decoded_rgba_bytes > Self::MAX_DECODE_BYTES
+            || decoded_rgba_bytes > max_bytes as u64
         {
+            return None;
+        }
+        let expected_bytes = usize::try_from(decoded_rgba_bytes).ok()?;
+        let rgba = img.to_rgba8();
+        if rgba.dimensions() != (width, height) || rgba.as_raw().len() != expected_bytes {
             return None;
         }
         Some(CachedImage {
@@ -187,47 +206,15 @@ impl ImageCache {
         })
     }
 
-    fn file_revision(path: &str) -> Option<FileRevision> {
+    fn file_revision(path: &str) -> Option<u64> {
+        let path_buf = std::path::Path::new(path);
         #[cfg(not(test))]
         {
-            use std::sync::Mutex;
-            use std::time::Instant;
-
-            static REVISION_CACHE: std::sync::OnceLock<
-                Mutex<HashMap<String, (FileRevision, Instant)>>,
-            > = std::sync::OnceLock::new();
-
-            let cache_mutex = REVISION_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-            let now = Instant::now();
-            if let Ok(cache) = cache_mutex.lock() {
-                if let Some((rev, timestamp)) = cache.get(path) {
-                    if now.duration_since(*timestamp).as_millis() < 1000 {
-                        return Some(rev.clone());
-                    }
-                }
-            }
-
-            let metadata = std::fs::metadata(path).ok()?;
-            let rev = FileRevision {
-                len: metadata.len(),
-                modified: metadata.modified().ok(),
-            };
-
-            if let Ok(mut cache) = cache_mutex.lock() {
-                if cache.len() > 2000 {
-                    cache.clear();
-                }
-                cache.insert(path.to_string(), (rev.clone(), now));
-            }
-            Some(rev)
+            crate::core::media_revision::existing_media_file_revision(path_buf)
         }
         #[cfg(test)]
         {
-            let metadata = std::fs::metadata(path).ok()?;
-            Some(FileRevision {
-                len: metadata.len(),
-                modified: metadata.modified().ok(),
-            })
+            crate::core::media_revision::existing_media_file_revision_uncached(path_buf)
         }
     }
 
@@ -237,7 +224,7 @@ impl ImageCache {
         self.cache
             .get(path)
             .filter(|cached| cached.revision == revision)
-            .map(|cached| &cached.image)
+            .map(|cached| cached.image.as_ref())
     }
 }
 
@@ -309,11 +296,20 @@ pub fn image_dimensions(path: &str) -> Option<(u32, u32)> {
 }
 
 fn load_svg_tree(path: &str) -> Option<resvg::usvg::Tree> {
-    let metadata = std::fs::metadata(path).ok()?;
+    use std::io::Read;
+
+    let file = std::fs::File::open(path).ok()?;
+    let metadata = file.metadata().ok()?;
     if metadata.len() == 0 || metadata.len() > ImageCache::MAX_SVG_SOURCE_BYTES {
         return None;
     }
-    let data = std::fs::read(path).ok()?;
+    let mut data = Vec::new();
+    file.take(ImageCache::MAX_SVG_SOURCE_BYTES + 1)
+        .read_to_end(&mut data)
+        .ok()?;
+    if data.len() as u64 > ImageCache::MAX_SVG_SOURCE_BYTES {
+        return None;
+    }
     let options = svg_options();
     resvg::usvg::Tree::from_data_nested(&data, &options).ok()
 }
@@ -342,6 +338,113 @@ where
     let cache = GLOBAL_IMAGE_CACHE.get_or_init(|| std::sync::Mutex::new(ImageCache::new()));
     let mut lock = cache.lock().unwrap_or_else(|e| e.into_inner());
     f(&mut lock)
+}
+
+/// Per-path decode locks prevent concurrent requests for one large image from
+/// multiplying its temporary decode memory, without serializing other paths.
+fn image_decode_lock(path: &str) -> Arc<std::sync::Mutex<()>> {
+    static DECODE_LOCKS: OnceLock<
+        std::sync::Mutex<HashMap<String, std::sync::Weak<std::sync::Mutex<()>>>>,
+    > = OnceLock::new();
+    let locks = DECODE_LOCKS.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
+    let mut locks = locks.lock().unwrap_or_else(|error| error.into_inner());
+    locks.retain(|_, lock| lock.strong_count() > 0);
+    if let Some(lock) = locks.get(path).and_then(std::sync::Weak::upgrade) {
+        return lock;
+    }
+    let lock = Arc::new(std::sync::Mutex::new(()));
+    locks.insert(path.to_string(), Arc::downgrade(&lock));
+    lock
+}
+
+/// Load a shared image without holding the global cache mutex during file I/O or
+/// decoding. Requests for the same uncached path share one decode, while
+/// unrelated paths can be decoded concurrently.
+pub fn load_image_shared(path: &str) -> Option<Arc<CachedImage>> {
+    let cache = GLOBAL_IMAGE_CACHE.get_or_init(|| std::sync::Mutex::new(ImageCache::new()));
+    let revision = ImageCache::file_revision(path);
+    if let Some(revision) = revision.as_ref() {
+        let mut lock = cache.lock().unwrap_or_else(|error| error.into_inner());
+        if lock
+            .cache
+            .get(path)
+            .is_some_and(|entry| &entry.revision == revision)
+        {
+            lock.lru_clock = lock.lru_clock.saturating_add(1);
+            let stamp = lock.lru_clock;
+            if let Some(entry) = lock.cache.get_mut(path) {
+                entry.lru_stamp = stamp;
+                return Some(Arc::clone(&entry.image));
+            }
+        }
+    } else {
+        let mut lock = cache.lock().unwrap_or_else(|error| error.into_inner());
+        if let Some(removed) = lock.cache.remove(path) {
+            lock.current_bytes = lock.current_bytes.saturating_sub(removed.byte_size);
+        }
+        return None;
+    }
+
+    let decode_lock = image_decode_lock(path);
+    let _decode_guard = decode_lock
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    let Some(revision) = ImageCache::file_revision(path) else {
+        let mut lock = cache.lock().unwrap_or_else(|error| error.into_inner());
+        if let Some(removed) = lock.cache.remove(path) {
+            lock.current_bytes = lock.current_bytes.saturating_sub(removed.byte_size);
+        }
+        return None;
+    };
+    let max_bytes = {
+        let mut lock = cache.lock().unwrap_or_else(|error| error.into_inner());
+        if lock
+            .cache
+            .get(path)
+            .is_some_and(|entry| entry.revision == revision)
+        {
+            lock.lru_clock = lock.lru_clock.saturating_add(1);
+            let stamp = lock.lru_clock;
+            if let Some(entry) = lock.cache.get_mut(path) {
+                entry.lru_stamp = stamp;
+                return Some(Arc::clone(&entry.image));
+            }
+        }
+        if let Some(removed) = lock.cache.remove(path) {
+            lock.current_bytes = lock.current_bytes.saturating_sub(removed.byte_size);
+        }
+        lock.max_bytes
+    };
+
+    let decoded = Arc::new(ImageCache::decode_image_file(path, max_bytes)?);
+    let mut lock = cache.lock().unwrap_or_else(|error| error.into_inner());
+    if let Some(entry) = lock
+        .cache
+        .get(path)
+        .filter(|entry| entry.revision == revision)
+    {
+        return Some(Arc::clone(&entry.image));
+    }
+    if let Some(removed) = lock.cache.remove(path) {
+        lock.current_bytes = lock.current_bytes.saturating_sub(removed.byte_size);
+    }
+    let byte_size = decoded.pixels.len();
+    if byte_size <= lock.max_bytes {
+        lock.lru_clock = lock.lru_clock.saturating_add(1);
+        let lru_stamp = lock.lru_clock;
+        lock.cache.insert(
+            path.to_string(),
+            CachedFile {
+                revision,
+                image: Arc::clone(&decoded),
+                lru_stamp,
+                byte_size,
+            },
+        );
+        lock.current_bytes = lock.current_bytes.saturating_add(byte_size);
+        lock.evict_if_over_budget();
+    }
+    Some(decoded)
 }
 
 #[cfg(test)]

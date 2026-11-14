@@ -1,5 +1,5 @@
 use crate::core::proxy::ProxyResolution;
-use crate::ui::localization::tr;
+use crate::ui::localization::{tr, tr_format};
 use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
@@ -288,61 +288,73 @@ pub(crate) fn start_proxy_job(app: &mut KagariApp, ctx: &egui::Context, layer_id
     let cancel_flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let worker_cancel = cancel_flag.clone();
     let (tx, rx) = std::sync::mpsc::channel();
-    app.proxy_job_rx = Some(rx);
-    app.proxy_job_cancel_flag = Some(cancel_flag);
-    app.proxy_job_label = Some(label);
-    app.proxy_job_progress = None;
-    app.toasts
-        .info(tr("Rendering proxy on a background worker…"));
-    ctx.request_repaint_after(std::time::Duration::from_millis(100));
-
-    let handle = std::thread::spawn(move || {
-        let finish = |proxy_path: Result<String, String>| {
-            let _ = tx.send(crate::app_state::ProxyJobMessage::Finished(
-                crate::app_state::ProxyJobResult {
-                    job_id,
-                    composition_name,
-                    layer_id,
-                    layer_idx,
-                    resolution,
-                    proxy_path,
-                },
-            ));
-        };
-        if worker_cancel.load(std::sync::atomic::Ordering::Relaxed) {
-            finish(Err(crate::core::proxy::PROXY_CANCELLED.to_string()));
-            return;
-        }
-        // Throttled progress: at most one message per 100 ms (plus a final
-        // update) so long video jobs cannot flood the UI channel.
-        let last_sent: std::cell::Cell<Option<std::time::Instant>> = std::cell::Cell::new(None);
-        let tx_progress = tx.clone();
-        let mut progress = move |done: u32, total: u32| {
-            let now = std::time::Instant::now();
-            let due = done >= total
-                || last_sent.get().is_none_or(|prev| {
-                    now.duration_since(prev) >= std::time::Duration::from_millis(100)
-                });
-            if due {
-                last_sent.set(Some(now));
-                let _ = tx_progress.send(crate::app_state::ProxyJobMessage::Progress {
-                    job_id,
-                    done,
-                    total,
-                });
+    let handle = std::thread::Builder::new()
+        .name("kagari-proxy-render".into())
+        .spawn(move || {
+            let finish = |proxy_path: Result<String, String>| {
+                let _ = tx.send(crate::app_state::ProxyJobMessage::Finished(
+                    crate::app_state::ProxyJobResult {
+                        job_id,
+                        composition_name,
+                        layer_id,
+                        layer_idx,
+                        resolution,
+                        proxy_path,
+                    },
+                ));
+            };
+            if worker_cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                finish(Err(crate::core::proxy::PROXY_CANCELLED.to_string()));
+                return;
             }
-        };
-        let proxy_path = crate::core::proxy::generate_preview_proxy_for_layer(
-            &layer,
-            resolution,
-            &destination,
-            &worker_cancel,
-            &mut progress,
-        );
-        finish(proxy_path);
-    });
-    app.track_background_thread(handle);
-    true
+            // Throttled progress: at most one message per 100 ms (plus a final
+            // update) so long video jobs cannot flood the UI channel.
+            let last_sent: std::cell::Cell<Option<std::time::Instant>> = std::cell::Cell::new(None);
+            let tx_progress = tx.clone();
+            let mut progress = move |done: u32, total: u32| {
+                let now = std::time::Instant::now();
+                let due = done >= total
+                    || last_sent.get().is_none_or(|prev| {
+                        now.duration_since(prev) >= std::time::Duration::from_millis(100)
+                    });
+                if due {
+                    last_sent.set(Some(now));
+                    let _ = tx_progress.send(crate::app_state::ProxyJobMessage::Progress {
+                        job_id,
+                        done,
+                        total,
+                    });
+                }
+            };
+            let proxy_path = crate::core::proxy::generate_preview_proxy_for_layer(
+                &layer,
+                resolution,
+                &destination,
+                &worker_cancel,
+                &mut progress,
+            );
+            finish(proxy_path);
+        });
+    match handle {
+        Ok(handle) => {
+            app.proxy_job_rx = Some(rx);
+            app.proxy_job_cancel_flag = Some(cancel_flag);
+            app.proxy_job_label = Some(label);
+            app.proxy_job_progress = None;
+            app.toasts
+                .info(tr("Rendering proxy on a background worker…"));
+            ctx.request_repaint_after(std::time::Duration::from_millis(100));
+            app.track_background_thread(handle);
+            true
+        }
+        Err(error) => {
+            app.toasts.error(tr_format(
+                "Could not start proxy rendering: {}",
+                &[&error.to_string()],
+            ));
+            false
+        }
+    }
 }
 
 /// Poll the proxy worker channel; progress messages update the bar, and the
@@ -421,6 +433,7 @@ fn handle_proxy_job_finished(app: &mut KagariApp, result: crate::app_state::Prox
                 }
                 if let Some(layer) = comp.layers.get_mut(result.layer_idx) {
                     layer.proxy.proxy_path = Some(path.clone());
+                    layer.proxy.path_resolution = Some(result.resolution);
                     layer.proxy.enabled = true;
                     applied = true;
                 }

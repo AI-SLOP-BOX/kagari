@@ -43,6 +43,8 @@ component ParticleProperties() {
     HStack(spacing: 5) { MinWidth(92) { Caption("寿命 (秒)") } If(selected_layer_locked) { Caption("{lifetime}") } else { TextField(lifetime, "2", action: emitter_lifetime_changed) } }
     HStack(spacing: 5) { MinWidth(92) { Caption("開始サイズ") } If(selected_layer_locked) { Caption("{particle_size}") } else { TextField(particle_size, "8", action: emitter_size_start_changed) } }
     HStack(spacing: 5) { MinWidth(92) { Caption("終了サイズ") } If(selected_layer_locked) { Caption("{size_random}") } else { TextField(size_random, "0", action: emitter_size_end_changed) } }
+    HStack(spacing: 5) { MinWidth(92) { Caption("開始不透明度") } If(selected_layer_locked) { Caption("{emitter_opacity_start}") } else { TextField(emitter_opacity_start, "1.0", action: emitter_opacity_start_changed) } }
+    HStack(spacing: 5) { MinWidth(92) { Caption("終了不透明度") } If(selected_layer_locked) { Caption("{emitter_opacity_end}") } else { TextField(emitter_opacity_end, "0.0", action: emitter_opacity_end_changed) } }
     HStack(spacing: 5) { MinWidth(92) { Caption("重力 (Y)") } If(selected_layer_locked) { Caption("{emitter_gravity_y}") } else { TextField(emitter_gravity_y, "0", action: emitter_gravity_y_changed) } }
     HStack(spacing: 5) { MinWidth(92) { Caption("風 (X)") } If(selected_layer_locked) { Caption("{emitter_wind_x}") } else { TextField(emitter_wind_x, "0", action: emitter_wind_x_changed) } }
     HStack(spacing: 5) { MinWidth(92) { Caption("乱流強度") } If(selected_layer_locked) { Caption("{emitter_turbulence}") } else { TextField(emitter_turbulence, "0", action: emitter_turbulence_changed) } }
@@ -181,12 +183,13 @@ component LayerProxyProperties() {
     Caption("▎ レイヤープロキシ")
     If(selected_is_image || selected_is_video) {
       HStack(spacing: 5) {
-        Caption("解像度")
+        Caption("次回生成")
         Button("{layer_proxy_resolution_label}", action: cycle_layer_proxy_resolution, tone: secondary, size: small, disabled: selected_layer_locked)
         Spacer
-        If(layer_proxy_enabled) { Button("プレビュー適用中", action: toggle_layer_proxy, tone: primary, size: small, disabled: selected_layer_locked) } else { Button("プレビューに適用", action: toggle_layer_proxy, tone: secondary, size: small, disabled: selected_layer_locked) }
+        If(layer_proxy_enabled) { Button("プレビュー適用中", action: toggle_layer_proxy, tone: primary, size: small, disabled: selected_layer_locked || !layer_proxy_has_file) } else { Button("プレビューに適用", action: toggle_layer_proxy, tone: secondary, size: small, disabled: selected_layer_locked || !layer_proxy_has_file) }
       }
-      If(layer_proxy_has_file) { Caption("プロキシファイルをプレビューに使用中") }
+      If(layer_proxy_enabled && layer_proxy_has_file) { Caption("プレビューに使用中: {layer_proxy_path_resolution_label}") }
+      If(!layer_proxy_enabled && layer_proxy_has_file) { Caption("登録済み・未適用: {layer_proxy_path_resolution_label}") }
       If(layer_proxy_path_set && !layer_proxy_has_file) { Caption("登録済みプロキシが見つかりません") }
       If(layer_proxy_path_set) { Button("プロキシ参照を解除", action: clear_layer_proxy, tone: secondary, size: small, disabled: selected_layer_locked) }
       If(layer_proxy_can_generate && !proxy_generation_active) { Button("低解像度プロキシを生成", action: generate_layer_proxy, tone: primary, size: small, disabled: selected_layer_locked) }

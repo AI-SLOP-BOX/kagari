@@ -2,11 +2,58 @@ use super::animator::{rasterize_text_animated, rasterize_text_animated_stack};
 use super::discovery::{discover_system_fonts, system_font_paths};
 use super::glyph::{rasterize_glyph_uncached, GLYPH_CACHE_BUDGET_BYTES};
 use super::types::{
-    apply_faux_bitmap_style, parse_font, styled_text_input, FauxTextStyle, GlyphCache,
-    RasterizedGlyph,
+    apply_faux_bitmap_style, checked_text_dimensions, parse_font, styled_text_input,
+    zeroed_text_bitmap, FauxTextStyle, GlyphCache, RasterizedGlyph,
 };
+use super::MAX_FONT_FAMILY_NAME_BYTES;
 use ab_glyph::{Font, PxScale, ScaleFont};
 use std::collections::HashMap;
+
+const MAX_FONT_FILE_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_LOADED_FONT_BYTES: usize = 256 * 1024 * 1024;
+const MAX_LOADED_FONT_COUNT: usize = 1_024;
+const MAX_OUTLINE_CURVES_PER_RUN: usize = 1_000_000;
+
+#[derive(Debug, Clone)]
+pub(crate) struct TextGlyphOutline {
+    pub curves: Vec<ab_glyph::OutlineCurve>,
+    pub advance: f32,
+    pub kerning_after: f32,
+}
+
+fn scale_outline_curve(
+    curve: ab_glyph::OutlineCurve,
+    horizontal: f32,
+    vertical: f32,
+) -> ab_glyph::OutlineCurve {
+    let scale = |point: ab_glyph::Point| ab_glyph::point(point.x * horizontal, point.y * vertical);
+    match curve {
+        ab_glyph::OutlineCurve::Line(p0, p1) => ab_glyph::OutlineCurve::Line(scale(p0), scale(p1)),
+        ab_glyph::OutlineCurve::Quad(p0, p1, p2) => {
+            ab_glyph::OutlineCurve::Quad(scale(p0), scale(p1), scale(p2))
+        }
+        ab_glyph::OutlineCurve::Cubic(p0, p1, p2, p3) => {
+            ab_glyph::OutlineCurve::Cubic(scale(p0), scale(p1), scale(p2), scale(p3))
+        }
+    }
+}
+
+fn read_font_file(path: &std::path::Path, byte_limit: u64) -> Option<Vec<u8>> {
+    use std::io::Read;
+
+    let file = std::fs::File::open(path).ok()?;
+    let file_size = file.metadata().ok()?.len();
+    if file_size == 0 || file_size > byte_limit {
+        return None;
+    }
+    let mut data = Vec::new();
+    data.try_reserve_exact(usize::try_from(file_size).ok()?)
+        .ok()?;
+    file.take(byte_limit.saturating_add(1))
+        .read_to_end(&mut data)
+        .ok()?;
+    (data.len() as u64 <= byte_limit).then_some(data)
+}
 
 /// Font rasterizer that caches loaded fonts and rasterized glyphs.
 pub struct FontRasterizer {
@@ -32,7 +79,15 @@ impl FontRasterizer {
 
     /// Load a font from bytes. Returns true if successful.
     pub fn load_font(&mut self, family_name: &str, font_data: Vec<u8>) -> bool {
-        if family_name.is_empty() || parse_font(&font_data).is_none() {
+        if family_name.is_empty()
+            || family_name.len() > MAX_FONT_FAMILY_NAME_BYTES
+            || font_data.is_empty()
+            || font_data.len() as u64 > MAX_FONT_FILE_BYTES
+            || self.loaded_font_count_after_replace(family_name) > MAX_LOADED_FONT_COUNT
+            || self.loaded_font_bytes_after_replace(family_name, font_data.capacity())
+                > MAX_LOADED_FONT_BYTES
+            || parse_font(&font_data).is_none()
+        {
             return false;
         }
         self.fonts.insert(family_name.to_string(), font_data);
@@ -44,6 +99,9 @@ impl FontRasterizer {
 
     /// Load a system font by name. Searches common system font paths.
     pub fn load_system_font(&mut self, family_name: &str) -> bool {
+        if family_name.is_empty() || family_name.len() > MAX_FONT_FAMILY_NAME_BYTES {
+            return false;
+        }
         if self.fonts.contains_key(family_name) {
             return true;
         }
@@ -51,8 +109,16 @@ impl FontRasterizer {
         let paths = system_font_paths(family_name);
         for path in &paths {
             if path.exists() {
-                if let Ok(data) = std::fs::read(path) {
-                    if parse_font(&data).is_some() {
+                if self.fonts.len() >= MAX_LOADED_FONT_COUNT {
+                    return false;
+                }
+                let remaining = MAX_LOADED_FONT_BYTES.saturating_sub(self.loaded_font_bytes());
+                let limit = MAX_FONT_FILE_BYTES.min(remaining as u64);
+                if let Some(data) = read_font_file(path, limit) {
+                    if parse_font(&data).is_some()
+                        && self.loaded_font_bytes_after_replace(family_name, data.capacity())
+                            <= MAX_LOADED_FONT_BYTES
+                    {
                         self.fonts.insert(family_name.to_string(), data);
                         return true;
                     }
@@ -74,7 +140,11 @@ impl FontRasterizer {
             return family_name.to_string();
         }
         // Case-insensitive match among loaded fonts
-        let lower = family_name.to_lowercase().replace([' ', '-', '_'], "");
+        let lower = if family_name.len() <= MAX_FONT_FAMILY_NAME_BYTES {
+            family_name.to_lowercase().replace([' ', '-', '_'], "")
+        } else {
+            String::new()
+        };
         if let Some(loaded_name) = self.fonts.keys().find(|k| {
             let k_clean = k.to_lowercase().replace([' ', '-', '_'], "");
             k_clean == lower || (lower.contains("hiragino") && k.contains("ヒラギノ"))
@@ -132,8 +202,17 @@ impl FontRasterizer {
     pub fn load_all_system_fonts(&mut self) {
         let discovered = Self::discover_system_fonts();
         for (name, path) in discovered {
-            if let Ok(data) = std::fs::read(&path) {
-                if parse_font(&data).is_some() {
+            if self.fonts.len() >= MAX_LOADED_FONT_COUNT {
+                break;
+            }
+            let path = std::path::Path::new(&path);
+            let remaining = MAX_LOADED_FONT_BYTES.saturating_sub(self.loaded_font_bytes());
+            let limit = MAX_FONT_FILE_BYTES.min(remaining as u64);
+            if let Some(data) = read_font_file(path, limit) {
+                if parse_font(&data).is_some()
+                    && self.loaded_font_bytes_after_replace(&name, data.capacity())
+                        <= MAX_LOADED_FONT_BYTES
+                {
                     self.fonts.insert(name, data);
                 }
             }
@@ -171,6 +250,26 @@ impl FontRasterizer {
         }
     }
 
+    fn loaded_font_count_after_replace(&self, family_name: &str) -> usize {
+        self.fonts.len() + usize::from(!self.fonts.contains_key(family_name))
+    }
+
+    fn loaded_font_bytes(&self) -> usize {
+        self.fonts
+            .values()
+            .fold(0usize, |total, data| total.saturating_add(data.capacity()))
+    }
+
+    fn loaded_font_bytes_after_replace(&self, family_name: &str, new_len: usize) -> usize {
+        self.loaded_font_bytes()
+            .saturating_sub(
+                self.fonts
+                    .get(family_name)
+                    .map_or(0, |data| data.capacity()),
+            )
+            .saturating_add(new_len)
+    }
+
     /// Get the default font (first available system font, or embed a fallback).
     pub fn get_default_font_data(&self) -> &[u8] {
         for name in &[
@@ -197,11 +296,11 @@ impl FontRasterizer {
         if !font_size.is_finite() || !(0.1..=8192.0).contains(&font_size) {
             return None;
         }
+        let font_data = self.fonts.get(family_name)?;
         let key = (family_name.to_string(), ch, font_size.to_bits());
         if let Some(hit) = self.glyph_cache.borrow().entries.get(&key) {
             return Some(hit.clone());
         }
-        let font_data = self.fonts.get(family_name)?;
         let glyph = rasterize_glyph_uncached(font_data, ch, font_size)?;
         let bytes = glyph.pixels.len();
         if bytes <= GLYPH_CACHE_BUDGET_BYTES {
@@ -214,6 +313,49 @@ impl FontRasterizer {
             cache.entries.insert(key, glyph.clone());
         }
         Some(glyph)
+    }
+
+    /// Extract scaled vector outlines and horizontal metrics for a text run.
+    pub(crate) fn text_glyph_outlines(
+        &self,
+        family_name: &str,
+        text: &str,
+        font_size: f32,
+    ) -> Option<(Vec<TextGlyphOutline>, f32)> {
+        if text.chars().count() > 100_000
+            || !font_size.is_finite()
+            || !(0.1..=16_384.0).contains(&font_size)
+        {
+            return None;
+        }
+        let font_data = self.fonts.get(family_name)?;
+        let font = parse_font(font_data)?;
+        let scaled = font.as_scaled(PxScale::from(font_size));
+        let scale = scaled.scale_factor();
+        let mut chars = text.chars().peekable();
+        let mut glyphs = Vec::new();
+        glyphs.try_reserve_exact(text.chars().count()).ok()?;
+        let mut curve_count = 0usize;
+        while let Some(ch) = chars.next() {
+            let glyph_id = font.glyph_id(ch);
+            let next_id = chars.peek().copied().map(|next| font.glyph_id(next));
+            let mut curves = font
+                .outline(glyph_id)
+                .map_or_else(Vec::new, |outline| outline.curves);
+            curve_count = curve_count.checked_add(curves.len())?;
+            if curve_count > MAX_OUTLINE_CURVES_PER_RUN {
+                return None;
+            }
+            for curve in &mut curves {
+                *curve = scale_outline_curve(curve.clone(), scale.horizontal, scale.vertical);
+            }
+            glyphs.push(TextGlyphOutline {
+                curves,
+                advance: scaled.h_advance(glyph_id),
+                kerning_after: next_id.map_or(0.0, |next| scaled.kern(glyph_id, next)),
+            });
+        }
+        Some((glyphs, scaled.ascent()))
     }
 
     /// Rasterize a full text string into a single RGBA buffer.
@@ -312,41 +454,62 @@ impl FontRasterizer {
             .iter()
             .map(|line| {
                 let mut w = 0.0f32;
-                for ch in line.text.chars() {
+                let mut characters = line.text.chars().peekable();
+                while let Some(ch) = characters.next() {
                     let glyph_id = font.glyph_id(ch);
                     w += scaled_font.h_advance(glyph_id);
-                    w += tracking;
-                }
-                if line.text.ends_with(' ') {
-                    w -= tracking;
+                    if let Some(next) = characters.peek() {
+                        w += scaled_font.kern(glyph_id, font.glyph_id(*next)) + tracking;
+                    }
                 }
                 w.max(line.width)
             })
             .fold(0.0f32, f32::max);
 
-        let buf_w = (actual_width.ceil() as u32)
-            .max(layout.total_width.ceil() as u32)
-            .max(1);
+        let output_width = actual_width.max(layout.total_width).max(box_width);
         let line_height = font_size * leading;
-        let buf_h = (layout.total_height.ceil() as u32)
-            .max(line_height.ceil() as u32)
-            .max(1);
-
-        let mut pixels = vec![0u8; (buf_w * buf_h * 4) as usize];
+        let output_height = layout.total_height.max(line_height);
+        let (buf_w, buf_h) = checked_text_dimensions(output_width, output_height, 0)?;
+        let mut pixels = zeroed_text_bitmap(buf_w, buf_h)?;
         let r = (color[0].clamp(0.0, 1.0) * 255.0) as u8;
         let g = (color[1].clamp(0.0, 1.0) * 255.0) as u8;
         let b = (color[2].clamp(0.0, 1.0) * 255.0) as u8;
+        let color_alpha = color[3].clamp(0.0, 1.0);
         let max_top = font_size * 0.8;
 
         for line in &layout.lines {
-            let align_x =
-                crate::core::text_layout::get_alignment_offset(line.width, box_width, alignment);
+            let mut actual_line_width = 0.0f32;
+            let mut measure_characters = line.text.chars().peekable();
+            while let Some(character) = measure_characters.next() {
+                let glyph_id = font.glyph_id(character);
+                actual_line_width += scaled_font.h_advance(glyph_id);
+                if let Some(next) = measure_characters.peek() {
+                    actual_line_width +=
+                        scaled_font.kern(glyph_id, font.glyph_id(*next)) + tracking;
+                }
+            }
+            let align_x = crate::core::text_layout::get_alignment_offset(
+                actual_line_width,
+                box_width,
+                alignment,
+            );
+            let justify_space = crate::core::text_layout::justification_space_width(
+                line,
+                actual_line_width,
+                box_width,
+                alignment,
+            );
             let mut cursor_x = align_x;
             let cursor_y = line.y_offset;
 
-            for ch in line.text.chars() {
+            let mut characters = line.text.chars().peekable();
+            while let Some(ch) = characters.next() {
                 let glyph_id = font.glyph_id(ch);
                 let h_advance = scaled_font.h_advance(glyph_id);
+                let kerning = characters
+                    .peek()
+                    .map(|next| scaled_font.kern(glyph_id, font.glyph_id(*next)))
+                    .unwrap_or(0.0);
 
                 if ch != ' ' {
                     if let Some(rg) = self.rasterize_glyph(family_name, ch, font_size) {
@@ -366,7 +529,9 @@ impl FontRasterizer {
                                         pixels[didx] = r;
                                         pixels[didx + 1] = g;
                                         pixels[didx + 2] = b;
-                                        pixels[didx + 3] = rg.pixels[sidx + 3];
+                                        pixels[didx + 3] =
+                                            (rg.pixels[sidx + 3] as f32 * color_alpha).round()
+                                                as u8;
                                     }
                                 }
                             }
@@ -374,7 +539,8 @@ impl FontRasterizer {
                     }
                 }
 
-                cursor_x += h_advance + tracking;
+                cursor_x +=
+                    h_advance + kerning + tracking + if ch == ' ' { justify_space } else { 0.0 };
             }
         }
 

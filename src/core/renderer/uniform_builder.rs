@@ -1,5 +1,6 @@
 use super::*;
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn build_layer_uniform(
     comp: &Composition,
     layer: &Layer,
@@ -8,6 +9,7 @@ pub(super) fn build_layer_uniform(
     transform_matrix: [[f32; 4]; 4],
     opacity: f32,
     textured_source: bool,
+    video_frame_blend: f32,
 ) -> LayerUniform {
     // Prepare Layer Uniform details
     let (
@@ -170,7 +172,11 @@ pub(super) fn build_layer_uniform(
         color = [1.0, 1.0, 1.0, 1.0];
     }
 
-    let mut ep = evaluate_effects(&layer.effects, frame);
+    let mut ep = if layer.effects_enabled {
+        evaluate_effects(&layer.effects, frame)
+    } else {
+        crate::core::effect_plugin::EffectParams::default()
+    };
 
     // Lens flare light-link: track a comp light's projected position
     if ep.flare_enabled == 1 {
@@ -225,6 +231,30 @@ pub(super) fn build_layer_uniform(
         },
         _ => [0.0; 4],
     };
+
+    let three_d_shade = if layer.is_3d {
+        let pos = layer.transform_3d.position.evaluate(frame);
+        let camera = comp.resolve_camera_at();
+        let screen_pos = crate::core::timeline::project_point_to_screen_at_frame(
+            &camera,
+            pos,
+            comp.width as f32,
+            comp.height as f32,
+            frame,
+        )
+        .unwrap_or([0.5, 0.5]);
+        crate::core::software_renderer::layer_3d_shading(
+            comp,
+            layer,
+            frame,
+            screen_pos[0] * comp.width as f32,
+            screen_pos[1] * comp.height as f32,
+        )
+    } else {
+        [1.0; 3]
+    };
+    let three_d_shade_avg = (three_d_shade[0] + three_d_shade[1] + three_d_shade[2]) / 3.0;
+    let three_d_lighting_enabled = layer.is_3d && (three_d_shade_avg - 1.0).abs() > 0.01;
 
     let layer_uniform = LayerUniform {
         transform_matrix,
@@ -476,9 +506,12 @@ pub(super) fn build_layer_uniform(
         sim_p5: ep.sim_p5,
         sim_p6: ep.sim_p6,
 
-        _padding_align: [0.0; 4],
-        _ls_pad4: 0.0,
+        three_d_shade,
+        three_d_lighting_enabled: u32::from(three_d_lighting_enabled),
+        accepts_shadows: u32::from(layer.material.accepts_shadows),
         _ls_pad5: 0.0,
+        video_frame_blend: video_frame_blend.clamp(0.0, 1.0),
+        _video_frame_blend_padding: [0.0; 3],
     };
 
     layer_uniform

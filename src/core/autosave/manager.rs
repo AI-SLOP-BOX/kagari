@@ -12,6 +12,116 @@ pub const MAX_AUTOSAVE_SLOTS: usize = 5;
 /// Maximum retention exposed by Preferences.
 pub const MAX_RECOVERY_SLOTS: usize = 50;
 
+/// Preserve snapshots from the former shared temporary recovery folder when
+/// the app moves to a private per-user recovery directory.
+#[cfg(unix)]
+pub fn migrate_legacy_recovery_snapshots(source: &Path, destination: &Path) {
+    use std::io::Read;
+    use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsExt};
+
+    if source == destination {
+        return;
+    }
+    let Ok(home) = std::env::var("HOME") else {
+        return;
+    };
+    let Some(user_id) = std::fs::metadata(home).ok().map(|metadata| metadata.uid()) else {
+        return;
+    };
+    if !destination.exists() {
+        let result = std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(destination);
+        if let Err(error) = result {
+            if error.kind() != std::io::ErrorKind::AlreadyExists {
+                log::warn!("could not create private recovery directory: {error}");
+                return;
+            }
+        }
+    }
+    if let Err(error) =
+        std::fs::set_permissions(destination, std::fs::Permissions::from_mode(0o700))
+    {
+        log::warn!("could not secure recovery directory: {error}");
+        return;
+    }
+
+    let Ok(entries) = std::fs::read_dir(source) else {
+        return;
+    };
+    let mut candidates = entries
+        .flatten()
+        .filter_map(|entry| {
+            let path = entry.path();
+            let name = path.file_name()?.to_str()?;
+            (name.starts_with("recovery_") && name.ends_with(".json")).then_some(path)
+        })
+        .take(4096)
+        .collect::<Vec<_>>();
+    candidates.sort_by_key(|path| {
+        std::fs::symlink_metadata(path)
+            .and_then(|metadata| metadata.modified())
+            .unwrap_or(std::time::UNIX_EPOCH)
+    });
+    candidates.reverse();
+
+    for source_path in candidates.into_iter().take(MAX_RECOVERY_SLOTS) {
+        let Some(name) = source_path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        let Ok(link_metadata) = std::fs::symlink_metadata(&source_path) else {
+            continue;
+        };
+        if !link_metadata.file_type().is_file()
+            || link_metadata.uid() != user_id
+            || link_metadata.len() > crate::core::project_migration::MAX_PROJECT_JSON_BYTES as u64
+        {
+            continue;
+        }
+        let Ok(mut input) = std::fs::File::open(&source_path) else {
+            continue;
+        };
+        let Ok(open_metadata) = input.metadata() else {
+            continue;
+        };
+        if open_metadata.dev() != link_metadata.dev()
+            || open_metadata.ino() != link_metadata.ino()
+            || open_metadata.uid() != user_id
+        {
+            continue;
+        }
+        let mut contents = Vec::new();
+        if Read::take(
+            &mut input,
+            crate::core::project_migration::MAX_PROJECT_JSON_BYTES as u64 + 1,
+        )
+        .read_to_end(&mut contents)
+        .is_err()
+            || contents.len() > crate::core::project_migration::MAX_PROJECT_JSON_BYTES
+        {
+            continue;
+        }
+
+        let destination_path = destination.join(name);
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        options.mode(0o600);
+        let Ok(mut output) = options.open(&destination_path) else {
+            continue;
+        };
+        use std::io::Write;
+        if output.write_all(&contents).is_err() || output.sync_all().is_err() {
+            let _ = std::fs::remove_file(&destination_path);
+            continue;
+        }
+        drop(output);
+        if load_snapshot_file(&destination_path).is_none() {
+            let _ = std::fs::remove_file(&destination_path);
+        }
+    }
+}
+
 /// One recoverable snapshot generation, listed newest-first by the picker.
 #[derive(Debug, Clone)]
 pub struct RecoveryGeneration {
@@ -96,7 +206,11 @@ pub fn load_snapshot_file(path: &Path) -> Option<(Project, Option<ProductionDocu
                 if doc.validate().is_ok() {
                     Some(doc)
                 } else {
-                    return None;
+                    log::warn!(
+                        "[Autosave] Recovering project without invalid production metadata from {:?}",
+                        path
+                    );
+                    None
                 }
             }
             None => None,
@@ -151,7 +265,16 @@ impl AutosaveManager {
     pub fn set_max_slots(&mut self, slots: usize) {
         self.max_slots = slots.clamp(1, MAX_RECOVERY_SLOTS);
         self.next_slot %= self.max_slots;
-        let paths = self.all_recovery_paths();
+        let namespace_prefix = format!("{}_", self.stem);
+        let paths = self
+            .all_recovery_paths()
+            .into_iter()
+            .filter(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with(&namespace_prefix))
+            })
+            .collect::<Vec<_>>();
         for path in paths.into_iter().skip(self.max_slots) {
             let _ = std::fs::remove_file(path);
         }
@@ -354,16 +477,7 @@ impl AutosaveManager {
     pub fn wait_for_pending(&mut self) -> Option<PathBuf> {
         let receiver = self.async_write.take()?;
         let result = receiver.recv();
-        // Join the worker thread after receiving its result so the autosave
-        // thread does not outlive the process as a detached thread.
-        if let Some(handle) = self
-            .join_handle
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take()
-        {
-            let _ = handle.join();
-        }
+        self.join_pending_worker();
         match result {
             Ok((generation, Ok(path))) => {
                 self.last_save = Instant::now();
@@ -393,12 +507,14 @@ impl AutosaveManager {
             Err(std::sync::mpsc::TryRecvError::Empty) => None,
             Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                 self.async_write = None;
+                self.join_pending_worker();
                 self.retry_at = Some(Instant::now() + Duration::from_secs(30));
                 self.last_error = Some("autosave worker stopped before returning a result".into());
                 None
             }
             Ok((generation, result)) => {
                 self.async_write = None;
+                self.join_pending_worker();
                 match result {
                     Ok(path) => {
                         self.last_save = Instant::now();
@@ -416,6 +532,17 @@ impl AutosaveManager {
                     }
                 }
             }
+        }
+    }
+
+    fn join_pending_worker(&self) {
+        let handle = self
+            .join_handle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        if let Some(handle) = handle {
+            let _ = handle.join();
         }
     }
 
@@ -602,8 +729,12 @@ impl AutosaveManager {
                             .file_name()
                             .and_then(|name| name.to_str())
                             .is_some_and(|name| {
-                                name.starts_with(&format!("{namespace}_"))
-                                    && name.ends_with(".json")
+                                name.strip_prefix(&format!("{namespace}_"))
+                                    .and_then(|name| name.strip_suffix(".json"))
+                                    .is_some_and(|slot| {
+                                        !slot.is_empty()
+                                            && slot.bytes().all(|byte| byte.is_ascii_digit())
+                                    })
                             });
                         if belongs_to_snapshot {
                             let _ = std::fs::remove_file(candidate);

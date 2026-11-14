@@ -2,6 +2,7 @@ use crate::app_state::KagariApp;
 use crate::core::timeline::Layer;
 use eframe::egui;
 
+#[allow(clippy::too_many_arguments)]
 pub fn handle_creation_tools_commit(
     app: &mut KagariApp,
     viewport_response: &egui::Response,

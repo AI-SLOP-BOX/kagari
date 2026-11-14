@@ -13,6 +13,8 @@ mod transforms;
 pub use transforms::*;
 mod layer;
 pub use layer::*;
+mod video_time;
+pub use video_time::*;
 mod composition;
 pub use composition::*;
 mod project;

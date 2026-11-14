@@ -46,6 +46,80 @@ fn cache_manifest_detects_frame_content_changes() {
 }
 
 #[test]
+fn relinked_image_sequence_rebuilds_cache_for_the_new_source() {
+    let root = test_cache_dir("image_sequence_relink");
+    let old_source_dir = root.join("old-source");
+    let new_source_dir = root.join("new-source");
+    std::fs::create_dir_all(&old_source_dir).expect("old source directory should be created");
+    std::fs::create_dir_all(&new_source_dir).expect("new source directory should be created");
+    for frame in 1..=2 {
+        image::RgbaImage::from_pixel(8, 8, image::Rgba([220, 20, 30, 255]))
+            .save(old_source_dir.join(format!("shot{frame:04}.png")))
+            .expect("old sequence frame should be written");
+        image::RgbaImage::from_pixel(8, 8, image::Rgba([20, 210, 40, 255]))
+            .save(new_source_dir.join(format!("shot{frame:04}.png")))
+            .expect("new sequence frame should be written");
+    }
+
+    let cache_root = root.join("media-cache");
+    let old_asset = import_image_sequence(
+        &old_source_dir.join("shot0001.png"),
+        &cache_root.join("shot_30fps"),
+        30.0,
+    )
+    .expect("old image sequence should import");
+    let new_source = new_source_dir.join("shot0001.png");
+    let mut project = crate::core::timeline::Project::default();
+    project.compositions[0]
+        .layers
+        .push(crate::core::timeline::Layer::new(
+            "video".into(),
+            "Relinked Sequence".into(),
+            crate::core::timeline::LayerType::Video {
+                source: new_source.to_string_lossy().into_owned(),
+                frames_dir: old_asset.frames_dir.clone(),
+                frame_count: old_asset.frame_count,
+                audio_wav: None,
+                audio_volume: crate::core::property::Animatable::new_constant(0.0),
+                speed: 1.0,
+            },
+            30,
+        ));
+
+    let (refreshed, errors) = refresh_missing_video_caches(&mut project, &cache_root);
+    assert_eq!(refreshed, 1);
+    assert!(errors.is_empty(), "unexpected cache errors: {errors:?}");
+    let crate::core::timeline::LayerType::Video {
+        source,
+        frames_dir,
+        frame_count,
+        ..
+    } = &project.compositions[0].layers.last().unwrap().layer_type
+    else {
+        panic!("expected relinked video layer");
+    };
+    assert_eq!(source, &new_source.to_string_lossy());
+    assert_ne!(frames_dir, &old_asset.frames_dir);
+    assert_eq!(*frame_count, 2);
+    let first_refreshed_cache = frames_dir.clone();
+
+    image::RgbaImage::from_pixel(8, 8, image::Rgba([10, 40, 230, 255]))
+        .save(new_source_dir.join("shot0002.png"))
+        .expect("updated sequence member should be written");
+    let (refreshed_again, errors) = refresh_missing_video_caches(&mut project, &cache_root);
+    assert_eq!(refreshed_again, 1);
+    assert!(errors.is_empty(), "unexpected cache errors: {errors:?}");
+    let crate::core::timeline::LayerType::Video { frames_dir, .. } =
+        &project.compositions[0].layers.last().unwrap().layer_type
+    else {
+        panic!("expected refreshed video layer");
+    };
+    assert_ne!(frames_dir, &first_refreshed_cache);
+
+    std::fs::remove_dir_all(root).expect("test source directory should be removable");
+}
+
+#[test]
 fn import_dimensions_respect_decoded_byte_budget() {
     assert!(dimensions_within_import_budget(8192, 4096));
     assert!(!dimensions_within_import_budget(8192, 4097));
@@ -76,6 +150,7 @@ fn test_frame_path_clamps_to_range() {
         width: 640,
         height: 360,
         audio_wav: None,
+        audio_warning: None,
     };
     assert!(frame_path(&asset, 0).ends_with("frame_00000.png"));
     assert!(frame_path(&asset, 5).ends_with("frame_00005.png"));
@@ -164,6 +239,29 @@ fn image_sequence_import_reindexes_frames_as_webp() {
 }
 
 #[test]
+fn image_sequence_import_accepts_tiff_and_bmp_sources() {
+    let root = test_cache_dir("image_sequence_formats");
+    for extension in ["tif", "tiff", "bmp"] {
+        let sequence_dir = root.join(extension);
+        std::fs::create_dir_all(&sequence_dir).expect("sequence directory should be created");
+        for frame in 1..=2 {
+            image::RgbaImage::from_pixel(8, 8, image::Rgba([30, frame as u8 * 40, 90, 255]))
+                .save(sequence_dir.join(format!("shot{frame:04}.{extension}")))
+                .expect("source frame should be writable");
+        }
+        let asset = import_image_sequence(
+            &sequence_dir.join(format!("shot0001.{extension}")),
+            &root.join(format!("{extension}-cache")),
+            24.0,
+        )
+        .unwrap_or_else(|error| panic!("{extension} sequence should import: {error}"));
+        assert_eq!(asset.frame_count, 2);
+        assert!(frame_path(&asset, 0).ends_with("frame_00000.webp"));
+    }
+    std::fs::remove_dir_all(root).expect("test root should be removable");
+}
+
+#[test]
 fn refresh_rebuilds_missing_video_cache_from_source() {
     if !ffmpeg_available() {
         return;
@@ -179,7 +277,7 @@ fn refresh_rebuilds_missing_video_cache_from_source() {
     ));
     std::fs::create_dir_all(&root).expect("test root should be created");
     let source = root.join("clip.mp4");
-    let encoded = Command::new("ffmpeg")
+    let encoded = crate::core::external_tools::ffmpeg_command()
         .args([
             "-y",
             "-f",

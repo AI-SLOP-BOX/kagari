@@ -223,12 +223,19 @@ impl Composition {
         res
     }
 
-    pub fn resolve_world_transform_3d(&self, layer: &Layer, frame: u32) -> [[f32; 4]; 4] {
+    pub fn resolve_world_transform_3d(
+        &self,
+        layer: &Layer,
+        frame: u32,
+        layer_width: f32,
+        layer_height: f32,
+    ) -> [[f32; 4]; 4] {
         let pos3d = layer.transform_3d.position.evaluate(frame);
         let rot3d = layer.transform_3d.rotation.evaluate(frame);
         let scale3d = layer.transform_3d.scale.evaluate(frame);
+        let world_unit_scale = self.height.max(1) as f32 * 0.5;
 
-        // Perspective Projection Matrix for Camera
+        // Camera projection and inverse view transform.
         let render_camera = self.resolve_camera_at();
         let fov_rad = render_camera.fov_at(frame).to_radians();
         let aspect = self.width as f32 / self.height.max(1) as f32;
@@ -268,8 +275,18 @@ impl Composition {
         ];
 
         let scale_matrix = [
-            [scale3d[0] / 100.0, 0.0, 0.0, 0.0],
-            [0.0, scale3d[1] / 100.0, 0.0, 0.0],
+            [
+                scale3d[0] / 100.0 * (layer_width / world_unit_scale),
+                0.0,
+                0.0,
+                0.0,
+            ],
+            [
+                0.0,
+                scale3d[1] / 100.0 * (layer_height * 2.0 / self.height.max(1) as f32),
+                0.0,
+                0.0,
+            ],
             [0.0, 0.0, scale3d[2] / 100.0, 0.0],
             [0.0, 0.0, 0.0, 1.0],
         ];
@@ -279,21 +296,28 @@ impl Composition {
             [0.0, 1.0, 0.0, 0.0],
             [0.0, 0.0, 1.0, 0.0],
             [
-                pos3d[0] / (self.width as f32 * 0.5),
-                pos3d[1] / (self.height as f32 * 0.5),
-                pos3d[2] / 1000.0,
+                pos3d[0] / world_unit_scale,
+                pos3d[1] / world_unit_scale,
+                pos3d[2] / world_unit_scale,
                 1.0,
             ],
         ];
 
+        let view_matrix =
+            crate::core::timeline::camera_view_transform(&render_camera, frame, world_unit_scale);
+
         fn m4_mul(a: [[f32; 4]; 4], b: [[f32; 4]; 4]) -> [[f32; 4]; 4] {
             let mut out = [[0.0; 4]; 4];
-            for r in 0..4 {
-                for c in 0..4 {
-                    out[r][c] = a[r][0] * b[0][c]
-                        + a[r][1] * b[1][c]
-                        + a[r][2] * b[2][c]
-                        + a[r][3] * b[3][c];
+            // Matrices are stored as columns to match WGSL's mat4x4 layout.
+            // Keep this multiplication convention aligned with the renderer's
+            // 2D matrix helper; row-major multiplication transposed the 3D
+            // transform uploaded to the GPU and clipped every 3D layer.
+            for column in 0..4 {
+                for row in 0..4 {
+                    out[column][row] = a[0][row] * b[column][0]
+                        + a[1][row] * b[column][1]
+                        + a[2][row] * b[column][2]
+                        + a[3][row] * b[column][3];
                 }
             }
             out
@@ -301,7 +325,10 @@ impl Composition {
 
         m4_mul(
             proj_3d,
-            m4_mul(pos_matrix, m4_mul(rot_matrix, scale_matrix)),
+            m4_mul(
+                view_matrix,
+                m4_mul(pos_matrix, m4_mul(rot_matrix, scale_matrix)),
+            ),
         )
     }
 }

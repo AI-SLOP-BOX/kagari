@@ -2,16 +2,73 @@ use super::*;
 
 #[path = "mixing/export.rs"]
 mod export;
+#[path = "mixing/source_timing.rs"]
+mod source_timing;
 pub use export::mix_composition_to_wav;
+pub use export::mix_composition_to_wav_cancelable;
+use source_timing::{audio_source_timing, video_audio_source_timing};
+
+/// Read an audio frame at a fractional time using linear interpolation.
+/// Integer truncation here produces audible stepping whenever playback speed
+/// or time remapping moves the read head between source samples.
+fn sample_audio_at_time(buffer: &AudioBuffer, time_seconds: f64) -> (f32, f32) {
+    let channels = usize::from(buffer.channels);
+    if channels == 0 || buffer.sample_rate == 0 || !time_seconds.is_finite() || time_seconds < 0.0 {
+        return (0.0, 0.0);
+    }
+
+    let frame_count = buffer.samples.len() / channels;
+    if frame_count == 0 {
+        return (0.0, 0.0);
+    }
+    let position = time_seconds * f64::from(buffer.sample_rate);
+    if !position.is_finite() || position >= frame_count as f64 {
+        return (0.0, 0.0);
+    }
+    let first_frame = position.floor() as usize;
+    let second_frame = (first_frame + 1).min(frame_count - 1);
+    let fraction = (position - first_frame as f64) as f32;
+    let sample_channel = |channel: usize| {
+        let channel = channel.min(channels - 1);
+        let first = buffer.samples[first_frame * channels + channel];
+        let second = buffer.samples[second_frame * channels + channel];
+        first + (second - first) * fraction
+    };
+    (sample_channel(0), sample_channel(1))
+}
 
 /// Apply per-layer audio effects (BassTreble) to stereo interleaved samples.
 /// Called on each layer's audio samples BEFORE mixing them together.
 pub fn apply_layer_audio_effects(samples: &mut [f32], layer: &Layer, sample_rate: f32, frame: u32) {
+    let mut states = std::collections::HashMap::new();
+    apply_layer_audio_effects_with_state(
+        samples,
+        layer,
+        sample_rate,
+        frame,
+        frame,
+        "",
+        &mut states,
+    );
+}
+
+fn apply_layer_audio_effects_with_state(
+    samples: &mut [f32],
+    layer: &Layer,
+    sample_rate: f32,
+    frame: u32,
+    state_frame: u32,
+    instance_id: &str,
+    states: &mut std::collections::HashMap<
+        (String, String, usize),
+        (u32, crate::core::audio_dsp::EqState),
+    >,
+) {
     if !layer.effects_enabled || samples.is_empty() {
         return;
     }
     use crate::core::audio_dsp;
-    for effect in &layer.effects {
+    for (effect_index, effect) in layer.effects.iter().enumerate() {
         if !effect.enabled {
             continue;
         }
@@ -38,7 +95,15 @@ pub fn apply_layer_audio_effects(samples: &mut [f32], layer: &Layer, sample_rate
                     band_type: audio_dsp::EqBandType::HighShelf,
                 },
             ];
-            audio_dsp::apply_eq(samples, &bands, sample_rate as u32);
+            let key = (instance_id.to_owned(), layer.id.clone(), effect_index);
+            let (last_frame, state) = states
+                .entry(key)
+                .or_insert_with(|| (state_frame.saturating_sub(1), audio_dsp::EqState::default()));
+            if last_frame.checked_add(1) != Some(state_frame) {
+                state.reset();
+            }
+            audio_dsp::apply_eq_with_state(samples, &bands, sample_rate as u32, state);
+            *last_frame = state_frame;
         }
     }
 }
@@ -71,64 +136,110 @@ pub fn composition_contains_audio_sources(comp: &Composition) -> bool {
 #[allow(clippy::too_many_arguments)]
 fn mix_precomp_audio(
     sub_comp: &crate::core::timeline::Composition,
-    sub_frame: u32,
+    sub_frame: f32,
+    depth: u32,
     stereo_output: &mut [f32],
     sample_rate: u32,
     buffer_size: usize,
     gain: f32,
     pan: f32,
     fps: f32,
+    source_frame_rate: f32,
+    output_frame: u32,
+    instance_id: &str,
+    layer_eq: &mut std::collections::HashMap<
+        (String, String, usize),
+        (u32, crate::core::audio_dsp::EqState),
+    >,
     source_errors: &mut Vec<AudioSourceError>,
     loaded_sources: &mut usize,
 ) {
+    if depth >= crate::core::software_renderer::MAX_PRECOMP_DEPTH {
+        return;
+    }
     for layer in &sub_comp.layers {
-        if !layer.is_active(sub_frame) || !layer.visible || layer.audio_muted {
+        let evaluated_frame = sub_frame.floor().max(0.0) as u32;
+        if !layer.is_active(evaluated_frame) || !layer.visible || layer.audio_muted {
             continue;
         }
         match &layer.layer_type {
             crate::core::timeline::LayerType::PreComp { comp_id, .. } => {
                 if let Some(sub) = sub_comp.find_sub_comp(comp_id) {
+                    let mapped_start = layer.remap_frame_at_time(sub_frame);
+                    let mapped_end = layer.remap_frame_at_time(sub_frame + 1.0);
+                    let nested_instance_id = format!("{instance_id}/{}/{}", sub.id, layer.id);
+                    let mut nested_output = vec![0.0f32; buffer_size * 2];
                     mix_precomp_audio(
                         sub,
-                        sub_frame.saturating_sub(layer.in_frame),
-                        stereo_output,
+                        mapped_start,
+                        depth + 1,
+                        &mut nested_output,
                         sample_rate,
                         buffer_size,
-                        gain,
-                        pan,
+                        1.0,
+                        0.0,
                         fps,
+                        source_frame_rate * (mapped_end - mapped_start),
+                        output_frame,
+                        &nested_instance_id,
+                        layer_eq,
                         source_errors,
                         loaded_sources,
                     );
+                    apply_layer_audio_effects_with_state(
+                        &mut nested_output,
+                        layer,
+                        sample_rate as f32,
+                        evaluated_frame,
+                        output_frame,
+                        instance_id,
+                        layer_eq,
+                    );
+                    let gl = gain * (1.0 - pan.max(0.0));
+                    let gr = gain * (1.0 - (-pan).max(0.0));
+                    for i in 0..buffer_size {
+                        let l_idx = i * 2;
+                        stereo_output[l_idx] += nested_output[l_idx] * gl;
+                        stereo_output[l_idx + 1] += nested_output[l_idx + 1] * gr;
+                    }
                 }
             }
             crate::core::timeline::LayerType::Audio { path, volume } => {
-                let vol_db = volume.evaluate(sub_frame);
+                let vol_db = volume.value_at_f32(sub_frame);
                 let layer_gain = gain * 10.0f32.powf(vol_db / 20.0);
-                let time_start = (sub_frame.saturating_sub(layer.in_frame)) as f32 / fps;
+                let (time_start, sample_rate_scale) = audio_source_timing(
+                    layer,
+                    sub_frame,
+                    sub_comp.fps.max(1) as f32,
+                    fps,
+                    source_frame_rate,
+                );
                 let source = load_cached_audio(path, sample_rate);
                 if let Ok(buf) = source {
                     *loaded_sources = loaded_sources.saturating_add(1);
+                    let mut layer_samples = vec![0.0f32; buffer_size * 2];
                     for i in 0..buffer_size {
-                        let t = time_start + i as f32 / sample_rate as f32;
-                        let idx =
-                            (t.max(0.0) * buf.sample_rate as f32) as usize * buf.channels as usize;
-                        let l = buf.samples.get(idx).copied().unwrap_or(0.0);
-                        let r = if buf.channels > 1 {
-                            buf.samples.get(idx + 1).copied().unwrap_or(l)
-                        } else {
-                            l
-                        };
-                        let gl = layer_gain * (1.0 - pan.max(0.0));
-                        let gr = layer_gain * (1.0 - (-pan).max(0.0));
+                        let t = time_start + i as f64 / f64::from(sample_rate) * sample_rate_scale;
+                        let (l, r) = sample_audio_at_time(&buf, t);
                         let l_idx = i * 2;
-                        let r_idx = i * 2 + 1;
-                        if l_idx < stereo_output.len() {
-                            stereo_output[l_idx] += l * gl;
-                        }
-                        if r_idx < stereo_output.len() {
-                            stereo_output[r_idx] += r * gr;
-                        }
+                        layer_samples[l_idx] = l;
+                        layer_samples[l_idx + 1] = r;
+                    }
+                    apply_layer_audio_effects_with_state(
+                        &mut layer_samples,
+                        layer,
+                        sample_rate as f32,
+                        evaluated_frame,
+                        output_frame,
+                        instance_id,
+                        layer_eq,
+                    );
+                    let gl = layer_gain * (1.0 - pan.max(0.0));
+                    let gr = layer_gain * (1.0 - (-pan).max(0.0));
+                    for i in 0..buffer_size {
+                        let l_idx = i * 2;
+                        stereo_output[l_idx] += layer_samples[l_idx] * gl;
+                        stereo_output[l_idx + 1] += layer_samples[l_idx + 1] * gr;
                     }
                 } else if let Err(reason) = source {
                     source_errors.push(AudioSourceError {
@@ -139,35 +250,48 @@ fn mix_precomp_audio(
                 }
             }
             crate::core::timeline::LayerType::Video {
+                frames_dir,
                 audio_wav: Some(w),
                 audio_volume,
+                speed,
                 ..
             } => {
-                let time_start = (sub_frame.saturating_sub(layer.in_frame)) as f32 / fps;
-                let layer_gain = gain * 10.0f32.powf(audio_volume.evaluate(sub_frame) / 20.0);
+                let (time_start, sample_rate_scale) = video_audio_source_timing(
+                    layer,
+                    sub_frame,
+                    frames_dir,
+                    sub_comp.fps.max(1) as f32,
+                    fps,
+                    source_frame_rate,
+                    *speed,
+                );
+                let layer_gain = gain * 10.0f32.powf(audio_volume.value_at_f32(sub_frame) / 20.0);
                 let source = load_cached_audio(w, sample_rate);
                 if let Ok(buf) = source {
                     *loaded_sources = loaded_sources.saturating_add(1);
+                    let mut layer_samples = vec![0.0f32; buffer_size * 2];
                     for i in 0..buffer_size {
-                        let t = time_start + i as f32 / sample_rate as f32;
-                        let idx =
-                            (t.max(0.0) * buf.sample_rate as f32) as usize * buf.channels as usize;
-                        let l = buf.samples.get(idx).copied().unwrap_or(0.0);
-                        let r = if buf.channels > 1 {
-                            buf.samples.get(idx + 1).copied().unwrap_or(l)
-                        } else {
-                            l
-                        };
-                        let gl = layer_gain * (1.0 - pan.max(0.0));
-                        let gr = layer_gain * (1.0 - (-pan).max(0.0));
+                        let t = time_start + i as f64 / f64::from(sample_rate) * sample_rate_scale;
+                        let (l, r) = sample_audio_at_time(&buf, t);
                         let l_idx = i * 2;
-                        let r_idx = i * 2 + 1;
-                        if l_idx < stereo_output.len() {
-                            stereo_output[l_idx] += l * gl;
-                        }
-                        if r_idx < stereo_output.len() {
-                            stereo_output[r_idx] += r * gr;
-                        }
+                        layer_samples[l_idx] = l;
+                        layer_samples[l_idx + 1] = r;
+                    }
+                    apply_layer_audio_effects_with_state(
+                        &mut layer_samples,
+                        layer,
+                        sample_rate as f32,
+                        evaluated_frame,
+                        output_frame,
+                        instance_id,
+                        layer_eq,
+                    );
+                    let gl = layer_gain * (1.0 - pan.max(0.0));
+                    let gr = layer_gain * (1.0 - (-pan).max(0.0));
+                    for i in 0..buffer_size {
+                        let l_idx = i * 2;
+                        stereo_output[l_idx] += layer_samples[l_idx] * gl;
+                        stereo_output[l_idx + 1] += layer_samples[l_idx + 1] * gr;
                     }
                 } else if let Err(reason) = source {
                     source_errors.push(AudioSourceError {
@@ -217,6 +341,23 @@ pub fn mix_audio_sources_for_frame_with_state(
     dsp: &MasterDspParams,
     dsp_state: &mut MasterDspState,
 ) -> (Vec<f32>, AudioFrameMeter) {
+    if dsp_state
+        .last_frame
+        .is_some_and(|last_frame| last_frame.checked_add(1) != Some(frame))
+        || dsp_state
+            .composition_id
+            .as_deref()
+            .is_some_and(|composition_id| composition_id != comp.id)
+        || dsp_state
+            .sample_rate
+            .is_some_and(|previous_rate| previous_rate != sample_rate)
+    {
+        *dsp_state = MasterDspState::default();
+    }
+    dsp_state.last_frame = Some(frame);
+    dsp_state.composition_id = Some(comp.id.clone());
+    dsp_state.sample_rate = Some(sample_rate);
+
     let mut stereo_output = vec![0.0f32; buffer_size * 2];
     let mut sum_sq_l = 0.0f32;
     let mut sum_sq_r = 0.0f32;
@@ -234,8 +375,8 @@ pub fn mix_audio_sources_for_frame_with_state(
         // Handle PreComp layers: recursively mix sub-composition audio
         if let LayerType::PreComp { comp_id, .. } = &layer.layer_type {
             if let Some(sub) = comp.find_sub_comp(comp_id) {
-                let time_start = (frame.saturating_sub(layer.in_frame)) as f32 / fps;
-                let sub_frame = (time_start * fps) as u32;
+                let mapped_start = layer.remap_frame_at_time(frame as f32);
+                let mapped_end = layer.remap_frame_at_time(frame as f32 + 1.0);
                 let mut sub_gain = 1.0f32;
                 let mut sub_pan = 0.0f32;
                 if let Some(mix) = mixer {
@@ -248,26 +389,52 @@ pub fn mix_audio_sources_for_frame_with_state(
                     }
                 }
                 if sub_gain > 0.0 {
+                    let mut sub_output = vec![0.0f32; buffer_size * 2];
+                    let sub_instance_id = format!("{}/{}/{}", comp.id, sub.id, layer.id);
                     mix_precomp_audio(
                         sub,
-                        sub_frame,
-                        &mut stereo_output,
+                        mapped_start,
+                        0,
+                        &mut sub_output,
                         sample_rate,
                         buffer_size,
-                        sub_gain,
-                        sub_pan,
+                        1.0,
+                        0.0,
                         fps,
+                        mapped_end - mapped_start,
+                        frame,
+                        &sub_instance_id,
+                        &mut dsp_state.layer_eq,
                         &mut source_errors,
                         &mut loaded_sources,
                     );
+                    apply_layer_audio_effects_with_state(
+                        &mut sub_output,
+                        layer,
+                        sample_rate as f32,
+                        frame,
+                        frame,
+                        &comp.id,
+                        &mut dsp_state.layer_eq,
+                    );
+                    let gl = sub_gain * (1.0 - sub_pan.max(0.0));
+                    let gr = sub_gain * (1.0 - (-sub_pan).max(0.0));
+                    for i in 0..buffer_size {
+                        let l_idx = i * 2;
+                        stereo_output[l_idx] += sub_output[l_idx] * gl;
+                        stereo_output[l_idx + 1] += sub_output[l_idx + 1] * gr;
+                    }
                 }
             }
             continue;
         }
         // Resolve the WAV path + gain for this layer
-        let (wav_path, gain_db, playback_speed) = match &layer.layer_type {
-            LayerType::Audio { path, volume } => (Some(path.clone()), volume.evaluate(frame), 1.0),
+        let (wav_path, gain_db, playback_speed, video_frames_dir) = match &layer.layer_type {
+            LayerType::Audio { path, volume } => {
+                (Some(path.clone()), volume.evaluate(frame), 1.0, None)
+            }
             LayerType::Video {
+                frames_dir,
                 audio_wav: Some(w),
                 audio_volume,
                 speed,
@@ -275,11 +442,12 @@ pub fn mix_audio_sources_for_frame_with_state(
             } => (
                 Some(w.clone()),
                 audio_volume.evaluate(frame),
-                if speed.is_finite() && *speed > 0.0 {
-                    *speed
+                if speed.is_finite() {
+                    speed.max(0.0)
                 } else {
-                    1.0
+                    0.0
                 },
+                Some(frames_dir.as_str()),
             ),
             _ => continue,
         };
@@ -306,7 +474,19 @@ pub fn mix_audio_sources_for_frame_with_state(
         if is_muted {
             gain = 0.0;
         }
-        let time_start = (frame.saturating_sub(layer.in_frame)) as f32 / fps;
+        let (time_start, sample_rate_scale) = if let Some(frames_dir) = video_frames_dir {
+            video_audio_source_timing(
+                layer,
+                frame as f32,
+                frames_dir,
+                fps,
+                fps,
+                1.0,
+                playback_speed,
+            )
+        } else {
+            audio_source_timing(layer, frame as f32, fps, fps, 1.0)
+        };
 
         // Source samples: decoded audio if present, otherwise silent placeholder
         let source: Option<std::sync::Arc<AudioBuffer>> = match &wav_path {
@@ -329,19 +509,9 @@ pub fn mix_audio_sources_for_frame_with_state(
 
         let mut layer_samples = vec![0.0f32; buffer_size * 2];
         for i in 0..buffer_size {
-            let t = (time_start + i as f32 / sample_rate as f32) * playback_speed;
+            let t = time_start + i as f64 / f64::from(sample_rate) * sample_rate_scale;
             let (sample_l, sample_r) = match &source {
-                Some(buf) => {
-                    let idx =
-                        (t.max(0.0) * buf.sample_rate as f32) as usize * buf.channels as usize;
-                    let l = buf.samples.get(idx).copied().unwrap_or(0.0);
-                    let r = if buf.channels > 1 {
-                        buf.samples.get(idx + 1).copied().unwrap_or(l)
-                    } else {
-                        l
-                    };
-                    (l, r)
-                }
+                Some(buf) => sample_audio_at_time(buf, t),
                 None => (0.0, 0.0),
             };
             let l_idx = i * 2;
@@ -349,7 +519,15 @@ pub fn mix_audio_sources_for_frame_with_state(
             layer_samples[l_idx] = sample_l;
             layer_samples[r_idx] = sample_r;
         }
-        apply_layer_audio_effects(&mut layer_samples, layer, sample_rate as f32, frame);
+        apply_layer_audio_effects_with_state(
+            &mut layer_samples,
+            layer,
+            sample_rate as f32,
+            frame,
+            frame,
+            &comp.id,
+            &mut dsp_state.layer_eq,
+        );
         let mut track_peak_l = 0.0f32;
         let mut track_peak_r = 0.0f32;
         for i in 0..buffer_size {
@@ -406,7 +584,12 @@ pub fn mix_audio_sources_for_frame_with_state(
                 band_type: audio_dsp::EqBandType::Bell,
             },
         ];
-        audio_dsp::apply_eq(&mut stereo_output, &master_eq, sample_rate);
+        audio_dsp::apply_eq_with_state(
+            &mut stereo_output,
+            &master_eq,
+            sample_rate,
+            &mut dsp_state.eq,
+        );
 
         let comp_params = audio_dsp::CompressorParams {
             threshold_db: dsp.comp_threshold,
@@ -493,18 +676,20 @@ pub fn detect_beat_frames(path: &std::path::Path, total_frames: u32, fps: f32) -
     let mut i = 0;
     while i < buf.samples.len() {
         let end = (i + hop * ch).min(buf.samples.len());
-        let n = ((end - i) / ch).max(1);
-        let sum: f32 = buf.samples[i..end]
+        let samples = &buf.samples[i..end];
+        let mean_square = samples
             .iter()
-            .enumerate()
-            .map(|(k, s)| if k % ch == 0 { *s } else { 0.0 })
-            .sum::<f32>()
-            + buf.samples[i..end]
-                .iter()
-                .enumerate()
-                .map(|(k, s)| if k % ch == 1 { *s } else { 0.0 })
-                .sum::<f32>();
-        energies.push((sum / (2.0 * n as f32)).abs());
+            .map(|sample| {
+                let sample = if sample.is_finite() {
+                    f64::from(*sample)
+                } else {
+                    0.0
+                };
+                sample * sample
+            })
+            .sum::<f64>()
+            / samples.len().max(1) as f64;
+        energies.push(mean_square.sqrt() as f32);
         i += hop * ch;
     }
     if energies.len() < 3 {

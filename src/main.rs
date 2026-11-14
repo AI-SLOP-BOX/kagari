@@ -46,6 +46,7 @@ fn main() -> eframe::Result<()> {
                 kagari_vfx::core::integration::DYNAMIC_LINK_CONNECTION_QUEUE_CAPACITY,
             );
             let mut dynamic_link_port = None;
+            let mut dynamic_link_start_error = None;
             for candidate_port in 9000..=9010 {
                 match kagari_vfx::core::integration::start_sync_server(
                     candidate_port,
@@ -56,16 +57,29 @@ fn main() -> eframe::Result<()> {
                         dynamic_link_port = Some(port);
                         break;
                     }
-                    Err(e) => {
-                        log::debug!("Port {candidate_port} busy or unavailable: {e}");
+                    Err(error) if error.kind() == std::io::ErrorKind::AddrInUse => {
+                        log::debug!("Dynamic Link port {candidate_port} is already in use");
+                    }
+                    Err(error) => {
+                        log::error!(
+                            "Dynamic Link server failed to start on port {candidate_port}: {error}"
+                        );
+                        dynamic_link_start_error = Some((candidate_port, error));
+                        break;
                     }
                 }
             }
             if let Some(port) = dynamic_link_port {
                 log::info!("Dynamic Link sync server successfully active on port {port}");
             } else {
-                log::warn!("Dynamic Link sync server could not bind to ports 9000-9010");
-                app.toasts.warning("Dynamic Link: ポート9000〜9010が使用中のため、同期サーバーを起動できませんでした");
+                if let Some((port, error)) = dynamic_link_start_error {
+                    app.toasts.warning(format!(
+                        "Dynamic Linkサーバーをポート{port}で起動できませんでした: {error}"
+                    ));
+                } else {
+                    log::warn!("Dynamic Link sync server could not bind to ports 9000-9010");
+                    app.toasts.warning("Dynamic Link: ポート9000〜9010が使用中のため、同期サーバーを起動できませんでした");
+                }
             }
 
             app.rx_frame = Some(frame_rx);

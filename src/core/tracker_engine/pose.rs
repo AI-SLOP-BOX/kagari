@@ -136,8 +136,10 @@ impl TrackerEngine {
         created
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn estimate_markerless_pose(
         layer: &Layer,
+        fps: u32,
         start_frame: u32,
         end_frame: u32,
         max_features: usize,
@@ -152,7 +154,7 @@ impl TrackerEngine {
         let mut width = 0u32;
         let mut height = 0u32;
         for frame in start_frame..=end_frame {
-            let (current, _next, w, h) = Self::load_tracker_frames(layer, frame)?;
+            let (current, _next, w, h) = Self::load_tracker_frames(layer, frame, fps)?;
             width = w as u32;
             height = h as u32;
             frames.push(current);
@@ -174,6 +176,7 @@ impl TrackerEngine {
     #[allow(clippy::too_many_arguments)]
     pub fn analyze_markerless_tracks(
         layer: &mut Layer,
+        fps: u32,
         start_frame: u32,
         end_frame: u32,
         max_features: usize,
@@ -186,7 +189,8 @@ impl TrackerEngine {
             return 0;
         }
         if layer.trackers.is_empty() {
-            let Some((first, _, width, height)) = Self::load_tracker_frames(layer, start_frame)
+            let Some((first, _, width, height)) =
+                Self::load_tracker_frames(layer, start_frame, fps)
             else {
                 return 0;
             };
@@ -214,7 +218,7 @@ impl TrackerEngine {
         let mut width = 0u32;
         let mut height = 0u32;
         for frame in start_frame..=end_frame {
-            let Some((current, next, w, h)) = Self::load_tracker_frames(layer, frame) else {
+            let Some((current, next, w, h)) = Self::load_tracker_frames(layer, frame, fps) else {
                 return 0;
             };
             width = w as u32;
@@ -249,8 +253,10 @@ impl TrackerEngine {
         total
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn analyze_markerless_track(
         layer: &mut Layer,
+        fps: u32,
         tracker_idx: usize,
         start_frame: u32,
         end_frame: u32,
@@ -265,7 +271,7 @@ impl TrackerEngine {
         let mut width = 0u32;
         let mut height = 0u32;
         for frame in start_frame..=end_frame {
-            let Some((current, next, w, h)) = Self::load_tracker_frames(layer, frame) else {
+            let Some((current, next, w, h)) = Self::load_tracker_frames(layer, frame, fps) else {
                 return 0;
             };
             width = w as u32;

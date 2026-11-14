@@ -1,5 +1,13 @@
 use super::*;
 
+fn luma_values(pixels: &[u8]) -> Option<Vec<f32>> {
+    let mut luma = crate::core::software_renderer::try_vec_with_capacity(pixels.len() / 4)?;
+    for pixel in pixels.as_chunks::<4>().0 {
+        luma.push(0.299 * pixel[0] as f32 + 0.587 * pixel[1] as f32 + 0.114 * pixel[2] as f32);
+    }
+    Some(luma)
+}
+
 pub(super) fn apply(
     pixels: &mut [u8],
     effect_type: &EffectType,
@@ -26,10 +34,9 @@ pub(super) fn apply(
             let treble = treble_gain.evaluate(frame);
             let cross = crossover_freq.evaluate(frame).clamp(20.0, 5000.0);
             if pixels.len() >= 4 {
-                let mut luma = Vec::with_capacity(pixels.len() / 4);
-                for p in pixels.as_chunks::<4>().0 {
-                    luma.push(0.299 * p[0] as f32 + 0.587 * p[1] as f32 + 0.114 * p[2] as f32);
-                }
+                let Some(mut luma) = luma_values(pixels) else {
+                    return true;
+                };
                 crate::core::audio_effects_dsp::apply_bass_treble(
                     &mut luma, 44100.0, bass, treble, cross,
                 );
@@ -59,10 +66,9 @@ pub(super) fn apply(
             let fb = feedback.evaluate(frame).clamp(0.0, 0.95);
             let wd = wet_dry.evaluate(frame);
             if pixels.len() >= 4 {
-                let mut luma = Vec::with_capacity(pixels.len() / 4);
-                for p in pixels.as_chunks::<4>().0 {
-                    luma.push(0.299 * p[0] as f32 + 0.587 * p[1] as f32 + 0.114 * p[2] as f32);
-                }
+                let Some(mut luma) = luma_values(pixels) else {
+                    return true;
+                };
                 crate::core::audio_effects_dsp::apply_flanger(&mut luma, 44100.0, md, rate, fb, wd);
                 for (px, &lv) in pixels.as_chunks_mut::<4>().0.iter_mut().zip(luma.iter()) {
                     let orig = 0.299 * px[0] as f32 + 0.587 * px[1] as f32 + 0.114 * px[2] as f32;
@@ -86,10 +92,9 @@ pub(super) fn apply(
             let vc = voices.evaluate(frame);
             let fb = feedback.evaluate(frame).clamp(0.0, 0.9);
             if pixels.len() >= 4 {
-                let mut luma = Vec::with_capacity(pixels.len() / 4);
-                for p in pixels.as_chunks::<4>().0 {
-                    luma.push(0.299 * p[0] as f32 + 0.587 * p[1] as f32 + 0.114 * p[2] as f32);
-                }
+                let Some(mut luma) = luma_values(pixels) else {
+                    return true;
+                };
                 crate::core::audio_effects_dsp::apply_chorus(
                     &mut luma, 44100.0, dm, dp, rt, vc, fb,
                 );
@@ -111,10 +116,9 @@ pub(super) fn apply(
             let gain = gain_db.evaluate(frame);
             let q = q_factor.evaluate(frame).clamp(0.5, 20.0);
             if pixels.len() >= 4 {
-                let mut luma = Vec::with_capacity(pixels.len() / 4);
-                for p in pixels.as_chunks::<4>().0 {
-                    luma.push(0.299 * p[0] as f32 + 0.587 * p[1] as f32 + 0.114 * p[2] as f32);
-                }
+                let Some(mut luma) = luma_values(pixels) else {
+                    return true;
+                };
                 crate::core::audio_effects_dsp::apply_parametric_eq_bell(
                     &mut luma, 44100.0, freq, gain, q,
                 );

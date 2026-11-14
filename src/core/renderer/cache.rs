@@ -1,4 +1,4 @@
-pub(crate) type RenderKey = (u64, u64, u32, u32, u32, (u32, u32));
+pub(crate) type RenderKey = (u64, u64, u64, u32, u32, u32, (u32, u32));
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub(crate) struct TextTextureKey {
     pub(crate) layer_id: String,
@@ -25,6 +25,7 @@ pub(crate) type TextTextureCache = std::collections::HashMap<
 pub(crate) type VideoFrameKey = (String, String, u32);
 struct VideoFrameEntry {
     _texture: std::sync::Arc<wgpu::Texture>,
+    _next_texture: Option<std::sync::Arc<wgpu::Texture>>,
     bind_group: std::sync::Arc<wgpu::BindGroup>,
     width: u32,
     height: u32,
@@ -65,16 +66,23 @@ impl VideoFrameCache {
         &mut self,
         key: VideoFrameKey,
         texture: std::sync::Arc<wgpu::Texture>,
+        next_texture: Option<std::sync::Arc<wgpu::Texture>>,
         bind_group: std::sync::Arc<wgpu::BindGroup>,
         width: u32,
         height: u32,
     ) {
-        let Some(byte_size) = (width as usize)
+        let Some(mut byte_size) = (width as usize)
             .checked_mul(height as usize)
             .and_then(|pixels| pixels.checked_mul(8))
         else {
             return;
         };
+        if next_texture.is_some() {
+            let Some(double_size) = byte_size.checked_mul(2) else {
+                return;
+            };
+            byte_size = double_size;
+        }
         if byte_size > self.max_bytes {
             return;
         }
@@ -87,6 +95,7 @@ impl VideoFrameCache {
             key,
             VideoFrameEntry {
                 _texture: texture,
+                _next_texture: next_texture,
                 bind_group,
                 width,
                 height,

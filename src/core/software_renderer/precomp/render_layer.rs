@@ -31,7 +31,10 @@ pub fn render_precomp_layers_inner(
         return Vec::new();
     }
 
-    let mut buffer = vec![0u8; size];
+    let Some(mut buffer) = super::super::try_zeroed_buffer(size) else {
+        log::error!("[Renderer] Could not allocate {size} bytes for pre-comp composition buffer");
+        return Vec::new();
+    };
     for p in (0..size).step_by(4) {
         buffer[p] = 0;
         buffer[p + 1] = 0;
@@ -51,6 +54,9 @@ pub fn render_precomp_layers_inner(
     };
 
     for (layer_idx, layer) in precomp_comp.layers.iter().enumerate() {
+        if super::super::render_cancelled() {
+            return buffer;
+        }
         if !layer.is_active(frame) || !layer.visible || layer.is_guide_layer {
             continue;
         }
@@ -95,7 +101,14 @@ fn apply_adjustment_layer(
     buffer: &mut [u8],
 ) {
     if !layer.effects.is_empty() && l_opacity > 0.003 {
-        let mut adjusted = buffer.to_vec();
+        let Some(mut adjusted) = super::super::try_clone_buffer(buffer) else {
+            log::error!(
+                "[Renderer] Could not allocate {} bytes for pre-comp adjustment layer {}",
+                buffer.len(),
+                layer.id
+            );
+            return;
+        };
         crate::core::cpu_effects::apply_layer_effects(
             Some(ctx.comp),
             Some(layer_idx),
@@ -106,7 +119,13 @@ fn apply_adjustment_layer(
             source_frame,
             ctx.comp.fps,
         );
+        if super::super::render_cancelled() {
+            return;
+        }
         for i in (0..buffer.len()).step_by(4) {
+            if i.is_multiple_of(4096 * 4) && super::super::render_cancelled() {
+                return;
+            }
             for c in 0..3 {
                 buffer[i + c] = (buffer[i + c] as f32 * (1.0 - l_opacity)
                     + adjusted[i + c] as f32 * l_opacity)
@@ -123,6 +142,34 @@ fn render_single_precomp_layer(
     p: &LayerRenderParams,
     buffer: &mut [u8],
 ) {
+    if matches!(layer.layer_type, LayerType::Particle { .. }) {
+        let mut source_comp = ctx.comp.clone();
+        source_comp.background_color = [0.0; 4];
+        let pixels = super::super::render_single_layer_pixels(
+            &source_comp,
+            p.layer_idx,
+            p.frame,
+            ctx.width,
+            ctx.height,
+        );
+        let bounds = LayerTransformBounds {
+            bw: ctx.width,
+            bh: ctx.height,
+            min_x: 0,
+            min_y: 0,
+            max_x: ctx.width,
+            max_y: ctx.height,
+            cx: ctx.width as f32 * 0.5,
+            cy: ctx.height as f32 * 0.5,
+            bounds_x: ctx.width as f32 * 0.5,
+            bounds_y: ctx.height as f32 * 0.5,
+            cos_r: 1.0,
+            sin_r: 0.0,
+        };
+        composite_layer_buffer(&pixels, &bounds, ctx.width, 1.0, buffer);
+        return;
+    }
+
     let (base_w, base_h) = match &layer.layer_type {
         LayerType::Solid { .. } | LayerType::PreComp { .. } => {
             (ctx.comp.width as f32, ctx.comp.height as f32)
@@ -151,8 +198,13 @@ fn render_single_precomp_layer(
 
     let rad = p.rotation.to_radians();
     let (cos_r, sin_r) = rad.sin_cos();
-    let cx = p.pos[0];
-    let cy = p.pos[1];
+    let [cx, cy] = super::super::layer_center_from_anchor(
+        p.pos,
+        p.scale,
+        p.rotation,
+        layer.transform.anchor_point.evaluate(p.frame),
+        [base_w, base_h],
+    );
     let bounds_x = w * 0.5;
     let bounds_y = h * 0.5;
 
@@ -168,8 +220,24 @@ fn render_single_precomp_layer(
         return;
     }
 
-    let buf_size = (bw * bh * 4) as usize;
-    let mut layer_buf = vec![0u8; buf_size];
+    let Some(buf_size) = (bw as usize)
+        .checked_mul(bh as usize)
+        .and_then(|pixels| pixels.checked_mul(4))
+    else {
+        log::error!(
+            "[Renderer] Pre-comp layer raster dimensions overflow for {}",
+            layer.id
+        );
+        super::super::mark_render_allocation_failed();
+        return;
+    };
+    let Some(mut layer_buf) = super::super::try_zeroed_buffer(buf_size) else {
+        log::error!(
+            "[Renderer] Could not allocate {buf_size} bytes for pre-comp layer {}",
+            layer.id
+        );
+        return;
+    };
     let raster_region = RasterizationRegion {
         min_x,
         min_y,
@@ -180,6 +248,8 @@ fn render_single_precomp_layer(
         center_y: cy,
         cos_rotation: cos_r,
         sin_rotation: sin_r,
+        flip_x: p.scale[0] < 0.0,
+        flip_y: p.scale[1] < 0.0,
         bounds_x,
         bounds_y,
     };
@@ -226,15 +296,21 @@ fn render_single_precomp_layer(
 
     if !layer.puppet_pins.is_empty() {
         let to_buf = |pt: [f32; 2]| -> [f32; 2] { [pt[0] - min_x as f32, pt[1] - min_y as f32] };
-        let pins: Vec<([f32; 2], [f32; 2])> = layer
-            .puppet_pins
-            .iter()
-            .map(|pin| {
-                let s = to_buf(pin.comp_source);
-                let d = to_buf(pin.position.evaluate(p.source_frame));
-                (s, d)
-            })
-            .collect();
+        let mut pins = Vec::new();
+        if pins.try_reserve_exact(layer.puppet_pins.len()).is_err() {
+            log::error!(
+                "[Renderer] Could not allocate {} puppet pins for pre-comp layer {}",
+                layer.puppet_pins.len(),
+                layer.id
+            );
+            super::super::mark_render_allocation_failed();
+            return;
+        }
+        pins.extend(layer.puppet_pins.iter().map(|pin| {
+            let s = to_buf(pin.comp_source);
+            let d = to_buf(pin.position.evaluate(p.source_frame));
+            (s, d)
+        }));
         crate::core::puppet_warp::warp_layer_buf_mesh(&mut layer_buf, bw, bh, &pins);
     }
 
@@ -260,6 +336,9 @@ fn composite_layer_buffer(
     buffer: &mut [u8],
 ) {
     for ly in 0..tb.bh {
+        if super::super::render_cancelled() {
+            return;
+        }
         for lx in 0..tb.bw {
             let lidx = ((ly * tb.bw + lx) * 4) as usize;
             let src_a = layer_buf[lidx + 3] as f32 / 255.0 * l_opacity;

@@ -108,6 +108,8 @@ pub fn draw_audio_panel(app: &mut KagariApp, ui: &mut egui::Ui) {
                         effect_type: crate::core::timeline::EffectType::AudioSpectrum {
                             enabled: crate::core::property::Animatable::new_constant(1.0),
                             bands: crate::core::property::Animatable::new_constant(5.0),
+                            start_frequency: 20.0,
+                            end_frequency: 20_000.0,
                             opacity: crate::core::property::Animatable::new_constant(1.0),
                             color_start: [0.0, 0.8, 1.0, 1.0],
                             color_end: [0.8, 0.2, 1.0, 1.0],

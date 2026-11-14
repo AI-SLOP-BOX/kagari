@@ -88,6 +88,9 @@ impl WgpuRenderer {
                         height,
                         depth_or_array_layers: 1,
                     };
+                    let Some(upload_bytes) = rgba8_to_rgba16f_bytes(&raster.pixels) else {
+                        return false;
+                    };
                     self.queue.write_texture(
                         wgpu::ImageCopyTexture {
                             texture: self
@@ -98,7 +101,7 @@ impl WgpuRenderer {
                             origin: wgpu::Origin3d::ZERO,
                             aspect: wgpu::TextureAspect::All,
                         },
-                        &rgba8_to_rgba16f_bytes(&raster.pixels),
+                        &upload_bytes,
                         wgpu::ImageDataLayout {
                             offset: 0,
                             bytes_per_row: Some(width * 8),
@@ -146,11 +149,16 @@ impl WgpuRenderer {
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: if run.start == 0 {
+                                let background_alpha =
+                                    comp.background_color[3].clamp(0.0, 1.0) as f64;
                                 wgpu::LoadOp::Clear(wgpu::Color {
-                                    r: comp.background_color[0].clamp(0.0, 1.0) as f64,
-                                    g: comp.background_color[1].clamp(0.0, 1.0) as f64,
-                                    b: comp.background_color[2].clamp(0.0, 1.0) as f64,
-                                    a: comp.background_color[3].clamp(0.0, 1.0) as f64,
+                                    r: comp.background_color[0].clamp(0.0, 1.0) as f64
+                                        * background_alpha,
+                                    g: comp.background_color[1].clamp(0.0, 1.0) as f64
+                                        * background_alpha,
+                                    b: comp.background_color[2].clamp(0.0, 1.0) as f64
+                                        * background_alpha,
+                                    a: background_alpha,
                                 })
                             } else {
                                 wgpu::LoadOp::Load

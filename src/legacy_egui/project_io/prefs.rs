@@ -140,25 +140,15 @@ where
     update(&mut root);
     let json = serde_json::to_vec_pretty(&serde_json::Value::Object(root))
         .map_err(|error| format!("Could not serialize preferences: {error}"))?;
-    let sequence = PREFS_WRITE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-    let temporary = path.with_file_name(format!(
-        ".kagari_prefs.json.tmp.{}.{}",
-        std::process::id(),
-        sequence
-    ));
-    let result = (|| -> std::io::Result<()> {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        let mut file = std::fs::File::create(&temporary)?;
-        use std::io::Write;
-        file.write_all(&json)?;
-        file.sync_all()?;
-        drop(file);
-        std::fs::rename(&temporary, &path)
-    })();
-    if let Err(error) = result {
-        let _ = std::fs::remove_file(temporary);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| {
+            format!(
+                "Could not create preferences directory {}: {error}",
+                parent.display()
+            )
+        })?;
+    }
+    if let Err(error) = crate::core::atomic_file::write_atomic(&path, &json) {
         return Err(format!(
             "Could not save preferences to {}: {error}",
             path.display()
@@ -218,8 +208,10 @@ pub(crate) fn path_from_key(value: &str) -> std::path::PathBuf {
     if kind == "w" && bytes.len().is_multiple_of(2) {
         use std::os::windows::ffi::OsStringExt;
         let wide = bytes
-            .chunks_exact(2)
-            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|chunk| u16::from_le_bytes(*chunk))
             .collect::<Vec<_>>();
         return std::path::PathBuf::from(std::ffi::OsString::from_wide(&wide));
     }

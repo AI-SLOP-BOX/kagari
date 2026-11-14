@@ -316,12 +316,32 @@ impl Project {
             "", "Footage", "footage", "Assets", "assets", "Media", "media", "audio", "Audio",
         ];
 
-        let find_file = |raw_path: &str| -> Option<String> {
+        let find_file = |raw_path: &str| -> Option<(String, bool)> {
             let p = std::path::Path::new(raw_path);
-            if p.is_file() {
-                return None;
+            let offline_project_path = if p.is_absolute() {
+                None
+            } else {
+                Some(project_file_dir.join(p).to_string_lossy().to_string())
+            };
+            if p.is_absolute() {
+                if p.is_file() {
+                    return None;
+                }
+            } else {
+                let project_relative = project_file_dir.join(p);
+                if project_relative.is_file() {
+                    let working_directory_path = p
+                        .is_file()
+                        .then(|| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf()));
+                    let resolved = std::fs::canonicalize(&project_relative)
+                        .unwrap_or_else(|_| project_relative.clone());
+                    let was_relinked =
+                        working_directory_path.is_some_and(|working_path| working_path != resolved);
+                    return Some((resolved.to_string_lossy().to_string(), was_relinked));
+                }
             }
             let filename = p.file_name()?;
+            let mut candidates = Vec::new();
             for sub in &candidate_subdirs {
                 let candidate = if sub.is_empty() {
                     project_file_dir.join(filename)
@@ -329,37 +349,51 @@ impl Project {
                     project_file_dir.join(sub).join(filename)
                 };
                 if candidate.is_file() {
-                    return Some(candidate.to_string_lossy().to_string());
+                    let candidate = std::fs::canonicalize(&candidate).unwrap_or(candidate);
+                    if !candidates.contains(&candidate) {
+                        candidates.push(candidate);
+                    }
                 }
             }
-            None
+            match candidates.as_slice() {
+                [candidate] => Some((candidate.to_string_lossy().to_string(), true)),
+                [] => offline_project_path.map(|path| (path, false)),
+                _ => {
+                    log::warn!(
+                        "Ambiguous footage relink for '{}': found {} candidates near the project; keeping the project-relative path unresolved",
+                        raw_path,
+                        candidates.len()
+                    );
+                    offline_project_path.map(|path| (path, false))
+                }
+            }
         };
 
         // Relink project assets
         for asset in &mut self.assets {
             match &mut asset.item_type {
                 ProjectItemType::Image { path, .. } => {
-                    if let Some(new_p) = find_file(path) {
+                    if let Some((new_p, was_relinked)) = find_file(path) {
                         *path = new_p;
-                        relinked_count += 1;
+                        relinked_count += usize::from(was_relinked);
                     }
                 }
                 ProjectItemType::Model3D { path } => {
-                    if let Some(new_p) = find_file(path) {
+                    if let Some((new_p, was_relinked)) = find_file(path) {
                         *path = new_p;
-                        relinked_count += 1;
+                        relinked_count += usize::from(was_relinked);
                     }
                 }
                 ProjectItemType::Video { path, .. } => {
-                    if let Some(new_p) = find_file(path) {
+                    if let Some((new_p, was_relinked)) = find_file(path) {
                         *path = new_p;
-                        relinked_count += 1;
+                        relinked_count += usize::from(was_relinked);
                     }
                 }
                 ProjectItemType::Audio { path, .. } => {
-                    if let Some(new_p) = find_file(path) {
+                    if let Some((new_p, was_relinked)) = find_file(path) {
                         *path = new_p;
-                        relinked_count += 1;
+                        relinked_count += usize::from(was_relinked);
                     }
                 }
                 _ => {}
@@ -368,21 +402,22 @@ impl Project {
 
         fn relink_comp(
             comp: &mut Composition,
-            find_file: &dyn Fn(&str) -> Option<String>,
+            find_file: &dyn Fn(&str) -> Option<(String, bool)>,
+            project_file_dir: &std::path::Path,
             relinked_count: &mut usize,
         ) {
             for layer in &mut comp.layers {
                 match &mut layer.layer_type {
                     LayerType::Image { path } => {
-                        if let Some(new_p) = find_file(path) {
+                        if let Some((new_p, was_relinked)) = find_file(path) {
                             *path = new_p;
-                            *relinked_count += 1;
+                            *relinked_count += usize::from(was_relinked);
                         }
                     }
                     LayerType::Model3D { path } => {
-                        if let Some(new_p) = find_file(path) {
+                        if let Some((new_p, was_relinked)) = find_file(path) {
                             *path = new_p;
-                            *relinked_count += 1;
+                            *relinked_count += usize::from(was_relinked);
                         }
                     }
                     LayerType::Video {
@@ -392,33 +427,51 @@ impl Project {
                         audio_wav,
                         ..
                     } => {
-                        if let Some(new_p) = find_file(source) {
+                        if frames_dir != "cache_pending"
+                            && std::path::Path::new(frames_dir).is_relative()
+                        {
+                            *frames_dir = project_file_dir
+                                .join(&*frames_dir)
+                                .to_string_lossy()
+                                .into_owned();
+                        }
+                        if let Some(audio_path) = audio_wav {
+                            if std::path::Path::new(audio_path).is_relative() {
+                                *audio_path = project_file_dir
+                                    .join(&*audio_path)
+                                    .to_string_lossy()
+                                    .into_owned();
+                            }
+                        }
+                        if let Some((new_p, was_relinked)) = find_file(source) {
                             *source = new_p;
-                            // The old extraction belongs to the missing source. Force the
-                            // relink pass to decode the newly found movie before rendering.
-                            frames_dir.clear();
-                            *frame_count = 0;
-                            *audio_wav = None;
-                            *relinked_count += 1;
+                            if was_relinked {
+                                // The old extraction belongs to the missing source. Force the
+                                // relink pass to decode the newly found movie before rendering.
+                                frames_dir.clear();
+                                *frame_count = 0;
+                                *audio_wav = None;
+                                *relinked_count += 1;
+                            }
                         }
                     }
                     LayerType::Audio { path, .. } => {
-                        if let Some(new_p) = find_file(path) {
+                        if let Some((new_p, was_relinked)) = find_file(path) {
                             *path = new_p;
-                            *relinked_count += 1;
+                            *relinked_count += usize::from(was_relinked);
                         }
                     }
                     _ => {}
                 }
             }
             for sub in &mut comp.sub_compositions {
-                relink_comp(sub, find_file, relinked_count);
+                relink_comp(sub, find_file, project_file_dir, relinked_count);
             }
         }
 
         // Relink layers across the full precomp tree, not only the top-level comps.
         for comp in &mut self.compositions {
-            relink_comp(comp, &find_file, &mut relinked_count);
+            relink_comp(comp, &find_file, project_file_dir, &mut relinked_count);
         }
 
         relinked_count

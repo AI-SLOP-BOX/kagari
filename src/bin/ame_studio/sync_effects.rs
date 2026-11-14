@@ -248,29 +248,35 @@ impl AfterEffectsStudio {
             })
             .unwrap_or_default();
 
+        let has_tracker_items = !tracker_items.is_empty();
         self.ui
-            .set_binding("has_tracker_items", Value::Bool(!tracker_items.is_empty()))?;
+            .set_binding("has_tracker_items", Value::Bool(has_tracker_items))?;
         self.ui
             .set_binding("tracker_items", Value::List(tracker_items))?;
 
         let current_layer_id = self.selected_layer_id.clone();
-        let tracker_target_layers = self
-            .project_model
-            .active_composition()
-            .layers
-            .iter()
-            .filter(|layer| Some(&layer.id) != current_layer_id.as_ref())
-            .map(|layer| {
-                Value::Record(std::collections::BTreeMap::from([
-                    ("id".to_owned(), Value::String(layer.id.clone())),
-                    ("name".to_owned(), Value::String(layer.name.clone())),
-                    (
-                        "selected".to_owned(),
-                        Value::Bool(self.selected_tracker_target_id.as_deref() == Some(&layer.id)),
-                    ),
-                ]))
-            })
-            .collect::<Vec<_>>();
+        let tracker_target_layers = if has_tracker_items {
+            self.project_model
+                .active_composition()
+                .layers
+                .iter()
+                .filter(|layer| Some(&layer.id) != current_layer_id.as_ref())
+                .map(|layer| {
+                    Value::Record(std::collections::BTreeMap::from([
+                        ("id".to_owned(), Value::String(layer.id.clone())),
+                        ("name".to_owned(), Value::String(layer.name.clone())),
+                        (
+                            "selected".to_owned(),
+                            Value::Bool(
+                                self.selected_tracker_target_id.as_deref() == Some(&layer.id),
+                            ),
+                        ),
+                    ]))
+                })
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
 
         self.ui
             .set_binding("tracker_target_layers", Value::List(tracker_target_layers))?;

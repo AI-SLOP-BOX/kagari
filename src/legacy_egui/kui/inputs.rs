@@ -268,9 +268,12 @@ impl PropertyGrid {
     ) -> R {
         let label = crate::ui::localization::tr(label);
         ui.horizontal(|ui| {
+            let available_width = ui.available_width();
+            let label_width = self.label_width.min((available_width - 104.0).max(0.0));
             ui.add_sized(
-                [self.label_width, layout::FIELD_HEIGHT],
-                egui::Label::new(egui::RichText::new(label).color(colors::TEXT_SECONDARY)),
+                [label_width, layout::FIELD_HEIGHT],
+                egui::Label::new(egui::RichText::new(label).color(colors::TEXT_SECONDARY))
+                    .truncate(),
             );
             control(ui)
         })

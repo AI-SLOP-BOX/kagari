@@ -3,12 +3,43 @@ use super::*;
 #[cfg(feature = "gui")]
 impl Default for KagariApp {
     fn default() -> Self {
+        let recovery_dir = {
+            #[cfg(unix)]
+            {
+                #[cfg(target_os = "macos")]
+                let home_path = std::env::var_os("HOME")
+                    .map(std::path::PathBuf::from)
+                    .map(|home| home.join("Library/Application Support/Kagari/Recovery"));
+                #[cfg(target_os = "linux")]
+                let home_path = std::env::var_os("XDG_STATE_HOME")
+                    .filter(|path| std::path::PathBuf::from(path).is_absolute())
+                    .map(std::path::PathBuf::from)
+                    .map(|state| state.join("kagari/recovery"))
+                    .or_else(|| {
+                        std::env::var_os("HOME")
+                            .map(std::path::PathBuf::from)
+                            .map(|home| home.join(".local/state/kagari/recovery"))
+                    });
+                #[cfg(all(unix, not(any(target_os = "macos", target_os = "linux"))))]
+                let home_path = std::env::var_os("HOME")
+                    .map(std::path::PathBuf::from)
+                    .map(|home| home.join(".local/state/kagari/recovery"));
+                home_path.unwrap_or_else(|| {
+                    std::env::temp_dir().join(format!("kagari_recovery_{}", std::process::id()))
+                })
+            }
+            #[cfg(not(unix))]
+            std::env::temp_dir().join("kagari_recovery")
+        };
+        #[cfg(unix)]
+        crate::core::autosave::manager::migrate_legacy_recovery_snapshots(
+            &std::env::temp_dir().join("kagari_recovery"),
+            &recovery_dir,
+        );
         Self {
             history: crate::core::history::ProjectHistory::new(Project::empty_for_new_project()),
-            autosave: crate::core::autosave::AutosaveManager::new(
-                std::env::temp_dir().join("kagari_recovery"),
-            )
-            .with_process_namespace(std::process::id()),
+            autosave: crate::core::autosave::AutosaveManager::new(recovery_dir)
+                .with_process_namespace(std::process::id()),
             autosave_history_generation: 0,
             show_recovery_dialog: false,
             confirm_exit: true,
@@ -24,6 +55,7 @@ impl Default for KagariApp {
             recovery_generations_rx: None,
             recovery_load_kind: RecoveryLoadKind::Latest,
             background_threads: std::sync::Mutex::new(Vec::new()),
+            background_worker_panicked: std::sync::atomic::AtomicBool::new(false),
             exit_cancel_flags: std::sync::Mutex::new(Vec::new()),
             ui_tabs: UiTabsDomainState::default(),
             loop_playback: true,

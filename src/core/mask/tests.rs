@@ -16,6 +16,7 @@ fn test_mask_rect_path() {
     let path = MaskPath::new_rect(0.0, 0.0, 100.0, 100.0);
     let poly = path.to_polygon(0, 4);
     assert!(!poly.is_empty(), "polygon should have points");
+    assert_eq!(poly.len(), 5, "linear rectangle edges need no subdivision");
 }
 
 #[test]

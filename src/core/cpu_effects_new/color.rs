@@ -1,5 +1,4 @@
 use crate::core::effect_utils;
-use crate::core::software_renderer::rgba_buffer_size;
 use rayon::prelude::*;
 
 /// Apply levels adjustment (tone remapping).
@@ -14,10 +13,7 @@ pub fn apply_levels(
     output_black: f32,
     output_white: f32,
 ) {
-    let Some(expected) = rgba_buffer_size(width, height) else {
-        return;
-    };
-    if pixels.len() < expected {
+    if !super::valid_rgba_dimensions(pixels, width, height) {
         return;
     }
     let range = (input_white - input_black).max(0.001);
@@ -32,7 +28,11 @@ pub fn apply_levels(
         *entry = (out.clamp(0.0, 1.0) * 255.0) as u8;
     }
 
-    pixels.par_chunks_mut(4).for_each(|chunk| {
+    let cancel_flag = super::render_cancel_flag();
+    pixels.par_chunks_mut(4).enumerate().for_each(|(i, chunk)| {
+        if i.is_multiple_of(4096) && super::cancellation_requested(&cancel_flag) {
+            return;
+        }
         if chunk.len() < 4 {
             return;
         }
@@ -52,8 +52,12 @@ pub fn apply_hue_saturation(
     lightness: f32,
 ) {
     let shift_norm = hue_shift / 360.0;
+    let cancel_flag = super::render_cancel_flag();
 
-    pixels.par_chunks_mut(4).for_each(|chunk| {
+    pixels.par_chunks_mut(4).enumerate().for_each(|(i, chunk)| {
+        if i.is_multiple_of(4096) && super::cancellation_requested(&cancel_flag) {
+            return;
+        }
         if chunk.len() < 4 {
             return;
         }
@@ -83,15 +87,25 @@ pub fn apply_color_grade_lut(
     lut_size: usize,
     intensity: f32,
 ) {
-    let Some(expected) = rgba_buffer_size(width, height) else {
+    if !super::valid_rgba_dimensions(pixels, width, height) {
+        return;
+    }
+    let Some(lut_voxel_count) = lut_size
+        .checked_mul(lut_size)
+        .and_then(|square| square.checked_mul(lut_size))
+    else {
         return;
     };
-    if pixels.len() < expected || lut_size < 2 || lut_data.len() < lut_size * lut_size * lut_size {
+    if lut_size < 2 || lut_data.len() < lut_voxel_count {
         return;
     }
     let ls = lut_size as f32 - 1.0;
+    let cancel_flag = super::render_cancel_flag();
 
-    pixels.par_chunks_mut(4).for_each(|chunk| {
+    pixels.par_chunks_mut(4).enumerate().for_each(|(i, chunk)| {
+        if i.is_multiple_of(4096) && super::cancellation_requested(&cancel_flag) {
+            return;
+        }
         if chunk.len() < 4 {
             return;
         }
@@ -153,9 +167,13 @@ pub fn apply_color_grade_lut(
 
 /// Apply color space conversion.
 pub fn apply_color_space_convert(pixels: &mut [u8], _width: u32, _height: u32, mode: u32) {
+    let cancel_flag = super::render_cancel_flag();
     match mode {
         0 => {
-            pixels.par_chunks_mut(4).for_each(|chunk| {
+            pixels.par_chunks_mut(4).enumerate().for_each(|(i, chunk)| {
+                if i.is_multiple_of(4096) && super::cancellation_requested(&cancel_flag) {
+                    return;
+                }
                 if chunk.len() < 4 {
                     return;
                 }
@@ -171,7 +189,10 @@ pub fn apply_color_space_convert(pixels: &mut [u8], _width: u32, _height: u32, m
             });
         }
         1 => {
-            pixels.par_chunks_mut(4).for_each(|chunk| {
+            pixels.par_chunks_mut(4).enumerate().for_each(|(i, chunk)| {
+                if i.is_multiple_of(4096) && super::cancellation_requested(&cancel_flag) {
+                    return;
+                }
                 if chunk.len() < 4 {
                     return;
                 }
@@ -187,7 +208,10 @@ pub fn apply_color_space_convert(pixels: &mut [u8], _width: u32, _height: u32, m
             });
         }
         2 => {
-            pixels.par_chunks_mut(4).for_each(|chunk| {
+            pixels.par_chunks_mut(4).enumerate().for_each(|(i, chunk)| {
+                if i.is_multiple_of(4096) && super::cancellation_requested(&cancel_flag) {
+                    return;
+                }
                 if chunk.len() < 4 {
                     return;
                 }
@@ -219,7 +243,11 @@ pub fn apply_curves(pixels: &mut [u8], _width: u32, _height: u32, channel: f32) 
         *entry = (val.clamp(0.0, 1.0) * 255.0) as u8;
     }
 
-    for px in pixels.as_chunks_mut::<4>().0 {
+    let cancel_flag = super::render_cancel_flag();
+    for (i, px) in pixels.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+        if i.is_multiple_of(4096) && super::cancellation_requested(&cancel_flag) {
+            return;
+        }
         if ch == 0 {
             px[0] = lut[px[0] as usize];
             px[1] = lut[px[1] as usize];

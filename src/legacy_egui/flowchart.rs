@@ -176,7 +176,7 @@ pub fn draw_flowchart_view(app: &mut KagariApp, ui: &mut egui::Ui, comp: &Compos
             let control2 = egui::pos2(npos.x - 80.0, npos.y);
             let points = [root_pos, control1, control2, npos];
             let mut curve_pts = [egui::Pos2::ZERO; 11];
-            for step in 0..=10 {
+            for (step, curve_point) in curve_pts.iter_mut().enumerate() {
                 let u = step as f32 / 10.0;
                 let u1 = 1.0 - u;
                 let x = u1 * u1 * u1 * points[0].x
@@ -187,7 +187,7 @@ pub fn draw_flowchart_view(app: &mut KagariApp, ui: &mut egui::Ui, comp: &Compos
                     + 3.0 * u1 * u1 * u * points[1].y
                     + 3.0 * u1 * u * u * points[2].y
                     + u * u * u * points[3].y;
-                curve_pts[step] = egui::pos2(x, y);
+                *curve_point = egui::pos2(x, y);
             }
 
             painter.add(egui::Shape::line(

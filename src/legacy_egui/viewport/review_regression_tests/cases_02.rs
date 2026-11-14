@@ -15,7 +15,7 @@ fn roto_brush_stroke_propagation_survives_project_roundtrip() {
         },
         3,
     );
-    layer.out_frame = 2;
+    layer.out_frame = 3;
     comp.layers.push(layer);
     app.commit_project(project);
 
@@ -23,6 +23,7 @@ fn roto_brush_stroke_propagation_survives_project_roundtrip() {
     let stroke = EngineRotoStroke {
         stroke_type: RotoStrokeType::Foreground,
         points: vec![[8.0, 16.0], [24.0, 16.0]],
+        pressures: Vec::new(),
         radius: 4.0,
         frame: Some(1),
     };

@@ -116,12 +116,14 @@ pub(crate) fn draw_media_specs(
             frames_dir,
             frame_count,
             audio_wav,
+            audio_volume,
             speed,
         } => {
             let before_src = source.clone();
             let before_frames = frames_dir.clone();
             let before_speed = *speed;
             let before_count = *frame_count;
+            let before_audio_volume = audio_volume.clone();
             let before_frame_blending = layer.frame_blending;
             ui.label(egui::RichText::new("動画レイヤー").strong());
             kui::property(ui, "ソース", |ui| kui::text_field(ui, source));
@@ -156,6 +158,19 @@ pub(crate) fn draw_media_specs(
             kui::property(ui, "総フレーム数", |ui| {
                 ui.add(kui::drag(frame_count).range(1..=100_000))
             });
+            if audio_wav.is_some() {
+                if let Some(nf) = draw_property_ui(
+                    current_frame,
+                    ui,
+                    "埋込音声の音量",
+                    audio_volume,
+                    |ui, value| {
+                        kui::slider(ui, value, -48.0..=12.0, " dB");
+                    },
+                ) {
+                    *next_frame = Some(nf);
+                }
+            }
             ui.label(format!(
                 "再生時間: {:.1}秒 (速度 {:.2}x) | 音声: {}",
                 *frame_count as f32 / comp_fps.max(1.0) / speed.max(0.01),
@@ -213,6 +228,7 @@ pub(crate) fn draw_media_specs(
                 || before_frames != *frames_dir
                 || before_speed != *speed
                 || before_count != *frame_count
+                || before_audio_volume != *audio_volume
                 || before_frame_blending != layer.frame_blending
             {
                 *project_changed = true;

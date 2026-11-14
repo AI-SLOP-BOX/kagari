@@ -61,6 +61,25 @@ through the library export modules; they are not separate CLI subcommands yet.
   runs fully headless. The viewport uses the GPU (wgpu) path when an adapter is
   available and falls back to CPU otherwise.
 
+The macOS Studio app also checks common Homebrew, MacPorts, and Nix install
+locations when Finder does not provide a shell-style `PATH`.
+
+For a Gatekeeper-ready macOS release, install a Developer ID Application
+certificate and configure a `notarytool` keychain profile, then package with:
+
+```bash
+KAGARI_CODESIGN_IDENTITY="Developer ID Application: Example (TEAMID)" \
+KAGARI_NOTARY_PROFILE="kagari-notary" \
+  ./scripts/package_macos.sh target/release/kagari-studio
+```
+
+The script signs and verifies the app and DMG, submits the DMG for notarization,
+staples and validates the ticket, then publishes the final DMG. Without these
+environment variables it creates an unsigned development artifact and prints
+a warning. The local package contains the CPU architecture of the machine that
+built it. CI publishes separate `arm64` and `x86_64` DMGs for Apple Silicon and
+Intel Macs; they are architecture-specific, not universal binaries.
+
 ## Documentation & Architecture
 
 For a comprehensive breakdown of all subsystems, layer types, effect packages, and connected vs in-progress features, see:

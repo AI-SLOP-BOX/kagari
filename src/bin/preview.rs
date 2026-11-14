@@ -322,8 +322,8 @@ struct PreviewApp {
 impl PreviewApp {
     fn load_project(path: &std::path::Path) -> Result<ProductionDocument, String> {
         let json = project_migration::read_project_json_file(path)?;
-        ProductionDocument::from_json(&json)
-            .or_else(|_| ProductionDocument::from_legacy_project_json(&json))
+        let (project, document) = project_migration::load_project_document_or_legacy(&json)?;
+        Ok(document.unwrap_or_else(|| ProductionDocument::new(project)))
     }
 
     fn active_composition(&self) -> Option<&Composition> {

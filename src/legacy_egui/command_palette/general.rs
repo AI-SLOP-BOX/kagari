@@ -519,7 +519,9 @@ pub fn get_general_commands() -> Vec<PaletteCommand> {
                     let srt = crate::core::subtitles::layers_to_srt(&comp.layers, comp.fps);
                     if srt.is_empty() {
                         app.toasts.error("No caption layers found");
-                    } else if let Err(e) = std::fs::write(&path, &srt) {
+                    } else if let Err(e) =
+                        crate::core::atomic_file::write_atomic(&path, srt.as_bytes())
+                    {
                         app.toasts.error(format!("Write failed: {}", e));
                     } else {
                         app.toasts.info("Captions exported");

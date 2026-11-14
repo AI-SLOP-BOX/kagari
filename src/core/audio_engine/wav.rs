@@ -2,58 +2,216 @@ use super::*;
 
 // ── WAV loading & waveform extraction ───────────────────────────────────────
 
+fn stereo_mix_weights(channel: symphonia::core::audio::Channels) -> Option<[f32; 2]> {
+    use symphonia::core::audio::Channels as Ch;
+
+    let center = std::f32::consts::FRAC_1_SQRT_2;
+    let surround = std::f32::consts::FRAC_1_SQRT_2;
+    let top = 0.5;
+    Some(if channel == Ch::FRONT_LEFT {
+        [1.0, 0.0]
+    } else if channel == Ch::FRONT_RIGHT {
+        [0.0, 1.0]
+    } else if channel == Ch::FRONT_CENTRE {
+        [center, center]
+    } else if channel == Ch::LFE1 || channel == Ch::LFE2 {
+        [0.316_227_76, 0.316_227_76]
+    } else if matches!(
+        channel,
+        Ch::REAR_LEFT
+            | Ch::SIDE_LEFT
+            | Ch::FRONT_LEFT_CENTRE
+            | Ch::REAR_LEFT_CENTRE
+            | Ch::FRONT_LEFT_WIDE
+            | Ch::FRONT_LEFT_HIGH
+    ) {
+        [surround, 0.0]
+    } else if matches!(
+        channel,
+        Ch::REAR_RIGHT
+            | Ch::SIDE_RIGHT
+            | Ch::FRONT_RIGHT_CENTRE
+            | Ch::REAR_RIGHT_CENTRE
+            | Ch::FRONT_RIGHT_WIDE
+            | Ch::FRONT_RIGHT_HIGH
+    ) {
+        [0.0, surround]
+    } else if matches!(
+        channel,
+        Ch::REAR_CENTRE | Ch::TOP_CENTRE | Ch::TOP_FRONT_CENTRE | Ch::TOP_REAR_CENTRE
+    ) {
+        [top, top]
+    } else if channel == Ch::TOP_FRONT_LEFT || channel == Ch::TOP_REAR_LEFT {
+        [top, 0.0]
+    } else if channel == Ch::TOP_FRONT_RIGHT || channel == Ch::TOP_REAR_RIGHT {
+        [0.0, top]
+    } else {
+        return None;
+    })
+}
+
+fn downmix_interleaved_to_stereo(
+    samples: &[f32],
+    layout: symphonia::core::audio::Channels,
+    output: &mut Vec<f32>,
+) -> Result<(), String> {
+    let channels = layout.count();
+    if channels <= 2 || !samples.len().is_multiple_of(channels) {
+        return Err("multichannel audio has an invalid interleaved layout".into());
+    }
+    let weights: Vec<[f32; 2]> = layout
+        .iter()
+        .map(|channel| {
+            stereo_mix_weights(channel)
+                .ok_or_else(|| format!("unsupported audio channel position: {channel}"))
+        })
+        .collect::<Result<_, _>>()?;
+    let frames = samples.len() / channels;
+    let output_len = frames
+        .checked_mul(2)
+        .ok_or_else(|| "downmixed audio size overflows address space".to_string())?;
+    output.clear();
+    output
+        .try_reserve(output_len)
+        .map_err(|error| format!("cannot allocate downmixed audio: {error}"))?;
+    for frame in samples.chunks_exact(channels) {
+        let mut left = 0.0f32;
+        let mut right = 0.0f32;
+        for (sample, [left_weight, right_weight]) in frame.iter().zip(&weights) {
+            left += sample * left_weight;
+            right += sample * right_weight;
+        }
+        output.extend_from_slice(&[left, right]);
+    }
+    Ok(())
+}
+
 impl AudioBuffer {
-    /// Parses a RIFF/WAVE file (PCM 8/16/24-bit, mono or stereo).
+    /// Parses integer PCM RIFF/WAVE files and downmixes WAVE_FORMAT_EXTENSIBLE
+    /// multichannel layouts with a recognized speaker mask to stereo.
     /// Returns an error with a human-readable reason for unsupported formats.
     pub fn load_wav(path: &std::path::Path) -> Result<Self, String> {
+        use std::io::{Read, Seek, SeekFrom};
         const MAX_WAV_BYTES: u64 = 512 * 1024 * 1024;
-        let metadata = std::fs::metadata(path).map_err(|e| format!("cannot stat WAV: {}", e))?;
+        const INPUT_CHUNK_BYTES: usize = 64 * 1024;
+        let mut file = std::fs::File::open(path).map_err(|e| format!("cannot open WAV: {}", e))?;
+        let metadata = file
+            .metadata()
+            .map_err(|e| format!("cannot stat WAV: {}", e))?;
         if metadata.len() > MAX_WAV_BYTES {
             return Err("WAV file exceeds the 512 MiB limit".into());
         }
-        let data = std::fs::read(path).map_err(|e| format!("cannot read WAV: {}", e))?;
-        if data.len() < 44 || &data[0..4] != b"RIFF" || &data[8..12] != b"WAVE" {
+        let mut header = [0u8; 12];
+        file.read_exact(&mut header)
+            .map_err(|error| format!("cannot read WAV header: {error}"))?;
+        if &header[0..4] != b"RIFF" || &header[8..12] != b"WAVE" {
             return Err("not a RIFF/WAVE file".into());
         }
+        let riff_size = u32::from_le_bytes([header[4], header[5], header[6], header[7]]) as u64;
+        let riff_end = 8u64
+            .checked_add(riff_size)
+            .filter(|end| *end <= metadata.len() && *end >= 12)
+            .ok_or_else(|| "WAV has an invalid RIFF size".to_string())?;
 
         // Walk chunks to find fmt and data
-        let mut pos = 12usize;
+        let mut pos = 12u64;
         let mut format_tag = 1u16;
         let mut channels = 0u16;
         let mut sample_rate = 0u32;
         let mut bits = 0u16;
-        let mut audio_data: Option<&[u8]> = None;
+        let mut block_align = 0u16;
+        let mut has_format = false;
+        let mut channel_layout = None;
+        let mut audio_data: Option<(u64, usize)> = None;
 
-        while pos + 8 <= data.len() {
-            let id = &data[pos..pos + 4];
-            let size =
-                u32::from_le_bytes([data[pos + 4], data[pos + 5], data[pos + 6], data[pos + 7]])
-                    as usize;
+        while pos.checked_add(8).is_some_and(|end| end <= riff_end) {
+            file.seek(SeekFrom::Start(pos))
+                .map_err(|error| format!("cannot seek WAV chunks: {error}"))?;
+            let mut chunk_header = [0u8; 8];
+            file.read_exact(&mut chunk_header)
+                .map_err(|error| format!("cannot read WAV chunk header: {error}"))?;
+            let id = &chunk_header[..4];
+            let size = u32::from_le_bytes([
+                chunk_header[4],
+                chunk_header[5],
+                chunk_header[6],
+                chunk_header[7],
+            ]) as u64;
             let body_start = pos + 8;
-            let body_end = body_start.saturating_add(size).min(data.len());
+            let body_end = body_start
+                .checked_add(size)
+                .filter(|end| *end <= riff_end)
+                .ok_or_else(|| "WAV contains a truncated chunk".to_string())?;
             match id {
                 b"fmt " => {
-                    let b = &data[body_start..body_end];
-                    if b.len() >= 16 {
-                        format_tag = u16::from_le_bytes([b[0], b[1]]);
-                        channels = u16::from_le_bytes([b[2], b[3]]);
-                        sample_rate = u32::from_le_bytes([b[4], b[5], b[6], b[7]]);
-                        bits = u16::from_le_bytes([b[14], b[15]]);
+                    if size < 16 {
+                        return Err("WAV has a truncated fmt chunk".into());
                     }
+                    let mut b = [0u8; 40];
+                    let fmt_bytes = (size as usize).min(b.len());
+                    file.read_exact(&mut b[..fmt_bytes])
+                        .map_err(|error| format!("cannot read WAV fmt chunk: {error}"))?;
+                    format_tag = u16::from_le_bytes([b[0], b[1]]);
+                    channels = u16::from_le_bytes([b[2], b[3]]);
+                    sample_rate = u32::from_le_bytes([b[4], b[5], b[6], b[7]]);
+                    block_align = u16::from_le_bytes([b[12], b[13]]);
+                    bits = u16::from_le_bytes([b[14], b[15]]);
+                    if format_tag == 0xfffe {
+                        if size < 40 {
+                            return Err("WAV has a truncated extensible fmt chunk".into());
+                        }
+                        let extension_size = u16::from_le_bytes([b[16], b[17]]) as u64;
+                        if extension_size < 22 || 18 + extension_size > size {
+                            return Err("WAV has an invalid extensible fmt size".into());
+                        }
+                        let valid_bits = u16::from_le_bytes([b[18], b[19]]);
+                        if valid_bits == 0 || valid_bits > bits {
+                            return Err("WAV has an invalid valid-bits-per-sample value".into());
+                        }
+                        let channel_mask = u32::from_le_bytes([b[20], b[21], b[22], b[23]]);
+                        let subformat = u32::from_le_bytes([b[24], b[25], b[26], b[27]]);
+                        let pcm_guid_tail = [
+                            0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71,
+                        ];
+                        if subformat != 1 || b[28..40] != pcm_guid_tail {
+                            return Err("unsupported WAVE_FORMAT_EXTENSIBLE subformat".into());
+                        }
+                        format_tag = 1;
+                        if channel_mask != 0 {
+                            let layout = symphonia::core::audio::Channels::from_bits(channel_mask)
+                                .filter(|layout| layout.count() == channels as usize)
+                                .ok_or_else(|| "WAV has an invalid channel mask".to_string())?;
+                            channel_layout = Some(layout);
+                        }
+                    }
+                    has_format = true;
                 }
-                b"data" => audio_data = Some(&data[body_start..body_end]),
+                b"data" => audio_data = Some((body_start, size as usize)),
                 _ => {}
             }
             // Chunks are word-aligned
-            pos = body_start + size + (size & 1);
+            pos = body_end
+                .checked_add(size & 1)
+                .filter(|end| *end <= riff_end)
+                .ok_or_else(|| "WAV contains an incomplete chunk padding byte".to_string())?;
+        }
+        if pos != riff_end {
+            return Err("WAV ends with an incomplete chunk header".into());
         }
 
+        if !has_format {
+            return Err("WAV has no fmt chunk".into());
+        }
         if audio_data.is_none() {
             return Err("WAV has no data chunk".into());
         }
-        if channels == 0 || channels > 32 || sample_rate == 0 || sample_rate > 384_000 || bits == 0
-        {
+        if channels == 0 || sample_rate == 0 || sample_rate > 384_000 || bits == 0 {
             return Err("WAV has invalid fmt chunk".into());
+        }
+        if channels > 2 && channel_layout.is_none() {
+            return Err(format!(
+                "WAV has {channels} channels but no speaker layout; multichannel PCM needs WAVE_FORMAT_EXTENSIBLE speaker metadata."
+            ));
         }
         if format_tag != 1 {
             return Err(format!(
@@ -61,35 +219,102 @@ impl AudioBuffer {
                 format_tag
             ));
         }
-        let raw = audio_data.unwrap();
+        let (audio_data_offset, audio_data_len) = audio_data.unwrap();
+        if audio_data_len == 0 {
+            return Err("WAV data chunk is empty".into());
+        }
+        if !matches!(bits, 8 | 16 | 24 | 32) {
+            return Err(format!("unsupported bit depth {}", bits));
+        }
         let bytes_per_sample = (bits / 8) as usize;
-        let frame_bytes = bytes_per_sample * channels as usize;
+        let frame_bytes = bytes_per_sample
+            .checked_mul(channels as usize)
+            .ok_or_else(|| "WAV frame size overflows address space".to_string())?;
+        if block_align as usize != frame_bytes {
+            return Err("WAV block alignment does not match its sample format".into());
+        }
+        if !audio_data_len.is_multiple_of(frame_bytes) {
+            return Err("WAV data chunk ends in a partial sample frame".into());
+        }
+        let output_channels = if channels > 2 { 2 } else { channels as usize };
+        let sample_count = (audio_data_len / frame_bytes)
+            .checked_mul(output_channels)
+            .filter(|count| *count <= MAX_DECODED_AUDIO_BYTES / std::mem::size_of::<f32>())
+            .ok_or_else(|| "decoded WAV exceeds the 512 MiB limit".to_string())?;
 
-        let mut samples = Vec::with_capacity(raw.len() / frame_bytes * channels as usize);
-        let mut i = 0usize;
-        while i + frame_bytes <= raw.len() {
-            for ch in 0..channels as usize {
-                let base = i + ch * bytes_per_sample;
-                let v = match bits {
-                    8 => (raw[base] as f32 - 128.0) / 128.0,
-                    16 => i16::from_le_bytes([raw[base], raw[base + 1]]) as f32 / 32768.0,
-                    24 => {
-                        let b0 = raw[base] as i32;
-                        let b1 = raw[base + 1] as i32;
-                        let b2 = raw[base + 2] as i32;
-                        (((b2 << 16) | (b1 << 8) | b0) << 8) as f32 / 2147483648.0
+        let channel_weights = if channels > 2 {
+            let layout = channel_layout.expect("multichannel layout validated above");
+            Some(
+                layout
+                    .iter()
+                    .map(|channel| {
+                        stereo_mix_weights(channel)
+                            .ok_or_else(|| format!("unsupported WAV speaker position: {channel}"))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+            )
+        } else {
+            None
+        };
+
+        let mut samples = Vec::new();
+        samples
+            .try_reserve_exact(sample_count)
+            .map_err(|error| format!("cannot allocate decoded WAV samples: {error}"))?;
+        file.seek(SeekFrom::Start(audio_data_offset))
+            .map_err(|error| format!("cannot seek WAV audio data: {error}"))?;
+        let frames_per_chunk = (INPUT_CHUNK_BYTES / frame_bytes).max(1);
+        let chunk_bytes = frames_per_chunk * frame_bytes;
+        let mut raw = vec![0u8; chunk_bytes];
+        let mut remaining = audio_data_len;
+        while remaining > 0 {
+            let bytes_to_read = remaining.min(chunk_bytes);
+            file.read_exact(&mut raw[..bytes_to_read])
+                .map_err(|error| format!("cannot read WAV audio data: {error}"))?;
+            for frame in raw[..bytes_to_read].chunks_exact(frame_bytes) {
+                let mut left = 0.0f32;
+                let mut right = 0.0f32;
+                for ch in 0..channels as usize {
+                    let base = ch * bytes_per_sample;
+                    let v = match bits {
+                        8 => (frame[base] as f32 - 128.0) / 128.0,
+                        16 => i16::from_le_bytes([frame[base], frame[base + 1]]) as f32 / 32768.0,
+                        24 => {
+                            let b0 = frame[base] as i32;
+                            let b1 = frame[base + 1] as i32;
+                            let b2 = frame[base + 2] as i32;
+                            (((b2 << 16) | (b1 << 8) | b0) << 8) as f32 / 2147483648.0
+                        }
+                        32 => {
+                            i32::from_le_bytes([
+                                frame[base],
+                                frame[base + 1],
+                                frame[base + 2],
+                                frame[base + 3],
+                            ]) as f32
+                                / 2147483648.0
+                        }
+                        _ => unreachable!("bit depth was validated above"),
+                    };
+                    let v = v.clamp(-1.0, 1.0);
+                    if let Some(weights) = &channel_weights {
+                        left += v * weights[ch][0];
+                        right += v * weights[ch][1];
+                    } else {
+                        samples.push(v);
                     }
-                    _ => return Err(format!("unsupported bit depth {}", bits)),
-                };
-                samples.push(v.clamp(-1.0, 1.0));
+                }
+                if channel_weights.is_some() {
+                    samples.extend_from_slice(&[left, right]);
+                }
             }
-            i += frame_bytes;
+            remaining -= bytes_to_read;
         }
 
         Ok(Self {
             samples,
             sample_rate,
-            channels,
+            channels: output_channels as u16,
         })
     }
 
@@ -99,6 +324,9 @@ impl AudioBuffer {
     pub fn load_audio(path: &std::path::Path) -> Result<Self, String> {
         const MAX_AUDIO_BYTES: u64 = 512 * 1024 * 1024;
         const MAX_DECODED_SAMPLES: usize = MAX_DECODED_AUDIO_BYTES / std::mem::size_of::<f32>();
+        const MAX_DECODED_PACKET_BYTES: usize = 64 * 1024 * 1024;
+        const MAX_DECODED_PACKET_SAMPLES: usize =
+            MAX_DECODED_PACKET_BYTES / std::mem::size_of::<f32>();
 
         let path_str = path.to_string_lossy();
         validate_audio_path(&path_str)?;
@@ -149,6 +377,8 @@ impl AudioBuffer {
             .make(&track.codec_params, &DecoderOptions::default())
             .map_err(|e| format!("cannot create audio decoder: {}", e))?;
         let mut sample_buffer: Option<SampleBuffer<f32>> = None;
+        let mut sample_spec: Option<(u32, symphonia::core::audio::Channels)> = None;
+        let mut downmixed_samples = Vec::new();
         let mut samples = Vec::new();
         let mut sample_rate = 0u32;
         let mut channels = 0u16;
@@ -156,7 +386,12 @@ impl AudioBuffer {
         loop {
             let packet = match format.next_packet() {
                 Ok(packet) => packet,
-                Err(SymphoniaError::ResetRequired) => break,
+                Err(SymphoniaError::ResetRequired) => {
+                    return Err(
+                        "audio stream changed configuration and cannot be decoded continuously"
+                            .into(),
+                    )
+                }
                 Err(SymphoniaError::IoError(error))
                     if error.kind() == std::io::ErrorKind::UnexpectedEof =>
                 {
@@ -169,8 +404,12 @@ impl AudioBuffer {
             }
             let decoded = match decoder.decode(&packet) {
                 Ok(decoded) => decoded,
-                Err(SymphoniaError::DecodeError(_)) => continue,
-                Err(SymphoniaError::IoError(_)) => continue,
+                Err(SymphoniaError::DecodeError(error)) => {
+                    return Err(format!("cannot decode audio packet: {error}"))
+                }
+                Err(SymphoniaError::IoError(error)) => {
+                    return Err(format!("cannot read audio packet: {error}"))
+                }
                 Err(error) => return Err(format!("cannot decode audio packet: {}", error)),
             };
             let spec = *decoded.spec();
@@ -178,23 +417,54 @@ impl AudioBuffer {
             if packet_channels == 0 || packet_channels > u16::MAX as usize {
                 return Err("audio track has an invalid channel count".into());
             }
-            if sample_buffer.is_none() {
-                let duration = decoded.capacity() as usize;
-                if duration.saturating_mul(packet_channels) > MAX_DECODED_SAMPLES {
-                    return Err("decoded audio exceeds the 512 MiB limit".into());
-                }
-                sample_buffer = Some(SampleBuffer::<f32>::new(decoded.capacity() as u64, spec));
+            let packet_capacity = decoded.capacity() as usize;
+            if packet_capacity.saturating_mul(packet_channels) > MAX_DECODED_PACKET_SAMPLES {
+                return Err("decoded audio packet exceeds the 64 MiB limit".into());
+            }
+            if sample_spec.is_some_and(|(rate, channel_layout)| {
+                rate != spec.rate || channel_layout != spec.channels
+            }) {
+                return Err("audio track changes sample rate or channel layout mid-stream".into());
+            }
+            if sample_spec.is_none() {
+                sample_spec = Some((spec.rate, spec.channels));
                 sample_rate = spec.rate;
-                channels = packet_channels as u16;
+                channels = if packet_channels > 2 {
+                    2
+                } else {
+                    packet_channels as u16
+                };
+            }
+            if sample_buffer
+                .as_ref()
+                .is_none_or(|buffer| buffer.capacity() < packet_capacity * packet_channels)
+            {
+                sample_buffer = Some(SampleBuffer::<f32>::new(decoded.capacity() as u64, spec));
             }
             let buffer = sample_buffer
                 .as_mut()
                 .expect("sample buffer initialized above");
+            buffer.clear();
             buffer.copy_interleaved_ref(decoded);
             let decoded_samples = buffer.samples();
-            if samples.len().saturating_add(decoded_samples.len()) > MAX_DECODED_SAMPLES {
-                return Err("decoded audio exceeds the 512 MiB limit".into());
-            }
+            let decoded_samples = if packet_channels > 2 {
+                downmix_interleaved_to_stereo(
+                    decoded_samples,
+                    spec.channels,
+                    &mut downmixed_samples,
+                )?;
+                downmixed_samples.as_slice()
+            } else {
+                decoded_samples
+            };
+            let new_sample_count = samples
+                .len()
+                .checked_add(decoded_samples.len())
+                .filter(|count| *count <= MAX_DECODED_SAMPLES)
+                .ok_or_else(|| "decoded audio exceeds the 512 MiB limit".to_string())?;
+            samples
+                .try_reserve(new_sample_count - samples.len())
+                .map_err(|error| format!("cannot allocate decoded audio samples: {error}"))?;
             samples.extend_from_slice(decoded_samples);
         }
 
@@ -210,14 +480,27 @@ impl AudioBuffer {
 
     /// Peak amplitude in [0, 1] at a given time offset (± window/2 seconds).
     pub fn peak_at(&self, time_sec: f32, window_sec: f32) -> f32 {
-        let start_sample = ((time_sec - window_sec * 0.5).max(0.0) * self.sample_rate as f32)
-            as usize
-            * self.channels as usize;
-        let end_sample = (((time_sec + window_sec * 0.5) * self.sample_rate as f32) as usize)
-            .saturating_mul(self.channels as usize)
-            .min(self.samples.len());
+        if !time_sec.is_finite()
+            || !window_sec.is_finite()
+            || window_sec < 0.0
+            || self.sample_rate == 0
+            || self.channels == 0
+        {
+            return 0.0;
+        }
+        let channels = usize::from(self.channels);
+        let frame_count = self.samples.len() / channels;
+        let half_window = f64::from(window_sec) * 0.5;
+        let sample_rate = f64::from(self.sample_rate);
+        let max_frame = frame_count as f64;
+        let start_frame = ((f64::from(time_sec) - half_window).max(0.0) * sample_rate)
+            .clamp(0.0, max_frame) as usize;
+        let end_frame = ((f64::from(time_sec) + half_window).max(0.0) * sample_rate)
+            .clamp(0.0, max_frame) as usize;
+        let start_sample = start_frame.saturating_mul(channels).min(self.samples.len());
+        let end_sample = end_frame.saturating_mul(channels).min(self.samples.len());
         let mut peak = 0.0f32;
-        for s in &self.samples[start_sample.min(self.samples.len())..end_sample] {
+        for s in &self.samples[start_sample..end_sample.max(start_sample)] {
             peak = peak.max(s.abs());
         }
         peak
@@ -225,17 +508,20 @@ impl AudioBuffer {
 
     /// Downsamples the buffer into `bins` peak values — ready for waveform drawing.
     pub fn waveform_peaks(&self, bins: usize) -> Vec<f32> {
-        let bins = bins.max(1);
         let total = self.samples.len();
-        let per_bin = (total / bins).max(1);
-        let mut peaks = Vec::with_capacity(bins);
+        const MAX_WAVEFORM_BINS: usize = 1_000_000;
+        let bins = bins.max(1).min(total.max(1)).min(MAX_WAVEFORM_BINS);
+        let mut peaks = Vec::new();
+        if peaks.try_reserve_exact(bins).is_err() {
+            return peaks;
+        }
         for b in 0..bins {
-            let range = b * per_bin..((b + 1) * per_bin).min(total);
-            peaks.push(range.clone().next().map_or(0.0, |_| {
-                self.samples[range]
-                    .iter()
-                    .fold(0.0f32, |m, s| m.max(s.abs()))
-            }));
+            let range_start = (b as u128 * total as u128 / bins as u128) as usize;
+            let range_end = ((b + 1) as u128 * total as u128 / bins as u128) as usize;
+            let peak = self.samples[range_start..range_end]
+                .iter()
+                .fold(0.0f32, |maximum, sample| maximum.max(sample.abs()));
+            peaks.push(peak);
         }
         peaks
     }

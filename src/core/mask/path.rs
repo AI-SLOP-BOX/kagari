@@ -77,6 +77,7 @@ impl MaskPath {
 
     /// Sample the path as a series of screen-space points for CPU rendering into a caller-provided output vector.
     /// Reuses existing vector allocations to eliminate heap allocation pressure during interactive scrubbing.
+    /// Leaves the output empty if the requested sample count exceeds the safety limit or allocation fails.
     pub fn to_polygon_into(&self, frame: u32, segments_per_edge: u32, out_vec: &mut Vec<[f32; 2]>) {
         out_vec.clear();
         let verts = self.get_vertices(frame);
@@ -87,16 +88,37 @@ impl MaskPath {
 
         let n = verts.len();
         let end = if self.is_closed { n } else { n - 1 };
-
-        out_vec.reserve(end * segments_per_edge as usize + 1);
+        let has_bezier_tangents = self
+            .tangents
+            .as_ref()
+            .is_some_and(|tangents| tangents.len() == n);
+        let samples_per_edge = if has_bezier_tangents {
+            segments_per_edge.max(1)
+        } else {
+            // A linear edge is already represented exactly by its endpoints;
+            // emitting sixteen redundant collinear points only slows mask
+            // coverage tests in every software-rendered frame.
+            1
+        };
+        let Some(sample_count) = end
+            .checked_mul(samples_per_edge as usize)
+            .and_then(|count| count.checked_add(usize::from(self.is_closed)))
+        else {
+            return;
+        };
+        if sample_count > crate::core::mask::MAX_MASK_POLYGON_SAMPLES
+            || out_vec.try_reserve(sample_count).is_err()
+        {
+            return;
+        }
 
         for i in 0..end {
             let p0 = verts[i];
             let next_i = (i + 1) % n;
             let p1 = verts[next_i];
 
-            let bezier_control_points = if let Some(tangs) = &self.tangents {
-                if tangs.len() == n {
+            let bezier_control_points = if has_bezier_tangents {
+                if let Some(tangs) = &self.tangents {
                     let out_t0 = tangs[i].1;
                     let in_t1 = tangs[next_i].0;
                     let c0 = [p0[0] + out_t0[0], p0[1] + out_t0[1]];
@@ -109,8 +131,8 @@ impl MaskPath {
                 None
             };
 
-            for s in 0..segments_per_edge {
-                let t = s as f32 / segments_per_edge as f32;
+            for s in 0..samples_per_edge {
+                let t = s as f32 / samples_per_edge as f32;
                 let pt = if let Some((c0, c1)) = bezier_control_points {
                     eval_cubic_bezier(p0, c0, c1, p1, t)
                 } else {

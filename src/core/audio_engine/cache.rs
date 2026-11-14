@@ -6,8 +6,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 pub(super) struct AudioCacheKey {
     pub(super) path: String,
     pub(super) sample_rate: u32,
-    pub(super) file_len: u64,
-    pub(super) modified_ns: Option<u128>,
+    pub(super) media_revision: u64,
 }
 
 pub(super) struct DecodedAudioCache {
@@ -82,18 +81,13 @@ fn audio_cache() -> &'static Mutex<DecodedAudioCache> {
 
 pub(super) fn load_cached_audio(path: &str, sample_rate: u32) -> Result<Arc<AudioBuffer>, String> {
     validate_audio_path(path)?;
-    let metadata = std::fs::metadata(path)
-        .map_err(|error| format!("could not inspect audio source: {error}"))?;
-    let modified_ns = metadata
-        .modified()
-        .ok()
-        .and_then(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|duration| duration.as_nanos());
+    std::fs::metadata(path).map_err(|error| format!("could not inspect audio source: {error}"))?;
     let key = AudioCacheKey {
         path: path.to_owned(),
         sample_rate,
-        file_len: metadata.len(),
-        modified_ns,
+        media_revision: crate::core::media_revision::media_file_revision(std::path::Path::new(
+            path,
+        )),
     };
     if let Some(buffer) = audio_cache()
         .lock()
@@ -102,9 +96,13 @@ pub(super) fn load_cached_audio(path: &str, sample_rate: u32) -> Result<Arc<Audi
     {
         return Ok(buffer);
     }
-    let buffer = AudioBuffer::load_audio(std::path::Path::new(path))
-        .map_err(|error| format!("could not decode audio source: {error}"))?
-        .resample(sample_rate)?;
+    let decoded = AudioBuffer::load_audio(std::path::Path::new(path))
+        .map_err(|error| format!("could not decode audio source: {error}"))?;
+    let buffer = if decoded.sample_rate == sample_rate {
+        decoded
+    } else {
+        decoded.resample(sample_rate)?
+    };
     let buffer = Arc::new(buffer);
     audio_cache()
         .lock()

@@ -89,8 +89,8 @@ fn time_reverse_flips_endpoints() {
     layer.out_frame = 100;
 
     layer.time_reverse();
-    assert_eq!(layer.remap_frame(0), 100);
-    assert_eq!(layer.remap_frame(50), 50);
+    assert_eq!(layer.remap_frame(0), 99);
+    assert_eq!(layer.remap_frame(50), 49);
     assert_eq!(layer.remap_frame(100), 0);
 }
 

@@ -1,6 +1,20 @@
 use super::*;
 
 impl AfterEffectsStudio {
+    fn reject_media_import_while_busy(&mut self) -> bool {
+        let Some(job) = self.video_import.as_ref() else {
+            return false;
+        };
+        let canceling = job.cancel.load(std::sync::atomic::Ordering::Relaxed);
+        self.asset_status = if canceling {
+            "前の素材の中止処理中です。完了してから再度追加してください。".to_owned()
+        } else {
+            "別の素材を読み込み中です。完了してから再度追加してください。".to_owned()
+        };
+        self.sync_bindings_logged();
+        true
+    }
+
     pub(crate) fn import_model_layer(&mut self) {
         let Some(path) = rfd::FileDialog::new()
             .add_filter("3Dモデル", &["obj", "gltf", "glb"])
@@ -326,12 +340,7 @@ impl AfterEffectsStudio {
     }
 
     pub(crate) fn import_video_layer(&mut self) {
-        if self.video_import.is_some() {
-            return;
-        }
-        if !kagari_vfx::core::video_import::ffmpeg_available() {
-            self.asset_status =
-                "動画の読み込みにはFFmpegが必要です。PATHを確認してください。".to_owned();
+        if self.reject_media_import_while_busy() {
             return;
         }
         let Some(path) = rfd::FileDialog::new()
@@ -349,11 +358,14 @@ impl AfterEffectsStudio {
     }
 
     pub(crate) fn import_image_sequence_layer(&mut self) {
-        if self.video_import.is_some() {
+        if self.reject_media_import_while_busy() {
             return;
         }
         let Some(path) = rfd::FileDialog::new()
-            .add_filter("画像連番", &["png", "jpg", "jpeg", "webp"])
+            .add_filter(
+                "画像連番",
+                &["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"],
+            )
             .pick_file()
         else {
             return;
@@ -383,16 +395,26 @@ impl AfterEffectsStudio {
         let (sender, receiver) = std::sync::mpsc::channel();
         let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let worker_cancel = cancel.clone();
-        std::thread::spawn(move || {
-            let result = kagari_vfx::core::video_import::import_image_sequence_with_cancel(
-                &path,
-                &destination,
-                fps as f32,
-                &worker_cancel,
-            );
-            let _ = sender.send(result);
-        });
+        let worker = std::thread::Builder::new()
+            .name("kagari-image-sequence-import".to_owned())
+            .spawn(move || {
+                let result = kagari_vfx::core::video_import::import_image_sequence_with_cancel(
+                    &path,
+                    &destination,
+                    fps as f32,
+                    &worker_cancel,
+                );
+                let _ = sender.send(result);
+            });
+        let worker = match worker {
+            Ok(worker) => worker,
+            Err(error) => {
+                self.asset_status = format!("連番画像の読み込みを開始できませんでした: {error}");
+                return;
+            }
+        };
         self.video_import = Some(VideoImportJob {
+            worker: Some(worker),
             receiver,
             cancel,
             cancel_supported: true,
@@ -450,12 +472,7 @@ impl AfterEffectsStudio {
         replace_project_asset_id: Option<String>,
         register_project_asset: bool,
     ) {
-        if self.video_import.is_some() {
-            return;
-        }
-        if !kagari_vfx::core::video_import::ffmpeg_available() {
-            self.asset_status =
-                "動画の読み込みにはFFmpegが必要です。PATHを確認してください。".to_owned();
+        if self.reject_media_import_while_busy() {
             return;
         }
         let Some(source_name) = path
@@ -484,16 +501,26 @@ impl AfterEffectsStudio {
         let (sender, receiver) = std::sync::mpsc::channel();
         let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let worker_cancel = cancel.clone();
-        std::thread::spawn(move || {
-            let result = kagari_vfx::core::video_import::import_video_with_cancel(
-                &source,
-                &destination,
-                fps as f32,
-                &worker_cancel,
-            );
-            let _ = sender.send(result);
-        });
+        let worker = std::thread::Builder::new()
+            .name("kagari-video-import".to_owned())
+            .spawn(move || {
+                let result = kagari_vfx::core::video_import::import_video_with_cancel(
+                    &source,
+                    &destination,
+                    fps as f32,
+                    &worker_cancel,
+                );
+                let _ = sender.send(result);
+            });
+        let worker = match worker {
+            Ok(worker) => worker,
+            Err(error) => {
+                self.asset_status = format!("動画の読み込みを開始できませんでした: {error}");
+                return;
+            }
+        };
         self.video_import = Some(VideoImportJob {
+            worker: Some(worker),
             receiver,
             cancel,
             cancel_supported: true,
@@ -543,6 +570,9 @@ impl AfterEffectsStudio {
         let Some(job) = self.video_import.take() else {
             return false;
         };
+        if let Some(worker) = job.worker {
+            let _ = worker.join();
+        }
         let target_is_current = self.screen == Screen::Editor
             && self.project_generation == job.project_generation
             && self.project_name == job.project_name
@@ -561,6 +591,7 @@ impl AfterEffectsStudio {
             };
         match result {
             Ok(asset) if target_is_current => {
+                let audio_warning = asset.audio_warning.clone();
                 let relinking_project_asset = if let Some(asset_id) =
                     job.replace_project_asset_id.as_deref()
                 {
@@ -590,6 +621,7 @@ impl AfterEffectsStudio {
                         );
                         self.asset_status =
                             format!("プロジェクト動画を再指定しました: {}", job.source_name);
+                        append_audio_warning(&mut self.asset_status, audio_warning.as_deref());
                         self.mark_project_changed();
                         true
                     } else {
@@ -661,6 +693,7 @@ impl AfterEffectsStudio {
                     if replaced {
                         self.selected_layer_id = Some(replace_layer_id.to_owned());
                         self.asset_status = format!("動画を再指定しました: {}", job.source_name);
+                        append_audio_warning(&mut self.asset_status, audio_warning.as_deref());
                         self.sync_selected_layer_controls();
                         self.mark_project_changed();
                     } else {
@@ -705,6 +738,7 @@ impl AfterEffectsStudio {
                     } else {
                         format!("動画を追加しました: {}", job.source_name)
                     };
+                    append_audio_warning(&mut self.asset_status, audio_warning.as_deref());
                     self.sync_selected_layer_controls();
                     self.mark_project_changed();
                 }
@@ -729,326 +763,10 @@ impl AfterEffectsStudio {
         self.sync_bindings_logged();
         true
     }
+}
 
-    pub(crate) fn cycle_selected_layer_proxy_resolution(&mut self) {
-        use kagari_vfx::core::proxy::ProxyResolution;
-        let Some(id) = self.selected_layer_id.clone() else {
-            return;
-        };
-        let Some(layer) = self
-            .project_model
-            .active_composition_mut()
-            .layers
-            .iter_mut()
-            .find(|layer| layer.id == id && !layer.locked)
-        else {
-            return;
-        };
-        layer.proxy.resolution = match layer.proxy.resolution {
-            ProxyResolution::Full => ProxyResolution::Half,
-            ProxyResolution::Half => ProxyResolution::Quarter,
-            ProxyResolution::Quarter => ProxyResolution::Eighth,
-            ProxyResolution::Eighth => ProxyResolution::Full,
-        };
-        self.mark_project_changed();
-    }
-
-    pub(crate) fn toggle_selected_layer_proxy(&mut self) {
-        let Some(id) = self.selected_layer_id.clone() else {
-            return;
-        };
-        let Some(layer) = self
-            .project_model
-            .active_composition_mut()
-            .layers
-            .iter_mut()
-            .find(|layer| layer.id == id && !layer.locked)
-        else {
-            return;
-        };
-        layer.proxy.enabled = !layer.proxy.enabled;
-        self.mark_project_changed();
-    }
-
-    pub(crate) fn clear_selected_layer_proxy(&mut self) {
-        let Some(id) = self.selected_layer_id.clone() else {
-            return;
-        };
-        let Some(layer) = self
-            .project_model
-            .active_composition_mut()
-            .layers
-            .iter_mut()
-            .find(|layer| layer.id == id && !layer.locked)
-        else {
-            return;
-        };
-        if layer.proxy.proxy_path.take().is_some() {
-            layer.proxy.enabled = false;
-            self.mark_project_changed();
-        }
-    }
-
-    pub(crate) fn start_selected_layer_proxy_generation(&mut self) {
-        use kagari_vfx::core::proxy::{generate_preview_proxy_for_layer, ProxyResolution};
-        if self.proxy_generation.is_some() {
-            return;
-        }
-        let Some(layer_id) = self.selected_layer_id.clone() else {
-            self.proxy_status = "プロキシを生成するレイヤーを選択してください。".to_owned();
-            return;
-        };
-        let composition = self.project_model.active_composition();
-        let Some(layer) = composition
-            .layers
-            .iter()
-            .find(|layer| layer.id == layer_id && !layer.locked)
-            .cloned()
-        else {
-            return;
-        };
-        let resolution = layer.proxy.resolution;
-        if !matches!(
-            &layer.layer_type,
-            kagari_vfx::core::timeline::LayerType::Image { .. }
-                | kagari_vfx::core::timeline::LayerType::Video { .. }
-        ) {
-            self.proxy_status = "プロキシ生成は画像と動画レイヤーに対応しています。".to_owned();
-            return;
-        }
-        if resolution == ProxyResolution::Full {
-            self.proxy_status = "生成前に解像度を1/2、1/4、1/8から選んでください。".to_owned();
-            return;
-        }
-        let composition_id = composition.id.clone();
-        let destination = std::env::temp_dir().join(format!(
-            "kagari_proxy_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|time| time.as_nanos())
-                .unwrap_or_default(),
-        ));
-        let (sender, receiver) = std::sync::mpsc::channel();
-        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let worker_cancel = cancel.clone();
-        std::thread::spawn(move || {
-            let last_sent = std::cell::Cell::new(None::<std::time::Instant>);
-            let progress_sender = sender.clone();
-            let mut progress = move |done: u32, total: u32| {
-                let now = std::time::Instant::now();
-                if done >= total
-                    || last_sent.get().is_none_or(|previous| {
-                        now.duration_since(previous) >= std::time::Duration::from_millis(100)
-                    })
-                {
-                    last_sent.set(Some(now));
-                    let _ =
-                        progress_sender.send(LayerProxyGenerationMessage::Progress { done, total });
-                }
-            };
-            let result = generate_preview_proxy_for_layer(
-                &layer,
-                resolution,
-                &destination,
-                &worker_cancel,
-                &mut progress,
-            );
-            let _ = sender.send(LayerProxyGenerationMessage::Finished(result));
-        });
-        self.proxy_generation = Some(LayerProxyGenerationJob {
-            receiver,
-            cancel,
-            layer_id,
-            composition_id,
-            project_file_path: self.project_file_path.clone(),
-            project_name: self.project_name.clone(),
-            project_generation: self.project_generation,
-        });
-        self.proxy_progress = 0;
-        self.proxy_status = format!("{} プロキシを生成しています…", resolution.label());
-    }
-
-    pub(crate) fn cancel_layer_proxy_generation(&mut self) {
-        if let Some(job) = &self.proxy_generation {
-            job.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
-            self.proxy_status = "プロキシ生成をキャンセルしています…".to_owned();
-        }
-    }
-
-    pub(crate) fn receive_layer_proxy_generation(&mut self) -> bool {
-        let Some(job) = self.proxy_generation.as_ref() else {
-            return false;
-        };
-        let mut messages = Vec::new();
-        let mut disconnected = false;
-        loop {
-            match job.receiver.try_recv() {
-                Ok(message) => messages.push(message),
-                Err(std::sync::mpsc::TryRecvError::Empty) => break,
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    disconnected = true;
-                    break;
-                }
-            }
-        }
-        if messages.is_empty() && !disconnected {
-            return false;
-        }
-        let mut changed = false;
-        for message in messages {
-            match message {
-                LayerProxyGenerationMessage::Progress { done, total } => {
-                    self.proxy_progress = if total == 0 {
-                        0
-                    } else {
-                        (u64::from(done).saturating_mul(100) / u64::from(total)).min(100) as i64
-                    };
-                    self.proxy_status =
-                        format!("プロキシを生成しています… {done}/{total} フレーム");
-                    changed = true;
-                }
-                LayerProxyGenerationMessage::Finished(result) => {
-                    let Some(job) = self.proxy_generation.take() else {
-                        return changed;
-                    };
-                    let cancelled = job.cancel.load(std::sync::atomic::Ordering::Relaxed);
-                    let target_is_current = self.project_generation == job.project_generation
-                        && self.project_name == job.project_name
-                        && self.project_file_path == job.project_file_path
-                        && self.project_model.active_composition().id == job.composition_id;
-                    match result {
-                        Ok(path) if !cancelled && target_is_current => {
-                            let applied = self
-                                .project_model
-                                .active_composition_mut()
-                                .layers
-                                .iter_mut()
-                                .find(|layer| layer.id == job.layer_id)
-                                .map(|layer| {
-                                    layer.proxy.proxy_path = Some(path.clone());
-                                    layer.proxy.enabled = true;
-                                })
-                                .is_some();
-                            if applied {
-                                kagari_vfx::core::frame_cache::bump_version();
-                                self.proxy_status =
-                                    "プロキシを生成し、プレビューに適用しました。".to_owned();
-                                self.proxy_progress = 100;
-                                self.mark_project_changed();
-                            } else {
-                                remove_generated_proxy(&path);
-                                self.proxy_status = "生成後に対象レイヤーがなくなったため、プロキシを適用しませんでした。".to_owned();
-                            }
-                        }
-                        Ok(path) => {
-                            remove_generated_proxy(&path);
-                            self.proxy_status = if cancelled {
-                                "プロキシ生成をキャンセルしました。"
-                            } else {
-                                "プロジェクトが切り替わったため、プロキシを適用しませんでした。"
-                            }
-                            .to_owned();
-                        }
-                        Err(error) if error == kagari_vfx::core::proxy::PROXY_CANCELLED => {
-                            self.proxy_status = "プロキシ生成をキャンセルしました。".to_owned();
-                        }
-                        Err(error) => {
-                            self.proxy_status = format!("プロキシを生成できませんでした: {error}")
-                        }
-                    }
-                    changed = true;
-                }
-            }
-        }
-        if disconnected && self.proxy_generation.is_some() {
-            self.proxy_generation = None;
-            self.proxy_status = "プロキシ生成ワーカーが停止しました。".to_owned();
-            changed = true;
-        }
-        changed
-    }
-
-    pub(crate) fn place_project_asset(&mut self, item_id: &str, fill_image: bool) {
-        use kagari_vfx::core::timeline::{Layer, LayerType, ProjectItemType};
-        let Some(item) = self
-            .project_model
-            .assets
-            .iter()
-            .find(|item| item.id == item_id)
-            .cloned()
-        else {
-            return;
-        };
-        if let ProjectItemType::Video { path, .. } = &item.item_type {
-            self.start_video_import(std::path::PathBuf::from(path), None, None, false);
-            return;
-        }
-        if let ProjectItemType::Composition { comp_idx } = &item.item_type {
-            self.place_project_composition_asset(*comp_idx, item.name);
-            return;
-        }
-        let composition = self.project_model.active_composition();
-        let (width, height, duration) = (
-            composition.width as f32,
-            composition.height as f32,
-            composition.duration_frames,
-        );
-        let id = format!(
-            "ameui_asset_{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|duration| duration.as_nanos())
-                .unwrap_or_default(),
-        );
-        let item_name = item.name.clone();
-        let stored_image_dimensions = match &item.item_type {
-            ProjectItemType::Image { width, height, .. } => (*width, *height),
-            _ => (0, 0),
-        };
-        let layer_type = match item.item_type {
-            ProjectItemType::Image { path, .. } => LayerType::Image { path },
-            ProjectItemType::Model3D { path } => LayerType::Model3D { path },
-            ProjectItemType::Audio { path, .. } => LayerType::Audio {
-                path,
-                volume: kagari_vfx::core::timeline::Animatable::new_constant(0.0),
-            },
-            ProjectItemType::Solid { color } => LayerType::Solid { color },
-            ProjectItemType::Video { .. }
-            | ProjectItemType::Composition { .. }
-            | ProjectItemType::Folder { .. } => return,
-        };
-        let is_model = matches!(&layer_type, LayerType::Model3D { .. });
-        let is_image = matches!(&layer_type, LayerType::Image { .. });
-        let mut layer = Layer::new(id.clone(), item_name.clone(), layer_type, duration);
-        layer.is_3d = is_model;
-        layer.transform.position =
-            kagari_vfx::core::timeline::Animatable::new_constant([width * 0.5, height * 0.5]);
-        if is_image {
-            let image_dimensions = if stored_image_dimensions.0 > 0 && stored_image_dimensions.1 > 0
-            {
-                stored_image_dimensions
-            } else if let LayerType::Image { path } = &layer.layer_type {
-                kagari_vfx::core::image_cache::image_dimensions(path).unwrap_or((0, 0))
-            } else {
-                (0, 0)
-            };
-            if image_dimensions.0 > 0 && image_dimensions.1 > 0 {
-                let scale = if fill_image {
-                    (width / image_dimensions.0 as f32).max(height / image_dimensions.1 as f32)
-                } else {
-                    (width / image_dimensions.0 as f32)
-                        .min(height / image_dimensions.1 as f32)
-                        .min(1.0)
-                } * 100.0;
-                layer.transform.scale =
-                    kagari_vfx::core::timeline::Animatable::new_constant([scale, scale]);
-            }
-        }
-        self.project_model.active_composition_mut().add_layer(layer);
-        self.selected_layer_id = Some(id);
-        self.sync_selected_layer_controls();
-        self.asset_status = format!("素材をシーンに配置しました: {}", item_name);
-        self.mark_project_changed();
+fn append_audio_warning(status: &mut String, warning: Option<&str>) {
+    if let Some(warning) = warning {
+        status.push_str(&format!(" 音声を取り込めませんでした: {warning}"));
     }
 }

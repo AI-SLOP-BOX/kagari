@@ -347,6 +347,18 @@ fn advance_markerless_tracks(
         block_radius,
         search_radius,
     );
+    if !flow.is_complete() || !reverse_flow.is_complete() {
+        for (index, position) in positions.iter().enumerate() {
+            if let Some(track) = tracks.get_mut(index) {
+                track.samples.push(MarkerlessMotionSample {
+                    frame: frame_index,
+                    position: *position,
+                    confidence: 0.0,
+                });
+            }
+        }
+        return;
+    }
     for (index, position) in positions.iter_mut().enumerate() {
         let x = position[0]
             .round()

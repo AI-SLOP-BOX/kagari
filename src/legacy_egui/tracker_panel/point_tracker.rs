@@ -158,8 +158,9 @@ pub(crate) fn draw_point_tracker_section(
                     if wa_out > start {
                         app.modify_project(|p| {
                             let comp = p.active_composition_mut();
+                            let fps = comp.fps;
                             crate::core::tracker_engine::TrackerEngine::analyze_markerless_tracks(
-                                &mut comp.layers[idx], start, wa_out, mocap_max as usize, mocap_spacing,
+                                &mut comp.layers[idx], fps, start, wa_out, mocap_max as usize, mocap_spacing,
                                 2, mocap_search as i32, mocap_confidence,
                             );
                         });
@@ -195,8 +196,10 @@ pub(crate) fn draw_point_tracker_section(
         if wa_out >= current_frame {
             let pose = {
                 let comp = app.history.current().active_composition();
+                let fps = comp.fps;
                 crate::core::tracker_engine::TrackerEngine::estimate_markerless_pose(
                     &comp.layers[idx],
+                    fps,
                     current_frame,
                     wa_out,
                     mocap_max as usize,

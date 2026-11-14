@@ -103,6 +103,7 @@ pub(in crate::ui::home_screen) fn draw_home_render_queue(
                                                     crate::app_state::QueueItemStatus::Rendering => ("書き出し中", colors::ACCENT_CYAN),
                                                     crate::app_state::QueueItemStatus::Done => ("完了", colors::ACCENT_GREEN),
                                                     crate::app_state::QueueItemStatus::Failed => ("失敗", colors::ACCENT_RED),
+                                                    crate::app_state::QueueItemStatus::Cancelled => ("キャンセル", colors::TEXT_SECONDARY),
                                                 }
                                             };
                                             let progress = if exporting && rendering_id.as_deref() == Some(composition_id.as_str()) {

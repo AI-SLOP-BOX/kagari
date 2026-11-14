@@ -6,6 +6,7 @@ use crate::ui::graph_editor::channel_ops::{
 use crate::ui::graph_editor::interpolation_ops::set_effect_channel_at_frame;
 use eframe::egui;
 
+#[allow(clippy::too_many_arguments)]
 pub fn handle_canvas_click_create(
     graph_response: &egui::Response,
     rect: egui::Rect,

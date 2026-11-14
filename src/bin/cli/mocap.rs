@@ -77,6 +77,12 @@ pub(super) fn cmd_mocap(
         }
         .into());
     }
+    let canonical_sources = paths
+        .iter()
+        .map(|path| path.canonicalize())
+        .collect::<Result<Vec<_>, _>>()?;
+    super::frame::ensure_output_does_not_replace_sources(output, &canonical_sources)?;
+
     let (first_frame, width, height) = load_mocap_frame(&paths[0], None)?;
     let seed_points = if pose {
         detect_markerless_features(&first_frame, width, height, max_features, feature_spacing)
@@ -130,7 +136,7 @@ pub(super) fn cmd_mocap(
                 }))?
             }
         };
-        std::fs::write(output, serialized)?;
+        super::frame::write_bytes_atomically(output, serialized.as_bytes())?;
         println!("wrote pose track to {}", output);
         return Ok(());
     }
@@ -155,12 +161,10 @@ pub(super) fn cmd_mocap(
             serde_json::json!({ "samples": samples })
         })
         .collect::<Vec<_>>();
-    std::fs::write(
-        output,
-        serde_json::to_vec_pretty(&serde_json::json!({
-            "width": width, "height": height, "tracks": json_tracks
-        }))?,
-    )?;
+    let serialized = serde_json::to_vec_pretty(&serde_json::json!({
+        "width": width, "height": height, "tracks": json_tracks
+    }))?;
+    super::frame::write_bytes_atomically(output, &serialized)?;
     println!("wrote {} track(s) to {}", tracks.len(), output);
     Ok(())
 }

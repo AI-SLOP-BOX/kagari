@@ -138,6 +138,8 @@ fn ffmpeg_audio_wav_dash_rejected() {
         height: 1080,
         fps: 30,
         total_frames: 100,
+        quality: 85,
+        audio_bitrate_kbps: 192,
         audio_wav: Some("-i".into()),
         codec: Default::default(),
     };
@@ -177,6 +179,8 @@ fn ffmpeg_output_path_dash_rejected() {
         height: 1080,
         fps: 30,
         total_frames: 100,
+        quality: 85,
+        audio_bitrate_kbps: 192,
         audio_wav: None,
         codec: Default::default(),
     };

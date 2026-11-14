@@ -3,8 +3,10 @@ use std::collections::HashSet;
 
 mod animation;
 mod references;
+mod text;
 pub(super) use animation::*;
 use references::*;
+use text::*;
 
 impl ProductionDocument {
     pub fn validate(&self) -> Result<(), String> {
@@ -40,9 +42,7 @@ impl ProductionDocument {
         for composition in &self.project.compositions {
             index_nested_compositions(composition, &mut composition_index);
         }
-        if !precomp_graph_is_acyclic(&composition_index) {
-            return Err("composition precomp graph contains a cycle".into());
-        }
+        validate_precomp_graph(&composition_index)?;
         let mut asset_ids = HashSet::new();
         if self.project.assets.len() > Self::MAX_ASSETS {
             return Err("production document contains too many assets".into());
@@ -162,12 +162,23 @@ impl ProductionDocument {
     }
 }
 
+pub(super) fn validate_standalone_composition(
+    composition: &crate::core::timeline::Composition,
+) -> Result<(), String> {
+    let mut composition_ids = HashSet::new();
+    validate_composition(composition, 0, &mut composition_ids)?;
+    validate_precomp_references(composition, &composition_ids)?;
+    let mut composition_index = HashMap::new();
+    index_nested_compositions(composition, &mut composition_index);
+    validate_precomp_graph(&composition_index)
+}
+
 fn validate_composition(
     composition: &crate::core::timeline::Composition,
     depth: usize,
     composition_ids: &mut HashSet<String>,
 ) -> Result<(), String> {
-    if depth > 1024 {
+    if depth > crate::core::media_revision::MAX_COMPOSITION_NESTING_DEPTH {
         return Err("production document composition nesting is too deep".into());
     }
     if composition.layers.len() > ProductionDocument::MAX_LAYERS_PER_COMPOSITION {
@@ -291,6 +302,13 @@ fn validate_composition(
         {
             return Err("layer ids must be non-empty and unique within a composition".into());
         }
+        if layer
+            .text_formatting
+            .as_ref()
+            .is_some_and(|formatting| !text_formatting_is_valid(formatting))
+        {
+            return Err("text formatting settings are invalid".into());
+        }
         if let Some(parent_id) = &layer.parent_id {
             if !metadata_text_is_safe(parent_id)
                 || parent_id.len() > ProductionDocument::MAX_ASSET_STRING_LENGTH
@@ -389,10 +407,14 @@ fn validate_composition(
                 || *stroke_width < 0.0
                 || *align > 2
                 || font_family.trim().is_empty()
+                || font_family.len() > crate::core::font_rasterizer::MAX_FONT_FAMILY_NAME_BYTES
                 || *stroke_width > 16_384.0
             {
                 return Err("text layer settings are invalid".into());
             }
+        }
+        if !layer_text_animators_are_valid(layer) {
+            return Err("text animator settings are invalid".into());
         }
         if let LayerType::Shape {
             shape_type,
@@ -527,8 +549,19 @@ fn validate_composition(
             }
         }
         if let LayerType::Particle { emitter } = &layer.layer_type {
+            if emitter.max_particles > crate::core::particle_system::MAX_PARTICLES_PER_EMITTER {
+                return Err(format!(
+                    "particle emitter on layer '{}' requests {} particles; the CPU renderer limit is {}",
+                    layer.name,
+                    emitter.max_particles,
+                    crate::core::particle_system::MAX_PARTICLES_PER_EMITTER
+                ));
+            }
             if !particle_emitter_is_valid(emitter) {
-                return Err("particle emitter settings are invalid".into());
+                return Err(format!(
+                    "particle emitter settings are invalid on layer '{}'",
+                    layer.name
+                ));
             }
         }
         if layer.effects.len() > ProductionDocument::MAX_EFFECTS_PER_LAYER {
@@ -537,6 +570,7 @@ fn validate_composition(
         if layer.masks.len() > ProductionDocument::MAX_MASKS_PER_LAYER {
             return Err("layer contains too many masks".into());
         }
+        validate_roto_strokes(&layer.roto_brush_strokes, composition.duration_frames)?;
         let mut effect_ids = HashSet::new();
         for effect in &layer.effects {
             if effect.id.trim().is_empty()
@@ -551,6 +585,7 @@ fn validate_composition(
             }
         }
         let mut mask_ids = HashSet::new();
+        let mut mask_vertex_count = 0usize;
         for mask in &layer.masks {
             if mask.id.trim().is_empty()
                 || mask.name.trim().is_empty()
@@ -559,6 +594,15 @@ fn validate_composition(
                 return Err("mask ids must be non-empty and unique within a layer".into());
             }
             validate_mask(mask)?;
+            mask_vertex_count = mask_vertex_count
+                .checked_add(mask_maximum_vertex_count(mask))
+                .filter(|&count| count <= ProductionDocument::MAX_MASK_VERTICES_PER_LAYER)
+                .ok_or_else(|| {
+                    format!(
+                        "layer exceeds the {} total mask-vertex limit",
+                        ProductionDocument::MAX_MASK_VERTICES_PER_LAYER
+                    )
+                })?;
         }
     }
     if !parent_links_are_acyclic(&layer_parents) {

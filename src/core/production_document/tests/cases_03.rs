@@ -270,9 +270,11 @@ fn upgrades_legacy_project_json_with_safe_defaults() {
 }
 #[test]
 fn legacy_migration_rejects_unusable_project() {
-    let mut project = Project::default();
-    project.active_composition_idx = project.compositions.len();
-    let legacy = crate::core::project_migration::save_project_versioned(&project).unwrap();
+    let legacy =
+        crate::core::project_migration::save_project_versioned(&Project::default()).unwrap();
+    let mut value: serde_json::Value = serde_json::from_str(&legacy).unwrap();
+    value["project_data"]["active_composition_idx"] = serde_json::json!(usize::MAX);
+    let legacy = serde_json::to_string(&value).unwrap();
     assert!(ProductionDocument::from_legacy_project_json(&legacy).is_err());
 }
 #[test]

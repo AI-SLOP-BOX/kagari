@@ -62,7 +62,7 @@ pub fn save_mode(mode: UiMode) {
         let _ = std::fs::create_dir_all(dir);
     }
     if let Ok(json) = serde_json::to_string(&s) {
-        let _ = std::fs::write(path, json);
+        let _ = crate::core::atomic_file::write_atomic(&path, json.as_bytes());
     }
 }
 

@@ -1,6 +1,9 @@
 #[cfg(test)]
 #[allow(clippy::module_inception)]
 mod tests {
+    use crate::core::openfx_bridge::properties::{
+        register_property_set_handle, unregister_property_set_handle,
+    };
     use crate::core::openfx_bridge::*;
     use std::path::Path;
 
@@ -160,6 +163,7 @@ mod tests {
         );
         let mut set = OfxPropertySet::new();
         let handle = &mut set as *mut OfxPropertySet as *mut std::os::raw::c_void;
+        register_property_set_handle(handle.cast());
         let suite = property_suite_raw();
         unsafe {
             let name = b"OfxPropWidth\0";
@@ -181,5 +185,6 @@ mod tests {
         assert_eq!(set.get_int("OfxPropWidth", 0), Some(640));
         assert_eq!(set.get_double("OfxPropScale", 0), Some(2.5));
         assert_eq!(set.get_string("OfxPropName", 0), Some("test"));
+        unregister_property_set_handle(handle.cast());
     }
 }

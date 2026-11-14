@@ -76,10 +76,6 @@ fn import_media_dialog(app: &mut KagariApp, ctx: &egui::Context) {
             app.show_welcome = false;
         }
         "mp4" | "mov" | "mkv" | "avi" | "webm" | "av1" => {
-            if !crate::core::video_import::ffmpeg_available() {
-                app.toasts.error("Video import needs ffmpeg on PATH");
-                return;
-            }
             crate::ui::drop_import::start_video_import(app, ctx, path, name);
             app.show_welcome = false;
         }

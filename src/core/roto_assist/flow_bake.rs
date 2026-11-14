@@ -1,11 +1,26 @@
+#[cfg(test)]
+pub(super) use super::motion_prior::constrain_matte_to_dilated_boundary;
+use super::motion_prior::try_filled_vec;
+pub(super) use super::motion_prior::{
+    constrain_matte_to_dilated_boundary_cancellable, roto_motion_prior_margin,
+};
 use super::segmentation::*;
 use crate::core::keyframe::{InterpolationType, Keyframe};
 use crate::core::mask::Mask;
 use crate::core::property::Animatable;
 use crate::core::timeline::TrackerPoint;
 
-const ROTO_FLOW_MAX_DIMENSION: f32 = 160.0;
+// 160px collapsed pedestrians and narrow boundaries into only a handful of
+// flow cells on HD footage. 320px keeps more subject detail while retaining a
+// bounded analysis size for 4K and larger compositions.
+const ROTO_FLOW_MAX_DIMENSION: f32 = 320.0;
 const ROTO_FLOW_SEARCH_RADIUS: i32 = 8;
+// A single-frame color re-segmentation can absorb nearby people or background
+// regions. Keep those jumps from replacing the motion-warped matte wholesale.
+const ROTO_MAX_RESEGMENT_AREA_RATIO: f32 = 1.35;
+// Corrections may intentionally reshape the matte, while still requiring a
+// finite limit so one ambiguous set of strokes cannot select the whole scene.
+const ROTO_MAX_CORRECTED_AREA_RATIO: f32 = 2.0;
 
 pub fn bake_tracked_mask(
     base_mask: &Mask,
@@ -16,19 +31,42 @@ pub fn bake_tracked_mask(
     if end_frame < start_frame {
         return Err("end frame must not precede start frame".into());
     }
-    let base_poly = base_mask.path.to_polygon(start_frame.max(1), 16);
+    let base_poly = base_mask.path.to_polygon(start_frame, 16);
     if base_poly.is_empty() {
         return Err("base mask has no vertices".into());
     }
+    if base_poly
+        .iter()
+        .flatten()
+        .any(|coordinate| !coordinate.is_finite())
+    {
+        return Err("base mask contains non-finite vertices".into());
+    }
     let origin = tracker.position.evaluate(start_frame);
+    if origin.iter().any(|coordinate| !coordinate.is_finite()) {
+        return Err("tracker position is not finite".into());
+    }
     let mut kfs: Vec<Keyframe<Vec<[f32; 2]>>> = Vec::new();
     let step = (end_frame.saturating_sub(start_frame) / 60).max(1); // ≤ ~61 samples
     let mut f = start_frame;
     loop {
         let cur = tracker.position.evaluate(f);
+        if cur.iter().any(|coordinate| !coordinate.is_finite()) {
+            return Err(format!("tracker position is not finite at frame {f}"));
+        }
         let dx = cur[0] - origin[0];
         let dy = cur[1] - origin[1];
+        if !dx.is_finite() || !dy.is_finite() {
+            return Err(format!("tracker displacement is not finite at frame {f}"));
+        }
         let moved: Vec<[f32; 2]> = base_poly.iter().map(|p| [p[0] + dx, p[1] + dy]).collect();
+        if moved
+            .iter()
+            .flatten()
+            .any(|coordinate| !coordinate.is_finite())
+        {
+            return Err(format!("baked mask position is not finite at frame {f}"));
+        }
         kfs.push(Keyframe::new(f, moved, InterpolationType::Linear));
         if f >= end_frame {
             break;
@@ -92,26 +130,79 @@ pub fn bake_optical_flow_roto_matte<F>(
     end_frame: u32,
     width: u32,
     height: u32,
-    mut frame_provider: F,
+    frame_provider: F,
 ) -> Result<Animatable<Vec<[f32; 2]>>, String>
 where
     F: FnMut(u32) -> Option<Vec<u8>>,
 {
+    bake_optical_flow_roto_matte_cancellable(
+        base_mask,
+        source_strokes,
+        settings,
+        anchor_frame,
+        start_frame,
+        end_frame,
+        width,
+        height,
+        frame_provider,
+        || false,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn bake_optical_flow_roto_matte_cancellable<F, C>(
+    base_mask: &Mask,
+    source_strokes: &[crate::core::roto_brush_engine::RotoStroke],
+    settings: &crate::core::roto_brush_engine::RotoBrushSettings,
+    anchor_frame: u32,
+    start_frame: u32,
+    end_frame: u32,
+    width: u32,
+    height: u32,
+    mut frame_provider: F,
+    mut is_cancelled: C,
+) -> Result<Animatable<Vec<[f32; 2]>>, String>
+where
+    F: FnMut(u32) -> Option<Vec<u8>>,
+    C: FnMut() -> bool,
+{
     if end_frame < start_frame || anchor_frame < start_frame || anchor_frame > end_frame {
         return Err("roto propagation range must contain the anchor frame".into());
     }
-    let expected_len = (width as usize)
+    if is_cancelled() {
+        return Err("Roto optical-flow propagation cancelled".into());
+    }
+    let pixel_count = (width as usize)
         .checked_mul(height as usize)
-        .and_then(|pixels| pixels.checked_mul(4))
+        .filter(|pixels| *pixels <= crate::core::roto_brush_engine::MAX_ROTO_FRAME_PIXELS)
+        .ok_or_else(|| "Roto propagation frame exceeds the supported pixel limit".to_owned())?;
+    let expected_len = pixel_count
+        .checked_mul(4)
         .filter(|_| width > 0 && height > 0)
         .ok_or_else(|| "invalid composition dimensions for roto propagation".to_owned())?;
-    let mut boundary = base_mask.path.to_polygon(anchor_frame, 16);
-    if boundary.len() < 3 {
+    let anchor_boundary = base_mask.path.to_polygon(anchor_frame, 16);
+    if anchor_boundary.len() < 3 {
         return Err("Roto Brush Matte has no closed boundary to propagate".into());
     }
+    if anchor_boundary
+        .iter()
+        .flatten()
+        .any(|coordinate| !coordinate.is_finite())
+    {
+        return Err("Roto Brush Matte boundary contains non-finite vertices".into());
+    }
+    let mut boundary = anchor_boundary.clone();
 
-    let anchor_pixels = frame_provider(anchor_frame)
-        .ok_or_else(|| format!("Could not render source frame {anchor_frame}"))?;
+    let anchor_pixels = match frame_provider(anchor_frame) {
+        Some(pixels) => pixels,
+        None if is_cancelled() => {
+            return Err("Roto optical-flow propagation cancelled".into());
+        }
+        None => return Err(format!("Could not render source frame {anchor_frame}")),
+    };
+    if is_cancelled() {
+        return Err("Roto optical-flow propagation cancelled".into());
+    }
     if anchor_pixels.len() != expected_len {
         return Err(format!(
             "Source frame {anchor_frame} has invalid dimensions"
@@ -121,7 +212,27 @@ where
     let flow_scale = (ROTO_FLOW_MAX_DIMENSION / width.max(height) as f32).min(1.0);
     let flow_width = ((width as f32 * flow_scale).round() as u32).max(1);
     let flow_height = ((height as f32 * flow_scale).round() as u32).max(1);
-    let anchor_small = downsample_rgba(&anchor_pixels, width, height, flow_width, flow_height);
+    let flow_buffer_len = (flow_width as usize)
+        .checked_mul(flow_height as usize)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .ok_or_else(|| "invalid downsampled Roto dimensions".to_owned())?;
+    let Some(anchor_small) = downsample_rgba(
+        &anchor_pixels,
+        width,
+        height,
+        flow_width,
+        flow_height,
+        &mut is_cancelled,
+    ) else {
+        if is_cancelled() {
+            return Err("Roto optical-flow propagation cancelled".into());
+        }
+        return Err("Could not allocate downsampled Roto source frame".into());
+    };
+    if anchor_small.len() != flow_buffer_len {
+        return Err("Could not allocate downsampled Roto source frame".into());
+    }
+    drop(anchor_pixels);
     let mut keyframes = vec![Keyframe::new(
         anchor_frame,
         boundary.clone(),
@@ -133,58 +244,143 @@ where
     for direction in [-1i64, 1i64] {
         let mut previous_frame = anchor_frame;
         let mut previous_small = anchor_small.clone();
-        boundary = base_mask.path.to_polygon(anchor_frame, 16);
+        boundary = anchor_boundary.clone();
         let mut propagated_strokes = anchor_strokes.clone();
         loop {
+            if is_cancelled() {
+                return Err("Roto optical-flow propagation cancelled".into());
+            }
             let next_frame = previous_frame as i64 + direction;
             if next_frame < start_frame as i64 || next_frame > end_frame as i64 {
                 break;
             }
             let next_frame = next_frame as u32;
-            let pixels = frame_provider(next_frame)
-                .ok_or_else(|| format!("Could not render source frame {next_frame}"))?;
+            let pixels = match frame_provider(next_frame) {
+                Some(pixels) => pixels,
+                None if is_cancelled() => {
+                    return Err("Roto optical-flow propagation cancelled".into());
+                }
+                None => return Err(format!("Could not render source frame {next_frame}")),
+            };
+            if is_cancelled() {
+                return Err("Roto optical-flow propagation cancelled".into());
+            }
             if pixels.len() != expected_len {
                 return Err(format!("Source frame {next_frame} has invalid dimensions"));
             }
-            let current_small = downsample_rgba(&pixels, width, height, flow_width, flow_height);
-            let flow = crate::core::optical_flow_timewarp::compute_dense_optical_flow(
-                &previous_small,
-                &current_small,
+            let Some(current_small) = downsample_rgba(
+                &pixels,
+                width,
+                height,
                 flow_width,
                 flow_height,
-                1,
-                ROTO_FLOW_SEARCH_RADIUS,
-            );
-            let reverse_flow = crate::core::optical_flow_timewarp::compute_dense_optical_flow(
-                &current_small,
-                &previous_small,
-                flow_width,
-                flow_height,
-                1,
-                ROTO_FLOW_SEARCH_RADIUS,
-            );
+                &mut is_cancelled,
+            ) else {
+                if is_cancelled() {
+                    return Err("Roto optical-flow propagation cancelled".into());
+                }
+                return Err(format!(
+                    "Could not allocate downsampled Roto source frame {next_frame}"
+                ));
+            };
+            if current_small.len() != flow_buffer_len {
+                return Err(format!(
+                    "Could not allocate downsampled Roto source frame {next_frame}"
+                ));
+            }
+            let Some(flow) =
+                crate::core::optical_flow_timewarp::compute_dense_optical_flow_cancellable(
+                    &previous_small,
+                    &current_small,
+                    flow_width,
+                    flow_height,
+                    1,
+                    ROTO_FLOW_SEARCH_RADIUS,
+                    &mut is_cancelled,
+                )
+            else {
+                return Err("Roto optical-flow propagation cancelled".into());
+            };
+            if !flow.is_complete() {
+                return Err(format!(
+                    "Could not allocate Roto optical-flow field at frame {next_frame}"
+                ));
+            }
+            if is_cancelled() {
+                return Err("Roto optical-flow propagation cancelled".into());
+            }
+            let Some(reverse_flow) =
+                crate::core::optical_flow_timewarp::compute_dense_optical_flow_cancellable(
+                    &current_small,
+                    &previous_small,
+                    flow_width,
+                    flow_height,
+                    1,
+                    ROTO_FLOW_SEARCH_RADIUS,
+                    &mut is_cancelled,
+                )
+            else {
+                return Err("Roto optical-flow propagation cancelled".into());
+            };
+            if !reverse_flow.is_complete() {
+                return Err(format!(
+                    "Could not allocate reverse Roto optical-flow field at frame {next_frame}"
+                ));
+            }
+            if is_cancelled() {
+                return Err("Roto optical-flow propagation cancelled".into());
+            }
             boundary = warp_roto_boundary_with_flow(&boundary, &flow, &reverse_flow, width, height);
             propagated_strokes =
                 warp_roto_strokes(&propagated_strokes, &flow, &reverse_flow, width, height);
-            propagated_strokes.extend(
-                source_strokes
-                    .iter()
-                    .filter(|stroke| stroke.frame == Some(next_frame))
-                    .cloned()
-                    .map(|mut stroke| {
-                        stroke.frame = None;
-                        stroke
-                    }),
-            );
-            if let Some(refined_boundary) = resegment_propagated_boundary(
+            let frame_corrections = source_strokes
+                .iter()
+                .filter(|stroke| stroke.frame == Some(next_frame))
+                .cloned()
+                .collect::<Vec<_>>();
+            propagated_strokes.extend(frame_corrections.iter().cloned().map(|mut stroke| {
+                stroke.frame = None;
+                stroke
+            }));
+            let has_user_correction = !frame_corrections.is_empty();
+            let refined_boundary = resegment_propagated_boundary(
                 &pixels,
                 width,
                 height,
                 &boundary,
                 &propagated_strokes,
+                &frame_corrections,
                 settings,
-            ) {
-                boundary = refined_boundary;
+                &mut is_cancelled,
+            );
+            if is_cancelled() {
+                return Err("Roto optical-flow propagation cancelled".into());
+            }
+            if let Some(refined_boundary) = refined_boundary {
+                // Compare against the original anchor as well as the previous
+                // frame: small segmentation errors can compound into a matte
+                // that slowly absorbs the full scene without a single large jump.
+                let max_area_ratio = if has_user_correction {
+                    ROTO_MAX_CORRECTED_AREA_RATIO
+                } else {
+                    ROTO_MAX_RESEGMENT_AREA_RATIO
+                };
+                if is_plausible_resegment_area_with_limit(
+                    &anchor_boundary,
+                    &refined_boundary,
+                    max_area_ratio,
+                    has_user_correction,
+                ) {
+                    boundary = refined_boundary;
+                } else if has_user_correction {
+                    return Err(format!(
+                        "Roto Brush correction at frame {next_frame} could not be applied safely"
+                    ));
+                }
+            } else if has_user_correction {
+                return Err(format!(
+                    "Roto Brush correction at frame {next_frame} could not be segmented"
+                ));
             }
             keyframes.push(Keyframe::new(
                 next_frame,
@@ -219,38 +415,77 @@ pub(crate) fn warp_roto_strokes(
         .collect()
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn resegment_propagated_boundary(
     pixels: &[u8],
     width: u32,
     height: u32,
     previous_boundary: &[[f32; 2]],
     strokes: &[crate::core::roto_brush_engine::RotoStroke],
+    correction_strokes: &[crate::core::roto_brush_engine::RotoStroke],
     settings: &crate::core::roto_brush_engine::RotoBrushSettings,
+    is_cancelled: &mut impl FnMut() -> bool,
 ) -> Option<Vec<[f32; 2]>> {
+    if is_cancelled() {
+        return None;
+    }
+    let has_user_correction = !correction_strokes.is_empty();
     let mut geometry_settings = settings.clone();
     geometry_settings.feather_radius = 0.0;
-    let foreground_seed = strokes
-        .iter()
-        .find(|stroke| {
-            stroke.stroke_type == crate::core::roto_brush_engine::RotoStrokeType::Foreground
-        })?
-        .points
-        .first()
-        .copied()?;
-    let alpha = crate::core::roto_brush_engine::generate_rotobrush_matte(
+    let foreground_seed = latest_foreground_seed(strokes)?;
+    let alpha = crate::core::roto_brush_engine::generate_rotobrush_matte_cancellable(
         pixels,
         width,
         height,
         strokes,
         &geometry_settings,
-    );
-    let mut binary = alpha
-        .into_iter()
-        .map(|value| if value >= 128 { 255 } else { 0 })
-        .collect::<Vec<_>>();
+        &mut *is_cancelled,
+    )?;
+    if is_cancelled() {
+        return None;
+    }
+    if width == 0 || height == 0 || alpha.len() != (width as usize).checked_mul(height as usize)? {
+        return None;
+    }
+    let mut binary = alpha;
+    for row in binary.chunks_exact_mut(width as usize) {
+        if is_cancelled() {
+            return None;
+        }
+        for value in row {
+            *value = if *value >= 128 { 255 } else { 0 };
+        }
+    }
+    if !constrain_matte_to_dilated_boundary_cancellable(
+        &mut binary,
+        width,
+        height,
+        previous_boundary,
+        roto_motion_prior_margin(width, height),
+        correction_strokes,
+        &mut *is_cancelled,
+    ) {
+        return None;
+    }
+    if is_cancelled() {
+        return None;
+    }
     retain_component_at_seed(&mut binary, width, height, foreground_seed)?;
     let polygon = trace_contour_to_polygon(&binary, width, height, 1.5);
     if polygon.len() < 3 {
+        return None;
+    }
+    let max_area_ratio = if has_user_correction {
+        ROTO_MAX_CORRECTED_AREA_RATIO
+    } else {
+        ROTO_MAX_RESEGMENT_AREA_RATIO
+    };
+    if !is_plausible_resegment_area_with_limit(
+        previous_boundary,
+        &polygon,
+        max_area_ratio,
+        has_user_correction,
+    ) {
         return None;
     }
     Some(resample_closed_polygon(
@@ -259,52 +494,66 @@ pub(crate) fn resegment_propagated_boundary(
     ))
 }
 
-pub(crate) fn retain_component_at_seed(
-    binary: &mut [u8],
-    width: u32,
-    height: u32,
-    seed: [f32; 2],
-) -> Option<()> {
-    if width == 0 || height == 0 || binary.len() != width as usize * height as usize {
-        return None;
-    }
-    let sx = seed[0].round().clamp(0.0, width.saturating_sub(1) as f32) as u32;
-    let sy = seed[1].round().clamp(0.0, height.saturating_sub(1) as f32) as u32;
-    let start = (sy * width + sx) as usize;
-    if binary[start] != 255 {
-        return None;
-    }
+pub(super) fn latest_foreground_seed(
+    strokes: &[crate::core::roto_brush_engine::RotoStroke],
+) -> Option<[f32; 2]> {
+    strokes
+        .iter()
+        .rev()
+        .filter(|stroke| {
+            stroke.stroke_type == crate::core::roto_brush_engine::RotoStrokeType::Foreground
+        })
+        .find_map(|stroke| {
+            stroke
+                .points
+                .iter()
+                .copied()
+                .find(|point| point.iter().all(|coordinate| coordinate.is_finite()))
+        })
+}
 
-    let mut visited = vec![false; binary.len()];
-    let mut queue = std::collections::VecDeque::from([start]);
-    visited[start] = true;
-    while let Some(index) = queue.pop_front() {
-        let x = (index % width as usize) as i32;
-        let y = (index / width as usize) as i32;
-        for dy in -1..=1 {
-            for dx in -1..=1 {
-                if dx == 0 && dy == 0 {
-                    continue;
-                }
-                let nx = x + dx;
-                let ny = y + dy;
-                if nx < 0 || ny < 0 || nx >= width as i32 || ny >= height as i32 {
-                    continue;
-                }
-                let next = ny as usize * width as usize + nx as usize;
-                if binary[next] == 255 && !visited[next] {
-                    visited[next] = true;
-                    queue.push_back(next);
-                }
-            }
-        }
+#[cfg(test)]
+pub(super) fn is_plausible_resegment_area(previous: &[[f32; 2]], candidate: &[[f32; 2]]) -> bool {
+    is_plausible_resegment_area_with_limit(
+        previous,
+        candidate,
+        ROTO_MAX_RESEGMENT_AREA_RATIO,
+        false,
+    )
+}
+
+fn is_plausible_resegment_area_with_limit(
+    previous: &[[f32; 2]],
+    candidate: &[[f32; 2]],
+    max_ratio: f32,
+    allow_shrink: bool,
+) -> bool {
+    let previous_area = polygon_area(previous);
+    let candidate_area = polygon_area(candidate);
+    if !previous_area.is_finite()
+        || !candidate_area.is_finite()
+        || previous_area <= f32::EPSILON
+        || candidate_area <= f32::EPSILON
+    {
+        return false;
     }
-    for (value, keep) in binary.iter_mut().zip(visited) {
-        if !keep {
-            *value = 0;
-        }
+    let ratio = candidate_area / previous_area;
+    ratio <= max_ratio && (allow_shrink || ratio >= 1.0 / max_ratio)
+}
+
+fn polygon_area(points: &[[f32; 2]]) -> f32 {
+    if points.len() < 3 {
+        return 0.0;
     }
-    Some(())
+    let twice_area: f32 = points
+        .iter()
+        .enumerate()
+        .map(|(index, point)| {
+            let next = points[(index + 1) % points.len()];
+            point[0] * next[1] - next[0] * point[1]
+        })
+        .sum();
+    twice_area.abs() * 0.5
 }
 
 pub(crate) fn resample_closed_polygon(points: &[[f32; 2]], count: usize) -> Vec<[f32; 2]> {
@@ -339,25 +588,60 @@ pub(crate) fn resample_closed_polygon(points: &[[f32; 2]], count: usize) -> Vec<
     output
 }
 
-pub(crate) fn downsample_rgba(
+fn downsample_rgba(
     source: &[u8],
     width: u32,
     height: u32,
     out_w: u32,
     out_h: u32,
-) -> Vec<u8> {
-    let mut output = vec![0u8; out_w as usize * out_h as usize * 4];
+    is_cancelled: &mut impl FnMut() -> bool,
+) -> Option<Vec<u8>> {
+    let source_len = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|pixels| pixels.checked_mul(4))?;
+    let output_len = (out_w as usize)
+        .checked_mul(out_h as usize)
+        .and_then(|pixels| pixels.checked_mul(4))?;
+    if width == 0 || height == 0 || out_w == 0 || out_h == 0 || source.len() != source_len {
+        return None;
+    }
+
+    let mut output = try_filled_vec(output_len, 0u8)?;
+    let scale_x = width as f64 / out_w as f64;
+    let scale_y = height as f64 / out_h as f64;
     for y in 0..out_h {
-        let sy = (((y as f32 + 0.5) * height as f32 / out_h as f32).floor() as u32).min(height - 1);
+        if is_cancelled() {
+            return None;
+        }
+        let top = y as f64 * scale_y;
+        let bottom = (y + 1) as f64 * scale_y;
+        let first_y = top.floor() as u32;
+        let last_y = bottom.ceil().min(height as f64) as u32;
         for x in 0..out_w {
-            let sx =
-                (((x as f32 + 0.5) * width as f32 / out_w as f32).floor() as u32).min(width - 1);
-            let src = ((sy * width + sx) * 4) as usize;
+            let left = x as f64 * scale_x;
+            let right = (x + 1) as f64 * scale_x;
+            let first_x = left.floor() as u32;
+            let last_x = right.ceil().min(width as f64) as u32;
+            let area = (right - left) * (bottom - top);
+            let mut sums = [0.0f64; 4];
+            for sy in first_y..last_y {
+                let weight_y = (bottom.min(sy as f64 + 1.0) - top.max(sy as f64)).max(0.0);
+                for sx in first_x..last_x {
+                    let weight_x = (right.min(sx as f64 + 1.0) - left.max(sx as f64)).max(0.0);
+                    let weight = weight_x * weight_y;
+                    let src = (sy as usize * width as usize + sx as usize) * 4;
+                    for channel in 0..4 {
+                        sums[channel] += source[src + channel] as f64 * weight;
+                    }
+                }
+            }
             let dst = ((y * out_w + x) * 4) as usize;
-            output[dst..dst + 4].copy_from_slice(&source[src..src + 4]);
+            for (channel, sum) in sums.into_iter().enumerate() {
+                output[dst + channel] = (sum / area).round().clamp(0.0, 255.0) as u8;
+            }
         }
     }
-    output
+    Some(output)
 }
 
 pub(crate) fn warp_roto_boundary_with_flow(

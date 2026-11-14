@@ -1,5 +1,19 @@
 use super::*;
 
+struct RenderDeadlineWatchdog {
+    flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    timer: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Drop for RenderDeadlineWatchdog {
+    fn drop(&mut self) {
+        self.flag.store(true, std::sync::atomic::Ordering::Relaxed);
+        if let Some(timer) = self.timer.take() {
+            let _ = timer.join();
+        }
+    }
+}
+
 /// Multi-frame rendering (MFR): render a range of frames in parallel using rayon.
 /// Returns a Vec of (frame, pixels) in the same order as the input range.
 /// Each frame is rendered independently on a separate CPU core, then the
@@ -31,22 +45,20 @@ pub fn render_frame_range_parallel(
     frames
         .par_iter()
         .map(|&f| {
-            if let Some(ref flag) = cancel_flag {
-                set_render_cancel_flag(Some(flag.clone()));
-            }
+            let _cancel_guard = cancel_flag
+                .as_ref()
+                .map(|flag| RenderCancelFlagGuard::install(flag.clone()));
             let pixels = render_frame_to_pixels(comp, f, width, height, exposure_ev, lut_mode);
-            if cancel_flag.is_some() {
-                set_render_cancel_flag(None);
-            }
             (f, pixels)
         })
         .collect()
 }
 
-/// Render a frame directly into a 32bpc scene-linear HDR float buffer (`HdrF32Buffer`).
+/// Convert the 8-bit software-renderer output to a linear `f32` buffer.
 ///
-/// Pixels are stored as 32-bit floats [R, G, B, A] in unbounded scene-linear space,
-/// preserving over-bright highlights (>1.0) and negative deep shadows for EXR / HDR export.
+/// This preserves the displayed image in linear-light form, but it is not an HDR
+/// rendering path: highlights and precision already lost by the 8-bit renderer
+/// cannot be recovered here.
 pub fn render_frame_to_hdr_f32(
     comp: &Composition,
     frame: u32,
@@ -55,24 +67,46 @@ pub fn render_frame_to_hdr_f32(
     exposure_ev: f32,
     lut_mode: u32,
 ) -> crate::core::color_science::HdrF32Buffer {
-    let f32_pixels = render_frame_to_pixels_f32(comp, frame, width, height, exposure_ev, lut_mode);
-    let mut hdr = crate::core::color_science::HdrF32Buffer::new(width, height);
-    for (i, px) in f32_pixels.iter().enumerate() {
-        let base = i * 4;
-        if base + 3 < hdr.data.len() {
-            hdr.data[base] = px[0];
-            hdr.data[base + 1] = px[1];
-            hdr.data[base + 2] = px[2];
-            hdr.data[base + 3] = px[3];
-        }
+    let empty = || crate::core::color_science::HdrF32Buffer {
+        width: 0,
+        height: 0,
+        data: Vec::new(),
+    };
+    if float_render_working_set_size(width, height).is_none() {
+        return empty();
     }
-    hdr
+    let pixels = render_frame_to_pixels(comp, frame, width, height, exposure_ev, lut_mode);
+    if pixels.is_empty() {
+        return empty();
+    }
+    let Some(float_len) = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|count| count.checked_mul(4))
+    else {
+        return empty();
+    };
+    let mut data = Vec::new();
+    if data.try_reserve_exact(float_len).is_err() {
+        return empty();
+    }
+    use crate::core::color::srgb_to_linear_piecewise;
+    for pixel in pixels.as_chunks::<4>().0 {
+        data.push(srgb_to_linear_piecewise(pixel[0] as f32 / 255.0));
+        data.push(srgb_to_linear_piecewise(pixel[1] as f32 / 255.0));
+        data.push(srgb_to_linear_piecewise(pixel[2] as f32 / 255.0));
+        data.push(pixel[3] as f32 / 255.0);
+    }
+    crate::core::color_science::HdrF32Buffer {
+        width,
+        height,
+        data,
+    }
 }
 
-/// Render a frame and return linear-light f32 RGBA pixels (16/32bpc path).
+/// Render a frame and convert its 8-bit sRGB result to linear-light f32 RGBA.
 ///
-/// Returns physically-linear colour values [r, g, b, a] in `0.0..=∞`, suitable
-/// for OpenEXR / HDR export, ACES processing, and full 32bpc floating point workflows.
+/// The values represent a linearized 8-bit render and remain in `0.0..=1.0`;
+/// this function does not provide a full-precision or HDR composition render.
 pub fn render_frame_to_pixels_f32(
     comp: &Composition,
     frame: u32,
@@ -81,12 +115,19 @@ pub fn render_frame_to_pixels_f32(
     exposure_ev: f32,
     lut_mode: u32,
 ) -> Vec<[f32; 4]> {
+    if float_render_working_set_size(width, height).is_none() {
+        return Vec::new();
+    }
     let buf8 = render_frame_to_pixels(comp, frame, width, height, exposure_ev, lut_mode);
     if buf8.is_empty() {
         return Vec::new();
     }
     let n = (width as usize) * (height as usize);
-    let mut out = vec![[0.0f32; 4]; n];
+    let mut out = Vec::new();
+    if out.try_reserve_exact(n).is_err() {
+        return Vec::new();
+    }
+    out.resize(n, [0.0f32; 4]);
     use crate::core::color::srgb_to_linear_piecewise;
     for (px, dst) in buf8.as_chunks::<4>().0.iter().zip(out.iter_mut()) {
         // Decode the sRGB-encoded result back to linear (exposure baked in).
@@ -119,30 +160,43 @@ pub fn render_frame_with_deadline(
     use std::sync::Arc;
     use std::time::Instant;
 
+    let start = Instant::now();
     let flag = Arc::new(AtomicBool::new(false));
-    set_render_cancel_flag(Some(flag.clone()));
+    let _cancel_guard = RenderCancelFlagGuard::install(flag.clone());
 
     // Watchdog timer: flips the flag when the deadline expires.
     let timer_flag = flag.clone();
-    let timer = std::thread::spawn(move || {
-        let start = Instant::now();
-        while start.elapsed() < deadline {
-            if timer_flag.load(Ordering::Relaxed) {
-                return; // already cancelled by other means
+    let timer = std::thread::Builder::new()
+        .name("kagari-render-deadline".into())
+        .spawn(move || {
+            while start.elapsed() < deadline {
+                if timer_flag.load(Ordering::Relaxed) {
+                    return; // already cancelled by other means
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
             }
-            std::thread::sleep(std::time::Duration::from_millis(10));
+            timer_flag.store(true, Ordering::Relaxed);
+        });
+    let timer = match timer {
+        Ok(timer) => timer,
+        Err(error) => {
+            flag.store(true, Ordering::Relaxed);
+            log::error!("Could not start render deadline watchdog: {error}");
+            drop(_cancel_guard);
+            return (Vec::new(), true);
         }
-        timer_flag.store(true, Ordering::Relaxed);
-    });
+    };
+    let watchdog = RenderDeadlineWatchdog {
+        flag: flag.clone(),
+        timer: Some(timer),
+    };
 
     let pixels = render_frame_to_pixels(comp, frame, width, height, exposure_ev, lut_mode);
-    let timed_out = flag.load(Ordering::Relaxed);
-
-    set_render_cancel_flag(None);
-
-    // Stop the watchdog promptly: flipping the flag makes its loop exit.
-    flag.store(true, Ordering::Relaxed);
-    let _ = timer.join();
+    // The watchdog polls at 10 ms intervals, so it may not have published its
+    // flag yet when a render returns just after the deadline. Measure elapsed
+    // time as well to make the reported result independent of that wakeup race.
+    let timed_out = flag.load(Ordering::Relaxed) || start.elapsed() >= deadline;
+    drop(watchdog);
 
     (pixels, timed_out)
 }
@@ -150,6 +204,16 @@ pub fn render_frame_with_deadline(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn deadline_reports_expiry_even_before_watchdog_poll() {
+        let comp = Composition::new("deadline-zero".into(), "Deadline".into(), 8, 8, 24, 1);
+        let (pixels, timed_out) =
+            render_frame_with_deadline(&comp, 0, 8, 8, 0.0, 0, std::time::Duration::ZERO);
+
+        assert!(timed_out, "zero deadline is expired when rendering returns");
+        assert_eq!(pixels.len(), 8 * 8 * 4);
+    }
 
     /// The global MFR switch must change scheduling only — never pixels.
     #[test]

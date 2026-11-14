@@ -21,10 +21,10 @@ pub(in crate::ui::viewport) fn start_roto_flow_bake(
     let mask = layer
         .masks
         .iter()
-        .find(|mask| mask.name == "Roto Brush Matte")
+        .find(|mask| mask.id == crate::core::roto_assist::ROTO_BRUSH_MATTE_ID)
         .ok_or_else(|| "Create a Roto Brush Matte before propagation".to_owned())?;
     let start_frame = layer.in_frame;
-    let end_frame = layer.out_frame.max(start_frame.saturating_add(1));
+    let end_frame = layer.out_frame.saturating_sub(1).max(start_frame);
     if anchor_frame < start_frame || anchor_frame > end_frame {
         return Err("Move the playhead inside the selected layer before propagation".into());
     }
@@ -71,7 +71,7 @@ pub(in crate::ui::viewport) fn start_roto_flow_bake(
         .name("kagari-roto-flow".into())
         .spawn(move || {
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                crate::core::roto_assist::bake_optical_flow_roto_matte(
+                crate::core::roto_assist::bake_optical_flow_roto_matte_cancellable(
                     &mask,
                     &source_strokes,
                     &settings,
@@ -84,18 +84,23 @@ pub(in crate::ui::viewport) fn start_roto_flow_bake(
                         if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
                             return None;
                         }
-                        let pixels =
-                            crate::core::software_renderer::render_frame_to_pixels_filtered(
-                                &source_comp,
-                                frame,
-                                width,
-                                height,
-                                0.0,
-                                0,
-                                Some(layer_index),
-                            );
+                        let pixels = crate::core::software_renderer::with_render_cancel_flag(
+                            cancelled.clone(),
+                            || {
+                                crate::core::software_renderer::render_frame_to_pixels_filtered(
+                                    &source_comp,
+                                    frame,
+                                    width,
+                                    height,
+                                    0.0,
+                                    0,
+                                    Some(layer_index),
+                                )
+                            },
+                        );
                         (!pixels.is_empty()).then_some(pixels)
                     },
+                    || cancelled.load(std::sync::atomic::Ordering::Relaxed),
                 )
             }))
             .unwrap_or_else(|_| {

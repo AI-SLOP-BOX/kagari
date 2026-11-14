@@ -5,6 +5,12 @@ use crate::ui::theme::colors;
 use crate::KagariApp;
 use eframe::egui;
 
+mod storage;
+pub(crate) use storage::{apply, load, save, save_workspaces};
+pub use storage::{apply_loaded, reset_to_defaults};
+mod ui_helpers;
+use ui_helpers::*;
+
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Prefs {
     #[serde(default)]
@@ -48,106 +54,6 @@ fn default_true() -> bool {
 }
 fn default_recovery_slots() -> usize {
     10
-}
-
-impl Default for Prefs {
-    fn default() -> Self {
-        Self {
-            language: crate::ui::localization::LanguagePreference::System,
-            cache_mb: 12 * 1024,
-            undo_steps: 50,
-            autosave_secs: 300,
-            recovery_slots: 10,
-            audio_preview: true,
-            adaptive_preview: true,
-            disk_cache_gb: 100,
-            disk_cache_directory: String::new(),
-            custom_workspaces: Vec::new(),
-            shortcut_bindings: std::collections::HashMap::new(),
-            startup_home: true,
-            confirm_exit: true,
-            confirm_close_project: true,
-            restore_previous_state: true,
-            gpu_compute_enabled: None,
-        }
-    }
-}
-
-pub(crate) fn load() -> Prefs {
-    crate::ui::project_io::load_prefs_value()
-        .and_then(|value| serde_json::from_value(value).ok())
-        .unwrap_or_default()
-}
-
-pub(crate) fn save(p: &Prefs) -> Result<(), String> {
-    let serde_json::Value::Object(fields) = serde_json::to_value(p)
-        .map_err(|error| format!("Could not serialize preferences: {error}"))?
-    else {
-        return Err("Preferences did not serialize to an object".to_owned());
-    };
-    crate::ui::project_io::update_prefs(|root| {
-        root.extend(fields);
-    })
-}
-
-pub(crate) fn save_workspaces(
-    workspaces: &[crate::ui::workspace_manager::SavedWorkspace],
-) -> Result<(), String> {
-    let mut prefs = load();
-    prefs.custom_workspaces = workspaces.to_vec();
-    save(&prefs)
-}
-
-/// Apply stored prefs to live app state. Called once at startup.
-pub fn apply_loaded(app: &mut KagariApp) {
-    let p = load();
-    apply(app, &p);
-    app.show_home = p.startup_home;
-}
-
-pub(crate) fn apply(app: &mut KagariApp, p: &Prefs) {
-    crate::ui::localization::set_preference(p.language);
-    crate::ui::shortcuts::defs::set_overrides(&p.shortcut_bindings);
-    app.confirm_exit = p.confirm_exit;
-    app.confirm_close_project = p.confirm_close_project;
-    app.restore_previous_state = p.restore_previous_state;
-    if let Some(enabled) = p.gpu_compute_enabled {
-        if app.history.current().use_gpu_compute != enabled {
-            app.modify_project(|project| project.use_gpu_compute = enabled);
-        }
-    }
-    app.frame_cache.max_memory_bytes = p.cache_mb * 1024 * 1024;
-    crate::core::frame_cache::disk_cache::set_max_disk_bytes(
-        p.disk_cache_gb as u64 * 1024 * 1024 * 1024,
-    );
-    let cache_path = if p.disk_cache_directory.trim().is_empty() {
-        None
-    } else {
-        Some(std::path::PathBuf::from(&p.disk_cache_directory))
-    };
-    if let Err(error) = crate::core::frame_cache::disk_cache::set_cache_directory(cache_path) {
-        app.toasts
-            .error(format!("Could not set disk cache folder: {error}"));
-    }
-    app.history.set_max_history_entries(p.undo_steps);
-    app.autosave.set_interval_secs(p.autosave_secs);
-    app.autosave.set_max_slots(p.recovery_slots);
-    app.audio_preview_enabled = p.audio_preview;
-    app.adaptive_preview_enabled = p.adaptive_preview;
-    app.custom_workspaces = p.custom_workspaces.clone();
-    if !p.adaptive_preview {
-        app.playback.adaptive_preview_factor = 1.0;
-    }
-}
-
-/// Restore the persisted preferences and the live runtime state to defaults.
-pub fn reset_to_defaults(app: &mut KagariApp) {
-    let defaults = Prefs::default();
-    apply(app, &defaults);
-    match save(&defaults) {
-        Ok(()) => app.toasts.info("Preferences reset to defaults"),
-        Err(error) => app.toasts.error(error),
-    }
 }
 
 pub fn draw_preferences_dialog(app: &mut KagariApp, ctx: &egui::Context) {
@@ -468,7 +374,7 @@ pub fn draw_preferences_dialog(app: &mut KagariApp, ctx: &egui::Context) {
                                             if kui::toggle(ui, &mut gpu_compute, &crate::ui::localization::tr("Use GPU acceleration for supported effects")).changed() {
                                                 p.gpu_compute_enabled = Some(gpu_compute);
                                             }
-                                            kui::caption(ui, &crate::ui::localization::tr("GPU effects use the active adapter when available."));
+                                            kui::caption(ui, crate::ui::localization::tr("GPU effects use the active adapter when available."));
                                             ui.add_space(12.0);
                                             ui.horizontal(|ui| {
                                                 status_chip(ui, "Preview renderer", if app.gpu_rendered { "GPU" } else { "Software" });
@@ -857,135 +763,5 @@ pub fn draw_close_project_confirmation_dialog(app: &mut KagariApp, ctx: &egui::C
     if close_project {
         app.show_close_project_confirmation = false;
         return_to_home(app, ctx);
-    }
-}
-
-fn return_to_home(app: &mut KagariApp, ctx: &egui::Context) {
-    app.show_home = true;
-    crate::ui::home_screen::set_home_nav(ctx, crate::ui::home_screen::HomeNav::Home);
-}
-
-fn settings_card<R>(
-    ui: &mut egui::Ui,
-    title: &str,
-    add_contents: impl FnOnce(&mut egui::Ui) -> R,
-) -> R {
-    let card_width = ui.available_width();
-    egui::Frame::none()
-        .fill(egui::Color32::from_rgb(14, 21, 24))
-        .stroke(egui::Stroke::new(
-            1.0_f32,
-            egui::Color32::from_rgb(35, 44, 50),
-        ))
-        .rounding(egui::Rounding::same(6.0))
-        .inner_margin(egui::Margin::symmetric(10.0, 2.0))
-        .show(ui, |ui| {
-            ui.set_width((card_width - 20.0).max(0.0));
-            ui.vertical(|ui| {
-                if !title.is_empty() {
-                    crate::ui::kui::section(ui, &crate::ui::localization::tr(title));
-                    ui.add_space(4.0);
-                }
-                add_contents(ui)
-            })
-            .inner
-        })
-        .inner
-}
-
-fn preference_toggle_row(ui: &mut egui::Ui, label: &str, description: &str, value: &mut bool) {
-    ui.horizontal(|ui| {
-        let label_width = (ui.available_width() - 60.0).max(100.0);
-        ui.allocate_ui_with_layout(
-            egui::vec2(label_width, 36.0),
-            egui::Layout::top_down(egui::Align::Min),
-            |ui| {
-                ui.label(
-                    egui::RichText::new(crate::ui::localization::tr(label))
-                        .size(14.0)
-                        .color(colors::TEXT_PRIMARY),
-                );
-                ui.label(
-                    egui::RichText::new(crate::ui::localization::tr(description))
-                        .size(10.5)
-                        .color(colors::TEXT_SECONDARY),
-                );
-            },
-        );
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            kui::switch(ui, value, "");
-        });
-    });
-    ui.add_space(1.0);
-    kui::separator(ui);
-    ui.add_space(1.0);
-}
-
-fn preference_property_row<R>(
-    ui: &mut egui::Ui,
-    label: &str,
-    description: &str,
-    control: impl FnOnce(&mut egui::Ui) -> R,
-) -> R {
-    let result = ui
-        .horizontal(|ui| {
-            let label_width = (ui.available_width() - 250.0).max(180.0);
-            ui.allocate_ui_with_layout(
-                egui::vec2(label_width, 38.0),
-                egui::Layout::top_down(egui::Align::Min),
-                |ui| {
-                    ui.label(
-                        egui::RichText::new(crate::ui::localization::tr(label))
-                            .size(14.0)
-                            .color(colors::TEXT_PRIMARY),
-                    );
-                    ui.label(
-                        egui::RichText::new(crate::ui::localization::tr(description))
-                            .size(10.5)
-                            .color(colors::TEXT_SECONDARY),
-                    );
-                },
-            );
-            let field_width = 240.0_f32.min(ui.available_width());
-            ui.add_space((ui.available_width() - field_width).max(0.0));
-            ui.allocate_ui_with_layout(
-                egui::vec2(field_width, 38.0),
-                egui::Layout::left_to_right(egui::Align::Center),
-                control,
-            )
-            .inner
-        })
-        .inner;
-    ui.add_space(1.0);
-    kui::separator(ui);
-    ui.add_space(1.0);
-    result
-}
-
-fn status_chip(ui: &mut egui::Ui, label: &str, value: &str) {
-    egui::Frame::none()
-        .fill(colors::BG_MID)
-        .stroke(egui::Stroke::new(1.0_f32, colors::BORDER_SUBTLE))
-        .rounding(egui::Rounding::same(6.0))
-        .inner_margin(egui::Margin::symmetric(10.0, 6.0))
-        .show(ui, |ui| {
-            ui.vertical(|ui| {
-                kui::caption(ui, label);
-                ui.label(
-                    egui::RichText::new(value)
-                        .strong()
-                        .color(colors::TEXT_PRIMARY),
-                );
-            });
-        });
-}
-
-fn format_bytes(bytes: u64) -> String {
-    if bytes >= 1024 * 1024 * 1024 {
-        format!("{:.1}", bytes as f64 / (1024.0 * 1024.0 * 1024.0))
-    } else if bytes >= 1024 * 1024 {
-        format!("{:.0} MB", bytes as f64 / (1024.0 * 1024.0))
-    } else {
-        format!("{:.0} KB", bytes as f64 / 1024.0)
     }
 }

@@ -94,11 +94,7 @@ impl CompSnapshot {
 
     /// Seconds per frame (AE `thisComp.frameDuration`).
     pub fn frame_duration(&self) -> f64 {
-        if self.fps > 0.0 {
-            1.0 / self.fps
-        } else {
-            0.0
-        }
+        if self.fps > 0.0 { 1.0 / self.fps } else { 0.0 }
     }
 }
 
@@ -107,6 +103,30 @@ thread_local! {
     /// (position px, scale %, rotation deg, 1-based stack index)
     static CURRENT_LAYER_XFORM: std::cell::RefCell<([f64; 2], [f64; 2], f64)> =
         const { std::cell::RefCell::new(([0.0, 0.0], [100.0, 100.0], 0.0)) };
+}
+
+type LayerXform = ([f64; 2], [f64; 2], f64);
+
+struct LayerXformGuard {
+    previous: LayerXform,
+}
+
+impl LayerXformGuard {
+    fn install(layer: Option<&LayerSnapshot>) -> Self {
+        let current = layer
+            .map(|layer| (layer.position, layer.scale, layer.rotation))
+            .unwrap_or(([0.0, 0.0], [100.0, 100.0], 0.0));
+        let previous = CURRENT_LAYER_XFORM.with(|context| context.replace(current));
+        Self { previous }
+    }
+}
+
+impl Drop for LayerXformGuard {
+    fn drop(&mut self) {
+        CURRENT_LAYER_XFORM.with(|context| {
+            context.replace(self.previous);
+        });
+    }
 }
 
 /// Set the per-evaluation layer context used by `toComp` / `fromComp`.
@@ -348,14 +368,7 @@ pub fn eval_v2_with_comp(
     COMP_ENGINE.with(|engine| {
         let time = frame as f64 / fps.max(1) as f64;
         set_current_time(time);
-        // Seed the spatial-transform context for fromComp/toComp
-        if let Some(l) = this_layer {
-            set_current_layer_xform(
-                [l.position[0] as f32, l.position[1] as f32],
-                [l.scale[0] as f32, l.scale[1] as f32],
-                l.rotation as f32,
-            );
-        }
+        let _xform_guard = LayerXformGuard::install(this_layer);
         let mut scope = Scope::new();
         scope.push("time", time);
         scope.push("frame", frame as i64);
@@ -465,6 +478,7 @@ fn eval_f32_with_comp_source(
         COMP_ENGINE.with(|engine| {
             let time = frame as f64 / fps.max(1) as f64;
             set_current_time(time);
+            let _xform_guard = LayerXformGuard::install(this_layer);
             let mut scope = Scope::new();
             scope.push("time", time);
             scope.push("frame", frame as i64);
