@@ -143,7 +143,8 @@ impl LoadedOfxPlugin {
                 set_host(host_ptr);
             }
             if let Some(main_entry) = (*plugin_ptr).main_entry {
-                let action = cstr("OfxActionLoad").ok_or("invalid OfxActionLoad CString")?;
+                let action = std::ffi::CString::new("OfxActionLoad")
+                    .map_err(|e| format!("invalid OfxActionLoad CString: {e}"))?;
                 let status = main_entry(
                     action.as_ptr().cast(),
                     std::ptr::null(),
