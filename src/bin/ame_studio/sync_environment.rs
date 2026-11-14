@@ -319,6 +319,10 @@ impl AfterEffectsStudio {
             "workspace_vertical_ratio",
             Value::Float(self.workspace_vertical_ratios[self.workspace.index()]),
         )?;
+        self.ui.set_binding(
+            "viewport_channel_mode",
+            Value::String(self.viewport_channel_mode.clone()),
+        )?;
         for (name, workspace) in [
             ("is_default_workspace", Workspace::Default),
             ("is_composition_workspace", Workspace::Composition),
