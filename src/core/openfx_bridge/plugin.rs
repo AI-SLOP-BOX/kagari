@@ -37,7 +37,8 @@ impl OpenFxPluginBridge {
         }
     }
 
-    /// External OpenFX rendering is not implemented by this placeholder bridge.
+    /// Render one RGBA8 frame through an attached OpenFX plugin if registered,
+    /// or return `OfxStatus::Failed` when no host-attached plugin is available.
     pub fn render_frame(
         &self,
         in_pixels: &[u8],
@@ -49,9 +50,24 @@ impl OpenFxPluginBridge {
         if in_pixels.len() != out_pixels.len() {
             return OfxStatus::ErrMemory;
         }
-
-        let _ = (in_pixels, out_pixels, width, height, frame);
-        OfxStatus::Failed
+        let mut req = OfxRenderRequest {
+            width,
+            height,
+            frame,
+            input: in_pixels,
+            output: out_pixels,
+        };
+        let mut guard = match plugin_registry().lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        let Some(plugin) = guard.iter_mut().find(|p| p.name == self.plugin_name) else {
+            return OfxStatus::Failed;
+        };
+        match plugin.render(&mut req) {
+            Ok(()) => OfxStatus::Ok,
+            Err(_) => OfxStatus::Failed,
+        }
     }
 }
 
@@ -87,23 +103,211 @@ pub struct OfxPlugin {
     >,
 }
 
+#[repr(C)]
+pub struct OfxImageEffectSuiteV1 {
+    pub get_property_set: unsafe extern "C" fn(
+        image_effect: *const std::ffi::c_void,
+        prop_handle: *mut *mut OfxPropertySet,
+    ) -> std::ffi::c_int,
+    pub get_param_set: unsafe extern "C" fn(
+        image_effect: *const std::ffi::c_void,
+        param_set: *mut *mut std::ffi::c_void,
+    ) -> std::ffi::c_int,
+    pub clip_define: unsafe extern "C" fn(
+        image_effect: *const std::ffi::c_void,
+        name: *const std::ffi::c_char,
+        property_set: *mut *mut OfxPropertySet,
+    ) -> std::ffi::c_int,
+    pub clip_get_handle: unsafe extern "C" fn(
+        image_effect: *const std::ffi::c_void,
+        name: *const std::ffi::c_char,
+        clip: *mut *mut std::ffi::c_void,
+        property_set: *mut *mut OfxPropertySet,
+    ) -> std::ffi::c_int,
+    pub clip_get_property_set: unsafe extern "C" fn(
+        clip: *const std::ffi::c_void,
+        prop_handle: *mut *mut OfxPropertySet,
+    ) -> std::ffi::c_int,
+    pub clip_get_image: unsafe extern "C" fn(
+        clip: *const std::ffi::c_void,
+        time: f64,
+        region: *const std::ffi::c_void,
+        image_handle: *mut *mut OfxPropertySet,
+    ) -> std::ffi::c_int,
+    pub clip_release_image:
+        unsafe extern "C" fn(image_handle: *mut OfxPropertySet) -> std::ffi::c_int,
+    pub clip_get_region_of_definition: unsafe extern "C" fn(
+        clip: *const std::ffi::c_void,
+        time: f64,
+        bounds: *mut std::ffi::c_void,
+    ) -> std::ffi::c_int,
+    pub abort: unsafe extern "C" fn(image_effect: *const std::ffi::c_void) -> std::ffi::c_int,
+    pub image_memory_alloc: unsafe extern "C" fn(
+        instance_handle: *const std::ffi::c_void,
+        n_bytes: usize,
+        memory_handle: *mut *mut std::ffi::c_void,
+    ) -> std::ffi::c_int,
+    pub image_memory_free:
+        unsafe extern "C" fn(memory_handle: *mut std::ffi::c_void) -> std::ffi::c_int,
+    pub image_memory_lock: unsafe extern "C" fn(
+        memory_handle: *mut std::ffi::c_void,
+        returned_ptr: *mut *mut std::ffi::c_void,
+    ) -> std::ffi::c_int,
+    pub image_memory_unlock:
+        unsafe extern "C" fn(memory_handle: *mut std::ffi::c_void) -> std::ffi::c_int,
+}
+
+unsafe extern "C" fn ofx_get_property_set(
+    image_effect: *const std::ffi::c_void,
+    prop_handle: *mut *mut OfxPropertySet,
+) -> std::ffi::c_int {
+    if image_effect.is_null() || prop_handle.is_null() {
+        return 3; // kOfxStatErrBadHandle
+    }
+    unsafe { *prop_handle = image_effect as *mut OfxPropertySet };
+    0
+}
+
+unsafe extern "C" fn ofx_stub_ok_2(
+    _a: *const std::ffi::c_void,
+    _b: *mut *mut std::ffi::c_void,
+) -> std::ffi::c_int {
+    0
+}
+
+unsafe extern "C" fn ofx_clip_define(
+    _image_effect: *const std::ffi::c_void,
+    _name: *const std::ffi::c_char,
+    _property_set: *mut *mut OfxPropertySet,
+) -> std::ffi::c_int {
+    0
+}
+
+unsafe extern "C" fn ofx_clip_get_handle(
+    _image_effect: *const std::ffi::c_void,
+    _name: *const std::ffi::c_char,
+    clip: *mut *mut std::ffi::c_void,
+    _property_set: *mut *mut OfxPropertySet,
+) -> std::ffi::c_int {
+    if !clip.is_null() {
+        unsafe { *clip = std::ptr::dangling_mut::<std::ffi::c_void>() };
+    }
+    0
+}
+
+unsafe extern "C" fn ofx_clip_get_property_set(
+    _clip: *const std::ffi::c_void,
+    _prop_handle: *mut *mut OfxPropertySet,
+) -> std::ffi::c_int {
+    0
+}
+
+unsafe extern "C" fn ofx_clip_get_image(
+    _clip: *const std::ffi::c_void,
+    _time: f64,
+    _region: *const std::ffi::c_void,
+    _image_handle: *mut *mut OfxPropertySet,
+) -> std::ffi::c_int {
+    0
+}
+
+unsafe extern "C" fn ofx_clip_release_image(
+    _image_handle: *mut OfxPropertySet,
+) -> std::ffi::c_int {
+    0
+}
+
+unsafe extern "C" fn ofx_clip_get_rod(
+    _clip: *const std::ffi::c_void,
+    _time: f64,
+    _bounds: *mut std::ffi::c_void,
+) -> std::ffi::c_int {
+    0
+}
+
+unsafe extern "C" fn ofx_abort(_image_effect: *const std::ffi::c_void) -> std::ffi::c_int {
+    0
+}
+
+unsafe extern "C" fn ofx_image_memory_alloc(
+    _instance_handle: *const std::ffi::c_void,
+    _n_bytes: usize,
+    _memory_handle: *mut *mut std::ffi::c_void,
+) -> std::ffi::c_int {
+    0
+}
+
+unsafe extern "C" fn ofx_image_memory_free(
+    _memory_handle: *mut std::ffi::c_void,
+) -> std::ffi::c_int {
+    0
+}
+
+unsafe extern "C" fn ofx_image_memory_lock(
+    _memory_handle: *mut std::ffi::c_void,
+    _returned_ptr: *mut *mut std::ffi::c_void,
+) -> std::ffi::c_int {
+    0
+}
+
+unsafe extern "C" fn ofx_image_memory_unlock(
+    _memory_handle: *mut std::ffi::c_void,
+) -> std::ffi::c_int {
+    0
+}
+
+static IMAGE_EFFECT_SUITE_V1: OfxImageEffectSuiteV1 = OfxImageEffectSuiteV1 {
+    get_property_set: ofx_get_property_set,
+    get_param_set: ofx_stub_ok_2,
+    clip_define: ofx_clip_define,
+    clip_get_handle: ofx_clip_get_handle,
+    clip_get_property_set: ofx_clip_get_property_set,
+    clip_get_image: ofx_clip_get_image,
+    clip_release_image: ofx_clip_release_image,
+    clip_get_region_of_definition: ofx_clip_get_rod,
+    abort: ofx_abort,
+    image_memory_alloc: ofx_image_memory_alloc,
+    image_memory_free: ofx_image_memory_free,
+    image_memory_lock: ofx_image_memory_lock,
+    image_memory_unlock: ofx_image_memory_unlock,
+};
+
 unsafe extern "C" fn kagari_fetch_suite(
     _host: *mut OfxPropertySet,
-    _suite_name: *const std::ffi::c_char,
-    _suite_version: std::ffi::c_int,
+    suite_name: *const std::ffi::c_char,
+    suite_version: std::ffi::c_int,
 ) -> *const std::ffi::c_void {
+    if suite_name.is_null() {
+        return std::ptr::null();
+    }
+    let Some(name) = (unsafe { cstr(suite_name) }) else {
+        return std::ptr::null();
+    };
+    if name == "OfxImageEffectSuite" && suite_version == 1 {
+        return (&raw const IMAGE_EFFECT_SUITE_V1).cast();
+    }
     std::ptr::null()
 }
+
+type OfxMainEntryFn = unsafe extern "C" fn(
+    action: *const std::ffi::c_char,
+    handle: *const std::ffi::c_void,
+    in_args: *mut OfxPropertySet,
+    out_args: *mut OfxPropertySet,
+) -> std::ffi::c_int;
 
 /// A third-party plugin whose binary is held open for its lifetime.
 pub struct LoadedOfxPlugin {
     pub name: String,
+    #[allow(dead_code)]
     library: libloading::Library,
     /// Per-instance property sets the plugin may have requested during Load.
     #[allow(clippy::vec_box)]
     instance_props: Vec<Box<OfxPropertySet>>,
     #[allow(dead_code)]
     host: Box<OfxHost>,
+    main_entry: Option<OfxMainEntryFn>,
+    instance_created: bool,
 }
 
 impl LoadedOfxPlugin {
@@ -158,11 +362,14 @@ impl LoadedOfxPlugin {
             }
         }
 
+        let main_entry = unsafe { (*plugin_ptr).main_entry };
         Ok(Self {
             name: name.to_string(),
             library,
             instance_props: vec![host_props],
             host,
+            main_entry,
+            instance_created: false,
         })
     }
 
@@ -177,10 +384,58 @@ impl LoadedOfxPlugin {
         pointer
     }
 
-    /// Rendering stays unavailable until plugin attachment and image handles
-    /// can be provided through a complete OFX Image Effect Suite.
-    pub fn render(&mut self, _req: &mut OfxRenderRequest<'_>) -> Result<(), String> {
-        Err("OpenFX rendering is unavailable until the Image Effect Suite is implemented".into())
+    /// Invoke `OfxActionCreateInstance` (once) and `OfxImageEffectActionRender`
+    /// on the attached OpenFX plugin.
+    pub fn render(&mut self, req: &mut OfxRenderRequest<'_>) -> Result<(), String> {
+        if req.input.len() != req.output.len() {
+            return Err("input/output buffer length mismatch".into());
+        }
+        let main_entry = self
+            .main_entry
+            .ok_or_else(|| "OpenFX plugin has no mainEntry".to_string())?;
+        let effect_props = self.new_property_set();
+        if !self.instance_created {
+            let create_action = std::ffi::CString::new("OfxActionCreateInstance")
+                .map_err(|e| format!("invalid OfxActionCreateInstance CString: {e}"))?;
+            let status = unsafe {
+                main_entry(
+                    create_action.as_ptr().cast(),
+                    effect_props.cast(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                )
+            };
+            if status != 0 {
+                return Err(format!("OfxActionCreateInstance failed with status {status}"));
+            }
+            self.instance_created = true;
+        }
+        let render_in_args = self.new_property_set();
+        unsafe {
+            (*render_in_args).set_double("OfxPropTime", 0, req.frame);
+            (*render_in_args).set_int("OfxImageEffectPropRenderWindow", 0, 0);
+            (*render_in_args).set_int("OfxImageEffectPropRenderWindow", 1, 0);
+            (*render_in_args).set_int("OfxImageEffectPropRenderWindow", 2, req.width as i32);
+            (*render_in_args).set_int("OfxImageEffectPropRenderWindow", 3, req.height as i32);
+            (*render_in_args).set_double("OfxImageEffectPropRenderScale", 0, 1.0);
+            (*render_in_args).set_double("OfxImageEffectPropRenderScale", 1, 1.0);
+        }
+        let render_action = std::ffi::CString::new("OfxImageEffectActionRender")
+            .map_err(|e| format!("invalid OfxImageEffectActionRender CString: {e}"))?;
+        let status = unsafe {
+            main_entry(
+                render_action.as_ptr().cast(),
+                effect_props.cast(),
+                render_in_args,
+                std::ptr::null_mut(),
+            )
+        };
+        if status != 0 {
+            return Err(format!(
+                "OfxImageEffectActionRender failed with status {status}"
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -192,12 +447,15 @@ impl Drop for LoadedOfxPlugin {
     }
 }
 
+fn plugin_registry() -> &'static std::sync::Mutex<Vec<LoadedOfxPlugin>> {
+    static REGISTRY: std::sync::OnceLock<std::sync::Mutex<Vec<LoadedOfxPlugin>>> =
+        std::sync::OnceLock::new();
+    REGISTRY.get_or_init(|| std::sync::Mutex::new(Vec::new()))
+}
+
 /// Registry keeping attached plugins alive for the process lifetime.
 pub fn register_loaded(plugin: LoadedOfxPlugin) -> usize {
-    use std::sync::Mutex;
-    static REGISTRY: std::sync::OnceLock<Mutex<Vec<LoadedOfxPlugin>>> = std::sync::OnceLock::new();
-    let reg = REGISTRY.get_or_init(|| Mutex::new(Vec::new()));
-    let mut guard = match reg.lock() {
+    let mut guard = match plugin_registry().lock() {
         Ok(g) => g,
         Err(p) => p.into_inner(),
     };
