@@ -6,7 +6,7 @@ component ProjectPanel() {
             Text("シーン", size: 14)
             Spacer
           }
-          HorizontalScrollView(460) { HStack(spacing: 4) {
+          Wrap(item_spacing: 4, line_spacing: 4) {
             Button("粒子", action: add_particle_layer, tone: secondary, size: small)
             Button("調整", action: add_adjustment_layer, tone: secondary, size: small)
             Button("ヌル", action: add_null_layer, tone: secondary, size: small)
@@ -16,7 +16,7 @@ component ProjectPanel() {
             Button("星", action: add_star_layer, tone: secondary, size: small)
             Button("多角形", action: add_polygon_layer, tone: secondary, size: small)
             Button("平面", action: add_solid_layer, tone: secondary, size: small)
-          } }
+          }
           HStack(spacing: 5) {
             Caption("3Dシーン")
             HorizontalScrollView(260) { HStack(spacing: 4) {
