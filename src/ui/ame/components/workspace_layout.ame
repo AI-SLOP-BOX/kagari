@@ -295,9 +295,9 @@ component WorkArea() {
         }.relative_frame(height: 1.0, min_height: 200, max_height: 760)
       } else {
         SplitPane(Horizontal, workspace_left_ratio, action: workspace_left_resized) {
-          SplitPane(Vertical, 0.38) {
-            ScrollView(360) { ProjectPanel() }
-            ScrollView(520) { ProjectAssetBrowser() }
+          VStack(spacing: 5) {
+            ScrollView(250) { ProjectPanel() }.relative_frame(height: 0.373, min_height: 100, max_height: 250)
+            ScrollView(420) { ProjectAssetBrowser() }.relative_frame(height: 0.627, min_height: 100, max_height: 420)
           }
           SplitPane(Horizontal, workspace_center_ratio, action: workspace_center_resized) {
             SplitPane(Vertical, workspace_vertical_ratio, action: workspace_vertical_resized) {
@@ -322,9 +322,9 @@ component WorkArea() {
         }.relative_frame(height: 1.0, min_height: 200, max_height: 760)
       } else {
         SplitPane(Horizontal, workspace_left_ratio, action: workspace_left_resized) {
-          SplitPane(Vertical, 0.38) {
-            ScrollView(360) { ProjectPanel() }
-            ScrollView(520) { ProjectAssetBrowser() }
+          VStack(spacing: 5) {
+            ScrollView(250) { ProjectPanel() }.relative_frame(height: 0.373, min_height: 100, max_height: 250)
+            ScrollView(420) { ProjectAssetBrowser() }.relative_frame(height: 0.627, min_height: 100, max_height: 420)
           }
           SplitPane(Horizontal, workspace_center_ratio, action: workspace_center_resized) {
             SplitPane(Vertical, workspace_vertical_ratio, action: workspace_vertical_resized) {
@@ -350,9 +350,9 @@ component WorkArea() {
         }.relative_frame(height: 1.0, min_height: 200, max_height: 680)
       } else {
         SplitPane(Horizontal, workspace_left_ratio, action: workspace_left_resized) {
-          SplitPane(Vertical, 0.38) {
-            ScrollView(360) { ProjectPanel() }
-            ScrollView(520) { ProjectAssetBrowser() }
+          VStack(spacing: 5) {
+            ScrollView(250) { ProjectPanel() }.relative_frame(height: 0.373, min_height: 100, max_height: 250)
+            ScrollView(420) { ProjectAssetBrowser() }.relative_frame(height: 0.627, min_height: 100, max_height: 420)
           }
           SplitPane(Horizontal, workspace_center_ratio, action: workspace_center_resized) {
             SplitPane(Vertical, workspace_vertical_ratio, action: workspace_vertical_resized) {
