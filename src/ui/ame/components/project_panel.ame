@@ -1,7 +1,6 @@
 component ProjectPanel() {
-    Card {
-      Padding(6) {
-        VStack(spacing: 5) {
+    Padding(4) {
+      VStack(spacing: 5) {
           HStack(spacing: 5) {
             Text("シーン", size: 14)
             Spacer
