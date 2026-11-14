@@ -699,6 +699,9 @@ pub(crate) unsafe extern "C" fn kagari_fetch_suite(
     if name == "OfxMessageSuite" && (suite_version == 1 || suite_version == 2) {
         return (&raw const MESSAGE_SUITE_V2).cast();
     }
+    if name == "OfxPropertySuite" && suite_version == 1 {
+        return (super::properties::property_suite_raw() as *const super::properties::OfxPropertySuiteV1).cast();
+    }
     std::ptr::null()
 }
 

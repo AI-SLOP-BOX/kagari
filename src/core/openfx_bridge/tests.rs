@@ -287,5 +287,14 @@ mod tests {
         };
         assert_eq!(rc, 0);
         assert_eq!(unsafe { (msg_suite.clear_persistent_message)(std::ptr::null_mut()) }, 0);
+
+        let prop_ptr = unsafe {
+            crate::core::openfx_bridge::plugin::kagari_fetch_suite(
+                std::ptr::null_mut(),
+                b"OfxPropertySuite\0".as_ptr().cast(),
+                1,
+            )
+        };
+        assert!(!prop_ptr.is_null());
     }
 }
