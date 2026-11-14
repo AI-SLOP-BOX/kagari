@@ -47,17 +47,17 @@ component ToolBar() {
 component WorkspaceTabs() {
   HorizontalScrollView(520) {
     HStack(spacing: 2) {
-      Button("標準", action: workspace_default, tone: secondary, size: small)
-      Button("タイムライン", action: workspace_timeline, tone: secondary, size: small)
-      Button("グラフ", action: workspace_graph, tone: secondary, size: small)
-      Button("エフェクト", action: workspace_effects, tone: secondary, size: small)
-      Button("3D・照明", action: workspace_camera_light, tone: secondary, size: small)
-      Button("色補正", action: workspace_color, tone: secondary, size: small)
-      Button("合成", action: workspace_layer_style, tone: secondary, size: small)
-      Button("マスク", action: workspace_mask, tone: secondary, size: small)
-      Button("文字", action: workspace_text, tone: secondary, size: small)
+      If(is_default_workspace) { Button("標準", action: workspace_default, tone: primary, size: small) } else { Button("標準", action: workspace_default, tone: secondary, size: small) }
+      If(is_timeline_workspace) { Button("タイムライン", action: workspace_timeline, tone: primary, size: small) } else { Button("タイムライン", action: workspace_timeline, tone: secondary, size: small) }
+      If(is_graph_workspace) { Button("グラフ", action: workspace_graph, tone: primary, size: small) } else { Button("グラフ", action: workspace_graph, tone: secondary, size: small) }
+      If(is_effects_workspace) { Button("エフェクト", action: workspace_effects, tone: primary, size: small) } else { Button("エフェクト", action: workspace_effects, tone: secondary, size: small) }
+      If(is_camera_light_workspace) { Button("3D・照明", action: workspace_camera_light, tone: primary, size: small) } else { Button("3D・照明", action: workspace_camera_light, tone: secondary, size: small) }
+      If(is_color_workspace) { Button("色補正", action: workspace_color, tone: primary, size: small) } else { Button("色補正", action: workspace_color, tone: secondary, size: small) }
+      If(is_layer_style_workspace) { Button("合成", action: workspace_layer_style, tone: primary, size: small) } else { Button("合成", action: workspace_layer_style, tone: secondary, size: small) }
+      If(is_mask_workspace) { Button("マスク", action: workspace_mask, tone: primary, size: small) } else { Button("マスク", action: workspace_mask, tone: secondary, size: small) }
+      If(is_text_workspace) { Button("文字", action: workspace_text, tone: primary, size: small) } else { Button("文字", action: workspace_text, tone: secondary, size: small) }
       Button("音響", action: workspace_audio, tone: secondary, size: small)
-      Button("リマップ", action: workspace_time_remap, tone: secondary, size: small)
+      If(is_time_remap_workspace) { Button("リマップ", action: workspace_time_remap, tone: primary, size: small) } else { Button("リマップ", action: workspace_time_remap, tone: secondary, size: small) }
       IconButton("reset", action: workspace_reset_layout, tone: secondary, size: small)
     }
   }
