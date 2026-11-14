@@ -67,7 +67,7 @@ component RecentCardsGrid() {
           }
         }
       } else {
-        Card { Padding(14) { HStack(spacing: 8) { Caption("最近使ったプロジェクトはありません") Spacer Button("プロジェクトを開く", action: open_project, tone: secondary, size: small) } } }
+        Card { Padding(14) { HStack(spacing: 8) { Caption("最近使ったプロジェクトはありません") Spacer Button("プロジェクトを開く", action: open_project, tone: secondary, size: small) } } }.material(GlassCard)
       }
     }
   }
@@ -90,7 +90,7 @@ component RecentWorkTable() {
             }
           }
         } else {
-          Card { Padding(10) { Caption("プロジェクトを保存すると、ファイルの更新履歴がここに表示されます。") } }
+          Card { Padding(10) { Caption("プロジェクトを保存すると、ファイルの更新履歴がここに表示されます。") } }.material(GlassCard)
         }
       } else {
         VStack(spacing: 0) {

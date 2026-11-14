@@ -6,6 +6,12 @@ app AfterEffectsStudio {
   }
   theme dark;
 
+  material GlassCard {
+    kind: liquid_glass
+    blur: 24.0
+    refraction: 0.35
+  }
+
   import "state/records.ame";
   import "state/bindings.ame";
   import "state/actions.ame";
