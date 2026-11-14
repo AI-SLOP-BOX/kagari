@@ -1,11 +1,12 @@
 #![allow(dead_code)]
-/// Lazy evaluation render pipeline with generation-based stale request filtering.
+/// Lazy evaluation render pipeline with generation-based stale request filtering
+/// and cooperative in-flight cancellation.
 ///
 /// The UI thread never blocks on GPU work. Instead, it enqueues `RenderCommand`
 /// messages. A background `RenderWorker` thread drains the queue, performs GPU
 /// rendering, and writes results to FrameCache.
-/// Flush skips queued work from earlier generations. A callback already running cannot be
-/// interrupted because the callback API does not receive a cancellation token.
+/// Flush skips queued work from earlier generations and flips any active
+/// `RenderCancellationToken` to cancelled so long-running callbacks can abort early.
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
@@ -33,6 +34,20 @@ pub enum RenderResult {
     BatchReady { start: u32, end: u32 },
 }
 
+/// Cooperative cancellation token passed to each render callback invocation.
+#[derive(Debug, Clone)]
+pub struct RenderCancellationToken {
+    generation: Arc<AtomicU64>,
+    expected_generation: u64,
+}
+
+impl RenderCancellationToken {
+    /// Returns `true` if `RenderPipeline::flush()` has invalidated this job's generation.
+    pub fn is_cancelled(&self) -> bool {
+        self.generation.load(Ordering::SeqCst) != self.expected_generation
+    }
+}
+
 /// Manages the command channel to the background render worker.
 pub struct RenderPipeline {
     cmd_tx: Sender<QueuedCommand>,
@@ -54,6 +69,14 @@ impl RenderPipeline {
     pub fn new<F>(render_fn: F) -> Self
     where
         F: Fn(RenderCommand, &Sender<RenderResult>) + Send + 'static,
+    {
+        Self::new_cancellable(move |command, result_tx, _cancel| render_fn(command, result_tx))
+    }
+
+    /// Spawn the background render worker with a cooperative cancellation token.
+    pub fn new_cancellable<F>(render_fn: F) -> Self
+    where
+        F: Fn(RenderCommand, &Sender<RenderResult>, &RenderCancellationToken) + Send + 'static,
     {
         let (cmd_tx, cmd_rx) = mpsc::channel::<QueuedCommand>();
         let (result_tx, result_rx) = mpsc::channel::<RenderResult>();
@@ -80,8 +103,12 @@ impl RenderPipeline {
                                 log::debug!("[RenderWorker] skipping stale render command (project version {})", version);
                                 continue;
                             }
+                            let cancel_token = RenderCancellationToken {
+                                generation: Arc::clone(&worker_generation),
+                                expected_generation: generation,
+                            };
                             let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                                render_fn(command, &result_tx);
+                                render_fn(command, &result_tx, &cancel_token);
                             }));
                             if let Err(e) = res {
                                 log::error!("[RenderWorker] Caught panic during render task execution: {:?}", e);
@@ -272,6 +299,38 @@ mod tests {
         assert_eq!(rendered_rx.recv_timeout(Duration::from_secs(2)), Ok(1));
         assert_eq!(rendered_rx.recv_timeout(Duration::from_secs(2)), Ok(3));
         assert!(rendered_rx.recv_timeout(Duration::from_millis(50)).is_err());
+        pipeline.shutdown();
+    }
+
+    #[test]
+    fn flush_cancels_in_flight_token_immediately() {
+        let (started_tx, started_rx) = mpsc::channel();
+        let (cancelled_tx, cancelled_rx) = mpsc::channel();
+        let pipeline = RenderPipeline::new_cancellable(move |command, _, cancel| {
+            if let RenderCommand::PrefetchRange { start, end, .. } = command {
+                let _ = started_tx.send(());
+                for _ in start..=end {
+                    if cancel.is_cancelled() {
+                        let _ = cancelled_tx.send(true);
+                        return;
+                    }
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                let _ = cancelled_tx.send(false);
+            }
+        });
+
+        pipeline.prefetch_range(0, 200, 1);
+        started_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("prefetch should start");
+        pipeline.flush();
+
+        assert_eq!(
+            cancelled_rx.recv_timeout(Duration::from_secs(2)),
+            Ok(true),
+            "in-flight prefetch must observe cancellation after flush"
+        );
         pipeline.shutdown();
     }
 }
