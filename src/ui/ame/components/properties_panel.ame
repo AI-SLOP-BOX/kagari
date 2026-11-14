@@ -14,10 +14,11 @@ component PropertiesContent() {
           Caption("▎ レイヤー時間 (フレーム)")
           HStack(spacing: 4) {
             Caption("イン")
-            MaxWidth(64) { If(selected_layer_locked) { Caption("{layer_in_frame}") } else { TextField(layer_in_frame, "0", action: layer_in_frame_changed) } }
+            MaxWidth(60) { If(selected_layer_locked) { Caption("{layer_in_frame}") } else { TextField(layer_in_frame, "0", action: layer_in_frame_changed) } }
             Caption("アウト")
-            MaxWidth(64) { If(selected_layer_locked) { Caption("{layer_out_frame}") } else { TextField(layer_out_frame, "300", action: layer_out_frame_changed) } }
-            Spacer
+            MaxWidth(60) { If(selected_layer_locked) { Caption("{layer_out_frame}") } else { TextField(layer_out_frame, "300", action: layer_out_frame_changed) } }
+          }
+          HStack(spacing: 4) {
             Button("イン→再生位置", action: layer_in_to_playhead, tone: secondary, size: small, disabled: selected_layer_locked)
             Button("アウト→再生位置", action: layer_out_to_playhead, tone: secondary, size: small, disabled: selected_layer_locked)
           }
