@@ -52,7 +52,7 @@ impl AfterEffectsStudio {
         scene.fill(
             Fill::NonZero,
             Affine::IDENTITY,
-            Color::from_rgb8(10, 11, 13),
+            Color::from_rgb8(8, 9, 11),
             None,
             &viewport,
         );
