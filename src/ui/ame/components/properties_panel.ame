@@ -1,6 +1,6 @@
 component PropertiesContent() {
-  VStack(spacing: 5) {
-    Card { Padding(6) { HStack(spacing: 8) { Text("プロパティ", size: 14) Spacer If(selected_layer) { Caption("{layer_name}") } else { Caption("未選択") } } } }
+  VStack(spacing: 4) {
+    Card { Padding(4) { HStack(spacing: 6) { Text("プロパティ", size: 13) Spacer If(selected_layer) { Caption("{layer_name}") } else { Caption("未選択") } } } }
     If(selected_layer_locked) { Caption("ロック中: タイムラインまたはシーン一覧で解除すると編集できます。") }
     If(selected_layer) {
       HStack(spacing: 3) {
@@ -10,15 +10,17 @@ component PropertiesContent() {
         If(properties_section_advanced) { Button("マスク・その他", action: properties_section_advanced, tone: primary, size: small) } else { Button("マスク・その他", action: properties_section_advanced, tone: secondary, size: small) }
       }
       If(properties_section_transform) {
-        Card { Padding(6) { VStack(spacing: 5) {
-          Caption("▎ レイヤー時間")
-          HStack(spacing: 5) { MinWidth(72) { Caption("イン点") } If(selected_layer_locked) { Caption("{layer_in_frame}") } else { TextField(layer_in_frame, "0", action: layer_in_frame_changed) } Caption("フレーム") }
-          HStack(spacing: 5) { MinWidth(72) { Caption("アウト点") } If(selected_layer_locked) { Caption("{layer_out_frame}") } else { TextField(layer_out_frame, "300", action: layer_out_frame_changed) } Caption("フレーム") }
-          HStack(spacing: 5) {
-            Button("イン点を再生位置へ", action: layer_in_to_playhead, tone: secondary, size: small, disabled: selected_layer_locked)
-            Button("アウト点を再生位置へ", action: layer_out_to_playhead, tone: secondary, size: small, disabled: selected_layer_locked)
+        Card { Padding(4) { VStack(spacing: 4) {
+          Caption("▎ レイヤー時間 (フレーム)")
+          HStack(spacing: 4) {
+            Caption("イン")
+            MaxWidth(64) { If(selected_layer_locked) { Caption("{layer_in_frame}") } else { TextField(layer_in_frame, "0", action: layer_in_frame_changed) } }
+            Caption("アウト")
+            MaxWidth(64) { If(selected_layer_locked) { Caption("{layer_out_frame}") } else { TextField(layer_out_frame, "300", action: layer_out_frame_changed) } }
+            Spacer
+            Button("イン→再生位置", action: layer_in_to_playhead, tone: secondary, size: small, disabled: selected_layer_locked)
+            Button("アウト→再生位置", action: layer_out_to_playhead, tone: secondary, size: small, disabled: selected_layer_locked)
           }
-          Caption("イン点からアウト点までを表示します。アウト点は含みます。")
         } } }
         If(selected_is_3d) { Transform3DProperties() } else { TransformProperties() }
         LayerConstraintsProperties()
