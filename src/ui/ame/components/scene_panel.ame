@@ -1,5 +1,5 @@
 component SceneAssetPanel() {
-  Card { Padding(8) { VStack(spacing: 5) {
+  Padding(4) { VStack(spacing: 5) {
     Text("シーン内の素材", size: 14)
     If(has_scene_assets) {
       VirtualList(scene_assets, asset, key: id, height: 260, row_height: 48, overscan: 5, variable_height: true) {
@@ -56,7 +56,7 @@ component SceneCreationPanel() {
 }
 
 component SceneHierarchyPanel() {
-  Card { Padding(8) { VStack(spacing: 5) {
+  Padding(4) { VStack(spacing: 5) {
     HStack(spacing: 4) {
       Text("シーン階層", size: 14)
       Button("すべて畳む", action: collapse_all_scene_groups, tone: secondary, size: small)

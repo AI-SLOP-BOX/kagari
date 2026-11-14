@@ -1,7 +1,6 @@
 component EffectPanel() {
-  Card {
-    Padding(6) {
-      VStack(spacing: 5) {
+  Padding(4) {
+    VStack(spacing: 5) {
         HStack(spacing: 8) {
           Text("エフェクト", size: 14)
           Spacer
@@ -116,7 +115,6 @@ component EffectPanel() {
           }
         }
       }
-    }
   }
 }
 
