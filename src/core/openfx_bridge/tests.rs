@@ -19,11 +19,11 @@ mod tests {
     }
 
     #[test]
-    fn test_plugin_attachment_is_disabled_until_host_suites_are_implemented() {
+    fn test_plugin_attachment_fails_closed_for_missing_library() {
         let error = LoadedOfxPlugin::attach(Path::new("missing.ofx"), "missing")
             .err()
             .expect("attachment must fail closed");
-        assert!(error.contains("host suites are not implemented"));
+        assert!(error.contains("failed to load OpenFX library"));
     }
 
     #[test]
