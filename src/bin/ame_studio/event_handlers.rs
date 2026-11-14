@@ -303,6 +303,7 @@ impl AfterEffectsStudio {
                     "R" => "G",
                     "G" => "B",
                     "B" => "A",
+                    "A" => "Luma",
                     _ => "RGBA",
                 }
                 .to_string();

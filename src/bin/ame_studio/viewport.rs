@@ -292,6 +292,14 @@ impl AfterEffectsStudio {
                                 let v = px[3];
                                 out.copy_from_slice(&[v, v, v, 255]);
                             }
+                            "Luma" => {
+                                let luma = (0.2126 * f32::from(px[0])
+                                    + 0.7152 * f32::from(px[1])
+                                    + 0.0722 * f32::from(px[2]))
+                                    * gain;
+                                let v = luma.round().clamp(0.0, 255.0) as u8;
+                                out.copy_from_slice(&[v, v, v, 255]);
+                            }
                             _ => {
                                 out.copy_from_slice(&[
                                     apply_gain(px[0]),
