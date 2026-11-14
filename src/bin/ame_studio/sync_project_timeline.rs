@@ -213,15 +213,28 @@ impl AfterEffectsStudio {
                 active_composition.width, active_composition.height,
             )),
         )?;
+        let (preview_badge, preview_reason) = if self.gpu_enabled
+            && kagari_vfx::core::compute_pipeline::gpu_effects_enabled()
+        {
+            (
+                "GPU プレビュー",
+                "GPU コンピュートエフェクト経路が有効です",
+            )
+        } else {
+            (
+                "CPU プレビュー",
+                "現行のプレビュー生成はCPUレンダー経路を使用します",
+            )
+        };
         self.ui
-            .set_binding("preview_badge", Value::String("CPU プレビュー".to_owned()))?;
+            .set_binding("preview_badge", Value::String(preview_badge.to_owned()))?;
         self.ui.set_binding(
             "preview_worker_failed",
             Value::Bool(self.viewport_preview_worker_failed),
         )?;
         self.ui.set_binding(
             "preview_fallback_reason",
-            Value::String("現行のプレビュー生成はCPUレンダー経路を使用します".to_owned()),
+            Value::String(preview_reason.to_owned()),
         )?;
         self.ui.set_binding(
             "fps_label",
