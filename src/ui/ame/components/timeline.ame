@@ -92,9 +92,8 @@ component TimelineRuler() {
 }
 
 component TimelinePanel() {
-    Card {
-      Padding(4) {
-        VStack(spacing: 4) {
+    Padding(4) {
+      VStack(spacing: 4) {
           If(wide) {
             VStack(spacing: 4) {
               HStack(spacing: 8) {
@@ -225,5 +224,4 @@ component TimelinePanel() {
           }
         }
       }
-    }
   }
