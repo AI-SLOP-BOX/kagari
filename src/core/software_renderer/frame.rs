@@ -81,14 +81,14 @@ pub(crate) fn render_frame_to_pixels_filtered_scaled(
         log::error!("[Renderer] Could not allocate {size} bytes for the composition buffer");
         return Vec::new();
     };
-    for (pixel_index, p) in buffer.as_chunks_mut::<4>().0.iter_mut().enumerate() {
-        if pixel_index.is_multiple_of(4096) && render_cancelled() {
-            return Vec::new();
-        }
+    for p in buffer.as_chunks_mut::<4>().0.iter_mut() {
         p[0] = bg_r;
         p[1] = bg_g;
         p[2] = bg_b;
         p[3] = bg_a;
+    }
+    if render_cancelled() {
+        return buffer;
     }
 
     if render_cancelled() {
