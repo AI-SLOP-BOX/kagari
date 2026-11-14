@@ -20,7 +20,7 @@ component ExportPanel() {
             Card { Padding(16) { VStack(spacing: 10) {
               HStack(spacing: 8) { Text("インターチェンジ / テンプレート", size: 17) Spacer Caption("MLT · Kagari Template · Lottie") }
               Caption("選択中のコンポジションを MLT、Kagariテンプレート、Lottie、OTIO、または字幕として保存します。Kagariテンプレート(.kgtpl)はKagari独自形式で、Premiere Pro用MOGRTではありません。テキストレイヤーを編集可能なプロパティとして保存します。OTIO はタイムライン交換用の外向きエンドポイントです。EXR 連番は現行の8bitレンダーを線形化して保存し、HDR階調は保持しません。")
-              HStack(spacing: 8) {
+              Wrap(spacing: 8) {
                 Button("MLT を保存…", action: export_mlt, tone: secondary)
                 Button("Kagariテンプレートを保存…", action: export_mogrt, tone: secondary)
                 Button("Lottie を保存…", action: export_lottie, tone: secondary)
@@ -29,9 +29,8 @@ component ExportPanel() {
                 Button("PNG 連番…", action: export_png_sequence, tone: secondary)
                 Button("EXR 連番…", action: export_exr_sequence, tone: secondary)
                 Button("字幕(.srt)", action: export_subtitles, tone: secondary)
-                Spacer
-                Caption("{status_resolution} · {duration_label}")
               }
+              Caption("{status_resolution} · {duration_label}")
             } } }
             Card { Padding(16) { VStack(spacing: 10) {
               HStack(spacing: 8) { Text("現在のフレームを画像保存", size: 17) Spacer Caption("PNG") }
