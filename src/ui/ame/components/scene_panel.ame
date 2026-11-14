@@ -37,9 +37,9 @@ component SceneAssetPanel() {
 }
 
 component SceneCreationPanel() {
-  Card { Padding(8) { VStack(spacing: 5) {
-    Text("レイヤーを追加", size: 14)
-    HorizontalScrollView(460) { HStack(spacing: 4) {
+  Card { Padding(6) { VStack(spacing: 4) {
+    Text("レイヤーを追加", size: 13)
+    Wrap(item_spacing: 4, line_spacing: 4) {
       Button("粒子", action: add_particle_layer, tone: secondary, size: small)
       Button("調整", action: add_adjustment_layer, tone: secondary, size: small)
       Button("ヌル", action: add_null_layer, tone: secondary, size: small)
@@ -51,7 +51,7 @@ component SceneCreationPanel() {
       Button("平面", action: add_solid_layer, tone: secondary, size: small)
       Button("カメラ", action: add_scene_camera, tone: secondary, size: small)
       Button("ライト", action: add_scene_light, tone: secondary, size: small)
-    } }
+    }
   } } }
 }
 
