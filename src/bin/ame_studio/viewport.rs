@@ -310,10 +310,41 @@ impl AfterEffectsStudio {
                     None
                 };
             let draw_img = filtered_image.as_ref().unwrap_or(&image);
-            scene.draw_image(
-                draw_img,
-                Affine::translate((left, top)) * Affine::scale_non_uniform(fit * pixel_aspect, fit),
-            );
+            if self.viewport_wipe_enabled {
+                let w = draw_img.width as usize;
+                let h = draw_img.height as usize;
+                let split_col = w / 2;
+                let raw_src = image.data.data();
+                let filt_src = draw_img.data.data();
+                let mut split_dst = Vec::with_capacity(filt_src.len());
+                for row in 0..h {
+                    let row_off = row * w * 4;
+                    let mid = row_off + split_col * 4;
+                    let end = row_off + w * 4;
+                    if end <= raw_src.len() && end <= filt_src.len() {
+                        split_dst.extend_from_slice(&raw_src[row_off..mid]);
+                        split_dst.extend_from_slice(&filt_src[mid..end]);
+                    }
+                }
+                let wipe_img = vello::peniko::ImageData {
+                    data: vello::peniko::Blob::from(split_dst),
+                    format: draw_img.format,
+                    alpha_type: draw_img.alpha_type,
+                    width: draw_img.width,
+                    height: draw_img.height,
+                };
+                scene.draw_image(
+                    &wipe_img,
+                    Affine::translate((left, top))
+                        * Affine::scale_non_uniform(fit * pixel_aspect, fit),
+                );
+            } else {
+                scene.draw_image(
+                    draw_img,
+                    Affine::translate((left, top))
+                        * Affine::scale_non_uniform(fit * pixel_aspect, fit),
+                );
+            }
             let frame = Rect::new(left, top, left + draw_width, top + draw_height);
             if self.viewport_wipe_enabled {
                 let split_x = left + draw_width * 0.5;
