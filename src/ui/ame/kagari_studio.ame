@@ -17,6 +17,12 @@ app AfterEffectsStudio {
   material AccentBorder {
     kind: gradient_border
   }
+  material HomeMeshBg {
+    kind: mesh_gradient
+  }
+  material FilmGrain {
+    kind: grain
+  }
 
   import "state/records.ame";
   import "state/bindings.ame";
