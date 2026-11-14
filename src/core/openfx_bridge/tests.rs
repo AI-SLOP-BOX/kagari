@@ -296,5 +296,19 @@ mod tests {
             )
         };
         assert!(!prop_ptr.is_null());
+
+        let interact_ptr = unsafe {
+            crate::core::openfx_bridge::plugin::kagari_fetch_suite(
+                std::ptr::null_mut(),
+                b"OfxInteractSuite\0".as_ptr().cast(),
+                1,
+            )
+        };
+        assert!(!interact_ptr.is_null());
+        let interact_suite = unsafe {
+            &*(interact_ptr as *const crate::core::openfx_bridge::plugin::OfxInteractSuiteV1)
+        };
+        assert_eq!(unsafe { (interact_suite.interact_redraw)(std::ptr::null_mut()) }, 0);
+        assert_eq!(unsafe { (interact_suite.interact_swap_buffers)(std::ptr::null_mut()) }, 0);
     }
 }

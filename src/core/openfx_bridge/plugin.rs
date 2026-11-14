@@ -673,6 +673,49 @@ static MESSAGE_SUITE_V2: OfxMessageSuiteV2 = OfxMessageSuiteV2 {
     clear_persistent_message: ofx_clear_persistent_message,
 };
 
+#[repr(C)]
+pub struct OfxInteractSuiteV1 {
+    pub interact_swap_buffers:
+        unsafe extern "C" fn(interact_instance: *mut std::ffi::c_void) -> std::ffi::c_int,
+    pub interact_redraw:
+        unsafe extern "C" fn(interact_instance: *mut std::ffi::c_void) -> std::ffi::c_int,
+    pub interact_get_property_set: unsafe extern "C" fn(
+        interact_instance: *mut std::ffi::c_void,
+        property: *mut *mut OfxPropertySet,
+    ) -> std::ffi::c_int,
+}
+
+unsafe extern "C" fn ofx_interact_swap_buffers(
+    _interact_instance: *mut std::ffi::c_void,
+) -> std::ffi::c_int {
+    super::K_OFX_STAT_OK
+}
+
+unsafe extern "C" fn ofx_interact_redraw(
+    _interact_instance: *mut std::ffi::c_void,
+) -> std::ffi::c_int {
+    super::K_OFX_STAT_OK
+}
+
+unsafe extern "C" fn ofx_interact_get_property_set(
+    interact_instance: *mut std::ffi::c_void,
+    property: *mut *mut OfxPropertySet,
+) -> std::ffi::c_int {
+    if property.is_null() {
+        return super::K_OFX_STAT_ERR_BAD_HANDLE;
+    }
+    unsafe {
+        *property = interact_instance.cast::<OfxPropertySet>();
+    }
+    super::K_OFX_STAT_OK
+}
+
+static INTERACT_SUITE_V1: OfxInteractSuiteV1 = OfxInteractSuiteV1 {
+    interact_swap_buffers: ofx_interact_swap_buffers,
+    interact_redraw: ofx_interact_redraw,
+    interact_get_property_set: ofx_interact_get_property_set,
+};
+
 pub(crate) unsafe extern "C" fn kagari_fetch_suite(
     _host: *mut OfxPropertySet,
     suite_name: *const std::ffi::c_char,
@@ -701,6 +744,9 @@ pub(crate) unsafe extern "C" fn kagari_fetch_suite(
     }
     if name == "OfxPropertySuite" && suite_version == 1 {
         return (super::properties::property_suite_raw() as *const super::properties::OfxPropertySuiteV1).cast();
+    }
+    if name == "OfxInteractSuite" && suite_version == 1 {
+        return (&raw const INTERACT_SUITE_V1).cast();
     }
     std::ptr::null()
 }
