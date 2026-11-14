@@ -1,7 +1,6 @@
 component AppBar() {
-    Card {
-      Padding(horizontal: 8, vertical: 6) {
-        HStack(spacing: 12) {
+    Padding(horizontal: 8, vertical: 4) {
+      HStack(spacing: 12) {
           HStack(spacing: 8) {
             AssetImage("kagari.logo", 1, 28, 30)
             Text("Kagari VFX", size: 15).weight(semibold)
@@ -34,5 +33,4 @@ component AppBar() {
           IconButton("settings", action: go_settings, tone: secondary, size: small)
         }
       }
-    }
   }

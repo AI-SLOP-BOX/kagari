@@ -1,6 +1,5 @@
 use super::*;
 
-#[allow(dead_code)]
 fn headless_wgpu_renderer(
 ) -> &'static std::sync::Mutex<Option<kagari_vfx::core::renderer::Renderer>> {
     static RENDERER: std::sync::OnceLock<
@@ -522,7 +521,6 @@ impl AfterEffectsStudio {
 mod viewport_preview_worker_tests {
     use super::*;
 
-#[allow(dead_code)]
 fn headless_wgpu_renderer(
 ) -> &'static std::sync::Mutex<Option<kagari_vfx::core::renderer::Renderer>> {
     static RENDERER: std::sync::OnceLock<
