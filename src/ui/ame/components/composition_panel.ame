@@ -6,8 +6,8 @@ component CompositionHeader() {
       Caption("{composition_position}")
       IconButton("step_next", action: composition_next, tone: secondary, size: small)
       IconButton("add", action: composition_add, tone: secondary, size: small)
-      IconButton("copy", action: composition_duplicate, tone: secondary, size: small)
-      If(has_multiple_compositions) { IconButton("trash", action: composition_remove, tone: secondary, size: small) }
+      Button("複製", action: composition_duplicate, tone: secondary, size: small)
+      If(has_multiple_compositions) { Button("削除", action: composition_remove, tone: secondary, size: small) }
       Spacer
       Caption("ズーム")
       IconButton("minus", action: composition_zoom_out, tone: secondary, size: small)
@@ -33,8 +33,8 @@ component CompositionSelector() {
       Caption("{composition_position}")
       IconButton("step_next", action: composition_next, tone: secondary, size: small)
       IconButton("add", action: composition_add, tone: secondary, size: small)
-      IconButton("copy", action: composition_duplicate, tone: secondary, size: small)
-      If(has_multiple_compositions) { IconButton("trash", action: composition_remove, tone: secondary, size: small) }
+      Button("複製", action: composition_duplicate, tone: secondary, size: small)
+      If(has_multiple_compositions) { Button("削除", action: composition_remove, tone: secondary, size: small) }
       Spacer
       Caption("ズーム")
       IconButton("minus", action: composition_zoom_out, tone: secondary, size: small)
