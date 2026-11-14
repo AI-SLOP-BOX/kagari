@@ -101,7 +101,7 @@ impl WgpuRenderer {
             shadow_enabled: self.shadow_active as u32,
             shadow_strength: 1.0,
             channel_mode: 0,
-            _pad_globals: 0,
+            wipe_split_x: 0.0,
         };
         self.queue
             .write_buffer(&self.globals_buffer, 0, bytemuck::bytes_of(&globals));

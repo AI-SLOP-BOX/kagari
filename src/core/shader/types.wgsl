@@ -5,7 +5,7 @@ struct Globals {
     shadow_enabled: u32,
     shadow_strength: f32,
     channel_mode: u32,
-    _pad_globals: u32,
+    wipe_split_x: f32,
 };
 
 struct Layer {

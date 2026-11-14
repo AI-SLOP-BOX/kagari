@@ -333,6 +333,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     // --- Viewport Exposure Adjustment ---
+    let pre_grade_color = final_color;
     final_color = vec4<f32>(final_color.rgb * pow(2.0, globals.exposure_ev), final_color.a);
 
     // --- Viewport LUT Color Management ---
@@ -364,6 +365,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         final_color = vec4<f32>(vec3<f32>(final_color.b), 1.0);
     } else if (globals.channel_mode == 4u) {
         final_color = vec4<f32>(vec3<f32>(final_color.a), 1.0);
+    }
+
+    if (globals.wipe_split_x > 0.0 && (in.clip_position.x / max(globals.viewport_size.x, 1.0)) < globals.wipe_split_x) {
+        final_color = pre_grade_color;
     }
 
     return final_color;
