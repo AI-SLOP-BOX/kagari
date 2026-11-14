@@ -22,7 +22,7 @@ component ToolBar() {
             If(roto_analysis_busy) { Button("ロト処理を中止", action: roto_cancel, tone: secondary, size: small) }
           }
           Spacer
-          If(compact) { HorizontalScrollView(220) { WorkspaceTabs() } } else { HorizontalScrollView(480) { WorkspaceTabs() } }
+          If(compact) { HorizontalScrollView(220) { WorkspaceTabs() } } else { HorizontalScrollView(400) { WorkspaceTabs() } }
           Spacer
           HStack(spacing: 4) {
             If(is_playing) { IconButton("pause", action: play_toggle, tone: primary, size: small) } else { IconButton("play", action: play_toggle, tone: secondary, size: small) }
