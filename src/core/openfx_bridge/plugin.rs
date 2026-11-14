@@ -67,6 +67,8 @@ pub struct OfxHost {
     >,
 }
 
+unsafe impl Send for OfxHost {}
+
 #[repr(C)]
 pub struct OfxPlugin {
     pub plugin_api: *const std::ffi::c_char,
