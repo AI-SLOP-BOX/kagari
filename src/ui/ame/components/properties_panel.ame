@@ -3,12 +3,12 @@ component PropertiesContent() {
     Card { Padding(6) { HStack(spacing: 8) { Text("プロパティ", size: 14) Spacer If(selected_layer) { Caption("{layer_name}") } else { Caption("未選択") } } } }
     If(selected_layer_locked) { Caption("ロック中: タイムラインまたはシーン一覧で解除すると編集できます。") }
     If(selected_layer) {
-      HorizontalScrollView(420) { HStack(spacing: 3) {
+      HStack(spacing: 3) {
         If(properties_section_transform) { Button("変形", action: properties_section_transform, tone: primary, size: small) } else { Button("変形", action: properties_section_transform, tone: secondary, size: small) }
         If(properties_section_content) { Button("種類別", action: properties_section_content, tone: primary, size: small) } else { Button("種類別", action: properties_section_content, tone: secondary, size: small) }
         If(properties_section_composite) { Button("合成・スタイル", action: properties_section_composite, tone: primary, size: small) } else { Button("合成・スタイル", action: properties_section_composite, tone: secondary, size: small) }
         If(properties_section_advanced) { Button("マスク・その他", action: properties_section_advanced, tone: primary, size: small) } else { Button("マスク・その他", action: properties_section_advanced, tone: secondary, size: small) }
-      } }
+      }
       If(properties_section_transform) {
         Card { Padding(6) { VStack(spacing: 5) {
           Caption("▎ レイヤー時間")

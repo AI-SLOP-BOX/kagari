@@ -21,7 +21,7 @@ component AssetImportPanel() {
 component ProjectAssetPanel() {
   Card { Padding(10) { VStack(spacing: 8) {
     HStack(spacing: 5) {
-      Text("プロジェクト素材 / {asset_folder_name}", size: 14)
+      If(asset_folder_has_parent) { Text("プロジェクト素材 / {asset_folder_name}", size: 14) } else { Text("プロジェクト素材", size: 14) }
       If(asset_folder_has_parent) { IconButton("arrow_up", action: leave_project_asset_folder, tone: secondary, size: small) }
       Spacer
     }
