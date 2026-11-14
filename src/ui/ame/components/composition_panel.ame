@@ -1,6 +1,6 @@
 component CompositionHeader() {
-  Card { Padding(5) { VStack(spacing: 4) {
-    HStack(spacing: 8) {
+  Card { Padding(3) { VStack(spacing: 3) {
+    HStack(spacing: 4) {
       Caption("コンポジション")
       IconButton("step_prev", action: composition_previous, tone: secondary, size: small)
       Caption("{composition_position}")
@@ -11,7 +11,7 @@ component CompositionHeader() {
       Spacer
       Caption("ズーム")
       IconButton("minus", action: composition_zoom_out, tone: secondary, size: small)
-      MaxWidth(88) { TextField(zoom, "100%", action: zoom_changed) }
+      MaxWidth(76) { TextField(zoom, "100%", action: zoom_changed) }
       IconButton("add", action: composition_zoom_in, tone: secondary, size: small)
       Button("全体", action: composition_zoom_fit, tone: secondary, size: small)
     }
@@ -148,11 +148,18 @@ component CompositionSettingsPanel() {
 }
 
 component CompositionViewerPanel() {
-  Card { Padding(5) { VStack(spacing: 4) {
+  Padding(2) { VStack(spacing: 2) {
     If(compact) { Canvas("kagari.viewport").frame(height: 360) } else { Grow(1) { Canvas("kagari.viewport") } }
     If(preview_worker_failed) { Caption("プレビュー処理が停止しました。アプリを再起動してください。") }
-    HStack(spacing: 6) { Icon("grid", 14) Caption("コンポジション") Spacer Caption("{status_resolution}") Caption("{fps_label}") }
-  } } }
+    HStack(spacing: 6) {
+      Icon("grid", 12)
+      Caption("{composition_name}")
+      Spacer
+      Caption("{status_resolution}")
+      Caption("·")
+      Caption("{fps_label}")
+    }
+  } }
 }
 
 component CompositionPanel() {
