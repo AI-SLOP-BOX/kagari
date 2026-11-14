@@ -1,5 +1,5 @@
 component CameraProperties() {
-  Card { Padding(6) { VStack(spacing: 5) {
+  Padding(4) { VStack(spacing: 4) {
     Caption("▎ カメラ")
     If(selected_is_active_camera) { Caption("このカメラを使用中") } else { Button("このカメラを使用", action: activate_selected_camera, tone: primary, size: small) }
     HStack(spacing: 4) { Caption("画角") If(selected_layer_locked) { Caption("{selected_camera_fov}") } else { DragValue(selected_camera_fov, min: 1.0, max: 179.0, action: selected_camera_fov_changed) } Caption("°") IconButton("diamond", action: keyframe_camera_fov, tone: secondary, size: small, disabled: selected_layer_locked) }
@@ -7,11 +7,11 @@ component CameraProperties() {
     HStack(spacing: 4) { Caption("絞り") If(selected_layer_locked) { Caption("{selected_camera_aperture}") } else { DragValue(selected_camera_aperture, min: 0.0, max: 500.0, action: selected_camera_aperture_changed) } IconButton("diamond", action: keyframe_camera_aperture, tone: secondary, size: small, disabled: selected_layer_locked) }
     If(selected_camera_dof_enabled) { Button("被写界深度: ON", action: toggle_selected_camera_dof, tone: secondary, size: small, disabled: selected_layer_locked) } else { Button("被写界深度: OFF", action: toggle_selected_camera_dof, tone: secondary, size: small, disabled: selected_layer_locked) }
     If(selected_camera_dof_enabled) { HStack(spacing: 4) { Caption("最大ぼけ") If(selected_layer_locked) { Caption("{selected_camera_dof_max_blur}") } else { DragValue(selected_camera_dof_max_blur, min: 1.0, max: 64.0, action: selected_camera_dof_max_blur_changed) } Caption("px") IconButton("diamond", action: keyframe_camera_dof_blur, tone: secondary, size: small, disabled: selected_layer_locked) } }
-  } } }
+  } }
 }
 
 component LightProperties() {
-  Card { Padding(6) { VStack(spacing: 5) {
+  Padding(4) { VStack(spacing: 4) {
     Caption("▎ ライト")
     Button("種類: {selected_light_type_label}", action: cycle_selected_light_type, tone: secondary, size: small, disabled: selected_layer_locked)
     HStack(spacing: 4) { Caption("色") If(selected_layer_locked) { Caption("{selected_light_color}") } else { TextField(selected_light_color, "#FFFFFF", action: selected_light_color_changed) } }
@@ -24,7 +24,7 @@ component LightProperties() {
     Button("影を落とす", action: toggle_selected_light_shadows, tone: secondary, size: small, disabled: selected_layer_locked)
     HStack(spacing: 4) { Caption("影の濃さ") If(selected_layer_locked) { Caption("{selected_light_shadow_darkness}") } else { DragValue(selected_light_shadow_darkness, min: 0.0, max: 100.0, action: selected_light_shadow_darkness_changed) } Caption("%") }
     Caption("位置と回転は3D変形から編集できます。")
-  } } }
+  } }
 }
 
 component ParticleProperties() {
