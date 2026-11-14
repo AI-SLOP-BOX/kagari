@@ -1,11 +1,11 @@
 component TransformProperties() {
-  Card { Padding(6) { VStack(spacing: 6) {
+  Card { Padding(4) { VStack(spacing: 4) {
     HStack(spacing: 4) {
       Text("▎ 変形 (Transform)", size: 12)
       Spacer
       If(selected_layer_locked) { Caption("🔒") }
     }
-    Card { Padding(5) { VStack(spacing: 4) {
+    Card { Padding(4) { VStack(spacing: 3) {
       HStack(spacing: 4) {
         MinWidth(56) { Caption("位置 (X/Y)") }
         If(selected_layer_locked) { Caption("{position_x} , {position_y}") } else {
