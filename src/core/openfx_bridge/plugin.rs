@@ -507,20 +507,13 @@ impl LoadedOfxPlugin {
         let in_image_props = self.new_property_set();
         let out_image_props = self.new_property_set();
         let row_bytes = (req.width as i32) * 4;
-        for (props, data_ptr) in [
-            (in_image_props, req.input.as_ptr() as *mut std::ffi::c_void),
-            (
-                out_image_props,
-                req.output.as_mut_ptr() as *mut std::ffi::c_void,
-            ),
-        ] {
+        for props in [in_image_props, out_image_props] {
             unsafe {
                 (*props).set_int("OfxImagePropBounds", 0, 0);
                 (*props).set_int("OfxImagePropBounds", 1, 0);
                 (*props).set_int("OfxImagePropBounds", 2, req.width as i32);
                 (*props).set_int("OfxImagePropBounds", 3, req.height as i32);
                 (*props).set_int("OfxImagePropRowBytes", 0, row_bytes);
-                (*props).set_pointer("OfxImagePropData", 0, data_ptr);
             }
         }
         ACTIVE_OFX_IMAGES.with(|c| c.set((in_image_props as usize, out_image_props as usize)));
