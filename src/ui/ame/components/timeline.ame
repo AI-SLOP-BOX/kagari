@@ -12,8 +12,7 @@ component TimelineRows() {
         HStack(spacing: 1) {
           Caption("{layer.indent}")
           If(layer.has_children) { If(layer.collapsed) { IconButton("chevron_right", action: toggle_scene_group, tone: secondary, size: small) } else { IconButton("chevron_down", action: toggle_scene_group, tone: secondary, size: small) } } else { Icon("tree_branch", 12) }
-          Caption("{layer.label}")
-          MaxWidth(104) { Button("{layer.name}", action: select_layer, tone: secondary, size: small) }
+          MaxWidth(116) { Button("{layer.name}", action: select_layer, tone: secondary, size: small) }
           Button("{layer.blend_mode}", action: cycle_layer_blend_mode, tone: secondary, size: small)
           Button("{layer.track_matte}", action: cycle_layer_track_matte, tone: secondary, size: small)
           Spacer
