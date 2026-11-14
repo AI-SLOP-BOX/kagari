@@ -158,8 +158,6 @@ component CompositionViewerPanel() {
       Button("セーフ", action: setting_safe_area_changed, tone: secondary, size: small)
       Button("{viewport_channel_mode}", action: viewport_cycle_channel, tone: secondary, size: small)
       Button("{viewport_exposure_label}", action: viewport_cycle_exposure, tone: secondary, size: small)
-      Button("{viewport_channel_mode}", action: viewport_cycle_channel, tone: secondary, size: small)
-      Button("{viewport_exposure_label}", action: viewport_cycle_exposure, tone: secondary, size: small)
       Spacer
       Caption("{status_resolution}")
       Caption("·")
