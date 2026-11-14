@@ -403,6 +403,23 @@ impl AfterEffectsStudio {
                         ),
                     );
                 }
+                let cx = (frame.x0 + frame.x1) * 0.5;
+                let cy = (frame.y0 + frame.y1) * 0.5;
+                let cross_color = Color::from_rgba8(255, 255, 255, 95);
+                scene.stroke(
+                    &Stroke::new(1.0),
+                    Affine::IDENTITY,
+                    cross_color,
+                    None,
+                    &Line::new((cx - 10.0, cy), (cx + 10.0, cy)),
+                );
+                scene.stroke(
+                    &Stroke::new(1.0),
+                    Affine::IDENTITY,
+                    cross_color,
+                    None,
+                    &Line::new((cx, cy - 10.0), (cx, cy + 10.0)),
+                );
             }
             if self.grid_visible && draw_width > 8.0 && draw_height > 8.0 {
                 let spacing = self.grid_spacing.clamp(8.0, 512.0);
