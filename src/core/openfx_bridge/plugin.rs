@@ -272,6 +272,72 @@ static IMAGE_EFFECT_SUITE_V1: OfxImageEffectSuiteV1 = OfxImageEffectSuiteV1 {
     image_memory_unlock: ofx_image_memory_unlock,
 };
 
+#[repr(C)]
+pub struct OfxParamSuiteV1 {
+    pub param_define: unsafe extern "C" fn(
+        param_set: *const std::ffi::c_void,
+        param_type: *const std::ffi::c_char,
+        name: *const std::ffi::c_char,
+        property_set: *mut *mut OfxPropertySet,
+    ) -> std::ffi::c_int,
+    pub param_get_handle: unsafe extern "C" fn(
+        param_set: *const std::ffi::c_void,
+        name: *const std::ffi::c_char,
+        param: *mut *mut std::ffi::c_void,
+        property_set: *mut *mut OfxPropertySet,
+    ) -> std::ffi::c_int,
+    pub param_set_get_property_set: unsafe extern "C" fn(
+        param_set: *const std::ffi::c_void,
+        prop_handle: *mut *mut OfxPropertySet,
+    ) -> std::ffi::c_int,
+    pub param_get_property_set: unsafe extern "C" fn(
+        param: *const std::ffi::c_void,
+        prop_handle: *mut *mut OfxPropertySet,
+    ) -> std::ffi::c_int,
+}
+
+unsafe extern "C" fn ofx_param_define(
+    _param_set: *const std::ffi::c_void,
+    _param_type: *const std::ffi::c_char,
+    _name: *const std::ffi::c_char,
+    _property_set: *mut *mut OfxPropertySet,
+) -> std::ffi::c_int {
+    0
+}
+
+unsafe extern "C" fn ofx_param_get_handle(
+    _param_set: *const std::ffi::c_void,
+    _name: *const std::ffi::c_char,
+    param: *mut *mut std::ffi::c_void,
+    _property_set: *mut *mut OfxPropertySet,
+) -> std::ffi::c_int {
+    if !param.is_null() {
+        unsafe { *param = std::ptr::dangling_mut::<std::ffi::c_void>() };
+    }
+    0
+}
+
+unsafe extern "C" fn ofx_param_set_get_property_set(
+    _param_set: *const std::ffi::c_void,
+    _prop_handle: *mut *mut OfxPropertySet,
+) -> std::ffi::c_int {
+    0
+}
+
+unsafe extern "C" fn ofx_param_get_property_set(
+    _param: *const std::ffi::c_void,
+    _prop_handle: *mut *mut OfxPropertySet,
+) -> std::ffi::c_int {
+    0
+}
+
+static PARAM_SUITE_V1: OfxParamSuiteV1 = OfxParamSuiteV1 {
+    param_define: ofx_param_define,
+    param_get_handle: ofx_param_get_handle,
+    param_set_get_property_set: ofx_param_set_get_property_set,
+    param_get_property_set: ofx_param_get_property_set,
+};
+
 unsafe extern "C" fn kagari_fetch_suite(
     _host: *mut OfxPropertySet,
     suite_name: *const std::ffi::c_char,
@@ -285,6 +351,9 @@ unsafe extern "C" fn kagari_fetch_suite(
     };
     if name == "OfxImageEffectSuite" && suite_version == 1 {
         return (&raw const IMAGE_EFFECT_SUITE_V1).cast();
+    }
+    if name == "OfxParamSuite" && suite_version == 1 {
+        return (&raw const PARAM_SUITE_V1).cast();
     }
     std::ptr::null()
 }
