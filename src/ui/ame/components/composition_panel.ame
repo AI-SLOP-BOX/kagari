@@ -156,6 +156,7 @@ component CompositionViewerPanel() {
       Caption("{composition_name}")
       Button("グリッド", action: setting_grid_visible_changed, tone: secondary, size: small)
       Button("セーフ", action: setting_safe_area_changed, tone: secondary, size: small)
+      Button("{viewport_channel_mode}", action: viewport_cycle_channel, tone: secondary, size: small)
       Spacer
       Caption("{status_resolution}")
       Caption("·")

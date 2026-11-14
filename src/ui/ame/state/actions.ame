@@ -87,7 +87,7 @@
   action workspace_left_resized;
   action workspace_center_resized;
   action workspace_vertical_resized;
-  action sidebar_vertical_resized;
+  action viewport_cycle_channel;
   action queue_tab;
   action layer_changed;
   action search_changed;
