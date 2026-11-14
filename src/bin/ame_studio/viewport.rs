@@ -300,6 +300,18 @@ impl AfterEffectsStudio {
                                 let v = luma.round().clamp(0.0, 255.0) as u8;
                                 out.copy_from_slice(&[v, v, v, 255]);
                             }
+                            "Zebra" => {
+                                let r = apply_gain(px[0]);
+                                let g = apply_gain(px[1]);
+                                let b = apply_gain(px[2]);
+                                if r >= 254 || g >= 254 || b >= 254 {
+                                    out.copy_from_slice(&[255, 48, 48, 255]);
+                                } else if r <= 1 && g <= 1 && b <= 1 {
+                                    out.copy_from_slice(&[40, 110, 255, 255]);
+                                } else {
+                                    out.copy_from_slice(&[r, g, b, px[3]]);
+                                }
+                            }
                             _ => {
                                 out.copy_from_slice(&[
                                     apply_gain(px[0]),
