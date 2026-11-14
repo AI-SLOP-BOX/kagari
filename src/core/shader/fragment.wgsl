@@ -347,6 +347,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let e = 0.14;
         let aces = clamp((final_color.rgb * (a * final_color.rgb + vec3<f32>(b))) / (final_color.rgb * (c * final_color.rgb + vec3<f32>(d)) + vec3<f32>(e)), vec3<f32>(0.0), vec3<f32>(1.0));
         final_color = vec4<f32>(aces, final_color.a);
+    } else if (globals.lut_mode == 3u) {
+        let linear = max(final_color.rgb, vec3<f32>(0.0));
+        let lo = linear * 12.92;
+        let hi = 1.055 * pow(linear, vec3<f32>(1.0 / 2.4)) - vec3<f32>(0.055);
+        let srgb = select(hi, lo, linear <= vec3<f32>(0.0031308));
+        final_color = vec4<f32>(clamp(srgb, vec3<f32>(0.0), vec3<f32>(1.0)), final_color.a);
     }
 
     if (layer.blend_mode == 2u) {
