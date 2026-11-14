@@ -145,7 +145,7 @@ impl LoadedOfxPlugin {
             if let Some(main_entry) = (*plugin_ptr).main_entry {
                 let action = cstr("OfxActionLoad").ok_or("invalid OfxActionLoad CString")?;
                 let status = main_entry(
-                    action.as_ptr(),
+                    action.as_ptr().cast(),
                     std::ptr::null(),
                     std::ptr::null_mut(),
                     std::ptr::null_mut(),
