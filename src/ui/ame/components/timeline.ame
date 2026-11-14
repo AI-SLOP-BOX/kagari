@@ -97,31 +97,36 @@ component TimelinePanel() {
       Padding(4) {
         VStack(spacing: 4) {
           If(wide) {
-            HStack(spacing: 5) {
-              If(is_audio_workspace) { Text("オーディオタイムライン", size: 13) } else { Text("タイムライン", size: 13) }
-              HorizontalScrollView(460) { HStack(spacing: 3) {
-                Button("すべて", action: timeline_view_all, tone: secondary, size: small)
-                Button("アニメーション", action: timeline_view_animation, tone: secondary, size: small)
-                Button("現在位置のキー", action: timeline_view_current_keyframes, tone: secondary, size: small)
-                Button("音声", action: timeline_view_audio, tone: secondary, size: small)
-                Button("メディア", action: timeline_view_media, tone: secondary, size: small)
-                Button("文字", action: timeline_view_text, tone: secondary, size: small)
-                Button("図形", action: timeline_view_shapes, tone: secondary, size: small)
-                Button("3D", action: timeline_view_3d, tone: secondary, size: small)
-                Button("カメラ", action: timeline_view_cameras, tone: secondary, size: small)
-                Button("ライト", action: timeline_view_lights, tone: secondary, size: small)
-                Button("グラフ", action: timeline_view_graph, tone: secondary, size: small)
-                Button("ノード", action: timeline_view_flowchart, tone: secondary, size: small)
-              } }
-              Button("シャイ", action: toggle_shy_visibility, tone: secondary, size: small)
-              TimelineTransport()
-              Spacer
-              TextField(current_time, "00:00:02:12", action: time_changed)
-              Button("キー追加", action: add_keyframe, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
-              Button("イージーイーズ (F9)", action: ease_selected_layer, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
-              KeyframeNavigation()
-              Caption("{fps_label}")
-              Button("書き出し", action: go_export, tone: secondary, size: small)
+            VStack(spacing: 4) {
+              HStack(spacing: 8) {
+                If(is_audio_workspace) { Text("オーディオタイムライン", size: 13).weight(bold) } else { Text("タイムライン", size: 13).weight(bold) }
+                HorizontalScrollView(420) { HStack(spacing: 3) {
+                  Button("すべて", action: timeline_view_all, tone: secondary, size: small)
+                  Button("アニメーション", action: timeline_view_animation, tone: secondary, size: small)
+                  Button("現在位置のキー", action: timeline_view_current_keyframes, tone: secondary, size: small)
+                  Button("音声", action: timeline_view_audio, tone: secondary, size: small)
+                  Button("メディア", action: timeline_view_media, tone: secondary, size: small)
+                  Button("文字", action: timeline_view_text, tone: secondary, size: small)
+                  Button("図形", action: timeline_view_shapes, tone: secondary, size: small)
+                  Button("3D", action: timeline_view_3d, tone: secondary, size: small)
+                  Button("カメラ", action: timeline_view_cameras, tone: secondary, size: small)
+                  Button("ライト", action: timeline_view_lights, tone: secondary, size: small)
+                  Button("グラフ", action: timeline_view_graph, tone: secondary, size: small)
+                  Button("ノード", action: timeline_view_flowchart, tone: secondary, size: small)
+                } }
+                Spacer
+                MaxWidth(110) { TextField(current_time, "00:00:02:12", action: time_changed) }
+                Caption("{fps_label}")
+                Button("書き出し", action: go_export, tone: secondary, size: small)
+              }
+              HStack(spacing: 6) {
+                TimelineTransport()
+                Button("シャイ", action: toggle_shy_visibility, tone: secondary, size: small)
+                Spacer
+                Button("キー追加", action: add_keyframe, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+                Button("イージーイーズ (F9)", action: ease_selected_layer, tone: secondary, size: small, disabled: !selected_layer || selected_layer_locked)
+                KeyframeNavigation()
+              }
             }
           } else {
             HStack(spacing: 5) {
