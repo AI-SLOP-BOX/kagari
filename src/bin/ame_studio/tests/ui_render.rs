@@ -12,6 +12,9 @@ fn view_tree_has_button_label(node: &ame_ui::view::ViewNode, label: &str) -> boo
 
 #[test]
 fn video_frame_blending_action_updates_binding_and_survives_project_roundtrip() {
+    std::thread::Builder::new()
+        .stack_size(16 * 1024 * 1024)
+        .spawn(|| {
     let mut app = AfterEffectsStudio::new().unwrap();
     invoke(&mut app, "back_to_editor", None);
     let video = kagari_vfx::core::timeline::Layer::new(
@@ -90,6 +93,10 @@ fn video_frame_blending_action_updates_binding_and_survives_project_roundtrip() 
         .find(|layer| layer.id == layer_id)
         .unwrap();
     assert!(!reopened_layer.frame_blending);
+        })
+        .unwrap()
+        .join()
+        .unwrap();
 }
 
 #[test]
