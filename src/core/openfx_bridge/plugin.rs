@@ -386,6 +386,225 @@ static PARAM_SUITE_V1: OfxParamSuiteV1 = OfxParamSuiteV1 {
     param_get_property_set: ofx_param_get_property_set,
 };
 
+#[repr(C)]
+pub struct OfxMemorySuiteV1 {
+    pub memory_alloc: unsafe extern "C" fn(
+        handle: *mut std::ffi::c_void,
+        n_bytes: usize,
+        allocated_data: *mut *mut std::ffi::c_void,
+    ) -> std::ffi::c_int,
+    pub memory_free: unsafe extern "C" fn(allocated_data: *mut std::ffi::c_void) -> std::ffi::c_int,
+}
+
+#[repr(C)]
+pub struct OfxMultiThreadSuiteV1 {
+    pub multi_thread: unsafe extern "C" fn(
+        func: Option<
+            unsafe extern "C" fn(
+                thread_index: std::ffi::c_uint,
+                thread_max: std::ffi::c_uint,
+                custom_arg: *mut std::ffi::c_void,
+            ),
+        >,
+        n_threads: std::ffi::c_uint,
+        custom_arg: *mut std::ffi::c_void,
+    ) -> std::ffi::c_int,
+    pub multi_thread_num_cpus:
+        unsafe extern "C" fn(n_cpus: *mut std::ffi::c_uint) -> std::ffi::c_int,
+    pub multi_thread_index:
+        unsafe extern "C" fn(thread_index: *mut std::ffi::c_uint) -> std::ffi::c_int,
+    pub multi_thread_is_spawned_thread: unsafe extern "C" fn() -> std::ffi::c_int,
+    pub mutex_create: unsafe extern "C" fn(
+        mutex: *mut *mut std::ffi::c_void,
+        lock_count: std::ffi::c_int,
+    ) -> std::ffi::c_int,
+    pub mutex_destroy: unsafe extern "C" fn(mutex: *mut std::ffi::c_void) -> std::ffi::c_int,
+    pub mutex_lock: unsafe extern "C" fn(mutex: *mut std::ffi::c_void) -> std::ffi::c_int,
+    pub mutex_unlock: unsafe extern "C" fn(mutex: *mut std::ffi::c_void) -> std::ffi::c_int,
+    pub mutex_try_lock: unsafe extern "C" fn(mutex: *mut std::ffi::c_void) -> std::ffi::c_int,
+}
+
+static OFX_ALLOCATIONS: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<usize, std::alloc::Layout>>,
+> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+
+std::thread_local! {
+    static OFX_THREAD_STATE: std::cell::Cell<(u32, bool)> = const { std::cell::Cell::new((0, false)) };
+}
+
+unsafe extern "C" fn ofx_memory_alloc(
+    _handle: *mut std::ffi::c_void,
+    n_bytes: usize,
+    allocated_data: *mut *mut std::ffi::c_void,
+) -> std::ffi::c_int {
+    if allocated_data.is_null() {
+        return super::K_OFX_STAT_ERR_BAD_HANDLE;
+    }
+    let size = n_bytes.max(1);
+    let Ok(layout) = std::alloc::Layout::from_size_align(size, 16) else {
+        return super::K_OFX_STAT_ERR_FAILED;
+    };
+    let ptr = unsafe { std::alloc::alloc(layout) };
+    if ptr.is_null() {
+        return super::K_OFX_STAT_ERR_MEMORY;
+    }
+    if let Ok(mut map) = OFX_ALLOCATIONS.lock() {
+        map.insert(ptr as usize, layout);
+    }
+    unsafe {
+        *allocated_data = ptr.cast();
+    }
+    super::K_OFX_STAT_OK
+}
+
+unsafe extern "C" fn ofx_memory_free(allocated_data: *mut std::ffi::c_void) -> std::ffi::c_int {
+    if allocated_data.is_null() {
+        return super::K_OFX_STAT_OK;
+    }
+    let layout = OFX_ALLOCATIONS
+        .lock()
+        .ok()
+        .and_then(|mut map| map.remove(&(allocated_data as usize)));
+    if let Some(layout) = layout {
+        unsafe { std::alloc::dealloc(allocated_data.cast(), layout) };
+        super::K_OFX_STAT_OK
+    } else {
+        super::K_OFX_STAT_ERR_BAD_HANDLE
+    }
+}
+
+static MEMORY_SUITE_V1: OfxMemorySuiteV1 = OfxMemorySuiteV1 {
+    memory_alloc: ofx_memory_alloc,
+    memory_free: ofx_memory_free,
+};
+
+unsafe extern "C" fn ofx_multi_thread(
+    func: Option<
+        unsafe extern "C" fn(
+            thread_index: std::ffi::c_uint,
+            thread_max: std::ffi::c_uint,
+            custom_arg: *mut std::ffi::c_void,
+        ),
+    >,
+    n_threads: std::ffi::c_uint,
+    custom_arg: *mut std::ffi::c_void,
+) -> std::ffi::c_int {
+    let Some(func) = func else {
+        return super::K_OFX_STAT_ERR_BAD_HANDLE;
+    };
+    let count = n_threads.max(1);
+    let arg_addr = custom_arg as usize;
+    rayon::scope(|s| {
+        for idx in 0..count {
+            s.spawn(move |_| {
+                OFX_THREAD_STATE.with(|cell| cell.set((idx, true)));
+                unsafe { func(idx, count, arg_addr as *mut std::ffi::c_void) };
+                OFX_THREAD_STATE.with(|cell| cell.set((0, false)));
+            });
+        }
+    });
+    super::K_OFX_STAT_OK
+}
+
+unsafe extern "C" fn ofx_multi_thread_num_cpus(
+    n_cpus: *mut std::ffi::c_uint,
+) -> std::ffi::c_int {
+    if n_cpus.is_null() {
+        return super::K_OFX_STAT_ERR_BAD_HANDLE;
+    }
+    let count = std::thread::available_parallelism()
+        .map(|n| n.get() as u32)
+        .unwrap_or(1);
+    unsafe {
+        *n_cpus = count;
+    }
+    super::K_OFX_STAT_OK
+}
+
+unsafe extern "C" fn ofx_multi_thread_index(
+    thread_index: *mut std::ffi::c_uint,
+) -> std::ffi::c_int {
+    if thread_index.is_null() {
+        return super::K_OFX_STAT_ERR_BAD_HANDLE;
+    }
+    let idx = OFX_THREAD_STATE.with(|cell| cell.get().0);
+    unsafe {
+        *thread_index = idx;
+    }
+    super::K_OFX_STAT_OK
+}
+
+unsafe extern "C" fn ofx_multi_thread_is_spawned_thread() -> std::ffi::c_int {
+    i32::from(OFX_THREAD_STATE.with(|cell| cell.get().1))
+}
+
+unsafe extern "C" fn ofx_mutex_create(
+    mutex: *mut *mut std::ffi::c_void,
+    _lock_count: std::ffi::c_int,
+) -> std::ffi::c_int {
+    if mutex.is_null() {
+        return super::K_OFX_STAT_ERR_BAD_HANDLE;
+    }
+    let boxed = Box::new(std::sync::Mutex::new(()));
+    unsafe {
+        *mutex = Box::into_raw(boxed).cast();
+    }
+    super::K_OFX_STAT_OK
+}
+
+unsafe extern "C" fn ofx_mutex_destroy(mutex: *mut std::ffi::c_void) -> std::ffi::c_int {
+    if mutex.is_null() {
+        return super::K_OFX_STAT_ERR_BAD_HANDLE;
+    }
+    unsafe { drop(Box::from_raw(mutex.cast::<std::sync::Mutex<()>>())) };
+    super::K_OFX_STAT_OK
+}
+
+unsafe extern "C" fn ofx_mutex_lock(mutex: *mut std::ffi::c_void) -> std::ffi::c_int {
+    if mutex.is_null() {
+        return super::K_OFX_STAT_ERR_BAD_HANDLE;
+    }
+    let m = unsafe { &*mutex.cast::<std::sync::Mutex<()>>() };
+    let guard = m.lock().unwrap_or_else(|e| e.into_inner());
+    std::mem::forget(guard);
+    super::K_OFX_STAT_OK
+}
+
+unsafe extern "C" fn ofx_mutex_unlock(mutex: *mut std::ffi::c_void) -> std::ffi::c_int {
+    if mutex.is_null() {
+        return super::K_OFX_STAT_ERR_BAD_HANDLE;
+    }
+    let m = unsafe { &*mutex.cast::<std::sync::Mutex<()>>() };
+    unsafe { m.force_unlock() };
+    super::K_OFX_STAT_OK
+}
+
+unsafe extern "C" fn ofx_mutex_try_lock(mutex: *mut std::ffi::c_void) -> std::ffi::c_int {
+    if mutex.is_null() {
+        return super::K_OFX_STAT_ERR_BAD_HANDLE;
+    }
+    let m = unsafe { &*mutex.cast::<std::sync::Mutex<()>>() };
+    match m.try_lock() {
+        Ok(guard) => {
+            std::mem::forget(guard);
+            super::K_OFX_STAT_OK
+        }
+        Err(_) => super::K_OFX_STAT_ERR_FAILED,
+    }
+}
+
+static MULTI_THREAD_SUITE_V1: OfxMultiThreadSuiteV1 = OfxMultiThreadSuiteV1 {
+    multi_thread: ofx_multi_thread,
+    multi_thread_num_cpus: ofx_multi_thread_num_cpus,
+    multi_thread_index: ofx_multi_thread_index,
+    multi_thread_is_spawned_thread: ofx_multi_thread_is_spawned_thread,
+    mutex_create: ofx_mutex_create,
+    mutex_destroy: ofx_mutex_destroy,
+    mutex_lock: ofx_mutex_lock,
+    mutex_unlock: ofx_mutex_unlock,
+    mutex_try_lock: ofx_mutex_try_lock,
+};
+
 pub(crate) unsafe extern "C" fn kagari_fetch_suite(
     _host: *mut OfxPropertySet,
     suite_name: *const std::ffi::c_char,
@@ -402,6 +621,12 @@ pub(crate) unsafe extern "C" fn kagari_fetch_suite(
     }
     if name == "OfxParamSuite" && suite_version == 1 {
         return (&raw const PARAM_SUITE_V1).cast();
+    }
+    if name == "OfxMemorySuite" && suite_version == 1 {
+        return (&raw const MEMORY_SUITE_V1).cast();
+    }
+    if name == "OfxMultiThreadSuite" && suite_version == 1 {
+        return (&raw const MULTI_THREAD_SUITE_V1).cast();
     }
     std::ptr::null()
 }

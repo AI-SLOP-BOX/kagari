@@ -215,4 +215,56 @@ mod tests {
                 .any(|p| p.name == "blurRadius" && p.param_type == "OfxParamTypeDouble")
         );
     }
+
+    #[test]
+    fn memory_and_multithread_suites_work() {
+        let mem_ptr = unsafe {
+            crate::core::openfx_bridge::plugin::kagari_fetch_suite(
+                std::ptr::null_mut(),
+                b"OfxMemorySuite\0".as_ptr().cast(),
+                1,
+            )
+        };
+        assert!(!mem_ptr.is_null());
+        let mem_suite =
+            unsafe { &*(mem_ptr as *const crate::core::openfx_bridge::plugin::OfxMemorySuiteV1) };
+        let mut buf: *mut std::ffi::c_void = std::ptr::null_mut();
+        assert_eq!(unsafe { (mem_suite.memory_alloc)(std::ptr::null_mut(), 1024, &mut buf) }, 0);
+        assert!(!buf.is_null());
+        assert_eq!(unsafe { (mem_suite.memory_free)(buf) }, 0);
+
+        let mt_ptr = unsafe {
+            crate::core::openfx_bridge::plugin::kagari_fetch_suite(
+                std::ptr::null_mut(),
+                b"OfxMultiThreadSuite\0".as_ptr().cast(),
+                1,
+            )
+        };
+        assert!(!mt_ptr.is_null());
+        let mt_suite = unsafe {
+            &*(mt_ptr as *const crate::core::openfx_bridge::plugin::OfxMultiThreadSuiteV1)
+        };
+        let mut cpus = 0u32;
+        assert_eq!(unsafe { (mt_suite.multi_thread_num_cpus)(&mut cpus) }, 0);
+        assert!(cpus >= 1);
+
+        let sum = std::sync::atomic::AtomicU32::new(0);
+        unsafe extern "C" fn worker(
+            idx: std::ffi::c_uint,
+            _max: std::ffi::c_uint,
+            arg: *mut std::ffi::c_void,
+        ) {
+            let acc = unsafe { &*(arg as *const std::sync::atomic::AtomicU32) };
+            acc.fetch_add(idx + 1, std::sync::atomic::Ordering::Relaxed);
+        }
+        let rc = unsafe {
+            (mt_suite.multi_thread)(
+                Some(worker),
+                4,
+                (&raw const sum) as *mut std::ffi::c_void,
+            )
+        };
+        assert_eq!(rc, 0);
+        assert_eq!(sum.load(std::sync::atomic::Ordering::Relaxed), 1 + 2 + 3 + 4);
+    }
 }
