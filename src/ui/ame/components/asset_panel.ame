@@ -1,9 +1,8 @@
 component AssetImportPanel() {
   DropTarget(action: import_dropped_file) {
     Card { Padding(10) { VStack(spacing: 6) {
-      HStack(spacing: 5) {
-        Text("素材を読み込む", size: 14)
-        Spacer
+      Text("素材を読み込む", size: 14)
+      HorizontalScrollView(300) { HStack(spacing: 4) {
         Button("画像", action: import_image_layer, tone: secondary, size: small)
         Button("連番", action: import_image_sequence_layer, tone: secondary, size: small)
         Button("3Dモデル", action: import_model_layer, tone: secondary, size: small)
@@ -11,7 +10,7 @@ component AssetImportPanel() {
         If(asset_importing) {
           If(asset_import_cancellable) { Button("中止", action: cancel_video_import, tone: primary, size: small) } else { Caption("連番を処理中") }
         } else { Button("動画", action: import_video_layer, tone: secondary, size: small) }
-      }
+      } }
       Caption("画像・連番画像・SVG・3Dモデル・音声・動画を読み込み · ファイルをここにドロップ")
       Caption("{asset_status}")
     } } }
