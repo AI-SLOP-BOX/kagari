@@ -475,6 +475,7 @@ impl AfterEffectsStudio {
             workspace_left_ratios,
             workspace_center_ratios,
             workspace_vertical_ratios,
+            viewport_channel_mode: "RGBA".to_string(),
             preview_revision: 0,
             preview_cache: std::collections::HashMap::new(),
             viewport_mapping: None,

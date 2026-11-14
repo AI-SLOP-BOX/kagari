@@ -290,12 +290,21 @@ impl AfterEffectsStudio {
             {
                 self.workspace_vertical_ratios[self.workspace.index()] = value.clamp(0.20, 0.80);
             }
-            ("sidebar_vertical_resized", Some(ActionValue::Number(_value))) => {}
             ("workspace_reset_layout", _) => {
                 let index = self.workspace.index();
                 self.workspace_left_ratios[index] = WORKSPACE_LEFT_DEFAULTS[index];
                 self.workspace_center_ratios[index] = WORKSPACE_CENTER_DEFAULTS[index];
                 self.workspace_vertical_ratios[index] = WORKSPACE_VERTICAL_DEFAULT;
+            }
+            ("viewport_cycle_channel", _) => {
+                self.viewport_channel_mode = match self.viewport_channel_mode.as_str() {
+                    "RGBA" => "R",
+                    "R" => "G",
+                    "G" => "B",
+                    "B" => "A",
+                    _ => "RGBA",
+                }
+                .to_string();
             }
             _ if self.handle_composition_action(action.name.as_str(), action_val.as_ref(), selected_row_id.as_deref()) => {}
             ("add_solid_layer", _) => self.add_solid_layer(),
