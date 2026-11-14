@@ -263,8 +263,32 @@ impl AfterEffectsStudio {
             let draw_height = f64::from(preview_height) * fit;
             let left = x + (width - draw_width) * 0.5 + self.viewport_pan[0];
             let top = y + (height - draw_height) * 0.5 + self.viewport_pan[1];
+            let filtered_image = if self.viewport_channel_mode != "RGBA" {
+                let src = image.data.data();
+                let mut dst = Vec::with_capacity(src.len());
+                for px in src.chunks_exact(4) {
+                    let v = match self.viewport_channel_mode.as_str() {
+                        "R" => px[0],
+                        "G" => px[1],
+                        "B" => px[2],
+                        "A" => px[3],
+                        _ => px[0],
+                    };
+                    dst.extend_from_slice(&[v, v, v, 255]);
+                }
+                Some(vello::peniko::ImageData {
+                    data: vello::peniko::Blob::from(dst),
+                    format: image.format,
+                    alpha_type: image.alpha_type,
+                    width: image.width,
+                    height: image.height,
+                })
+            } else {
+                None
+            };
+            let draw_img = filtered_image.as_ref().unwrap_or(&image);
             scene.draw_image(
-                &image,
+                draw_img,
                 Affine::translate((left, top)) * Affine::scale_non_uniform(fit * pixel_aspect, fit),
             );
             let frame = Rect::new(left, top, left + draw_width, top + draw_height);
