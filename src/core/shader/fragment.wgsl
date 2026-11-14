@@ -365,6 +365,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         final_color = vec4<f32>(vec3<f32>(final_color.b), 1.0);
     } else if (globals.channel_mode == 4u) {
         final_color = vec4<f32>(vec3<f32>(final_color.a), 1.0);
+    } else if (globals.channel_mode == 5u) {
+        let luma = dot(final_color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+        final_color = vec4<f32>(vec3<f32>(luma), 1.0);
     }
 
     if (globals.wipe_split_x > 0.0 && (in.clip_position.x / max(globals.viewport_size.x, 1.0)) < globals.wipe_split_x) {
