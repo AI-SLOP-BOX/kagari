@@ -8,8 +8,8 @@ app AfterEffectsStudio {
 
   material GlassCard {
     kind: liquid_glass
-    blur: 24.0
-    refraction: 0.35
+    blur: 24
+    refraction: 35
   }
   material HeroBloom {
     kind: bloom

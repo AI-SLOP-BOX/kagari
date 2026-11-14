@@ -33,11 +33,11 @@ component SceneAssetPanel() {
     } else {
       Caption("読み込み済みの画像・動画・音声・3Dモデル素材はありません。")
     }
-  } } }
+  } }
 }
 
 component SceneCreationPanel() {
-  Card { Padding(6) { VStack(spacing: 4) {
+  Padding(4) { VStack(spacing: 4) {
     Text("レイヤーを追加", size: 13)
     Wrap(item_spacing: 4, line_spacing: 4) {
       Button("粒子", action: add_particle_layer, tone: secondary, size: small)
@@ -52,7 +52,7 @@ component SceneCreationPanel() {
       Button("カメラ", action: add_scene_camera, tone: secondary, size: small)
       Button("ライト", action: add_scene_light, tone: secondary, size: small)
     }
-  } } }
+  } }
 }
 
 component SceneHierarchyPanel() {
@@ -101,7 +101,7 @@ component SceneHierarchyPanel() {
         }
       }
     } else { Caption("コンポジションにレイヤーがありません。素材やシェイプを追加できます。") }
-  } } }
+  } }
 }
 
 component SceneAlignmentPanel() {
