@@ -139,7 +139,7 @@
   bind workspace_left_ratio: Float = 0.22;
   bind workspace_center_ratio: Float = 0.70;
   bind workspace_vertical_ratio: Float = 0.54;
-  bind viewport_channel_mode: String = "RGBA";
+  bind sidebar_vertical_ratio: Float = 0.38;
   bind is_audio_workspace: Bool = false;
   bind zoom: String = "20%";
   bind position_x: Float = 960.0;
