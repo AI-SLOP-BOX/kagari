@@ -49,18 +49,20 @@ component ToolBar() {
   }
 
 component WorkspaceTabs() {
-  HStack(spacing: 2) {
-    Button("標準", action: workspace_default, tone: secondary, size: small)
-    Button("タイムライン", action: workspace_timeline, tone: secondary, size: small)
-    Button("グラフ", action: workspace_graph, tone: secondary, size: small)
-    Button("エフェクト", action: workspace_effects, tone: secondary, size: small)
-    Button("3D・照明", action: workspace_camera_light, tone: secondary, size: small)
-    Button("色補正", action: workspace_color, tone: secondary, size: small)
-    Button("合成", action: workspace_layer_style, tone: secondary, size: small)
-    Button("マスク", action: workspace_mask, tone: secondary, size: small)
-    Button("文字", action: workspace_text, tone: secondary, size: small)
-    Button("音響", action: workspace_audio, tone: secondary, size: small)
-    Button("リマップ", action: workspace_time_remap, tone: secondary, size: small)
-    IconButton("reset", action: workspace_reset_layout, tone: secondary, size: small)
+  HorizontalScrollView(520) {
+    HStack(spacing: 2) {
+      Button("標準", action: workspace_default, tone: secondary, size: small)
+      Button("タイムライン", action: workspace_timeline, tone: secondary, size: small)
+      Button("グラフ", action: workspace_graph, tone: secondary, size: small)
+      Button("エフェクト", action: workspace_effects, tone: secondary, size: small)
+      Button("3D・照明", action: workspace_camera_light, tone: secondary, size: small)
+      Button("色補正", action: workspace_color, tone: secondary, size: small)
+      Button("合成", action: workspace_layer_style, tone: secondary, size: small)
+      Button("マスク", action: workspace_mask, tone: secondary, size: small)
+      Button("文字", action: workspace_text, tone: secondary, size: small)
+      Button("音響", action: workspace_audio, tone: secondary, size: small)
+      Button("リマップ", action: workspace_time_remap, tone: secondary, size: small)
+      IconButton("reset", action: workspace_reset_layout, tone: secondary, size: small)
+    }
   }
 }
