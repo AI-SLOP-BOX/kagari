@@ -151,9 +151,11 @@ component CompositionViewerPanel() {
   Padding(2) { VStack(spacing: 2) {
     If(compact) { Canvas("kagari.viewport").frame(height: 360) } else { Grow(1) { Canvas("kagari.viewport") } }
     If(preview_worker_failed) { Caption("プレビュー処理が停止しました。アプリを再起動してください。") }
-    HStack(spacing: 6) {
+    HStack(spacing: 4) {
       Icon("grid", 12)
       Caption("{composition_name}")
+      Button("グリッド", action: setting_grid_visible_changed, tone: secondary, size: small)
+      Button("セーフ", action: setting_safe_area_changed, tone: secondary, size: small)
       Spacer
       Caption("{status_resolution}")
       Caption("·")
