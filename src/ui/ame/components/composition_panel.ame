@@ -1,5 +1,5 @@
 component CompositionHeader() {
-  Card { Padding(3) { VStack(spacing: 3) {
+  Padding(horizontal: 6, vertical: 3) { VStack(spacing: 3) {
     HStack(spacing: 4) {
       Caption("コンポジション")
       IconButton("step_prev", action: composition_previous, tone: secondary, size: small)
@@ -22,11 +22,11 @@ component CompositionHeader() {
         }
       } }
     }
-  } } }
+  } }
 }
 
 component CompositionSelector() {
-  Card { Padding(5) { VStack(spacing: 4) {
+  Padding(horizontal: 6, vertical: 3) { VStack(spacing: 3) {
     HStack(spacing: 8) {
       Caption("コンポジション")
       IconButton("step_prev", action: composition_previous, tone: secondary, size: small)
@@ -49,7 +49,7 @@ component CompositionSelector() {
         }
       } }
     }
-  } } }
+  } }
 }
 
 component CompositionBasicSettings() {
