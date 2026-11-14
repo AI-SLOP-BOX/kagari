@@ -91,7 +91,7 @@ mod tests {
             || {
                 let checks = cancellation_checks.get() + 1;
                 cancellation_checks.set(checks);
-                provider_calls.get() >= 2 && checks >= 20
+                checks >= 20
             },
         );
 

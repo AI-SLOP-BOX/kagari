@@ -268,7 +268,3 @@ project_workflow = [
     "ClipboardSystem (Cross-composition layer, effect, and keyframe copy/paste with ID collision safety)",
 ]
 
-[[example]]
-name = "ui_snapshot"
-required-features = ["wgpu"]
-

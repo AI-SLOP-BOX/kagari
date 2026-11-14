@@ -1,5 +1,3 @@
-#![cfg(feature = "wgpu")]
-
 use std::sync::Arc;
 
 use half::f16;
