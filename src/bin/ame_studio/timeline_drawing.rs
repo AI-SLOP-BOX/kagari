@@ -220,25 +220,31 @@ pub(crate) fn draw_timeline(
         }
     }
 
-    let playhead_x = x + width * (f64::from(frame.min(duration_frames.max(1))) - timeline_start)
-        / visible_frames;
+    let playhead_x = (x + width
+        * (f64::from(frame.min(duration_frames.max(1))) - timeline_start)
+        / visible_frames)
+        .round()
+        + 0.5;
     if playhead_x >= x && playhead_x <= x + width {
+        let playhead_color = Color::from_rgb8(235, 68, 54);
         scene.stroke(
-            &Stroke::new(1.8),
+            &Stroke::new(1.5),
             Affine::IDENTITY,
-            Color::from_rgb8(255, 116, 28),
+            playhead_color,
             None,
             &Line::new((playhead_x, y), (playhead_x, y + height)),
         );
         let mut marker = BezPath::new();
-        marker.move_to((playhead_x - 5.0, y));
-        marker.line_to((playhead_x + 5.0, y));
-        marker.line_to((playhead_x, y + 8.0));
+        marker.move_to((playhead_x - 5.5, y));
+        marker.line_to((playhead_x + 5.5, y));
+        marker.line_to((playhead_x + 5.5, y + 4.5));
+        marker.line_to((playhead_x, y + 10.0));
+        marker.line_to((playhead_x - 5.5, y + 4.5));
         marker.close_path();
         scene.fill(
             Fill::NonZero,
             Affine::IDENTITY,
-            Color::from_rgb8(255, 116, 28),
+            playhead_color,
             None,
             &marker,
         );
