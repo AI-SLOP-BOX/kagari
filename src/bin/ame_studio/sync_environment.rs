@@ -323,6 +323,15 @@ impl AfterEffectsStudio {
             "viewport_channel_mode",
             Value::String(self.viewport_channel_mode.clone()),
         )?;
+        let ev_label = match self.viewport_exposure_ev as i32 {
+            1 => "+1EV",
+            2 => "+2EV",
+            -1 => "-1EV",
+            -2 => "-2EV",
+            _ => "0EV",
+        };
+        self.ui
+            .set_binding("viewport_exposure_label", Value::String(ev_label.to_string()))?;
         for (name, workspace) in [
             ("is_default_workspace", Workspace::Default),
             ("is_composition_workspace", Workspace::Composition),

@@ -307,6 +307,15 @@ impl AfterEffectsStudio {
                 }
                 .to_string();
             }
+            ("viewport_cycle_exposure", _) => {
+                self.viewport_exposure_ev = match self.viewport_exposure_ev as i32 {
+                    0 => 1.0,
+                    1 => 2.0,
+                    2 => -1.0,
+                    -1 => -2.0,
+                    _ => 0.0,
+                };
+            }
             _ if self.handle_composition_action(action.name.as_str(), action_val.as_ref(), selected_row_id.as_deref()) => {}
             ("add_solid_layer", _) => self.add_solid_layer(),
             ("add_scene_camera", _) => self.add_scene_camera(),
