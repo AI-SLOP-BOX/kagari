@@ -1,3 +1,4 @@
+#![cfg(feature = "wgpu")]
 #![allow(clippy::unwrap_used)]
 
 use kagari_vfx::core::compute_pipeline::GpuComputeContext;
