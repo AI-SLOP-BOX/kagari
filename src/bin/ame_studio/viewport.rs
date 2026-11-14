@@ -265,40 +265,42 @@ impl AfterEffectsStudio {
             let top = y + (height - draw_height) * 0.5 + self.viewport_pan[1];
             let filtered_image =
                 if self.viewport_channel_mode != "RGBA" || self.viewport_exposure_ev != 0.0 {
+                    use rayon::prelude::*;
                     let gain = 2f32.powf(self.viewport_exposure_ev as f32);
                     let src = image.data.data();
-                    let mut dst = Vec::with_capacity(src.len());
-                    for px in src.chunks_exact(4) {
-                        let apply_gain = |c: u8| -> u8 {
-                            ((f32::from(c) * gain).round().clamp(0.0, 255.0)) as u8
-                        };
-                        match self.viewport_channel_mode.as_str() {
+                    let mut dst = vec![0u8; src.len()];
+                    let mode = self.viewport_channel_mode.as_str();
+                    let apply_gain = |c: u8| -> u8 {
+                        ((f32::from(c) * gain).round().clamp(0.0, 255.0)) as u8
+                    };
+                    dst.par_chunks_exact_mut(4)
+                        .zip(src.par_chunks_exact(4))
+                        .for_each(|(out, px)| match mode {
                             "R" => {
                                 let v = apply_gain(px[0]);
-                                dst.extend_from_slice(&[v, v, v, 255]);
+                                out.copy_from_slice(&[v, v, v, 255]);
                             }
                             "G" => {
                                 let v = apply_gain(px[1]);
-                                dst.extend_from_slice(&[v, v, v, 255]);
+                                out.copy_from_slice(&[v, v, v, 255]);
                             }
                             "B" => {
                                 let v = apply_gain(px[2]);
-                                dst.extend_from_slice(&[v, v, v, 255]);
+                                out.copy_from_slice(&[v, v, v, 255]);
                             }
                             "A" => {
                                 let v = px[3];
-                                dst.extend_from_slice(&[v, v, v, 255]);
+                                out.copy_from_slice(&[v, v, v, 255]);
                             }
                             _ => {
-                                dst.extend_from_slice(&[
+                                out.copy_from_slice(&[
                                     apply_gain(px[0]),
                                     apply_gain(px[1]),
                                     apply_gain(px[2]),
                                     px[3],
                                 ]);
                             }
-                        }
-                    }
+                        });
                     Some(vello::peniko::ImageData {
                         data: vello::peniko::Blob::from(dst),
                         format: image.format,
@@ -311,21 +313,26 @@ impl AfterEffectsStudio {
                 };
             let draw_img = filtered_image.as_ref().unwrap_or(&image);
             if self.viewport_wipe_enabled {
+                use rayon::prelude::*;
                 let w = draw_img.width as usize;
                 let h = draw_img.height as usize;
                 let split_col = w / 2;
                 let raw_src = image.data.data();
                 let filt_src = draw_img.data.data();
-                let mut split_dst = Vec::with_capacity(filt_src.len());
-                for row in 0..h {
-                    let row_off = row * w * 4;
-                    let mid = row_off + split_col * 4;
-                    let end = row_off + w * 4;
-                    if end <= raw_src.len() && end <= filt_src.len() {
-                        split_dst.extend_from_slice(&raw_src[row_off..mid]);
-                        split_dst.extend_from_slice(&filt_src[mid..end]);
-                    }
-                }
+                let row_bytes = w * 4;
+                let mid_bytes = split_col * 4;
+                let mut split_dst = vec![0u8; h * row_bytes];
+                split_dst
+                    .par_chunks_exact_mut(row_bytes)
+                    .enumerate()
+                    .for_each(|(row, out_row)| {
+                        let row_off = row * row_bytes;
+                        let end = row_off + row_bytes;
+                        if end <= raw_src.len() && end <= filt_src.len() {
+                            out_row[..mid_bytes].copy_from_slice(&raw_src[row_off..row_off + mid_bytes]);
+                            out_row[mid_bytes..].copy_from_slice(&filt_src[row_off + mid_bytes..end]);
+                        }
+                    });
                 let wipe_img = vello::peniko::ImageData {
                     data: vello::peniko::Blob::from(split_dst),
                     format: draw_img.format,
