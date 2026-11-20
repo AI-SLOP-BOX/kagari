@@ -34,10 +34,14 @@ component SettingsExternalNav() { HitArea("settings_external_select", action: se
 component SettingsExperimentalNav() { HitArea("settings_experimental_select", action: settings_experimental_select) { SettingsNavItem(active: settings_experimental) { Padding(horizontal: 18, vertical: 8) { HStack(spacing: 12) { If(settings_experimental) { Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#e6ebf2' stroke-width='1.8' stroke-linecap='round'><path d='M4 7h7M15 7h5M4 12h10M18 12h2M4 17h4M12 17h8'/><circle cx='13' cy='7' r='1.6'/><circle cx='16' cy='12' r='1.6'/><circle cx='10' cy='17' r='1.6'/></svg>", 20, 20) } else { Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#aeb7bd' stroke-width='1.8' stroke-linecap='round'><path d='M4 7h7M15 7h5M4 12h10M18 12h2M4 17h4M12 17h8'/><circle cx='13' cy='7' r='1.6'/><circle cx='16' cy='12' r='1.6'/><circle cx='10' cy='17' r='1.6'/></svg>", 20, 20) } Text("実験的機能", size: 13) Spacer } } } } }
 
 component SettingsPanel() {
-    Center {
-      Padding(horizontal: 24, vertical: 0) {
-        MaxWidth(1200) {
-          Card(padding: 0, spacing: 0, hover_strength: 0.0, hover_elevation: 0.0, background: "#181d25", border_color: "#2b3240") {
+    VStack(spacing: 0) {
+      Spacer
+      HStack(spacing: 0) {
+        Spacer
+        Padding(horizontal: 24, vertical: 20) {
+          MinWidth(980) {
+            MaxWidth(1160) {
+              Card(padding: 0, spacing: 0, hover_strength: 0.0, hover_elevation: 0.0, background: "#181d25", border_color: "#2b3240") {
         HStack(spacing: 0) {
           Align(stretch) {
             Grow(1) { MaxWidth(220) { Grow(1) { MinWidth(212) { Grow(1) {
@@ -118,7 +122,7 @@ component SettingsPanel() {
                         }
                       }
                     }
-                  }.relative_frame(height: 1.0, min_height: 200, max_height: 720)
+                  }.frame(height: 620)
                 }
                 Surface(padding: 0, spacing: 0, radius: 0, border: false, background: "#252c38") { Spacer }.frame(height: 1)
                 If(settings_defaults_confirm_open) {
@@ -149,9 +153,13 @@ component SettingsPanel() {
             }
           }
         }
-          }.relative_frame(height: 0.85, min_height: 360, max_height: 1200)
+              }.frame(height: 740)
+            }
+          }
         }
+        Spacer
       }
+      Spacer
     }
   }
 

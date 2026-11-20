@@ -210,7 +210,7 @@ app AfterEffectsStudio {
 
   view {
     If(settings_page) {
-      Overlay {
+      ZStack {
         MainContent()
         ZStack {
           Surface(padding: 0, spacing: 0, radius: 0, border: false, background: "#06090f") { Spacer }.opacity(modal_scrim_opacity)
