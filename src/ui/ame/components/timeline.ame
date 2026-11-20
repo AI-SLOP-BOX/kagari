@@ -159,13 +159,13 @@ component TimelinePanel() {
               Caption("{timeline_zoom_label}")
               IconButton("add", action: timeline_zoom_in, tone: ghost, size: small)
               Button("全体", action: timeline_zoom_fit, tone: ghost, size: small)
-              Button("再生位置で分割", action: split_selected_layer_at_playhead, tone: ghost, size: small, disabled: !selected_layer || selected_layer_locked)
-              Button("イン点へ", action: layer_in_to_playhead, tone: ghost, size: small, disabled: !selected_layer || selected_layer_locked)
-              Button("アウト点へ", action: layer_out_to_playhead, tone: ghost, size: small, disabled: !selected_layer || selected_layer_locked)
+              Button("分割", action: split_selected_layer_at_playhead, tone: ghost, size: small, disabled: !selected_layer || selected_layer_locked)
+              Button("Inへ", action: layer_in_to_playhead, tone: ghost, size: small, disabled: !selected_layer || selected_layer_locked)
+              Button("Outへ", action: layer_out_to_playhead, tone: ghost, size: small, disabled: !selected_layer || selected_layer_locked)
               IconButton("arrow_up", action: move_layer_up, tone: ghost, size: small, disabled: !selected_layer || selected_layer_locked)
               IconButton("arrow_down", action: move_layer_down, tone: ghost, size: small, disabled: !selected_layer || selected_layer_locked)
-              Button("先頭へ", action: move_layer_to_start, tone: ghost, size: small, disabled: !selected_layer || selected_layer_locked)
-              Button("末尾へ", action: move_layer_to_end, tone: ghost, size: small, disabled: !selected_layer || selected_layer_locked)
+              Button("先頭", action: move_layer_to_start, tone: ghost, size: small, disabled: !selected_layer || selected_layer_locked)
+              Button("末尾", action: move_layer_to_end, tone: ghost, size: small, disabled: !selected_layer || selected_layer_locked)
               IconButton("arrow_left", action: timeline_pan_left, tone: ghost, size: small)
               IconButton("arrow_right", action: timeline_pan_right, tone: ghost, size: small)
               If(timeline_view_markers) { Button("マーカー", action: timeline_view_markers, tone: primary, size: small) } else { Button("マーカー", action: timeline_view_markers, tone: ghost, size: small) }
@@ -191,13 +191,12 @@ component TimelinePanel() {
               Caption("再生範囲")
               Caption("開始f")
               MaxWidth(70) { TextField(work_area_start_frame, "0", action: work_area_start_frame_changed) }
-              Button("開始を現在位置へ", action: set_playback_range_start, tone: ghost, size: small)
+              Button("現在位置", action: set_playback_range_start, tone: ghost, size: small)
               Caption("終了f")
               MaxWidth(70) { TextField(work_area_end_frame, "0", action: work_area_end_frame_changed) }
-              Button("終了を現在位置へ", action: set_playback_range_end, tone: ghost, size: small)
+              Button("現在位置", action: set_playback_range_end, tone: ghost, size: small)
               Caption("{work_area_label}")
               Button("解除", action: clear_playback_range, tone: ghost, size: small)
-              Caption("ループ再生ON時に適用")
             }
           } else {
             HStack(spacing: 3) {

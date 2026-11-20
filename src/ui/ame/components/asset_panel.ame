@@ -1,7 +1,10 @@
 component AssetImportPanel() {
   DropTarget(action: import_dropped_file) {
     Card(hover_strength: 0.0, hover_elevation: 0.0) { Padding(10) { VStack(spacing: 6) {
-      Text("素材を読み込む", size: 14)
+      HStack(spacing: 6) {
+        Svg("<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='#aeb7bd' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/><polyline points='17 8 12 3 7 8'/><line x1='12' y1='3' x2='12' y2='15'/></svg>", 14, 14)
+        Text("素材を読み込む", size: 14).weight(semibold)
+      }
       Wrap(item_spacing: 4, line_spacing: 4) {
         Button("画像", action: import_image_layer, tone: ghost, size: small)
         Button("連番", action: import_image_sequence_layer, tone: ghost, size: small)
@@ -11,7 +14,7 @@ component AssetImportPanel() {
           If(asset_import_cancellable) { Button("中止", action: cancel_video_import, tone: primary, size: small) } else { Caption("連番を処理中") }
         } else { Button("動画", action: import_video_layer, tone: ghost, size: small) }
       }
-      Caption("対応: 画像・連番・SVG・PSD・3D・音声・動画 (ドロップ可)")
+      Caption("PSD / 動画 / 音声 / 3D をドロップ")
       Caption("{asset_status}")
     } } }
   }
