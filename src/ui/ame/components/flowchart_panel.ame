@@ -10,7 +10,7 @@ component FlowchartPanel() {
         Button("タイムラインに戻る", action: timeline_view_all, tone: ghost, size: small)
       }
     }
-    Canvas("kagari.flowchart").frame(height: 120)
+    Canvas("kagari.flowchart").frame(height: 68)
     Surface(padding: 5, spacing: 0, radius: 5, border: false, background: "#14181f") {
       VStack(spacing: 4) {
         HStack(spacing: 6) {
@@ -28,6 +28,8 @@ component FlowchartPanel() {
           Button("+ DeepMerge", action: node_graph_add_deep_merge, tone: ghost, size: small)
           Button("+ OverMerge", action: node_graph_add_over_merge, tone: ghost, size: small)
           Button("+ OpenFX", action: node_graph_add_openfx, tone: ghost, size: small)
+        }
+        HStack(spacing: 3) {
           Button("値-", action: node_graph_param_down, tone: ghost, size: small)
           Button("値+", action: node_graph_param_up, tone: ghost, size: small)
           Button("←", action: node_graph_move_left, tone: ghost, size: small)
@@ -35,11 +37,12 @@ component FlowchartPanel() {
           Button("整列", action: node_graph_auto_layout, tone: ghost, size: small)
           Button("削除", action: node_graph_remove_selected, tone: destructive, size: small)
           Button("リセット", action: node_graph_reset, tone: ghost, size: small)
+          Spacer
           If(node_graph_live_preview) { Button("DAGライブ: ON", action: toggle_node_graph_preview, tone: primary, size: small) } else { Button("DAGライブ: OFF", action: toggle_node_graph_preview, tone: ghost, size: small) }
           Button("DAG評価実行", action: node_graph_evaluate, tone: primary, size: small)
-          Button("結果レイヤー書き出し", action: node_graph_bake_to_layer, tone: ghost, size: small)
+          Button("レイヤー書き出し", action: node_graph_bake_to_layer, tone: secondary, size: small)
         }
-        Canvas("kagari.node_graph").frame(height: 112)
+        Canvas("kagari.node_graph").frame(height: 140)
       }
     }
   }
