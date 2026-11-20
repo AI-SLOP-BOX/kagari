@@ -62,7 +62,7 @@ app AfterEffectsStudio {
   import "state/records.ame";
   import "state/bindings.ame";
   import "state/actions.ame";
-  bind modal_scrim_opacity: Float = 0.68;
+  bind modal_scrim_opacity: Float = 0.78;
 
 
   import "components/navigation.ame";
@@ -96,9 +96,14 @@ app AfterEffectsStudio {
   import "components/workspace_layout.ame";
 
   component CommandPaletteModal() {
-    Padding(horizontal: 24, vertical: 0) {
-      MaxWidth(580) {
-        Card(hover_strength: 0.0, hover_elevation: 0.0) {
+    VStack(spacing: 0) {
+      Spacer
+      HStack(spacing: 0) {
+        Spacer
+        Padding(horizontal: 24, vertical: 0) {
+          MinWidth(560) {
+            MaxWidth(620) {
+              Card(hover_strength: 0.0, hover_elevation: 0.0, background: "#181d25", border_color: "#2b3240") {
           VStack(spacing: 12) {
             HStack(spacing: 8) {
               Text("検索")
@@ -107,7 +112,9 @@ app AfterEffectsStudio {
               Spacer
               Button("Esc", action: toggle_command_palette, tone: secondary, size: small)
             }
-            CommandPalette(action: execute_command, placeholder: "画面、新規作成、プリセット、ツール、ワークスペースを検索...") {
+            Grow(1) {
+              ScrollView(360) {
+                CommandPalette(action: execute_command, placeholder: "画面、新規作成、プリセット、ツール、ワークスペースを検索...") {
               Command("go_home", "画面: ホームへ移動")
               Command("go_projects", "画面: プロジェクト一覧")
               Command("go_settings", "画面: 環境設定", hint: "⌘,")
@@ -198,13 +205,20 @@ app AfterEffectsStudio {
               Command("add_corner_pin", "エフェクト: コーナーピン (8-DOF 透視)")
               Command("add_colorama", "エフェクト: Colorama (カラーサイクル)")
               Command("export_run_qc", "書き出し: 書き出し前 QC 品質検査 (黒フレーム/ROI/輝度)")
+                }
+              }.frame(height: 360)
             }
           }
           .padding(16)
-          .relative_frame(height: 0.72, min_height: 280, max_height: 440)
         }
         .material(GlassCard)
+        .frame(height: 480)
+            }
+          }
+        }
+        Spacer
       }
+      Spacer
     }
   }
 
@@ -218,15 +232,18 @@ app AfterEffectsStudio {
         }
       }
     } else {
-      ZStack {
-        MainContent()
-        If(command_palette_open) {
+      If(command_palette_open) {
+        ZStack {
+          MainContent()
           ZStack {
             Surface(padding: 0, spacing: 0, radius: 0, border: false, background: "#06090f") { Spacer }.opacity(modal_scrim_opacity)
-            Center { CommandPaletteModal() }
+            CommandPaletteModal()
           }
         }
-        If(project_switch_confirm_open) {
+      } else {
+        ZStack {
+          MainContent()
+          If(project_switch_confirm_open) {
           ZStack {
             Surface(padding: 0, spacing: 0, radius: 0, border: false, background: "#06090f") { Spacer }.opacity(modal_scrim_opacity)
             Center { ProjectSwitchConfirmModal() }
@@ -253,4 +270,5 @@ app AfterEffectsStudio {
       }
     }
   }
+}
 }

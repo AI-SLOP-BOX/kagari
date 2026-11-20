@@ -1,8 +1,8 @@
 component CommandSearchButton() {
     HitArea("検索", action: toggle_command_palette) {
       ZStack {
-        Svg("<svg xmlns='http://www.w3.org/2000/svg' width='214' height='32' viewBox='0 0 214 32'><rect x='0.5' y='0.5' width='213' height='31' rx='15.5' fill='#1c2129' stroke='#2d3442'/></svg>", 214, 32)
-        Padding(horizontal: 12, vertical: 6) {
+        Svg("<svg xmlns='http://www.w3.org/2000/svg' width='136' height='32' viewBox='0 0 136 32'><rect x='0.5' y='0.5' width='135' height='31' rx='15.5' fill='#1c2129' stroke='#2d3442'/></svg>", 136, 32)
+        Padding(horizontal: 10, vertical: 6) {
           HStack(spacing: 8) {
             Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#8d95a2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><path d='m21 21-4.3-4.3'/></svg>", 14, 14)
             Text("検索...", size: 12)
@@ -67,7 +67,7 @@ component AppBar() {
           }
         }
       } else {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
           HStack(spacing: 8) {
             Svg("<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'><rect x='1' y='1' width='22' height='22' rx='6' fill='#1c2129' stroke='#ff8a2a' stroke-width='1.5'/><path d='M12 4.5L17.5 12L12 19.5L6.5 12Z' fill='#ff8a2a'/><path d='M12 8.5L14.8 12L12 15.5L9.2 12Z' fill='#ffd180'/></svg>", 24, 24)
             Text("Kagari Studio", size: 14).weight(semibold)
@@ -101,27 +101,31 @@ component AppBar() {
             }
             Spacer
           }
-          HStack(spacing: 8) {
-            If(editor_page) {
-              Surface(padding: 4, spacing: 0, radius: 5, border: false, background: "#14181f") {
-                HStack(spacing: 8) {
-                  Caption("{project_summary}")
+          If(editor_page) {
+            Surface(padding: 4, spacing: 0, radius: 6, border: false, background: "#14181f") {
+              HStack(spacing: 6) {
+                Caption("{project_summary}")
+                If(save_status != "") {
                   Caption("·")
                   Caption("{save_status}")
                 }
+                Button("保存", action: save_project, tone: primary, size: small)
               }
-              Button("保存", action: save_project, tone: primary, size: small)
             }
-            CommandSearchButton()
-            If(editor_page || export_page) {
-              HitArea("go_settings", action: go_settings) { If(settings_page) {
+          }
+          CommandSearchButton()
+          If(editor_page || export_page) {
+            HitArea("go_settings", action: go_settings) {
+              ZStack {
+                If(settings_page) {
                   Svg("<svg xmlns='http://www.w3.org/2000/svg' width='34' height='32' viewBox='0 0 34 32'><rect x='0.5' y='0.5' width='33' height='31' rx='8' fill='#2a1c16' stroke='#f58c4b'/></svg>", 34, 32)
                 } else {
                   Svg("<svg xmlns='http://www.w3.org/2000/svg' width='34' height='32' viewBox='0 0 34 32'><rect x='0.5' y='0.5' width='33' height='31' rx='8' fill='#1c2129' stroke='#2d3442'/></svg>", 34, 32)
                 }
                 Center {
                   Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#d8dee4' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z'/><circle cx='12' cy='12' r='3'/></svg>", 16, 16)
-                } }
+                }
+              }
             }
           }
         }

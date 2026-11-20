@@ -153,8 +153,7 @@ component TimelinePanel() {
           If(!timeline_view_flowchart) {
             If(!wide) { CompactTimelineControls() }
             If(wide) {
-            Wrap(item_spacing: 3, line_spacing: 3) {
-              Caption("時間範囲")
+            Wrap(item_spacing: 2, line_spacing: 3) {
               IconButton("minus", action: timeline_zoom_out, tone: ghost, size: small)
               Caption("{timeline_zoom_label}")
               IconButton("add", action: timeline_zoom_in, tone: ghost, size: small)
@@ -190,12 +189,12 @@ component TimelinePanel() {
             HStack(spacing: 4) {
               Caption("再生範囲")
               Caption("開始f")
-              MaxWidth(70) { TextField(work_area_start_frame, "0", action: work_area_start_frame_changed) }
-              Button("現在位置", action: set_playback_range_start, tone: ghost, size: small)
+              MaxWidth(54) { TextField(work_area_start_frame, "0", action: work_area_start_frame_changed) }
+              Button("現在", action: set_playback_range_start, tone: ghost, size: small)
               Caption("終了f")
-              MaxWidth(70) { TextField(work_area_end_frame, "0", action: work_area_end_frame_changed) }
-              Button("現在位置", action: set_playback_range_end, tone: ghost, size: small)
-              Caption("{work_area_label}")
+              MaxWidth(54) { TextField(work_area_end_frame, "0", action: work_area_end_frame_changed) }
+              Button("現在", action: set_playback_range_end, tone: ghost, size: small)
+              If(work_area_label != "") { Caption("{work_area_label}") }
               Button("解除", action: clear_playback_range, tone: ghost, size: small)
             }
           } else {
