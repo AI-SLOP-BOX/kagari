@@ -178,11 +178,11 @@ impl AfterEffectsStudio {
                                     .saturating_mul(4)
                         }) {
                             let pixels = if self.node_graph_live_preview {
-                                self.evaluate_compositor_graph_rgba8(
+                                std::sync::Arc::new(self.evaluate_compositor_graph_rgba8(
                                     preview_width,
                                     preview_height,
-                                    pixels,
-                                )
+                                    pixels.as_ref().clone(),
+                                ))
                             } else {
                                 pixels
                             };
