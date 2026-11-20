@@ -25,6 +25,10 @@ impl AfterEffectsStudio {
             "node_graph_live_preview",
             Value::Bool(self.node_graph_live_preview),
         );
+        let _ = self.ui.set_binding(
+            "engine_hub_expanded",
+            Value::Bool(self.engine_hub_expanded),
+        );
         let _ = self.ui.set_binding("effect_cat_all", Value::Bool(self.effect_category == "all"));
         let _ = self.ui.set_binding("effect_cat_color", Value::Bool(self.effect_category == "color"));
         let _ = self.ui.set_binding("effect_cat_blur", Value::Bool(self.effect_category == "blur"));

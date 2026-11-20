@@ -135,6 +135,7 @@ pub struct AfterEffectsStudio {
     node_graph_drag_node: Option<(u64, f64, f64)>,
     node_graph_drag_wire: Option<(u64, (f64, f64), (f64, f64))>,
     node_graph_live_preview: bool,
+    engine_hub_expanded: bool,
     effect_category: &'static str,
     clear_cache_confirm: bool,
     settings_category: usize,

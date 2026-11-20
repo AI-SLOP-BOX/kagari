@@ -113,6 +113,7 @@ app AfterEffectsStudio {
               Command("go_settings", "画面: 環境設定", hint: "⌘,")
               Command("go_documents", "画面: ヘルプ / ドキュメント")
               Command("new_project", "プロジェクト: 新規作成", hint: "⌘N")
+              Command("load_demo_vfx_scene", "チュートリアル: VFX サンプルシーンを開く")
               Command("open_project", "プロジェクト: フォルダから開く...")
               Command("quick_start_1080p60", "プリセット: フルHD (1920×1080 · 60fps)")
               Command("quick_start_4k24", "プリセット: 4K (3840×2160 · 24fps)")

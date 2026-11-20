@@ -547,6 +547,7 @@ impl AfterEffectsStudio {
             node_graph_drag_node: None,
             node_graph_drag_wire: None,
             node_graph_live_preview: false,
+            engine_hub_expanded: false,
             effect_category: "all",
             color_wheel_drag: None,
             color_wheels_bounds: None,

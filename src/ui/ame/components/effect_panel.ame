@@ -184,23 +184,29 @@ component ColorWorkspacePanel() {
       Caption("Lift: {color_lift_label} · Gamma: {color_gamma_label} · Gain: {color_gain_label}")
     } } }
     Card { Padding(8) { VStack(spacing: 5) {
-      HStack(spacing: 6) { Text("VFX エンジン統合ハブ", size: 14).weight(semibold) Spacer }
-      Wrap(item_spacing: 3, line_spacing: 3) {
-        Button("スコープ計測", action: engine_analyze_color_scopes, tone: ghost, size: small)
-        Button("グレイン解析", action: engine_analyze_film_grain, tone: ghost, size: small)
-        Button("ProKeyer", action: engine_run_pro_keyer, tone: ghost, size: small)
-        Button("DAG/ROI", action: engine_run_deep_and_node_graph, tone: ghost, size: small)
-        Button("Roto調整", action: engine_run_roto_refine, tone: ghost, size: small)
-        Button("MoGraph3D", action: engine_run_mograph_cloner, tone: ghost, size: small)
-        Button("3Dカメラ/歪み", action: engine_run_sfm_and_lens, tone: ghost, size: small)
-        Button("クリーンプレート", action: engine_run_temporal_cleanplate, tone: ghost, size: small)
-        Button("Composer", action: engine_apply_composer_preset, tone: ghost, size: small)
-        Button("Pucker/Twist", action: engine_apply_shape_pucker_twist, tone: ghost, size: small)
-        Button("自動プロキシ", action: engine_auto_proxy_step, tone: ghost, size: small)
-        Button("Cryptomatte", action: engine_run_cryptomatte, tone: ghost, size: small)
-        Button("ACES 1.3", action: engine_run_aces_check, tone: ghost, size: small)
+      HStack(spacing: 6) {
+        Text("VFX エンジン統合ハブ", size: 14).weight(semibold)
+        Spacer
+        If(engine_hub_expanded) { Button("閉じる", action: engine_hub_toggle, tone: ghost, size: small) } else { Button("展開 (13機能)", action: engine_hub_toggle, tone: ghost, size: small) }
       }
-      Caption("{engine_hub_status}")
+      If(engine_hub_expanded) {
+        Wrap(item_spacing: 3, line_spacing: 3) {
+          Button("スコープ計測", action: engine_analyze_color_scopes, tone: ghost, size: small)
+          Button("グレイン解析", action: engine_analyze_film_grain, tone: ghost, size: small)
+          Button("ProKeyer", action: engine_run_pro_keyer, tone: ghost, size: small)
+          Button("DAG/ROI", action: engine_run_deep_and_node_graph, tone: ghost, size: small)
+          Button("Roto調整", action: engine_run_roto_refine, tone: ghost, size: small)
+          Button("MoGraph3D", action: engine_run_mograph_cloner, tone: ghost, size: small)
+          Button("3Dカメラ/歪み", action: engine_run_sfm_and_lens, tone: ghost, size: small)
+          Button("クリーンプレート", action: engine_run_temporal_cleanplate, tone: ghost, size: small)
+          Button("Composer", action: engine_apply_composer_preset, tone: ghost, size: small)
+          Button("Pucker/Twist", action: engine_apply_shape_pucker_twist, tone: ghost, size: small)
+          Button("自動プロキシ", action: engine_auto_proxy_step, tone: ghost, size: small)
+          Button("Cryptomatte", action: engine_run_cryptomatte, tone: ghost, size: small)
+          Button("ACES 1.3", action: engine_run_aces_check, tone: ghost, size: small)
+        }
+        Caption("{engine_hub_status}")
+      }
     } } }
     EffectPanel()
   }

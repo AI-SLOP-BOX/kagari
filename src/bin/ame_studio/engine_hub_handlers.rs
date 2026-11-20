@@ -596,8 +596,34 @@ impl AfterEffectsStudio {
                 };
                 true
             }
+            "engine_hub_toggle" => {
+                self.engine_hub_expanded = !self.engine_hub_expanded;
+                true
+            }
+            "load_demo_vfx_scene" => {
+                self.load_demo_vfx_scene();
+                true
+            }
             _ => false,
         }
+    }
+
+    fn load_demo_vfx_scene(&mut self) {
+        self.screen = Screen::Editor;
+        self.render_queue = false;
+        self.add_ae_generator_layer(2, "VFX 背景グラデーション");
+        self.add_saber_beam_layer();
+        self.add_3d_extruded_shape();
+        self.add_tracked_3d_camera();
+        #[cfg(feature = "wgpu")]
+        self.node_graph_insert_before_out(
+            "SapphireGlow",
+            kagari_vfx::core::compositor_node_graph::NodeKind::SapphireOptical(Default::default()),
+        );
+        self.node_graph_evaluate_current_frame();
+        self.engine_hub_status =
+            "VFX サンプルシーン構築完了 (非破壊グラデ + Saber + 3D押し出し + SfMカメラ + DAG)"
+                .to_owned();
     }
 
     fn run_export_qc_check(&mut self) {
@@ -2441,5 +2467,29 @@ mod engine_hub_tests {
         .unwrap();
         assert!(app.render_status.contains("DataWindow="));
         let _ = id1;
+    }
+
+    #[test]
+    fn demo_vfx_scene_and_hub_toggle_work() {
+        let mut app = AfterEffectsStudio::new().expect("studio app");
+        assert!(!app.engine_hub_expanded);
+        app.handle_action(HostAction {
+            name: "engine_hub_toggle".to_owned(),
+            value: None,
+            target: None,
+        })
+        .unwrap();
+        assert!(app.engine_hub_expanded);
+
+        let base_layers = app.project_model.active_composition().layers.len();
+        app.handle_action(HostAction {
+            name: "load_demo_vfx_scene".to_owned(),
+            value: None,
+            target: None,
+        })
+        .unwrap();
+        assert_eq!(app.screen, Screen::Editor);
+        assert!(app.project_model.active_composition().layers.len() >= base_layers + 4);
+        assert!(app.engine_hub_status.contains("VFX サンプルシーン構築完了"));
     }
 }

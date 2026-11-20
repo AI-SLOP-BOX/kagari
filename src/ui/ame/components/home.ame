@@ -8,11 +8,13 @@ component HomeHeader() {
         VStack(spacing: 10) {
           HomeActionNewCard()
           HomeActionOpenCard()
+          HomeActionDemoCard()
         }
       } else {
         HStack(spacing: 14) {
           Grow(1) { HomeActionNewCard() }
           Grow(1) { HomeActionOpenCard() }
+          Grow(1) { HomeActionDemoCard() }
         }
       }
     }
@@ -42,6 +44,20 @@ component HomeActionOpenCard() {
           }
           Spacer
           Button("参照", action: open_project, tone: ghost, size: small)
+        }
+      } }
+  }
+
+component HomeActionDemoCard() {
+    HitArea("load_demo_vfx_scene", action: load_demo_vfx_scene) { Card(padding: 16, spacing: 6) {
+        HStack(spacing: 14) {
+          Svg("<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 44 44'><rect width='44' height='44' rx='10' fill='#282018' stroke='#ff8a2a' stroke-width='1.4'/><path d='M22 11l2.8 7.2L32 21l-7.2 2.8L22 31l-2.8-7.2L12 21l7.2-2.8z' fill='#ff8a2a'/></svg>", 44, 44)
+          VStack(spacing: 3) {
+            Text("VFX サンプルを開く", size: 16).weight(semibold)
+            Text("Saber・3D・ノード作例")
+          }
+          Spacer
+          Button("体験", action: load_demo_vfx_scene, tone: primary, size: small)
         }
       } }
   }

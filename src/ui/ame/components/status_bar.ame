@@ -18,6 +18,18 @@ component StatusBar() {
               Caption("({preview_fallback_reason})")
             }
             Spacer
+            Surface(padding: 2, spacing: 0, radius: 6, border: true, background: "#141820") {
+              HStack(spacing: 2) {
+                If(is_default_workspace) { Button("編集", action: workspace_default, tone: primary, size: small) } else { Button("編集", action: workspace_default, tone: ghost, size: small) }
+                If(is_graph_workspace) { Button("グラフ", action: workspace_graph, tone: primary, size: small) } else { Button("グラフ", action: workspace_graph, tone: ghost, size: small) }
+                If(timeline_view_flowchart) { Button("ノード", action: timeline_view_flowchart, tone: primary, size: small) } else { Button("ノード", action: timeline_view_flowchart, tone: ghost, size: small) }
+                If(is_effects_workspace) { Button("エフェクト", action: workspace_effects, tone: primary, size: small) } else { Button("エフェクト", action: workspace_effects, tone: ghost, size: small) }
+                If(is_camera_light_workspace) { Button("3D", action: workspace_camera_light, tone: primary, size: small) } else { Button("3D", action: workspace_camera_light, tone: ghost, size: small) }
+                If(is_color_workspace) { Button("カラー", action: workspace_color, tone: primary, size: small) } else { Button("カラー", action: workspace_color, tone: ghost, size: small) }
+                If(export_page) { Button("書き出し", action: go_export, tone: primary, size: small) } else { Button("書き出し", action: go_export, tone: ghost, size: small) }
+              }
+            }
+            Spacer
             Caption("{current_time}")
             Caption("·")
             Caption("{save_status}")

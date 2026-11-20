@@ -739,3 +739,5 @@
   action node_graph_add_over_merge;
   action node_graph_auto_layout;
   action toggle_node_graph_preview;
+  action engine_hub_toggle;
+  action load_demo_vfx_scene;

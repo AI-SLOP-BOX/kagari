@@ -602,6 +602,7 @@
   bind engine_hub_status: String = "エンジン統合ハブ待機中";
   bind node_graph_status: String = "DAG準備完了";
   bind node_graph_live_preview: Bool = false;
+  bind engine_hub_expanded: Bool = false;
   bind effect_cat_all: Bool = true;
   bind effect_cat_color: Bool = false;
   bind effect_cat_blur: Bool = false;
