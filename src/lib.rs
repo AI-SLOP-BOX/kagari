@@ -6,18 +6,6 @@
 
 pub mod core;
 
-#[cfg(feature = "gui")]
-#[path = "legacy_egui/mod.rs"]
-pub mod ui;
-
-#[cfg(feature = "gui")]
-pub mod app_state;
-
-#[cfg(feature = "gui")]
-pub use app_state::DragTransaction;
-#[cfg(feature = "gui")]
-pub use app_state::KagariApp;
-
 pub use core::automation;
 pub use core::ffmpeg_export::ExportEvent;
 pub use core::timeline::Project;

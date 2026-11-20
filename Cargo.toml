@@ -10,12 +10,6 @@ keywords = ["vfx", "compositing", "motion-graphics", "video", "rendering"]
 categories = ["multimedia", "graphics"]
 
 [dependencies]
-eframe = { version = "0.29", default-features = false, features = [
-    "default_fonts",  # REQUIRED: embeds egui default fonts — without this NO text renders!
-    "wgpu",
-    "wayland",
-    "x11",
-], optional = true }
 winit = { version = "0.30", optional = true }
 pollster = { version = "0.3", optional = true }
 ame-ui = { path = "../AmeUI", optional = true }
@@ -34,17 +28,10 @@ wgpu = { version = "22", optional = true }
 rhai = { version = "1.18", features = ["sync"] }
 # rand: for film grain and procedural noise
 rand = "0.8"
-# egui_extras for SVG icon rendering support
-egui_extras = { version = "0.29", features = ["svg"], optional = true }
-# egui-phosphor: professional icon font for crisp UI glyphs
-egui-phosphor = { version = "0.7", optional = true }
-sys-locale = { version = "0.3.2", optional = true }
 # rfd for native OS file dialogs (macOS / Windows / Linux)
 rfd = { version = "0.14", optional = true }
 # rayon for multi-core parallel pixel sweeps
 rayon = "1.8"
-# rodio: audio playback for synced AV preview (gui only)
-rodio = { version = "0.19", optional = true }
 # Symphonia: in-process decoding for imported audio assets and waveform analysis
 symphonia = { version = "0.5.5", default-features = false, features = [
     "aac",
@@ -91,7 +78,6 @@ pollster = "0.3"
 
 [features]
 default = ["ame"]
-gui = ["dep:eframe", "dep:egui_extras", "dep:rfd", "dep:rodio", "dep:egui-phosphor", "dep:sys-locale", "wgpu", "exr-compression"]
 preview = ["dep:winit", "dep:pollster", "wgpu"]
 cli = ["dep:clap", "dep:png", "exr-compression"]
 cli-gpu = ["cli", "dep:pollster", "wgpu"]
@@ -111,11 +97,6 @@ required-features = ["cli"]
 name = "kagari-studio"
 path = "src/bin/ame_studio.rs"
 required-features = ["ame"]
-
-[[bin]]
-name = "kagari-studio-egui"
-path = "src/main.rs"
-required-features = ["gui"]
 
 [[bin]]
 name = "kagari-preview"

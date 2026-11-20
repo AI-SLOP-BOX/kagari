@@ -703,16 +703,15 @@ fn production_source(path: &str) -> String {
 #[test]
 fn application_connects_the_async_render_worker() {
     let sources = [
-        "src/app_state/mod.rs",
-        "src/app_state/initialization.rs",
+        "src/bin/ame_studio.rs",
         "src/bin/ame_studio/preview_workers.rs",
         "src/bin/preview.rs",
     ]
     .map(production_source)
     .join("\n");
     assert!(
-        sources.contains("RenderPipeline::new(") || sources.contains("RenderPipeline::new_cancellable("),
-        "RenderPipeline exists only in tests; connect the application worker before accepting the bridge"
+        sources.contains("spawn_viewport_preview_renderer"),
+        "Async render worker exists only in tests; connect the application worker before accepting the bridge"
     );
 }
 
@@ -724,7 +723,7 @@ fn application_connects_native_ae_execution() {
         "src/core/effect_plugin.rs",
         "src/core/effect_plugin/registry.rs",
         "src/core/aegp_sdk_bridge.rs",
-        "src/app_state/mod.rs",
+        "src/bin/ame_studio.rs",
     ]
     .map(production_source)
     .join("\n");
@@ -736,31 +735,19 @@ fn application_connects_native_ae_execution() {
 
 #[test]
 fn file_menu_uses_the_standard_otio_adapter() {
-    let source = production_source("src/legacy_egui/menu/file_edit.rs");
-    let export = source
-        .split("fn draw_export_otio(")
-        .nth(1)
-        .unwrap()
-        .split("\nfn ")
-        .next()
-        .unwrap();
-    let import = source
-        .split("fn draw_import_otio(")
-        .nth(1)
-        .unwrap()
-        .split("\nfn ")
-        .next()
-        .unwrap();
+    let export_source = production_source("src/bin/ame_studio/export.rs");
+    let import_source = production_source("src/bin/ame_studio/project_io/save.rs");
     assert!(
-        export.contains(".to_json("),
-        "File menu bypasses standard OTIO serialization"
+        export_source.contains("OtioTimeline::from_composition(")
+            && export_source.contains(".to_json("),
+        "AmeStudio export bypasses standard OTIO serialization"
     );
     assert!(
-        import.contains("OtioTimeline::from_json("),
-        "File menu bypasses standard OTIO parsing"
+        import_source.contains("OtioTimeline::from_json("),
+        "AmeStudio import bypasses standard OTIO parsing"
     );
     assert!(
-        !import.contains("p.compositions[0] ="),
+        !import_source.contains("p.compositions[0] ="),
         "OTIO import must not overwrite the first composition instead of the requested target"
     );
 }

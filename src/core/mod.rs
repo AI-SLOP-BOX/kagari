@@ -6,8 +6,6 @@ pub mod aegp_sdk_bridge;
 pub mod atomic_file;
 pub mod audio_dsp;
 pub mod audio_engine;
-#[cfg(feature = "gui")]
-pub mod audio_playback;
 pub mod audio_spectrum;
 pub mod audio_to_keyframes;
 pub mod audio_types;
