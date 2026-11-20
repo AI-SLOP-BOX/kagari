@@ -589,8 +589,10 @@ impl AfterEffectsStudio {
             }
             "toggle_node_graph_preview" => {
                 self.node_graph_live_preview = !self.node_graph_live_preview;
+                self.preview_revision = self.preview_revision.wrapping_add(1);
+                self.preview_cache.clear();
                 self.node_graph_status = if self.node_graph_live_preview {
-                    "DAGライブ合成モード: ON (QC/書き出しにノードグラフ適用)".to_owned()
+                    "DAGライブ合成モード: ON (ビューポート/QCへリアルタイム適用)".to_owned()
                 } else {
                     "DAGライブ合成モード: OFF".to_owned()
                 };
@@ -1538,6 +1540,33 @@ impl AfterEffectsStudio {
             "Optical Flow 時間補間 (t=0.5): {} bytes 生成・フレームブレンド有効化",
             interp.len()
         );
+    }
+
+    pub(crate) fn evaluate_compositor_graph_rgba8(
+        &self,
+        w: u32,
+        h: u32,
+        rgba8: Vec<u8>,
+    ) -> Vec<u8> {
+        let rgba_f32: Vec<f32> = rgba8.iter().map(|&b| f32::from(b) / 255.0).collect();
+        let mut inputs = std::collections::HashMap::new();
+        if let Ok(fb) =
+            kagari_vfx::core::compositor_node_graph::FrameBufferF32::new(w, h, rgba_f32, None)
+        {
+            inputs.insert(1u64, fb);
+        }
+        #[cfg(feature = "wgpu")]
+        let res = self.compositor_graph.evaluate(&inputs, 999, None);
+        #[cfg(not(feature = "wgpu"))]
+        let res = self.compositor_graph.evaluate(&inputs, 999);
+        match res {
+            Ok(out) => out
+                .rgba
+                .into_iter()
+                .map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8)
+                .collect(),
+            Err(_) => rgba8,
+        }
     }
 
     fn node_graph_insert_before_out(
@@ -2614,5 +2643,10 @@ mod engine_hub_tests {
             108.0,
         )));
         assert_eq!(app.corner_pin_drag, None);
+
+        // Live compositor viewport helper check
+        let sample = vec![128u8; 8 * 8 * 4];
+        let out = app.evaluate_compositor_graph_rgba8(8, 8, sample.clone());
+        assert_eq!(out.len(), sample.len());
     }
 }

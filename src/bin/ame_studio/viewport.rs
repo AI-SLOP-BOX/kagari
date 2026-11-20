@@ -177,6 +177,15 @@ impl AfterEffectsStudio {
                                     .saturating_mul(preview_height as usize)
                                     .saturating_mul(4)
                         }) {
+                            let pixels = if self.node_graph_live_preview {
+                                self.evaluate_compositor_graph_rgba8(
+                                    preview_width,
+                                    preview_height,
+                                    pixels,
+                                )
+                            } else {
+                                pixels
+                            };
                             let image = vello::peniko::ImageData {
                                 data: vello::peniko::Blob::new(pixels),
                                 format: vello::peniko::ImageFormat::Rgba8,
