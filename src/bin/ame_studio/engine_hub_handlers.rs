@@ -1796,6 +1796,49 @@ impl AfterEffectsStudio {
                 None,
                 &Circle::new((rect.x1, cy), 3.5),
             );
+
+            // Draw crisp node-type vector glyph inside the node card
+            let cx = (rect.x0 + rect.x1) * 0.5;
+            let gy = cy + 4.0;
+            match node.kind {
+                kagari_vfx::core::compositor_node_graph::NodeKind::MediaIn => {
+                    let mut p = BezPath::new();
+                    p.move_to((cx - 5.0, gy - 6.0));
+                    p.line_to((cx + 6.0, gy));
+                    p.line_to((cx - 5.0, gy + 6.0));
+                    p.close_path();
+                    scene.fill(Fill::NonZero, Affine::IDENTITY, accent, None, &p);
+                }
+                kagari_vfx::core::compositor_node_graph::NodeKind::ColorWheelGrade(_) => {
+                    scene.stroke(&Stroke::new(1.8), Affine::IDENTITY, accent, None, &Circle::new((cx, gy), 7.0));
+                    scene.fill(Fill::NonZero, Affine::IDENTITY, accent, None, &Circle::new((cx + 2.5, gy - 1.5), 2.2));
+                }
+                kagari_vfx::core::compositor_node_graph::NodeKind::GaussianBlur { .. } => {
+                    scene.stroke(&Stroke::new(1.4), Affine::IDENTITY, accent, None, &Circle::new((cx, gy), 7.5));
+                    scene.stroke(&Stroke::new(1.2), Affine::IDENTITY, accent, None, &Circle::new((cx, gy), 4.0));
+                }
+                kagari_vfx::core::compositor_node_graph::NodeKind::ProKeyer(_) => {
+                    let mut p = BezPath::new();
+                    p.move_to((cx, gy - 7.0));
+                    p.line_to((cx + 7.0, gy));
+                    p.line_to((cx, gy + 7.0));
+                    p.line_to((cx - 7.0, gy));
+                    p.close_path();
+                    scene.stroke(&Stroke::new(1.6), Affine::IDENTITY, accent, None, &p);
+                }
+                kagari_vfx::core::compositor_node_graph::NodeKind::MediaOut => {
+                    let mon = RoundedRect::from_rect(Rect::new(cx - 8.0, gy - 5.5, cx + 8.0, gy + 5.5), 2.0);
+                    scene.stroke(&Stroke::new(1.6), Affine::IDENTITY, accent, None, &mon);
+                }
+                _ => {
+                    let mut p = BezPath::new();
+                    p.move_to((cx - 7.0, gy));
+                    p.line_to((cx + 7.0, gy));
+                    p.move_to((cx, gy - 6.0));
+                    p.line_to((cx, gy + 6.0));
+                    scene.stroke(&Stroke::new(1.6), Affine::IDENTITY, accent, None, &p);
+                }
+            }
         }
         if let Some((_, p0, p1)) = self.node_graph_drag_wire {
             let dx = ((p1.0 - p0.0).abs() * 0.45).max(16.0);
