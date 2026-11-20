@@ -741,3 +741,5 @@
   action toggle_node_graph_preview;
   action engine_hub_toggle;
   action load_demo_vfx_scene;
+  action tutorial_next;
+  action tutorial_close;

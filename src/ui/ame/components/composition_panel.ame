@@ -199,6 +199,16 @@ component CompositionPanel() {
 
 component CompositionPreview() {
   VStack(spacing: 4) {
+    If(tutorial_active) {
+      Surface(padding: 6, spacing: 0, radius: 5, border: true, background: "#1b1610") {
+        HStack(spacing: 8) {
+          Caption("{tutorial_text}")
+          Spacer
+          Button("次へ", action: tutorial_next, tone: primary, size: small)
+          Button("閉じる", action: tutorial_close, tone: ghost, size: small)
+        }
+      }
+    }
     CompositionHeader()
     CompositionViewerPanel()
   }

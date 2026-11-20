@@ -256,6 +256,112 @@ impl AfterEffectsStudio {
             }
         }
 
+        // Interactive 4-corner drag gizmo for CornerPin / MeshWarp on the selected layer
+        if !event.modifiers.alt {
+            let (comp_w, comp_h) = {
+                let comp = self.project_model.active_composition();
+                (
+                    f64::from(comp.width.max(1)),
+                    f64::from(comp.height.max(1)),
+                )
+            };
+            match event.phase {
+                CanvasPointerPhase::Down => {
+                    if let Some(layer_id) = self.selected_layer_id.as_deref() {
+                        let comp = self.project_model.active_composition();
+                        if let Some(layer) = comp.layers.iter().find(|l| l.id == layer_id && !l.locked) {
+                            for eff in layer.effects.iter().filter(|e| e.enabled) {
+                                let corners = match &eff.effect_type {
+                                    kagari_vfx::core::timeline::EffectType::CornerPin {
+                                        top_left,
+                                        top_right,
+                                        bottom_right,
+                                        bottom_left,
+                                    }
+                                    | kagari_vfx::core::timeline::EffectType::MeshWarp {
+                                        top_left,
+                                        top_right,
+                                        bottom_right,
+                                        bottom_left,
+                                    } => Some([
+                                        top_left.evaluate(self.current_frame),
+                                        top_right.evaluate(self.current_frame),
+                                        bottom_right.evaluate(self.current_frame),
+                                        bottom_left.evaluate(self.current_frame),
+                                    ]),
+                                    _ => None,
+                                };
+                                if let Some(pts) = corners {
+                                    for (idx, p) in pts.iter().enumerate() {
+                                        let sx = left + f64::from(p[0]) * comp_w * scale_x;
+                                        let sy = top + f64::from(p[1]) * comp_h * scale_y;
+                                        let dx = event.x - sx;
+                                        let dy = event.y - sy;
+                                        if dx * dx + dy * dy <= 196.0 {
+                                            self.corner_pin_drag = Some(idx);
+                                            return true;
+                                        }
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                CanvasPointerPhase::Moved if self.corner_pin_drag.is_some() => {
+                    if let (Some(idx), Some(layer_id)) =
+                        (self.corner_pin_drag, self.selected_layer_id.clone())
+                    {
+                        let nx = (point[0] / comp_w).clamp(-0.5, 1.5) as f32;
+                        let ny = (point[1] / comp_h).clamp(-0.5, 1.5) as f32;
+                        if let Some(layer) = self
+                            .project_model
+                            .active_composition_mut()
+                            .layers
+                            .iter_mut()
+                            .find(|l| l.id == layer_id && !l.locked)
+                        {
+                            for eff in layer.effects.iter_mut().filter(|e| e.enabled) {
+                                match &mut eff.effect_type {
+                                    kagari_vfx::core::timeline::EffectType::CornerPin {
+                                        top_left,
+                                        top_right,
+                                        bottom_right,
+                                        bottom_left,
+                                    }
+                                    | kagari_vfx::core::timeline::EffectType::MeshWarp {
+                                        top_left,
+                                        top_right,
+                                        bottom_right,
+                                        bottom_left,
+                                    } => {
+                                        let target = match idx {
+                                            0 => top_left,
+                                            1 => top_right,
+                                            2 => bottom_right,
+                                            _ => bottom_left,
+                                        };
+                                        *target = kagari_vfx::core::timeline::Animatable::new_constant([nx, ny]);
+                                        self.mark_project_changed();
+                                        return true;
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                    return true;
+                }
+                CanvasPointerPhase::Up | CanvasPointerPhase::Cancelled
+                    if self.corner_pin_drag.is_some() =>
+                {
+                    self.corner_pin_drag = None;
+                    return true;
+                }
+                _ => {}
+            }
+        }
+
         // 3D Camera interactive navigation: Alt + Primary (Orbit), Alt + Secondary (Pan), Alt + Shift / Tertiary (Dolly)
         if event.phase == CanvasPointerPhase::Down && event.modifiers.alt {
             let comp = self.project_model.active_composition();

@@ -144,6 +144,71 @@ impl AfterEffectsStudio {
                     );
                 }
 
+                // Draw interactive 4-corner gizmo for enabled CornerPin / MeshWarp effects
+                let comp_w = f64::from(composition.width.max(1));
+                let comp_h = f64::from(composition.height.max(1));
+                for eff in layer.effects.iter().filter(|e| e.enabled) {
+                    let corners = match &eff.effect_type {
+                        kagari_vfx::core::timeline::EffectType::CornerPin {
+                            top_left,
+                            top_right,
+                            bottom_right,
+                            bottom_left,
+                        }
+                        | kagari_vfx::core::timeline::EffectType::MeshWarp {
+                            top_left,
+                            top_right,
+                            bottom_right,
+                            bottom_left,
+                        } => Some([
+                            top_left.evaluate(frame_index),
+                            top_right.evaluate(frame_index),
+                            bottom_right.evaluate(frame_index),
+                            bottom_left.evaluate(frame_index),
+                        ]),
+                        _ => None,
+                    };
+                    if let Some(pts) = corners {
+                        let screen_pts: [(f64, f64); 4] = pts.map(|p| {
+                            (
+                                map_left + f64::from(p[0]) * comp_w * scale_x,
+                                map_top + f64::from(p[1]) * comp_h * scale_y,
+                            )
+                        });
+                        let mut quad = BezPath::new();
+                        quad.move_to(screen_pts[0]);
+                        quad.line_to(screen_pts[1]);
+                        quad.line_to(screen_pts[2]);
+                        quad.line_to(screen_pts[3]);
+                        quad.close_path();
+                        scene.stroke(
+                            &Stroke::new(1.5),
+                            Affine::IDENTITY,
+                            Color::from_rgb8(56, 224, 255),
+                            None,
+                            &quad,
+                        );
+                        for sp in screen_pts {
+                            let c = vello::kurbo::Circle::new(sp, 5.5);
+                            scene.fill(
+                                Fill::NonZero,
+                                Affine::IDENTITY,
+                                Color::from_rgb8(255, 148, 56),
+                                None,
+                                &c,
+                            );
+                            scene.stroke(
+                                &Stroke::new(1.2),
+                                Affine::IDENTITY,
+                                Color::WHITE,
+                                None,
+                                &c,
+                            );
+                        }
+                        break;
+                    }
+                }
+
                 // Draw AE Anchor Point crosshair circle
                 let anchor_circle =
                     vello::kurbo::Circle::new((anchor_screen_x, anchor_screen_y), 5.0);

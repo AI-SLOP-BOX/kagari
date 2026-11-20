@@ -548,6 +548,8 @@ impl AfterEffectsStudio {
             node_graph_drag_wire: None,
             node_graph_live_preview: false,
             engine_hub_expanded: false,
+            corner_pin_drag: None,
+            tutorial_step: 0,
             effect_category: "all",
             color_wheel_drag: None,
             color_wheels_bounds: None,

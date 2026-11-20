@@ -604,6 +604,18 @@ impl AfterEffectsStudio {
                 self.load_demo_vfx_scene();
                 true
             }
+            "tutorial_next" => {
+                self.tutorial_step = if self.tutorial_step >= 4 {
+                    0
+                } else {
+                    self.tutorial_step + 1
+                };
+                true
+            }
+            "tutorial_close" => {
+                self.tutorial_step = 0;
+                true
+            }
             _ => false,
         }
     }
@@ -611,6 +623,7 @@ impl AfterEffectsStudio {
     fn load_demo_vfx_scene(&mut self) {
         self.screen = Screen::Editor;
         self.render_queue = false;
+        self.tutorial_step = 1;
         self.add_ae_generator_layer(2, "VFX 背景グラデーション");
         self.add_saber_beam_layer();
         self.add_3d_extruded_shape();
@@ -2491,5 +2504,72 @@ mod engine_hub_tests {
         assert_eq!(app.screen, Screen::Editor);
         assert!(app.project_model.active_composition().layers.len() >= base_layers + 4);
         assert!(app.engine_hub_status.contains("VFX サンプルシーン構築完了"));
+    }
+
+    #[test]
+    fn corner_pin_viewport_gizmo_drag_and_tutorial_work() {
+        let mut app = AfterEffectsStudio::new().expect("studio app");
+        app.handle_action(HostAction {
+            name: "load_demo_vfx_scene".to_owned(),
+            value: None,
+            target: None,
+        })
+        .unwrap();
+        assert_eq!(app.tutorial_step, 1);
+        for expected in [2usize, 3, 4, 0] {
+            app.handle_action(HostAction {
+                name: "tutorial_next".to_owned(),
+                value: None,
+                target: None,
+            })
+            .unwrap();
+            assert_eq!(app.tutorial_step, expected);
+        }
+
+        app.handle_action(HostAction {
+            name: "add_solid_layer".to_owned(),
+            value: None,
+            target: None,
+        })
+        .unwrap();
+        app.handle_action(HostAction {
+            name: "add_corner_pin".to_owned(),
+            value: None,
+            target: None,
+        })
+        .unwrap();
+        app.viewport_mapping = Some((0.0, 0.0, 1.0, 1.0));
+        let make_event = |phase, x, y| ame_ui::CanvasPointerEvent {
+            phase,
+            kind: ame_ui::CanvasPointerKind::Mouse,
+            pointer_id: None,
+            click_count: 1,
+            x,
+            y,
+            button: Some(ame_ui::event::PointerButton::Primary),
+            modifiers: ame_ui::event::KeyModifiers::default(),
+            pressure: None,
+            tilt: None,
+            coalesced_samples: Vec::new(),
+            space_pressed: false,
+        };
+        // Grab top-left corner at (0, 0) and drag to (192, 108)
+        assert!(app.handle_viewport_canvas_pointer(make_event(
+            CanvasPointerPhase::Down,
+            0.0,
+            0.0,
+        )));
+        assert_eq!(app.corner_pin_drag, Some(0));
+        assert!(app.handle_viewport_canvas_pointer(make_event(
+            CanvasPointerPhase::Moved,
+            192.0,
+            108.0,
+        )));
+        assert!(app.handle_viewport_canvas_pointer(make_event(
+            CanvasPointerPhase::Up,
+            192.0,
+            108.0,
+        )));
+        assert_eq!(app.corner_pin_drag, None);
     }
 }
