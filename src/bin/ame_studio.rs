@@ -26,7 +26,7 @@ mod ame_studio_asset_placement;
 mod ame_studio_effect_edit_ops;
 #[path = "ame_studio/effect_ops.rs"]
 mod ame_studio_effect_ops;
-#[path = "ame_studio/engine_hub_handlers.rs"]
+#[path = "ame_studio/engine_hub_handlers/mod.rs"]
 mod ame_studio_engine_hub_handlers;
 #[path = "ame_studio/event_editor_workspace_handlers.rs"]
 mod ame_studio_event_editor_workspace_handlers;
@@ -34,7 +34,7 @@ mod ame_studio_event_editor_workspace_handlers;
 mod ame_studio_event_effect_handlers;
 #[path = "ame_studio/event_graph_handlers.rs"]
 mod ame_studio_event_graph_handlers;
-#[path = "ame_studio/event_handlers.rs"]
+#[path = "ame_studio/event_handlers/mod.rs"]
 mod ame_studio_event_handlers;
 #[path = "ame_studio/event_layer_keyframe_handlers.rs"]
 mod ame_studio_event_layer_keyframe_handlers;
@@ -65,7 +65,7 @@ mod ame_studio_export_video;
 mod ame_studio_icons;
 #[path = "ame_studio/layer_controls.rs"]
 mod ame_studio_layer_controls;
-#[path = "ame_studio/media_import.rs"]
+#[path = "ame_studio/media_import/mod.rs"]
 mod ame_studio_media_import;
 #[path = "ame_studio/media_proxy.rs"]
 mod ame_studio_media_proxy;

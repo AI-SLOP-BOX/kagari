@@ -29,4 +29,6 @@ mod tests {
     mod roto_brush;
     #[path = "ui_render.rs"]
     mod ui_render;
+    #[path = "ui_render_e2e.rs"]
+    mod ui_render_e2e;
 }
