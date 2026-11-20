@@ -442,11 +442,11 @@ unsafe extern "C" fn ofx_memory_alloc(
     }
     let size = n_bytes.max(1);
     let Ok(layout) = std::alloc::Layout::from_size_align(size, 16) else {
-        return super::K_OFX_STAT_ERR_FAILED;
+        return super::K_OFX_STAT_ERR_FATAL;
     };
     let ptr = unsafe { std::alloc::alloc(layout) };
     if ptr.is_null() {
-        return super::K_OFX_STAT_ERR_MEMORY;
+        return super::K_OFX_STAT_ERR_FATAL;
     }
     if let Ok(mut map) = OFX_ALLOCATIONS.lock() {
         map.insert(ptr as usize, layout);
@@ -538,6 +538,11 @@ unsafe extern "C" fn ofx_multi_thread_is_spawned_thread() -> std::ffi::c_int {
     i32::from(OFX_THREAD_STATE.with(|cell| cell.get().1))
 }
 
+struct OfxMutex {
+    locked: std::sync::Mutex<bool>,
+    cv: std::sync::Condvar,
+}
+
 unsafe extern "C" fn ofx_mutex_create(
     mutex: *mut *mut std::ffi::c_void,
     _lock_count: std::ffi::c_int,
@@ -545,7 +550,10 @@ unsafe extern "C" fn ofx_mutex_create(
     if mutex.is_null() {
         return super::K_OFX_STAT_ERR_BAD_HANDLE;
     }
-    let boxed = Box::new(std::sync::Mutex::new(()));
+    let boxed = Box::new(OfxMutex {
+        locked: std::sync::Mutex::new(false),
+        cv: std::sync::Condvar::new(),
+    });
     unsafe {
         *mutex = Box::into_raw(boxed).cast();
     }
@@ -556,7 +564,7 @@ unsafe extern "C" fn ofx_mutex_destroy(mutex: *mut std::ffi::c_void) -> std::ffi
     if mutex.is_null() {
         return super::K_OFX_STAT_ERR_BAD_HANDLE;
     }
-    unsafe { drop(Box::from_raw(mutex.cast::<std::sync::Mutex<()>>())) };
+    unsafe { drop(Box::from_raw(mutex.cast::<OfxMutex>())) };
     super::K_OFX_STAT_OK
 }
 
@@ -564,9 +572,12 @@ unsafe extern "C" fn ofx_mutex_lock(mutex: *mut std::ffi::c_void) -> std::ffi::c
     if mutex.is_null() {
         return super::K_OFX_STAT_ERR_BAD_HANDLE;
     }
-    let m = unsafe { &*mutex.cast::<std::sync::Mutex<()>>() };
-    let guard = m.lock().unwrap_or_else(|e| e.into_inner());
-    std::mem::forget(guard);
+    let m = unsafe { &*mutex.cast::<OfxMutex>() };
+    let mut locked = m.locked.lock().unwrap_or_else(|e| e.into_inner());
+    while *locked {
+        locked = m.cv.wait(locked).unwrap_or_else(|e| e.into_inner());
+    }
+    *locked = true;
     super::K_OFX_STAT_OK
 }
 
@@ -574,8 +585,10 @@ unsafe extern "C" fn ofx_mutex_unlock(mutex: *mut std::ffi::c_void) -> std::ffi:
     if mutex.is_null() {
         return super::K_OFX_STAT_ERR_BAD_HANDLE;
     }
-    let m = unsafe { &*mutex.cast::<std::sync::Mutex<()>>() };
-    unsafe { m.force_unlock() };
+    let m = unsafe { &*mutex.cast::<OfxMutex>() };
+    let mut locked = m.locked.lock().unwrap_or_else(|e| e.into_inner());
+    *locked = false;
+    m.cv.notify_one();
     super::K_OFX_STAT_OK
 }
 
@@ -583,13 +596,13 @@ unsafe extern "C" fn ofx_mutex_try_lock(mutex: *mut std::ffi::c_void) -> std::ff
     if mutex.is_null() {
         return super::K_OFX_STAT_ERR_BAD_HANDLE;
     }
-    let m = unsafe { &*mutex.cast::<std::sync::Mutex<()>>() };
-    match m.try_lock() {
-        Ok(guard) => {
-            std::mem::forget(guard);
-            super::K_OFX_STAT_OK
-        }
-        Err(_) => super::K_OFX_STAT_ERR_FAILED,
+    let m = unsafe { &*mutex.cast::<OfxMutex>() };
+    let mut locked = m.locked.lock().unwrap_or_else(|e| e.into_inner());
+    if *locked {
+        super::K_OFX_STAT_ERR_FATAL
+    } else {
+        *locked = true;
+        super::K_OFX_STAT_OK
     }
 }
 
@@ -632,17 +645,17 @@ unsafe extern "C" fn ofx_message(
     let kind = if message_type.is_null() {
         "OfxMessageLog".to_string()
     } else {
-        unsafe { cstr(message_type) }.unwrap_or_else(|| "OfxMessageLog".to_string())
+        unsafe { cstr(message_type) }.unwrap_or("OfxMessageLog").to_string()
     };
     let id = if message_id.is_null() {
         String::new()
     } else {
-        unsafe { cstr(message_id) }.unwrap_or_default()
+        unsafe { cstr(message_id) }.unwrap_or_default().to_string()
     };
     let msg = if format.is_null() {
         String::new()
     } else {
-        unsafe { cstr(format) }.unwrap_or_default()
+        unsafe { cstr(format) }.unwrap_or_default().to_string()
     };
     match kind.as_str() {
         "OfxMessageError" | "OfxMessageFatal" => log::error!("[OpenFX:{id}] {msg}"),

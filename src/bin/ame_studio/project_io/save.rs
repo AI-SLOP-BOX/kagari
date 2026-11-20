@@ -131,7 +131,7 @@ impl AfterEffectsStudio {
         self.setup_name = "無題のプロジェクト".to_owned();
         self.setup_width = "1920".to_owned();
         self.setup_height = "1080".to_owned();
-        self.setup_fps = "30".to_owned();
+        self.setup_fps = "60".to_owned();
         self.setup_duration_seconds = "10".to_owned();
         self.setup_error.clear();
         self.screen = Screen::ProjectSetup;
@@ -355,7 +355,7 @@ impl AfterEffectsStudio {
         self.apply_autosave_result(job, outcome);
     }
 
-    fn wait_for_autosave(&mut self) {
+    pub(crate) fn wait_for_autosave(&mut self) {
         let Some(mut job) = self.autosave_job.take() else {
             return;
         };

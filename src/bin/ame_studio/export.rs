@@ -698,14 +698,7 @@ impl AfterEffectsStudio {
                         worker_cancel.clone(),
                         false,
                         move |frame| {
-                            kagari_vfx::core::software_renderer::render_frame_to_pixels(
-                                &render_composition,
-                                frame,
-                                width,
-                                height,
-                                0.0,
-                                0,
-                            )
+                            render_export_pixels_gpu_or_cpu(&render_composition, frame, width, height)
                         },
                     );
                 let worker = match result {

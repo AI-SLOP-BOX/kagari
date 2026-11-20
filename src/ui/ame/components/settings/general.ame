@@ -2,7 +2,7 @@ component SettingsGeneralPage() {
   VStack(spacing: 12) {
     VStack(spacing: 4) { Title("一般") Caption("アプリケーションの基本的な動作を設定します。") }
 
-    Card(padding: 12, spacing: 10) {
+    Card(padding: 12, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
       Text("起動と終了", size: 13)
       SettingsRow("起動時の動作", label_width: 170) {
         Checkbox("ホーム画面を開く", show_home_on_startup, action: setting_home_changed)
@@ -29,7 +29,7 @@ component SettingsGeneralPage() {
       }
     }
 
-    Card(padding: 12, spacing: 10) {
+    Card(padding: 12, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
       Text("インターフェース", size: 13)
       SettingsRow("テーマ", label_width: 170) {
         Caption("ダーク (推奨)")
@@ -51,7 +51,7 @@ component SettingsGeneralPage() {
       }
     }
 
-    Card(padding: 12, spacing: 10) {
+    Card(padding: 12, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
       Text("プロジェクト", size: 13)
       SettingsRow("新規プロジェクトの場所", label_width: 190) {
         AttachedButton("参照…", action: setting_project_dir_browse) {

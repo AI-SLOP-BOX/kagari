@@ -2,6 +2,32 @@ use super::*;
 
 const MAX_VIEWPORT_PREVIEW_CACHE_ENTRIES: usize = 120;
 const MAX_VIEWPORT_PREVIEW_CACHE_BYTES: u64 = 128 * 1024 * 1024;
+const MAX_SCALED_VIEWPORT_PREVIEW_CACHE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+
+fn viewport_preview_cache_limits(memory_limit_gb: f64) -> (usize, u64) {
+    let clamped_gb = if memory_limit_gb.is_finite() {
+        memory_limit_gb.clamp(1.0, 64.0)
+    } else {
+        12.0
+    };
+    let quarter_bytes = (clamped_gb * 0.25 * 1024.0 * 1024.0 * 1024.0) as u64;
+    let max_bytes = quarter_bytes.clamp(
+        MAX_VIEWPORT_PREVIEW_CACHE_BYTES,
+        MAX_SCALED_VIEWPORT_PREVIEW_CACHE_BYTES,
+    );
+    let max_entries = ((max_bytes / (1024 * 1024)) as usize).clamp(MAX_VIEWPORT_PREVIEW_CACHE_ENTRIES, 1800);
+    (max_entries, max_bytes)
+}
+
+fn viewport_preview_cache_needs_eviction_with_limits(
+    entry_count: usize,
+    cached_bytes: u64,
+    incoming: u64,
+    max_entries: usize,
+    max_bytes: u64,
+) -> bool {
+    entry_count >= max_entries || cached_bytes.saturating_add(incoming) > max_bytes
+}
 
 fn viewport_preview_job_should_cancel(
     active: ViewportPreviewKey,
@@ -22,13 +48,19 @@ fn viewport_preview_cache_entry_bytes(width: u32, height: u32) -> u64 {
         .saturating_mul(4)
 }
 
+#[cfg(test)]
 fn viewport_preview_cache_needs_eviction(
     entry_count: usize,
     cached_bytes: u64,
     incoming: u64,
 ) -> bool {
-    entry_count >= MAX_VIEWPORT_PREVIEW_CACHE_ENTRIES
-        || cached_bytes.saturating_add(incoming) > MAX_VIEWPORT_PREVIEW_CACHE_BYTES
+    viewport_preview_cache_needs_eviction_with_limits(
+        entry_count,
+        cached_bytes,
+        incoming,
+        MAX_VIEWPORT_PREVIEW_CACHE_ENTRIES,
+        MAX_VIEWPORT_PREVIEW_CACHE_BYTES,
+    )
 }
 
 fn viewport_preview_cache_eviction_key(
@@ -47,22 +79,7 @@ fn viewport_preview_cache_eviction_key(
 }
 
 impl AfterEffectsStudio {
-    pub fn draw_viewport(&mut self, scene: &mut Scene, x: f64, y: f64, width: f64, height: f64) {
-        let viewport = Rect::new(x, y, x + width, y + height);
-        scene.fill(
-            Fill::NonZero,
-            Affine::IDENTITY,
-            Color::from_rgb8(8, 9, 11),
-            None,
-            &viewport,
-        );
-        let composition = self.project_model.active_composition();
-        let source_width = composition.width.max(1);
-        let source_height = composition.height.max(1);
-        let pixel_aspect = f64::from(composition.pixel_aspect).clamp(0.1, 10.0);
-        let proxy_scale = f64::from(kagari_vfx::core::proxy::composition_preview_scale(
-            composition,
-        ));
+    pub(crate) fn viewport_preview_limit(&self) -> f64 {
         let mut preview_limit: f64 = match self.playback_quality.as_str() {
             "full" => 960.0,
             "high" => 768.0,
@@ -87,6 +104,26 @@ impl AfterEffectsStudio {
         if !self.high_quality_preview {
             preview_limit = preview_limit.min(480.0);
         }
+        preview_limit
+    }
+
+    pub fn draw_viewport(&mut self, scene: &mut Scene, x: f64, y: f64, width: f64, height: f64) {
+        let viewport = Rect::new(x, y, x + width, y + height);
+        scene.fill(
+            Fill::NonZero,
+            Affine::IDENTITY,
+            Color::from_rgb8(8, 9, 11),
+            None,
+            &viewport,
+        );
+        let preview_limit = self.viewport_preview_limit();
+        let composition = self.project_model.active_composition();
+        let source_width = composition.width.max(1);
+        let source_height = composition.height.max(1);
+        let pixel_aspect = f64::from(composition.pixel_aspect).clamp(0.1, 10.0);
+        let proxy_scale = f64::from(kagari_vfx::core::proxy::composition_preview_scale(
+            composition,
+        ));
         let render_scale = (preview_limit / (f64::from(source_width) * pixel_aspect))
             .min(preview_limit / f64::from(source_height))
             .min(1.0)
@@ -105,8 +142,21 @@ impl AfterEffectsStudio {
             width: preview_width,
             height: preview_height,
         };
+        let current_k = (
+            preview_key.revision,
+            preview_key.width,
+            preview_key.height,
+            preview_key.frame,
+            preview_key.media_revision,
+        );
+        let current_preview_cached = self.preview_cache.contains_key(&current_k);
         if self.viewport_preview_active_key.is_some_and(|active| {
-            viewport_preview_job_should_cancel(active, preview_key, self.is_playing)
+            let cancel_for_playhead = !current_preview_cached
+                && viewport_preview_job_should_cancel(active, preview_key, self.is_playing);
+            let cancel_for_config = active.revision != preview_key.revision
+                || active.width != preview_key.width
+                || active.height != preview_key.height;
+            cancel_for_playhead || cancel_for_config
         }) {
             if let Some(cancel) = &self.viewport_preview_cancel {
                 cancel.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -150,10 +200,14 @@ impl AfterEffectsStudio {
                                 .keys()
                                 .map(|key| viewport_preview_cache_entry_bytes(key.1, key.2))
                                 .fold(0u64, u64::saturating_add);
-                            while viewport_preview_cache_needs_eviction(
+                            let (max_cache_entries, max_cache_bytes) =
+                                viewport_preview_cache_limits(self.memory_limit_gb);
+                            while viewport_preview_cache_needs_eviction_with_limits(
                                 self.preview_cache.len(),
                                 cached_bytes,
                                 incoming_bytes,
+                                max_cache_entries,
+                                max_cache_bytes,
                             ) {
                                 let cache_keys =
                                     self.preview_cache.keys().copied().collect::<Vec<_>>();
@@ -216,29 +270,82 @@ impl AfterEffectsStudio {
                 .min_by_key(|(k, _)| (k.3 as i64 - preview_key.frame as i64).abs())
                 .map(|(_, img)| img.clone())
         });
-        if current_preview.is_none() && self.viewport_preview_failed != Some(preview_key) {
+        if (current_preview.is_none() || (!self.is_playing && !self.viewport_preview_inflight))
+            && !self.viewport_preview_worker_failed
+        {
             if self.viewport_preview_inflight {
                 // Let the active render finish; the next frame will request the latest playhead.
             } else {
-                let job = ViewportPreviewJob {
-                    key: preview_key,
-                    composition: Box::new(composition.clone()),
-                    cancel: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
-                };
-                let cancel = job.cancel.clone();
-                match self.viewport_preview_request_tx.try_send(job) {
-                    Ok(()) => {
-                        self.viewport_preview_inflight = true;
-                        self.viewport_preview_active_key = Some(preview_key);
-                        self.viewport_preview_cancel = Some(cancel);
+                let target_key = if current_preview.is_none()
+                    && self.viewport_preview_failed != Some(preview_key)
+                {
+                    Some(preview_key)
+                } else if !self.is_playing && composition.duration_frames > 1 {
+                    let (max_entries, max_bytes) =
+                        viewport_preview_cache_limits(self.memory_limit_gb);
+                    let cached_bytes = self
+                        .preview_cache
+                        .keys()
+                        .map(|key| viewport_preview_cache_entry_bytes(key.1, key.2))
+                        .fold(0u64, u64::saturating_add);
+                    let entry_bytes =
+                        viewport_preview_cache_entry_bytes(preview_width, preview_height);
+                    if self.preview_cache.len() < max_entries
+                        && cached_bytes.saturating_add(entry_bytes) <= max_bytes
+                    {
+                        let total = composition.duration_frames;
+                        (1..=16.min(total - 1)).find_map(|offset| {
+                            let candidate_frame = (frame_index + offset) % total;
+                            let candidate_media_rev =
+                                kagari_vfx::core::media_revision::composition_media_revision(
+                                    composition,
+                                    candidate_frame,
+                                );
+                            let candidate_k = (
+                                preview_key.revision,
+                                preview_width,
+                                preview_height,
+                                candidate_frame,
+                                candidate_media_rev,
+                            );
+                            let candidate_key = ViewportPreviewKey {
+                                revision: preview_key.revision,
+                                media_revision: candidate_media_rev,
+                                frame: candidate_frame,
+                                width: preview_width,
+                                height: preview_height,
+                            };
+                            (!self.preview_cache.contains_key(&candidate_k)
+                                && self.viewport_preview_failed != Some(candidate_key))
+                            .then_some(candidate_key)
+                        })
+                    } else {
+                        None
                     }
-                    Err(std::sync::mpsc::TrySendError::Full(_)) => {}
-                    Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                        self.viewport_preview_failed = Some(preview_key);
-                        self.viewport_preview_worker_failed = true;
-                        let _ = self
-                            .ui
-                            .set_binding("preview_worker_failed", Value::Bool(true));
+                } else {
+                    None
+                };
+                if let Some(job_key) = target_key {
+                    let job = ViewportPreviewJob {
+                        key: job_key,
+                        composition: Box::new(composition.clone()),
+                        cancel: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                    };
+                    let cancel = job.cancel.clone();
+                    match self.viewport_preview_request_tx.try_send(job) {
+                        Ok(()) => {
+                            self.viewport_preview_inflight = true;
+                            self.viewport_preview_active_key = Some(job_key);
+                            self.viewport_preview_cancel = Some(cancel);
+                        }
+                        Err(std::sync::mpsc::TrySendError::Full(_)) => {}
+                        Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
+                            self.viewport_preview_failed = Some(job_key);
+                            self.viewport_preview_worker_failed = true;
+                            let _ = self
+                                .ui
+                                .set_binding("preview_worker_failed", Value::Bool(true));
+                        }
                     }
                 }
             }
@@ -333,7 +440,8 @@ impl AfterEffectsStudio {
                 };
             let draw_img = filtered_image.as_ref().unwrap_or(&image);
             if self.viewport_wipe_enabled {
-                let split_x = (left + draw_width * 0.5).round() + 0.5;
+                let split_x =
+                    (left + draw_width * self.viewport_wipe_split.clamp(0.05, 0.95)).round() + 0.5;
                 let transform = Affine::translate((left, top))
                     * Affine::scale_non_uniform(fit * pixel_aspect, fit);
                 let left_clip = Rect::new(left, top, split_x, top + draw_height);
@@ -426,19 +534,30 @@ impl AfterEffectsStudio {
             }
             let frame = Rect::new(left, top, left + draw_width, top + draw_height);
             if self.viewport_wipe_enabled {
-                let split_x = left + draw_width * 0.5;
+                let split_x =
+                    (left + draw_width * self.viewport_wipe_split.clamp(0.05, 0.95)).round() + 0.5;
+                let mid_y = top + draw_height * 0.5;
                 scene.stroke(
                     &Stroke::new(1.5),
                     Affine::IDENTITY,
-                    Color::from_rgb8(255, 138, 54),
+                    Color::from_rgb8(245, 140, 75),
                     None,
-                    &kurbo::Line::new((split_x, top), (split_x, top + draw_height)),
+                    &Line::new((split_x, top), (split_x, top + draw_height)),
+                );
+                let grip = RoundedRect::new(split_x - 4.0, mid_y - 14.0, split_x + 4.0, mid_y + 14.0, 4.0);
+                scene.fill(Fill::NonZero, Affine::IDENTITY, Color::from_rgb8(245, 140, 75), None, &grip);
+                scene.stroke(
+                    &Stroke::new(1.0),
+                    Affine::IDENTITY,
+                    Color::from_rgb8(20, 22, 26),
+                    None,
+                    &grip,
                 );
             }
             scene.stroke(
                 &Stroke::new(1.0),
                 Affine::IDENTITY,
-                Color::from_rgb8(65, 70, 76),
+                Color::from_rgb8(42, 48, 58),
                 None,
                 &frame,
             );

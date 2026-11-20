@@ -648,3 +648,74 @@ fn multi_effect_non_conflicting_chain_matches_software_reference_and_passes_capa
         );
     }
 }
+
+#[test]
+fn gpu_3d_depth_of_field_blurs_off_focus_layer() {
+    let Some((device, queue)) = request_gpu() else {
+        eprintln!("skipping GPU 3D DoF test: no adapter available");
+        return;
+    };
+
+    const WIDTH: u32 = 64;
+    const HEIGHT: u32 = 64;
+    let img_path = std::env::temp_dir().join(format!("kagari_gpu_dof_{}.png", std::process::id()));
+    let mut img = image::RgbaImage::from_pixel(32, 32, image::Rgba([0, 0, 0, 255]));
+    for y in 8..24 {
+        for x in 8..24 {
+            img.put_pixel(x, y, image::Rgba([255, 255, 255, 255]));
+        }
+    }
+    img.save(&img_path).unwrap();
+
+    let mut comp = Composition::new(
+        "gpu_3d_dof".to_owned(),
+        "GPU 3D DoF".to_owned(),
+        WIDTH,
+        HEIGHT,
+        30,
+        10,
+    );
+    comp.background_color = [0.0, 0.0, 0.0, 1.0];
+    comp.active_camera.dof_enabled = true;
+    comp.active_camera.focus_distance = 500.0;
+    comp.active_camera.aperture = 120.0;
+
+    let mut layer = Layer::new(
+        "dof_3d_img".to_owned(),
+        "DoF 3D Image".to_owned(),
+        LayerType::Image {
+            path: img_path.to_string_lossy().into_owned(),
+        },
+        10,
+    );
+    layer.is_3d = true;
+    layer.transform_3d.position = constant([0.0, 0.0, 900.0]);
+    comp.layers.push(layer);
+
+    assert_eq!(
+        kagari_vfx::core::render_capability::software_preview_reason(&comp, 0),
+        None
+    );
+
+    let mut renderer = WgpuRenderer::new(device, queue);
+    let blurred = renderer
+        .render_frame_to_rgba8_gpu(&comp, 0, WIDTH, HEIGHT, 0.0, 0)
+        .expect("GPU 3D DoF render should succeed");
+
+    comp.active_camera.dof_enabled = false;
+    let sharp = renderer
+        .render_frame_to_rgba8_gpu(&comp, 0, WIDTH, HEIGHT, 0.0, 0)
+        .expect("GPU 3D sharp render should succeed");
+
+    let diff_sum: u64 = blurred
+        .iter()
+        .zip(sharp.iter())
+        .map(|(&a, &b)| (a as i32 - b as i32).unsigned_abs() as u64)
+        .sum();
+    let _ = std::fs::remove_file(&img_path);
+
+    assert!(
+        diff_sum > 500,
+        "GPU 3D depth-of-field should visibly blur an off-focus 3D layer (diff_sum={diff_sum})"
+    );
+}

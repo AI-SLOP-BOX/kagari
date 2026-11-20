@@ -1,5 +1,25 @@
 use super::*;
 
+pub(crate) fn settings_category_matches(category: usize, query: &str) -> bool {
+    let q = query.trim().to_ascii_lowercase();
+    if q.is_empty() {
+        return true;
+    }
+    let keywords = match category {
+        0 => "一般 general 起動 自動保存 テーマ アクセント プロジェクト",
+        1 => "パフォーマンス performance gpu cpu メモリ キャッシュ undo 履歴",
+        2 => "メディア media 読み込み キャッシュ プロキシ proxy",
+        3 => "表示 display ui スケール テーマ アクセント プレビュー グリッド セーフエリア カラー",
+        4 => "再生 playback ループ 音声 音量 プリロール ポストロール",
+        5 => "ショートカット shortcuts キーボード keybinding",
+        6 => "ファイルパス filepath パス バックアップ アセット 保存先",
+        7 => "外部連携 external openfx プラグイン plugin",
+        8 => "実験的機能 experimental beta",
+        _ => "",
+    };
+    keywords.to_ascii_lowercase().contains(&q)
+}
+
 impl AfterEffectsStudio {
     pub(crate) fn handle_settings_action(
         &mut self,
@@ -11,7 +31,18 @@ impl AfterEffectsStudio {
                 self.settings_open = true;
                 self.settings_category = 0;
                 self.settings_feedback.clear();
+                self.settings_search.clear();
                 self.settings_snapshot = Some(self.settings_draft());
+                true
+            }
+            ("settings_search_changed", Some(ActionValue::Text(value))) => {
+                self.settings_search = value.clone();
+                let query = self.settings_search.trim().to_ascii_lowercase();
+                if !query.is_empty() && !settings_category_matches(self.settings_category, &query) {
+                    if let Some(first) = (0..9).find(|&idx| settings_category_matches(idx, &query)) {
+                        self.settings_category = first;
+                    }
+                }
                 true
             }
             ("close_settings", _) | ("settings_cancel", _) => {
@@ -99,8 +130,17 @@ impl AfterEffectsStudio {
                 true
             }
             ("settings_defaults", _) => {
+                self.settings_defaults_confirm_open = true;
+                true
+            }
+            ("settings_defaults_confirm", _) => {
+                self.settings_defaults_confirm_open = false;
                 self.reset_settings_draft();
                 self.settings_feedback = "デフォルトに戻しました。「OK」で保存します。".to_owned();
+                true
+            }
+            ("settings_defaults_cancel", _) => {
+                self.settings_defaults_confirm_open = false;
                 true
             }
             ("__ame_binding_update_accent_color", Some(ActionValue::Text(value))) => {

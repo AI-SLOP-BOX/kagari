@@ -343,6 +343,55 @@ impl AfterEffectsStudio {
         self.mark_project_changed();
     }
 
+    pub(crate) fn set_selected_scene_light_type(&mut self, label: &str) {
+        use kagari_vfx::core::timeline::LightType;
+        let Some(layer_id) = self.selected_layer_id.as_deref() else {
+            return;
+        };
+        let light_id = self
+            .project_model
+            .active_composition()
+            .layers
+            .iter()
+            .find(|layer| layer.id == layer_id && !layer.locked)
+            .and_then(|layer| match layer.scene_object.as_ref() {
+                Some(kagari_vfx::core::timeline::SceneObjectRef::Light { id }) => Some(id.clone()),
+                _ => None,
+            });
+        let Some(light_id) = light_id else {
+            return;
+        };
+        let Some(light) = self
+            .project_model
+            .active_composition_mut()
+            .lights
+            .iter_mut()
+            .find(|light| light.id == light_id)
+        else {
+            return;
+        };
+        light.light_type = match label {
+            "環境光" => LightType::Ambient,
+            "点光源" => LightType::Point,
+            "スポット" => match &light.light_type {
+                LightType::Spot {
+                    cone_angle_deg,
+                    cone_feather_pct,
+                } => LightType::Spot {
+                    cone_angle_deg: *cone_angle_deg,
+                    cone_feather_pct: *cone_feather_pct,
+                },
+                _ => LightType::Spot {
+                    cone_angle_deg: 90.0,
+                    cone_feather_pct: 50.0,
+                },
+            },
+            "平行光" => LightType::Parallel,
+            _ => return,
+        };
+        self.mark_project_changed();
+    }
+
     pub(crate) fn update_selected_scene_light_color(&mut self, input: &str) {
         let Some(layer_id) = self.selected_layer_id.as_deref() else {
             return;

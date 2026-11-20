@@ -36,23 +36,46 @@ impl AfterEffectsStudio {
                 let rotation = layer.transform.rotation.evaluate(frame_index) as f64;
                 let scale = layer.transform.scale.evaluate(frame_index);
 
-                let layer_w = match &layer.layer_type {
+                let (layer_w, layer_h) = match &layer.layer_type {
                     kagari_vfx::core::timeline::LayerType::Solid { .. } => {
-                        f64::from(composition.width)
+                        (f64::from(composition.width), f64::from(composition.height))
                     }
                     kagari_vfx::core::timeline::LayerType::Text {
                         text, font_size, ..
-                    } => (text.len() as f64 * (*font_size as f64 * 0.6)).max(40.0),
-                    _ => 200.0,
-                };
-                let layer_h = match &layer.layer_type {
-                    kagari_vfx::core::timeline::LayerType::Solid { .. } => {
-                        f64::from(composition.height)
+                    } => (
+                        (text.len() as f64 * (*font_size as f64 * 0.6)).max(40.0),
+                        f64::from(*font_size).max(20.0),
+                    ),
+                    kagari_vfx::core::timeline::LayerType::Shape { shape_type, .. } => {
+                        match shape_type {
+                            kagari_vfx::core::timeline::ShapeType::Rectangle {
+                                width,
+                                height,
+                                ..
+                            }
+                            | kagari_vfx::core::timeline::ShapeType::Ellipse {
+                                width,
+                                height,
+                                ..
+                            } => (
+                                f64::from(width.evaluate(frame_index)).max(1.0),
+                                f64::from(height.evaluate(frame_index)).max(1.0),
+                            ),
+                            kagari_vfx::core::timeline::ShapeType::Polygon { radius, .. } => {
+                                let d = (f64::from(radius.evaluate(frame_index)) * 2.0).max(1.0);
+                                (d, d)
+                            }
+                            kagari_vfx::core::timeline::ShapeType::Star { outer_radius, .. } => {
+                                let d =
+                                    (f64::from(outer_radius.evaluate(frame_index)) * 2.0).max(1.0);
+                                (d, d)
+                            }
+                            kagari_vfx::core::timeline::ShapeType::FreeformBezier { .. } => {
+                                (200.0, 200.0)
+                            }
+                        }
                     }
-                    kagari_vfx::core::timeline::LayerType::Text { font_size, .. } => {
-                        f64::from(*font_size).max(20.0)
-                    }
-                    _ => 200.0,
+                    _ => (200.0, 200.0),
                 };
 
                 // Screen position of the anchor point

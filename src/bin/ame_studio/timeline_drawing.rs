@@ -23,23 +23,42 @@ pub(crate) fn draw_timeline(
     scene.fill(
         Fill::NonZero,
         Affine::IDENTITY,
-        Color::from_rgb8(13, 15, 17),
+        Color::from_rgb8(11, 12, 14),
         None,
         &bounds,
     );
     let visible_frames = visible_frames.max(1.0);
     let tracks_top = y + 22.0;
+    let ruler_rect = Rect::new(x, y, x + width, tracks_top);
+    scene.fill(
+        Fill::NonZero,
+        Affine::IDENTITY,
+        Color::from_rgb8(19, 21, 25),
+        None,
+        &ruler_rect,
+    );
     let track_height = 28.0;
     let grid = Stroke::new(1.0);
 
-    for tick in 0..=5 {
-        let tick_x = x + width * tick as f64 / 5.0;
+    for tick in 0..=20 {
+        let tick_x = x + width * tick as f64 / 20.0;
+        let is_major = tick % 4 == 0;
+        if is_major {
+            scene.stroke(
+                &grid,
+                Affine::IDENTITY,
+                Color::from_rgb8(34, 38, 46),
+                None,
+                &Line::new((tick_x, y), (tick_x, y + height)),
+            );
+        }
+        let tick_top = if is_major { y + 10.0 } else { y + 15.0 };
         scene.stroke(
             &grid,
             Affine::IDENTITY,
-            Color::from_rgb8(38, 42, 47),
+            Color::from_rgb8(72, 80, 96),
             None,
-            &Line::new((tick_x, y), (tick_x, y + height)),
+            &Line::new((tick_x, tick_top), (tick_x, tracks_top)),
         );
     }
     let first_visible_row = (vertical_scroll / track_height).floor() as usize;
@@ -226,7 +245,7 @@ pub(crate) fn draw_timeline(
         .round()
         + 0.5;
     if playhead_x >= x && playhead_x <= x + width {
-        let playhead_color = Color::from_rgb8(235, 68, 54);
+        let playhead_color = Color::from_rgb8(245, 140, 75);
         scene.stroke(
             &Stroke::new(1.5),
             Affine::IDENTITY,

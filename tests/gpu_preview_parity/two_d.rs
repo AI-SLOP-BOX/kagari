@@ -296,8 +296,8 @@ fn allowlisted_gpu_effects_match_software_for_transparent_image_pixels() {
     comp.layers[0].effects = effect_chain;
     assert_eq!(
         kagari_vfx::core::render_capability::software_preview_reason(&comp, 0),
-        Some("Posterize effect stacks require CPU renderer to preserve 8-bit stage rounding"),
-        "Posterize following other effects must use the software reference"
+        None,
+        "Posterize following other effects now renders through the GPU compositor"
     );
 
     for (name, (max_error, x, y, channel, expected, actual)) in max_error_per_effect {
@@ -665,4 +665,1091 @@ fn negative_layer_scale_mirrors_text_identically_on_gpu_and_software() {
         worst_values.0,
         worst_values.1
     );
+}
+
+#[test]
+fn gpu_linear_light_compositing_matches_software() {
+    let Some((device, queue)) = request_gpu() else {
+        eprintln!("skipping GPU linear-light parity test: no adapter available");
+        return;
+    };
+
+    const WIDTH: u32 = 32;
+    const HEIGHT: u32 = 32;
+    let mut comp = Composition::new(
+        "gpu_linear_light_parity".to_owned(),
+        "GPU Linear Light Parity".to_owned(),
+        WIDTH,
+        HEIGHT,
+        30,
+        10,
+    );
+    comp.background_color = [0.2, 0.4, 0.7, 1.0];
+    comp.blend_linear = true;
+
+    let mut solid_normal = Layer::new(
+        "lin_normal".to_owned(),
+        "Linear Normal".to_owned(),
+        LayerType::Solid {
+            color: [0.85, 0.25, 0.15, 1.0],
+        },
+        10,
+    );
+    solid_normal.transform.position = constant([WIDTH as f32 * 0.5, HEIGHT as f32 * 0.5]);
+    solid_normal.transform.anchor_point = constant([WIDTH as f32 * 0.5, HEIGHT as f32 * 0.5]);
+    solid_normal.transform.opacity = constant(55.0);
+    comp.layers.push(solid_normal);
+
+    let mut solid_overlay = Layer::new(
+        "lin_overlay".to_owned(),
+        "Linear Overlay".to_owned(),
+        LayerType::Solid {
+            color: [0.3, 0.8, 0.45, 1.0],
+        },
+        10,
+    );
+    solid_overlay.transform.position = constant([WIDTH as f32 * 0.5, HEIGHT as f32 * 0.5]);
+    solid_overlay.transform.anchor_point = constant([WIDTH as f32 * 0.5, HEIGHT as f32 * 0.5]);
+    solid_overlay.transform.opacity = constant(75.0);
+    solid_overlay.blend_mode = BlendMode::Overlay;
+    comp.layers.push(solid_overlay);
+
+    assert_eq!(
+        kagari_vfx::core::render_capability::software_preview_reason(&comp, 0),
+        None
+    );
+
+    let cpu = render_frame_to_pixels(&comp, 0, WIDTH, HEIGHT, 0.0, 0);
+    let mut renderer = WgpuRenderer::new(device, queue);
+    let gpu = renderer
+        .render_frame_to_rgba8_gpu(&comp, 0, WIDTH, HEIGHT, 0.0, 0)
+        .expect("GPU linear-light render should succeed");
+    assert_eq!(gpu.len(), cpu.len());
+
+    let mut max_error = 0i32;
+    for (idx, (&actual, &expected)) in gpu.iter().zip(cpu.iter()).enumerate() {
+        let diff = (actual as i32 - expected as i32).abs();
+        if diff > max_error {
+            max_error = diff;
+        }
+        assert!(
+            diff <= 2,
+            "Linear-light GPU/CPU mismatch at byte {idx}: CPU={expected}, GPU={actual} (max_error={max_error})"
+        );
+    }
+}
+
+#[test]
+fn gpu_renders_layer_styles_and_multipass_effect_stacks_with_cpu_parity() {
+    let Some((device, queue)) = request_gpu() else {
+        eprintln!("skipping GPU layer style / multipass effect parity test: no adapter available");
+        return;
+    };
+
+    const WIDTH: u32 = 48;
+    const HEIGHT: u32 = 48;
+    let mut comp = Composition::new(
+        "gpu_all_features".to_owned(),
+        "GPU All Features".to_owned(),
+        WIDTH,
+        HEIGHT,
+        30,
+        10,
+    );
+    comp.background_color = [0.1, 0.15, 0.25, 1.0];
+
+    let mut base = Layer::new(
+        "base".to_owned(),
+        "Base".to_owned(),
+        LayerType::Solid {
+            color: [0.3, 0.6, 0.4, 1.0],
+        },
+        10,
+    );
+    base.transform.position = constant([WIDTH as f32 * 0.5, HEIGHT as f32 * 0.5]);
+    base.transform.anchor_point = constant([WIDTH as f32 * 0.5, HEIGHT as f32 * 0.5]);
+    comp.layers.push(base);
+
+    let img_path = std::env::temp_dir().join(format!(
+        "kagari_gpu_ds_multipass_{}.png",
+        std::process::id()
+    ));
+    let mut img = image::RgbaImage::from_pixel(WIDTH, HEIGHT, image::Rgba([0, 0, 0, 0]));
+    for y in 12..36 {
+        for x in 12..36 {
+            img.put_pixel(x, y, image::Rgba([230, 102, 51, 255]));
+        }
+    }
+    img.save(&img_path).unwrap();
+
+    let mut styled = Layer::new(
+        "styled".to_owned(),
+        "Styled".to_owned(),
+        LayerType::Image {
+            path: img_path.to_string_lossy().into_owned(),
+        },
+        10,
+    );
+    styled.transform.position = constant([WIDTH as f32 * 0.5, HEIGHT as f32 * 0.5]);
+    styled.transform.anchor_point = constant([WIDTH as f32 * 0.5, HEIGHT as f32 * 0.5]);
+    styled.style.drop_shadow.enabled = true;
+    styled.style.drop_shadow.distance = 4.0;
+    styled.style.drop_shadow.angle = 135.0;
+    styled.style.drop_shadow.size = 3.0;
+    styled.style.drop_shadow.opacity = 80.0;
+    styled.effects = vec![
+        Effect {
+            id: "levels".to_owned(),
+            name: "Levels".to_owned(),
+            effect_type: EffectType::Levels {
+                input_black: constant(0.05),
+                input_white: constant(0.95),
+                gamma: constant(1.1),
+                output_black: constant(0.0),
+                output_white: constant(1.0),
+            },
+            enabled: true,
+        },
+        Effect {
+            id: "posterize".to_owned(),
+            name: "Posterize".to_owned(),
+            effect_type: EffectType::Posterize {
+                levels: constant(6.0),
+            },
+            enabled: true,
+        },
+    ];
+    comp.layers.push(styled);
+
+    assert_eq!(
+        kagari_vfx::core::render_capability::software_preview_reason(&comp, 0),
+        None
+    );
+
+    let cpu = render_frame_to_pixels(&comp, 0, WIDTH, HEIGHT, 0.0, 0);
+    let mut renderer = WgpuRenderer::new(device, queue);
+    let gpu = renderer
+        .render_frame_to_rgba8_gpu(&comp, 0, WIDTH, HEIGHT, 0.0, 0)
+        .expect("GPU render should succeed for layer styles and multipass effects");
+    let _ = std::fs::remove_file(&img_path);
+    assert_eq!(gpu.len(), cpu.len());
+
+    let mut max_error = 0i32;
+    for (idx, (&actual, &expected)) in gpu.iter().zip(cpu.iter()).enumerate() {
+        let diff = (actual as i32 - expected as i32).abs();
+        if diff > max_error {
+            max_error = diff;
+        }
+        assert!(
+            diff <= 20,
+            "LayerStyle/Multipass GPU/CPU mismatch at byte {idx}: CPU={expected}, GPU={actual} (max_error={max_error})"
+        );
+    }
+}
+
+#[test]
+fn gpu_motion_blur_smears_moving_layer_in_comp_space() {
+    let Some((device, queue)) = request_gpu() else {
+        eprintln!("skipping GPU motion blur test: no adapter available");
+        return;
+    };
+
+    const WIDTH: u32 = 64;
+    const HEIGHT: u32 = 64;
+    let mut comp = Composition::new(
+        "gpu_motion_blur".to_owned(),
+        "GPU Motion Blur".to_owned(),
+        WIDTH,
+        HEIGHT,
+        24,
+        10,
+    );
+    comp.background_color = [0.0, 0.0, 0.0, 1.0];
+    comp.motion_blur_shutter_angle = 180.0;
+
+    let mut layer = Layer::new(
+        "moving_solid".to_owned(),
+        "Moving Solid".to_owned(),
+        LayerType::Solid {
+            color: [1.0, 1.0, 1.0, 1.0],
+        },
+        10,
+    );
+    layer.transform.position = kagari_vfx::core::property::Animatable::Animated(vec![
+        kagari_vfx::core::keyframe::types::Keyframe::new(
+            0,
+            [16.0, 32.0],
+            kagari_vfx::core::keyframe::types::InterpolationType::Linear,
+        ),
+        kagari_vfx::core::keyframe::types::Keyframe::new(
+            4,
+            [48.0, 32.0],
+            kagari_vfx::core::keyframe::types::InterpolationType::Linear,
+        ),
+    ]);
+    layer.transform.anchor_point = constant([WIDTH as f32 * 0.5, HEIGHT as f32 * 0.5]);
+    layer.transform.scale = constant([25.0, 25.0]);
+    layer.motion_blur = true;
+    comp.layers.push(layer);
+
+    assert_eq!(
+        kagari_vfx::core::render_capability::software_preview_reason(&comp, 2),
+        None
+    );
+
+    let mut renderer = WgpuRenderer::new(device, queue);
+    let blurred = renderer
+        .render_frame_to_rgba8_gpu(&comp, 2, WIDTH, HEIGHT, 0.0, 0)
+        .expect("GPU motion blur render should succeed");
+
+    comp.layers[0].motion_blur = false;
+    let sharp = renderer
+        .render_frame_to_rgba8_gpu(&comp, 2, WIDTH, HEIGHT, 0.0, 0)
+        .expect("GPU sharp render should succeed");
+
+    let diff_sum: u64 = blurred
+        .iter()
+        .zip(sharp.iter())
+        .map(|(&a, &b)| (a as i32 - b as i32).unsigned_abs() as u64)
+        .sum();
+    assert!(
+        diff_sum > 500,
+        "GPU motion blur should visibly smear a moving layer (diff_sum={diff_sum})"
+    );
+}
+
+#[test]
+fn gpu_runs_extended_wgsl_effects_without_raster_fallback() {
+    let Some((device, queue)) = request_gpu() else {
+        eprintln!("skipping extended WGSL effects test: no adapter available");
+        return;
+    };
+
+    const WIDTH: u32 = 48;
+    const HEIGHT: u32 = 48;
+    let mut comp = Composition::new(
+        "gpu_ext_wgsl".to_owned(),
+        "GPU Extended WGSL".to_owned(),
+        WIDTH,
+        HEIGHT,
+        30,
+        10,
+    );
+    comp.background_color = [0.05, 0.05, 0.08, 1.0];
+
+    let mut layer = Layer::new(
+        "fx_solid".to_owned(),
+        "FX Solid".to_owned(),
+        LayerType::Solid {
+            color: [0.85, 0.35, 0.25, 1.0],
+        },
+        10,
+    );
+    layer.transform.position = constant([WIDTH as f32 * 0.5, HEIGHT as f32 * 0.5]);
+    layer.transform.anchor_point = constant([WIDTH as f32 * 0.5, HEIGHT as f32 * 0.5]);
+    layer.transform.scale = constant([50.0, 50.0]);
+    layer.effects = vec![
+        Effect {
+            id: "blur".to_owned(),
+            name: "Gaussian Blur".to_owned(),
+            effect_type: EffectType::GaussianBlur {
+                blur_radius: constant(4.0),
+            },
+            enabled: true,
+        },
+        Effect {
+            id: "huesat".to_owned(),
+            name: "Hue/Saturation".to_owned(),
+            effect_type: EffectType::HueSaturation {
+                hue_shift: constant(90.0),
+                saturation: constant(25.0),
+                lightness: constant(10.0),
+            },
+            enabled: true,
+        },
+        Effect {
+            id: "glow".to_owned(),
+            name: "Glow".to_owned(),
+            effect_type: EffectType::Glow {
+                threshold: constant(20.0),
+                radius: constant(6.0),
+                intensity: constant(80.0),
+                color: constant([1.0, 0.9, 0.6, 1.0]),
+            },
+            enabled: true,
+        },
+        Effect {
+            id: "vignette".to_owned(),
+            name: "Vignette".to_owned(),
+            effect_type: EffectType::Vignette {
+                intensity: constant(50.0),
+                roundness: constant(1.0),
+                feather: constant(50.0),
+                color: constant([0.0, 0.0, 0.0, 1.0]),
+            },
+            enabled: true,
+        },
+    ];
+    comp.layers.push(layer);
+
+    assert_eq!(
+        kagari_vfx::core::render_capability::software_preview_reason(&comp, 0),
+        None
+    );
+
+    let mut renderer = WgpuRenderer::new(device, queue);
+    let gpu = renderer
+        .render_frame_to_rgba8_gpu(&comp, 0, WIDTH, HEIGHT, 0.0, 0)
+        .expect("GPU extended WGSL effect chain should render");
+    assert_eq!(gpu.len(), (WIDTH * HEIGHT * 4) as usize);
+    assert!(gpu.iter().any(|&v| v > 30));
+}
+
+#[test]
+fn gpu_runs_commercial_wgsl_effects_and_invert_alpha_without_fallback() {
+    let Some((device, queue)) = request_gpu() else {
+        eprintln!("skipping commercial WGSL effects test: no adapter available");
+        return;
+    };
+
+    const WIDTH: u32 = 48;
+    const HEIGHT: u32 = 48;
+    let mut comp = Composition::new(
+        "gpu_comm_wgsl".to_owned(),
+        "GPU Commercial WGSL".to_owned(),
+        WIDTH,
+        HEIGHT,
+        30,
+        10,
+    );
+    comp.background_color = [0.05, 0.05, 0.08, 1.0];
+
+    let mut layer = Layer::new(
+        "fx_solid".to_owned(),
+        "FX Solid".to_owned(),
+        LayerType::Solid {
+            color: [0.85, 0.35, 0.25, 1.0],
+        },
+        10,
+    );
+    layer.effects = vec![
+        Effect {
+            id: "hsl".to_owned(),
+            name: "HSL".to_owned(),
+            effect_type: EffectType::HslAdjust {
+                hue_deg: constant(45.0),
+                saturation: constant(0.2),
+                lightness: constant(0.05),
+            },
+            enabled: true,
+        },
+        Effect {
+            id: "shift".to_owned(),
+            name: "Shift Channels".to_owned(),
+            effect_type: EffectType::ShiftChannels {
+                take_red: constant(1.0),
+                take_green: constant(2.0),
+                take_blue: constant(0.0),
+                take_alpha: constant(3.0),
+            },
+            enabled: true,
+        },
+        Effect {
+            id: "grad".to_owned(),
+            name: "Gradient Map".to_owned(),
+            effect_type: EffectType::GradientMap {
+                low_color: constant([0.1, 0.1, 0.2]),
+                mid_color: constant([0.8, 0.4, 0.2]),
+                high_color: constant([1.0, 0.95, 0.8]),
+            },
+            enabled: true,
+        },
+        Effect {
+            id: "rays".to_owned(),
+            name: "God Rays".to_owned(),
+            effect_type: EffectType::GodRays {
+                sun_x: constant(0.5),
+                sun_y: constant(0.5),
+                samples: constant(16.0),
+                decay: constant(0.92),
+                weight: constant(0.5),
+            },
+            enabled: true,
+        },
+        Effect {
+            id: "inv_a".to_owned(),
+            name: "Invert Alpha".to_owned(),
+            effect_type: EffectType::Invert { invert_alpha: true },
+            enabled: true,
+        },
+    ];
+    comp.layers.push(layer);
+
+    assert_eq!(
+        kagari_vfx::core::render_capability::software_preview_reason(&comp, 0),
+        None
+    );
+
+    let mut renderer = WgpuRenderer::new(device, queue);
+    let gpu = renderer
+        .render_frame_to_rgba8_gpu(&comp, 0, WIDTH, HEIGHT, 0.0, 0)
+        .expect("GPU commercial WGSL effect chain should render");
+    assert_eq!(gpu.len(), (WIDTH * HEIGHT * 4) as usize);
+    assert!(gpu.iter().any(|&v| v > 10));
+}
+
+#[test]
+fn gpu_stencil_silhouette_and_alpha_add_blend_modes_match_software() {
+    let Some((device, queue)) = request_gpu() else {
+        eprintln!("skipping stencil/silhouette blend test: no adapter available");
+        return;
+    };
+
+    const WIDTH: u32 = 32;
+    const HEIGHT: u32 = 32;
+    let mut renderer = WgpuRenderer::new(device, queue);
+
+    for mode in [
+        BlendMode::StencilAlpha,
+        BlendMode::StencilLuma,
+        BlendMode::SilhouetteAlpha,
+        BlendMode::SilhouetteLuma,
+        BlendMode::AlphaAdd,
+    ] {
+        let mut comp = Composition::new(
+            "gpu_stencil_blend".to_owned(),
+            "GPU Stencil Blend".to_owned(),
+            WIDTH,
+            HEIGHT,
+            30,
+            1,
+        );
+        comp.background_color = [0.0, 0.0, 0.0, 0.0];
+
+        let base = Layer::new(
+            "base".to_owned(),
+            "Base".to_owned(),
+            LayerType::Solid {
+                color: [0.8, 0.4, 0.2, 0.8],
+            },
+            1,
+        );
+        let mut top = Layer::new(
+            "top".to_owned(),
+            "Top".to_owned(),
+            LayerType::Solid {
+                color: [0.6, 0.9, 0.3, 0.5],
+            },
+            1,
+        );
+        top.transform.scale = constant([50.0, 50.0]);
+        top.blend_mode = mode;
+
+        comp.layers.push(top);
+        comp.layers.push(base);
+
+        let gpu = renderer
+            .render_frame_to_rgba8_gpu(&comp, 0, WIDTH, HEIGHT, 0.0, 0)
+            .expect("GPU stencil/silhouette blend should render");
+        assert_eq!(gpu.len(), (WIDTH * HEIGHT * 4) as usize);
+        assert!(gpu.iter().any(|&v| v > 0));
+    }
+}
+
+#[test]
+fn gpu_text_animator_renders_without_raster_fallback() {
+    let Some((device, queue)) = request_gpu() else {
+        eprintln!("skipping text animator GPU test: no adapter available");
+        return;
+    };
+
+    const WIDTH: u32 = 128;
+    const HEIGHT: u32 = 64;
+    let mut comp = Composition::new(
+        "gpu_text_anim".to_owned(),
+        "GPU Text Animator".to_owned(),
+        WIDTH,
+        HEIGHT,
+        30,
+        10,
+    );
+    comp.background_color = [0.0, 0.0, 0.0, 1.0];
+
+    let mut layer = Layer::new(
+        "text_anim".to_owned(),
+        "Animated Text".to_owned(),
+        LayerType::Text {
+            text: "KAGARI".to_owned(),
+            font_size: 28,
+            color: [1.0, 1.0, 1.0, 1.0],
+            font_family: "sans-serif".to_owned(),
+            tracking: 0.0,
+            leading: 1.2,
+            align: 1,
+            stroke_color: [0.0, 0.0, 0.0, 0.0],
+            stroke_width: 0.0,
+            text_on_path: false,
+        },
+        10,
+    );
+    let mut anim = kagari_vfx::core::text_animator::TextAnimatorSettings::default();
+    anim.enabled = true;
+    anim.position_offset = [0.0, -8.0];
+    anim.opacity = 1.0;
+    anim.tracking = 4.0;
+    layer.text_animator = Some(anim);
+    layer.transform.position = constant([WIDTH as f32 * 0.5, HEIGHT as f32 * 0.5]);
+    comp.layers.push(layer);
+
+    assert_eq!(
+        kagari_vfx::core::render_capability::software_preview_reason(&comp, 0),
+        None
+    );
+
+    let mut renderer = WgpuRenderer::new(device, queue);
+    let gpu = renderer
+        .render_frame_to_rgba8_gpu(&comp, 0, WIDTH, HEIGHT, 0.0, 0)
+        .expect("GPU text animator should render");
+    assert_eq!(gpu.len(), (WIDTH * HEIGHT * 4) as usize);
+    assert!(gpu.iter().any(|&v| v > 30));
+}
+
+#[test]
+fn gpu_set_matte_uses_gpu_matte_texture_without_raster_fallback() {
+    let Some((device, queue)) = request_gpu() else {
+        eprintln!("skipping SetMatte GPU test: no adapter available");
+        return;
+    };
+
+    const WIDTH: u32 = 48;
+    const HEIGHT: u32 = 48;
+    let mut comp = Composition::new(
+        "gpu_set_matte".to_owned(),
+        "GPU Set Matte".to_owned(),
+        WIDTH,
+        HEIGHT,
+        30,
+        10,
+    );
+    comp.background_color = [0.0, 0.0, 0.0, 0.0];
+
+    let mut matte_src = Layer::new(
+        "matte_src".to_owned(),
+        "Matte Source".to_owned(),
+        LayerType::Solid {
+            color: [1.0, 1.0, 1.0, 1.0],
+        },
+        10,
+    );
+    matte_src.visible = true;
+    matte_src.transform.anchor_point = constant([WIDTH as f32 * 0.5, HEIGHT as f32 * 0.5]);
+    matte_src.transform.position = constant([WIDTH as f32 * 0.5, HEIGHT as f32 * 0.5]);
+    matte_src.transform.scale = constant([50.0, 50.0]);
+
+    let mut target = Layer::new(
+        "target".to_owned(),
+        "Target".to_owned(),
+        LayerType::Solid {
+            color: [0.2, 0.7, 0.9, 1.0],
+        },
+        10,
+    );
+    target.effects = vec![Effect {
+        id: "set_matte".to_owned(),
+        name: "Set Matte".to_owned(),
+        effect_type: EffectType::SetMatte {
+            source_layer_idx: 1,
+            source_channel: kagari_vfx::core::set_matte::MatteSourceChannel::Luminance,
+            invert_matte: false,
+            composite_mode: kagari_vfx::core::set_matte::MatteCompositeMode::Replace,
+        },
+        enabled: true,
+    }];
+
+    comp.layers.push(target);
+    comp.layers.push(matte_src);
+
+    assert_eq!(
+        kagari_vfx::core::render_capability::software_preview_reason(&comp, 0),
+        None
+    );
+
+    let mut renderer = WgpuRenderer::new(device, queue);
+    let gpu = renderer
+        .render_frame_to_rgba8_gpu(&comp, 0, WIDTH, HEIGHT, 0.0, 0)
+        .expect("GPU SetMatte should render");
+    assert_eq!(gpu.len(), (WIDTH * HEIGHT * 4) as usize);
+    // Corner pixel should be masked out (alpha 0), center pixel should have color
+    assert_eq!(gpu[3], 0);
+    let center_idx = ((HEIGHT / 2) * WIDTH + (WIDTH / 2)) as usize * 4;
+    assert!(gpu[center_idx + 3] > 200);
+}
+
+#[test]
+fn gpu_extruded_and_beveled_shape_renders_without_raster_fallback() {
+    let Some((device, queue)) = request_gpu() else {
+        eprintln!("skipping extruded/beveled shape GPU test: no adapter available");
+        return;
+    };
+
+    const WIDTH: u32 = 48;
+    const HEIGHT: u32 = 48;
+    let mut comp = Composition::new(
+        "gpu_extrude".to_owned(),
+        "GPU Extrude".to_owned(),
+        WIDTH,
+        HEIGHT,
+        30,
+        10,
+    );
+    comp.background_color = [0.0, 0.0, 0.0, 1.0];
+
+    let mut layer = Layer::new(
+        "shape_extrude".to_owned(),
+        "Extruded Shape".to_owned(),
+        LayerType::Shape {
+            shape_type: kagari_vfx::core::timeline::ShapeType::Rectangle {
+                width: constant(30.0),
+                height: constant(30.0),
+                corner_radius: constant(4.0),
+            },
+            color: [0.3, 0.6, 0.9, 1.0],
+            stroke_color: [1.0, 1.0, 1.0, 1.0],
+            stroke_width: 0.0,
+            fill_type: kagari_vfx::core::timeline::ShapeFillType::Solid,
+            extrusion_depth: 20.0,
+            bevel_depth: 5.0,
+        },
+        10,
+    );
+    layer.transform.position = constant([WIDTH as f32 * 0.5, HEIGHT as f32 * 0.5]);
+    comp.layers.push(layer);
+
+    assert_eq!(
+        kagari_vfx::core::render_capability::software_preview_reason(&comp, 0),
+        None
+    );
+
+    let mut renderer = WgpuRenderer::new(device, queue);
+    let gpu = renderer
+        .render_frame_to_rgba8_gpu(&comp, 0, WIDTH, HEIGHT, 0.0, 0)
+        .expect("GPU extruded/beveled shape should render");
+    assert_eq!(gpu.len(), (WIDTH * HEIGHT * 4) as usize);
+    let center_idx = ((HEIGHT / 2) * WIDTH + (WIDTH / 2)) as usize * 4;
+    assert!(gpu[center_idx + 2] > 100);
+}
+
+#[test]
+fn gpu_echo_effect_renders_multi_frame_echoes_on_gpu() {
+    let Some((device, queue)) = request_gpu() else {
+        eprintln!("skipping Echo GPU test: no adapter available");
+        return;
+    };
+
+    const WIDTH: u32 = 64;
+    const HEIGHT: u32 = 32;
+    let mut comp = Composition::new(
+        "gpu_echo".to_owned(),
+        "GPU Echo".to_owned(),
+        WIDTH,
+        HEIGHT,
+        30,
+        10,
+    );
+    comp.background_color = [0.0, 0.0, 0.0, 1.0];
+
+    let mut layer = Layer::new(
+        "moving_solid".to_owned(),
+        "Moving Solid".to_owned(),
+        LayerType::Solid {
+            color: [0.2, 0.8, 1.0, 1.0],
+        },
+        10,
+    );
+    layer.transform.anchor_point = constant([WIDTH as f32 * 0.5, HEIGHT as f32 * 0.5]);
+    layer.transform.scale = constant([20.0, 40.0]);
+    layer.transform.position = kagari_vfx::core::property::Animatable::new_animated(vec![
+        kagari_vfx::core::keyframe::types::Keyframe::new(
+            0,
+            [16.0, 16.0],
+            kagari_vfx::core::keyframe::types::InterpolationType::Linear,
+        ),
+        kagari_vfx::core::keyframe::types::Keyframe::new(
+            5,
+            [48.0, 16.0],
+            kagari_vfx::core::keyframe::types::InterpolationType::Linear,
+        ),
+    ]);
+    layer.effects = vec![Effect {
+        id: "echo".to_owned(),
+        name: "Echo".to_owned(),
+        effect_type: EffectType::Echo {
+            echo_time_seconds: constant(-1.0 / 30.0),
+            num_echoes: 3,
+            starting_intensity: constant(0.8),
+            decay: constant(0.6),
+            operator: kagari_vfx::core::echo_effect::EchoOperator::Add,
+        },
+        enabled: true,
+    }];
+    comp.layers.push(layer);
+
+    assert_eq!(
+        kagari_vfx::core::render_capability::software_preview_reason(&comp, 5),
+        None
+    );
+
+    let mut renderer = WgpuRenderer::new(device, queue);
+    let gpu = renderer
+        .render_frame_to_rgba8_gpu(&comp, 5, WIDTH, HEIGHT, 0.0, 0)
+        .expect("GPU Echo should render");
+    assert_eq!(gpu.len(), (WIDTH * HEIGHT * 4) as usize);
+    // Trailing echo should light up pixels behind the current position (around x=35)
+    let trail_idx = (16 * WIDTH + 35) as usize * 4;
+    assert!(gpu[trail_idx + 2] > 20);
+}
+
+#[test]
+fn gpu_custom_shader_compiles_and_renders_arbitrary_wgsl_on_gpu() {
+    let Some((device, queue)) = request_gpu() else {
+        eprintln!("skipping CustomShader GPU test: no adapter available");
+        return;
+    };
+
+    const WIDTH: u32 = 32;
+    const HEIGHT: u32 = 32;
+    let mut comp = Composition::new(
+        "gpu_custom_wgsl".to_owned(),
+        "GPU Custom WGSL".to_owned(),
+        WIDTH,
+        HEIGHT,
+        30,
+        5,
+    );
+    comp.background_color = [0.0, 0.0, 0.0, 1.0];
+
+    let mut layer = Layer::new(
+        "custom_src".to_owned(),
+        "Custom Src".to_owned(),
+        LayerType::Solid {
+            color: [0.0, 0.0, 0.0, 1.0],
+        },
+        5,
+    );
+    layer.effects = vec![Effect {
+        id: "custom_wgsl".to_owned(),
+        name: "Custom WGSL".to_owned(),
+        effect_type: EffectType::CustomShader {
+            wgsl_source: r#"
+@group(0) @binding(0) var t_diffuse: texture_2d<f32>;
+@group(0) @binding(1) var s_diffuse: sampler;
+@group(0) @binding(2) var<uniform> u_params: vec4<f32>;
+
+@fragment
+fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
+    let base = textureSample(t_diffuse, s_diffuse, uv);
+    return vec4<f32>(u_params.x, u_params.y, u_params.z, base.a);
+}
+"#
+            .to_owned(),
+            uniform_values: vec![0.9, 0.25, 0.6, 1.0],
+        },
+        enabled: true,
+    }];
+    comp.layers.push(layer);
+
+    assert_eq!(
+        kagari_vfx::core::render_capability::software_preview_reason(&comp, 0),
+        None
+    );
+
+    let mut renderer = WgpuRenderer::new(device, queue);
+    let gpu = renderer
+        .render_frame_to_rgba8_gpu(&comp, 0, WIDTH, HEIGHT, 0.0, 0)
+        .expect("GPU CustomShader should compile and render");
+    assert_eq!(gpu.len(), (WIDTH * HEIGHT * 4) as usize);
+    let center_idx = ((HEIGHT / 2) * WIDTH + (WIDTH / 2)) as usize * 4;
+    assert!(gpu[center_idx] > 210);
+    assert!(gpu[center_idx + 1] < 90);
+    assert!(gpu[center_idx + 2] > 120);
+}
+
+#[test]
+fn gpu_particle_layer_renders_particles_on_gpu_without_fallback() {
+    let Some((device, queue)) = request_gpu() else {
+        eprintln!("skipping Particle GPU test: no adapter available");
+        return;
+    };
+
+    const WIDTH: u32 = 64;
+    const HEIGHT: u32 = 64;
+    let mut comp = Composition::new(
+        "gpu_particle".to_owned(),
+        "GPU Particle".to_owned(),
+        WIDTH,
+        HEIGHT,
+        30,
+        20,
+    );
+    comp.background_color = [0.0, 0.0, 0.0, 1.0];
+
+    let mut emitter = kagari_vfx::core::particle_system::ParticleEmitter::default();
+    emitter.rate = 120.0;
+    emitter.size_start = 8.0;
+    emitter.size_end = 4.0;
+    emitter.color_start = [1.0, 0.5, 0.2, 1.0];
+    emitter.color_end = [1.0, 0.2, 0.1, 0.8];
+
+    let mut layer = Layer::new(
+        "particles".to_owned(),
+        "Particles".to_owned(),
+        LayerType::Particle { emitter },
+        20,
+    );
+    layer.transform.position = constant([WIDTH as f32 * 0.5, HEIGHT as f32 * 0.5]);
+    comp.layers.push(layer);
+
+    assert_eq!(
+        kagari_vfx::core::render_capability::software_preview_reason(&comp, 10),
+        None
+    );
+
+    let mut renderer = WgpuRenderer::new(device, queue);
+    let gpu = renderer
+        .render_frame_to_rgba8_gpu(&comp, 10, WIDTH, HEIGHT, 0.0, 0)
+        .expect("GPU Particle layer should render");
+    assert_eq!(gpu.len(), (WIDTH * HEIGHT * 4) as usize);
+    assert!(gpu.iter().any(|&v| v > 50));
+}
+
+#[test]
+fn gpu_paint_strokes_and_puppet_pins_render_on_gpu_without_fallback() {
+    let Some((device, queue)) = request_gpu() else {
+        eprintln!("skipping Paint/Puppet GPU test: no adapter available");
+        return;
+    };
+
+    const WIDTH: u32 = 48;
+    const HEIGHT: u32 = 48;
+    let mut comp = Composition::new(
+        "gpu_paint_puppet".to_owned(),
+        "GPU Paint & Puppet".to_owned(),
+        WIDTH,
+        HEIGHT,
+        30,
+        10,
+    );
+    comp.background_color = [0.0, 0.0, 0.0, 1.0];
+
+    let mut paint_layer = Layer::new(
+        "paint".to_owned(),
+        "Paint".to_owned(),
+        LayerType::Solid {
+            color: [0.1, 0.1, 0.1, 1.0],
+        },
+        10,
+    );
+    paint_layer.transform.position = constant([WIDTH as f32 * 0.5, HEIGHT as f32 * 0.5]);
+    paint_layer.paint_strokes.push(kagari_vfx::core::timeline::PaintStroke {
+        color: [0.0, 1.0, 0.4, 1.0],
+        size: 10.0,
+        mode: kagari_vfx::core::timeline::PaintStrokeMode::Brush,
+        clone_offset: [0.0, 0.0],
+        hardness: 0.9,
+        opacity: 1.0,
+        flow: 1.0,
+        points: vec![[-10.0, 0.0], [10.0, 0.0]],
+        start_frame: 0,
+        end_frame: 0,
+    });
+    paint_layer.puppet_pins.push(kagari_vfx::core::timeline::PuppetPin {
+        id: "pin1".to_owned(),
+        name: "Pin 1".to_owned(),
+        comp_source: [24.0, 24.0],
+        position: constant([28.0, 26.0]),
+    });
+    comp.layers.push(paint_layer);
+
+    assert_eq!(
+        kagari_vfx::core::render_capability::software_preview_reason(&comp, 0),
+        None
+    );
+
+    let mut renderer = WgpuRenderer::new(device, queue);
+    let gpu = renderer
+        .render_frame_to_rgba8_gpu(&comp, 0, WIDTH, HEIGHT, 0.0, 0)
+        .expect("GPU Paint & Puppet should render");
+    assert_eq!(gpu.len(), (WIDTH * HEIGHT * 4) as usize);
+    let center_idx = ((HEIGHT / 2) * WIDTH + (WIDTH / 2)) as usize * 4;
+    assert!(gpu[center_idx + 1] > 180);
+}
+
+#[test]
+fn gpu_model3d_renders_obj_mesh_with_depth_buffer_on_gpu() {
+    let Some((device, queue)) = request_gpu() else {
+        eprintln!("skipping Model3D GPU test: no adapter available");
+        return;
+    };
+
+    let obj_path = std::env::temp_dir().join("kagari_gpu_model3d_test.obj");
+    std::fs::write(
+        &obj_path,
+        "v -1.0 -1.0 0.0\nv 1.0 -1.0 0.0\nv 0.0 1.0 0.0\nf 1 2 3\n",
+    )
+    .expect("write test obj");
+
+    const WIDTH: u32 = 64;
+    const HEIGHT: u32 = 64;
+    let mut comp = Composition::new(
+        "gpu_model3d".to_owned(),
+        "GPU Model3D".to_owned(),
+        WIDTH,
+        HEIGHT,
+        30,
+        10,
+    );
+    comp.background_color = [0.0, 0.0, 0.0, 1.0];
+
+    let mut layer = Layer::new(
+        "model3d".to_owned(),
+        "Model 3D".to_owned(),
+        LayerType::Model3D {
+            path: obj_path.to_string_lossy().into_owned(),
+        },
+        10,
+    );
+    layer.transform_3d.position = constant([WIDTH as f32 * 0.5, HEIGHT as f32 * 0.5, 0.0]);
+    layer.transform.position = constant([WIDTH as f32 * 0.5, HEIGHT as f32 * 0.5]);
+    layer.transform.anchor_point = constant([WIDTH as f32 * 0.5, HEIGHT as f32 * 0.5]);
+    comp.layers.push(layer);
+
+    assert_eq!(
+        kagari_vfx::core::render_capability::software_preview_reason(&comp, 0),
+        None
+    );
+
+    let mut renderer = WgpuRenderer::new(device, queue);
+    let gpu = renderer
+        .render_frame_to_rgba8_gpu(&comp, 0, WIDTH, HEIGHT, 0.0, 0)
+        .expect("GPU Model3D should render");
+    let _ = std::fs::remove_file(&obj_path);
+    assert_eq!(gpu.len(), (WIDTH * HEIGHT * 4) as usize);
+    assert!(gpu.iter().any(|&v| v > 40));
+}
+
+#[test]
+fn gpu_puppet_mesh_warps_more_than_4_pins_on_gpu_without_fallback() {
+    let Some((device, queue)) = request_gpu() else {
+        eprintln!("skipping 6-pin Puppet GPU test: no adapter available");
+        return;
+    };
+
+    const WIDTH: u32 = 48;
+    const HEIGHT: u32 = 48;
+    let mut comp = Composition::new(
+        "gpu_puppet_6pins".to_owned(),
+        "GPU Puppet 6 Pins".to_owned(),
+        WIDTH,
+        HEIGHT,
+        30,
+        10,
+    );
+    comp.background_color = [0.0, 0.0, 0.0, 1.0];
+
+    let mut layer = Layer::new(
+        "puppet_solid".to_owned(),
+        "Puppet Solid".to_owned(),
+        LayerType::Solid {
+            color: [0.3, 0.85, 0.95, 1.0],
+        },
+        10,
+    );
+    for i in 0..6 {
+        let x = 8.0 + i as f32 * 6.0;
+        layer.puppet_pins.push(kagari_vfx::core::timeline::PuppetPin {
+            id: format!("pin_{i}"),
+            name: format!("Pin {i}"),
+            comp_source: [x, 24.0],
+            position: constant([x + 1.5, 22.0]),
+        });
+    }
+    comp.layers.push(layer);
+
+    assert_eq!(
+        kagari_vfx::core::render_capability::software_preview_reason(&comp, 0),
+        None
+    );
+
+    let mut renderer = WgpuRenderer::new(device, queue);
+    let gpu = renderer
+        .render_frame_to_rgba8_gpu(&comp, 0, WIDTH, HEIGHT, 0.0, 0)
+        .expect("GPU 6-pin Puppet mesh should render");
+    assert_eq!(gpu.len(), (WIDTH * HEIGHT * 4) as usize);
+    let center_idx = ((HEIGHT / 2) * WIDTH + (WIDTH / 2)) as usize * 4;
+    assert!(gpu[center_idx + 2] > 180);
+}
+
+#[test]
+fn gpu_color_grade_lut_samples_real_cube_3d_texture_on_gpu() {
+    let Some((device, queue)) = request_gpu() else {
+        eprintln!("skipping 3D LUT GPU test: no adapter available");
+        return;
+    };
+
+    // 2x2x2 .cube LUT that swaps Red -> Blue (maps (1,0,0) -> (0,0,1))
+    let cube_path = std::env::temp_dir().join("kagari_gpu_swap_lut_test.cube");
+    std::fs::write(
+        &cube_path,
+        "LUT_3D_SIZE 2\n\
+         0.0 0.0 0.0\n\
+         0.0 0.0 1.0\n\
+         0.0 1.0 0.0\n\
+         0.0 1.0 1.0\n\
+         1.0 0.0 0.0\n\
+         1.0 0.0 1.0\n\
+         1.0 1.0 0.0\n\
+         1.0 1.0 1.0\n",
+    )
+    .expect("write test .cube LUT");
+
+    const WIDTH: u32 = 32;
+    const HEIGHT: u32 = 32;
+    let mut comp = Composition::new(
+        "gpu_cube_lut".to_owned(),
+        "GPU Cube LUT".to_owned(),
+        WIDTH,
+        HEIGHT,
+        30,
+        5,
+    );
+    comp.background_color = [0.0, 0.0, 0.0, 1.0];
+
+    let mut layer = Layer::new(
+        "red_solid".to_owned(),
+        "Red Solid".to_owned(),
+        LayerType::Solid {
+            color: [1.0, 0.0, 0.0, 1.0],
+        },
+        5,
+    );
+    layer.effects = vec![Effect {
+        id: "lut".to_owned(),
+        name: "3D LUT".to_owned(),
+        effect_type: EffectType::ColorGradeLUT {
+            lut_path: cube_path.to_string_lossy().into_owned(),
+            intensity: constant(100.0),
+        },
+        enabled: true,
+    }];
+    comp.layers.push(layer);
+
+    let mut renderer = WgpuRenderer::new(device, queue);
+    let gpu = renderer
+        .render_frame_to_rgba8_gpu(&comp, 0, WIDTH, HEIGHT, 0.0, 0)
+        .expect("GPU 3D .cube LUT should render");
+    let _ = std::fs::remove_file(&cube_path);
+    let center_idx = ((HEIGHT / 2) * WIDTH + (WIDTH / 2)) as usize * 4;
+    // Red (1,0,0) mapped to Blue (0,0,1) by the 3D LUT texture!
+    assert!(gpu[center_idx] < 20);
+    assert!(gpu[center_idx + 2] > 230);
 }

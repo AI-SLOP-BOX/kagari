@@ -390,6 +390,7 @@ impl AfterEffectsStudio {
             openfx_plugins: Vec::new(),
             openfx_search_paths: String::new(),
             settings_open: false,
+            command_palette_open: false,
             exit_confirm_open: false,
             project_switch_confirm_open: false,
             composition_remove_confirm_open: false,
@@ -412,6 +413,8 @@ impl AfterEffectsStudio {
             cache_path,
             cache_path_status: String::new(),
             settings_feedback: String::new(),
+            settings_defaults_confirm_open: false,
+            settings_search: String::new(),
             cache_limit,
             cache_usage_bytes,
             accent_color,
@@ -462,6 +465,11 @@ impl AfterEffectsStudio {
             layer_name: "Emitter · Main".to_owned(),
             search: String::new(),
             project_search: String::new(),
+            project_sort: "updated".to_owned(),
+            project_sort_desc: true,
+            project_view_grid: false,
+            selected_project_paths: std::collections::BTreeSet::new(),
+            active_project_path: None,
             current_time: format_timecode(132, 30),
             zoom_manually_adjusted: false,
             current_frame: 132,
@@ -472,12 +480,16 @@ impl AfterEffectsStudio {
             timeline_zoom: 1.0,
             timeline_start_frame: 0.0,
             timeline_vertical_scroll: 0.0,
+            virtual_list_ranges: std::collections::HashMap::new(),
             workspace_left_ratios,
             workspace_center_ratios,
             workspace_vertical_ratios,
             viewport_channel_mode: "RGBA".to_string(),
             viewport_exposure_ev: 0.0,
             viewport_wipe_enabled: false,
+            viewport_wipe_split: 0.5,
+            viewport_wipe_dragging: false,
+            viewport_scale_drag: None,
             preview_revision: 0,
             preview_cache: std::collections::HashMap::new(),
             viewport_mapping: None,
@@ -502,6 +514,42 @@ impl AfterEffectsStudio {
             graph_channel: GraphChannel::PositionX,
             graph_key_drag: None,
             flowchart_wire_drag: None,
+            color_scope_mode: ColorScopeMode::Parade,
+            engine_hub_status: "エンジン統合ハブ待機中".to_owned(),
+            compositor_graph: {
+                let mut g = kagari_vfx::core::compositor_node_graph::CompositorNodeGraph::new();
+                g.add_node(
+                    1,
+                    "MediaIn",
+                    kagari_vfx::core::compositor_node_graph::NodeKind::MediaIn,
+                );
+                g.add_node(
+                    2,
+                    "ColorWheel",
+                    kagari_vfx::core::compositor_node_graph::NodeKind::ColorWheelGrade(
+                        Default::default(),
+                    ),
+                );
+                g.add_node(
+                    999,
+                    "MediaOut",
+                    kagari_vfx::core::compositor_node_graph::NodeKind::MediaOut,
+                );
+                let _ = g.connect(1, 2, 0);
+                let _ = g.connect(2, 999, 0);
+                g
+            },
+            node_graph_selected_id: Some(2),
+            node_graph_next_id: 3,
+            node_graph_status: "DAG準備完了 (3ノード: MediaIn → ColorWheel → MediaOut)".to_owned(),
+            node_graph_bounds: None,
+            node_graph_positions: std::collections::HashMap::new(),
+            node_graph_drag_node: None,
+            node_graph_drag_wire: None,
+            node_graph_live_preview: false,
+            effect_category: "all",
+            color_wheel_drag: None,
+            color_wheels_bounds: None,
             hide_shy_layers: false,
             waveform_cache: std::collections::HashMap::new(),
             waveform_cache_revisions: std::collections::HashMap::new(),
@@ -545,6 +593,7 @@ impl AfterEffectsStudio {
             align_selected_layer_ids: std::collections::HashSet::new(),
             align_to_composition: false,
             selected_effect_id: None,
+            effect_clipboard: None,
             graph_effect_parameter_id: None,
             selected_marker_frame: None,
             selected_layer_marker_frame: None,
@@ -564,9 +613,13 @@ impl AfterEffectsStudio {
             save_status: String::new(),
             project_is_dirty: false,
             setup_name: "無題のプロジェクト".to_owned(),
+            setup_location: "~/Documents/Kagari Studio/Projects".to_owned(),
+            setup_comp_name: "コンポジション 1".to_owned(),
+            setup_create_initial_comp: true,
+            setup_advanced_open: false,
             setup_width: "1920".to_owned(),
             setup_height: "1080".to_owned(),
-            setup_fps: "30".to_owned(),
+            setup_fps: "60".to_owned(),
             setup_duration_seconds: "10".to_owned(),
             setup_error: String::new(),
             setup_return_screen: if show_home_on_startup {
@@ -620,6 +673,7 @@ impl AfterEffectsStudio {
         }
         kagari_vfx::core::compute_pipeline::set_gpu_effects_enabled(app.gpu_enabled);
         app.sync_bindings()?;
+        app.sync_recent_projects_bindings()?;
         Ok(app)
     }
 }

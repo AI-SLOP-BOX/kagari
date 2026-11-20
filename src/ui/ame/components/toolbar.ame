@@ -1,42 +1,68 @@
 component ToolBar() {
-    Padding(horizontal: 6, vertical: 3) {
+    Surface(padding: 5, spacing: 4, radius: 5, border: true, background: "#14171d") {
       VStack(spacing: 4) {
-        HStack(spacing: 6) {
-          HStack(spacing: 2) {
-            If(selected_tool == "Selection") { Button("選択", action: tool_select, tone: primary, size: small) } else { Button("選択", action: tool_select, tone: secondary, size: small) }
-            If(selected_tool == "Hand") { Button("手", action: tool_hand, tone: primary, size: small) } else { Button("手", action: tool_hand, tone: secondary, size: small) }
-            If(selected_tool == "Zoom") { Button("ズーム", action: tool_zoom, tone: primary, size: small) } else { Button("ズーム", action: tool_zoom, tone: secondary, size: small) }
-            IconButton("type", action: tool_text, tone: secondary, size: small)
-            IconButton("shape", action: tool_shape, tone: secondary, size: small)
-            IconButton("edit", action: tool_pen, tone: secondary, size: small)
-            If(selected_tool_roto) { Button("ロト", action: tool_roto, tone: primary, size: small) } else { Button("ロト", action: tool_roto, tone: secondary, size: small) }
+        If(narrow) {
+          Wrap(item_spacing: 4, line_spacing: 4) {
+            If(selected_tool == "Selection") { Button("選択", action: tool_select, tone: primary, size: small) } else { Button("選択", action: tool_select, tone: ghost, size: small) }
+            If(selected_tool == "Hand") { Button("手", action: tool_hand, tone: primary, size: small) } else { Button("手", action: tool_hand, tone: ghost, size: small) }
+            If(selected_tool == "Zoom") { Button("ズーム", action: tool_zoom, tone: primary, size: small) } else { Button("ズーム", action: tool_zoom, tone: ghost, size: small) }
+            IconButton("type", action: tool_text, tone: ghost, size: small)
+            IconButton("shape", action: tool_shape, tone: ghost, size: small)
+            IconButton("edit", action: tool_pen, tone: ghost, size: small)
+            If(selected_tool_roto) { Button("ロト", action: tool_roto, tone: primary, size: small) } else { Button("ロト", action: tool_roto, tone: ghost, size: small) }
+            IconButton("undo", action: undo_project, tone: ghost, size: small, disabled: !can_undo)
+            IconButton("redo", action: redo_project, tone: ghost, size: small, disabled: !can_redo)
+            IconButton("effect", action: add_adjustment_layer, tone: ghost, size: small)
+            IconButton("particle", action: add_particle_layer, tone: ghost, size: small)
+            If(roto_analysis_busy) { Button("ロト中止", action: roto_cancel, tone: ghost, size: small) }
+            HorizontalScrollView(240) { WorkspaceTabs() }
+            If(is_playing) { IconButton("pause", action: play_toggle, tone: primary, size: small) } else { IconButton("play", action: play_toggle, tone: ghost, size: small) }
+            IconButton("stop", action: play_stop, tone: ghost, size: small)
+            If(playback_loop) { IconButton("repeat", action: toggle_playback_loop, tone: primary, size: small) } else { IconButton("repeat", action: toggle_playback_loop, tone: ghost, size: small) }
           }
-          HStack(spacing: 2) {
-            IconButton("undo", action: undo_project, tone: secondary, size: small, disabled: !can_undo)
-            IconButton("redo", action: redo_project, tone: secondary, size: small, disabled: !can_redo)
-            IconButton("effect", action: add_adjustment_layer, tone: secondary, size: small)
-            IconButton("particle", action: add_particle_layer, tone: secondary, size: small)
-            If(roto_analysis_busy) { Button("ロト中止", action: roto_cancel, tone: secondary, size: small) }
-          }
-          Spacer
-          If(compact) { HorizontalScrollView(240) { WorkspaceTabs() } } else { HorizontalScrollView(440) { WorkspaceTabs() } }
-          Spacer
-          HStack(spacing: 2) {
-            If(is_playing) { IconButton("pause", action: play_toggle, tone: primary, size: small) } else { IconButton("play", action: play_toggle, tone: secondary, size: small) }
-            IconButton("stop", action: play_stop, tone: secondary, size: small)
-            If(playback_loop) { IconButton("repeat", action: toggle_playback_loop, tone: primary, size: small) } else { IconButton("repeat", action: toggle_playback_loop, tone: secondary, size: small) }
+        } else {
+          HStack(spacing: 6) {
+            Surface(padding: 2, spacing: 0, radius: 5, border: false, background: "#101318") {
+              HStack(spacing: 2) {
+                If(selected_tool == "Selection") { Button("選択", action: tool_select, tone: primary, size: small) } else { Button("選択", action: tool_select, tone: ghost, size: small) }
+                If(selected_tool == "Hand") { Button("手", action: tool_hand, tone: primary, size: small) } else { Button("手", action: tool_hand, tone: ghost, size: small) }
+                If(selected_tool == "Zoom") { Button("ズーム", action: tool_zoom, tone: primary, size: small) } else { Button("ズーム", action: tool_zoom, tone: ghost, size: small) }
+                IconButton("type", action: tool_text, tone: ghost, size: small)
+                IconButton("shape", action: tool_shape, tone: ghost, size: small)
+                IconButton("edit", action: tool_pen, tone: ghost, size: small)
+                If(selected_tool_roto) { Button("ロト", action: tool_roto, tone: primary, size: small) } else { Button("ロト", action: tool_roto, tone: ghost, size: small) }
+              }
+            }
+            Surface(padding: 0, spacing: 0, radius: 0, border: false, background: "#262c37") { Spacer }.frame(width: 1, height: 16)
+            HStack(spacing: 2) {
+              IconButton("undo", action: undo_project, tone: ghost, size: small, disabled: !can_undo)
+              IconButton("redo", action: redo_project, tone: ghost, size: small, disabled: !can_redo)
+              IconButton("effect", action: add_adjustment_layer, tone: ghost, size: small)
+              IconButton("particle", action: add_particle_layer, tone: ghost, size: small)
+              If(roto_analysis_busy) { Button("ロト中止", action: roto_cancel, tone: ghost, size: small) }
+            }
+            Spacer
+            If(compact) { HorizontalScrollView(240) { WorkspaceTabs() } } else { Grow(1) { HorizontalScrollView(600) { WorkspaceTabs() } } }
+            Spacer
+            Surface(padding: 2, spacing: 0, radius: 5, border: false, background: "#101318") {
+              HStack(spacing: 2) {
+                If(is_playing) { IconButton("pause", action: play_toggle, tone: primary, size: small) } else { IconButton("play", action: play_toggle, tone: ghost, size: small) }
+                IconButton("stop", action: play_stop, tone: ghost, size: small)
+                If(playback_loop) { IconButton("repeat", action: toggle_playback_loop, tone: primary, size: small) } else { IconButton("repeat", action: toggle_playback_loop, tone: ghost, size: small) }
+              }
+            }
           }
         }
         If(selected_tool_roto) {
           HStack(spacing: 8) {
-            If(roto_foreground) { Button("前景", action: roto_mode_foreground, tone: primary, size: small) } else { Button("前景", action: roto_mode_foreground, tone: secondary, size: small) }
-            If(roto_foreground) { Button("背景 (Alt)", action: roto_mode_background, tone: secondary, size: small) } else { Button("背景 (Alt)", action: roto_mode_background, tone: primary, size: small) }
+            If(roto_foreground) { Button("前景", action: roto_mode_foreground, tone: primary, size: small) } else { Button("前景", action: roto_mode_foreground, tone: ghost, size: small) }
+            If(roto_foreground) { Button("背景 (Alt)", action: roto_mode_background, tone: ghost, size: small) } else { Button("背景 (Alt)", action: roto_mode_background, tone: primary, size: small) }
             Caption("ブラシ")
             Slider(roto_brush_radius, min: 1.0, max: 128.0, action: roto_brush_radius_changed)
             Caption("ぼかし")
             Slider(roto_feather_radius, min: 0.0, max: 32.0, action: roto_feather_radius_changed)
-            Button("消去", action: roto_clear, tone: secondary, size: small, disabled: roto_analysis_busy)
-            Button("時間方向へ伝播", action: roto_propagate, tone: secondary, size: small, disabled: roto_analysis_busy)
+            Button("消去", action: roto_clear, tone: ghost, size: small, disabled: roto_analysis_busy)
+            Button("時間方向へ伝播", action: roto_propagate, tone: ghost, size: small, disabled: roto_analysis_busy)
             Caption("{roto_status}")
           }
         }
@@ -47,18 +73,18 @@ component ToolBar() {
 component WorkspaceTabs() {
   HorizontalScrollView(520) {
     HStack(spacing: 2) {
-      If(is_default_workspace) { Button("標準", action: workspace_default, tone: primary, size: small) } else { Button("標準", action: workspace_default, tone: secondary, size: small) }
-      If(is_timeline_workspace) { Button("タイムライン", action: workspace_timeline, tone: primary, size: small) } else { Button("タイムライン", action: workspace_timeline, tone: secondary, size: small) }
-      If(is_graph_workspace) { Button("グラフ", action: workspace_graph, tone: primary, size: small) } else { Button("グラフ", action: workspace_graph, tone: secondary, size: small) }
-      If(is_effects_workspace) { Button("エフェクト", action: workspace_effects, tone: primary, size: small) } else { Button("エフェクト", action: workspace_effects, tone: secondary, size: small) }
-      If(is_camera_light_workspace) { Button("3D・照明", action: workspace_camera_light, tone: primary, size: small) } else { Button("3D・照明", action: workspace_camera_light, tone: secondary, size: small) }
-      If(is_color_workspace) { Button("色補正", action: workspace_color, tone: primary, size: small) } else { Button("色補正", action: workspace_color, tone: secondary, size: small) }
-      If(is_layer_style_workspace) { Button("合成", action: workspace_layer_style, tone: primary, size: small) } else { Button("合成", action: workspace_layer_style, tone: secondary, size: small) }
-      If(is_mask_workspace) { Button("マスク", action: workspace_mask, tone: primary, size: small) } else { Button("マスク", action: workspace_mask, tone: secondary, size: small) }
-      If(is_text_workspace) { Button("文字", action: workspace_text, tone: primary, size: small) } else { Button("文字", action: workspace_text, tone: secondary, size: small) }
-      Button("音響", action: workspace_audio, tone: secondary, size: small)
-      If(is_time_remap_workspace) { Button("リマップ", action: workspace_time_remap, tone: primary, size: small) } else { Button("リマップ", action: workspace_time_remap, tone: secondary, size: small) }
-      IconButton("reset", action: workspace_reset_layout, tone: secondary, size: small)
+      If(is_default_workspace) { Button("標準", action: workspace_default, tone: primary, size: small) } else { Button("標準", action: workspace_default, tone: ghost, size: small) }
+      If(is_timeline_workspace) { Button("タイムライン", action: workspace_timeline, tone: primary, size: small) } else { Button("タイムライン", action: workspace_timeline, tone: ghost, size: small) }
+      If(is_graph_workspace) { Button("グラフ", action: workspace_graph, tone: primary, size: small) } else { Button("グラフ", action: workspace_graph, tone: ghost, size: small) }
+      If(is_effects_workspace) { Button("エフェクト", action: workspace_effects, tone: primary, size: small) } else { Button("エフェクト", action: workspace_effects, tone: ghost, size: small) }
+      If(is_camera_light_workspace) { Button("3D・照明", action: workspace_camera_light, tone: primary, size: small) } else { Button("3D・照明", action: workspace_camera_light, tone: ghost, size: small) }
+      If(is_color_workspace) { Button("色補正", action: workspace_color, tone: primary, size: small) } else { Button("色補正", action: workspace_color, tone: ghost, size: small) }
+      If(is_layer_style_workspace) { Button("合成", action: workspace_layer_style, tone: primary, size: small) } else { Button("合成", action: workspace_layer_style, tone: ghost, size: small) }
+      If(is_mask_workspace) { Button("マスク", action: workspace_mask, tone: primary, size: small) } else { Button("マスク", action: workspace_mask, tone: ghost, size: small) }
+      If(is_text_workspace) { Button("文字", action: workspace_text, tone: primary, size: small) } else { Button("文字", action: workspace_text, tone: ghost, size: small) }
+      Button("音響", action: workspace_audio, tone: ghost, size: small)
+      If(is_time_remap_workspace) { Button("リマップ", action: workspace_time_remap, tone: primary, size: small) } else { Button("リマップ", action: workspace_time_remap, tone: ghost, size: small) }
+      IconButton("reset", action: workspace_reset_layout, tone: ghost, size: small)
     }
   }
 }

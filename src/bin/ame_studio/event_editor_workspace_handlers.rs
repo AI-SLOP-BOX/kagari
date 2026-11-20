@@ -7,6 +7,20 @@ impl AfterEffectsStudio {
         action_value: Option<ActionValue>,
     ) -> bool {
         match (action_name, action_value) {
+            ("toggle_command_palette", _) => {
+                self.command_palette_open = !self.command_palette_open;
+                true
+            }
+            ("execute_command", Some(ActionValue::Text(command_id))) => {
+                self.command_palette_open = false;
+                if !self.handle_editor_workspace_action(&command_id, None)
+                    && !self.handle_navigation_setup_action(&command_id, None)
+                    && !self.handle_engine_hub_action(&command_id)
+                {
+                    self.handle_effect_action(&command_id, None, None);
+                }
+                true
+            }
             ("back_to_editor", _) | ("timeline_tab", _) => {
                 self.screen = Screen::Editor;
                 self.render_queue = false;

@@ -233,6 +233,29 @@ impl AfterEffectsStudio {
             })
             .collect::<Vec<_>>();
 
+        // Interactive A/B wipe split drag when wipe comparison is active
+        if self.viewport_wipe_enabled {
+            let comp_w = f64::from(self.project_model.active_composition().width.max(1));
+            let split_screen_x = left + comp_w * self.viewport_wipe_split.clamp(0.05, 0.95) * scale_x;
+            match event.phase {
+                CanvasPointerPhase::Down if !event.modifiers.alt => {
+                    if (event.x - split_screen_x).abs() <= 14.0 {
+                        self.viewport_wipe_dragging = true;
+                        return true;
+                    }
+                }
+                CanvasPointerPhase::Moved if self.viewport_wipe_dragging => {
+                    self.viewport_wipe_split = (point[0] / comp_w).clamp(0.05, 0.95);
+                    return true;
+                }
+                CanvasPointerPhase::Up if self.viewport_wipe_dragging => {
+                    self.viewport_wipe_dragging = false;
+                    return true;
+                }
+                _ => {}
+            }
+        }
+
         // 3D Camera interactive navigation: Alt + Primary (Orbit), Alt + Secondary (Pan), Alt + Shift / Tertiary (Dolly)
         if event.phase == CanvasPointerPhase::Down && event.modifiers.alt {
             let comp = self.project_model.active_composition();
@@ -295,6 +318,44 @@ impl AfterEffectsStudio {
                         mask_id: mask_id.to_owned(),
                         vertex_index,
                     });
+                    return true;
+                }
+            }
+            if let Some(layer_id) = self.selected_layer_id.clone() {
+                let corner_hit = {
+                    let comp = self.project_model.active_composition();
+                    comp.layers
+                        .iter()
+                        .find(|l| l.id == layer_id && !l.locked && l.visible && l.is_active(self.current_frame))
+                        .and_then(|layer| {
+                            let pos = layer.transform.position.evaluate(self.current_frame);
+                            let anchor = layer.transform.anchor_point.evaluate(self.current_frame);
+                            let rot = f64::from(layer.transform.rotation.evaluate(self.current_frame)).to_radians();
+                            let scale = layer.transform.scale.evaluate(self.current_frame);
+                            let size = layer.bounding_size();
+                            let lw = f64::from(size[0]);
+                            let lh = f64::from(size[1]);
+                            let (sin_r, cos_r) = rot.sin_cos();
+                            let sx = f64::from(scale[0]) / 100.0;
+                            let sy = f64::from(scale[1]) / 100.0;
+                            let corners = [
+                                (-f64::from(anchor[0]), -f64::from(anchor[1])),
+                                (lw - f64::from(anchor[0]), -f64::from(anchor[1])),
+                                (lw - f64::from(anchor[0]), lh - f64::from(anchor[1])),
+                                (-f64::from(anchor[0]), lh - f64::from(anchor[1])),
+                            ];
+                            let hit = corners.iter().any(|&(lx, ly)| {
+                                let rx = (lx * sx) * cos_r - (ly * sy) * sin_r;
+                                let ry = (lx * sx) * sin_r + (ly * sy) * cos_r;
+                                let cx = left + (f64::from(pos[0]) + rx) * scale_x;
+                                let cy = top + (f64::from(pos[1]) + ry) * scale_y;
+                                (event.x - cx).hypot(event.y - cy) <= 12.0
+                            });
+                            hit.then_some((pos, scale))
+                        })
+                };
+                if let Some((pos, scale)) = corner_hit {
+                    self.viewport_scale_drag = Some((layer_id, pos, scale, point));
                     return true;
                 }
             }
@@ -498,6 +559,37 @@ impl AfterEffectsStudio {
                     self.update_mask_vertex(point);
                     return true;
                 }
+                if let Some((ref layer_id, pos, start_scale, start_point)) =
+                    self.viewport_scale_drag.clone()
+                {
+                    let start_dist = (start_point[0] - f64::from(pos[0]))
+                        .hypot(start_point[1] - f64::from(pos[1]))
+                        .max(1.0);
+                    let cur_dist = (point[0] - f64::from(pos[0]))
+                        .hypot(point[1] - f64::from(pos[1]))
+                        .max(1.0);
+                    let ratio = (cur_dist / start_dist) as f32;
+                    let next_scale = [
+                        (start_scale[0] * ratio).clamp(1.0, 2000.0),
+                        (start_scale[1] * ratio).clamp(1.0, 2000.0),
+                    ];
+                    if let Some(layer) = self
+                        .project_model
+                        .active_composition_mut()
+                        .layers
+                        .iter_mut()
+                        .find(|l| l.id == *layer_id && !l.locked)
+                    {
+                        layer
+                            .transform
+                            .scale
+                            .set_value_at_frame(self.current_frame, next_scale);
+                        self.mark_project_changed();
+                        self.sync_selected_layer_controls();
+                        self.sync_bindings_logged();
+                    }
+                    return true;
+                }
                 if let Some((start_offset, start_point)) = self.viewport_pan_drag {
                     self.viewport_pan = [
                         start_offset[0] + event.x - start_point[0],
@@ -562,6 +654,7 @@ impl AfterEffectsStudio {
                     return true;
                 }
                 self.viewport_drag = None;
+                self.viewport_scale_drag = None;
                 self.light_gizmo_drag = None;
                 self.camera_nav_drag = None;
                 self.mask_vertex_drag = None;

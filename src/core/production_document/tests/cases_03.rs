@@ -103,10 +103,15 @@ fn rejects_unsorted_or_duplicate_animation_keyframes() {
     for frames in [[10, 5], [5, 5]] {
         let mut document = ProductionDocument::new(Project::default());
         document.project.compositions[0].layers[0].transform.opacity =
-            Animatable::new_animated(vec![
-                Keyframe::new(frames[0], 20.0, InterpolationType::Linear),
-                Keyframe::new(frames[1], 80.0, InterpolationType::Linear),
-            ]);
+            Animatable::new_animated(vec![]);
+        *document.project.compositions[0].layers[0]
+            .transform
+            .opacity
+            .keyframes_mut()
+            .unwrap() = vec![
+            Keyframe::new(frames[0], 20.0, InterpolationType::Linear),
+            Keyframe::new(frames[1], 80.0, InterpolationType::Linear),
+        ];
         assert!(document.validate().is_err());
     }
 }

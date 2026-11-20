@@ -115,4 +115,19 @@ mod tests {
         assert!(parse_binding_value("audio.bass=NaN").is_err());
         assert!(parse_binding_value(" audio.bass=0.5").is_err());
     }
+
+    #[test]
+    fn doctor_and_presets_cli_reports_expose_subsystems_and_bundles() {
+        let doc = info::doctor_report_value();
+        assert_eq!(doc["subsystems"]["aces_color_management"], true);
+        assert_eq!(doc["subsystems"]["deep_compositing"], true);
+        assert_eq!(doc["subsystems"]["sfm_camera_tracker"], true);
+
+        let presets = info::presets_report_value();
+        assert!(!presets["timeline_presets"].as_array().unwrap().is_empty());
+        assert!(!presets["composer_bundles"].as_array().unwrap().is_empty());
+
+        assert!(Cli::try_parse_from(["kagari", "doctor", "--json"]).is_ok());
+        assert!(Cli::try_parse_from(["kagari", "presets", "--json"]).is_ok());
+    }
 }

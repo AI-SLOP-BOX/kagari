@@ -147,25 +147,42 @@ impl AfterEffectsStudio {
             .collect::<Vec<_>>();
         self.ui
             .set_binding("has_effect_items", Value::Bool(!effect_items.is_empty()))?;
+        self.ui.set_binding(
+            "has_selected_effect",
+            Value::Bool(selected_effect.is_some()),
+        )?;
+        self.ui.set_binding(
+            "has_effect_clipboard",
+            Value::Bool(self.effect_clipboard.is_some()),
+        )?;
         self.ui
             .set_binding("effect_items", Value::List(effect_items))?;
         let effect_parameters = selected_effect
-            .map(|effect| effect_parameter_specs(&effect.effect_type, self.current_frame))
-            .unwrap_or_default()
-            .into_iter()
-            .map(|(id, label, value, unit)| {
-                Value::Record(std::collections::BTreeMap::from([
-                    ("id".to_owned(), Value::String(id.to_owned())),
-                    ("label".to_owned(), Value::String(label.to_owned())),
-                    ("value".to_owned(), Value::String(format!("{value:.2}"))),
-                    ("unit".to_owned(), Value::String(unit.to_owned())),
-                ]))
+            .map(|effect| {
+                effect_parameter_specs(&effect.effect_type, self.current_frame)
+                    .into_iter()
+                    .map(|(id, label, value, unit)| {
+                        let (min_v, max_v) = effect_parameter_range(&effect.effect_type, id);
+                        let normalized = normalize_effect_param(value, min_v, max_v);
+                        Value::Record(std::collections::BTreeMap::from([
+                            ("id".to_owned(), Value::String(id.to_owned())),
+                            ("label".to_owned(), Value::String(label.to_owned())),
+                            ("value".to_owned(), Value::String(format!("{value:.2}"))),
+                            ("unit".to_owned(), Value::String(unit.to_owned())),
+                            ("normalized".to_owned(), Value::Float(normalized)),
+                            ("is_numeric".to_owned(), Value::Bool(true)),
+                        ]))
+                    })
+                    .collect::<Vec<_>>()
             })
-            .collect::<Vec<_>>();
+            .unwrap_or_default();
         self.ui.set_binding(
             "has_effect_parameters",
             Value::Bool(!effect_parameters.is_empty()),
         )?;
+        self.ui
+            .set_binding("effect_parameters", Value::List(effect_parameters))?;
+        self.sync_color_grading_bindings()?;
         self.sync_tracker_bindings()?;
         self.sync_animation_preset_bindings()?;
         Ok(())

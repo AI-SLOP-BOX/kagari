@@ -9,8 +9,11 @@ use std::sync::Arc;
 mod cache;
 mod cache_identity;
 mod helpers;
+mod lut_gpu;
 mod mask_raster;
 mod media_textures;
+mod model3d_gpu;
+mod puppet_gpu;
 mod ram_preview;
 mod render_encoder;
 mod render_pass;
@@ -69,6 +72,10 @@ struct GlobalsUniform {
     shadow_strength: f32,
     channel_mode: u32,
     wipe_split_x: f32,
+    dither_output: u32,
+    blend_linear: u32,
+    working_color_space: u32,
+    _pad2: u32,
 }
 
 /// Compile-time proof that LayerUniform is non-zero-sized, embedded directly
@@ -288,7 +295,10 @@ struct LayerUniform {
     accepts_shadows: u32,
     _ls_pad5: f32,
     video_frame_blend: f32,
-    _video_frame_blend_padding: [f32; 3],
+    shape_stroke_width: f32,
+    shape_size_x: f32,
+    shape_size_y: f32,
+    shape_stroke_color: [f32; 4],
 }
 
 // ─── GPU Layer Mask Rasterization (CPU-baked coverage → group(3) texture) ──
@@ -302,6 +312,8 @@ pub(crate) struct MaskShape {
     pub inverted: bool,
     /// Feather radius in output pixels (0 = hard edge).
     pub feather: f32,
+    /// Mask expansion in output pixels (> 0 dilates, < 0 erodes).
+    pub expansion: f32,
 }
 
 /// Approximate byte budget for cached Rgba16Float source textures.
@@ -315,7 +327,11 @@ pub struct WgpuRenderer {
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
     render_pipeline: wgpu::RenderPipeline,
+    render_pipeline_multiply: wgpu::RenderPipeline,
     render_pipeline_screen: wgpu::RenderPipeline,
+    render_pipeline_add: wgpu::RenderPipeline,
+    render_pipeline_behind: wgpu::RenderPipeline,
+    render_pipeline_replace: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
 
@@ -347,6 +363,26 @@ pub struct WgpuRenderer {
     shadow_view: Option<wgpu::TextureView>,
     shadow_size: (u32, u32),
     shadow_active: bool,
+    backdrop_texture: Option<wgpu::Texture>,
+    backdrop_view: Option<wgpu::TextureView>,
+    backdrop_size: (u32, u32),
+    scratch_a_texture: Option<wgpu::Texture>,
+    scratch_a_view: Option<wgpu::TextureView>,
+    scratch_a_bind_group: Option<std::sync::Arc<wgpu::BindGroup>>,
+    scratch_b_texture: Option<wgpu::Texture>,
+    scratch_b_view: Option<wgpu::TextureView>,
+    scratch_b_bind_group: Option<std::sync::Arc<wgpu::BindGroup>>,
+    scratch_size: (u32, u32),
+    custom_shader_bgl: wgpu::BindGroupLayout,
+    custom_shader_pipeline_layout: wgpu::PipelineLayout,
+    custom_shader_uniform_buffer: wgpu::Buffer,
+    custom_shader_pipelines: std::cell::RefCell<std::collections::HashMap<u64, Option<wgpu::RenderPipeline>>>,
+    model3d_bgl: wgpu::BindGroupLayout,
+    model3d_pipeline: wgpu::RenderPipeline,
+    puppet_pipeline: wgpu::RenderPipeline,
+    lut_bgl: wgpu::BindGroupLayout,
+    lut_pipeline: wgpu::RenderPipeline,
+    lut_cache: std::cell::RefCell<std::collections::HashMap<u64, Option<(wgpu::TextureView, u32)>>>,
     /// Content-addressed cache so static masks skip EDT re-raster during
     /// playback of other layers.
     mask_raster_cache: std::cell::RefCell<MaskRasterCache>,
@@ -503,15 +539,15 @@ impl WgpuRenderer {
                 label: Some("kagari_gpu_preview_copy"),
             });
         encoder.copy_texture_to_buffer(
-            wgpu::TexelCopyTextureInfo {
+            wgpu::ImageCopyTexture {
                 texture: tex,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            wgpu::TexelCopyBufferInfo {
+            wgpu::ImageCopyBuffer {
                 buffer: &readback,
-                layout: wgpu::TexelCopyBufferLayout {
+                layout: wgpu::ImageDataLayout {
                     offset: 0,
                     bytes_per_row: Some(padded_bytes_per_row),
                     rows_per_image: Some(h),
@@ -526,7 +562,7 @@ impl WgpuRenderer {
         slice.map_async(wgpu::MapMode::Read, move |res| {
             let _ = tx.send(res);
         });
-        let _ = self.device.poll(wgpu::PollType::Wait);
+        let _ = self.device.poll(wgpu::Maintain::Wait);
         rx.recv().ok()?.ok()?;
 
         let mapped = slice.get_mapped_range();
@@ -535,18 +571,62 @@ impl WgpuRenderer {
             let src_row = &mapped[row * padded_bytes_per_row as usize
                 ..row * padded_bytes_per_row as usize + unpadded_bytes_per_row as usize];
             let dst_row = &mut rgba8[row * (w as usize * 4)..(row + 1) * (w as usize * 4)];
-            for (px_src, px_dst) in src_row.chunks_exact(8).zip(dst_row.chunks_exact_mut(4)) {
-                for ch in 0..4 {
-                    let bits = u16::from_le_bytes([px_src[ch * 2], px_src[ch * 2 + 1]]);
-                    let v = f16::from_bits(bits).to_f32();
-                    px_dst[ch] = (v.clamp(0.0, 1.0) * 255.0).round() as u8;
-                }
-            }
+            decode_rgba16f_row_to_rgba8(
+                src_row,
+                dst_row,
+                comp.working_color_space,
+                comp.blend_linear,
+            );
         }
         drop(mapped);
         readback.unmap();
         Some(rgba8)
     }
+}
+
+pub(crate) fn decode_rgba16f_row_to_rgba8(
+    src_row: &[u8],
+    dst_row: &mut [u8],
+    working_color_space: crate::core::color_science::WorkingColorSpace,
+    blend_linear: bool,
+) {
+    let needs_space_convert =
+        working_color_space != crate::core::color_science::WorkingColorSpace::Rec709;
+    for (px_src, px_dst) in src_row.chunks_exact(8).zip(dst_row.chunks_exact_mut(4)) {
+        let mut rgb = [
+            f16::from_le_bytes([px_src[0], px_src[1]]).to_f32(),
+            f16::from_le_bytes([px_src[2], px_src[3]]).to_f32(),
+            f16::from_le_bytes([px_src[4], px_src[5]]).to_f32(),
+        ];
+        let a = f16::from_le_bytes([px_src[6], px_src[7]]).to_f32();
+        if blend_linear && a > 1e-5 {
+            let inv_a = 1.0 / a;
+            rgb = rgb.map(|c| {
+                crate::core::color::linear_to_srgb_piecewise((c * inv_a).max(0.0)) * a
+            });
+        }
+        if needs_space_convert {
+            rgb = crate::core::color_science::convert_color_space(
+                rgb,
+                working_color_space,
+                crate::core::color_science::WorkingColorSpace::Rec709,
+            );
+        }
+        let to_u8 = |v: f32| {
+            if v.is_finite() {
+                (v.clamp(0.0, 1.0) * 255.0).round() as u8
+            } else {
+                0
+            }
+        };
+        px_dst[0] = to_u8(rgb[0]);
+        px_dst[1] = to_u8(rgb[1]);
+        px_dst[2] = to_u8(rgb[2]);
+        px_dst[3] = to_u8(a);
+    }
+}
+
+impl WgpuRenderer {
 
     /// Last-resort 1x1 fallback view so a missing target can never panic the UI thread.
     fn dummy_view_or_create(&mut self, snapshot: bool) -> &wgpu::TextureView {

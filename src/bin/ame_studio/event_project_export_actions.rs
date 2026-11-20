@@ -102,6 +102,10 @@ impl AfterEffectsStudio {
                 self.cycle_video_export_codec();
                 true
             }
+            ("select_video_export_codec", Some(ActionValue::Text(label))) => {
+                self.set_video_export_codec(&label);
+                true
+            }
             ("render_overwrite", _) => {
                 self.start_video_export(true);
                 true

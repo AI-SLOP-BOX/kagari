@@ -427,7 +427,7 @@ fn test_generations_list_newest_first_with_labels() {
 
 #[test]
 fn test_legacy_snapshot_without_metadata_is_listed_and_loadable() {
-    let dir = std::env::temp_dir().join(format!("kagari_autosave_legacy_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("kagari_autosave_legacy_nometa_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     // Old-format snapshot: project only, no saved_at_secs / label.

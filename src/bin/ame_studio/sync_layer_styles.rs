@@ -308,11 +308,25 @@ impl AfterEffectsStudio {
         let style_parameter_items = style_params
             .into_iter()
             .map(|(id, label, value, unit)| {
+                let is_numeric = unit != "#RRGGBB";
+                let normalized = if is_numeric {
+                    let numeric = value.trim().parse::<f32>().unwrap_or(0.0);
+                    let (min_v, max_v) = if id.ends_with(".angle") {
+                        (-180.0, 180.0)
+                    } else {
+                        (0.0, 100.0)
+                    };
+                    normalize_effect_param(numeric, min_v, max_v)
+                } else {
+                    0.0
+                };
                 Value::Record(std::collections::BTreeMap::from([
                     ("id".to_owned(), Value::String(id)),
                     ("label".to_owned(), Value::String(label)),
                     ("value".to_owned(), Value::String(value)),
                     ("unit".to_owned(), Value::String(unit)),
+                    ("normalized".to_owned(), Value::Float(normalized)),
+                    ("is_numeric".to_owned(), Value::Bool(is_numeric)),
                 ]))
             })
             .collect::<Vec<_>>();
@@ -329,7 +343,14 @@ impl AfterEffectsStudio {
     }
 
     pub(crate) fn sync_composite_bindings(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let (blend_mode_label_str, track_matte_label_str, has_track_matte, matte_source_layers) = {
+        let (
+            blend_mode_label_str,
+            blend_key,
+            track_matte_label_str,
+            matte_key,
+            has_track_matte,
+            matte_source_layers,
+        ) = {
             let active_comp = self.project_model.active_composition();
             let selected_layer = self
                 .selected_layer_id
@@ -381,17 +402,30 @@ impl AfterEffectsStudio {
                 })
                 .unwrap_or_default();
 
-            (blend_label, matte_label, has_matte, matte_sources)
+            let blend_key = selected_layer
+                .map(|layer| Self::blend_mode_key(layer.blend_mode))
+                .unwrap_or("Normal")
+                .to_owned();
+            let matte_key = selected_layer
+                .map(|layer| Self::track_matte_key(layer.track_matte))
+                .unwrap_or("None")
+                .to_owned();
+
+            (blend_label, blend_key, matte_label, matte_key, has_matte, matte_sources)
         };
 
         self.ui.set_binding(
             "selected_blend_mode_label",
             Value::String(blend_mode_label_str),
         )?;
+        self.ui
+            .set_binding("selected_blend_mode", Value::String(blend_key))?;
         self.ui.set_binding(
             "selected_track_matte_label",
             Value::String(track_matte_label_str),
         )?;
+        self.ui
+            .set_binding("selected_track_matte", Value::String(matte_key))?;
         self.ui
             .set_binding("selected_has_track_matte", Value::Bool(has_track_matte))?;
         self.ui

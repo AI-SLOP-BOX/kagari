@@ -7,6 +7,7 @@
   bind activity_page: Bool = false;
   bind documents_page: Bool = false;
   bind settings_page: Bool = false;
+  bind command_palette_open: Bool = false;
   bind exit_confirm_open: Bool = false;
   bind project_switch_confirm_open: Bool = false;
   bind settings_nav_active: Bool = false;
@@ -20,6 +21,11 @@
   bind editor_page: Bool = false;
   bind project_setup_page: Bool = false;
   bind setup_name: String = "無題のプロジェクト";
+  bind setup_location: String = "~/Documents/Kagari Studio/Projects";
+  bind setup_comp_name: String = "コンポジション 1";
+  bind setup_create_initial_comp: Bool = true;
+  bind setup_preset: String = "full_hd";
+  bind setup_advanced_open: Bool = false;
   bind setup_width: String = "1920";
   bind setup_height: String = "1080";
   bind setup_fps: String = "30";
@@ -100,7 +106,13 @@
   bind layer_constraint_vertical: String = "上固定";
   bind search: String = "";
   bind project_search: String = "";
+  bind project_sort: String = "updated";
+  bind project_sort_desc: Bool = true;
+  bind project_view_grid: Bool = false;
+  bind project_has_selection: Bool = false;
+  bind project_selection_label: String = "";
   bind has_project_matches: Bool = false;
+  bind project_count_label: String = "0件のプロジェクト";
   bind current_time: String = "00:00:02:12";
   bind keyframe_status: String = "キーなし";
   bind timeline_time_0: String = "0s";
@@ -186,6 +198,8 @@
   bind selected_light_falloff: Float = 1.0;
   bind selected_light_shadow_darkness: Float = 60.0;
   bind selected_blend_mode_label: String = "Normal";
+  bind selected_blend_mode: String = "Normal";
+  bind selected_track_matte: String = "None";
   bind selected_track_matte_label: String = "なし";
   bind selected_has_track_matte: Bool = false;
   bind matte_source_layers: List<MatteSourceItem> = [];
@@ -231,6 +245,8 @@
   bind effect_search: String = "";
   bind effect_items: List<EffectItem> = [];
   bind has_effect_items: Bool = false;
+  bind has_selected_effect: Bool = false;
+  bind has_effect_clipboard: Bool = false;
   bind effect_catalog_items: List<EffectCatalogItem> = [];
   bind has_effect_catalog_items: Bool = false;
   bind effect_parameters: List<EffectParameter> = [];
@@ -364,6 +380,17 @@
   bind cache_path: String = "~/Library/Caches/Kagari";
   bind cache_path_status: String = "";
   bind settings_feedback: String = "";
+  bind settings_search: String = "";
+  bind settings_defaults_confirm_open: Bool = false;
+  bind settings_show_general: Bool = true;
+  bind settings_show_performance: Bool = true;
+  bind settings_show_media: Bool = true;
+  bind settings_show_display: Bool = true;
+  bind settings_show_playback: Bool = true;
+  bind settings_show_shortcuts: Bool = true;
+  bind settings_show_filepath: Bool = true;
+  bind settings_show_external: Bool = true;
+  bind settings_show_experimental: Bool = true;
   bind cache_limit: String = "20";
   bind docs_detail_page: Bool = false;
   bind clear_cache_confirm: Bool = false;
@@ -568,4 +595,16 @@
   bind recent_8_info: String = "";
   bind recent_project_items: List<RecentProject> = [];
   bind project_items: List<RecentProject> = [];
+  bind color_scope_mode: String = "parade";
+  bind color_lift_label: String = "0.00";
+  bind color_gamma_label: String = "1.00";
+  bind color_gain_label: String = "1.00";
+  bind engine_hub_status: String = "エンジン統合ハブ待機中";
+  bind node_graph_status: String = "DAG準備完了";
+  bind node_graph_live_preview: Bool = false;
+  bind effect_cat_all: Bool = true;
+  bind effect_cat_color: Bool = false;
+  bind effect_cat_blur: Bool = false;
+  bind effect_cat_distort: Bool = false;
+  bind effect_cat_key: Bool = false;
 

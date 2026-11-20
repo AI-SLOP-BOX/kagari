@@ -12,7 +12,7 @@ component SettingsShortcutsPage() {
   VStack(spacing: 12) {
     VStack(spacing: 4) { Title("ショートカット") Caption("各機能のキーボードショートカットを確認します。") }
 
-    Card(padding: 12, spacing: 8) {
+    Card(padding: 12, spacing: 8, hover_strength: 0.0, hover_elevation: 0.0) {
       Text("プリセット", size: 13)
       SettingsRow("プリセット", label_width: 120) {
         Caption("デフォルト")
@@ -20,7 +20,7 @@ component SettingsShortcutsPage() {
       Caption("現在はデフォルトのキーバインドを使用します。独自キーバインドの編集は今後のバージョンで対応予定です。")
     }
 
-    Card(padding: 12, spacing: 8) {
+    Card(padding: 12, spacing: 8, hover_strength: 0.0, hover_elevation: 0.0) {
       HStack(spacing: 8) {
         Text("コマンド", size: 13)
         Spacer

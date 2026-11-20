@@ -11,4 +11,8 @@ pub(crate) struct TextRasterParams {
     pub(crate) stroke_color: [f32; 4],
     pub(crate) stroke_width: f32,
     pub(crate) faux_style: crate::core::font_rasterizer::FauxTextStyle,
+    pub(crate) animator_hash: u64,
+    pub(crate) time_sec: f32,
+    pub(crate) text_animator: Option<crate::core::text_animator::TextAnimatorSettings>,
+    pub(crate) text_animator_stack: Option<crate::core::text_animator_advanced::AnimatorStack>,
 }

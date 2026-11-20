@@ -166,6 +166,133 @@ impl AfterEffectsStudio {
         }
     }
 
+    pub(crate) fn blend_mode_key(mode: kagari_vfx::core::timeline::BlendMode) -> &'static str {
+        use kagari_vfx::core::timeline::BlendMode;
+        match mode {
+            BlendMode::Normal => "Normal",
+            BlendMode::Multiply => "Multiply",
+            BlendMode::Screen => "Screen",
+            BlendMode::Overlay => "Overlay",
+            BlendMode::Add => "Add",
+            BlendMode::Darken => "Darken",
+            BlendMode::Lighten => "Lighten",
+            BlendMode::SoftLight => "SoftLight",
+            BlendMode::HardLight => "HardLight",
+            BlendMode::Difference => "Difference",
+            BlendMode::Exclusion => "Exclusion",
+            BlendMode::Divide => "Divide",
+            BlendMode::Subtract => "Subtract",
+            BlendMode::ColorBurn => "ColorBurn",
+            BlendMode::LinearBurn => "LinearBurn",
+            BlendMode::VividLight => "VividLight",
+            BlendMode::ColorDodge => "ColorDodge",
+            BlendMode::LinearDodge => "LinearDodge",
+            BlendMode::Color => "Color",
+            BlendMode::Hue => "Hue",
+            BlendMode::Saturation => "Saturation",
+            BlendMode::Luminosity => "Luminosity",
+            BlendMode::StencilAlpha => "StencilAlpha",
+            BlendMode::StencilLuma => "StencilLuma",
+            BlendMode::SilhouetteAlpha => "SilhouetteAlpha",
+            BlendMode::SilhouetteLuma => "SilhouetteLuma",
+            BlendMode::Behind => "Behind",
+            BlendMode::AlphaAdd => "AlphaAdd",
+            BlendMode::LinearLight => "LinearLight",
+        }
+    }
+
+    pub(crate) fn track_matte_key(
+        mode: kagari_vfx::core::timeline::TrackMatteMode,
+    ) -> &'static str {
+        use kagari_vfx::core::timeline::TrackMatteMode as Matte;
+        match mode {
+            Matte::None => "None",
+            Matte::AlphaMatte => "AlphaMatte",
+            Matte::AlphaMatteInverted => "AlphaMatteInverted",
+            Matte::LumaMatte => "LumaMatte",
+            Matte::LumaMatteInverted => "LumaMatteInverted",
+        }
+    }
+
+    pub(crate) fn set_layer_blend_mode(&mut self, key: &str) {
+        use kagari_vfx::core::timeline::BlendMode;
+        let mode = match key {
+            "Normal" => BlendMode::Normal,
+            "Multiply" => BlendMode::Multiply,
+            "Screen" => BlendMode::Screen,
+            "Overlay" => BlendMode::Overlay,
+            "Add" => BlendMode::Add,
+            "Darken" => BlendMode::Darken,
+            "Lighten" => BlendMode::Lighten,
+            "SoftLight" => BlendMode::SoftLight,
+            "HardLight" => BlendMode::HardLight,
+            "Difference" => BlendMode::Difference,
+            "Exclusion" => BlendMode::Exclusion,
+            "Divide" => BlendMode::Divide,
+            "Subtract" => BlendMode::Subtract,
+            "ColorBurn" => BlendMode::ColorBurn,
+            "LinearBurn" => BlendMode::LinearBurn,
+            "VividLight" => BlendMode::VividLight,
+            "ColorDodge" => BlendMode::ColorDodge,
+            "LinearDodge" => BlendMode::LinearDodge,
+            "Color" => BlendMode::Color,
+            "Hue" => BlendMode::Hue,
+            "Saturation" => BlendMode::Saturation,
+            "Luminosity" => BlendMode::Luminosity,
+            "StencilAlpha" => BlendMode::StencilAlpha,
+            "StencilLuma" => BlendMode::StencilLuma,
+            "SilhouetteAlpha" => BlendMode::SilhouetteAlpha,
+            "SilhouetteLuma" => BlendMode::SilhouetteLuma,
+            "Behind" => BlendMode::Behind,
+            "AlphaAdd" => BlendMode::AlphaAdd,
+            "LinearLight" => BlendMode::LinearLight,
+            _ => return,
+        };
+        if let Some(id) = self.selected_layer_id.as_deref() {
+            let selected = self
+                .project_model
+                .active_composition_mut()
+                .layers
+                .iter_mut()
+                .find(|layer| layer.id == id && !layer.locked);
+            if let Some(layer) = selected {
+                if layer.blend_mode != mode {
+                    layer.blend_mode = mode;
+                    self.mark_project_changed();
+                }
+            }
+        }
+    }
+
+    pub(crate) fn set_layer_track_matte(&mut self, key: &str) {
+        use kagari_vfx::core::timeline::TrackMatteMode as Matte;
+        let mode = match key {
+            "None" => Matte::None,
+            "AlphaMatte" => Matte::AlphaMatte,
+            "AlphaMatteInverted" => Matte::AlphaMatteInverted,
+            "LumaMatte" => Matte::LumaMatte,
+            "LumaMatteInverted" => Matte::LumaMatteInverted,
+            _ => return,
+        };
+        if let Some(id) = self.selected_layer_id.as_deref() {
+            let selected = self
+                .project_model
+                .active_composition_mut()
+                .layers
+                .iter_mut()
+                .find(|layer| layer.id == id && !layer.locked);
+            if let Some(layer) = selected {
+                if layer.track_matte != mode {
+                    layer.track_matte = mode;
+                    if layer.track_matte == Matte::None {
+                        layer.track_matte_layer_id = None;
+                    }
+                    self.mark_project_changed();
+                }
+            }
+        }
+    }
+
     pub(crate) fn select_track_matte_source(&mut self, source_id_opt: Option<&str>) {
         if let (Some(layer_id), Some(source_id)) =
             (self.selected_layer_id.as_deref(), source_id_opt)

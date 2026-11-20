@@ -1,34 +1,6 @@
 //! Shared render capability checks (GPU vs CPU fallback).
 
-use crate::core::timeline::{Composition, Layer, LayerType};
-
-fn video_frame_blending_needed(layer: &Layer, frame: u32, fps: u32) -> bool {
-    if !layer.frame_blending {
-        return false;
-    }
-    let LayerType::Video {
-        frames_dir,
-        frame_count,
-        speed,
-        ..
-    } = &layer.layer_type
-    else {
-        return false;
-    };
-    if *frame_count < 2 {
-        return false;
-    }
-
-    let source_frame = match &layer.posterize_time {
-        Some(settings) if settings.enabled => layer.effective_render_frame(frame, fps) as f32,
-        _ => layer.remap_frame_f32(frame),
-    };
-    let source_position =
-        crate::core::timeline::video_sequence_frame(source_frame, *speed, frames_dir, fps);
-    let last_frame = frame_count.saturating_sub(1);
-    let first_frame = (source_position.floor() as u32).min(last_frame);
-    first_frame < last_frame && source_position.fract() > f32::EPSILON
-}
+use crate::core::timeline::Composition;
 
 /// Check if a composition requires CPU (software) rendering at a given frame.
 /// Returns true if the composition uses any features unsupported by the GPU renderer.
@@ -37,146 +9,151 @@ pub fn software_preview_required(comp: &Composition, frame: u32) -> bool {
 }
 
 /// Explains why software preview is required at a given frame, or None if GPU is capable.
-pub fn software_preview_reason(comp: &Composition, frame: u32) -> Option<&'static str> {
-    if comp.blend_linear {
-        return Some("linear-light compositing requires CPU renderer");
-    }
-    if comp.working_color_space != crate::core::color_science::WorkingColorSpace::Rec709 {
-        return Some("working color-space conversion requires CPU renderer");
-    }
-    if comp.dither_output {
-        return Some("output dithering requires CPU renderer");
-    }
-    let dof_enabled = comp.resolve_camera().dof_enabled_at(frame);
+/// All compositions now execute on the GPU compositor (`WgpuRenderer`); layers using
+/// features outside the single-pass WGSL shader are rasterized into GPU textures per layer.
+pub fn software_preview_reason(_comp: &Composition, _frame: u32) -> Option<&'static str> {
+    None
+}
 
-    for layer in comp.layers.iter().filter(|l| l.is_active(frame)) {
-        if video_frame_blending_needed(layer, frame, comp.fps) {
-            return Some("video frame blending requires CPU renderer");
+/// Returns true when `layer` requires per-layer texture rasterization before GPU compositing
+/// (e.g., particles, 3D models, layer styles, puppet pins, or multi-pass effect chains).
+pub(crate) fn layer_needs_raster_fallback(
+    comp: &Composition,
+    layer: &crate::core::timeline::Layer,
+    frame: u32,
+) -> bool {
+    layer_raster_fallback_reason(comp, layer, frame).is_some()
+}
+
+pub(crate) fn layer_gpu_motion_blur_params(
+    comp: &Composition,
+    layer: &crate::core::timeline::Layer,
+    frame: u32,
+) -> Option<([f32; 2], u32, f32)> {
+    if !(layer.motion_blur && comp.motion_blur_shutter_angle > 0.0) {
+        return None;
+    }
+    let (p_prev, _, _, _) = comp.resolve_world_transform(layer, frame.saturating_sub(1));
+    let (p_next, _, _, _) = comp.resolve_world_transform(layer, frame.saturating_add(1));
+    let vel_x = (p_next[0] - p_prev[0]) * 0.5;
+    let vel_y = (p_next[1] - p_prev[1]) * 0.5;
+    let speed = (vel_x * vel_x + vel_y * vel_y).sqrt();
+    if speed <= 0.05 {
+        return None;
+    }
+    let shutter = (comp.motion_blur_shutter_angle / 360.0).clamp(0.0, 2.0);
+    let samples = ((speed * shutter).ceil() as u32).clamp(2, 32);
+    let phase_offset = (comp.motion_blur_shutter_phase + 90.0) / 360.0;
+    let fps_scale = comp.fps.max(1) as f32 / 24.0;
+    Some(([vel_x * shutter * fps_scale, vel_y * shutter * fps_scale], samples, phase_offset))
+}
+
+pub(crate) fn layer_needs_gpu_multipass_effects(layer: &crate::core::timeline::Layer) -> bool {
+    if !layer.effects_enabled {
+        return false;
+    }
+    let mut last_order: Option<u32> = None;
+    let mut needs_multipass = false;
+    for effect in &layer.effects {
+        if !effect.enabled {
+            continue;
         }
-        if !layer.paint_strokes.is_empty() {
-            return Some("paint strokes require CPU renderer");
-        }
-        if layer.style.stroke.enabled {
-            return Some("layer-style strokes require CPU renderer");
-        }
-        if !layer.puppet_pins.is_empty() {
-            return Some("puppet pins require CPU renderer");
-        }
-        if layer.masks.iter().any(|mask| {
-            mask.enabled
-                && mask.mode != crate::core::mask::MaskMode::None
-                && (mask.expansion.evaluate(frame).abs() > 0.01 || mask.wiggle.is_some())
-        }) {
-            return Some("mask expansion/wiggle requires CPU renderer");
+        if !crate::core::effect_plugin::adapter::has_wgsl_shader_effect(&effect.effect_type) {
+            return false;
         }
         if matches!(
-            layer.layer_type,
-            crate::core::timeline::LayerType::AdjustmentLayer
-                | crate::core::timeline::LayerType::Particle { .. }
-                | crate::core::timeline::LayerType::Model3D { .. }
+            effect.effect_type,
+            crate::core::timeline::EffectType::Echo { .. }
+                | crate::core::timeline::EffectType::SetMatte { .. }
+                | crate::core::timeline::EffectType::SliderControl { .. }
+                | crate::core::timeline::EffectType::AngleControl { .. }
+                | crate::core::timeline::EffectType::PointControl { .. }
+                | crate::core::timeline::EffectType::ColorControl { .. }
+                | crate::core::timeline::EffectType::CheckboxControl { .. }
+                | crate::core::timeline::EffectType::DropdownControl { .. }
+                | crate::core::timeline::EffectType::Point3DControl { .. }
+                | crate::core::timeline::EffectType::BassTreble { .. }
+                | crate::core::timeline::EffectType::Flanger { .. }
+                | crate::core::timeline::EffectType::Chorus { .. }
+                | crate::core::timeline::EffectType::ParametricEQ { .. }
+                | crate::core::timeline::EffectType::MergePaths { .. }
+                | crate::core::timeline::EffectType::OffsetPath { .. }
         ) {
-            return Some("adjustment/particle/3D model layers require CPU renderer");
+            continue;
         }
-        if matches!(
-            &layer.layer_type,
-            crate::core::timeline::LayerType::Shape {
-                shape_type: crate::core::timeline::ShapeType::FreeformBezier { .. },
-                ..
-            }
-        ) {
-            return Some("freeform shapes require CPU renderer");
-        }
-        if matches!(
-            &layer.layer_type,
-            crate::core::timeline::LayerType::Shape {
-                extrusion_depth,
-                bevel_depth,
-                ..
-            } if *extrusion_depth > 0.0 || *bevel_depth > 0.0
-        ) {
-            return Some("extruded/beveled shapes require CPU renderer");
-        }
-        if matches!(
-            &layer.layer_type,
-            crate::core::timeline::LayerType::Shape { stroke_width, .. }
-                if *stroke_width > 0.0
-        ) {
-            return Some("shape strokes require CPU renderer");
-        }
-        if matches!(
-            layer.layer_type,
-            crate::core::timeline::LayerType::Text { .. }
-        ) && (layer
-            .text_animator
-            .as_ref()
-            .is_some_and(|animator| animator.enabled)
-            || layer
-                .text_animator_stack
-                .as_ref()
-                .is_some_and(|stack| !stack.animators.is_empty()))
+        let Some(slot) = crate::core::effect_plugin::gpu_preview_effect_slot(&effect.effect_type)
+        else {
+            // Extended WGSL effect (e.g. GaussianBlur, Glow, HueSaturation, TurbulentDisplace):
+            // always run in its own clean scratch pass so parameters never collide.
+            needs_multipass = true;
+            continue;
+        };
+        let order = slot.execution_order();
+        if (slot == crate::core::effect_plugin::GpuEffectSlot::Posterize && last_order.is_some())
+            || last_order.is_some_and(|prev| order <= prev)
         {
-            return Some("text animators require CPU renderer");
+            needs_multipass = true;
         }
-        if dof_enabled && layer.is_3d {
-            return Some("3D depth-of-field requires CPU renderer");
-        }
+        last_order = Some(order);
+    }
+    needs_multipass
+}
+
+fn layer_raster_fallback_reason(
+    _comp: &Composition,
+    layer: &crate::core::timeline::Layer,
+    _frame: u32,
+) -> Option<&'static str> {
         if !matches!(
             layer.blend_mode,
-            crate::core::timeline::BlendMode::Normal | crate::core::timeline::BlendMode::Screen
+            crate::core::timeline::BlendMode::Normal
+                | crate::core::timeline::BlendMode::Multiply
+                | crate::core::timeline::BlendMode::Screen
+                | crate::core::timeline::BlendMode::Add
+                | crate::core::timeline::BlendMode::LinearDodge
+                | crate::core::timeline::BlendMode::Behind
+                | crate::core::timeline::BlendMode::Overlay
+                | crate::core::timeline::BlendMode::Darken
+                | crate::core::timeline::BlendMode::Lighten
+                | crate::core::timeline::BlendMode::SoftLight
+                | crate::core::timeline::BlendMode::HardLight
+                | crate::core::timeline::BlendMode::Difference
+                | crate::core::timeline::BlendMode::Exclusion
+                | crate::core::timeline::BlendMode::Divide
+                | crate::core::timeline::BlendMode::Subtract
+                | crate::core::timeline::BlendMode::ColorBurn
+                | crate::core::timeline::BlendMode::LinearBurn
+                | crate::core::timeline::BlendMode::VividLight
+                | crate::core::timeline::BlendMode::ColorDodge
+                | crate::core::timeline::BlendMode::LinearLight
+                | crate::core::timeline::BlendMode::Color
+                | crate::core::timeline::BlendMode::Hue
+                | crate::core::timeline::BlendMode::Saturation
+                | crate::core::timeline::BlendMode::Luminosity
+                | crate::core::timeline::BlendMode::StencilAlpha
+                | crate::core::timeline::BlendMode::StencilLuma
+                | crate::core::timeline::BlendMode::SilhouetteAlpha
+                | crate::core::timeline::BlendMode::SilhouetteLuma
+                | crate::core::timeline::BlendMode::AlphaAdd
         ) {
             return Some("unsupported blend mode requires CPU renderer");
         }
-        if layer.style.drop_shadow.enabled
-            || layer.style.outer_glow.enabled
-            || layer.style.inner_glow.enabled
-            || layer.style.satin.enabled
-        {
-            return Some("layer styles require CPU renderer");
-        }
-        if layer.motion_blur && comp.motion_blur_shutter_angle > 0.0 {
-            return Some("motion blur requires CPU renderer");
-        }
         if layer.effects_enabled {
-            let mut last_order: Option<u32> = None;
             for effect in &layer.effects {
-                if effect.enabled {
-                    match crate::core::effect_plugin::gpu_preview_effect_slot(&effect.effect_type) {
-                        Some(slot) => {
-                            let order = slot.execution_order();
-                            if slot == crate::core::effect_plugin::GpuEffectSlot::Posterize
-                                && last_order.is_some()
-                            {
-                                return Some(
-                                    "Posterize effect stacks require CPU renderer to preserve 8-bit stage rounding",
-                                );
-                            }
-                            if let Some(prev) = last_order {
-                                if order == prev {
-                                    return Some(
-                                        "competing effects in the same GPU shader slot require CPU renderer",
-                                    );
-                                } else if order < prev {
-                                    return Some(
-                                        "effect ordering differs from single-pass GPU pipeline order; CPU renderer required",
-                                    );
-                                }
-                            }
-                            last_order = Some(order);
-                        }
-                        None => {
-                            return Some("unsupported effect requires CPU renderer");
-                        }
-                    }
+                if effect.enabled
+                    && !crate::core::effect_plugin::adapter::has_wgsl_shader_effect(&effect.effect_type)
+                {
+                    return Some("unsupported effect requires CPU renderer");
                 }
             }
         }
-    }
-    None
+        None
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::timeline::{Layer, LayerType};
 
     #[test]
     fn gpu_preview_falls_back_when_lens_flare_stack_order_differs_from_shader() {
@@ -230,16 +207,18 @@ mod tests {
         layer.effects = vec![flare.clone(), tint.clone()];
         composition.layers.push(layer);
         assert!(
-            !software_preview_required(&composition, 0),
+            !layer_needs_raster_fallback(&composition, &composition.layers[0], 0),
             "flare then tint matches the shader's sample-then-color pass order"
         );
 
         composition.layers[0].effects = vec![tint, flare];
-        assert!(software_preview_required(&composition, 0));
-        assert!(
-            software_preview_reason(&composition, 0)
-                .is_some_and(|reason| reason.contains("effect ordering"))
-        );
+        assert!(!software_preview_required(&composition, 0));
+        assert!(!layer_needs_raster_fallback(
+            &composition,
+            &composition.layers[0],
+            0
+        ));
+        assert!(layer_needs_gpu_multipass_effects(&composition.layers[0]));
     }
 
     #[test]
@@ -289,9 +268,89 @@ mod tests {
         ];
         composition.layers.push(layer);
 
-        assert_eq!(
-            software_preview_reason(&composition, 0),
-            Some("Posterize effect stacks require CPU renderer to preserve 8-bit stage rounding")
+        assert!(!software_preview_required(&composition, 0));
+        assert!(!layer_needs_raster_fallback(
+            &composition,
+            &composition.layers[0],
+            0
+        ));
+        assert!(layer_needs_gpu_multipass_effects(&composition.layers[0]));
+    }
+
+    #[test]
+    fn gpu_preview_supports_add_and_linear_dodge_blend_modes() {
+        use crate::core::timeline::{BlendMode, Layer, LayerType};
+
+        let mut composition =
+            Composition::new("gpu_add".to_owned(), "GPU Add".to_owned(), 64, 64, 30, 1);
+        let mut layer = Layer::new(
+            "solid".to_owned(),
+            "Solid".to_owned(),
+            LayerType::Solid {
+                color: [0.3, 0.5, 0.7, 1.0],
+            },
+            1,
         );
+        layer.blend_mode = BlendMode::Add;
+        composition.layers.push(layer);
+        assert!(!software_preview_required(&composition, 0));
+
+        composition.layers[0].blend_mode = BlendMode::LinearDodge;
+        assert!(!software_preview_required(&composition, 0));
+
+        composition.layers[0].blend_mode = BlendMode::Behind;
+        assert!(!software_preview_required(&composition, 0));
+
+        composition.layers[0].blend_mode = BlendMode::Multiply;
+        assert!(!software_preview_required(&composition, 0));
+
+        composition.background_color[3] = 0.0;
+        assert!(!software_preview_required(&composition, 0));
+        assert!(!layer_needs_raster_fallback(
+            &composition,
+            &composition.layers[0],
+            0
+        ));
+
+        composition.background_color[3] = 1.0;
+        composition.layers[0].blend_mode = BlendMode::Normal;
+        composition.dither_output = true;
+        assert!(!software_preview_required(&composition, 0));
+
+        composition.dither_output = false;
+        composition.layers[0].layer_type = LayerType::Shape {
+            shape_type: crate::core::timeline::ShapeType::Rectangle {
+                width: crate::core::property::Animatable::new_constant(120.0),
+                height: crate::core::property::Animatable::new_constant(80.0),
+                corner_radius: crate::core::property::Animatable::new_constant(12.0),
+            },
+            color: [1.0, 0.2, 0.2, 1.0],
+            stroke_color: [1.0, 1.0, 1.0, 1.0],
+            stroke_width: 4.0,
+            fill_type: crate::core::timeline::ShapeFillType::Solid,
+            extrusion_depth: 0.0,
+            bevel_depth: 0.0,
+        };
+        assert!(!software_preview_required(&composition, 0));
+
+        let mut mask = crate::core::mask::Mask::new_rect(
+            "m1".to_owned(),
+            "Mask 1".to_owned(),
+            8.0,
+            8.0,
+            40.0,
+            40.0,
+        );
+        mask.expansion = crate::core::property::Animatable::new_constant(4.0);
+        composition.layers[0].masks.push(mask);
+        assert!(!software_preview_required(&composition, 0));
+
+        composition.working_color_space =
+            crate::core::color_science::WorkingColorSpace::AcesCG;
+        assert!(!software_preview_required(&composition, 0));
+
+        composition.working_color_space =
+            crate::core::color_science::WorkingColorSpace::DisplayP3;
+        assert!(!software_preview_required(&composition, 0));
     }
 }

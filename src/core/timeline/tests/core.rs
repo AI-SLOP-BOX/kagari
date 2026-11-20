@@ -132,7 +132,8 @@ mod tests {
         else {
             panic!("expected nested video layer");
         };
-        assert_eq!(source, &footage.to_string_lossy());
+        let expected = std::fs::canonicalize(&footage).unwrap_or_else(|_| footage.clone());
+        assert_eq!(source, &expected.to_string_lossy());
         assert!(frames_dir.is_empty());
         assert_eq!(*frame_count, 0);
         assert!(audio_wav.is_none());

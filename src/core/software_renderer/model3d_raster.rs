@@ -9,9 +9,10 @@ use super::raster::RasterCtx;
 use crate::core::timeline::{Layer, LightType};
 use std::collections::HashMap;
 
-mod cache;
+pub(crate) mod cache;
 mod shading;
-use cache::{clear_texture_load_error, load_mesh, report_texture_load_error_once};
+use cache::{clear_texture_load_error, report_texture_load_error_once};
+pub(crate) use cache::load_mesh;
 use shading::{sample_texture, shade};
 
 fn rotate_xyz(point: [f32; 3], rotation_deg: [f32; 3]) -> [f32; 3] {

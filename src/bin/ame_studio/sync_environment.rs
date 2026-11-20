@@ -17,8 +17,14 @@ impl AfterEffectsStudio {
         }
         self.ui
             .set_binding("settings_page", Value::Bool(self.settings_open))?;
+        self.ui.set_binding(
+            "command_palette_open",
+            Value::Bool(self.command_palette_open),
+        )?;
         self.ui
             .set_binding("exit_confirm_open", Value::Bool(self.exit_confirm_open))?;
+        self.ui
+            .set_binding("layer_name", Value::String(self.layer_name.clone()))?;
         self.ui.set_binding(
             "project_switch_confirm_open",
             Value::Bool(self.project_switch_confirm_open),
@@ -76,19 +82,30 @@ impl AfterEffectsStudio {
             .set_binding("docs_body", Value::String(self.docs_body.clone()))?;
         self.ui
             .set_binding("clear_cache_confirm", Value::Bool(self.clear_cache_confirm))?;
-        for (name, index) in [
-            ("settings_general", 0),
-            ("settings_performance", 1),
-            ("settings_media", 2),
-            ("settings_display", 3),
-            ("settings_playback", 4),
-            ("settings_shortcuts", 5),
-            ("settings_filepath", 6),
-            ("settings_external", 7),
-            ("settings_experimental", 8),
+        self.ui.set_binding(
+            "settings_search",
+            Value::String(self.settings_search.clone()),
+        )?;
+        for (name, show_name, index) in [
+            ("settings_general", "settings_show_general", 0),
+            ("settings_performance", "settings_show_performance", 1),
+            ("settings_media", "settings_show_media", 2),
+            ("settings_display", "settings_show_display", 3),
+            ("settings_playback", "settings_show_playback", 4),
+            ("settings_shortcuts", "settings_show_shortcuts", 5),
+            ("settings_filepath", "settings_show_filepath", 6),
+            ("settings_external", "settings_show_external", 7),
+            ("settings_experimental", "settings_show_experimental", 8),
         ] {
             self.ui
                 .set_binding(name, Value::Bool(self.settings_category == index))?;
+            self.ui.set_binding(
+                show_name,
+                Value::Bool(crate::ame_studio_preferences::settings_category_matches(
+                    index,
+                    &self.settings_search,
+                )),
+            )?;
         }
 
         let openfx_plugins = self
@@ -136,6 +153,10 @@ impl AfterEffectsStudio {
         self.ui.set_binding(
             "settings_feedback",
             Value::String(self.settings_feedback.clone()),
+        )?;
+        self.ui.set_binding(
+            "settings_defaults_confirm_open",
+            Value::Bool(self.settings_defaults_confirm_open),
         )?;
         self.ui
             .set_binding("cache_limit", Value::String(self.cache_limit.clone()))?;
@@ -255,6 +276,35 @@ impl AfterEffectsStudio {
         // Setup page bindings
         self.ui
             .set_binding("setup_name", Value::String(self.setup_name.clone()))?;
+        self.ui.set_binding(
+            "setup_location",
+            Value::String(self.setup_location.clone()),
+        )?;
+        self.ui.set_binding(
+            "setup_comp_name",
+            Value::String(self.setup_comp_name.clone()),
+        )?;
+        self.ui.set_binding(
+            "setup_create_initial_comp",
+            Value::Bool(self.setup_create_initial_comp),
+        )?;
+        let setup_preset = match (
+            self.setup_width.as_str(),
+            self.setup_height.as_str(),
+            self.setup_fps.as_str(),
+        ) {
+            ("1920", "1080", "60") => "full_hd",
+            ("3840", "2160", "24") => "4k",
+            ("1080", "1920", "60") => "vertical",
+            ("1080", "1080", "30") => "square",
+            _ => "custom",
+        };
+        self.ui
+            .set_binding("setup_preset", Value::String(setup_preset.to_owned()))?;
+        self.ui.set_binding(
+            "setup_advanced_open",
+            Value::Bool(self.setup_advanced_open),
+        )?;
         self.ui
             .set_binding("setup_width", Value::String(self.setup_width.clone()))?;
         self.ui

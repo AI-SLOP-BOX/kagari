@@ -2,7 +2,7 @@ component SettingsPerformancePage() {
   VStack(spacing: 12) {
     VStack(spacing: 4) { Title("パフォーマンス") Caption("メモリの使用方法や処理の設定を調整します。") }
 
-    Card(padding: 12, spacing: 10) {
+    Card(padding: 12, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
       Text("エフェクト計算", size: 13)
       SettingsRow("GPU計算", label_width: 170) {
         Select(renderer, action: setting_renderer_changed) {
@@ -10,12 +10,15 @@ component SettingsPerformancePage() {
           Option("cpu", "CPU（標準）")
         }
       }
-      Caption("GPU計算は対応する一部エフェクトで使用します。コンポジット本体と最終書き出しは現在CPUレンダー経路です。")
+      Caption("対応エフェクト・ブレンドおよび書き出しで GPU を優先使用し、非対応機能は CPU にフォールバックします。")
+      SettingsRow("総メモリ上限", label_width: 170) {
+        HStack(spacing: 6) { DragValue(memory_limit_gb, min: 1.0, max: 64.0, action: setting_memory_changed) Caption("GB") }
+      }
       Checkbox("再生中の解像度自動低下（アダプティブプレビュー）", adaptive_preview, action: setting_adaptive_preview_changed)
-      Caption("総メモリ上限とアイドル時の事前レンダーは、まだ処理に接続されていません。")
+      Caption("総メモリ上限とアイドル時の事前レンダーがプレビュー RAM キャッシュに連動します。")
     }
 
-    Card(padding: 12, spacing: 10) {
+    Card(padding: 12, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
       Text("キャッシュ", size: 13)
       SettingsRow("ディスクキャッシュの場所", label_width: 200) {
         AttachedButton("参照…", action: setting_cache_path_browse) {
@@ -26,7 +29,7 @@ component SettingsPerformancePage() {
       HStack(spacing: 8) {
         Caption("使用量")
         Spacer
-        Caption("{cache_usage_text} / {cache_limit} GB")
+        Card(padding: 4, spacing: 0, hover_strength: 0.0, hover_elevation: 0.0) { Caption("{cache_usage_text} / {cache_limit} GB") }
       }
       ProgressBar(cache_usage_progress)
       HStack(spacing: 8) {
@@ -38,7 +41,7 @@ component SettingsPerformancePage() {
       }
     }
 
-    Card(padding: 12, spacing: 10) {
+    Card(padding: 12, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
       Text("履歴と復旧", size: 13)
       SettingsRow("Undo 履歴", label_width: 170) {
         HStack(spacing: 6) { DragValue(undo_steps, min: 10.0, max: 500.0, action: setting_undo_changed) Caption("件") }
@@ -49,7 +52,7 @@ component SettingsPerformancePage() {
     }
 
     If(clear_cache_confirm) {
-      Card(padding: 14, spacing: 10) {
+      Card(padding: 14, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
         Text("キャッシュを消去しますか？", size: 17)
         Caption("プレビューキャッシュのみを削除します。プロジェクトや素材ファイルは削除されません。")
         HStack(spacing: 8) {

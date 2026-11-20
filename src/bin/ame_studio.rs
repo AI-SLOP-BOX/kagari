@@ -26,6 +26,8 @@ mod ame_studio_asset_placement;
 mod ame_studio_effect_edit_ops;
 #[path = "ame_studio/effect_ops.rs"]
 mod ame_studio_effect_ops;
+#[path = "ame_studio/engine_hub_handlers.rs"]
+mod ame_studio_engine_hub_handlers;
 #[path = "ame_studio/event_editor_workspace_handlers.rs"]
 mod ame_studio_event_editor_workspace_handlers;
 #[path = "ame_studio/event_effect_handlers.rs"]
@@ -123,11 +125,23 @@ pub struct AfterEffectsStudio {
     docs_detail_page: bool,
     docs_title: String,
     docs_body: String,
+    engine_hub_status: String,
+    compositor_graph: kagari_vfx::core::compositor_node_graph::CompositorNodeGraph,
+    node_graph_selected_id: Option<u64>,
+    node_graph_next_id: u64,
+    node_graph_status: String,
+    node_graph_bounds: Option<(f64, f64, f64, f64)>,
+    node_graph_positions: std::collections::HashMap<u64, (f64, f64)>,
+    node_graph_drag_node: Option<(u64, f64, f64)>,
+    node_graph_drag_wire: Option<(u64, (f64, f64), (f64, f64))>,
+    node_graph_live_preview: bool,
+    effect_category: &'static str,
     clear_cache_confirm: bool,
     settings_category: usize,
     openfx_plugins: Vec<DetectedOfxPlugin>,
     openfx_search_paths: String,
     settings_open: bool,
+    command_palette_open: bool,
     exit_confirm_open: bool,
     project_switch_confirm_open: bool,
     composition_remove_confirm_open: bool,
@@ -150,6 +164,8 @@ pub struct AfterEffectsStudio {
     cache_path: String,
     cache_path_status: String,
     settings_feedback: String,
+    settings_defaults_confirm_open: bool,
+    settings_search: String,
     cache_limit: String,
     cache_usage_bytes: u64,
     accent_color: String,
@@ -200,6 +216,11 @@ pub struct AfterEffectsStudio {
     layer_name: String,
     search: String,
     project_search: String,
+    project_sort: String,
+    project_sort_desc: bool,
+    project_view_grid: bool,
+    selected_project_paths: std::collections::BTreeSet<String>,
+    active_project_path: Option<String>,
     current_time: String,
     zoom_manually_adjusted: bool,
     current_frame: u32,
@@ -210,12 +231,16 @@ pub struct AfterEffectsStudio {
     timeline_zoom: f64,
     timeline_start_frame: f64,
     timeline_vertical_scroll: f64,
+    virtual_list_ranges: std::collections::HashMap<String, std::ops::Range<usize>>,
     workspace_left_ratios: [f64; 15],
     workspace_center_ratios: [f64; 15],
     workspace_vertical_ratios: [f64; 15],
     viewport_channel_mode: String,
     viewport_exposure_ev: f64,
     viewport_wipe_enabled: bool,
+    viewport_wipe_split: f64,
+    viewport_wipe_dragging: bool,
+    viewport_scale_drag: Option<(String, [f32; 2], [f32; 2], [f64; 2])>,
     preview_revision: u64,
     preview_cache: std::collections::HashMap<(u64, u32, u32, u32, u64), vello::peniko::ImageData>,
     viewport_preview_request_tx: std::sync::mpsc::SyncSender<ViewportPreviewJob>,
@@ -247,6 +272,9 @@ pub struct AfterEffectsStudio {
     graph_channel: GraphChannel,
     graph_key_drag: Option<GraphKeyDrag>,
     flowchart_wire_drag: Option<FlowchartWireDrag>,
+    color_scope_mode: ColorScopeMode,
+    color_wheel_drag: Option<ColorWheelDrag>,
+    color_wheels_bounds: Option<(f64, f64, f64, f64)>,
     hide_shy_layers: bool,
     waveform_cache: std::collections::HashMap<String, std::sync::Arc<CachedAudioWaveform>>,
     waveform_cache_revisions: std::collections::HashMap<String, u64>,
@@ -290,6 +318,7 @@ pub struct AfterEffectsStudio {
     align_selected_layer_ids: std::collections::HashSet<String>,
     align_to_composition: bool,
     selected_effect_id: Option<String>,
+    effect_clipboard: Option<kagari_vfx::core::timeline::Effect>,
     graph_effect_parameter_id: Option<String>,
     selected_marker_frame: Option<u32>,
     selected_layer_marker_frame: Option<u32>,
@@ -309,6 +338,10 @@ pub struct AfterEffectsStudio {
     save_status: String,
     project_is_dirty: bool,
     setup_name: String,
+    setup_location: String,
+    setup_comp_name: String,
+    setup_create_initial_comp: bool,
+    setup_advanced_open: bool,
     setup_width: String,
     setup_height: String,
     setup_fps: String,
@@ -500,6 +533,9 @@ pub(crate) use ame_studio_timeline_graph_render::*;
 #[path = "ame_studio/timeline_waveform.rs"]
 mod ame_studio_timeline_waveform;
 pub(crate) use ame_studio_timeline_waveform::*;
+#[path = "ame_studio/color_grading_ui.rs"]
+mod ame_studio_color_grading_ui;
+pub(crate) use ame_studio_color_grading_ui::*;
 
 fn parse_timecode(value: &str, fps: u32) -> Option<u32> {
     let [hours, minutes, seconds, frames] = value

@@ -2,23 +2,23 @@ component CompositionHeader() {
   Padding(horizontal: 6, vertical: 3) { VStack(spacing: 3) {
     HStack(spacing: 4) {
       Caption("コンポジション")
-      IconButton("step_prev", action: composition_previous, tone: secondary, size: small)
+      IconButton("step_prev", action: composition_previous, tone: ghost, size: small)
       Caption("{composition_position}")
-      IconButton("step_next", action: composition_next, tone: secondary, size: small)
-      IconButton("add", action: composition_add, tone: secondary, size: small)
-      IconButton("copy", action: composition_duplicate, tone: secondary, size: small)
-      If(has_multiple_compositions) { IconButton("trash", action: composition_remove, tone: secondary, size: small) }
+      IconButton("step_next", action: composition_next, tone: ghost, size: small)
+      IconButton("add", action: composition_add, tone: ghost, size: small)
+      IconButton("copy", action: composition_duplicate, tone: ghost, size: small)
+      If(has_multiple_compositions) { IconButton("trash", action: composition_remove, tone: ghost, size: small) }
       Spacer
       Caption("ズーム")
-      IconButton("minus", action: composition_zoom_out, tone: secondary, size: small)
+      IconButton("minus", action: composition_zoom_out, tone: ghost, size: small)
       MaxWidth(76) { TextField(zoom, "100%", action: zoom_changed) }
-      IconButton("add", action: composition_zoom_in, tone: secondary, size: small)
-      IconButton("maximize", action: composition_zoom_fit, tone: secondary, size: small)
+      IconButton("add", action: composition_zoom_in, tone: ghost, size: small)
+      IconButton("maximize", action: composition_zoom_fit, tone: ghost, size: small)
     }
     If(has_multiple_compositions) {
       HorizontalScrollView(420) { HStack(spacing: 4) {
         ForEach(composition_items, item, key: id) {
-          If(item.selected) { Button("{item.name}", action: composition_select, tone: primary, size: small) } else { Button("{item.name}", action: composition_select, tone: secondary, size: small) }
+          If(item.selected) { Button("{item.name}", action: composition_select, tone: primary, size: small) } else { Button("{item.name}", action: composition_select, tone: ghost, size: small) }
         }
       } }
     }
@@ -29,23 +29,23 @@ component CompositionSelector() {
   Padding(horizontal: 6, vertical: 3) { VStack(spacing: 3) {
     HStack(spacing: 8) {
       Caption("コンポジション")
-      IconButton("step_prev", action: composition_previous, tone: secondary, size: small)
+      IconButton("step_prev", action: composition_previous, tone: ghost, size: small)
       Caption("{composition_position}")
-      IconButton("step_next", action: composition_next, tone: secondary, size: small)
-      IconButton("add", action: composition_add, tone: secondary, size: small)
-      IconButton("copy", action: composition_duplicate, tone: secondary, size: small)
-      If(has_multiple_compositions) { IconButton("trash", action: composition_remove, tone: secondary, size: small) }
+      IconButton("step_next", action: composition_next, tone: ghost, size: small)
+      IconButton("add", action: composition_add, tone: ghost, size: small)
+      IconButton("copy", action: composition_duplicate, tone: ghost, size: small)
+      If(has_multiple_compositions) { IconButton("trash", action: composition_remove, tone: ghost, size: small) }
       Spacer
       Caption("ズーム")
-      IconButton("minus", action: composition_zoom_out, tone: secondary, size: small)
+      IconButton("minus", action: composition_zoom_out, tone: ghost, size: small)
       MaxWidth(88) { TextField(zoom, "100%", action: zoom_changed) }
-      IconButton("add", action: composition_zoom_in, tone: secondary, size: small)
-      IconButton("maximize", action: composition_zoom_fit, tone: secondary, size: small)
+      IconButton("add", action: composition_zoom_in, tone: ghost, size: small)
+      IconButton("maximize", action: composition_zoom_fit, tone: ghost, size: small)
     }
     If(has_multiple_compositions) {
       HorizontalScrollView(420) { HStack(spacing: 4) {
         ForEach(composition_items, item, key: id) {
-          If(item.selected) { Button("{item.name}", action: composition_select, tone: primary, size: small) } else { Button("{item.name}", action: composition_select, tone: secondary, size: small) }
+          If(item.selected) { Button("{item.name}", action: composition_select, tone: primary, size: small) } else { Button("{item.name}", action: composition_select, tone: ghost, size: small) }
         }
       } }
     }
@@ -66,21 +66,21 @@ component CompositionBasicSettings() {
       Caption("秒")
       MaxWidth(58) { TextField(composition_duration, "10", action: composition_duration_changed) }
     }
-    HStack(spacing: 4) {
+    Wrap(item_spacing: 4, line_spacing: 4) {
       Caption("サイズプリセット")
-      Button("HD 720p", action: composition_preset_hd, tone: secondary, size: small)
-      Button("Full HD", action: composition_preset_full_hd, tone: secondary, size: small)
-      Button("4K UHD", action: composition_preset_4k, tone: secondary, size: small)
-      Button("縦 9:16", action: composition_preset_vertical, tone: secondary, size: small)
-      Button("正方形", action: composition_preset_square, tone: secondary, size: small)
+      Button("HD 720p", action: composition_preset_hd, tone: ghost, size: small)
+      Button("Full HD", action: composition_preset_full_hd, tone: ghost, size: small)
+      Button("4K UHD", action: composition_preset_4k, tone: ghost, size: small)
+      Button("縦 9:16", action: composition_preset_vertical, tone: ghost, size: small)
+      Button("正方形", action: composition_preset_square, tone: ghost, size: small)
     }
-    HStack(spacing: 4) {
+    Wrap(item_spacing: 4, line_spacing: 4) {
       Caption("fpsプリセット")
-      Button("24 fps", action: composition_fps_24, tone: secondary, size: small)
-      Button("25 fps", action: composition_fps_25, tone: secondary, size: small)
-      Button("30 fps", action: composition_fps_30, tone: secondary, size: small)
-      Button("50 fps", action: composition_fps_50, tone: secondary, size: small)
-      Button("60 fps", action: composition_fps_60, tone: secondary, size: small)
+      Button("24 fps", action: composition_fps_24, tone: ghost, size: small)
+      Button("25 fps", action: composition_fps_25, tone: ghost, size: small)
+      Button("30 fps", action: composition_fps_30, tone: ghost, size: small)
+      Button("50 fps", action: composition_fps_50, tone: ghost, size: small)
+      Button("60 fps", action: composition_fps_60, tone: ghost, size: small)
       Caption("尺は秒単位で維持")
     }
     HStack(spacing: 5) {
@@ -100,9 +100,19 @@ component CompositionColorSettings() {
       Caption("シャッター角")
       MaxWidth(58) { TextField(composition_shutter_angle, "180", action: composition_shutter_angle_changed) }
       Caption("背景")
-      MaxWidth(86) { TextField(composition_background, "#000000", action: composition_background_changed) }
-      Button("{composition_bit_depth}", action: composition_cycle_bit_depth, tone: secondary, size: small)
-      Button("{composition_working_space}", action: composition_cycle_working_space, tone: secondary, size: small)
+      ColorPicker(composition_background, action: composition_background_changed)
+      Select(composition_bit_depth, action: select_composition_bit_depth) {
+        Option("8 bpc", "8 bpc")
+        Option("16 bpc", "16 bpc")
+        Option("32 bpc (float)", "32 bpc (float)")
+      }
+      Select(composition_working_space, action: select_composition_working_space) {
+        Option("Rec.709 / sRGB", "Rec.709 / sRGB")
+        Option("Display P3", "Display P3")
+        Option("Rec.2020 (UHDTV)", "Rec.2020 (UHDTV)")
+        Option("Linear sRGB", "Linear sRGB")
+        Option("ACEScg (AP1)", "ACEScg (AP1)")
+      }
     }
     HStack(spacing: 4) {
       Caption("シャッター位相")
@@ -115,13 +125,13 @@ component CompositionColorSettings() {
 component CompositionPreviewSettings() {
   Card { Padding(6) { VStack(spacing: 5) {
     Text("プレビュー", size: 14)
-    HStack(spacing: 4) {
+    Wrap(item_spacing: 4, line_spacing: 4) {
       Caption("プレビュー解像度")
-      If(composition_proxy_full) { Button("Full", action: composition_proxy_full, tone: primary, size: small) } else { Button("Full", action: composition_proxy_full, tone: secondary, size: small) }
-      If(composition_proxy_half) { Button("1/2", action: composition_proxy_half, tone: primary, size: small) } else { Button("1/2", action: composition_proxy_half, tone: secondary, size: small) }
-      If(composition_proxy_quarter) { Button("1/4", action: composition_proxy_quarter, tone: primary, size: small) } else { Button("1/4", action: composition_proxy_quarter, tone: secondary, size: small) }
-      If(composition_proxy_eighth) { Button("1/8", action: composition_proxy_eighth, tone: primary, size: small) } else { Button("1/8", action: composition_proxy_eighth, tone: secondary, size: small) }
-      If(composition_proxy_preview) { Button("プレビューON", action: toggle_composition_proxy_preview, tone: primary, size: small) } else { Button("プレビューOFF", action: toggle_composition_proxy_preview, tone: secondary, size: small) }
+      If(composition_proxy_full) { Button("Full", action: composition_proxy_full, tone: primary, size: small) } else { Button("Full", action: composition_proxy_full, tone: ghost, size: small) }
+      If(composition_proxy_half) { Button("1/2", action: composition_proxy_half, tone: primary, size: small) } else { Button("1/2", action: composition_proxy_half, tone: ghost, size: small) }
+      If(composition_proxy_quarter) { Button("1/4", action: composition_proxy_quarter, tone: primary, size: small) } else { Button("1/4", action: composition_proxy_quarter, tone: ghost, size: small) }
+      If(composition_proxy_eighth) { Button("1/8", action: composition_proxy_eighth, tone: primary, size: small) } else { Button("1/8", action: composition_proxy_eighth, tone: ghost, size: small) }
+      If(composition_proxy_preview) { Button("プレビューON", action: toggle_composition_proxy_preview, tone: primary, size: small) } else { Button("プレビューOFF", action: toggle_composition_proxy_preview, tone: ghost, size: small) }
     }
   } } }
 }
@@ -129,9 +139,9 @@ component CompositionPreviewSettings() {
 component CompositionRenderSettings() {
   Card { Padding(6) { VStack(spacing: 5) {
     Text("レンダー", size: 14)
-    HStack(spacing: 4) {
-      If(composition_blend_linear) { Button("リニア光合成 ON", action: toggle_composition_blend_linear, tone: primary, size: small) } else { Button("リニア光合成 OFF", action: toggle_composition_blend_linear, tone: secondary, size: small) }
-      If(composition_dither_output) { Button("ディザ ON", action: toggle_composition_dither_output, tone: primary, size: small) } else { Button("ディザ OFF", action: toggle_composition_dither_output, tone: secondary, size: small) }
+    Wrap(item_spacing: 4, line_spacing: 4) {
+      If(composition_blend_linear) { Button("リニア光合成 ON", action: toggle_composition_blend_linear, tone: primary, size: small) } else { Button("リニア光合成 OFF", action: toggle_composition_blend_linear, tone: ghost, size: small) }
+      If(composition_dither_output) { Button("ディザ ON", action: toggle_composition_dither_output, tone: primary, size: small) } else { Button("ディザ OFF", action: toggle_composition_dither_output, tone: ghost, size: small) }
       Caption("階調のバンディングを軽減")
     }
   } } }
@@ -149,30 +159,32 @@ component CompositionSettingsPanel() {
 
 component CompositionViewerPanel() {
   Padding(2) { VStack(spacing: 2) {
-    Canvas("kagari.viewport").frame(height: 360)
+    Canvas("kagari.viewport").relative_frame(height: 0.44, min_height: 200, max_height: 620)
     If(preview_worker_failed) { Caption("プレビュー処理が停止しました。アプリを再起動してください。") }
-    HStack(spacing: 4) {
-      Icon("grid", 12)
-      Button("グリッド", action: setting_grid_visible_changed, tone: secondary, size: small)
-      Button("セーフ", action: setting_safe_area_changed, tone: secondary, size: small)
-      Button("{viewport_channel_mode}", action: viewport_cycle_channel, tone: secondary, size: small)
-      Button("{viewport_exposure_label}", action: viewport_cycle_exposure, tone: secondary, size: small)
-      If(viewport_wipe_enabled) { Button("A/B", action: viewport_toggle_wipe, tone: primary, size: small) } else { Button("A/B", action: viewport_toggle_wipe, tone: secondary, size: small) }
-      Spacer
-      HStack(spacing: 4) {
-        IconButton("step_prev", action: step_frame_backward, tone: secondary, size: small)
-        If(is_playing) { IconButton("pause", action: play_toggle, tone: primary, size: small) } else { IconButton("play", action: play_toggle, tone: secondary, size: small) }
-        IconButton("stop", action: play_stop, tone: secondary, size: small)
-        IconButton("step_next", action: step_frame_forward, tone: secondary, size: small)
-        If(playback_loop) { IconButton("repeat", action: toggle_playback_loop, tone: primary, size: small) } else { IconButton("repeat", action: toggle_playback_loop, tone: secondary, size: small) }
-        Text("{current_time}", size: 13)
+    Surface(padding: 4, spacing: 0, radius: 4, border: true, background: "#12151a") {
+      Wrap(item_spacing: 4, line_spacing: 4) {
+        Icon("grid", 12)
+        If(grid_visible) { Button("グリッド", action: setting_grid_visible_changed, tone: primary, size: small) } else { Button("グリッド", action: setting_grid_visible_changed, tone: ghost, size: small) }
+        If(safe_area_visible) { Button("セーフ", action: setting_safe_area_changed, tone: primary, size: small) } else { Button("セーフ", action: setting_safe_area_changed, tone: ghost, size: small) }
+        Button("{viewport_channel_mode}", action: viewport_cycle_channel, tone: ghost, size: small)
+        Button("{viewport_exposure_label}", action: viewport_cycle_exposure, tone: ghost, size: small)
+        If(viewport_wipe_enabled) { Button("A/B", action: viewport_toggle_wipe, tone: primary, size: small) } else { Button("A/B", action: viewport_toggle_wipe, tone: ghost, size: small) }
+        Spacer
+        HStack(spacing: 2) {
+          IconButton("step_prev", action: step_frame_backward, tone: ghost, size: small)
+          If(is_playing) { IconButton("pause", action: play_toggle, tone: primary, size: small) } else { IconButton("play", action: play_toggle, tone: ghost, size: small) }
+          IconButton("stop", action: play_stop, tone: ghost, size: small)
+          IconButton("step_next", action: step_frame_forward, tone: ghost, size: small)
+          If(playback_loop) { IconButton("repeat", action: toggle_playback_loop, tone: primary, size: small) } else { IconButton("repeat", action: toggle_playback_loop, tone: ghost, size: small) }
+          Text("{current_time}", size: 13)
+        }
+        Spacer
+        Caption("{composition_name}")
+        Caption("·")
+        Caption("{status_resolution}")
+        Caption("·")
+        Caption("{fps_label}")
       }
-      Spacer
-      Caption("{composition_name}")
-      Caption("·")
-      Caption("{status_resolution}")
-      Caption("·")
-      Caption("{fps_label}")
     }
   } }
 }
@@ -200,10 +212,13 @@ component CompositionRemoveConfirmModal() {
         Caption("「{composition_name}」と中のレイヤーを削除します。他のコンポジション内の参照レイヤーも削除されます。この操作は取り消せません。")
         HStack(spacing: 8) {
           Spacer
-          Button("キャンセル", action: composition_remove_cancel, tone: secondary)
+          Button("キャンセル", action: composition_remove_cancel, tone: ghost)
           Button("削除", action: composition_remove_confirm, tone: destructive)
         }
       }
+    }
+    .context_menu() {
+      Item("コマンドパレット", action: toggle_command_palette)
     }
   }
 }

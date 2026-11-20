@@ -2,7 +2,7 @@ component SettingsDisplayPage() {
   VStack(spacing: 12) {
     VStack(spacing: 4) { Title("表示") Caption("ユーザーインターフェース、プレビューの表示、カラーに関する設定を行います。") }
 
-    Card(padding: 12, spacing: 10) {
+    Card(padding: 12, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
       Text("ユーザーインターフェース", size: 13)
       SettingsRow("UI のスケール", label_width: 180) {
         HStack(spacing: 6) { Text("100%") Caption("(標準)") }
@@ -24,7 +24,7 @@ component SettingsDisplayPage() {
       }
     }
 
-    Card(padding: 12, spacing: 10) {
+    Card(padding: 12, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
       Text("プレビュー", size: 13)
       SettingsRow("プレビューの解像度", label_width: 180) {
         Select(preview_resolution, action: setting_preview_resolution_changed) {
@@ -50,7 +50,7 @@ component SettingsDisplayPage() {
       }
     }
 
-    Card(padding: 12, spacing: 10) {
+    Card(padding: 12, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
       Text("カラー出力", size: 13)
       Caption("プロジェクトの色空間変換、出力ガンマ、HDRディスプレイ連携は未実装です。プレビューと書き出しは現在8-bit SDRを使用します。")
     }

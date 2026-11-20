@@ -83,6 +83,7 @@ fn mask_input_key(shapes: &[MaskShape], width: u32, height: u32) -> u64 {
         shape.opacity.to_bits().hash(&mut hasher);
         shape.inverted.hash(&mut hasher);
         shape.feather.to_bits().hash(&mut hasher);
+        shape.expansion.to_bits().hash(&mut hasher);
     }
     hasher.finish()
 }
@@ -320,6 +321,7 @@ fn feather_coverage(
     width: u32,
     height: u32,
     feather: f32,
+    expansion: f32,
 ) -> Option<Vec<f32>> {
     let mut bin = try_vec_with_capacity(cov.len())?;
     bin.extend(cov.iter().map(|&c| c > 0.5));
@@ -327,12 +329,13 @@ fn feather_coverage(
     let d_to_covered = edt_2d(&bin, width, height, true)?; // outside → edge
     let has_covered_pixels = bin.iter().any(|covered| *covered);
     let half = feather.max(0.5);
-    if half > 64.0 {
+    if half > 64.0 || expansion.abs() >= 0.01 {
         let cap = (width + height) as f32;
         let mut feathered = try_vec_with_capacity(cov.len())?;
         feathered.extend(cov.iter().zip(d_to_uncovered).zip(d_to_covered).map(
             |((_, inside_distance), outside_distance)| {
-                let signed_distance = inside_distance.min(cap) - outside_distance.min(cap);
+                let signed_distance =
+                    inside_distance.min(cap) - outside_distance.min(cap) + expansion;
                 (0.5 + signed_distance / (2.0 * half)).clamp(0.0, 1.0)
             },
         ));
@@ -391,8 +394,15 @@ pub(crate) fn combine_mask_shapes(
             continue;
         }
         let mut cov = rasterize_polygon_evenodd(&shape.poly, width, height)?;
-        if shape.feather >= 0.5 {
-            cov = feather_coverage(&cov, &shape.poly, width, height, shape.feather)?;
+        if shape.feather >= 0.5 || shape.expansion.abs() >= 0.01 {
+            cov = feather_coverage(
+                &cov,
+                &shape.poly,
+                width,
+                height,
+                shape.feather,
+                shape.expansion,
+            )?;
         }
         let op = shape.opacity.clamp(0.0, 1.0);
         if op < 1.0 {
@@ -443,6 +453,7 @@ pub(crate) fn combine_mask_shapes(
 pub(crate) fn collect_mask_shapes(
     layer: &crate::core::timeline::Layer,
     frame: u32,
+    fps: u32,
     out_w: u32,
     out_h: u32,
     comp_w: u32,
@@ -454,14 +465,18 @@ pub(crate) fn collect_mask_shapes(
     }
     let sx = out_w as f32 / comp_w.max(1) as f32;
     let sy = out_h as f32 / comp_h.max(1) as f32;
+    let time_sec = frame as f32 / fps.max(1) as f32;
     let mut shapes = Vec::new();
     for mask in &layer.masks {
         if !mask.enabled || mask.mode == MaskMode::None {
             continue;
         }
-        let mut poly = mask
-            .path
-            .to_polygon(frame, crate::core::mask::MASK_CURVE_SEGMENTS);
+        let mut poly = crate::core::software_renderer::wiggle_polygon(
+            mask,
+            mask.path
+                .to_polygon(frame, crate::core::mask::MASK_CURVE_SEGMENTS),
+            time_sec,
+        );
         // to_polygon may repeat the first point to close the loop — drop it
         if poly.len() > 1 && poly[0] == *poly.last().unwrap() {
             poly.pop();
@@ -474,7 +489,8 @@ pub(crate) fn collect_mask_shapes(
             mode: mask.mode,
             opacity: (mask.opacity.evaluate(frame) / 100.0).clamp(0.0, 1.0),
             inverted: mask.inverted,
-            feather: mask.feather.evaluate(frame).max(0.0),
+            feather: mask.feather.evaluate(frame).max(0.0) * (0.5 * (sx + sy)),
+            expansion: mask.expansion.evaluate(frame) * (0.5 * (sx + sy)),
         });
     }
     if shapes.is_empty() {

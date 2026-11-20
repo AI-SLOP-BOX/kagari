@@ -735,3 +735,42 @@ pub(crate) fn set_animatable_at_frame<T: Clone>(
     }
     true
 }
+
+pub(crate) fn effect_parameter_range(
+    effect: &kagari_vfx::core::timeline::EffectType,
+    parameter_id: &str,
+) -> (f32, f32) {
+    use kagari_vfx::core::timeline::EffectType;
+    match (effect, parameter_id) {
+        (EffectType::GaussianBlur { .. }, "blur_radius") => (0.0, 200.0),
+        (EffectType::ColorTint { .. }, "intensity") => (0.0, 100.0),
+        (EffectType::DropShadow { .. }, "opacity") => (0.0, 100.0),
+        (EffectType::DropShadow { .. }, "direction") => (-180.0, 180.0),
+        (EffectType::DropShadow { .. }, "distance") => (0.0, 200.0),
+        (EffectType::DropShadow { .. }, "softness") => (0.0, 100.0),
+        (EffectType::Levels { .. }, "gamma") => (0.1, 4.0),
+        (EffectType::Levels { .. }, _) => (0.0, 1.0),
+        (EffectType::HueSaturation { .. }, "hue") => (-180.0, 180.0),
+        (EffectType::HueSaturation { .. }, "saturation" | "lightness") => (-100.0, 100.0),
+        (EffectType::FilmEmulation { .. }, "lift") => (-0.5, 0.5),
+        (EffectType::FilmEmulation { .. }, "gamma" | "gain") => (0.2, 2.2),
+        (EffectType::FilmEmulation { .. }, "hue_shift_deg") => (-45.0, 45.0),
+        (EffectType::FilmEmulation { .. }, _) => (0.0, 2.0),
+        (EffectType::Glow { .. }, "intensity") => (0.0, 5.0),
+        (EffectType::Glow { .. }, "radius") => (0.0, 200.0),
+        (EffectType::Glow { .. }, "threshold") => (0.0, 1.0),
+        (EffectType::RadialBlur { .. }, "amount") => (0.0, 1.0),
+        (EffectType::Sharpen { .. }, "amount") => (0.0, 5.0),
+        (_, "opacity" | "intensity" | "amount") => (0.0, 100.0),
+        (_, "angle" | "direction" | "hue" | "hue_shift_deg") => (-180.0, 180.0),
+        (_, "gamma" | "gain") => (0.1, 4.0),
+        (_, "lift") => (-0.5, 0.5),
+        (_, "radius" | "blur_radius" | "distance" | "softness") => (0.0, 200.0),
+        _ => (0.0, 100.0),
+    }
+}
+
+pub(crate) fn normalize_effect_param(value: f32, min: f32, max: f32) -> f64 {
+    let span = (max - min).max(1e-5);
+    f64::from(((value - min) / span).clamp(0.0, 1.0))
+}

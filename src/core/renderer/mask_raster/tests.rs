@@ -47,6 +47,7 @@ mod gpu_mask_tests {
                 opacity: 1.0,
                 inverted: false,
                 feather: 0.0,
+            expansion: 0.0,
             },
             MaskShape {
                 poly: rect(4.0, 0.0, 4.0, 2.0),
@@ -54,6 +55,7 @@ mod gpu_mask_tests {
                 opacity: 1.0,
                 inverted: false,
                 feather: 0.0,
+            expansion: 0.0,
             },
         ];
         let cov = combine_mask_shapes(&shapes, 8, 2).expect("masks present");
@@ -71,6 +73,7 @@ mod gpu_mask_tests {
             opacity: 1.0,
             inverted: false,
             feather: 0.0,
+            expansion: 0.0,
         }];
         let cov = combine_mask_shapes(&shapes, 8, 8).expect("masks present");
         let get = |px: usize, py: usize| cov[py * 8 + px];
@@ -86,6 +89,7 @@ mod gpu_mask_tests {
             opacity: 1.0,
             inverted: true,
             feather: 0.0,
+            expansion: 0.0,
         }];
         let cov = combine_mask_shapes(&shapes, 8, 8).expect("masks present");
         let get = |px: usize, py: usize| cov[py * 8 + px];
@@ -102,6 +106,7 @@ mod gpu_mask_tests {
                 opacity: 1.0,
                 inverted: false,
                 feather: 0.0,
+            expansion: 0.0,
             },
             MaskShape {
                 poly: rect(2.0, 0.0, 6.0, 2.0),
@@ -109,6 +114,7 @@ mod gpu_mask_tests {
                 opacity: 1.0,
                 inverted: false,
                 feather: 0.0,
+            expansion: 0.0,
             },
         ];
         let cov = combine_mask_shapes(&shapes, 8, 2).expect("masks present");
@@ -126,6 +132,7 @@ mod gpu_mask_tests {
             opacity: 1.0,
             inverted: false,
             feather: 0.0,
+            expansion: 0.0,
         }];
         assert!(combine_mask_shapes(&disabled, 8, 8).is_none());
     }
@@ -138,6 +145,7 @@ mod gpu_mask_tests {
             opacity: 1.0,
             inverted: false,
             feather,
+            expansion: 0.0,
         };
         let a = mask_input_key(&[shape(0.0, crate::core::mask::MaskMode::Add)], 8, 8);
         let b = mask_input_key(&[shape(0.0, crate::core::mask::MaskMode::Add)], 8, 8);
@@ -198,6 +206,7 @@ mod gpu_mask_tests {
             opacity: 1.0,
             inverted: false,
             feather: 0.0,
+            expansion: 0.0,
         }];
         let out = combine_mask_shapes(&shapes, 8, 8).expect("mask present");
         let raw = rasterize_polygon_evenodd(&rect(2.0, 2.0, 4.0, 4.0), 8, 8).unwrap();
@@ -216,6 +225,7 @@ mod gpu_mask_tests {
             opacity: 1.0,
             inverted: false,
             feather: 4.0,
+            expansion: 0.0,
         }];
         let out = combine_mask_shapes(&shapes, 24, 16).expect("mask present");
         let get = |px: usize, py: usize| out[py * 24 + px];
@@ -231,12 +241,48 @@ mod gpu_mask_tests {
     }
 
     #[test]
+    fn mask_expansion_dilates_and_erodes_coverage() {
+        let poly = rect(6.0, 6.0, 12.0, 12.0);
+        let dilated = [MaskShape {
+            poly: poly.clone(),
+            mode: crate::core::mask::MaskMode::Add,
+            opacity: 1.0,
+            inverted: false,
+            feather: 0.0,
+            expansion: 3.0,
+        }];
+        let out_dilated = combine_mask_shapes(&dilated, 24, 24).expect("dilated mask");
+        assert!(
+            out_dilated[12 * 24 + 4] > 0.5,
+            "pixel 2px outside rect should be covered with +3px expansion"
+        );
+
+        let eroded = [MaskShape {
+            poly,
+            mode: crate::core::mask::MaskMode::Add,
+            opacity: 1.0,
+            inverted: false,
+            feather: 0.0,
+            expansion: -3.0,
+        }];
+        let out_eroded = combine_mask_shapes(&eroded, 24, 24).expect("eroded mask");
+        assert!(
+            out_eroded[12 * 24 + 7] < 0.5,
+            "pixel 1px inside rect should be cleared with -3px expansion"
+        );
+        assert!(
+            out_eroded[12 * 24 + 12] > 0.5,
+            "center pixel should remain opaque with -3px expansion"
+        );
+    }
+
+    #[test]
     fn feather_keeps_subpixel_width_paths_visible() {
         let poly = [[3.1, 1.0], [3.2, 1.0], [3.2, 7.0], [3.1, 7.0]];
         let binary = rasterize_polygon_evenodd(&poly, 8, 8).unwrap();
         assert!(binary.iter().all(|coverage| *coverage == 0.0));
 
-        let feathered = feather_coverage(&binary, &poly, 8, 8, 1.0).unwrap();
+        let feathered = feather_coverage(&binary, &poly, 8, 8, 1.0, 0.0).unwrap();
 
         assert!(feathered[3 * 8 + 3] > 0.0);
         assert_eq!(feathered[3 * 8 + 5], 0.0);
@@ -291,7 +337,7 @@ mod cpu_parity_tests {
         let cpu = crate::core::software_renderer::render_frame_to_pixels(&comp, 0, W, H, 0.0, 0);
 
         let (key, shapes) =
-            collect_mask_shapes(&comp.layers[0], 0, W, H, W, H).expect("mask present");
+            collect_mask_shapes(&comp.layers[0], 0, 30, W, H, W, H).expect("mask present");
         let raster = rasterize_from_shapes(&shapes, W, H).expect("coverage");
         assert_eq!(raster.key, key, "key must derive from the same inputs");
 

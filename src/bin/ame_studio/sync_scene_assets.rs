@@ -214,71 +214,6 @@ impl AfterEffectsStudio {
             Value::String(current_parent_name),
         )?;
 
-        let audio_tracks: Vec<Value> = if self.workspace == Workspace::Audio {
-            self.project_model
-                .active_composition()
-                .layers
-                .iter()
-                .filter_map(|layer| {
-                    let source_kind = match &layer.layer_type {
-                        kagari_vfx::core::timeline::LayerType::Audio { .. } => Some("音声素材"),
-                        kagari_vfx::core::timeline::LayerType::Video {
-                            audio_wav: Some(_), ..
-                        } => Some("動画内音声"),
-                        _ => None,
-                    }?;
-                    let volume_track = match &layer.layer_type {
-                        kagari_vfx::core::timeline::LayerType::Audio { volume, .. } => Some(volume),
-                        kagari_vfx::core::timeline::LayerType::Video {
-                            audio_wav: Some(_),
-                            audio_volume,
-                            ..
-                        } => Some(audio_volume),
-                        _ => None,
-                    };
-                    let volume = volume_track.map(|track| track.evaluate(self.current_frame));
-                    let keyframe_here = volume_track.is_some_and(|track| {
-                        track.keyframes().is_some_and(|keyframes| {
-                            keyframes.iter().any(|key| key.frame == self.current_frame)
-                        })
-                    });
-                    Some(Value::Record(std::collections::BTreeMap::from([
-                        ("id".to_owned(), Value::String(layer.id.clone())),
-                        ("name".to_owned(), Value::String(layer.name.clone())),
-                        (
-                            "source_kind".to_owned(),
-                            Value::String(source_kind.to_owned()),
-                        ),
-                        (
-                            "selected".to_owned(),
-                            Value::Bool(
-                                self.selected_layer_id.as_deref() == Some(layer.id.as_str()),
-                            ),
-                        ),
-                        ("locked".to_owned(), Value::Bool(layer.locked)),
-                        ("solo".to_owned(), Value::Bool(layer.solo)),
-                        ("muted".to_owned(), Value::Bool(layer.audio_muted)),
-                        ("has_volume".to_owned(), Value::Bool(volume.is_some())),
-                        ("keyframe_here".to_owned(), Value::Bool(keyframe_here)),
-                        (
-                            "volume".to_owned(),
-                            Value::String(
-                                volume
-                                    .map(|value| format!("{value:.2}"))
-                                    .unwrap_or_default(),
-                            ),
-                        ),
-                    ])))
-                })
-                .collect()
-        } else {
-            Vec::new()
-        };
-        self.ui
-            .set_binding("has_audio_tracks", Value::Bool(!audio_tracks.is_empty()))?;
-        self.ui
-            .set_binding("audio_tracks", Value::List(audio_tracks))?;
-
         let timeline_layers: Vec<Value> = visible_timeline_layers
             .into_iter()
             .map(|layer| {
@@ -557,7 +492,164 @@ impl AfterEffectsStudio {
             .set_binding("has_scene_assets", Value::Bool(!scene_assets.is_empty()))?;
         self.ui
             .set_binding("scene_assets", Value::List(scene_assets))?;
+        self.sync_audio_tracks_binding()?;
         self.sync_project_asset_bindings()?;
         Ok(())
+    }
+
+    /// Materializes only the requested visible slice of audio tracks into the
+    /// lazy `audio_tracks` binding window when the Audio workspace is active.
+    pub(crate) fn sync_audio_tracks_binding(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        if self.workspace == Workspace::Audio {
+            let audio_capable_layers = self
+                .project_model
+                .active_composition()
+                .layers
+                .iter()
+                .filter(|layer| {
+                    matches!(
+                        &layer.layer_type,
+                        kagari_vfx::core::timeline::LayerType::Audio { .. }
+                            | kagari_vfx::core::timeline::LayerType::Video {
+                                audio_wav: Some(_),
+                                ..
+                            }
+                    )
+                });
+            let total_audio_tracks = audio_capable_layers.clone().count();
+            let default_window = (300usize.div_ceil(54) + 4).min(total_audio_tracks);
+            let requested = self
+                .virtual_list_ranges
+                .get("audio_tracks")
+                .cloned()
+                .unwrap_or(0..default_window);
+            let window_start = requested.start.min(total_audio_tracks);
+            let window_end = requested.end.max(window_start).min(total_audio_tracks);
+            let window_len = window_end - window_start;
+            let audio_tracks: Vec<Value> = audio_capable_layers
+                .skip(window_start)
+                .take(window_len)
+                .filter_map(|layer| {
+                    let source_kind = match &layer.layer_type {
+                        kagari_vfx::core::timeline::LayerType::Audio { .. } => Some("音声素材"),
+                        kagari_vfx::core::timeline::LayerType::Video {
+                            audio_wav: Some(_), ..
+                        } => Some("動画内音声"),
+                        _ => None,
+                    }?;
+                    let volume_track = match &layer.layer_type {
+                        kagari_vfx::core::timeline::LayerType::Audio { volume, .. } => Some(volume),
+                        kagari_vfx::core::timeline::LayerType::Video {
+                            audio_wav: Some(_),
+                            audio_volume,
+                            ..
+                        } => Some(audio_volume),
+                        _ => None,
+                    };
+                    let volume = volume_track.map(|track| track.evaluate(self.current_frame));
+                    let keyframe_here = volume_track.is_some_and(|track| {
+                        track.keyframes().is_some_and(|keyframes| {
+                            keyframes.iter().any(|key| key.frame == self.current_frame)
+                        })
+                    });
+                    Some(Value::Record(std::collections::BTreeMap::from([
+                        ("id".to_owned(), Value::String(layer.id.clone())),
+                        ("name".to_owned(), Value::String(layer.name.clone())),
+                        (
+                            "source_kind".to_owned(),
+                            Value::String(source_kind.to_owned()),
+                        ),
+                        (
+                            "selected".to_owned(),
+                            Value::Bool(
+                                self.selected_layer_id.as_deref() == Some(layer.id.as_str()),
+                            ),
+                        ),
+                        ("locked".to_owned(), Value::Bool(layer.locked)),
+                        ("solo".to_owned(), Value::Bool(layer.solo)),
+                        ("muted".to_owned(), Value::Bool(layer.audio_muted)),
+                        ("has_volume".to_owned(), Value::Bool(volume.is_some())),
+                        ("keyframe_here".to_owned(), Value::Bool(keyframe_here)),
+                        (
+                            "volume".to_owned(),
+                            Value::String(
+                                volume
+                                    .map(|value| format!("{value:.2}"))
+                                    .unwrap_or_default(),
+                            ),
+                        ),
+                    ])))
+                })
+                .collect();
+            self.ui
+                .set_binding("has_audio_tracks", Value::Bool(total_audio_tracks > 0))?;
+            let cached_source_id = if total_audio_tracks > 0 {
+                self.audio_tracks_virtual_list_source_id()
+            } else {
+                None
+            };
+            self.ui.set_virtual_list_window(
+                "audio_tracks",
+                window_start,
+                total_audio_tracks,
+                audio_tracks,
+            )?;
+            let runtime_source_id = cached_source_id.or_else(|| {
+                if total_audio_tracks > 0 {
+                    self.audio_tracks_virtual_list_source_id()
+                } else {
+                    None
+                }
+            });
+            let mut ui_ranges = self.virtual_list_ranges.clone();
+            Self::insert_audio_tracks_ui_range(
+                &mut ui_ranges,
+                runtime_source_id.as_deref(),
+                window_len,
+            );
+            ame_ui::app::App::set_virtual_list_ranges(&mut self.ui, &ui_ranges);
+        } else {
+            self.ui
+                .set_binding("has_audio_tracks", Value::Bool(false))?;
+            self.ui
+                .set_virtual_list_window("audio_tracks", 0, 0, Vec::new())?;
+        }
+        Ok(())
+    }
+
+    /// Populates local window range `0..len` for `"audio_tracks"` and all
+    /// branch-lowering ordinals (`ame-vl-{index}-{ordinal}`) in `ui_ranges`.
+    pub(crate) fn insert_audio_tracks_ui_range(
+        ui_ranges: &mut std::collections::HashMap<String, std::ops::Range<usize>>,
+        runtime_source_id: Option<&str>,
+        len: usize,
+    ) {
+        ui_ranges.insert("audio_tracks".to_owned(), 0..len);
+        if let Some((prefix, _)) = runtime_source_id.and_then(|id| id.rsplit_once('-')) {
+            for ordinal in 0..16 {
+                ui_ranges.insert(format!("{prefix}-{ordinal}"), 0..len);
+            }
+        }
+    }
+
+    /// Resolves the runtime-assigned `source_id` (`ame-vl-*`) for
+    /// `AudioMixerPanel`'s `VirtualList` from the current view tree.
+    pub(crate) fn audio_tracks_virtual_list_source_id(&mut self) -> Option<String> {
+        let tree = ame_ui::app::App::try_shared_view_tree(&mut self.ui).ok()??;
+        let mut pending = vec![&tree.root];
+        while let Some(node) = pending.pop() {
+            if let ame_ui::view::ViewKind::VirtualList {
+                height: 300,
+                row_height: 54,
+                variable_height: false,
+                source_id: Some(source_id),
+                ..
+            } = &node.kind
+            {
+                return Some(source_id.clone());
+            }
+            pending.extend(&node.children);
+        }
+        None
     }
 }

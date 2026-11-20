@@ -1,11 +1,46 @@
 component FlowchartPanel() {
-  VStack(spacing: 4) {
-    HStack(spacing: 6) {
-      Caption("ノードグラフ & パイプライン依存構造")
-      Spacer
-      Button("タイムラインに戻る", action: timeline_view_all, tone: secondary, size: small)
+  Card(padding: 8, spacing: 6, hover_strength: 0.0, hover_elevation: 0.0) {
+    Surface(padding: 6, spacing: 0, radius: 5, border: false, background: "#14181f") {
+      HStack(spacing: 8) {
+        Text("レイヤー依存フローチャート", size: 13).weight(semibold)
+        Spacer
+        Surface(padding: 3, spacing: 0, radius: 4, border: false, background: "#11141a") {
+          Caption("親子リンク (シアン) · トラックマット (アンバー)")
+        }
+        Button("タイムラインに戻る", action: timeline_view_all, tone: ghost, size: small)
+      }
     }
-    Canvas("kagari.flowchart").frame(height: 260)
-    Caption("親・子リンク (シアン) · トラックマット依存 (アンバー) · レイヤーをクリックで選択")
+    Canvas("kagari.flowchart").frame(height: 120)
+    Surface(padding: 5, spacing: 0, radius: 5, border: false, background: "#14181f") {
+      VStack(spacing: 4) {
+        HStack(spacing: 6) {
+          Text("VFX 合成ノードグラフ (DAG)", size: 13).weight(semibold)
+          Spacer
+          Caption("{node_graph_status}")
+        }
+        Wrap(item_spacing: 3, line_spacing: 3) {
+          Button("+ Blur", action: node_graph_add_blur, tone: ghost, size: small)
+          Button("+ ColorWheel", action: node_graph_add_color_wheel, tone: ghost, size: small)
+          Button("+ ProKeyer", action: node_graph_add_pro_keyer, tone: ghost, size: small)
+          Button("+ Transform", action: node_graph_add_transform, tone: ghost, size: small)
+          Button("+ Sapphire", action: node_graph_add_sapphire, tone: ghost, size: small)
+          Button("+ Saber", action: node_graph_add_saber, tone: ghost, size: small)
+          Button("+ DeepMerge", action: node_graph_add_deep_merge, tone: ghost, size: small)
+          Button("+ OverMerge", action: node_graph_add_over_merge, tone: ghost, size: small)
+          Button("+ OpenFX", action: node_graph_add_openfx, tone: ghost, size: small)
+          Button("値-", action: node_graph_param_down, tone: ghost, size: small)
+          Button("値+", action: node_graph_param_up, tone: ghost, size: small)
+          Button("←", action: node_graph_move_left, tone: ghost, size: small)
+          Button("→", action: node_graph_move_right, tone: ghost, size: small)
+          Button("整列", action: node_graph_auto_layout, tone: ghost, size: small)
+          Button("削除", action: node_graph_remove_selected, tone: destructive, size: small)
+          Button("リセット", action: node_graph_reset, tone: ghost, size: small)
+          If(node_graph_live_preview) { Button("DAGライブ: ON", action: toggle_node_graph_preview, tone: primary, size: small) } else { Button("DAGライブ: OFF", action: toggle_node_graph_preview, tone: ghost, size: small) }
+          Button("DAG評価実行", action: node_graph_evaluate, tone: primary, size: small)
+          Button("結果レイヤー書き出し", action: node_graph_bake_to_layer, tone: ghost, size: small)
+        }
+        Canvas("kagari.node_graph").frame(height: 112)
+      }
+    }
   }
 }

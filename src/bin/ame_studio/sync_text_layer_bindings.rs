@@ -330,11 +330,17 @@ impl AfterEffectsStudio {
                 ]
                 .into_iter()
                 .map(|(id, label, value, unit)| {
+                    let (min, max) =
+                        crate::ame_studio_text_ops::text_animator_parameter_range(id);
+                    let span = (max - min).max(f32::EPSILON);
+                    let normalized = f64::from(((value - min) / span).clamp(0.0, 1.0));
                     Value::Record(std::collections::BTreeMap::from([
                         ("id".to_owned(), Value::String(id.to_owned())),
                         ("label".to_owned(), Value::String(label.to_owned())),
                         ("value".to_owned(), Value::String(format!("{value:.2}"))),
                         ("unit".to_owned(), Value::String(unit.to_owned())),
+                        ("normalized".to_owned(), Value::Float(normalized)),
+                        ("is_numeric".to_owned(), Value::Bool(true)),
                     ]))
                 })
                 .collect::<Vec<_>>()

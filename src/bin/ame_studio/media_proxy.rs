@@ -45,6 +45,33 @@ impl AfterEffectsStudio {
         self.mark_project_changed();
     }
 
+    pub(crate) fn set_selected_layer_proxy_resolution(&mut self, label: &str) {
+        use kagari_vfx::core::proxy::ProxyResolution;
+        let next = match label {
+            "Full" => ProxyResolution::Full,
+            "1/2" => ProxyResolution::Half,
+            "1/4" => ProxyResolution::Quarter,
+            "1/8" => ProxyResolution::Eighth,
+            _ => return,
+        };
+        let Some(id) = self.selected_layer_id.clone() else {
+            return;
+        };
+        let Some(layer) = self
+            .project_model
+            .active_composition_mut()
+            .layers
+            .iter_mut()
+            .find(|layer| layer.id == id && !layer.locked)
+        else {
+            return;
+        };
+        if layer.proxy.resolution != next {
+            layer.proxy.resolution = next;
+            self.mark_project_changed();
+        }
+    }
+
     pub(crate) fn toggle_selected_layer_proxy(&mut self) {
         let Some(id) = self.selected_layer_id.clone() else {
             return;

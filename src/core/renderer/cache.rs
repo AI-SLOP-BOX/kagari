@@ -17,6 +17,7 @@ pub(crate) struct TextTextureKey {
     pub(crate) faux_italic: bool,
     pub(crate) all_caps: bool,
     pub(crate) small_caps: bool,
+    pub(crate) animator_hash: u64,
 }
 pub(crate) type TextTextureCache = std::collections::HashMap<
     TextTextureKey,

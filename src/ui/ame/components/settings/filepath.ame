@@ -2,7 +2,7 @@ component SettingsFilepathPage() {
   VStack(spacing: 12) {
     VStack(spacing: 4) { Title("ファイルパス") Caption("プロジェクト、キャッシュ、メディアなどの保存先を設定します。") }
 
-    Card(padding: 12, spacing: 10) {
+    Card(padding: 12, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
       Text("プロジェクト", size: 13)
       SettingsRow("プロジェクトの保存先", label_width: 170) {
         AttachedButton("参照…", action: setting_project_dir_browse) {
@@ -14,7 +14,7 @@ component SettingsFilepathPage() {
       }
     }
 
-    Card(padding: 12, spacing: 10) {
+    Card(padding: 12, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
       Text("キャッシュ・一時ファイル", size: 13)
       SettingsRow("メディアキャッシュ", label_width: 170) {
         AttachedButton("参照…", action: setting_cache_path_browse) {
@@ -33,7 +33,7 @@ component SettingsFilepathPage() {
       }
     }
 
-    Card(padding: 12, spacing: 10) {
+    Card(padding: 12, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
       Text("自動保存・バックアップ", size: 13)
       SettingsRow("自動保存の保存先", label_width: 170) {
         AttachedButton("参照…", action: setting_autosave_dir_browse) {
@@ -62,7 +62,7 @@ component SettingsFilepathPage() {
       }
     }
 
-    Card(padding: 12, spacing: 10) {
+    Card(padding: 12, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
       Text("アセットライブラリ", size: 13)
       SettingsRow("ユーザーアセットの保存先", label_width: 190) {
         AttachedButton("参照…", action: setting_asset_library_browse) {

@@ -128,14 +128,7 @@ impl AfterEffectsStudio {
                     return;
                 }
                 let pixels = match render_sequence_frame(&worker_cancel, || {
-                    kagari_vfx::core::software_renderer::render_frame_to_pixels(
-                        &composition,
-                        frame,
-                        width,
-                        height,
-                        0.0,
-                        0,
-                    )
+                    render_export_pixels_gpu_or_cpu(&composition, frame, width, height)
                 }) {
                     Ok(pixels) => pixels,
                     Err(()) => {
@@ -467,14 +460,8 @@ impl AfterEffectsStudio {
                     if worker_cancel.load(std::sync::atomic::Ordering::SeqCst) {
                         return Err("書き出しをキャンセルしました。".to_owned());
                     }
-                    let pixels = kagari_vfx::core::software_renderer::render_frame_to_pixels(
-                        &composition,
-                        frame,
-                        width,
-                        height,
-                        0.0,
-                        0,
-                    );
+                    let pixels =
+                        render_export_pixels_gpu_or_cpu(&composition, frame, width, height);
                     if pixels.len() as u64 != expected_byte_len {
                         return Err("フレームを描画できませんでした。".to_owned());
                     }
@@ -540,10 +527,25 @@ impl AfterEffectsStudio {
     }
 
     pub(crate) fn cycle_video_export_codec(&mut self) {
+        self.set_video_export_codec_index((self.video_export_codec_idx + 1) % 4);
+    }
+
+    pub(crate) fn set_video_export_codec(&mut self, label: &str) {
+        let idx = match label {
+            "H.264 · MP4" => 0,
+            "H.265 · MP4" => 1,
+            "ProRes 422 · MOV" => 2,
+            "ProRes 4444 · MOV" => 3,
+            _ => return,
+        };
+        self.set_video_export_codec_index(idx);
+    }
+
+    fn set_video_export_codec_index(&mut self, idx: usize) {
         if self.export_in_progress() {
             return;
         }
-        self.video_export_codec_idx = (self.video_export_codec_idx + 1) % 4;
+        self.video_export_codec_idx = idx % 4;
         let mut path = expand_home_path(self.video_output_path.trim());
         path.set_extension(if self.video_export_codec_idx >= 2 {
             "mov"

@@ -71,7 +71,47 @@ impl AfterEffectsStudio {
                 );
                 true
             }
+            ("docs_roto_brush", _)
+            | ("docs_pro_keyer", _)
+            | ("docs_aces_color", _)
+            | ("docs_node_graph", _) => {
+                let topic = match action_name {
+                    "docs_roto_brush" => "roto_brush",
+                    "docs_pro_keyer" => "pro_keyer",
+                    "docs_aces_color" => "aces_color",
+                    _ => "node_graph",
+                };
+                if let Some(entry) = kagari_vfx::core::studio_ux::lookup_japanese_help(topic) {
+                    let body = format!(
+                        "{}\n\n{}\n\nヒント: {}",
+                        entry.summary_ja,
+                        entry.steps_ja.join("\n"),
+                        entry.shortcut_hint
+                    );
+                    self.set_document(entry.title_ja, &body);
+                }
+                true
+            }
             ("open_project", _) => {
+                #[cfg(target_os = "macos")]
+                if let Some(sender) = self.app_event_sender.clone() {
+                    std::thread::spawn(move || {
+                        if let Ok(output) = std::process::Command::new("osascript")
+                            .arg("-e")
+                            .arg(r#"POSIX path of (choose file with prompt "プロジェクトを開く" of type {"json", "kgtpl", "mogrt", "otio"})"#)
+                            .output()
+                        {
+                            if output.status.success() {
+                                let path = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+                                if !path.is_empty() {
+                                    let _ = sender.send(format!("open_project_path:{path}"));
+                                }
+                            }
+                        }
+                    });
+                    return true;
+                }
+                #[cfg(not(target_os = "macos"))]
                 if let Some(path) = rfd::FileDialog::new()
                     .add_filter(
                         "Kagari プロジェクト / テンプレート / OTIO",
@@ -87,12 +127,71 @@ impl AfterEffectsStudio {
                 self.request_new_project();
                 true
             }
+            ("quick_start_1080p60", _) => {
+                self.create_project_with_settings("フルHD プロジェクト".to_owned(), 1920, 1080, 60, 10);
+                true
+            }
+            ("quick_start_4k24", _) => {
+                self.create_project_with_settings("4K プロジェクト".to_owned(), 3840, 2160, 24, 10);
+                true
+            }
+            ("quick_start_vertical", _) => {
+                self.create_project_with_settings("縦型ショート".to_owned(), 1080, 1920, 60, 10);
+                true
+            }
+            ("quick_start_square", _) => {
+                self.create_project_with_settings("正方形 SNS".to_owned(), 1080, 1080, 30, 10);
+                true
+            }
             ("setup_cancel", _) => {
                 self.screen = self.setup_return_screen;
                 true
             }
             ("setup_name_changed", Some(ActionValue::Text(value))) => {
                 self.setup_name = value;
+                true
+            }
+            ("setup_location_changed", Some(ActionValue::Text(value))) => {
+                self.setup_location = value;
+                true
+            }
+            ("setup_comp_name_changed", Some(ActionValue::Text(value))) => {
+                self.setup_comp_name = value;
+                true
+            }
+            ("setup_create_initial_comp_changed", Some(ActionValue::Checked(enabled))) => {
+                self.setup_create_initial_comp = enabled;
+                true
+            }
+            ("setup_toggle_advanced", _) => {
+                self.setup_advanced_open = !self.setup_advanced_open;
+                true
+            }
+            ("setup_preset_changed", Some(ActionValue::Text(preset))) => {
+                match preset.as_str() {
+                    "full_hd" => {
+                        self.setup_width = "1920".to_owned();
+                        self.setup_height = "1080".to_owned();
+                        self.setup_fps = "60".to_owned();
+                    }
+                    "4k" => {
+                        self.setup_width = "3840".to_owned();
+                        self.setup_height = "2160".to_owned();
+                        self.setup_fps = "24".to_owned();
+                    }
+                    "vertical" => {
+                        self.setup_width = "1080".to_owned();
+                        self.setup_height = "1920".to_owned();
+                        self.setup_fps = "60".to_owned();
+                    }
+                    "square" => {
+                        self.setup_width = "1080".to_owned();
+                        self.setup_height = "1080".to_owned();
+                        self.setup_fps = "30".to_owned();
+                    }
+                    _ => {}
+                }
+                self.setup_error.clear();
                 true
             }
             ("setup_width_changed", Some(ActionValue::Text(value))) => {

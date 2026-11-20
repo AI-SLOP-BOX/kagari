@@ -148,6 +148,10 @@ impl AfterEffectsStudio {
                 self.cycle_selected_text_animator_shape();
                 true
             }
+            ("select_text_animator_shape", Some(ActionValue::Text(label))) => {
+                self.set_selected_text_animator_shape(&label);
+                true
+            }
             ("toggle_text_animator_random_order", _) => {
                 self.toggle_selected_text_animator_random_order();
                 true
@@ -159,6 +163,20 @@ impl AfterEffectsStudio {
             ("text_animator_parameter_changed", Some(ActionValue::Text(value))) => {
                 if let Some(parameter) = selected_row_id.as_deref() {
                     self.update_selected_text_animator_parameter(parameter, &value);
+                };
+                true
+            }
+            ("text_animator_parameter_slider_changed", Some(ActionValue::Number(norm))) => {
+                if let Some(parameter) = selected_row_id.as_deref() {
+                    let (min, max) =
+                        crate::ame_studio_text_ops::text_animator_parameter_range(parameter);
+                    let actual = min + (norm.clamp(0.0, 1.0) as f32) * (max - min);
+                    let formatted = if matches!(parameter, "selector.char_start" | "selector.char_end") {
+                        format!("{}", actual.round() as i32)
+                    } else {
+                        format!("{actual:.2}")
+                    };
+                    self.update_selected_text_animator_parameter(parameter, &formatted);
                 };
                 true
             }
@@ -192,6 +210,10 @@ impl AfterEffectsStudio {
             }
             ("cycle_shape_fill_type", _) => {
                 self.cycle_selected_shape_fill_type();
+                true
+            }
+            ("select_shape_fill_type", Some(ActionValue::Text(label))) => {
+                self.set_selected_shape_fill_type(&label);
                 true
             }
             ("shape_gradient_start_color_changed", Some(ActionValue::Text(value))) => {

@@ -173,6 +173,17 @@ impl WgpuRenderer {
                         ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
                     },
+                    // backdrop texture for adjustment layers & programmable blends (binding 6)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 6,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
                 ],
                 label: Some("combined_bind_group_layout"),
             });
@@ -312,6 +323,10 @@ impl WgpuRenderer {
                 wgpu::BindGroupEntry {
                     binding: 5,
                     resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 6,
+                    resource: wgpu::BindingResource::TextureView(&dummy_matte_view),
                 },
             ],
             label: Some("combined_bind_group"),
@@ -482,11 +497,114 @@ impl WgpuRenderer {
         };
         let render_pipeline_screen = create_pipeline("Render Pipeline Screen", Some(screen_blend));
 
+        // Add / LinearDodge in premultiplied form is `D + S_premul` for RGB and Alpha,
+        // matching software_renderer's BlendMode::Add fast-path.
+        let add_blend = wgpu::BlendState {
+            color: wgpu::BlendComponent {
+                src_factor: wgpu::BlendFactor::One,
+                dst_factor: wgpu::BlendFactor::One,
+                operation: wgpu::BlendOperation::Add,
+            },
+            alpha: wgpu::BlendComponent {
+                src_factor: wgpu::BlendFactor::One,
+                dst_factor: wgpu::BlendFactor::One,
+                operation: wgpu::BlendOperation::Add,
+            },
+        };
+        let render_pipeline_add = create_pipeline("Render Pipeline Add", Some(add_blend));
+
+        // Behind in premultiplied form paints only into transparent destination regions:
+        // `S_premul * (1 - D_a) + D`.
+        let behind_blend = wgpu::BlendState {
+            color: wgpu::BlendComponent {
+                src_factor: wgpu::BlendFactor::OneMinusDstAlpha,
+                dst_factor: wgpu::BlendFactor::One,
+                operation: wgpu::BlendOperation::Add,
+            },
+            alpha: wgpu::BlendComponent {
+                src_factor: wgpu::BlendFactor::OneMinusDstAlpha,
+                dst_factor: wgpu::BlendFactor::One,
+                operation: wgpu::BlendOperation::Add,
+            },
+        };
+        let render_pipeline_behind = create_pipeline("Render Pipeline Behind", Some(behind_blend));
+
+        // Multiply in premultiplied form:
+        // `S_premul * D + D * (1 - S_a) = S_a * (S * D) + (1 - S_a) * D`.
+        let multiply_blend = wgpu::BlendState {
+            color: wgpu::BlendComponent {
+                src_factor: wgpu::BlendFactor::Dst,
+                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                operation: wgpu::BlendOperation::Add,
+            },
+            alpha: wgpu::BlendComponent {
+                src_factor: wgpu::BlendFactor::One,
+                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                operation: wgpu::BlendOperation::Add,
+            },
+        };
+        let render_pipeline_multiply =
+            create_pipeline("Render Pipeline Multiply", Some(multiply_blend));
+        let render_pipeline_replace =
+            create_pipeline("Render Pipeline Replace", Some(wgpu::BlendState::REPLACE));
+
+        let custom_shader_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        multisampled: false,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
+            label: Some("custom_shader_bgl"),
+        });
+        let custom_shader_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Custom Shader Pipeline Layout"),
+                bind_group_layouts: &[&custom_shader_bgl],
+                push_constant_ranges: &[],
+            });
+        let custom_shader_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Custom Shader Uniform Buffer"),
+            size: 16,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let (model3d_bgl, model3d_pipeline) = super::model3d_gpu::create_model3d_pipeline(&device);
+        let puppet_pipeline =
+            super::puppet_gpu::create_puppet_pipeline(&device, &texture_bind_group_layout);
+        let (lut_bgl, lut_pipeline) = super::lut_gpu::create_lut_pipeline(&device);
+
         Self {
             device,
             queue,
             render_pipeline,
+            render_pipeline_multiply,
             render_pipeline_screen,
+            render_pipeline_add,
+            render_pipeline_behind,
+            render_pipeline_replace,
             vertex_buffer,
             index_buffer,
             globals_buffer,
@@ -510,6 +628,26 @@ impl WgpuRenderer {
             shadow_view: None,
             shadow_size: (0, 0),
             shadow_active: false,
+            backdrop_texture: None,
+            backdrop_view: None,
+            backdrop_size: (0, 0),
+            scratch_a_texture: None,
+            scratch_a_view: None,
+            scratch_a_bind_group: None,
+            scratch_b_texture: None,
+            scratch_b_view: None,
+            scratch_b_bind_group: None,
+            scratch_size: (0, 0),
+            custom_shader_bgl,
+            custom_shader_pipeline_layout,
+            custom_shader_uniform_buffer,
+            custom_shader_pipelines: std::cell::RefCell::new(std::collections::HashMap::new()),
+            model3d_bgl,
+            model3d_pipeline,
+            puppet_pipeline,
+            lut_bgl,
+            lut_pipeline,
+            lut_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
             target_texture: None,
             target_view: None,
             target_size: (0, 0),

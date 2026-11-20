@@ -22,7 +22,7 @@ pub use frame::render_frame_to_pixels_filtered;
 mod layer_prepare;
 mod mask;
 mod matte;
-mod model3d_raster;
+pub(crate) mod model3d_raster;
 mod output;
 mod particle_layer;
 mod postfx;
@@ -370,7 +370,7 @@ pub fn render_frame_to_pixels(
 
 /// Calculate the shortest distance from point (px, py) to the polygon boundary.
 /// Apply optional Wiggle Paths deformation to a sampled mask polygon.
-fn wiggle_polygon(
+pub(crate) fn wiggle_polygon(
     mask: &crate::core::mask::Mask,
     pts: Vec<[f32; 2]>,
     time_sec: f32,

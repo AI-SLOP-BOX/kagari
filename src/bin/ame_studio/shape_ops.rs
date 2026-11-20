@@ -232,6 +232,72 @@ impl AfterEffectsStudio {
         self.mark_project_changed();
     }
 
+    pub(crate) fn set_selected_shape_fill_type(&mut self, label: &str) {
+        use kagari_vfx::core::timeline::{LayerType, ShapeFillType};
+        let Some(id) = self.selected_layer_id.clone() else {
+            return;
+        };
+        let composition_width = self.project_model.active_composition().width as f32;
+        let Some(layer) = self
+            .project_model
+            .active_composition_mut()
+            .layers
+            .iter_mut()
+            .find(|layer| layer.id == id && !layer.locked)
+        else {
+            return;
+        };
+        let LayerType::Shape {
+            color, fill_type, ..
+        } = &mut layer.layer_type
+        else {
+            return;
+        };
+        let (existing_colors, existing_stops) = match fill_type {
+            ShapeFillType::Solid => (vec![*color, [1.0, 1.0, 1.0, color[3]]], vec![0.0, 1.0]),
+            ShapeFillType::LinearGradient { colors, stops, .. }
+            | ShapeFillType::RadialGradient { colors, stops, .. } => {
+                let mut c = colors.clone();
+                if c.is_empty() {
+                    c.push(*color);
+                }
+                let mut s = stops.clone();
+                if s.len() != c.len() {
+                    s = (0..c.len())
+                        .map(|i| i as f32 / (c.len().saturating_sub(1).max(1)) as f32)
+                        .collect();
+                }
+                (c, s)
+            }
+        };
+        match label {
+            "単色" => {
+                if let Some(first) = existing_colors.first() {
+                    *color = *first;
+                }
+                *fill_type = ShapeFillType::Solid;
+            }
+            "線形グラデーション" => {
+                *fill_type = ShapeFillType::LinearGradient {
+                    start: [-composition_width * 0.5, 0.0],
+                    end: [composition_width * 0.5, 0.0],
+                    colors: existing_colors,
+                    stops: existing_stops,
+                };
+            }
+            "放射グラデーション" => {
+                *fill_type = ShapeFillType::RadialGradient {
+                    center: [0.0, 0.0],
+                    radius: (composition_width * 0.5).max(1.0),
+                    colors: existing_colors,
+                    stops: existing_stops,
+                };
+            }
+            _ => return,
+        }
+        self.mark_project_changed();
+    }
+
     pub(crate) fn update_selected_shape_gradient_color(&mut self, end_color: bool, input: &str) {
         use kagari_vfx::core::timeline::{LayerType, ShapeFillType};
         let Some(id) = self.selected_layer_id.clone() else {

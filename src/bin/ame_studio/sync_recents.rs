@@ -36,6 +36,7 @@ impl AfterEffectsStudio {
                         Value::String(item.path_label.clone()),
                     ),
                     ("date".to_owned(), Value::String(item.date.clone())),
+                    ("selected".to_owned(), Value::Bool(false)),
                 ]))
             })
             .collect::<Vec<_>>();
@@ -43,7 +44,7 @@ impl AfterEffectsStudio {
             .set_binding("recent_project_items", Value::List(recent_project_items))?;
 
         let query = self.project_search.trim().to_lowercase();
-        let project_items = self
+        let mut filtered_projects = self
             .recent_projects
             .iter()
             .filter(|item| {
@@ -52,19 +53,42 @@ impl AfterEffectsStudio {
                     || item.path_label.to_lowercase().contains(&query)
                     || item.path.to_string_lossy().to_lowercase().contains(&query)
             })
+            .cloned()
+            .collect::<Vec<_>>();
+        filtered_projects.sort_by(|a, b| {
+            let ord = match self.project_sort.as_str() {
+                "name" => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+                "created" => {
+                    let ca = std::fs::metadata(&a.path)
+                        .and_then(|m| m.created())
+                        .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+                    let cb = std::fs::metadata(&b.path)
+                        .and_then(|m| m.created())
+                        .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+                    ca.cmp(&cb).then_with(|| a.date.cmp(&b.date))
+                }
+                _ => a.date.cmp(&b.date),
+            };
+            if self.project_sort_desc {
+                ord.reverse()
+            } else {
+                ord
+            }
+        });
+        let project_items = filtered_projects
+            .iter()
             .map(|item| {
+                let path_str = item.path.display().to_string();
+                let selected = self.selected_project_paths.contains(&path_str);
                 Value::Record(std::collections::BTreeMap::from([
-                    (
-                        "path".to_owned(),
-                        Value::String(item.path.display().to_string()),
-                    ),
+                    ("path".to_owned(), Value::String(path_str)),
                     ("name".to_owned(), Value::String(item.name.clone())),
                     ("info".to_owned(), Value::String(item.comps_info.clone())),
                     (
                         "specs".to_owned(),
                         Value::String(format!(
-                            "{} · {} · {}",
-                            item.resolution, item.fps, item.duration
+                            "{} · {} · {} · {}レイヤー",
+                            item.resolution, item.fps, item.duration, item.layer_count
                         )),
                     ),
                     (
@@ -72,15 +96,32 @@ impl AfterEffectsStudio {
                         Value::String(item.path_label.clone()),
                     ),
                     ("date".to_owned(), Value::String(item.date.clone())),
+                    ("selected".to_owned(), Value::Bool(selected)),
                 ]))
             })
             .collect::<Vec<_>>();
+        let project_count_label = format!("{}件のプロジェクト", project_items.len());
+        let selected_count = self.selected_project_paths.len();
         self.ui
             .set_binding("project_search", Value::String(self.project_search.clone()))?;
+        self.ui
+            .set_binding("project_sort", Value::String(self.project_sort.clone()))?;
+        self.ui
+            .set_binding("project_sort_desc", Value::Bool(self.project_sort_desc))?;
+        self.ui
+            .set_binding("project_view_grid", Value::Bool(self.project_view_grid))?;
+        self.ui
+            .set_binding("project_has_selection", Value::Bool(selected_count > 0))?;
+        self.ui.set_binding(
+            "project_selection_label",
+            Value::String(format!("{selected_count}件選択中")),
+        )?;
         self.ui.set_binding(
             "has_project_matches",
             Value::Bool(!project_items.is_empty()),
         )?;
+        self.ui
+            .set_binding("project_count_label", Value::String(project_count_label))?;
         self.ui
             .set_binding("project_items", Value::List(project_items))?;
 

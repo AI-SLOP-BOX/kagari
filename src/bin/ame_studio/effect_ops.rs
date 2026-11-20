@@ -427,6 +427,22 @@ impl AfterEffectsStudio {
                     radius: Animatable::new_constant(2.0),
                 },
             ),
+            "corner_pin" => (
+                "コーナーピン (8-DOF)",
+                EffectType::CornerPin {
+                    top_left: Animatable::new_constant([0.0, 0.0]),
+                    top_right: Animatable::new_constant([1.0, 0.0]),
+                    bottom_right: Animatable::new_constant([1.0, 1.0]),
+                    bottom_left: Animatable::new_constant([0.0, 1.0]),
+                },
+            ),
+            "colorama" => (
+                "Colorama (カラーサイクル)",
+                EffectType::Colorama {
+                    preset_index: Animatable::new_constant(0.0),
+                    cycle_phase: Animatable::new_constant(0.0),
+                },
+            ),
             _ => return,
         };
         let id = format!(

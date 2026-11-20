@@ -101,6 +101,24 @@ pub fn compute_dense_optical_flow_cancellable(
     let block_radius = block_radius.clamp(0, 64);
     let search_radius = search_radius.clamp(0, 128);
 
+    #[cfg(feature = "wgpu")]
+    if crate::core::compute_pipeline::gpu_effects_enabled()
+        && (1..=4).contains(&block_radius)
+        && (1..=16).contains(&search_radius)
+        && !is_cancelled()
+    {
+        if let Some((gpu_field, _conf)) = crate::core::optical_flow_gpu::compute_dense_optical_flow_gpu(
+            src_rgba,
+            tgt_rgba,
+            width,
+            height,
+            block_radius,
+            search_radius,
+        ) {
+            return Some(gpu_field);
+        }
+    }
+
     let get_luma = |buf: &[u8], x: i32, y: i32| -> f32 {
         let cx = x.clamp(0, w - 1) as usize;
         let cy = y.clamp(0, h - 1) as usize;

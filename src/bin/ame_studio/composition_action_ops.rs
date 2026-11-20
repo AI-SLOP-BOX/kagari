@@ -124,8 +124,16 @@ impl AfterEffectsStudio {
                 self.cycle_composition_bit_depth();
                 true
             }
+            ("select_composition_bit_depth", Some(ActionValue::Text(label))) => {
+                self.set_composition_bit_depth(&label);
+                true
+            }
             ("composition_cycle_working_space", _) => {
                 self.cycle_composition_working_space();
+                true
+            }
+            ("select_composition_working_space", Some(ActionValue::Text(label))) => {
+                self.set_composition_working_space(&label);
                 true
             }
             ("composition_name_changed", Some(ActionValue::Text(val))) => {

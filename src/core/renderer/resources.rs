@@ -28,7 +28,7 @@ impl WgpuRenderer {
     pub(super) fn rebuild_combined_bind_group(&self) -> wgpu::BindGroup {
         let mask_view = self.mask_view.as_ref().unwrap_or(&self.dummy_mask_view);
         let shadow_view = self.shadow_view.as_ref().unwrap_or(&self.dummy_shadow_view);
-        let matte_view = &self.dummy_matte_view;
+        let backdrop_view = self.backdrop_view.as_ref().unwrap_or(&self.dummy_matte_view);
         self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &self.combined_bind_group_layout,
             entries: &[
@@ -50,11 +50,15 @@ impl WgpuRenderer {
                 },
                 wgpu::BindGroupEntry {
                     binding: 4,
-                    resource: wgpu::BindingResource::TextureView(matte_view),
+                    resource: wgpu::BindingResource::TextureView(&self.dummy_matte_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 5,
                     resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 6,
+                    resource: wgpu::BindingResource::TextureView(backdrop_view),
                 },
             ],
             label: Some("combined_bind_group"),
@@ -86,6 +90,96 @@ impl WgpuRenderer {
         self.mask_view = Some(view);
         self.mask_size = (width, height);
         self.combined_bind_group = self.rebuild_combined_bind_group();
+    }
+
+    pub(super) fn ensure_backdrop_texture(&mut self, width: u32, height: u32) {
+        if self.backdrop_size == (width, height) && self.backdrop_texture.is_some() {
+            return;
+        }
+        let size = wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        };
+        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Programmable Blend Backdrop Texture"),
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba16Float,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        self.backdrop_texture = Some(texture);
+        self.backdrop_view = Some(view);
+        self.backdrop_size = (width, height);
+        self.combined_bind_group = self.rebuild_combined_bind_group();
+    }
+
+    pub(super) fn ensure_scratch_textures(&mut self, width: u32, height: u32) {
+        if self.scratch_size == (width, height)
+            && self.scratch_a_texture.is_some()
+            && self.scratch_b_texture.is_some()
+        {
+            return;
+        }
+        let size = wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        };
+        let create_scratch = |label: &str, bg_label: &str| {
+            let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some(label),
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba16Float,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING
+                    | wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::COPY_SRC
+                    | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            });
+            let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+            let bind_group = std::sync::Arc::new(self.device.create_bind_group(
+                &wgpu::BindGroupDescriptor {
+                    layout: &self.texture_bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(&view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::Sampler(&self.sampler),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: wgpu::BindingResource::TextureView(&view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 3,
+                            resource: wgpu::BindingResource::Sampler(&self.sampler),
+                        },
+                    ],
+                    label: Some(bg_label),
+                },
+            ));
+            (texture, view, bind_group)
+        };
+        let (ta, va, bga) = create_scratch("Layer Scratch A", "scratch_a_bind_group");
+        let (tb, vb, bgb) = create_scratch("Layer Scratch B", "scratch_b_bind_group");
+        self.scratch_a_texture = Some(ta);
+        self.scratch_a_view = Some(va);
+        self.scratch_a_bind_group = Some(bga);
+        self.scratch_b_texture = Some(tb);
+        self.scratch_b_view = Some(vb);
+        self.scratch_b_bind_group = Some(bgb);
+        self.scratch_size = (width, height);
     }
 
     /// Prepares/resizes the offscreen target texture if needed.
@@ -136,6 +230,7 @@ impl WgpuRenderer {
             faux_italic: params.faux_style.italic,
             all_caps: params.faux_style.all_caps,
             small_caps: params.faux_style.small_caps,
+            animator_hash: params.animator_hash,
         };
         // Cached: return stored dimensions — no CPU rasterization on hits
         if let Some(bind_group) = self
@@ -155,17 +250,51 @@ impl WgpuRenderer {
         };
         let rasterized = crate::core::font_rasterizer::with_font_rasterizer(|r| {
             let family = r.resolve_family(font_family);
-            r.rasterize_text_formatted_styled(
-                &family,
-                text,
-                font_size as f32,
-                color,
-                tracking,
-                leading,
-                params.box_width,
-                alignment,
-                params.faux_style,
-            )
+            if let Some(stack) = params
+                .text_animator_stack
+                .as_ref()
+                .filter(|s| !s.animators.is_empty())
+            {
+                r.rasterize_text_animated_stack_styled(
+                    &family,
+                    text,
+                    font_size as f32,
+                    color,
+                    tracking,
+                    leading,
+                    params.box_width,
+                    alignment,
+                    stack,
+                    params.time_sec,
+                    params.faux_style,
+                )
+            } else if let Some(anim) = params.text_animator.as_ref().filter(|a| a.enabled) {
+                r.rasterize_text_animated_styled(
+                    &family,
+                    text,
+                    font_size as f32,
+                    color,
+                    tracking,
+                    leading,
+                    params.box_width,
+                    alignment,
+                    anim,
+                    params.time_sec,
+                    params.faux_style,
+                )
+            } else {
+                r.rasterize_text_formatted_styled(
+                    &family,
+                    text,
+                    font_size as f32,
+                    color,
+                    tracking,
+                    leading,
+                    params.box_width,
+                    alignment,
+                    params.faux_style,
+                )
+            }
         })?;
         let rasterized =
             crate::core::font_rasterizer::clip_text_bitmap_height(rasterized, params.box_height);

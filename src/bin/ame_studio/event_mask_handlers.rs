@@ -74,6 +74,40 @@ impl AfterEffectsStudio {
                 };
                 true
             }
+            ("select_mask_mode", Some(ActionValue::Text(label))) => {
+                if let (Some(layer_id), Some(mask_id)) = (
+                    self.selected_layer_id.as_deref(),
+                    self.selected_mask_id.as_deref(),
+                ) {
+                    use kagari_vfx::core::mask::MaskMode;
+                    let next = match label.as_str() {
+                        "加算" => Some(MaskMode::Add),
+                        "減算" => Some(MaskMode::Subtract),
+                        "交差" => Some(MaskMode::Intersect),
+                        "明るく" => Some(MaskMode::Lighten),
+                        "暗く" => Some(MaskMode::Darken),
+                        "差分" => Some(MaskMode::Difference),
+                        "なし" => Some(MaskMode::None),
+                        _ => None,
+                    };
+                    if let Some(next) = next {
+                        if let Some(mask) = self
+                            .project_model
+                            .active_composition_mut()
+                            .layers
+                            .iter_mut()
+                            .find(|layer| layer.id == layer_id && !layer.locked)
+                            .and_then(|layer| layer.masks.iter_mut().find(|mask| mask.id == mask_id))
+                        {
+                            if mask.mode != next {
+                                mask.mode = next;
+                                self.mark_project_changed();
+                            }
+                        }
+                    }
+                };
+                true
+            }
             ("toggle_mask_inverted", _) => {
                 if let (Some(layer_id), Some(mask_id)) = (
                     self.selected_layer_id.as_deref(),

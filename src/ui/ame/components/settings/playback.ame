@@ -2,7 +2,7 @@ component SettingsPlaybackPage() {
   VStack(spacing: 12) {
     VStack(spacing: 4) { Title("再生") Caption("プレビューの再生動作、品質、音声に関する設定を行います。") }
 
-    Card(padding: 12, spacing: 10) {
+    Card(padding: 12, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
       Text("再生の基本設定", size: 13)
       SettingsRow("再生品質", label_width: 180) {
         Select(playback_quality, action: setting_playback_quality_changed) {
@@ -28,7 +28,7 @@ component SettingsPlaybackPage() {
       }
     }
 
-    Card(padding: 12, spacing: 10) {
+    Card(padding: 12, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
       Text("プレビューの動作", size: 13)
       SettingsRow("プリロール", label_width: 180) {
         HStack(spacing: 6) { DragValue(pre_roll_secs, min: 0.0, max: 10.0, action: setting_pre_roll_changed) Caption("秒（前）") }
@@ -44,7 +44,7 @@ component SettingsPlaybackPage() {
       }
     }
 
-    Card(padding: 12, spacing: 10) {
+    Card(padding: 12, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
       Text("音声", size: 13)
       SettingsRow("音声デバイス", label_width: 180) {
         Caption("システムの既定のデバイス")
@@ -54,8 +54,8 @@ component SettingsPlaybackPage() {
       }
       SettingsRow("再生音量", label_width: 180) {
         HStack(spacing: 8) {
-          Slider(playback_volume, min: 0.0, max: 100.0, action: setting_volume_changed)
-          Text("{playback_volume:.0f} %", size: 12)
+          Grow(1) { Slider(playback_volume, min: 0.0, max: 100.0, action: setting_volume_changed) }
+          Card(padding: 4, spacing: 0, hover_strength: 0.0, hover_elevation: 0.0) { Text("{playback_volume:.0f} %", size: 12) }
         }
       }
       SettingsRow("ピーク表示", label_width: 180) {

@@ -98,6 +98,7 @@ impl GpuComputeContext {
             if data.len() == pixels.len() {
                 pixels.copy_from_slice(&data);
             }
+            drop(data);
             bufs.staging_out.unmap_tracking();
         }
         record_timing(t);

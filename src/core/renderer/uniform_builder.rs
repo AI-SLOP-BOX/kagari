@@ -10,6 +10,7 @@ pub(super) fn build_layer_uniform(
     opacity: f32,
     textured_source: bool,
     video_frame_blend: f32,
+    disable_effects: bool,
 ) -> LayerUniform {
     // Prepare Layer Uniform details
     let (
@@ -172,11 +173,46 @@ pub(super) fn build_layer_uniform(
         color = [1.0, 1.0, 1.0, 1.0];
     }
 
-    let mut ep = if layer.effects_enabled {
+    let mut ep = if layer.effects_enabled && !disable_effects {
         evaluate_effects(&layer.effects, frame)
     } else {
         crate::core::effect_plugin::EffectParams::default()
     };
+    if ep.sim_enabled == 0 && !layer.puppet_pins.is_empty() && layer.puppet_pins.len() <= 4 {
+        let cw = comp.width.max(1) as f32;
+        let ch = comp.height.max(1) as f32;
+        ep.sim_enabled = 3;
+        ep.sim_type = 83;
+        ep.tint_white[2] = layer.puppet_pins.len() as f32;
+        if let Some(p0) = layer.puppet_pins.first() {
+            let d = p0.position.evaluate(effective_frame);
+            ep.sim_p1 = p0.comp_source[0] / cw;
+            ep.sim_p2 = p0.comp_source[1] / ch;
+            ep.sim_p3 = d[0] / cw;
+            ep.sim_p4 = d[1] / ch;
+        }
+        if let Some(p1) = layer.puppet_pins.get(1) {
+            let d = p1.position.evaluate(effective_frame);
+            ep.sim_p5 = p1.comp_source[0] / cw;
+            ep.sim_p6 = p1.comp_source[1] / ch;
+            ep.tint_black[0] = d[0] / cw;
+            ep.tint_black[1] = d[1] / ch;
+        }
+        if let Some(p2) = layer.puppet_pins.get(2) {
+            let d = p2.position.evaluate(effective_frame);
+            ep.tint_black[2] = p2.comp_source[0] / cw;
+            ep.tint_black[3] = p2.comp_source[1] / ch;
+            ep.shadow_color[0] = d[0] / cw;
+            ep.shadow_color[1] = d[1] / ch;
+        }
+        if let Some(p3) = layer.puppet_pins.get(3) {
+            let d = p3.position.evaluate(effective_frame);
+            ep.shadow_color[2] = p3.comp_source[0] / cw;
+            ep.shadow_color[3] = p3.comp_source[1] / ch;
+            ep.tint_white[0] = d[0] / cw;
+            ep.tint_white[1] = d[1] / ch;
+        }
+    }
 
     // Lens flare light-link: track a comp light's projected position
     if ep.flare_enabled == 1 {
@@ -232,9 +268,31 @@ pub(super) fn build_layer_uniform(
         _ => [0.0; 4],
     };
 
-    let three_d_shade = if layer.is_3d {
+    let three_d_shade = if layer.is_3d && !disable_effects {
         let pos = layer.transform_3d.position.evaluate(frame);
         let camera = comp.resolve_camera_at();
+        if camera.dof_enabled_at(frame) {
+            let dof = crate::core::camera_dof::CameraDofSettings {
+                focus_distance: camera.focus_distance_at(frame),
+                aperture: camera.aperture_at(frame),
+                f_stop: camera.aperture_at(frame),
+                blur_level: 100.0,
+                iris_sides: camera.dof_iris_sides,
+                anamorphic_ratio: 1.0,
+                optical_vignetting: 0.0,
+            };
+            let dof_blur = crate::core::camera_dof::calculate_circle_of_confusion(pos[2], &dof)
+                .clamp(0.0, camera.dof_max_blur_at(frame));
+            if dof_blur >= 1.0 {
+                let radius = dof_blur.round();
+                if ep.blur_enabled == 0 {
+                    ep.blur_enabled = 1;
+                    ep.blur_radius = radius;
+                } else {
+                    ep.blur_radius = (ep.blur_radius * ep.blur_radius + radius * radius).sqrt();
+                }
+            }
+        }
         let screen_pos = crate::core::timeline::project_point_to_screen_at_frame(
             &camera,
             pos,
@@ -253,6 +311,35 @@ pub(super) fn build_layer_uniform(
     } else {
         [1.0; 3]
     };
+    let (shape_stroke_width, shape_stroke_color, shape_size_x, shape_size_y) =
+        match &layer.layer_type {
+            LayerType::Shape {
+                shape_type,
+                stroke_color,
+                stroke_width,
+                ..
+            } => {
+                let (sx, sy) = match shape_type {
+                    ShapeType::Rectangle { width, height, .. }
+                    | ShapeType::Ellipse { width, height, .. } => (
+                        width.evaluate(effective_frame).max(1.0),
+                        height.evaluate(effective_frame).max(1.0),
+                    ),
+                    ShapeType::Polygon { radius, .. } => {
+                        let d = (radius.evaluate(effective_frame) * 2.0).max(1.0);
+                        (d, d)
+                    }
+                    ShapeType::Star { outer_radius, .. } => {
+                        let d = (outer_radius.evaluate(effective_frame) * 2.0).max(1.0);
+                        (d, d)
+                    }
+                    ShapeType::FreeformBezier { .. } => (200.0, 200.0),
+                };
+                ((*stroke_width).max(0.0), *stroke_color, sx, sy)
+            }
+            _ => (0.0, [0.0; 4], 200.0, 200.0),
+        };
+
     let three_d_shade_avg = (three_d_shade[0] + three_d_shade[1] + three_d_shade[2]) / 3.0;
     let three_d_lighting_enabled = layer.is_3d && (three_d_shade_avg - 1.0).abs() > 0.01;
 
@@ -333,7 +420,31 @@ pub(super) fn build_layer_uniform(
         grain_size: ep.grain_size,
         shape_params: shape_params_eval,
         track_matte_mode: match layer.track_matte {
-            crate::core::timeline::TrackMatteMode::None => 0,
+            crate::core::timeline::TrackMatteMode::None => {
+                if layer.effects_enabled {
+                    layer
+                        .effects
+                        .iter()
+                        .rev()
+                        .find_map(|eff| {
+                            if !eff.enabled {
+                                return None;
+                            }
+                            if let crate::core::timeline::EffectType::SetMatte {
+                                invert_matte,
+                                ..
+                            } = eff.effect_type
+                            {
+                                Some(if invert_matte { 2 } else { 1 })
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or(0)
+                } else {
+                    0
+                }
+            }
             crate::core::timeline::TrackMatteMode::AlphaMatte => 1,
             crate::core::timeline::TrackMatteMode::AlphaMatteInverted => 2,
             crate::core::timeline::TrackMatteMode::LumaMatte => 3,
@@ -511,7 +622,10 @@ pub(super) fn build_layer_uniform(
         accepts_shadows: u32::from(layer.material.accepts_shadows),
         _ls_pad5: 0.0,
         video_frame_blend: video_frame_blend.clamp(0.0, 1.0),
-        _video_frame_blend_padding: [0.0; 3],
+        shape_stroke_width,
+        shape_size_x,
+        shape_size_y,
+        shape_stroke_color,
     };
 
     layer_uniform

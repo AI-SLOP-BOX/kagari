@@ -101,6 +101,8 @@
     label: String;
     value: String;
     unit: String;
+    normalized: Float;
+    is_numeric: Bool;
   }
   record LayerStyleItem {
     id: String;
@@ -138,6 +140,7 @@
     specs: String;
     location: String;
     date: String;
+    selected: Bool;
   }
   record DetectedOfxPlugin {
     name: String;

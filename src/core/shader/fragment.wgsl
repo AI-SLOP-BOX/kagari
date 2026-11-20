@@ -21,13 +21,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let r_tc = in.tex_coords - r_offset_local.x * dpdx(in.tex_coords) - r_offset_local.y * dpdy(in.tex_coords);
         let b_tc = in.tex_coords - b_offset_local.x * dpdx(in.tex_coords) - b_offset_local.y * dpdy(in.tex_coords);
 
-        let col_r = sample_layer_color(r_local, r_tc, blur_extend);
-        let col_g = sample_layer_color(in.local_pos, in.tex_coords, blur_extend);
-        let col_b = sample_layer_color(b_local, b_tc, blur_extend);
+        let col_r = sample_layer_color(r_local, r_tc, blur_extend, in.clip_position.xy);
+        let col_g = sample_layer_color(in.local_pos, in.tex_coords, blur_extend, in.clip_position.xy);
+        let col_b = sample_layer_color(b_local, b_tc, blur_extend, in.clip_position.xy);
 
         final_color = vec4<f32>(col_r.r, col_g.g, col_b.b, col_g.a);
     } else {
-        final_color = sample_layer_color(in.local_pos, in.tex_coords, blur_extend);
+        final_color = sample_layer_color(in.local_pos, in.tex_coords, blur_extend, in.clip_position.xy);
     }
 
     // Software isolation applies the mask before layer effects, then reapplies
@@ -198,6 +198,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             1.0 - final_color.b,
             final_color.a
         );
+    } else if (layer.invert_enabled == 2u) {
+        final_color = vec4<f32>(
+            1.0 - final_color.r,
+            1.0 - final_color.g,
+            1.0 - final_color.b,
+            1.0 - final_color.a
+        );
     }
 
     // --- Posterize ---
@@ -332,6 +339,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         final_color = vec4<f32>(final_color.rgb, final_color.a * matte_alpha);
     }
 
+    if (layer.blend_mode == 255u) {
+        if (final_color.a <= 0.001) {
+            discard;
+        }
+        return vec4<f32>(
+            round(clamp(final_color.rgb, vec3<f32>(0.0), vec3<f32>(1.0)) * 255.0) / 255.0,
+            final_color.a
+        );
+    }
+
     // --- Viewport Exposure Adjustment ---
     let pre_grade_color = final_color;
     final_color = vec4<f32>(final_color.rgb * pow(2.0, globals.exposure_ev), final_color.a);
@@ -355,7 +372,43 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         final_color = vec4<f32>(clamp(srgb, vec3<f32>(0.0), vec3<f32>(1.0)), final_color.a);
     }
 
-    if (layer.blend_mode == 2u) {
+    if (globals.blend_linear == 1u && layer.layer_type != 7u) {
+        final_color = vec4<f32>(srgb_to_linear_piecewise_vec3(final_color.rgb), final_color.a);
+    }
+
+    if (globals.working_color_space > 0u && layer.blend_mode != 255u && layer.layer_type != 7u) {
+        let lin = srgb_to_linear_piecewise_vec3(final_color.rgb);
+        if (globals.working_color_space == 1u) {
+            // Display P3 primaries
+            let p3 = vec3<f32>(
+                dot(lin, vec3<f32>(0.822462, 0.177538, 0.0)),
+                dot(lin, vec3<f32>(0.033194, 0.966806, 0.0)),
+                dot(lin, vec3<f32>(0.017083, 0.072397, 0.910520))
+            );
+            final_color = vec4<f32>(clamp(p3, vec3<f32>(0.0), vec3<f32>(1.0)), final_color.a);
+        } else if (globals.working_color_space == 2u) {
+            // Rec.2020 primaries
+            let rec2020 = vec3<f32>(
+                dot(lin, vec3<f32>(0.627404, 0.329283, 0.043313)),
+                dot(lin, vec3<f32>(0.069097, 0.919540, 0.011362)),
+                dot(lin, vec3<f32>(0.016391, 0.088013, 0.895595))
+            );
+            final_color = vec4<f32>(clamp(rec2020, vec3<f32>(0.0), vec3<f32>(1.0)), final_color.a);
+        } else if (globals.working_color_space == 3u) {
+            // Linear sRGB
+            final_color = vec4<f32>(lin, final_color.a);
+        } else if (globals.working_color_space == 4u) {
+            // ACEScg (AP1) primaries
+            let ap1 = vec3<f32>(
+                dot(lin, vec3<f32>(0.613097, 0.339523, 0.047379)),
+                dot(lin, vec3<f32>(0.070194, 0.916354, 0.013452)),
+                dot(lin, vec3<f32>(0.020616, 0.109570, 0.869815))
+            );
+            final_color = vec4<f32>(clamp(ap1, vec3<f32>(0.0), vec3<f32>(1.0)), final_color.a);
+        }
+    }
+
+    if (layer.blend_mode == 1u || layer.blend_mode == 2u) {
         final_color = vec4<f32>(final_color.rgb * final_color.a, final_color.a);
     }
 
@@ -387,5 +440,200 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         final_color = pre_grade_color;
     }
 
+    if (globals.dither_output == 1u) {
+        let px = floor(in.clip_position.x);
+        let py = floor(in.clip_position.y);
+        let pixel_index = py * globals.viewport_size.x + px;
+        let dither_seed = pixel_index * 0.618034;
+        let noise = (fract(dither_seed * 7.13) - fract(dither_seed * 3.71)) / 255.0;
+        final_color = vec4<f32>(
+            clamp(final_color.rgb + vec3<f32>(noise), vec3<f32>(0.0), vec3<f32>(1.0)),
+            final_color.a
+        );
+    }
+
+    if (layer.blend_mode >= 22u && layer.blend_mode <= 25u) || layer.blend_mode == 27u {
+        let dst = textureLoad(t_backdrop, vec2<i32>(in.clip_position.xy), 0);
+        let dst_a = dst.a;
+        let src_rgb = final_color.rgb;
+        let src_a = final_color.a;
+        if (layer.blend_mode == 22u) {
+            // StencilAlpha
+            return vec4<f32>(dst.rgb * src_a, dst_a * src_a);
+        } else if (layer.blend_mode == 23u) {
+            // StencilLuma
+            let luma = clamp(dot(src_rgb, vec3<f32>(0.2126, 0.7152, 0.0722)) * src_a, 0.0, 1.0);
+            return vec4<f32>(dst.rgb * luma, dst_a * luma);
+        } else if (layer.blend_mode == 24u) {
+            // SilhouetteAlpha
+            let inv_a = 1.0 - src_a;
+            return vec4<f32>(dst.rgb * inv_a, dst_a * inv_a);
+        } else if (layer.blend_mode == 25u) {
+            // SilhouetteLuma
+            let luma = clamp(dot(src_rgb, vec3<f32>(0.2126, 0.7152, 0.0722)) * src_a, 0.0, 1.0);
+            let inv_l = 1.0 - luma;
+            return vec4<f32>(dst.rgb * inv_l, dst_a * inv_l);
+        } else {
+            // AlphaAdd (27u)
+            let out_a = clamp(src_a + dst_a, 0.0, 1.0);
+            let out_premul_rgb = clamp(src_rgb * src_a + dst.rgb, vec3<f32>(0.0), vec3<f32>(1.0));
+            return vec4<f32>(out_premul_rgb, out_a);
+        }
+    }
+
+    if (layer.blend_mode == 3u
+        || layer.blend_mode == 4u
+        || (layer.blend_mode >= 5u && layer.blend_mode <= 21u)
+        || layer.blend_mode == 28u)
+    {
+        let dst = textureLoad(t_backdrop, vec2<i32>(in.clip_position.xy), 0);
+        let dst_a = dst.a;
+        let dst_rgb = select(vec3<f32>(0.0), dst.rgb / dst_a, dst_a > 0.0001);
+        let src_rgb = final_color.rgb;
+        let src_a = final_color.a;
+        let overlap_rgb = eval_programmable_blend(layer.blend_mode, src_rgb, dst_rgb);
+        let blended_rgb = src_rgb * (1.0 - dst_a) + overlap_rgb * dst_a;
+        let out_a = src_a + dst_a * (1.0 - src_a);
+        let out_premul_rgb = blended_rgb * src_a + dst.rgb * (1.0 - src_a);
+        return vec4<f32>(out_premul_rgb, out_a);
+    }
+
     return final_color;
+}
+
+fn blend_overlay_ch(s: f32, d: f32) -> f32 {
+    if (d < 0.5) { return 2.0 * s * d; }
+    return 1.0 - 2.0 * (1.0 - s) * (1.0 - d);
+}
+
+fn blend_soft_light_ch(s: f32, d: f32) -> f32 {
+    if (s <= 0.5) {
+        return d - (1.0 - 2.0 * s) * d * (1.0 - d);
+    }
+    let curve = select(sqrt(max(d, 0.0)), ((16.0 * d - 12.0) * d + 4.0) * d, d <= 0.25);
+    return d + (2.0 * s - 1.0) * (curve - d);
+}
+
+fn blend_hard_light_ch(s: f32, d: f32) -> f32 {
+    if (s <= 0.5) { return 2.0 * s * d; }
+    return 1.0 - 2.0 * (1.0 - s) * (1.0 - d);
+}
+
+fn blend_color_burn_ch(s: f32, d: f32) -> f32 {
+    if (s <= 0.0) { return 0.0; }
+    return clamp(1.0 - ((1.0 - d) / s), 0.0, 1.0);
+}
+
+fn blend_color_dodge_ch(s: f32, d: f32) -> f32 {
+    if (s >= 1.0) { return 1.0; }
+    return clamp(d / (1.0 - s), 0.0, 1.0);
+}
+
+fn blend_vivid_light_ch(s: f32, d: f32) -> f32 {
+    if (s <= 0.5) {
+        if (s <= 0.0) { return 0.0; }
+        return clamp(1.0 - ((1.0 - d) / (2.0 * s)), 0.0, 1.0);
+    }
+    if (s >= 1.0) { return 1.0; }
+    return clamp(d / (2.0 * (1.0 - s)), 0.0, 1.0);
+}
+
+fn blend_rgb_to_hsb(c: vec3<f32>) -> vec3<f32> {
+    let max_c = max(c.r, max(c.g, c.b));
+    let min_c = min(c.r, min(c.g, c.b));
+    let delta = max_c - min_c;
+    var h = 0.0;
+    if (delta >= 0.001) {
+        if (max_c == c.r) {
+            let m = (c.g - c.b) / delta;
+            h = 60.0 * (m - 6.0 * trunc(m / 6.0));
+        } else if (max_c == c.g) {
+            h = 60.0 * ((c.b - c.r) / delta + 2.0);
+        } else {
+            h = 60.0 * ((c.r - c.g) / delta + 4.0);
+        }
+    }
+    if (h < 0.0) { h += 360.0; }
+    let s = select(0.0, delta / max_c, max_c >= 0.001);
+    return vec3<f32>(h, s, max_c);
+}
+
+fn blend_hsb_to_rgb(h_in: f32, s: f32, b: f32) -> vec3<f32> {
+    let h = h_in - 360.0 * floor(h_in / 360.0);
+    let c = b * s;
+    let hd = h / 60.0;
+    let h_mod2 = hd - 2.0 * trunc(hd / 2.0);
+    let x = c * (1.0 - abs(h_mod2 - 1.0));
+    let m = b - c;
+    var rgb = vec3<f32>(c, 0.0, x);
+    if (h < 60.0) {
+        rgb = vec3<f32>(c, x, 0.0);
+    } else if (h < 120.0) {
+        rgb = vec3<f32>(x, c, 0.0);
+    } else if (h < 180.0) {
+        rgb = vec3<f32>(0.0, c, x);
+    } else if (h < 240.0) {
+        rgb = vec3<f32>(0.0, x, c);
+    } else if (h < 300.0) {
+        rgb = vec3<f32>(x, 0.0, c);
+    }
+    return rgb + vec3<f32>(m);
+}
+
+fn srgb_to_linear_piecewise_vec3(c: vec3<f32>) -> vec3<f32> {
+    let v = max(c, vec3<f32>(0.0));
+    let lo = v / 12.92;
+    let hi = pow((v + vec3<f32>(0.055)) / 1.055, vec3<f32>(2.4));
+    return select(hi, lo, v <= vec3<f32>(0.04045));
+}
+
+fn eval_programmable_blend(mode: u32, s: vec3<f32>, d: vec3<f32>) -> vec3<f32> {
+    if (mode == 3u) {
+        return vec3<f32>(blend_overlay_ch(s.r, d.r), blend_overlay_ch(s.g, d.g), blend_overlay_ch(s.b, d.b));
+    } else if (mode == 4u) {
+        return s * d;
+    } else if (mode == 5u) {
+        return min(s, d);
+    } else if (mode == 6u) {
+        return max(s, d);
+    } else if (mode == 7u) {
+        return vec3<f32>(blend_soft_light_ch(s.r, d.r), blend_soft_light_ch(s.g, d.g), blend_soft_light_ch(s.b, d.b));
+    } else if (mode == 8u) {
+        return vec3<f32>(blend_hard_light_ch(s.r, d.r), blend_hard_light_ch(s.g, d.g), blend_hard_light_ch(s.b, d.b));
+    } else if (mode == 9u) {
+        return abs(d - s);
+    } else if (mode == 10u) {
+        return s + d - 2.0 * s * d;
+    } else if (mode == 11u) {
+        return clamp(s / max(d, vec3<f32>(0.000001)), vec3<f32>(0.0), vec3<f32>(1.0));
+    } else if (mode == 12u) {
+        return max(s - d, vec3<f32>(0.0));
+    } else if (mode == 13u) {
+        return vec3<f32>(blend_color_burn_ch(s.r, d.r), blend_color_burn_ch(s.g, d.g), blend_color_burn_ch(s.b, d.b));
+    } else if (mode == 14u) {
+        return clamp(s + d - vec3<f32>(1.0), vec3<f32>(0.0), vec3<f32>(1.0));
+    } else if (mode == 15u) {
+        return vec3<f32>(blend_color_dodge_ch(s.r, d.r), blend_color_dodge_ch(s.g, d.g), blend_color_dodge_ch(s.b, d.b));
+    } else if (mode == 16u) {
+        return vec3<f32>(blend_vivid_light_ch(s.r, d.r), blend_vivid_light_ch(s.g, d.g), blend_vivid_light_ch(s.b, d.b));
+    } else if (mode == 28u) {
+        return clamp(d + 2.0 * s - vec3<f32>(1.0), vec3<f32>(0.0), vec3<f32>(1.0));
+    } else if (mode == 18u) {
+        let sh = blend_rgb_to_hsb(s);
+        let dh = blend_rgb_to_hsb(d);
+        return blend_hsb_to_rgb(sh.x, sh.y, dh.z);
+    } else if (mode == 19u) {
+        let sh = blend_rgb_to_hsb(s);
+        let dh = blend_rgb_to_hsb(d);
+        return blend_hsb_to_rgb(sh.x, dh.y, dh.z);
+    } else if (mode == 20u) {
+        let sh = blend_rgb_to_hsb(s);
+        let dh = blend_rgb_to_hsb(d);
+        return blend_hsb_to_rgb(dh.x, sh.y, dh.z);
+    } else if (mode == 21u) {
+        let sh = blend_rgb_to_hsb(s);
+        let dh = blend_rgb_to_hsb(d);
+        return blend_hsb_to_rgb(dh.x, dh.y, sh.z);
+    }
+    return s;
 }

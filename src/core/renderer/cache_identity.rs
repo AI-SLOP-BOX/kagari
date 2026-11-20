@@ -10,12 +10,16 @@ pub(crate) fn composition_cache_key(comp: &Composition) -> u64 {
     comp.fps.hash(&mut hasher);
     comp.duration_frames.hash(&mut hasher);
     comp.blend_linear.hash(&mut hasher);
+    (comp.working_color_space as u8).hash(&mut hasher);
     comp.dither_output.hash(&mut hasher);
     for c in &comp.background_color {
         c.to_bits().hash(&mut hasher);
     }
     comp.motion_blur_shutter_angle.to_bits().hash(&mut hasher);
     comp.motion_blur_shutter_phase.to_bits().hash(&mut hasher);
+    comp.active_camera.dof_enabled.hash(&mut hasher);
+    comp.active_camera.focus_distance.to_bits().hash(&mut hasher);
+    comp.active_camera.aperture.to_bits().hash(&mut hasher);
 
     comp.layers.len().hash(&mut hasher);
     for layer in &comp.layers {
@@ -33,6 +37,17 @@ pub(crate) fn composition_cache_key(comp: &Composition) -> u64 {
         layer.is_3d.hash(&mut hasher);
         layer.motion_blur.hash(&mut hasher);
         layer.frame_blending.hash(&mut hasher);
+        if let crate::core::timeline::LayerType::Shape {
+            stroke_color,
+            stroke_width,
+            ..
+        } = &layer.layer_type
+        {
+            stroke_width.to_bits().hash(&mut hasher);
+            for c in stroke_color {
+                c.to_bits().hash(&mut hasher);
+            }
+        }
         layer.effects.len().hash(&mut hasher);
         for eff in &layer.effects {
             eff.id.hash(&mut hasher);

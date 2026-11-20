@@ -105,6 +105,12 @@ pub(super) fn dispatch(command: Commands) -> Result<(), Box<dyn std::error::Erro
         Commands::Validate { project } => {
             validate::cmd_validate(&project)?;
         }
+        Commands::Doctor { json } => {
+            info::cmd_doctor(json)?;
+        }
+        Commands::Presets { json } => {
+            info::cmd_presets(json)?;
+        }
         Commands::Render(RenderCommands::Qc {
             project,
             comp,

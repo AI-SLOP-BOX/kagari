@@ -144,7 +144,7 @@ fn mesh_cache() -> &'static Mutex<MeshCache> {
     CACHE.get_or_init(|| Mutex::new(MeshCache::new()))
 }
 
-pub(super) fn load_mesh(path: &str) -> Option<Arc<Mesh3D>> {
+pub(crate) fn load_mesh(path: &str) -> Option<Arc<Mesh3D>> {
     let source = Path::new(path);
     let extension = source
         .extension()

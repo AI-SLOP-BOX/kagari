@@ -2,7 +2,7 @@ component SettingsExternalPage() {
   VStack(spacing: 12) {
     VStack(spacing: 4) { Title("外部連携") Caption("OpenFX バンドルの検出状況を確認します。") }
 
-    Card(padding: 12, spacing: 10) {
+    Card(padding: 12, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
       HStack(spacing: 8) {
         Text("OpenFX", size: 13)
         Spacer
@@ -11,7 +11,7 @@ component SettingsExternalPage() {
       }
       If(has_openfx_plugins) {
         ForEach(openfx_plugins, plugin, key: path) {
-          Card(padding: 10, spacing: 4) {
+          Card(padding: 10, spacing: 4, hover_strength: 0.0, hover_elevation: 0.0) {
             Text("{plugin.name}", size: 13)
             Caption("{plugin.path}")
           }
@@ -23,7 +23,7 @@ component SettingsExternalPage() {
       Caption("AEGP ホスト連携は未実装です。")
     }
 
-    Card(padding: 12, spacing: 10) {
+    Card(padding: 12, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
       Text("検索場所", size: 13)
       If(openfx_search_paths != "") { Caption("{openfx_search_paths}") } else { Caption("標準の OpenFX 検索フォルダが見つかりません。") }
     }

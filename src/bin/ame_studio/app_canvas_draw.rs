@@ -27,6 +27,18 @@ impl AfterEffectsStudio {
         let y = f64::from(bounds.y);
         let width = f64::from(bounds.width.max(1.0));
         let height = f64::from(bounds.height.max(1.0));
+        if canvas_id == "kagari.scopes" {
+            self.draw_scopes_canvas(scene, x, y, width, height);
+            return;
+        }
+        if canvas_id == "kagari.vectorscope" {
+            self.draw_vectorscope_canvas(scene, x, y, width, height);
+            return;
+        }
+        if canvas_id == "kagari.color_wheels" {
+            self.draw_color_wheels_canvas(scene, x, y, width, height);
+            return;
+        }
         if canvas_id == "kagari.graph" {
             self.graph_canvas_width = width;
             self.graph_canvas_height = height;
@@ -90,6 +102,11 @@ impl AfterEffectsStudio {
                     );
                 }
             }
+            return;
+        }
+        if canvas_id == "kagari.node_graph" {
+            self.node_graph_bounds = Some((x, y, width, height));
+            self.draw_node_graph_canvas(scene, x, y, width, height);
             return;
         }
         if canvas_id == "kagari.flowchart" {
@@ -478,12 +495,8 @@ impl AfterEffectsStudio {
         if canvas_id != "kagari.viewport" {
             return;
         }
+        let preview_limit = self.viewport_preview_limit();
         let composition = self.project_model.active_composition();
-        let preview_limit = if self.adaptive_preview && self.is_playing {
-            320.0
-        } else {
-            640.0
-        };
         let source_width = f64::from(composition.width.max(1));
         let source_height = f64::from(composition.height.max(1));
         let pixel_aspect = f64::from(composition.pixel_aspect).clamp(0.1, 10.0);

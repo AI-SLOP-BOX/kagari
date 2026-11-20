@@ -19,45 +19,37 @@ pub(crate) fn draw_flowchart(
     drag_wire: Option<FlowchartDragWireView>,
 ) {
     let bounds = Rect::new(x, y, x + width, y + height);
-    // Dark canvas background with border
+    // Obsidian dot-grid canvas background with crisp 1px border
     scene.fill(
         Fill::NonZero,
         Affine::IDENTITY,
-        Color::from_rgb8(13, 15, 17),
+        Color::from_rgb8(11, 12, 14),
         None,
         &bounds,
     );
     scene.stroke(
         &Stroke::new(1.0),
         Affine::IDENTITY,
-        Color::from_rgb8(28, 32, 38),
+        Color::from_rgb8(34, 38, 46),
         None,
         &bounds,
     );
 
-    // Subtle background dot / wire grid
-    let grid_size = 28.0;
-    let grid_stroke = Stroke::new(0.5);
-    let mut gx = x + grid_size;
-    while gx < x + width {
-        scene.stroke(
-            &grid_stroke,
-            Affine::IDENTITY,
-            Color::from_rgba8(36, 42, 50, 90),
-            None,
-            &Line::new((gx, y), (gx, y + height)),
-        );
-        gx += grid_size;
-    }
+    let grid_size = 22.0;
+    let dot_color = Color::from_rgba8(64, 72, 86, 120);
     let mut gy = y + grid_size;
     while gy < y + height {
-        scene.stroke(
-            &grid_stroke,
-            Affine::IDENTITY,
-            Color::from_rgba8(36, 42, 50, 90),
-            None,
-            &Line::new((x, gy), (x + width, gy)),
-        );
+        let mut gx = x + grid_size;
+        while gx < x + width {
+            scene.fill(
+                Fill::NonZero,
+                Affine::IDENTITY,
+                dot_color,
+                None,
+                &Circle::new((gx, gy), 1.0),
+            );
+            gx += grid_size;
+        }
         gy += grid_size;
     }
 

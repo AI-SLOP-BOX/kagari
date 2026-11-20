@@ -1,43 +1,43 @@
 component AssetImportPanel() {
   DropTarget(action: import_dropped_file) {
-    Card { Padding(10) { VStack(spacing: 6) {
+    Card(hover_strength: 0.0, hover_elevation: 0.0) { Padding(10) { VStack(spacing: 6) {
       Text("素材を読み込む", size: 14)
-      HorizontalScrollView(300) { HStack(spacing: 4) {
-        Button("画像", action: import_image_layer, tone: secondary, size: small)
-        Button("連番", action: import_image_sequence_layer, tone: secondary, size: small)
-        Button("3Dモデル", action: import_model_layer, tone: secondary, size: small)
-        Button("音声", action: import_audio_layer, tone: secondary, size: small)
+      Wrap(item_spacing: 4, line_spacing: 4) {
+        Button("画像", action: import_image_layer, tone: ghost, size: small)
+        Button("連番", action: import_image_sequence_layer, tone: ghost, size: small)
+        Button("3Dモデル", action: import_model_layer, tone: ghost, size: small)
+        Button("音声", action: import_audio_layer, tone: ghost, size: small)
         If(asset_importing) {
           If(asset_import_cancellable) { Button("中止", action: cancel_video_import, tone: primary, size: small) } else { Caption("連番を処理中") }
-        } else { Button("動画", action: import_video_layer, tone: secondary, size: small) }
-      } }
-      Caption("画像・連番画像・SVG・3Dモデル・音声・動画を読み込み · ファイルをここにドロップ")
+        } else { Button("動画", action: import_video_layer, tone: ghost, size: small) }
+      }
+      Caption("対応: 画像・連番・SVG・PSD・3D・音声・動画 (ドロップ可)")
       Caption("{asset_status}")
     } } }
   }
 }
 
 component ProjectAssetPanel() {
-  Card { Padding(10) { VStack(spacing: 8) {
+  Card(hover_strength: 0.0, hover_elevation: 0.0) { Padding(10) { VStack(spacing: 8) {
     HStack(spacing: 5) {
       If(asset_folder_has_parent) { Text("プロジェクト素材 / {asset_folder_name}", size: 14) } else { Text("プロジェクト素材", size: 14) }
-      If(asset_folder_has_parent) { IconButton("arrow_up", action: leave_project_asset_folder, tone: secondary, size: small) }
+      If(asset_folder_has_parent) { IconButton("arrow_up", action: leave_project_asset_folder, tone: ghost, size: small) }
       Spacer
     }
     HStack(spacing: 5) {
       TextField(new_asset_folder_name, "フォルダー名", action: new_asset_folder_name_changed)
-      Button("フォルダー", action: create_project_asset_folder, tone: secondary, size: small)
+      Button("フォルダー", action: create_project_asset_folder, tone: ghost, size: small)
     }
     HStack(spacing: 4) {
       Caption("並び替え")
-      If(project_assets_sort_by_type) { Button("名前", action: project_assets_sort_name, tone: secondary, size: small) } else { Button("名前", action: project_assets_sort_name, tone: primary, size: small) }
-      If(project_assets_sort_by_type) { Button("種類", action: project_assets_sort_type, tone: primary, size: small) } else { Button("種類", action: project_assets_sort_type, tone: secondary, size: small) }
+      If(project_assets_sort_by_type) { Button("名前", action: project_assets_sort_name, tone: ghost, size: small) } else { Button("名前", action: project_assets_sort_name, tone: primary, size: small) }
+      If(project_assets_sort_by_type) { Button("種類", action: project_assets_sort_type, tone: primary, size: small) } else { Button("種類", action: project_assets_sort_type, tone: ghost, size: small) }
     }
     HStack(spacing: 4) {
       Grow(1) { TextField(project_asset_search, "素材名・種類・パスで検索", action: project_asset_search_changed) }
       If(project_asset_search != "") {
-        Button("検索解除", action: clear_project_asset_search, tone: secondary, size: small)
-        If(project_asset_search_all_folders) { Button("全階層", action: project_asset_search_all_folders, tone: primary, size: small) } else { Button("全階層", action: project_asset_search_all_folders, tone: secondary, size: small) }
+        Button("検索解除", action: clear_project_asset_search, tone: ghost, size: small)
+        If(project_asset_search_all_folders) { Button("全階層", action: project_asset_search_all_folders, tone: primary, size: small) } else { Button("全階層", action: project_asset_search_all_folders, tone: ghost, size: small) }
       }
     }
     If(has_selected_project_asset) {
@@ -48,8 +48,8 @@ component ProjectAssetPanel() {
       If(selected_project_asset_is_image) {
         HStack(spacing: 5) {
           Caption("配置サイズ")
-          Button("全体を表示", action: place_project_asset_fit, tone: secondary, size: small)
-          Button("画面を埋める", action: place_project_asset_fill, tone: secondary, size: small)
+          Button("全体を表示", action: place_project_asset_fit, tone: ghost, size: small)
+          Button("画面を埋める", action: place_project_asset_fill, tone: ghost, size: small)
         }
       }
       If(selected_project_asset_can_move_here) { HStack(spacing: 5) { Spacer Button("このフォルダーへ移動", action: move_selected_project_asset_here, tone: primary, size: small) } }
@@ -70,20 +70,20 @@ component ProjectAssetPanel() {
                 }
               }
               If(asset.is_folder) {
-                IconButton("chevron_right", action: enter_project_asset_folder, tone: secondary, size: small)
-                If(asset.selected) { Button("選択中", action: select_project_asset_folder, tone: primary, size: small) } else { Button("選択", action: select_project_asset_folder, tone: secondary, size: small) }
+                IconButton("chevron_right", action: enter_project_asset_folder, tone: ghost, size: small)
+                If(asset.selected) { Button("選択中", action: select_project_asset_folder, tone: primary, size: small) } else { Button("選択", action: select_project_asset_folder, tone: ghost, size: small) }
                 MaxWidth(180) { TextField(asset.name, "フォルダー名", action: rename_project_asset) }
               } else { If(asset.is_composition) {
-                If(asset.selected) { Button("{asset.name}", action: select_project_asset, tone: primary, size: small) } else { Button("{asset.name}", action: select_project_asset, tone: secondary, size: small) }
-                Button("開く", action: open_project_composition, tone: secondary, size: small)
+                If(asset.selected) { Button("{asset.name}", action: select_project_asset, tone: primary, size: small) } else { Button("{asset.name}", action: select_project_asset, tone: ghost, size: small) }
+                Button("開く", action: open_project_composition, tone: ghost, size: small)
               } else {
-                If(asset.selected) { Button("{asset.name}", action: select_project_asset, tone: primary, size: small) } else { Button("{asset.name}", action: select_project_asset, tone: secondary, size: small) }
+                If(asset.selected) { Button("{asset.name}", action: select_project_asset, tone: primary, size: small) } else { Button("{asset.name}", action: select_project_asset, tone: ghost, size: small) }
               } }
               If(!asset.is_folder) { Caption("{asset.kind}") }
               Spacer
               If(!asset.is_folder) { If(asset.placeable) { Button("配置", action: place_project_asset, tone: primary, size: small) } }
-              If(asset.missing) { Button("再指定", action: relink_project_asset, tone: secondary, size: small) }
-              If(asset.removable) { Button("登録解除", action: remove_project_asset, tone: secondary, size: small) }
+              If(asset.missing) { Button("再指定", action: relink_project_asset, tone: ghost, size: small) }
+              If(asset.removable) { Button("登録解除", action: remove_project_asset, tone: ghost, size: small) }
             }
             If(project_asset_search_all_folders && project_asset_search != "" && asset.parent_path != "") { Caption("保存先: {asset.parent_path}") }
             If(!asset.is_folder) {

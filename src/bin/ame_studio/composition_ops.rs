@@ -247,6 +247,21 @@ impl AfterEffectsStudio {
         self.mark_project_changed();
     }
 
+    pub(crate) fn set_composition_bit_depth(&mut self, label: &str) {
+        use kagari_vfx::core::color_science::BitDepth;
+        let next = match label {
+            "8 bpc" => BitDepth::EightBit,
+            "16 bpc" => BitDepth::SixteenBit,
+            "32 bpc (float)" => BitDepth::ThirtyTwoBitFloat,
+            _ => return,
+        };
+        let composition = self.project_model.active_composition_mut();
+        if composition.bit_depth != next {
+            composition.bit_depth = next;
+            self.mark_project_changed();
+        }
+    }
+
     pub(crate) fn cycle_composition_working_space(&mut self) {
         use kagari_vfx::core::color_science::WorkingColorSpace;
         let composition = self.project_model.active_composition_mut();
@@ -257,6 +272,21 @@ impl AfterEffectsStudio {
         composition.working_color_space =
             WorkingColorSpace::ALL[(index + 1) % WorkingColorSpace::ALL.len()];
         self.mark_project_changed();
+    }
+
+    pub(crate) fn set_composition_working_space(&mut self, label: &str) {
+        use kagari_vfx::core::color_science::WorkingColorSpace;
+        let Some(&next) = WorkingColorSpace::ALL
+            .iter()
+            .find(|space| space.label() == label)
+        else {
+            return;
+        };
+        let composition = self.project_model.active_composition_mut();
+        if composition.working_color_space != next {
+            composition.working_color_space = next;
+            self.mark_project_changed();
+        }
     }
 
     pub(crate) fn switch_composition(&mut self, direction: i32) {

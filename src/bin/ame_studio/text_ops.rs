@@ -172,6 +172,45 @@ impl AfterEffectsStudio {
         self.mark_project_changed();
     }
 
+    pub(crate) fn set_selected_text_animator_shape(&mut self, label: &str) {
+        use kagari_vfx::core::text_animator::SelectorShape;
+        let next = match label {
+            "Square" => SelectorShape::Square,
+            "Ramp Up" => SelectorShape::RampUp,
+            "Ramp Down" => SelectorShape::RampDown,
+            "Triangle" => SelectorShape::Triangle,
+            "Round" => SelectorShape::Round,
+            "Smooth" => SelectorShape::Smooth,
+            "Wobble" => SelectorShape::Wobble,
+            "Random" => SelectorShape::Random,
+            "Expression" => SelectorShape::Expression,
+            _ => return,
+        };
+        let Some(layer_id) = self.selected_layer_id.as_deref() else {
+            return;
+        };
+        let Some(layer) = self
+            .project_model
+            .active_composition_mut()
+            .layers
+            .iter_mut()
+            .find(|layer| layer.id == layer_id && !layer.locked)
+        else {
+            return;
+        };
+        let Some(animator) = layer
+            .text_animator
+            .as_mut()
+            .filter(|animator| animator.enabled)
+        else {
+            return;
+        };
+        if animator.selector.shape != next {
+            animator.selector.shape = next;
+            self.mark_project_changed();
+        }
+    }
+
     pub(crate) fn toggle_selected_text_animator_random_order(&mut self) {
         let Some(layer_id) = self.selected_layer_id.as_deref() else {
             return;
@@ -291,6 +330,25 @@ impl AfterEffectsStudio {
             self.mark_project_changed();
         }
     }
+}
+
+pub(crate) fn text_animator_parameter_range(field: &str) -> (f32, f32) {
+    match field {
+        "selector.start" | "selector.end" | "selector.ease_high" | "selector.ease_low" => {
+            (0.0, 100.0)
+        }
+        "selector.offset" | "opacity" => (-100.0, 100.0),
+        "selector.char_start" | "selector.char_end" => (-1.0, 200.0),
+        "position_offset.x" | "position_offset.y" => (-1000.0, 1000.0),
+        "scale.x" | "scale.y" => (0.0, 5.0),
+        "tracking" => (-200.0, 200.0),
+        "rotation" => (-360.0, 360.0),
+        "blur_amount" => (0.0, 100.0),
+        _ => (0.0, 100.0),
+    }
+}
+
+impl AfterEffectsStudio {
 
     pub(crate) fn update_selected_text_property(&mut self, field: &str, input: &str) {
         let Some(id) = self.selected_layer_id.clone() else {

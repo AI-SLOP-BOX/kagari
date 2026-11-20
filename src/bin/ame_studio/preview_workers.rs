@@ -1,34 +1,59 @@
 use super::*;
 
-fn headless_wgpu_renderer(
-) -> &'static std::sync::Mutex<Option<kagari_vfx::core::renderer::Renderer>> {
-    static RENDERER: std::sync::OnceLock<
-        std::sync::Mutex<Option<kagari_vfx::core::renderer::Renderer>>,
+#[cfg(feature = "wgpu")]
+fn try_render_preview_pixels_gpu(
+    composition: &kagari_vfx::core::timeline::Composition,
+    frame: u32,
+    width: u32,
+    height: u32,
+    exposure_ev: f32,
+    lut_mode: u32,
+) -> Option<Vec<u8>> {
+    if kagari_vfx::core::render_capability::software_preview_required(composition, frame) {
+        return None;
+    }
+    // Keep the shared WgpuRenderer in a static OnceLock instead of thread_local!
+    // so worker thread teardown never drops wgpu::Device after wgpu_core's own
+    // LockTrace TLS key has already been destroyed.
+    static GPU_RENDERER: std::sync::OnceLock<
+        std::sync::Mutex<Option<Option<kagari_vfx::core::renderer::WgpuRenderer>>>,
     > = std::sync::OnceLock::new();
-    RENDERER.get_or_init(|| {
-        let instance = wgpu::Instance::default();
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        }))
-        .ok()?;
+    let mutex = GPU_RENDERER.get_or_init(|| std::sync::Mutex::new(None));
+    let mut slot = mutex.lock().ok()?;
+    let renderer_opt = slot.get_or_insert_with(|| {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
+        let adapter =
+            pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: None,
+                force_fallback_adapter: false,
+            }))?;
         let (device, queue) = pollster::block_on(adapter.request_device(
             &wgpu::DeviceDescriptor {
                 label: Some("kagari_preview_worker_gpu"),
                 required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::default(),
+                required_limits: wgpu::Limits {
+                    max_bind_groups: 6,
+                    ..wgpu::Limits::default()
+                },
                 memory_hints: wgpu::MemoryHints::Performance,
-                trace: wgpu::Trace::Off,
             },
+            None,
         ))
         .ok()?;
-        Some(kagari_vfx::core::renderer::Renderer::new(
+        Some(kagari_vfx::core::renderer::WgpuRenderer::new(
             std::sync::Arc::new(device),
             std::sync::Arc::new(queue),
         ))
-    })
-    .into()
+    });
+    renderer_opt.as_mut()?.render_frame_to_rgba8_gpu(
+        composition,
+        frame,
+        width,
+        height,
+        exposure_ev,
+        lut_mode,
+    )
 }
 
 fn render_preview_pixels_gpu_or_cpu(
@@ -39,19 +64,11 @@ fn render_preview_pixels_gpu_or_cpu(
     exposure_ev: f32,
     lut_mode: u32,
 ) -> Vec<u8> {
-    if let Ok(mut guard) = headless_wgpu_renderer().lock() {
-        if let Some(renderer) = guard.as_mut() {
-            if let Some(pixels) = renderer.render_frame_to_rgba8_gpu(
-                composition,
-                frame,
-                width,
-                height,
-                exposure_ev,
-                lut_mode,
-            ) {
-                return pixels;
-            }
-        }
+    #[cfg(feature = "wgpu")]
+    if let Some(pixels) =
+        try_render_preview_pixels_gpu(composition, frame, width, height, exposure_ev, lut_mode)
+    {
+        return pixels;
     }
     kagari_vfx::core::software_renderer::render_frame_to_pixels_preview(
         composition,
@@ -60,6 +77,28 @@ fn render_preview_pixels_gpu_or_cpu(
         height,
         exposure_ev,
         lut_mode,
+    )
+}
+
+pub(super) fn render_export_pixels_gpu_or_cpu(
+    composition: &kagari_vfx::core::timeline::Composition,
+    frame: u32,
+    width: u32,
+    height: u32,
+) -> Vec<u8> {
+    #[cfg(feature = "wgpu")]
+    if let Some(pixels) =
+        try_render_preview_pixels_gpu(composition, frame, width, height, 0.0, 0)
+    {
+        return pixels;
+    }
+    kagari_vfx::core::software_renderer::render_frame_to_pixels(
+        composition,
+        frame,
+        width,
+        height,
+        0.0,
+        0,
     )
 }
 
@@ -149,6 +188,9 @@ pub(crate) fn render_composition_preview(
 }
 
 fn render_viewport_preview(job: &ViewportPreviewJob) -> Option<std::sync::Arc<Vec<u8>>> {
+    if job.cancel.load(std::sync::atomic::Ordering::Relaxed) {
+        return None;
+    }
     let expected = (job.key.width as usize)
         .saturating_mul(job.key.height as usize)
         .saturating_mul(4);
@@ -520,69 +562,6 @@ impl AfterEffectsStudio {
 #[cfg(test)]
 mod viewport_preview_worker_tests {
     use super::*;
-
-fn headless_wgpu_renderer(
-) -> &'static std::sync::Mutex<Option<kagari_vfx::core::renderer::Renderer>> {
-    static RENDERER: std::sync::OnceLock<
-        std::sync::Mutex<Option<kagari_vfx::core::renderer::Renderer>>,
-    > = std::sync::OnceLock::new();
-    RENDERER.get_or_init(|| {
-        let instance = wgpu::Instance::default();
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        }))
-        .ok()?;
-        let (device, queue) = pollster::block_on(adapter.request_device(
-            &wgpu::DeviceDescriptor {
-                label: Some("kagari_preview_worker_gpu"),
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::default(),
-                memory_hints: wgpu::MemoryHints::Performance,
-                trace: wgpu::Trace::Off,
-            },
-        ))
-        .ok()?;
-        Some(kagari_vfx::core::renderer::Renderer::new(
-            std::sync::Arc::new(device),
-            std::sync::Arc::new(queue),
-        ))
-    })
-    .into()
-}
-
-fn render_preview_pixels_gpu_or_cpu(
-    composition: &kagari_vfx::core::timeline::Composition,
-    frame: u32,
-    width: u32,
-    height: u32,
-    exposure_ev: f32,
-    lut_mode: u32,
-) -> Vec<u8> {
-    if let Ok(mut guard) = headless_wgpu_renderer().lock() {
-        if let Some(renderer) = guard.as_mut() {
-            if let Some(pixels) = renderer.render_frame_to_rgba8_gpu(
-                composition,
-                frame,
-                width,
-                height,
-                exposure_ev,
-                lut_mode,
-            ) {
-                return pixels;
-            }
-        }
-    }
-    kagari_vfx::core::software_renderer::render_frame_to_pixels_preview(
-        composition,
-        frame,
-        width,
-        height,
-        exposure_ev,
-        lut_mode,
-    )
-}
 
     #[test]
     fn cancelled_preview_never_returns_a_partial_frame() {

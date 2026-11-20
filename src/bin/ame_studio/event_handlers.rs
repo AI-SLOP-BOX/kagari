@@ -1,6 +1,65 @@
 use super::*;
 
 impl AfterEffectsStudio {
+    pub(crate) fn create_project_with_settings(
+        &mut self,
+        name: String,
+        width: u32,
+        height: u32,
+        fps: u32,
+        duration_seconds: u32,
+    ) {
+        self.stop_playback();
+        self.wait_for_autosave();
+        self.cancel_video_import();
+        self.invalidate_roto_operations();
+        self.project_generation = self.project_generation.wrapping_add(1);
+        self.setup_error.clear();
+        self.setup_width = width.to_string();
+        self.setup_height = height.to_string();
+        self.setup_fps = fps.to_string();
+        self.setup_duration_seconds = duration_seconds.to_string();
+        self.project_name = if name.trim().is_empty() {
+            "無題のプロジェクト".to_owned()
+        } else {
+            name.trim().to_owned()
+        };
+        self.project_model = kagari_vfx::core::timeline::Project::empty_for_new_project();
+        self.history =
+            kagari_vfx::core::history::ProjectHistory::new(self.project_model.clone());
+        self.history.set_max_history_entries(self.undo_steps);
+        self.history_interaction_snapshot = None;
+        self.reset_project_asset_browser();
+        self.collapsed_scene_layers.clear();
+        self.align_selected_layer_ids.clear();
+        self.preview_revision = self.preview_revision.wrapping_add(1);
+        self.project_file_path = None;
+        self.project_is_dirty = true;
+        self.save_status = "未保存の変更があります".to_owned();
+        self.selected_layer_id = None;
+        let composition = self.project_model.active_composition_mut();
+        composition.width = width;
+        composition.height = height;
+        composition.fps = fps;
+        composition.duration_frames = fps.saturating_mul(duration_seconds);
+        composition.name = self.project_name.clone();
+        self.history
+            .restore_current_without_history(self.project_model.clone());
+        self.project_fps = fps;
+        self.current_frame = 0;
+        self.current_time = format_timecode(0, fps);
+        self.position_x = f64::from(width) * 0.5;
+        self.position_y = f64::from(height) * 0.5;
+        self.anchor_x = 0.0;
+        self.anchor_y = 0.0;
+        self.scale_x = 100.0;
+        self.scale_y = 100.0;
+        self.opacity = 100.0;
+        self.selected_layer = false;
+        self.screen = Screen::Editor;
+        self.render_queue = false;
+    }
+
     pub(crate) fn handle_action(
         &mut self,
         action: HostAction,
@@ -83,10 +142,30 @@ impl AfterEffectsStudio {
                 "⌘ / Ctrl + S  編集中のプロジェクトを保存\n⌘ / Ctrl + N  新規プロジェクト設定を開く\n⌘ / Ctrl + M  書き出し画面を開く（編集画面）",
             ),
             _ if self.handle_navigation_setup_action(action.name.as_str(), action_val.clone()) => {}
+            _ if self.handle_engine_hub_action(action.name.as_str()) => {}
             _ if self.handle_editor_workspace_action(action.name.as_str(), action_val.clone()) => {}
             _ if self.handle_settings_action(action.name.as_str(), action_val.as_ref()) => {}
 
             ("open_project", _) => {
+                #[cfg(target_os = "macos")]
+                if let Some(sender) = self.app_event_sender.clone() {
+                    std::thread::spawn(move || {
+                        if let Ok(output) = std::process::Command::new("osascript")
+                            .arg("-e")
+                            .arg(r#"POSIX path of (choose file with prompt "プロジェクトを開く" of type {"json", "kgtpl", "mogrt", "otio"})"#)
+                            .output()
+                        {
+                            if output.status.success() {
+                                let path = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+                                if !path.is_empty() {
+                                    let _ = sender.send(format!("open_project_path:{path}"));
+                                }
+                            }
+                        }
+                    });
+                    return Ok(());
+                }
+                #[cfg(not(target_os = "macos"))]
                 if let Some(path) = rfd::FileDialog::new()
                     .add_filter(
                         "Kagari プロジェクト / テンプレート / OTIO",
@@ -213,47 +292,13 @@ impl AfterEffectsStudio {
                     self.setup_error = "長さは1〜3600秒の範囲で入力してください。".to_owned();
                     return self.sync_bindings();
                 }
-                self.setup_error.clear();
-                self.project_name = if self.setup_name.trim().is_empty() {
-                    "無題のプロジェクト".to_owned()
-                } else {
-                    self.setup_name.trim().to_owned()
-                };
-                self.project_model = kagari_vfx::core::timeline::Project::empty_for_new_project();
-                self.history = kagari_vfx::core::history::ProjectHistory::new(
-                    self.project_model.clone(),
+                self.create_project_with_settings(
+                    self.setup_name.clone(),
+                    width,
+                    height,
+                    fps,
+                    duration_seconds,
                 );
-                self.history.set_max_history_entries(self.undo_steps);
-                self.history_interaction_snapshot = None;
-                self.reset_project_asset_browser();
-                self.collapsed_scene_layers.clear();
-                self.align_selected_layer_ids.clear();
-                self.preview_revision = self.preview_revision.wrapping_add(1);
-                self.project_file_path = None;
-                self.project_is_dirty = true;
-                self.save_status = "未保存の変更があります".to_owned();
-                self.selected_layer_id = None;
-                let composition = self.project_model.active_composition_mut();
-                composition.width = width;
-                composition.height = height;
-                composition.fps = fps;
-                composition.duration_frames = fps.saturating_mul(duration_seconds);
-                composition.name = self.project_name.clone();
-                self.history
-                    .restore_current_without_history(self.project_model.clone());
-                self.project_fps = fps;
-                self.current_frame = 0;
-                self.current_time = format_timecode(0, fps);
-                self.position_x = f64::from(width) * 0.5;
-                self.position_y = f64::from(height) * 0.5;
-                self.anchor_x = 0.0;
-                self.anchor_y = 0.0;
-                self.scale_x = 100.0;
-                self.scale_y = 100.0;
-                self.opacity = 100.0;
-                self.selected_layer = false;
-                self.screen = Screen::Editor;
-                self.render_queue = false;
             }
             ("open_recent_1", _) => {
                 if let Some(item) = self.recent_projects.first() {
@@ -339,6 +384,9 @@ impl AfterEffectsStudio {
             ("keyframe_light_intensity", _) => self.keyframe_selected_scene_light_intensity(),
             ("toggle_selected_light_shadows", _) => self.toggle_selected_scene_light_shadows(),
             ("cycle_selected_light_type", _) => self.cycle_selected_scene_light_type(),
+            ("select_light_type", Some(ActionValue::Text(label))) => {
+                self.set_selected_scene_light_type(&label);
+            }
             ("selected_light_color_changed", Some(ActionValue::Text(value))) => self.update_selected_scene_light_color(&value),
             ("selected_light_cone_angle_changed", Some(ActionValue::Number(value))) => self.update_selected_scene_light_property("cone_angle", value),
             ("selected_light_cone_feather_changed", Some(ActionValue::Number(value))) => self.update_selected_scene_light_property("cone_feather", value),
@@ -359,6 +407,20 @@ impl AfterEffectsStudio {
             ("layer_style_parameter_changed", Some(ActionValue::Text(value))) => {
                 if let Some(parameter_id) = selected_row_id.as_deref() {
                     self.update_selected_layer_style_parameter(parameter_id, &value);
+                }
+            }
+            ("layer_style_parameter_slider_changed", Some(ActionValue::Number(norm))) => {
+                if let Some(parameter_id) = selected_row_id.as_deref() {
+                    let (min_v, max_v) = if parameter_id.ends_with(".angle") {
+                        (-180.0_f32, 180.0_f32)
+                    } else {
+                        (0.0_f32, 100.0_f32)
+                    };
+                    let actual = min_v + (norm.clamp(0.0, 1.0) as f32) * (max_v - min_v);
+                    self.update_selected_layer_style_parameter(
+                        parameter_id,
+                        &format!("{actual:.2}"),
+                    );
                 }
             }
             ("select_layer", ref val) => {
@@ -389,7 +451,13 @@ impl AfterEffectsStudio {
                 self.update_selected_layer_timing(&frame, false);
             }
             ("cycle_layer_blend_mode", _) => self.cycle_layer_blend_mode(),
+            ("select_layer_blend_mode", Some(ActionValue::Text(key))) => {
+                self.set_layer_blend_mode(&key);
+            }
             ("cycle_layer_track_matte", _) => self.cycle_layer_track_matte(),
+            ("select_layer_track_matte", Some(ActionValue::Text(key))) => {
+                self.set_layer_track_matte(&key);
+            }
             ("select_track_matte_source", ref val) => {
                 let source_id_opt = match val {
                     Some(ActionValue::Text(s)) => Some(s.as_str()),
@@ -405,6 +473,9 @@ impl AfterEffectsStudio {
             ("toggle_shy_layer", _) => self.toggle_selected_layer_flag(LayerToggle::Shy),
             ("toggle_layer_effects", _) => self.toggle_selected_layer_flag(LayerToggle::Effects),
             ("cycle_auto_orient", _) => self.cycle_selected_auto_orient(),
+            ("select_auto_orient", Some(ActionValue::Text(label))) => {
+                self.set_selected_auto_orient(&label);
+            }
             ("auto_orient_point_x_changed", Some(ActionValue::Text(value))) => self.update_auto_orient_target(&value, 0),
             ("auto_orient_point_y_changed", Some(ActionValue::Text(value))) => self.update_auto_orient_target(&value, 1),
             ("cycle_layer_label_color", _) => {
@@ -416,8 +487,23 @@ impl AfterEffectsStudio {
                     self.cycle_layer_label_color_for(&layer_id);
                 }
             }
+            ("select_layer_label_color", Some(ActionValue::Text(label))) => {
+                if let Some(layer_id) = selected_row_id
+                    .as_deref()
+                    .or(self.selected_layer_id.as_deref())
+                    .map(str::to_owned)
+                {
+                    self.set_layer_label_color_for(&layer_id, &label);
+                }
+            }
             ("cycle_constraint_horizontal", _) => self.cycle_selected_layer_constraint(true),
+            ("select_constraint_horizontal", Some(ActionValue::Text(label))) => {
+                self.set_selected_layer_constraint(true, &label);
+            }
             ("cycle_constraint_vertical", _) => self.cycle_selected_layer_constraint(false),
+            ("select_constraint_vertical", Some(ActionValue::Text(label))) => {
+                self.set_selected_layer_constraint(false, &label);
+            }
             ("add_particle_layer", _) => self.add_particle_layer(),
             ("add_adjustment_layer", _) => self.add_utility_layer(
                 "調整レイヤー",
@@ -483,6 +569,9 @@ impl AfterEffectsStudio {
             }
             ("video_posterize_fps_changed", Some(ActionValue::Text(value))) => self.update_selected_video_posterize_fps(&value),
             ("cycle_layer_proxy_resolution", _) => self.cycle_selected_layer_proxy_resolution(),
+            ("select_layer_proxy_resolution", Some(ActionValue::Text(label))) => {
+                self.set_selected_layer_proxy_resolution(&label);
+            }
             ("toggle_layer_proxy", _) => self.toggle_selected_layer_proxy(),
             ("clear_layer_proxy", _) => self.clear_selected_layer_proxy(),
             ("generate_layer_proxy", _) => self.start_selected_layer_proxy_generation(),
@@ -495,7 +584,145 @@ impl AfterEffectsStudio {
                         .find(|item| item.path.as_os_str().to_string_lossy() == path)
                         .map(|item| item.path.clone())
                 }) {
+                    self.active_project_path = Some(path.display().to_string());
                     self.request_project_open(&path);
+                }
+            }
+            ("project_sort_changed", Some(ActionValue::Text(sort))) => {
+                self.project_sort = sort;
+            }
+            ("project_sort_toggle_dir", _) => {
+                self.project_sort_desc = !self.project_sort_desc;
+            }
+            ("project_sort_by_name", _) => {
+                if self.project_sort == "name" {
+                    self.project_sort_desc = !self.project_sort_desc;
+                } else {
+                    self.project_sort = "name".to_owned();
+                    self.project_sort_desc = false;
+                }
+            }
+            ("project_sort_by_updated", _) => {
+                if self.project_sort == "updated" {
+                    self.project_sort_desc = !self.project_sort_desc;
+                } else {
+                    self.project_sort = "updated".to_owned();
+                    self.project_sort_desc = true;
+                }
+            }
+            ("project_view_toggle", _) => {
+                self.project_view_grid = !self.project_view_grid;
+            }
+            ("project_toggle_select", _) => {
+                if let Some(path) = selected_row_id {
+                    let key = path.to_owned();
+                    if !self.selected_project_paths.remove(&key) {
+                        self.selected_project_paths.insert(key.clone());
+                    }
+                    self.active_project_path = Some(key);
+                }
+            }
+            ("project_clear_selection", _) => {
+                self.selected_project_paths.clear();
+                self.active_project_path = None;
+            }
+            ("project_open_selected", _) => {
+                let target_key = self
+                    .active_project_path
+                    .clone()
+                    .or_else(|| self.selected_project_paths.iter().next().cloned())
+                    .or_else(|| {
+                        self.recent_projects
+                            .first()
+                            .map(|item| item.path.display().to_string())
+                    });
+                if let Some(path) = target_key.and_then(|key| {
+                    self.recent_projects
+                        .iter()
+                        .find(|item| item.path.display().to_string() == key)
+                        .map(|item| item.path.clone())
+                }) {
+                    self.request_project_open(&path);
+                }
+            }
+            ("project_remove_selected", _) => {
+                if let Some(path) = selected_row_id {
+                    let key = path.to_owned();
+                    if self.selected_project_paths.is_empty()
+                        || !self.selected_project_paths.contains(&key)
+                    {
+                        self.recent_projects
+                            .retain(|item| item.path.display().to_string() != key);
+                        self.selected_project_paths.remove(&key);
+                    } else {
+                        self.recent_projects.retain(|item| {
+                            !self
+                                .selected_project_paths
+                                .contains(&item.path.display().to_string())
+                        });
+                        self.selected_project_paths.clear();
+                    }
+                } else if !self.selected_project_paths.is_empty() {
+                    self.recent_projects.retain(|item| {
+                        !self
+                            .selected_project_paths
+                            .contains(&item.path.display().to_string())
+                    });
+                    self.selected_project_paths.clear();
+                } else if let Some(key) = self.active_project_path.take() {
+                    self.recent_projects
+                        .retain(|item| item.path.display().to_string() != key);
+                }
+            }
+            ("project_reveal_item", _) => {
+                if let Some(path) = selected_row_id.and_then(|key| {
+                    self.recent_projects
+                        .iter()
+                        .find(|item| item.path.display().to_string() == key)
+                        .map(|item| item.path.clone())
+                }) {
+                    #[cfg(target_os = "macos")]
+                    {
+                        let _ = std::process::Command::new("open").arg("-R").arg(&path).spawn();
+                    }
+                    #[cfg(target_os = "linux")]
+                    {
+                        if let Some(parent) = path.parent() {
+                            let _ = std::process::Command::new("xdg-open").arg(parent).spawn();
+                        }
+                    }
+                    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+                    {
+                        let _ = &path;
+                    }
+                }
+            }
+            ("project_duplicate_item", _) => {
+                if let Some(item) = selected_row_id.and_then(|key| {
+                    self.recent_projects
+                        .iter()
+                        .find(|item| item.path.display().to_string() == key)
+                        .cloned()
+                }) {
+                    let stem = item
+                        .path
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or(&item.name);
+                    let ext = item
+                        .path
+                        .extension()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("json");
+                    let copy_path = item.path.with_file_name(format!("{stem}_copy.{ext}"));
+                    if item.path.exists() {
+                        let _ = std::fs::copy(&item.path, &copy_path);
+                    }
+                    let mut dup = item.clone();
+                    dup.name = format!("{} のコピー", item.name);
+                    dup.path = copy_path;
+                    dup.path_label = format!(".../projects/{}_copy.{ext}", stem);
+                    self.recent_projects.insert(0, dup);
                 }
             }
             ("request_remove_selected_layer", _) => self.request_remove_selected_layer(),

@@ -1,5 +1,4 @@
 use crate::core::{renderer::WgpuRenderer, timeline::Composition};
-use half::f16;
 use std::sync::Arc;
 
 pub struct HeadlessGpuRenderer {
@@ -134,20 +133,13 @@ impl HeadlessGpuRenderer {
         for y in 0..height as usize {
             let source_row = &mapped[y * padded_bytes_per_row as usize
                 ..y * padded_bytes_per_row as usize + unpadded_bytes_per_row as usize];
-            for x in 0..width as usize {
-                let source = x * 8;
-                let target = (y * width as usize + x) * 4;
-                for channel in 0..4 {
-                    let offset = source + channel * 2;
-                    let value =
-                        f16::from_le_bytes([source_row[offset], source_row[offset + 1]]).to_f32();
-                    rgba[target + channel] = if value.is_finite() {
-                        (value.clamp(0.0, 1.0) * 255.0).round() as u8
-                    } else {
-                        0
-                    };
-                }
-            }
+            let target_row = &mut rgba[y * width as usize * 4..(y + 1) * width as usize * 4];
+            crate::core::renderer::decode_rgba16f_row_to_rgba8(
+                source_row,
+                target_row,
+                composition.working_color_space,
+                composition.blend_linear,
+            );
         }
         drop(mapped);
         output.unmap();

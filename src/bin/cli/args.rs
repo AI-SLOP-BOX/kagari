@@ -108,6 +108,20 @@ pub(super) enum Commands {
         project: String,
     },
 
+    /// Inspect OS, GPU backend, OpenFX, and VFX engine capabilities
+    Doctor {
+        /// Emit machine-readable JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// List built-in timeline and Animation Composer motion presets
+    Presets {
+        /// Emit machine-readable JSON
+        #[arg(long)]
+        json: bool,
+    },
+
     /// Render a single frame to PNG (for testing)
     /// Run an automation script (Rhai) against a project
     Script {

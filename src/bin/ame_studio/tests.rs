@@ -17,6 +17,8 @@ mod tests {
     mod ameui_reload;
     #[path = "camera_projects.rs"]
     mod camera_projects;
+    #[path = "color_grading.rs"]
+    mod color_grading;
     #[path = "graph_navigation_tracker.rs"]
     mod graph_navigation_tracker;
     #[path = "playback_actions.rs"]

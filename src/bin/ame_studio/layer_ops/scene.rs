@@ -130,6 +130,48 @@ impl AfterEffectsStudio {
         self.mark_project_changed();
     }
 
+    pub(crate) fn set_selected_layer_constraint(&mut self, horizontal: bool, label: &str) {
+        let Some(layer_id) = self.selected_layer_id.as_deref() else {
+            return;
+        };
+        let Some(layer) = self
+            .project_model
+            .active_composition_mut()
+            .layers
+            .iter_mut()
+            .find(|layer| layer.id == layer_id && !layer.locked)
+        else {
+            return;
+        };
+        if horizontal {
+            use kagari_vfx::core::layer_constraints::HorizontalPin;
+            let next = match label {
+                "左固定" => HorizontalPin::Left,
+                "中央固定" => HorizontalPin::Center,
+                "右固定" => HorizontalPin::Right,
+                "幅に比例" => HorizontalPin::Scale,
+                _ => return,
+            };
+            if layer.constraints.horizontal != next {
+                layer.constraints.horizontal = next;
+                self.mark_project_changed();
+            }
+        } else {
+            use kagari_vfx::core::layer_constraints::VerticalPin;
+            let next = match label {
+                "上固定" => VerticalPin::Top,
+                "中央固定" => VerticalPin::Center,
+                "下固定" => VerticalPin::Bottom,
+                "高さに比例" => VerticalPin::Scale,
+                _ => return,
+            };
+            if layer.constraints.vertical != next {
+                layer.constraints.vertical = next;
+                self.mark_project_changed();
+            }
+        }
+    }
+
     pub(crate) fn toggle_alignment_layer_selection(&mut self, layer_id: &str) {
         if self
             .project_model
@@ -242,6 +284,65 @@ impl AfterEffectsStudio {
                 .unwrap_or(0);
             layer.label = colors[(index + 1) % colors.len()];
             self.mark_project_changed();
+        }
+    }
+
+    pub(crate) fn set_selected_auto_orient(&mut self, label: &str) {
+        let Some(layer_id) = self.selected_layer_id.as_deref() else {
+            return;
+        };
+        let comp_center = {
+            let composition = self.project_model.active_composition();
+            [
+                composition.width as f32 * 0.5,
+                composition.height as f32 * 0.5,
+            ]
+        };
+        let next = match label {
+            "なし" => kagari_vfx::core::auto_orient::AutoOrientMode::Off,
+            "パスに沿う" => kagari_vfx::core::auto_orient::AutoOrientMode::OrientAlongPath,
+            "点を向く" => kagari_vfx::core::auto_orient::AutoOrientMode::OrientTowardsPoint {
+                target_point: comp_center,
+            },
+            _ => return,
+        };
+        if let Some(layer) = self
+            .project_model
+            .active_composition_mut()
+            .layers
+            .iter_mut()
+            .find(|layer| layer.id == layer_id && !layer.locked)
+        {
+            layer.auto_orient = next;
+            self.mark_project_changed();
+        }
+    }
+
+    pub(crate) fn set_layer_label_color_for(&mut self, layer_id: &str, label: &str) {
+        let Some(&next) = kagari_vfx::core::timeline::LabelColor::ALL
+            .iter()
+            .find(|color| layer_label_color_label(**color) == label)
+        else {
+            return;
+        };
+        if let Some(layer) = self
+            .project_model
+            .active_composition_mut()
+            .layers
+            .iter_mut()
+            .find(|layer| layer.id == layer_id)
+        {
+            if layer.locked {
+                self.asset_status = format!(
+                    "「{}」はロック中のためラベル色を変更できません。",
+                    layer.name
+                );
+                return;
+            }
+            if layer.label != next {
+                layer.label = next;
+                self.mark_project_changed();
+            }
         }
     }
 }

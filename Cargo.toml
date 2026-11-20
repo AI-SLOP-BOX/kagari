@@ -95,8 +95,8 @@ gui = ["dep:eframe", "dep:egui_extras", "dep:rfd", "dep:rodio", "dep:egui-phosph
 preview = ["dep:winit", "dep:pollster", "wgpu"]
 cli = ["dep:clap", "dep:png", "exr-compression"]
 cli-gpu = ["cli", "dep:pollster", "wgpu"]
-wgpu = ["dep:wgpu"]
-ame = ["dep:ame-ui", "dep:vello", "dep:rfd", "exr-compression"]
+wgpu = ["dep:wgpu", "dep:pollster"]
+ame = ["dep:ame-ui", "dep:vello", "dep:rfd", "wgpu", "exr-compression"]
 exr-compression = ["dep:flate2"]
 
 [target.'cfg(windows)'.dependencies]

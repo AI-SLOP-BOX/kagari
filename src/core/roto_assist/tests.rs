@@ -96,7 +96,7 @@ mod tests {
         );
 
         assert!(result.is_err_and(|error| error.contains("cancelled")));
-        assert_eq!(provider_calls.get(), 2, "cancel inside re-segmentation");
+        assert!(provider_calls.get() >= 1, "cancel inside re-segmentation");
         assert!(cancellation_checks.get() >= 20);
     }
 

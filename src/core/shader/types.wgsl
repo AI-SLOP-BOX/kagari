@@ -6,6 +6,10 @@ struct Globals {
     shadow_strength: f32,
     channel_mode: u32,
     wipe_split_x: f32,
+    dither_output: u32,
+    blend_linear: u32,
+    working_color_space: u32,
+    _pad2: u32,
 };
 
 struct Layer {
@@ -230,9 +234,13 @@ struct Layer {
     accepts_shadows: u32,
     _ls_pad5: f32,
     video_frame_blend: f32,
-    _video_frame_blend_pad0: f32,
-    _video_frame_blend_pad1: f32,
-    _video_frame_blend_pad2: f32,
+    shape_stroke_width: f32,
+    shape_size_x: f32,
+    shape_size_y: f32,
+    shape_stroke_r: f32,
+    shape_stroke_g: f32,
+    shape_stroke_b: f32,
+    shape_stroke_a: f32,
 };
 
 @group(0) @binding(0) var<uniform> globals: Globals;
@@ -247,6 +255,7 @@ struct Layer {
 @group(3) @binding(3) var s_shadow: sampler;
 @group(3) @binding(4) var t_matte: texture_2d<f32>;
 @group(3) @binding(5) var s_matte: sampler;
+@group(3) @binding(6) var t_backdrop: texture_2d<f32>;
 
 struct VertexInput {
     @location(0) position: vec2<f32>,

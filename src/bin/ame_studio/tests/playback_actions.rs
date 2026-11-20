@@ -77,15 +77,33 @@ fn core_ame_studio_actions_coverage() {
 
     let mut declared_actions = std::collections::BTreeSet::new();
 
-    fn extract_action(line: &str) -> Option<String> {
-        let idx = line.find("action:")?;
+    fn find_action_keyword(line: &str) -> Option<usize> {
+        let mut offset = 0;
+        while let Some(rel) = line[offset..].find("action:") {
+            let idx = offset + rel;
+            let boundary_ok = idx == 0
+                || line[..idx]
+                    .chars()
+                    .next_back()
+                    .is_some_and(|c| !c.is_alphanumeric() && c != '_');
+            if boundary_ok {
+                return Some(idx);
+            }
+            offset = idx + 7;
+        }
+        None
+    }
+
+    fn extract_action(line: &str) -> Option<(String, usize)> {
+        let idx = find_action_keyword(line)?;
         let rest = line[idx + 7..].trim_start();
         let end = rest
             .find(|c: char| !c.is_alphanumeric() && c != '_')
             .unwrap_or(rest.len());
         let action = &rest[..end];
+        let next_offset = idx + 7 + (line[idx + 7..].len() - rest.len()) + end;
         if !action.is_empty() {
-            Some(action.to_string())
+            Some((action.to_string(), next_offset))
         } else {
             None
         }
@@ -101,20 +119,9 @@ fn core_ame_studio_actions_coverage() {
                     if let Ok(content) = std::fs::read_to_string(&path) {
                         for line in content.lines() {
                             let mut curr = line;
-                            while let Some(action) = extract_action(curr) {
+                            while let Some((action, next_offset)) = extract_action(curr) {
                                 acc.insert(action);
-                                if let Some(pos) = curr.find("action:") {
-                                    curr = &curr[pos + 7..];
-                                    if let Some(next_pos) =
-                                        curr.find(|c: char| !c.is_alphanumeric() && c != '_')
-                                    {
-                                        curr = &curr[next_pos..];
-                                    } else {
-                                        break;
-                                    }
-                                } else {
-                                    break;
-                                }
+                                curr = &curr[next_offset..];
                             }
                         }
                     }
@@ -228,4 +235,100 @@ fn particle_emitter_extended_controls_update_state() {
     } else {
         panic!("Expected particle layer");
     }
+}
+
+#[test]
+fn commercial_controls_and_effect_clipboard_roundtrip() {
+    use kagari_vfx::core::color_science::{BitDepth, WorkingColorSpace};
+    use kagari_vfx::core::layer_constraints::{HorizontalPin, VerticalPin};
+    use kagari_vfx::core::text_animator::SelectorShape;
+    use kagari_vfx::core::timeline::{LabelColor, LayerType, ShapeFillType};
+
+    let mut app = AfterEffectsStudio::new().unwrap();
+    app.add_shape_layer();
+    let shape_id = app
+        .selected_layer_id
+        .clone()
+        .expect("shape layer should be selected");
+
+    invoke(
+        &mut app,
+        "select_shape_fill_type",
+        Some(ActionValue::Text("線形グラデーション".to_owned())),
+    );
+    invoke(
+        &mut app,
+        "select_constraint_horizontal",
+        Some(ActionValue::Text("右固定".to_owned())),
+    );
+    invoke(
+        &mut app,
+        "select_constraint_vertical",
+        Some(ActionValue::Text("高さに比例".to_owned())),
+    );
+    invoke(
+        &mut app,
+        "select_layer_label_color",
+        Some(ActionValue::Text("水色".to_owned())),
+    );
+    invoke(&mut app, "add_gaussian_blur", None);
+    invoke(&mut app, "copy_selected_effect", None);
+    invoke(&mut app, "duplicate_selected_effect", None);
+
+    app.add_text_layer();
+    let text_id = app
+        .selected_layer_id
+        .clone()
+        .expect("text layer should be selected");
+    assert_ne!(text_id, shape_id);
+
+    invoke(&mut app, "paste_effect_to_layer", None);
+    invoke(&mut app, "toggle_text_animator", None);
+    invoke(
+        &mut app,
+        "select_text_animator_shape",
+        Some(ActionValue::Text("Triangle".to_owned())),
+    );
+    let (min_s, max_s) = crate::ame_studio_text_ops::text_animator_parameter_range("selector.start");
+    let expected_start = min_s + 0.25 * (max_s - min_s);
+    app.update_selected_text_animator_parameter("selector.start", &format!("{expected_start:.2}"));
+    invoke(
+        &mut app,
+        "select_composition_bit_depth",
+        Some(ActionValue::Text("16 bpc".to_owned())),
+    );
+    invoke(
+        &mut app,
+        "select_composition_working_space",
+        Some(ActionValue::Text("Display P3".to_owned())),
+    );
+    invoke(
+        &mut app,
+        "select_video_export_codec",
+        Some(ActionValue::Text("ProRes 422 · MOV".to_owned())),
+    );
+
+    let comp = app.project_model.active_composition();
+    assert_eq!(comp.bit_depth, BitDepth::SixteenBit);
+    assert_eq!(comp.working_color_space, WorkingColorSpace::DisplayP3);
+    assert_eq!(app.video_export_codec_idx, 2);
+
+    let shape_layer = comp.layers.iter().find(|l| l.id == shape_id).unwrap();
+    assert!(matches!(
+        shape_layer.layer_type,
+        LayerType::Shape {
+            fill_type: ShapeFillType::LinearGradient { .. },
+            ..
+        }
+    ));
+    assert_eq!(shape_layer.constraints.horizontal, HorizontalPin::Right);
+    assert_eq!(shape_layer.constraints.vertical, VerticalPin::Scale);
+    assert_eq!(shape_layer.label, LabelColor::Aqua);
+    assert_eq!(shape_layer.effects.len(), 2);
+
+    let text_layer = comp.layers.iter().find(|l| l.id == text_id).unwrap();
+    assert_eq!(text_layer.effects.len(), 1);
+    let animator = text_layer.text_animator.as_ref().unwrap();
+    assert_eq!(animator.selector.shape, SelectorShape::Triangle);
+    assert!((animator.selector.start - 25.0).abs() < 0.01);
 }

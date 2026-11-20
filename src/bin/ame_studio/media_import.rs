@@ -70,7 +70,7 @@ impl AfterEffectsStudio {
         let Some(path) = rfd::FileDialog::new()
             .add_filter(
                 "画像",
-                &["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff", "svg"],
+                &["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff", "svg", "psd"],
             )
             .pick_file()
         else {
@@ -80,6 +80,13 @@ impl AfterEffectsStudio {
     }
 
     pub(crate) fn import_image_file(&mut self, path: std::path::PathBuf) {
+        if path
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("psd"))
+        {
+            self.import_psd_file(&path);
+            return;
+        }
         let Some(file_name) = path
             .file_stem()
             .map(|name| name.to_string_lossy().into_owned())
@@ -133,6 +140,88 @@ impl AfterEffectsStudio {
             path.file_name().unwrap_or_default().to_string_lossy()
         );
         self.mark_project_changed();
+    }
+
+    pub(crate) fn import_psd_file(&mut self, path: &std::path::Path) {
+        let Ok(bytes) = std::fs::read(path) else {
+            self.asset_status = "PSD ファイルを読み込めませんでした。".to_owned();
+            return;
+        };
+        let doc = match kagari_vfx::core::psd_importer::parse_psd(&bytes) {
+            Ok(d) => d,
+            Err(err) => {
+                self.asset_status = format!("PSD 解析エラー: {err}");
+                return;
+            }
+        };
+        if doc.layers.is_empty() {
+            self.asset_status = "PSD に読み込めるレイヤーがありませんでした。".to_owned();
+            return;
+        }
+
+        let cache_dir = std::env::temp_dir().join("kagari_psd_layers");
+        let _ = std::fs::create_dir_all(&cache_dir);
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or_default();
+
+        let still_secs = self.still_duration_secs.clamp(0.1, 600.0);
+        let mut imported_count = 0usize;
+
+        for (idx, psd_layer) in doc.layers.into_iter().enumerate() {
+            if psd_layer.width == 0 || psd_layer.height == 0 {
+                continue;
+            }
+            let Some(img_buf) =
+                image::RgbaImage::from_raw(psd_layer.width, psd_layer.height, psd_layer.rgba8)
+            else {
+                continue;
+            };
+            let out_png = cache_dir.join(format!("psd_{stamp}_{idx}.png"));
+            if img_buf.save(&out_png).is_err() {
+                continue;
+            }
+            let source_path = out_png.display().to_string();
+            self.register_project_asset(
+                psd_layer.name.clone(),
+                kagari_vfx::core::timeline::ProjectItemType::Image {
+                    path: source_path.clone(),
+                    width: psd_layer.width,
+                    height: psd_layer.height,
+                },
+            );
+
+            let composition = self.project_model.active_composition_mut();
+            let still_frames = (still_secs * f64::from(composition.fps.max(1)))
+                .round()
+                .max(1.0) as u32;
+            let layer_frames = still_frames.min(composition.duration_frames.max(1));
+            let id = format!("ameui_psd_{stamp}_{idx}");
+            let mut layer = kagari_vfx::core::timeline::Layer::new(
+                id.clone(),
+                psd_layer.name,
+                kagari_vfx::core::timeline::LayerType::Image { path: source_path },
+                layer_frames,
+            );
+            layer.visible = psd_layer.visible;
+            layer.transform.opacity = kagari_vfx::core::timeline::Animatable::new_constant(
+                (f32::from(psd_layer.opacity) / 255.0) * 100.0,
+            );
+            layer.transform.position = kagari_vfx::core::timeline::Animatable::new_constant([
+                psd_layer.left as f32 + psd_layer.width as f32 * 0.5,
+                psd_layer.top as f32 + psd_layer.height as f32 * 0.5,
+            ]);
+            composition.add_layer(layer);
+            self.selected_layer_id = Some(id);
+            imported_count += 1;
+        }
+
+        self.sync_selected_layer_controls();
+        if imported_count > 0 {
+            self.mark_project_changed();
+        }
+        self.asset_status = format!("PSD から {imported_count} レイヤーを読み込みました。");
     }
 
     pub(crate) fn import_audio_layer(&mut self) {

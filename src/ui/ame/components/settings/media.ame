@@ -2,7 +2,7 @@ component SettingsMediaPage() {
   VStack(spacing: 12) {
     VStack(spacing: 4) { Title("メディア") Caption("メディアの読み込み、デコード、キャッシュに関する設定を行います。") }
 
-    Card(padding: 12, spacing: 10) {
+    Card(padding: 12, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
       Text("読み込み", size: 13)
       SettingsRow("静止画のデフォルト長", label_width: 180) {
         HStack(spacing: 6) {
@@ -18,7 +18,7 @@ component SettingsMediaPage() {
       }
     }
 
-    Card(padding: 12, spacing: 10) {
+    Card(padding: 12, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
       Text("デコード", size: 13)
       SettingsRow("ハードウェアデコード", label_width: 180) {
         Checkbox("対応する形式でハードウェアデコードを使用する", hardware_decode, action: setting_hardware_decode_changed)
@@ -39,7 +39,7 @@ component SettingsMediaPage() {
       }
     }
 
-    Card(padding: 12, spacing: 10) {
+    Card(padding: 12, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
       Text("キャッシュとメディア管理", size: 13)
       SettingsRow("メディアキャッシュの場所", label_width: 190) {
         AttachedButton("参照…", action: setting_cache_path_browse) {
