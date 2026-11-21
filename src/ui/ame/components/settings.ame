@@ -1,4 +1,5 @@
 import "settings/general.ame";
+import "settings/locale_select.ame";
 import "settings/performance.ame";
 import "settings/media.ame";
 import "settings/display.ame";
@@ -34,6 +35,7 @@ component SettingsExternalNav() { HitArea("settings_external_select", action: se
 component SettingsExperimentalNav() { HitArea("settings_experimental_select", action: settings_experimental_select) { SettingsNavItem(active: settings_experimental) { Padding(horizontal: 18, vertical: 8) { HStack(spacing: 12) { If(settings_experimental) { Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#e6ebf2' stroke-width='1.8' stroke-linecap='round'><path d='M4 7h7M15 7h5M4 12h10M18 12h2M4 17h4M12 17h8'/><circle cx='13' cy='7' r='1.6'/><circle cx='16' cy='12' r='1.6'/><circle cx='10' cy='17' r='1.6'/></svg>", 20, 20) } else { Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#aeb7bd' stroke-width='1.8' stroke-linecap='round'><path d='M4 7h7M15 7h5M4 12h10M18 12h2M4 17h4M12 17h8'/><circle cx='13' cy='7' r='1.6'/><circle cx='16' cy='12' r='1.6'/><circle cx='10' cy='17' r='1.6'/></svg>", 20, 20) } Text("実験的機能", size: 13) Spacer } } } } }
 
 component SettingsPanel() {
+    If(ui_locale != "") {
     VStack(spacing: 0) {
       Spacer
       HStack(spacing: 0) {
@@ -69,7 +71,7 @@ component SettingsPanel() {
               VStack(spacing: 0) {
                 Padding(horizontal: 24, vertical: 14) {
                   HStack(spacing: 10) {
-                    Text("環境設定", size: 18).weight(bold)
+                    Text("{t.settings_title}", size: 18).weight(bold)
                     Spacer
                     HitArea("close_settings", action: close_settings) { ZStack { Svg("<svg xmlns='http://www.w3.org/2000/svg' width='30' height='30' viewBox='0 0 30 30'><rect width='30' height='30' rx='8' fill='transparent'/></svg>", 30, 30)
                       Center {
@@ -160,6 +162,7 @@ component SettingsPanel() {
         Spacer
       }
       Spacer
+    }
     }
   }
 

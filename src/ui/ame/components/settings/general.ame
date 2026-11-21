@@ -1,4 +1,5 @@
 component SettingsGeneralPage() {
+  If(ui_locale != "") {
   VStack(spacing: 12) {
     VStack(spacing: 4) { Title("一般") Caption("アプリケーションの基本的な動作を設定します。") }
 
@@ -34,6 +35,9 @@ component SettingsGeneralPage() {
       SettingsRow("テーマ", label_width: 170) {
         Caption("ダーク (推奨)")
       }
+      SettingsRow("{t.settings_language}", label_width: 170) {
+        LocaleSelect()
+      }
       SettingsRow("アクセントカラー", label_width: 170) {
         ColorSwatches(selected: accent_color) {
           Swatch("#f39c29")
@@ -62,5 +66,6 @@ component SettingsGeneralPage() {
         Checkbox("プロジェクトに自動で名前を付ける（例：プロジェクト 1、2…）", auto_project_names, action: setting_auto_project_names_changed)
       }
     }
+  }
   }
 }

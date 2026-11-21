@@ -85,6 +85,7 @@ impl AfterEffectsStudio {
             cache_path: self.cache_path.clone(),
             cache_limit: self.cache_limit.clone(),
             accent_color: self.accent_color.clone(),
+            ui_locale: self.ui_locale.clone(),
             auto_project_names: self.auto_project_names,
             renderer: self.renderer.clone(),
             background_render: self.background_render,
@@ -137,6 +138,7 @@ impl AfterEffectsStudio {
         self.cache_path = draft.cache_path;
         self.cache_limit = draft.cache_limit;
         self.accent_color = draft.accent_color;
+        self.ui_locale = draft.ui_locale;
         self.auto_project_names = draft.auto_project_names;
         self.renderer = draft.renderer;
         self.background_render = draft.background_render;
@@ -202,6 +204,7 @@ impl AfterEffectsStudio {
             .to_string();
         self.cache_limit = "100".to_owned();
         self.accent_color = default_accent_color();
+        self.ui_locale = "ja".to_owned();
         self.auto_project_names = true;
         self.renderer = "gpu".to_owned();
         self.background_render = true;
@@ -257,6 +260,7 @@ impl AfterEffectsStudio {
         self.autosave_secs = normalize_autosave_secs(self.autosave_secs);
         if parse_hex_color(&self.accent_color).is_none() {
             self.accent_color = default_accent_color();
+        self.ui_locale = "ja".to_owned();
         }
         self.gpu_enabled = self.renderer != "cpu";
         let cache_directory = if self.cache_path.trim().is_empty() {
@@ -318,6 +322,10 @@ impl AfterEffectsStudio {
             (
                 "accent_color",
                 serde_json::Value::String(self.accent_color.clone()),
+            ),
+            (
+                "ui_locale",
+                serde_json::Value::String(self.ui_locale.clone()),
             ),
             (
                 "auto_project_names",

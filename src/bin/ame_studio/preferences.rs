@@ -6,10 +6,10 @@ pub(crate) fn settings_category_matches(category: usize, query: &str) -> bool {
         return true;
     }
     let keywords = match category {
-        0 => "一般 general 起動 自動保存 テーマ アクセント プロジェクト",
+        0 => "一般 general 起動 自動保存 テーマ アクセント プロジェクト 言語 language locale",
         1 => "パフォーマンス performance gpu cpu メモリ キャッシュ undo 履歴",
         2 => "メディア media 読み込み キャッシュ プロキシ proxy",
-        3 => "表示 display ui スケール テーマ アクセント プレビュー グリッド セーフエリア カラー",
+        3 => "表示 display ui スケール テーマ アクセント プレビュー グリッド セーフエリア カラー 言語 language locale",
         4 => "再生 playback ループ 音声 音量 プリロール ポストロール",
         5 => "ショートカット shortcuts キーボード keybinding",
         6 => "ファイルパス filepath パス バックアップ アセット 保存先",
@@ -17,10 +17,26 @@ pub(crate) fn settings_category_matches(category: usize, query: &str) -> bool {
         8 => "実験的機能 experimental beta",
         _ => "",
     };
-    keywords.to_ascii_lowercase().contains(&q)
+    if keywords.to_ascii_lowercase().contains(&q) {
+        return true;
+    }
+    matches!(category, 0 | 3)
+        && ame_sources::i18n::LOCALE_SEARCH_KEYWORDS
+            .to_ascii_lowercase()
+            .contains(&q)
 }
 
 impl AfterEffectsStudio {
+    fn set_ui_locale(&mut self, locale: &str) {
+        if ame_sources::i18n::is_supported_locale(locale) {
+            self.ui_locale = locale.to_owned();
+            let _ = write_preference(
+                "ui_locale",
+                serde_json::Value::String(self.ui_locale.clone()),
+            );
+        }
+    }
+
     pub(crate) fn handle_settings_action(
         &mut self,
         action_name: &str,
@@ -154,6 +170,20 @@ impl AfterEffectsStudio {
                     self.accent_color = value.clone();
                 }
                 true
+            }
+            ("setting_locale_changed", Some(ActionValue::Text(value)))
+            | ("__ame_binding_update_ui_locale", Some(ActionValue::Text(value))) => {
+                self.set_ui_locale(value);
+                true
+            }
+            (name, _) if name.starts_with("switch_locale_") => {
+                if let Some(locale) = name.strip_prefix("switch_locale_") {
+                    if ame_sources::i18n::is_supported_locale(locale) {
+                        self.set_ui_locale(locale);
+                        return true;
+                    }
+                }
+                false
             }
             ("setting_renderer_changed", Some(ActionValue::Text(value))) => {
                 self.renderer = value.clone();

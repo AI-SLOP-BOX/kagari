@@ -1,9 +1,10 @@
 component ExportPanel() {
+  If(ui_locale != "") {
   ScrollView(760) {
     Padding(16) {
       VStack(spacing: 12) {
         Surface(padding: 12, spacing: 0, radius: 8, border: false, background: "#14181f") {
-          HStack(spacing: 8) { VStack(spacing: 3) { Text("書き出し", size: 22).weight(semibold) Caption("コンポジション全体、または現在のフレームを保存します。") } Spacer Button("編集に戻る", action: back_to_editor, tone: ghost, size: small) }
+          HStack(spacing: 8) { VStack(spacing: 3) { Text("{t.export_title}", size: 22).weight(semibold) Caption("{t.export_subtitle}") } Spacer Button("{t.export_back_to_editor}", action: back_to_editor, tone: ghost, size: small) }
         }
         HStack(spacing: 0) {
           Spacer
@@ -12,7 +13,7 @@ component ExportPanel() {
               VStack(spacing: 10) {
                 Card(hover_strength: 0.0, hover_elevation: 0.0) { Padding(14) { VStack(spacing: 10) {
                   HStack(spacing: 8) {
-                    Text("動画を書き出す", size: 18).weight(semibold)
+                    Text("{t.export_video_title}", size: 18).weight(semibold)
                     Spacer
                     If(status_resolution != "") {
                       Surface(padding: 3, spacing: 0, radius: 4, border: false, background: "#162436") { Caption("{status_resolution} · {fps_label}") }
@@ -28,7 +29,7 @@ component ExportPanel() {
                     If(render_running) { If(video_export_audio_enabled) { Caption("音声あり") } else { Caption("音声なし") } } else { Checkbox("音声を含める", video_export_audio_enabled, action: video_export_audio_changed) }
                   }
                   ProgressBar(render_progress)
-                  HStack(spacing: 8) { Caption("{render_status}") Spacer If(render_running) { Button("キャンセル", action: render_stop, tone: destructive) } else { If(video_overwrite_pending) { HStack(spacing: 8) { Button("上書きして書き出す", action: render_overwrite, tone: destructive) Button("戻る", action: render_cancel_overwrite, tone: ghost) } } else { HStack(spacing: 8) { Button("QC検査", action: export_run_qc, tone: secondary) Button("書き出しを開始", action: render_start, tone: primary) } } } }
+                  HStack(spacing: 8) { Caption("{render_status}") Spacer If(render_running) { Button("キャンセル", action: render_stop, tone: destructive) } else { If(video_overwrite_pending) { HStack(spacing: 8) { Button("上書きして書き出す", action: render_overwrite, tone: destructive) Button("戻る", action: render_cancel_overwrite, tone: ghost) } } else { HStack(spacing: 8) { Button("QC検査", action: export_run_qc, tone: secondary) Button("{t.export_start_btn}", action: render_start, tone: primary) } } } }
                 } } }
                 Card(hover_strength: 0.0, hover_elevation: 0.0) { Padding(16) { VStack(spacing: 10) {
                   HStack(spacing: 8) { Text("インターチェンジ / テンプレート", size: 17).weight(semibold) Spacer Caption("MLT · Kagari Template · Lottie · EXR") }
@@ -61,5 +62,6 @@ component ExportPanel() {
         }
       }
     }
+  }
   }
 }

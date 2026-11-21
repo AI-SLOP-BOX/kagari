@@ -172,6 +172,7 @@ pub struct AfterEffectsStudio {
     cache_limit: String,
     cache_usage_bytes: u64,
     accent_color: String,
+    ui_locale: String,
     auto_project_names: bool,
     renderer: String,
     background_render: bool,

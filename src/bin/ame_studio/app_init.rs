@@ -108,6 +108,12 @@ impl AfterEffectsStudio {
         } else {
             default_accent_color()
         };
+        let ui_locale = saved_string("ui_locale", "ja".to_owned());
+        let ui_locale = if ame_sources::i18n::is_supported_locale(&ui_locale) {
+            ui_locale
+        } else {
+            "ja".to_owned()
+        };
         let auto_project_names = saved_bool("auto_project_names", true);
         let renderer = saved_string(
             "renderer",
@@ -418,6 +424,7 @@ impl AfterEffectsStudio {
             cache_limit,
             cache_usage_bytes,
             accent_color,
+            ui_locale,
             auto_project_names,
             renderer,
             background_render,

@@ -15,6 +15,7 @@ impl AfterEffectsStudio {
                 self.command_palette_open = false;
                 if !self.handle_editor_workspace_action(&command_id, None)
                     && !self.handle_navigation_setup_action(&command_id, None)
+                    && !self.handle_settings_action(&command_id, None)
                     && !self.handle_engine_hub_action(&command_id)
                 {
                     self.handle_effect_action(&command_id, None, None);

@@ -743,3 +743,6 @@
   action load_demo_vfx_scene;
   action tutorial_next;
   action tutorial_close;
+  action setting_locale_changed;
+  action switch_locale_ja;
+  action switch_locale_en;

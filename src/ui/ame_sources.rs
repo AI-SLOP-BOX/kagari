@@ -1,9 +1,17 @@
-pub const STUDIO_ROOT: &str = include_str!("ame/kagari_studio.ame");
+pub mod i18n {
+    include!(concat!(env!("OUT_DIR"), "/i18n_locales.rs"));
+}
+
+pub const STUDIO_ROOT: &str = include_str!(concat!(env!("OUT_DIR"), "/i18n_kagari_studio.ame"));
 
 pub const STUDIO_MODULES: &[(&str, &str)] = &[
     ("state/records.ame", include_str!("ame/state/records.ame")),
     ("state/bindings.ame", include_str!("ame/state/bindings.ame")),
     ("state/actions.ame", include_str!("ame/state/actions.ame")),
+    (
+        "state/strings.ame",
+        include_str!(concat!(env!("OUT_DIR"), "/i18n_strings.ame")),
+    ),
     (
         "components/navigation.ame",
         include_str!("ame/components/navigation.ame"),
@@ -35,6 +43,10 @@ pub const STUDIO_MODULES: &[(&str, &str)] = &[
     (
         "components/settings/general.ame",
         include_str!("ame/components/settings/general.ame"),
+    ),
+    (
+        "components/settings/locale_select.ame",
+        include_str!(concat!(env!("OUT_DIR"), "/i18n_locale_select.ame")),
     ),
     (
         "components/settings/performance.ame",

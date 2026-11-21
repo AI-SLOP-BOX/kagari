@@ -163,6 +163,8 @@ impl AfterEffectsStudio {
         self.ui
             .set_binding("accent_color", Value::String(self.accent_color.clone()))?;
         self.ui
+            .set_binding("ui_locale", Value::String(self.ui_locale.clone()))?;
+        self.ui
             .set_binding("auto_project_names", Value::Bool(self.auto_project_names))?;
         self.ui
             .set_binding("renderer", Value::String(self.renderer.clone()))?;

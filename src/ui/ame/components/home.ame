@@ -1,8 +1,9 @@
 component HomeHeader() {
+    If(ui_locale != "") {
     VStack(spacing: 14) {
       VStack(spacing: 4) {
-        Text("制作を始める", size: 26).weight(bold)
-        Text("新しいプロジェクトを作成するか、既存のコンポジション編集を再開します。", size: 14)
+        Text("{t.home_title}", size: 26).weight(bold)
+        Text("{t.home_subtitle}", size: 14)
       }
       If(narrow) {
         VStack(spacing: 10) {
@@ -18,57 +19,68 @@ component HomeHeader() {
         }
       }
     }
+    }
   }
 
 component HomeActionNewCard() {
+    If(ui_locale != "") {
     HitArea("new_project", action: new_project) { Card(padding: 16, spacing: 6) {
         HStack(spacing: 14) {
           Svg("<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 44 44'><rect width='44' height='44' rx='10' fill='#282e39'/><path d='M22 15v14M15 22h14' stroke='#e2e8f0' stroke-width='2.2' stroke-linecap='round'/></svg>", 44, 44)
-          VStack(spacing: 3) {
-            Text("新規プロジェクト", size: 16).weight(semibold)
-            Text("ゼロから制作を開始", size: 13)
+          Grow(1) {
+            VStack(spacing: 3) {
+              Text("{t.home_new_project}", size: 16).weight(semibold)
+              Text("{t.home_new_project_sub}", size: 13)
+            }
           }
-          Spacer
-          Button("作成", action: new_project, tone: ghost, size: small)
+          Button("{t.home_create_btn}", action: new_project, tone: ghost, size: small)
         }
       } }
+    }
   }
 
 component HomeActionOpenCard() {
+    If(ui_locale != "") {
     HitArea("open_project", action: open_project) { Card(padding: 16, spacing: 6) {
         HStack(spacing: 14) {
           Svg("<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 44 44'><rect width='44' height='44' rx='10' fill='#282e39'/><path d='M14 17a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H16a2 2 0 0 1-2-2z' fill='none' stroke='#e2e8f0' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>", 44, 44)
-          VStack(spacing: 3) {
-            Text("プロジェクトを開く", size: 16).weight(semibold)
-            Text("保存済みの制作を再開", size: 13)
+          Grow(1) {
+            VStack(spacing: 3) {
+              Text("{t.home_open_project}", size: 16).weight(semibold)
+              Text("{t.home_open_project_sub}", size: 13)
+            }
           }
-          Spacer
-          Button("参照", action: open_project, tone: ghost, size: small)
+          Button("{t.home_browse_btn}", action: open_project, tone: ghost, size: small)
         }
       } }
+    }
   }
 
 component HomeActionDemoCard() {
+    If(ui_locale != "") {
     HitArea("load_demo_vfx_scene", action: load_demo_vfx_scene) { Card(padding: 16, spacing: 6) {
         HStack(spacing: 14) {
           Svg("<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 44 44'><rect width='44' height='44' rx='10' fill='#282018' stroke='#ff8a2a' stroke-width='1.4'/><path d='M22 11l2.8 7.2L32 21l-7.2 2.8L22 31l-2.8-7.2L12 21l7.2-2.8z' fill='#ff8a2a'/></svg>", 44, 44)
-          VStack(spacing: 3) {
-            Text("VFX サンプルを開く", size: 16).weight(semibold)
-            Text("Saber・3D・ノード作例")
+          Grow(1) {
+            VStack(spacing: 3) {
+              Text("{t.home_vfx_demo}", size: 16).weight(semibold)
+              Text("{t.home_vfx_demo_sub}")
+            }
           }
-          Spacer
-          Button("体験", action: load_demo_vfx_scene, tone: primary, size: small)
+          Button("{t.home_try_btn}", action: load_demo_vfx_scene, tone: primary, size: small)
         }
       } }
+    }
   }
 
 component RecentCardsGrid() {
+    If(ui_locale != "") {
     VStack(spacing: 12) {
       Surface(padding: 8, spacing: 0, radius: 6, border: false, background: "#14181f") {
         HStack(spacing: 8) {
-          Text("最近のプロジェクト", size: 15).weight(semibold)
+          Text("{t.home_recent_title}", size: 15).weight(semibold)
           Spacer
-          Button("すべて表示  →", action: go_projects, tone: ghost, size: small)
+          Button("{t.home_view_all}", action: go_projects, tone: ghost, size: small)
         }
       }
       If(has_recent_1) {
@@ -89,18 +101,20 @@ component RecentCardsGrid() {
           }
         }
       } else {
-        Card(hover_strength: 0.0, hover_elevation: 0.0) { Padding(18) { HStack(spacing: 10) { Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#646d7a' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z'/></svg>", 16, 16) Text("最近使ったプロジェクトはありません", size: 14) Spacer Button("プロジェクトを開く", action: open_project, tone: secondary, size: small) } } }
+        Card(hover_strength: 0.0, hover_elevation: 0.0) { Padding(18) { HStack(spacing: 10) { Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#646d7a' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z'/></svg>", 16, 16) Text("{t.home_no_recent}", size: 14) Spacer Button("{t.home_open_project}", action: open_project, tone: secondary, size: small) } } }
       }
+    }
     }
   }
 
 component QuickStartTemplates() {
+    If(ui_locale != "") {
     VStack(spacing: 12) {
       Surface(padding: 8, spacing: 0, radius: 6, border: false, background: "#14181f") {
         HStack(spacing: 8) {
-          Text("コンポジションプリセット", size: 15).weight(semibold)
+          Text("{t.home_presets_title}", size: 15).weight(semibold)
           Spacer
-          Button("詳細設定で作成  →", action: new_project, tone: ghost, size: small)
+          Button("{t.home_custom_setup}", action: new_project, tone: ghost, size: small)
         }
       }
       If(narrow) {
@@ -118,6 +132,7 @@ component QuickStartTemplates() {
           Grow(1) { QuickStartCardSquare() }
         }
       }
+    }
     }
   }
 

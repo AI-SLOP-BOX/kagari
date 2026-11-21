@@ -309,3 +309,70 @@ fn settings_search_filters_categories_and_selects_match() {
         .join()
         .unwrap();
 }
+
+#[test]
+fn locale_switch_updates_home_translations_between_ja_and_en() {
+    std::thread::Builder::new()
+        .stack_size(16 * 1024 * 1024)
+        .spawn(|| {
+            let view_tree_has_text = |root: &ame_ui::view::ViewNode, target: &str| {
+                !find_view_nodes(root, &|node| match &node.kind {
+                    ame_ui::view::ViewKind::Text(text)
+                    | ame_ui::view::ViewKind::TextSized { text, .. }
+                    | ame_ui::view::ViewKind::TextWeighted { text, .. } => text == target,
+                    ame_ui::view::ViewKind::Button { label, .. } => label == target,
+                    _ => false,
+                })
+                .is_empty()
+            };
+
+            let mut app = AfterEffectsStudio::new().unwrap();
+            invoke(&mut app, "switch_locale_en", None);
+            assert_eq!(app.ui_locale, "en");
+            assert_eq!(
+                app.ui.state("ui_locale"),
+                Some(&Value::String("en".to_owned()))
+            );
+            let en_tree = app.shared_view_tree().unwrap();
+            assert!(
+                view_tree_has_text(&en_tree.root, "Start Creating"),
+                "English locale should render `Start Creating` on Home"
+            );
+            assert!(
+                view_tree_has_text(&en_tree.root, "New Project"),
+                "English locale should render `New Project` on Home"
+            );
+
+            invoke(&mut app, "switch_locale_ja", None);
+            assert_eq!(app.ui_locale, "ja");
+            assert_eq!(
+                app.ui.state("ui_locale"),
+                Some(&Value::String("ja".to_owned()))
+            );
+            let ja_tree = app.shared_view_tree().unwrap();
+            assert!(
+                !view_tree_has_text(&ja_tree.root, "Start Creating"),
+                "Japanese locale should no longer show `Start Creating` on Home"
+            );
+            assert!(
+                view_tree_has_text(&ja_tree.root, "制作を始める"),
+                "Japanese locale should restore `制作を始める` on Home"
+            );
+            assert!(
+                view_tree_has_text(&ja_tree.root, "新規プロジェクト"),
+                "Japanese locale should restore `新規プロジェクト` on Home"
+            );
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}
+
+#[test]
+fn supported_locales_are_loaded_from_json_catalogs() {
+    assert!(ame_sources::i18n::is_supported_locale("ja"));
+    assert!(ame_sources::i18n::is_supported_locale("en"));
+    assert!(!ame_sources::i18n::is_supported_locale("unknown_locale"));
+    assert!(ame_sources::i18n::SUPPORTED_LOCALES.len() >= 2);
+}
+

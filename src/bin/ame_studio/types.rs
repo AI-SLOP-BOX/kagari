@@ -655,6 +655,7 @@ pub(super) struct SettingsDraft {
     pub(super) cache_path: String,
     pub(super) cache_limit: String,
     pub(super) accent_color: String,
+    pub(super) ui_locale: String,
     pub(super) auto_project_names: bool,
     pub(super) renderer: String,
     pub(super) background_render: bool,

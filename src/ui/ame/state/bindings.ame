@@ -1,4 +1,5 @@
 
+  bind ui_locale: String = "ja";
   bind compact: Bool = false;
   bind narrow: Bool = false;
   bind wide: Bool = true;

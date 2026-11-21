@@ -62,6 +62,7 @@ app AfterEffectsStudio {
   import "state/records.ame";
   import "state/bindings.ame";
   import "state/actions.ame";
+  import "state/strings.ame";
   bind modal_scrim_opacity: Float = 0.78;
 
 
@@ -118,6 +119,10 @@ app AfterEffectsStudio {
               Command("go_home", "画面: ホームへ移動")
               Command("go_projects", "画面: プロジェクト一覧")
               Command("go_settings", "画面: 環境設定", hint: "⌘,")
+              // <generated-locale-commands>
+              Command("switch_locale_ja", "言語 / Language: 日本語 (Japanese)")
+              Command("switch_locale_en", "言語 / Language: English (英語)")
+              // </generated-locale-commands>
               Command("go_documents", "画面: ヘルプ / ドキュメント")
               Command("new_project", "プロジェクト: 新規作成", hint: "⌘N")
               Command("load_demo_vfx_scene", "チュートリアル: VFX サンプルシーンを開く")
