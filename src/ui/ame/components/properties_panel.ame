@@ -1,7 +1,7 @@
 component PropertiesContent() {
   VStack(spacing: 4) {
     Surface(padding: 6, spacing: 0, radius: 4, border: false, background: "#14181f") {
-      HStack(spacing: 6) { Text("プロパティ", size: 13).weight(semibold) Spacer If(selected_layer) { Caption("{layer_name}") } else { Caption("未選択") } }
+      HStack(spacing: 6) { Text("{t.panel_properties}", size: 13).weight(semibold) Spacer If(selected_layer) { Caption("{layer_name}") } else { Caption("未選択") } }
     }
     If(selected_layer_locked) { Caption("ロック中: タイムラインまたはシーン一覧で解除すると編集できます。") }
     If(selected_layer) {

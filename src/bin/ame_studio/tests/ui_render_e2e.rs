@@ -376,3 +376,27 @@ fn supported_locales_are_loaded_from_json_catalogs() {
     assert!(ame_sources::i18n::SUPPORTED_LOCALES.len() >= 2);
 }
 
+#[test]
+fn canvas_accessibility_items_expose_composition_and_playhead() {
+    std::thread::Builder::new()
+        .stack_size(16 * 1024 * 1024)
+        .spawn(|| {
+            let app = AfterEffectsStudio::new().unwrap();
+            let viewport_items = App::canvas_accessibility_items(&app, "kagari.viewport");
+            assert!(
+                !viewport_items.is_empty(),
+                "kagari.viewport should expose at least the active composition label"
+            );
+            assert_eq!(viewport_items[0].role, ame_ui::app::CanvasItemRole::Label);
+
+            let timeline_items = App::canvas_accessibility_items(&app, "kagari.timeline");
+            assert!(
+                timeline_items.iter().any(|item| item.label == "Playhead"),
+                "kagari.timeline should expose the Playhead slider item"
+            );
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}
+

@@ -228,7 +228,7 @@ component HomePanel() {
             }
             Grow(1) {
               ScrollView(760) {
-                Padding(horizontal: 32, vertical: 24) {
+                Padding(horizontal: 24, vertical: 20) {
                   MaxWidth(1040) {
                     VStack(spacing: 28) {
                       HomeHeader()

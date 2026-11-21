@@ -54,5 +54,10 @@
   "export_subtitle": "Save the entire composition or the current frame.",
   "export_back_to_editor": "Back to Editor",
   "export_video_title": "Export Video",
-  "export_start_btn": "Start Export"
+  "export_start_btn": "Start Export",
+  "panel_scene": "Scene",
+  "panel_import_assets": "Import Media",
+  "panel_timeline": "Timeline",
+  "panel_audio_timeline": "Audio Timeline",
+  "panel_properties": "Properties"
 }

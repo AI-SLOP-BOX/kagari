@@ -17,7 +17,7 @@
   "btn_save": "保存",
   "search_placeholder": "検索...",
   "home_title": "制作を始める",
-  "home_subtitle": "新しいプロジェクトを作成するか、既存のコンポジション編集を再開します。",
+  "home_subtitle": "プロジェクトを作成、または既存の編集を再開します。",
   "home_new_project": "新規プロジェクト",
   "home_new_project_sub": "ゼロから制作を開始",
   "home_create_btn": "作成",
@@ -54,5 +54,10 @@
   "export_subtitle": "コンポジション全体、または現在のフレームを保存します。",
   "export_back_to_editor": "編集に戻る",
   "export_video_title": "動画を書き出す",
-  "export_start_btn": "書き出しを開始"
+  "export_start_btn": "書き出しを開始",
+  "panel_scene": "シーン",
+  "panel_import_assets": "素材を読み込む",
+  "panel_timeline": "タイムライン",
+  "panel_audio_timeline": "オーディオタイムライン",
+  "panel_properties": "プロパティ"
 }

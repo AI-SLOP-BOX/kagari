@@ -54,6 +54,72 @@ impl App for AfterEffectsStudio {
         ame_ui::app::App::accessibility_adaptation(&self.ui)
     }
 
+    fn canvas_accessibility_items(
+        &self,
+        canvas_id: &str,
+    ) -> Vec<ame_ui::app::CanvasAccessibilityItem> {
+        use ame_ui::app::{CanvasAccessibilityItem, CanvasItemRole};
+        let comp = self.project_model.active_composition();
+        match canvas_id {
+            "kagari.viewport" => {
+                let mut items = Vec::with_capacity(comp.layers.len() + 1);
+                items.push(CanvasAccessibilityItem {
+                    label: comp.name.clone(),
+                    role: CanvasItemRole::Label,
+                    x: 8.0,
+                    y: 8.0,
+                    width: 240.0,
+                    height: 24.0,
+                    value: Some(format!("{}x{}", comp.width, comp.height)),
+                    selected: None,
+                });
+                for (idx, layer) in comp.layers.iter().take(64).enumerate() {
+                    items.push(CanvasAccessibilityItem {
+                        label: layer.name.clone(),
+                        role: CanvasItemRole::Button,
+                        x: 12.0,
+                        y: 36.0 + idx as f32 * 24.0,
+                        width: 220.0,
+                        height: 22.0,
+                        value: Some(format!(
+                            "visible={} frames={}..={}",
+                            layer.visible, layer.in_frame, layer.out_frame
+                        )),
+                        selected: Some(self.selected_layer_id.as_deref() == Some(layer.id.as_str())),
+                    });
+                }
+                items
+            }
+            "kagari.timeline" => {
+                let mut items = Vec::with_capacity(comp.layers.len() + 1);
+                items.push(CanvasAccessibilityItem {
+                    label: "Playhead".to_owned(),
+                    role: CanvasItemRole::Slider,
+                    x: 0.0,
+                    y: 0.0,
+                    width: 16.0,
+                    height: 28.0,
+                    value: Some(format!("frame {}", self.current_frame)),
+                    selected: None,
+                });
+                for (idx, layer) in comp.layers.iter().take(64).enumerate() {
+                    items.push(CanvasAccessibilityItem {
+                        label: layer.name.clone(),
+                        role: CanvasItemRole::Button,
+                        x: 16.0,
+                        y: 32.0 + idx as f32 * 28.0,
+                        width: 260.0,
+                        height: 24.0,
+                        value: Some(format!("{}..={}", layer.in_frame, layer.out_frame)),
+                        selected: Some(self.selected_layer_id.as_deref() == Some(layer.id.as_str())),
+                    });
+                }
+                items
+            }
+            _ => Vec::new(),
+        }
+    }
+
     fn layout_motion_interpolation(&self) -> bool {
         ame_ui::app::App::layout_motion_interpolation(&self.ui)
     }
