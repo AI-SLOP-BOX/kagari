@@ -10,10 +10,41 @@ pub(crate) struct CpuMaskEntry {
     /// Vertices with mask expansion already applied (expanded once per
     /// layer render, never per pixel).
     pub(crate) vertices: Vec<[f32; 2]>,
+    /// Bounds expanded by the feather radius for pixel-level early rejection.
+    pub(crate) bounds: [f32; 4],
     pub(crate) feather: f32,
     pub(crate) opacity: f32,
     pub(crate) inverted: bool,
     pub(crate) mode: MaskMode,
+}
+
+pub(crate) fn polygon_bounds(vertices: &[[f32; 2]], padding: f32) -> [f32; 4] {
+    let mut bounds = [
+        f32::INFINITY,
+        f32::INFINITY,
+        f32::NEG_INFINITY,
+        f32::NEG_INFINITY,
+    ];
+    for point in vertices
+        .iter()
+        .filter(|point| point.iter().all(|v| v.is_finite()))
+    {
+        bounds[0] = bounds[0].min(point[0]);
+        bounds[1] = bounds[1].min(point[1]);
+        bounds[2] = bounds[2].max(point[0]);
+        bounds[3] = bounds[3].max(point[1]);
+    }
+    let padding = if padding.is_finite() {
+        padding.max(0.0)
+    } else {
+        0.0
+    };
+    [
+        bounds[0] - padding,
+        bounds[1] - padding,
+        bounds[2] + padding,
+        bounds[3] + padding,
+    ]
 }
 
 /// Offset a polygon's vertices along their outward normals by `expansion` pixels.
@@ -107,8 +138,14 @@ pub(crate) fn compute_combined_mask_coverage(px: f32, py: f32, masks: &[CpuMaskE
         if mask.vertices.len() < 3 {
             continue;
         }
-        let inside = point_in_polygon(px, py, &mask.vertices);
-        let mut cov = if mask.feather >= 0.5 {
+        let outside_bounds = px < mask.bounds[0]
+            || py < mask.bounds[1]
+            || px > mask.bounds[2]
+            || py > mask.bounds[3];
+        let inside = !outside_bounds && point_in_polygon(px, py, &mask.vertices);
+        let mut cov = if outside_bounds {
+            0.0
+        } else if mask.feather >= 0.5 {
             let dist = distance_to_polygon(px, py, &mask.vertices);
             let signed = if inside { dist } else { -dist };
             (0.5 + signed / (2.0 * mask.feather.max(0.5))).clamp(0.0, 1.0)
@@ -121,8 +158,17 @@ pub(crate) fn compute_combined_mask_coverage(px: f32, py: f32, masks: &[CpuMaskE
         if mask.inverted {
             cov = 1.0 - cov;
         }
-        if first && mask.mode == MaskMode::Subtract {
-            acc = 1.0;
+        if first {
+            if mask.mode == MaskMode::Subtract {
+                // A leading subtract mask carves from a full-frame matte.
+                acc = 1.0;
+            } else {
+                // The first mask establishes the matte. Starting Intersect,
+                // Darken, or Difference from transparent would erase it.
+                acc = cov;
+                first = false;
+                continue;
+            }
         }
         acc = match mask.mode {
             MaskMode::Add | MaskMode::Lighten => acc + (cov * (1.0 - acc)),
@@ -141,8 +187,10 @@ mod tests {
     use super::*;
 
     fn rect_mask(feather: f32, opacity: f32, inverted: bool) -> CpuMaskEntry {
+        let vertices = vec![[2.0, 2.0], [8.0, 2.0], [8.0, 8.0], [2.0, 8.0]];
         CpuMaskEntry {
-            vertices: vec![[2.0, 2.0], [8.0, 2.0], [8.0, 8.0], [2.0, 8.0]],
+            bounds: polygon_bounds(&vertices, feather),
+            vertices,
             feather,
             opacity,
             inverted,

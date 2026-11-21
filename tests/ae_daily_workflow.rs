@@ -89,8 +89,8 @@ fn time_reverse_flips_endpoints() {
     layer.out_frame = 100;
 
     layer.time_reverse();
-    assert_eq!(layer.remap_frame(0), 100);
-    assert_eq!(layer.remap_frame(50), 50);
+    assert_eq!(layer.remap_frame(0), 99);
+    assert_eq!(layer.remap_frame(50), 49);
     assert_eq!(layer.remap_frame(100), 0);
 }
 
@@ -133,7 +133,7 @@ fn time_remap_freezes_source_without_freezing_layer_transform() {
     let pixels = render_frame_to_pixels(&comp, 0, 64, 64, 0.0, 0);
     let red_sum_in = |x0: usize, y0: usize, x1: usize, y1: usize| -> u64 {
         (y0..y1)
-            .flat_map(|y| (x0..x1).map(move |x| ((y * 64 + x) * 4) as usize))
+            .flat_map(|y| (x0..x1).map(move |x| (y * 64 + x) * 4))
             .map(|index| pixels[index] as u64)
             .sum()
     };

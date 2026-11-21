@@ -28,6 +28,120 @@ pub(crate) struct PostFxCtx<'a> {
     pub dof_blur: f32,
 }
 
+/// Match the software renderer's flat-plane material lighting in the GPU
+/// uniform builder so CPU and GPU image layers use the same evaluated shade.
+pub(crate) fn layer_3d_shading(
+    comp: &Composition,
+    layer: &Layer,
+    frame: u32,
+    cx: f32,
+    cy: f32,
+) -> [f32; 3] {
+    let mat = &layer.material;
+    let layer_z = layer.transform_3d.position.evaluate(frame)[2];
+    let metalness = mat.metalness.clamp(0.0, 1.0);
+    let mut shade = [mat.ambient * (1.0 - metalness); 3];
+    if mat.accepts_lights {
+        for light in &comp.lights {
+            if matches!(&light.light_type, LightType::Ambient) {
+                let contribution =
+                    mat.ambient * (1.0 - metalness) * light.intensity_at(frame) / 100.0;
+                for (channel, value) in shade.iter_mut().enumerate() {
+                    *value += contribution * light.color[channel];
+                }
+                continue;
+            }
+            let lpos = comp.light_position_at(light, frame);
+            let (ldz, atten_dist) = if matches!(&light.light_type, LightType::Parallel) {
+                let direction = super::shadow::PARALLEL_LIGHT_DIRECTION;
+                let length = (direction[0] * direction[0]
+                    + direction[1] * direction[1]
+                    + direction[2] * direction[2])
+                    .sqrt();
+                (direction[2] / length, 1.0)
+            } else {
+                let lx = cx - lpos[0];
+                let ly = cy - lpos[1];
+                let lz = layer_z - lpos[2];
+                let dist = (lx * lx + ly * ly + lz * lz).sqrt().max(1.0);
+                (lz / dist, 1.0 / (1.0 + (dist / 500.0).powi(2)))
+            };
+            let ndotl = ldz.max(0.0);
+            let atten_base = light.intensity_at(frame) / 100.0;
+            let mut attenuation = atten_base * atten_dist;
+
+            if let LightType::Spot {
+                cone_angle_deg,
+                cone_feather_pct,
+            } = light.light_type
+            {
+                let cone_rad = cone_angle_deg.to_radians() * 0.5;
+                let cone_edge = cone_rad.cos();
+                let feather = (cone_feather_pct / 100.0).clamp(0.01, 1.0);
+                let spot_falloff =
+                    ((ndotl - cone_edge) / (feather * (1.0 - cone_edge).max(0.01))).clamp(0.0, 1.0);
+                attenuation *= spot_falloff;
+            }
+
+            let lc = light.color;
+            for channel in 0..3 {
+                shade[channel] +=
+                    ndotl * attenuation * mat.diffuse * (1.0 - metalness) * lc[channel];
+            }
+
+            if mat.specular > 0.01 {
+                let hz = 1.0 + ldz;
+                let h_len = hz.abs().max(0.001);
+                let ndoth = (hz / h_len).max(0.0);
+                let spec = ndoth.powf(mat.specular_exponent) * attenuation * mat.specular;
+                for channel in 0..3 {
+                    shade[channel] += spec * lc[channel];
+                }
+            }
+        }
+    }
+    for value in &mut shade {
+        *value = (*value + mat.emission).clamp(0.0, 3.0);
+    }
+    shade
+}
+
+fn linked_lens_flare_position(
+    comp: &Composition,
+    layer: &Layer,
+    frame: u32,
+    min_x: u32,
+    min_y: u32,
+    width: u32,
+    height: u32,
+) -> Option<[f32; 2]> {
+    let light_name = layer
+        .effects
+        .iter()
+        .find_map(|effect| match &effect.effect_type {
+            crate::core::timeline::EffectType::LensFlare {
+                link_to_light: Some(name),
+                ..
+            } if effect.enabled => Some(name),
+            _ => None,
+        })?;
+    let light = comp.lights.iter().find(|light| light.name == *light_name)?;
+    let screen = crate::core::timeline::project_point_to_screen_at_frame(
+        &comp.resolve_camera_at(),
+        comp.light_position_at(light, frame),
+        comp.width as f32,
+        comp.height as f32,
+        frame,
+    )?;
+    if width == 0 || height == 0 {
+        return None;
+    }
+    Some([
+        (screen[0] * comp.width as f32 - min_x as f32) / width as f32,
+        (screen[1] * comp.height as f32 - min_y as f32) / height as f32,
+    ])
+}
+
 /// Run all post-raster processing on `ctx.layer_buf` in place.
 pub(crate) fn apply_post_fx(ctx: PostFxCtx<'_>) {
     let PostFxCtx {
@@ -50,34 +164,10 @@ pub(crate) fn apply_post_fx(ctx: PostFxCtx<'_>) {
         dof_blur,
         ..
     } = ctx;
-    let render_camera = comp.resolve_camera_at();
     // Phase 2: apply the layer's CPU effect stack.
-    // Resolve lens-flare light links (project the named light through the camera).
+    // Resolve the projected composition-space light into this cropped layer buffer.
     let flare_light_screen = if layer.effects_enabled {
-        layer
-            .effects
-            .iter()
-            .find_map(|e| match &e.effect_type {
-                crate::core::timeline::EffectType::LensFlare {
-                    link_to_light: Some(n),
-                    ..
-                } if e.enabled => Some(n.clone()),
-                _ => None,
-            })
-            .and_then(|light_name| {
-                comp.lights
-                    .iter()
-                    .find(|l| l.name == light_name)
-                    .and_then(|light| {
-                        crate::core::timeline::project_point_to_screen_at_frame(
-                            &render_camera,
-                            comp.light_position_at(light, frame),
-                            bw as f32,
-                            bh as f32,
-                            frame,
-                        )
-                    })
-            })
+        linked_lens_flare_position(comp, layer, frame, min_x, min_y, bw, bh)
     } else {
         None
     };
@@ -129,76 +219,26 @@ pub(crate) fn apply_post_fx(ctx: PostFxCtx<'_>) {
     // Phong shading with material properties (ambient, diffuse, specular, emission).
     // Enhanced: spot light cone falloff, inverse-square attenuation, light color tinting.
     if layer.is_3d {
-        let mat = &layer.material;
-        let layer_z = layer.transform_3d.position.evaluate(frame)[2];
-        let mut shade_r = mat.ambient;
-        let mut shade_g = mat.ambient;
-        let mut shade_b = mat.ambient;
-        for light in &comp.lights {
-            let lpos = comp.light_position_at(light, frame);
-            let lx = cx - lpos[0];
-            let ly = cy - lpos[1];
-            let lz = layer_z - lpos[2];
-            let dist = (lx * lx + ly * ly + lz * lz).sqrt().max(1.0);
-
-            // Light direction (normalized)
-            let _ldx = lx / dist;
-            let _ldy = ly / dist;
-            let ldz = lz / dist;
-
-            // N·L with flat normal facing the camera (+z)
-            let ndotl = (ldz).max(0.0);
-
-            // Inverse-square attenuation with configurable intensity
-            let atten_base = light.intensity / 100.0;
-            let atten_dist = 1.0 / (1.0 + (dist / 500.0).powi(2));
-            let mut attenuation = atten_base * atten_dist;
-
-            // Spot light cone falloff
-            if let LightType::Spot {
-                cone_angle_deg,
-                cone_feather_pct,
-            } = light.light_type
-            {
-                let cone_rad = cone_angle_deg.to_radians() * 0.5;
-                let cos_angle = ldz.max(0.0); // angle from light's forward direction (+z)
-                let cone_edge = cone_rad.cos();
-                let feather = (cone_feather_pct / 100.0).clamp(0.01, 1.0);
-                let spot_falloff = ((cos_angle - cone_edge)
-                    / (feather * (1.0 - cone_edge).max(0.01)))
-                .clamp(0.0, 1.0);
-                attenuation *= spot_falloff;
-            }
-
-            // Diffuse component with light color
-            let lc = light.color;
-            shade_r += ndotl * attenuation * mat.diffuse * lc[0];
-            shade_g += ndotl * attenuation * mat.diffuse * lc[1];
-            shade_b += ndotl * attenuation * mat.diffuse * lc[2];
-
-            // Specular component (Blinn-Phong) with light color
-            if mat.specular > 0.01 {
-                let hx = 0.0;
-                let hy = 0.0;
-                let hz = 1.0 + ldz;
-                let h_len = (hx * hx + hy * hy + hz * hz).sqrt().max(0.001);
-                let ndoth = (hz / h_len).max(0.0);
-                let spec = ndoth.powf(mat.specular_exponent) * attenuation * mat.specular;
-                shade_r += spec * lc[0];
-                shade_g += spec * lc[1];
-                shade_b += spec * lc[2];
-            }
-        }
-        // Emission adds constant self-illumination
-        shade_r += mat.emission;
-        shade_g += mat.emission;
-        shade_b += mat.emission;
-        let shade_avg = ((shade_r + shade_g + shade_b) / 3.0).clamp(0.0, 3.0);
+        // Match the GPU uniform builder: evaluate lighting at the projected
+        // layer origin, not the center of its clipped raster bounds. Those
+        // centers diverge sharply when a plane crosses the near plane.
+        let camera = comp.resolve_camera_at();
+        let shade_center = crate::core::timeline::project_point_to_screen_at_frame(
+            &camera,
+            layer.transform_3d.position.evaluate(frame),
+            comp.width as f32,
+            comp.height as f32,
+            frame,
+        )
+        .map(|[x, y]| [x * width as f32, y * height as f32])
+        .unwrap_or([cx, cy]);
+        let shade = layer_3d_shading(comp, layer, frame, shade_center[0], shade_center[1]);
+        let shade_avg = ((shade[0] + shade[1] + shade[2]) / 3.0).clamp(0.0, 3.0);
         if (shade_avg - 1.0).abs() > 0.01 {
-            for px_chunk in layer_buf.chunks_exact_mut(4) {
-                px_chunk[0] = ((px_chunk[0] as f32 * shade_r.clamp(0.0, 3.0)).min(255.0)) as u8;
-                px_chunk[1] = ((px_chunk[1] as f32 * shade_g.clamp(0.0, 3.0)).min(255.0)) as u8;
-                px_chunk[2] = ((px_chunk[2] as f32 * shade_b.clamp(0.0, 3.0)).min(255.0)) as u8;
+            for px_chunk in layer_buf.as_chunks_mut::<4>().0 {
+                px_chunk[0] = ((px_chunk[0] as f32 * shade[0]).min(255.0)) as u8;
+                px_chunk[1] = ((px_chunk[1] as f32 * shade[1]).min(255.0)) as u8;
+                px_chunk[2] = ((px_chunk[2] as f32 * shade[2]).min(255.0)) as u8;
             }
         }
     }
@@ -215,6 +255,8 @@ pub(crate) fn apply_post_fx(ctx: PostFxCtx<'_>) {
             ]
         };
         if st.drop_shadow.enabled {
+            let mut color = st.drop_shadow.color;
+            color[3] *= (st.drop_shadow.opacity / 100.0).clamp(0.0, 1.0);
             crate::core::ae_effects_pack::apply_drop_shadow(
                 &mut *layer_buf,
                 bw,
@@ -222,11 +264,13 @@ pub(crate) fn apply_post_fx(ctx: PostFxCtx<'_>) {
                 st.drop_shadow.distance,
                 st.drop_shadow.angle,
                 (st.drop_shadow.size.round() as u32).max(1),
-                to_rgba8(st.drop_shadow.color),
+                to_rgba8(color),
             );
         }
         if st.inner_shadow.enabled {
             let s = &st.inner_shadow;
+            let mut color = s.color;
+            color[3] *= (s.opacity / 100.0).clamp(0.0, 1.0);
             crate::core::ae_effects_pack::apply_inner_shadow(
                 &mut *layer_buf,
                 bw,
@@ -234,7 +278,7 @@ pub(crate) fn apply_post_fx(ctx: PostFxCtx<'_>) {
                 s.distance,
                 s.angle,
                 (s.size.round() as u32).min(64),
-                to_rgba8(s.color),
+                to_rgba8(color),
             );
         }
         if st.outer_glow.enabled {
@@ -290,12 +334,13 @@ pub(crate) fn apply_post_fx(ctx: PostFxCtx<'_>) {
             );
         }
         if st.stroke.enabled {
-            crate::core::ae_effects_pack_v2::apply_stroke_effect(
+            crate::core::ae_effects_pack_v2::apply_stroke_effect_position(
                 &mut *layer_buf,
                 bw,
                 bh,
                 to_rgba8(st.stroke.color),
                 (st.stroke.size.round() as u32).max(1),
+                st.stroke.position,
             );
         }
         if st.gradient_overlay.enabled {
@@ -336,10 +381,13 @@ pub(crate) fn apply_post_fx(ctx: PostFxCtx<'_>) {
 
     // Phase 2.72: receive shadows — multiply layer pixels by the sampled
     // shadow density at their world position (all receiver types).
-    if !shadow_map.is_empty() && bw > 0 && bh > 0 {
+    if layer.material.accepts_shadows && !shadow_map.is_empty() && bw > 0 && bh > 0 {
         let sw = width.max(1) as usize;
         let sh = height.max(1) as usize;
         for ly in 0..bh {
+            if super::render_cancelled() {
+                return;
+            }
             let wy = (min_y + ly).min(sh as u32 - 1) as usize;
             for lx in 0..bw {
                 let wx = (min_x + lx).min(sw as u32 - 1) as usize;
@@ -367,17 +415,67 @@ pub(crate) fn apply_post_fx(ctx: PostFxCtx<'_>) {
     // isolation happens during raster (baked) or just above (shapes).
     if !masks.is_empty() {
         for ly in 0..bh {
+            if super::render_cancelled() {
+                return;
+            }
             for lx in 0..bw {
                 let lidx = ((ly * bw + lx) * 4) as usize;
                 if lidx + 3 >= layer_buf.len() || layer_buf[lidx + 3] == 0 {
                     continue;
                 }
-                let cov =
-                    compute_combined_mask_coverage((min_x + lx) as f32, (min_y + ly) as f32, masks);
+                let cov = compute_combined_mask_coverage(
+                    (min_x + lx) as f32 + 0.5,
+                    (min_y + ly) as f32 + 0.5,
+                    masks,
+                );
                 if cov < 0.999 {
                     layer_buf[lidx + 3] = (layer_buf[lidx + 3] as f32 * cov) as u8;
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod lens_flare_link_tests {
+    use super::linked_lens_flare_position;
+    use crate::core::property::Animatable;
+    use crate::core::timeline::{Composition, Effect, EffectType, Layer, LayerType, Light3D};
+
+    #[test]
+    fn linked_flare_maps_comp_light_into_the_cropped_layer_buffer() {
+        let mut comp = Composition::new("flare-link".into(), "Flare Link".into(), 100, 80, 30, 1);
+        comp.lights.push(Light3D {
+            name: "Key".into(),
+            position: Animatable::new_constant([0.0, 0.0, 1000.0]),
+            ..Default::default()
+        });
+        let mut layer = Layer::new(
+            "source".into(),
+            "Source".into(),
+            LayerType::Solid {
+                color: [0.2, 0.3, 0.4, 1.0],
+            },
+            1,
+        );
+        layer.effects.push(Effect {
+            id: "flare".into(),
+            name: "Lens Flare".into(),
+            effect_type: EffectType::LensFlare {
+                enabled: Animatable::new_constant(1.0),
+                position_x: Animatable::new_constant(0.1),
+                position_y: Animatable::new_constant(0.2),
+                intensity: Animatable::new_constant(1.0),
+                threshold: Animatable::new_constant(1.0),
+                color: Animatable::new_constant([1.0; 4]),
+                link_to_light: Some("Key".into()),
+            },
+            enabled: true,
+        });
+
+        let position = linked_lens_flare_position(&comp, &layer, 0, 25, 10, 50, 40)
+            .expect("the linked light projects in front of the camera");
+        assert!((position[0] - 0.5).abs() < 1e-5);
+        assert!((position[1] - 0.75).abs() < 1e-5);
     }
 }

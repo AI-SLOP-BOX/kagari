@@ -76,9 +76,8 @@ pub fn extract_depth_to_rgba(
     };
     let range = (z_max - z_min).max(1e-5);
 
-    for i in 0..len {
-        let z = depth_f32[i];
-        let mut norm = ((z - z_min) / range).clamp(0.0, 1.0);
+    for (i, z) in depth_f32.iter().take(len).enumerate() {
+        let mut norm = ((*z - z_min) / range).clamp(0.0, 1.0);
         if options.invert {
             norm = 1.0 - norm;
         }
@@ -114,27 +113,24 @@ pub fn extract_normals_to_rgba(
 
     for i in 0..len {
         let in_idx = i * 3;
-        let nx = (normals_f32[in_idx]
-            .is_finite()
-            .then_some(normals_f32[in_idx])
-            .unwrap_or(0.0)
-            * 0.5
-            + 0.5)
-            .clamp(0.0, 1.0);
-        let ny = (normals_f32[in_idx + 1]
-            .is_finite()
-            .then_some(normals_f32[in_idx + 1])
-            .unwrap_or(0.0)
-            * 0.5
-            + 0.5)
-            .clamp(0.0, 1.0);
-        let nz = (normals_f32[in_idx + 2]
-            .is_finite()
-            .then_some(normals_f32[in_idx + 2])
-            .unwrap_or(0.0)
-            * 0.5
-            + 0.5)
-            .clamp(0.0, 1.0);
+        let nx_value = if normals_f32[in_idx].is_finite() {
+            normals_f32[in_idx]
+        } else {
+            0.0
+        };
+        let ny_value = if normals_f32[in_idx + 1].is_finite() {
+            normals_f32[in_idx + 1]
+        } else {
+            0.0
+        };
+        let nz_value = if normals_f32[in_idx + 2].is_finite() {
+            normals_f32[in_idx + 2]
+        } else {
+            0.0
+        };
+        let nx = (nx_value * 0.5 + 0.5).clamp(0.0, 1.0);
+        let ny = (ny_value * 0.5 + 0.5).clamp(0.0, 1.0);
+        let nz = (nz_value * 0.5 + 0.5).clamp(0.0, 1.0);
 
         let out_idx = i * 4;
         out_rgba[out_idx] = (nx * 255.0).round() as u8;

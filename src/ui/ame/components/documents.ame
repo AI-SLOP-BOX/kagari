@@ -1,0 +1,221 @@
+component DocumentsPanel() {
+    HStack(spacing: 0) {
+      Align(stretch) { HomeNavRail() }
+      Grow(1) {
+        Align(stretch) {
+          VStack(spacing: 0) {
+            If(!narrow) {
+              Padding(horizontal: 24, vertical: 14) {
+                HStack(spacing: 8) {
+                  Spacer
+                  CommandSearchButton()
+                }
+              }
+            }
+            Grow(1) {
+              ScrollView(760) {
+                Padding(horizontal: 32, vertical: 4) {
+                  MaxWidth(1040) {
+                    VStack(spacing: 16) {
+                      VStack(spacing: 4) {
+                        Text("ヘルプ", size: 26).weight(bold)
+                        Caption("チュートリアル・ショートカット・バージョン情報・サポート")
+                      }
+
+                      VStack(spacing: 8) {
+                        Text("チュートリアル・ガイド", size: 15).weight(semibold)
+                        VStack(spacing: 6) {
+                          HitArea("docs_project_basics", action: docs_project_basics) { Card(padding: 11, spacing: 0) {
+                              HStack(spacing: 14) {
+                                Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#d8dee4' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-6l-2-2H5a2 2 0 0 0-2 2z'/></svg>", 18, 18)
+                                VStack(spacing: 2) {
+                                  Text("プロジェクトの基本", size: 14).weight(semibold)
+                                  Caption("新規作成時に解像度、フレームレート、長さを設定します。")
+                                }
+                                Spacer
+                                ZStack {
+                                  Svg("<svg xmlns='http://www.w3.org/2000/svg' width='88' height='30' viewBox='0 0 88 30'><rect x='0.5' y='0.5' width='87' height='29' rx='14.5' fill='#232933' stroke='#353e4e'/></svg>", 88, 30)
+                                  Center { Text("開く  →", size: 12).weight(medium) }
+                                }
+                              }
+                            } }
+                          HitArea("docs_editor_workflow", action: docs_editor_workflow) { Card(padding: 11, spacing: 0) {
+                              HStack(spacing: 14) {
+                                Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#d8dee4' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='3' width='18' height='18' rx='2'/><path d='M3 9h18M9 21V9'/></svg>", 18, 18)
+                                VStack(spacing: 2) {
+                                  Text("編集画面・ワークフロー", size: 14).weight(semibold)
+                                  Caption("シーン、素材、プロパティ、タイムラインを使った基本の編集手順です。")
+                                }
+                                Spacer
+                                ZStack {
+                                  Svg("<svg xmlns='http://www.w3.org/2000/svg' width='88' height='30' viewBox='0 0 88 30'><rect x='0.5' y='0.5' width='87' height='29' rx='14.5' fill='#232933' stroke='#353e4e'/></svg>", 88, 30)
+                                  Center { Text("開く  →", size: 12).weight(medium) }
+                                }
+                              }
+                            } }
+                          HitArea("docs_import", action: docs_import) { Card(padding: 11, spacing: 0) {
+                              HStack(spacing: 14) {
+                                Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#d8dee4' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='3' width='18' height='18' rx='2'/><circle cx='9' cy='9' r='2'/><path d='m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21'/></svg>", 18, 18)
+                                VStack(spacing: 2) {
+                                  Text("素材の読み込みと対応形式", size: 14).weight(semibold)
+                                  Caption("画像・動画・音声レイヤーで使える形式とプロジェクトへの追加方法です。")
+                                }
+                                Spacer
+                                ZStack {
+                                  Svg("<svg xmlns='http://www.w3.org/2000/svg' width='88' height='30' viewBox='0 0 88 30'><rect x='0.5' y='0.5' width='87' height='29' rx='14.5' fill='#232933' stroke='#353e4e'/></svg>", 88, 30)
+                                  Center { Text("開く  →", size: 12).weight(medium) }
+                                }
+                              }
+                            } }
+                          HitArea("docs_export", action: docs_export) { Card(padding: 11, spacing: 0) {
+                              HStack(spacing: 14) {
+                                Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#d8dee4' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/><polyline points='7 10 12 15 17 10'/><line x1='12' y1='15' x2='12' y2='3'/></svg>", 18, 18)
+                                VStack(spacing: 2) {
+                                  Text("書き出し・レンダリング", size: 14).weight(semibold)
+                                  Caption("現在フレームのPNG保存とコンポジション全体のH.264/ProRes出力に対応しています。")
+                                }
+                                Spacer
+                                ZStack {
+                                  Svg("<svg xmlns='http://www.w3.org/2000/svg' width='88' height='30' viewBox='0 0 88 30'><rect x='0.5' y='0.5' width='87' height='29' rx='14.5' fill='#232933' stroke='#353e4e'/></svg>", 88, 30)
+                                  Center { Text("開く  →", size: 12).weight(medium) }
+                                }
+                              }
+                            } }
+                          HitArea("docs_shortcuts", action: docs_shortcuts) { Card(padding: 11, spacing: 0) {
+                              HStack(spacing: 14) {
+                                Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#d8dee4' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='2' y='6' width='20' height='12' rx='2'/><path d='M6 10h1M10 10h1M14 10h1M18 10h1M6 14h12'/></svg>", 18, 18)
+                                VStack(spacing: 2) {
+                                  Text("キーボードショートカット", size: 14).weight(semibold)
+                                  Caption("検索 (⌘K)、環境設定 (⌘,)、保存 (⌘S)、再生 (Space) などの操作一覧です。")
+                                }
+                                Spacer
+                                ZStack {
+                                  Svg("<svg xmlns='http://www.w3.org/2000/svg' width='88' height='30' viewBox='0 0 88 30'><rect x='0.5' y='0.5' width='87' height='29' rx='14.5' fill='#232933' stroke='#353e4e'/></svg>", 88, 30)
+                                  Center { Text("開く  →", size: 12).weight(medium) }
+                                }
+                              }
+                            } }
+                          HitArea("docs_roto_brush", action: docs_roto_brush) { Card(padding: 11, spacing: 0) {
+                              HStack(spacing: 14) {
+                                Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#d8dee4' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='m12 19 7-7 3 3-7 7-3-3z'/><path d='m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z'/></svg>", 18, 18)
+                                VStack(spacing: 2) {
+                                  Text("ロトスコープ（被写体切り抜き）", size: 14).weight(semibold)
+                                  Caption("ブラシでなぞるだけの切り抜きとエッジ調整・汚染除去の使い方です。")
+                                }
+                                Spacer
+                                ZStack {
+                                  Svg("<svg xmlns='http://www.w3.org/2000/svg' width='88' height='30' viewBox='0 0 88 30'><rect x='0.5' y='0.5' width='87' height='29' rx='14.5' fill='#232933' stroke='#353e4e'/></svg>", 88, 30)
+                                  Center { Text("開く  →", size: 12).weight(medium) }
+                                }
+                              }
+                            } }
+                          HitArea("docs_pro_keyer", action: docs_pro_keyer) { Card(padding: 11, spacing: 0) {
+                              HStack(spacing: 14) {
+                                Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#d8dee4' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='3' width='18' height='18' rx='2'/><path d='M9 9h6v6H9z'/></svg>", 18, 18)
+                                VStack(spacing: 2) {
+                                  Text("キーイング（グリーンバック抜き）", size: 14).weight(semibold)
+                                  Caption("クロマキー抽出とスピル抑制で自然な合成を行う手順です。")
+                                }
+                                Spacer
+                                ZStack {
+                                  Svg("<svg xmlns='http://www.w3.org/2000/svg' width='88' height='30' viewBox='0 0 88 30'><rect x='0.5' y='0.5' width='87' height='29' rx='14.5' fill='#232933' stroke='#353e4e'/></svg>", 88, 30)
+                                  Center { Text("開く  →", size: 12).weight(medium) }
+                                }
+                              }
+                            } }
+                          HitArea("docs_aces_color", action: docs_aces_color) { Card(padding: 11, spacing: 0) {
+                              HStack(spacing: 14) {
+                                Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#d8dee4' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='M12 3v9l6 3'/></svg>", 18, 18)
+                                VStack(spacing: 2) {
+                                  Text("ACES カラーマネジメント", size: 14).weight(semibold)
+                                  Caption("ACEScg 作業色空間と 3-Way カラーホイール・書き出し管理ガイドです。")
+                                }
+                                Spacer
+                                ZStack {
+                                  Svg("<svg xmlns='http://www.w3.org/2000/svg' width='88' height='30' viewBox='0 0 88 30'><rect x='0.5' y='0.5' width='87' height='29' rx='14.5' fill='#232933' stroke='#353e4e'/></svg>", 88, 30)
+                                  Center { Text("開く  →", size: 12).weight(medium) }
+                                }
+                              }
+                            } }
+                          HitArea("docs_node_graph", action: docs_node_graph) { Card(padding: 11, spacing: 0) {
+                              HStack(spacing: 14) {
+                                Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#d8dee4' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='3' width='6' height='6' rx='1'/><rect x='15' y='15' width='6' height='6' rx='1'/><path d='M9 6h3v12h3'/></svg>", 18, 18)
+                                VStack(spacing: 2) {
+                                  Text("ノードグラフ合成", size: 14).weight(semibold)
+                                  Caption("MediaIn から各種エフェクト・DeepMerge を経由して MediaOut へ繋ぐ流れです。")
+                                }
+                                Spacer
+                                ZStack {
+                                  Svg("<svg xmlns='http://www.w3.org/2000/svg' width='88' height='30' viewBox='0 0 88 30'><rect x='0.5' y='0.5' width='87' height='29' rx='14.5' fill='#232933' stroke='#353e4e'/></svg>", 88, 30)
+                                  Center { Text("開く  →", size: 12).weight(medium) }
+                                }
+                              }
+                            } }
+                        }
+                      }
+
+                      VStack(spacing: 8) {
+                        Text("バージョン情報・ライセンス・サポート", size: 15).weight(semibold)
+                        Card(padding: 12, spacing: 6, hover_strength: 0.0, hover_elevation: 0.0) {
+                          HStack(spacing: 12) {
+                            AssetImage("kagari.logo", 1, 24, 24)
+                            VStack(spacing: 2) {
+                              Text("Kagari Studio v0.3.0", size: 14).weight(semibold)
+                              Caption("Kagari VFX Engine · AmeUI / wgpu GPU Compositor")
+                            }
+                            Spacer
+                            Caption("License: MIT / Apache-2.0")
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+component DocsDetailPanel() {
+    HStack(spacing: 0) {
+      Align(stretch) { HomeNavRail() }
+      Grow(1) {
+        Align(stretch) {
+          VStack(spacing: 0) {
+            If(!narrow) {
+              Padding(horizontal: 24, vertical: 14) {
+                HStack(spacing: 8) {
+                  Spacer
+                  CommandSearchButton()
+                }
+              }
+            }
+            Grow(1) {
+              ScrollView(760) {
+                Padding(horizontal: 32, vertical: 10) {
+                  MaxWidth(1040) {
+                    VStack(spacing: 16) {
+                      HStack(spacing: 10) {
+                        HitArea("go_documents", action: go_documents) { ZStack {
+                            Svg("<svg xmlns='http://www.w3.org/2000/svg' width='124' height='32' viewBox='0 0 124 32'><rect x='0.5' y='0.5' width='123' height='31' rx='15.5' fill='#1c2129' stroke='#2d3442'/></svg>", 124, 32)
+                            Center { Text("← ヘルプ一覧", size: 12).weight(medium) }
+                          } }
+                        Spacer
+                      }
+                      Card(padding: 22, spacing: 12, hover_strength: 0.0, hover_elevation: 0.0) {
+                        Text("{docs_title}", size: 22).weight(bold)
+                        Text("{docs_body}", size: 14)
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }

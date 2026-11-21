@@ -1,22 +1,26 @@
 #![allow(dead_code)]
+use serde::{Deserialize, Serialize};
+
 /// Line Cap styles for Shape Stroke matching After Effects.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum LineCapStyle {
+    #[default]
     Butt,
     Round,
     Square,
 }
 
 /// Line Join styles for Shape Stroke matching After Effects.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum LineJoinStyle {
+    #[default]
     Miter,
     Round,
     Bevel,
 }
 
 /// Shape Stroke Modifier configuration.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct StrokeModifierOptions {
     pub width: f32,
     pub line_cap: LineCapStyle,
@@ -36,6 +40,27 @@ impl Default for StrokeModifierOptions {
             dash_pattern: Vec::new(),
             dash_offset: 0.0,
         }
+    }
+}
+
+impl StrokeModifierOptions {
+    pub fn new(width: f32) -> Self {
+        Self {
+            width: width.max(0.0),
+            ..Default::default()
+        }
+    }
+
+    pub fn with_caps(mut self, cap: LineCapStyle, join: LineJoinStyle) -> Self {
+        self.line_cap = cap;
+        self.line_join = join;
+        self
+    }
+
+    pub fn with_dashes(mut self, pattern: Vec<f32>, offset: f32) -> Self {
+        self.dash_pattern = pattern;
+        self.dash_offset = offset;
+        self
     }
 }
 

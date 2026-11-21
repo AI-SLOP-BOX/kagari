@@ -1,0 +1,403 @@
+component WorkArea() {
+    If(is_camera_light_workspace) {
+      If(compact) {
+        ScrollView(760) { VStack(spacing: 8) { CompositionPreview() CameraLightWorkspacePanel() TimelinePanel() } }
+      } else {
+        SplitPane(Horizontal, workspace_left_ratio, action: workspace_left_resized) {
+          ScrollView(760) { SceneHierarchyPanel() }
+          SplitPane(Horizontal, workspace_center_ratio, action: workspace_center_resized) {
+            SplitPane(Vertical, workspace_vertical_ratio, action: workspace_vertical_resized) { CompositionPreview() ScrollView(450) { TimelinePanel() } }
+            ScrollView(760) { CameraLightWorkspacePanel() }
+          }
+        }
+      }
+    } else {
+    If(is_color_workspace) {
+      If(compact) {
+        ScrollView(760) {
+          VStack(spacing: 8) { CompositionPreview() ColorWorkspacePanel() TimelinePanel() }
+        }
+      } else {
+        SplitPane(Horizontal, workspace_left_ratio, action: workspace_left_resized) {
+          VStack(spacing: 5) {
+            ScrollView(260) { ProjectPanel() }.relative_frame(height: 0.333, min_height: 100, max_height: 260)
+            ScrollView(520) { SceneHierarchyPanel() }.relative_frame(height: 0.667, min_height: 100, max_height: 520)
+          }
+          SplitPane(Horizontal, workspace_center_ratio, action: workspace_center_resized) {
+            SplitPane(Vertical, workspace_vertical_ratio, action: workspace_vertical_resized) {
+              CompositionPreview()
+              ScrollView(450) { TimelinePanel() }
+            }
+            ScrollView(760) { ColorWorkspacePanel() }
+          }
+        }
+      }
+    } else {
+    If(is_layer_style_workspace) {
+      If(compact) {
+        ScrollView(760) {
+          VStack(spacing: 8) {
+            CompositionPreview()
+            LayerStyleWorkspacePanel()
+            TimelinePanel()
+          }
+        }
+      } else {
+        SplitPane(Horizontal, workspace_left_ratio, action: workspace_left_resized) {
+          VStack(spacing: 5) {
+            ScrollView(260) { ProjectPanel() }.relative_frame(height: 0.333, min_height: 100, max_height: 260)
+            ScrollView(520) { SceneHierarchyPanel() }.relative_frame(height: 0.667, min_height: 100, max_height: 520)
+          }
+          SplitPane(Horizontal, workspace_center_ratio, action: workspace_center_resized) {
+            SplitPane(Vertical, workspace_vertical_ratio, action: workspace_vertical_resized) {
+              CompositionPreview()
+              ScrollView(450) { TimelinePanel() }
+            }
+            ScrollView(760) { LayerStyleWorkspacePanel() }
+          }
+        }
+      }
+    } else {
+    If(is_text_workspace) {
+      If(compact) {
+        ScrollView(760) {
+          VStack(spacing: 8) {
+            CompositionPreview()
+            TextWorkspacePanel()
+            TimelinePanel()
+          }
+        }
+      } else {
+        SplitPane(Horizontal, workspace_left_ratio, action: workspace_left_resized) {
+          VStack(spacing: 5) {
+            ScrollView(260) { ProjectPanel() }.relative_frame(height: 0.382, min_height: 100, max_height: 260)
+            ScrollView(420) { SceneHierarchyPanel() }.relative_frame(height: 0.618, min_height: 100, max_height: 420)
+          }
+          SplitPane(Horizontal, workspace_center_ratio, action: workspace_center_resized) {
+            SplitPane(Vertical, workspace_vertical_ratio, action: workspace_vertical_resized) {
+              CompositionPreview()
+              ScrollView(450) { VStack(spacing: 5) { AnimationPanel() TimelinePanel() } }
+            }
+            ScrollView(760) { TextWorkspacePanel() }
+          }
+        }
+      }
+    } else {
+    If(is_assets_workspace) {
+      If(compact) {
+        ScrollView(760) {
+          VStack(spacing: 8) {
+            CompositionPreview()
+            TimelinePanel()
+            ProjectAssetBrowser()
+            AssetPreviewPanel()
+            SceneAssetPanel()
+          }
+        }
+      } else {
+        SplitPane(Horizontal, workspace_left_ratio, action: workspace_left_resized) {
+          ProjectAssetBrowser()
+          VStack(spacing: 5) {
+            AssetPreviewPanel()
+            CompositionPreview()
+            TimelinePanel()
+            SceneAssetPanel()
+          }
+        }
+      }
+    } else {
+    If(is_mask_workspace) {
+      If(compact) {
+        ScrollView(760) {
+          VStack(spacing: 8) {
+            CompositionPreview()
+            MaskProperties()
+            TimelinePanel()
+          }
+        }
+      } else {
+        SplitPane(Horizontal, workspace_left_ratio, action: workspace_left_resized) {
+          VStack(spacing: 5) {
+            ScrollView(360) { ProjectPanel() }.relative_frame(height: 0.667, min_height: 100, max_height: 360)
+            ScrollView(180) { AssetPanel() }.relative_frame(height: 0.333, min_height: 100, max_height: 180)
+          }
+          VStack(spacing: 5) {
+            SplitPane(Vertical, workspace_vertical_ratio, action: workspace_vertical_resized) {
+              CompositionPreview()
+              ScrollView(450) { VStack(spacing: 5) { MaskProperties() TimelinePanel() } }
+            }
+          }
+        }
+      }
+    } else {
+    If(is_timeline_workspace) {
+      If(compact) {
+        ScrollView(760) {
+          VStack(spacing: 8) {
+            CompositionSelector()
+            TimelinePanel()
+            ProjectPanel()
+            AssetPanel()
+            PropertiesPanel()
+          }
+        }
+      } else {
+        SplitPane(Horizontal, workspace_left_ratio, action: workspace_left_resized) {
+          VStack(spacing: 5) {
+            ScrollView(540) { ProjectPanel() }.relative_frame(height: 0.563, min_height: 100, max_height: 540)
+            ScrollView(420) { ProjectAssetBrowser() }.relative_frame(height: 0.437, min_height: 100, max_height: 420)
+          }
+          SplitPane(Horizontal, workspace_center_ratio, action: workspace_center_resized) {
+            SplitPane(Vertical, workspace_vertical_ratio, action: workspace_vertical_resized) {
+              CompositionPreview()
+              ScrollView(450) { TimelinePanel() }
+            }
+            PropertiesPanel()
+          }
+        }
+      }
+    } else {
+    If(is_scene_workspace) {
+      If(compact) {
+        ScrollView(760) {
+          VStack(spacing: 8) {
+            CompositionPreview()
+            TimelinePanel()
+            SceneCreationPanel()
+            SceneHierarchyPanel()
+            SceneAlignmentPanel()
+            SceneLayerOperationsPanel()
+            AssetPanel()
+            PropertiesPanel()
+          }
+        }
+      } else {
+        SplitPane(Horizontal, workspace_left_ratio, action: workspace_left_resized) {
+          VStack(spacing: 5) {
+            ScrollView(760) {
+              VStack(spacing: 5) {
+                SceneCreationPanel()
+                SceneHierarchyPanel()
+                SceneAlignmentPanel()
+                SceneLayerOperationsPanel()
+              }
+            }.relative_frame(height: 0.507, min_height: 100, max_height: 2400)
+            ScrollView(420) { ProjectAssetBrowser() }.relative_frame(height: 0.28, min_height: 100, max_height: 420)
+            ScrollView(320) { SceneAssetBrowser() }.relative_frame(height: 0.213, min_height: 100, max_height: 320)
+          }
+          SplitPane(Horizontal, workspace_center_ratio, action: workspace_center_resized) {
+            SplitPane(Vertical, workspace_vertical_ratio, action: workspace_vertical_resized) {
+              CompositionPreview()
+              ScrollView(450) { TimelinePanel() }
+            }
+            PropertiesPanel()
+          }
+        }
+      }
+    } else {
+    If(is_composition_workspace) {
+      If(compact) {
+        ScrollView(760) {
+          VStack(spacing: 8) {
+            CompositionHeader()
+            CompositionSettingsPanel()
+            CompositionViewerPanel()
+          }
+        }
+      } else {
+        SplitPane(Horizontal, workspace_center_ratio, action: workspace_center_resized) {
+          CompositionPreview()
+          ScrollView(760) { CompositionSettingsPanel() }
+        }
+      }
+    } else {
+    If(is_time_remap_workspace) {
+      If(compact) {
+        ScrollView(760) {
+          VStack(spacing: 8) {
+            CompositionPreview()
+            TimeRemapPanel()
+            TimelinePanel()
+            PropertiesPanel()
+          }
+        }
+      } else {
+        SplitPane(Horizontal, workspace_left_ratio, action: workspace_left_resized) {
+          VStack(spacing: 5) { ScrollView(250) { ProjectPanel() }.relative_frame(height: 0.373, min_height: 100, max_height: 250) ScrollView(420) { ProjectAssetBrowser() }.relative_frame(height: 0.627, min_height: 100, max_height: 420) }
+          SplitPane(Horizontal, workspace_center_ratio, action: workspace_center_resized) {
+            SplitPane(Vertical, workspace_vertical_ratio, action: workspace_vertical_resized) {
+              CompositionPreview()
+              ScrollView(450) { VStack(spacing: 5) { TimeRemapPanel() TimelinePanel() } }
+            }
+            PropertiesPanel()
+          }
+        }
+      }
+    } else {
+    If(is_graph_workspace) {
+      If(compact) {
+        ScrollView(760) {
+          VStack(spacing: 8) {
+            CompositionPreview()
+            AnimationPanel()
+            TimelinePanel()
+            PropertiesPanel()
+          }
+        }
+      } else {
+        SplitPane(Horizontal, workspace_left_ratio, action: workspace_left_resized) {
+          VStack(spacing: 5) { ScrollView(250) { ProjectPanel() }.relative_frame(height: 0.373, min_height: 100, max_height: 250) ScrollView(420) { ProjectAssetBrowser() }.relative_frame(height: 0.627, min_height: 100, max_height: 420) }
+          SplitPane(Horizontal, workspace_center_ratio, action: workspace_center_resized) {
+            SplitPane(Vertical, workspace_vertical_ratio, action: workspace_vertical_resized) {
+              CompositionPreview()
+              ScrollView(450) { VStack(spacing: 5) { AnimationPanel() TimelinePanel() } }
+            }
+            PropertiesPanel()
+          }
+        }
+      }
+    } else {
+    If(is_animation_workspace) {
+      If(compact) {
+        ScrollView(760) {
+          VStack(spacing: 8) {
+            CompositionPreview()
+            AnimationPanel()
+            TimelinePanel()
+            PropertiesPanel()
+          }
+        }
+      } else {
+        SplitPane(Horizontal, workspace_left_ratio, action: workspace_left_resized) {
+          VStack(spacing: 5) { ScrollView(250) { ProjectPanel() }.relative_frame(height: 0.373, min_height: 100, max_height: 250) ScrollView(420) { ProjectAssetBrowser() }.relative_frame(height: 0.627, min_height: 100, max_height: 420) }
+          SplitPane(Horizontal, workspace_center_ratio, action: workspace_center_resized) {
+            SplitPane(Vertical, workspace_vertical_ratio, action: workspace_vertical_resized) {
+              CompositionPreview()
+              ScrollView(450) { VStack(spacing: 5) { AnimationPanel() TimelinePanel() } }
+            }
+            PropertiesPanel()
+          }
+        }
+      }
+    } else {
+    If(is_audio_workspace) {
+      If(compact) {
+        ScrollView(760) {
+          VStack(spacing: 8) {
+            CompositionPreview()
+            AudioMixerPanel()
+            TimelinePanel()
+            PropertiesPanel()
+            AssetPanel()
+          }
+        }
+      } else {
+        SplitPane(Horizontal, workspace_left_ratio, action: workspace_left_resized) {
+          VStack(spacing: 5) {
+            ScrollView(250) { ProjectPanel() }.relative_frame(height: 0.373, min_height: 100, max_height: 250)
+            ScrollView(420) { ProjectAssetBrowser() }.relative_frame(height: 0.627, min_height: 100, max_height: 420)
+          }
+          SplitPane(Horizontal, workspace_center_ratio, action: workspace_center_resized) {
+            SplitPane(Vertical, workspace_vertical_ratio, action: workspace_vertical_resized) {
+              CompositionPreview()
+              ScrollView(450) { VStack(spacing: 5) { AudioMixerPanel() TimelinePanel() } }
+            }
+            PropertiesPanel()
+          }
+        }
+      }
+    } else {
+    If(is_effects_workspace) {
+      If(compact) {
+        ScrollView(760) {
+          VStack(spacing: 8) {
+            ProjectPanel()
+            CompositionPreview()
+            EffectPanel()
+            PropertiesPanel()
+            AssetPanel()
+          }
+        }
+      } else {
+        SplitPane(Horizontal, workspace_left_ratio, action: workspace_left_resized) {
+          VStack(spacing: 5) {
+            ScrollView(250) { ProjectPanel() }.relative_frame(height: 0.373, min_height: 100, max_height: 250)
+            ScrollView(420) { ProjectAssetBrowser() }.relative_frame(height: 0.627, min_height: 100, max_height: 420)
+          }
+          SplitPane(Horizontal, workspace_center_ratio, action: workspace_center_resized) {
+            SplitPane(Vertical, workspace_vertical_ratio, action: workspace_vertical_resized) {
+              CompositionPreview()
+              ScrollView(450) { TimelinePanel() }
+            }
+            VStack(spacing: 5) { EffectPanel() PropertiesPanel() }
+          }
+        }
+      }
+    } else {
+      If(compact) {
+        ScrollView(760) {
+          VStack(spacing: 8) {
+            CompositionPreview()
+            TimelinePanel()
+            HStack(spacing: 8) {
+              Grow(1) { ProjectPanel() }
+              Grow(1) { PropertiesPanel() }
+            }
+            AssetPanel()
+          }
+        }
+      } else {
+        SplitPane(Horizontal, workspace_left_ratio, action: workspace_left_resized) {
+          VStack(spacing: 5) {
+            ScrollView(250) { ProjectPanel() }.relative_frame(height: 0.373, min_height: 100, max_height: 250)
+            ScrollView(420) { ProjectAssetBrowser() }.relative_frame(height: 0.627, min_height: 100, max_height: 420)
+          }
+          SplitPane(Horizontal, workspace_center_ratio, action: workspace_center_resized) {
+            SplitPane(Vertical, workspace_vertical_ratio, action: workspace_vertical_resized) {
+              CompositionPreview()
+              ScrollView(450) { TimelinePanel() }
+            }
+            PropertiesPanel()
+          }
+        }
+      }
+    }
+    }
+    }
+    }
+    }
+    }
+    }
+    }
+    }
+    }
+    }
+    }
+    }
+    }
+  }
+
+component AppScreen() {
+    If(project_setup_page) { ProjectSetupPanel() } else { If(home_page) { HomePanel() } else { If(activity_page) { ActivityPanel() } else {
+      If(projects_page) { ProjectsPanel() } else {
+        If(documents_page) {
+          If(docs_detail_page) { DocsDetailPanel() } else { DocumentsPanel() }
+        } else {
+          If(export_page) { ExportPanel() } else {
+            Padding(3) { VStack(spacing: 3) { ToolBar() Grow(1) { WorkArea() } StatusBar() } }
+          }
+        }
+      }
+    } } }
+  }
+
+component MainContent() {
+    Padding(0) {
+      VStack(spacing: 0) {
+        If(narrow || (!home_page && !projects_page && !documents_page)) {
+          AppBar()
+        }
+        Grow(1) { AppScreen() }
+      }
+    }
+  }

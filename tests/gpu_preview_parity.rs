@@ -3,7 +3,9 @@ use std::sync::Arc;
 use half::f16;
 use kagari_vfx::core::renderer::WgpuRenderer;
 use kagari_vfx::core::software_renderer::render_frame_to_pixels;
-use kagari_vfx::core::timeline::{Composition, Effect, EffectType, Layer, LayerType};
+use kagari_vfx::core::timeline::{
+    BlendMode, Composition, Effect, EffectType, Layer, LayerType, Light3D, LightType,
+};
 use kagari_vfx::core::{effect_plugin::gpu_preview_effect_supported, property::Animatable};
 
 const WIDTH: u32 = 64;
@@ -67,16 +69,18 @@ fn gpu_rgba16f_pixels(
     comp: &Composition,
 ) -> Vec<[f32; 4]> {
     renderer.render(comp, 0, 0.0, 0);
+    let width = comp.width;
+    let height = comp.height;
     let texture = renderer
         .target_texture
         .as_ref()
         .expect("render should allocate the offscreen target");
-    let unpadded_bytes_per_row = WIDTH * 8;
+    let unpadded_bytes_per_row = width * 8;
     let bytes_per_row = unpadded_bytes_per_row.div_ceil(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT)
         * wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("gpu-preview-parity-readback"),
-        size: (bytes_per_row * HEIGHT) as u64,
+        size: (bytes_per_row * height) as u64,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
     });
@@ -95,12 +99,12 @@ fn gpu_rgba16f_pixels(
             layout: wgpu::ImageDataLayout {
                 offset: 0,
                 bytes_per_row: Some(bytes_per_row),
-                rows_per_image: Some(HEIGHT),
+                rows_per_image: Some(height),
             },
         },
         wgpu::Extent3d {
-            width: WIDTH,
-            height: HEIGHT,
+            width,
+            height,
             depth_or_array_layers: 1,
         },
     );
@@ -118,9 +122,9 @@ fn gpu_rgba16f_pixels(
         .expect("readback mapping callback should run")
         .expect("GPU readback should map");
     let mapped = buffer.slice(..).get_mapped_range();
-    let mut pixels = Vec::with_capacity((WIDTH * HEIGHT) as usize);
-    for y in 0..HEIGHT as usize {
-        for x in 0..WIDTH as usize {
+    let mut pixels = Vec::with_capacity((width * height) as usize);
+    for y in 0..height as usize {
+        for x in 0..width as usize {
             let offset = y * bytes_per_row as usize + x * 8;
             let channel = |index: usize| {
                 let start = offset + index * 2;
@@ -134,78 +138,7 @@ fn gpu_rgba16f_pixels(
     pixels
 }
 
-#[test]
-fn allowlisted_gpu_effects_match_the_software_reference_across_the_full_frame() {
-    let Some((device, queue)) = request_gpu() else {
-        eprintln!("skipping GPU preview parity test: no adapter available");
-        return;
-    };
-    let cases = [
-        (
-            "Color Tint",
-            EffectType::ColorTint {
-                color: constant([0.91, 0.34, 0.73, 1.0]),
-                intensity: constant(63.7),
-            },
-        ),
-        (
-            "Levels",
-            EffectType::Levels {
-                input_black: constant(0.05),
-                input_white: constant(0.95),
-                gamma: constant(1.3),
-                output_black: constant(0.02),
-                output_white: constant(0.98),
-            },
-        ),
-        (
-            "Lens Flare",
-            EffectType::LensFlare {
-                enabled: constant(1.0),
-                position_x: constant(0.5),
-                position_y: constant(0.5),
-                intensity: constant(0.7),
-                threshold: constant(1.2),
-                color: constant([1.0, 0.6, 0.2, 1.0]),
-                link_to_light: None,
-            },
-        ),
-        (
-            "Invert",
-            EffectType::Invert {
-                invert_alpha: false,
-            },
-        ),
-    ];
-    let mut renderer = WgpuRenderer::new(device.clone(), queue.clone());
-
-    for (name, effect_type) in cases {
-        assert!(
-            gpu_preview_effect_supported(&effect_type),
-            "{name} is included in the GPU preview allowlist"
-        );
-        let comp = composition_with_effect(name, effect_type);
-        let cpu = render_frame_to_pixels(&comp, 0, WIDTH, HEIGHT, 0.0, 0);
-        let gpu = gpu_rgba16f_pixels(&device, &queue, &mut renderer, &comp);
-        let mut max_error = 0.0f32;
-        let mut worst_pixel = (0usize, 0usize, 0usize);
-        for (index, actual_pixel) in gpu.iter().enumerate() {
-            for channel in 0..4 {
-                let expected = cpu[index * 4 + channel] as f32;
-                let actual = actual_pixel[channel] * 255.0;
-                let error = (expected - actual).abs();
-                if error > max_error {
-                    max_error = error;
-                    worst_pixel = (index % WIDTH as usize, index / WIDTH as usize, channel);
-                }
-            }
-        }
-        assert!(
-            max_error <= 2.0,
-            "{name} GPU/software mismatch at pixel ({}, {}), channel {}: max full-frame error {max_error:.3} 8-bit values",
-            worst_pixel.0,
-            worst_pixel.1,
-            worst_pixel.2
-        );
-    }
-}
+#[path = "gpu_preview_parity/three_d.rs"]
+mod three_d;
+#[path = "gpu_preview_parity/two_d.rs"]
+mod two_d;

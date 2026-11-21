@@ -385,9 +385,11 @@ mod tests {
     #[test]
     fn test_3d_particle_simulation_spawn_and_collision() {
         let mut sim = ParticleSimulation3D::new();
-        let mut config = EmitterConfig3D::default();
-        config.birth_rate_per_sec = 50.0;
-        config.gravity = [0.0, 100.0, 0.0];
+        let mut config = EmitterConfig3D {
+            birth_rate_per_sec: 50.0,
+            gravity: [0.0, 100.0, 0.0],
+            ..Default::default()
+        };
 
         // Add a floor plane at Y = 600 pointing UP ([0, -1, 0])
         config.collision_planes.push(CollisionPlane {

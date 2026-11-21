@@ -1,20 +1,55 @@
 /// Project save/load — serializes compositions to/from JSON files.
 use crate::core::timeline::Composition;
 use std::fs;
-use std::io;
+use std::io::{self, Read};
 use std::path::Path;
+
+fn write_project_json_atomic(path: &Path, json: &str) -> io::Result<()> {
+    crate::core::atomic_file::write_atomic(path, json.as_bytes())
+}
+
+fn read_project_json(path: &Path) -> io::Result<String> {
+    let file = fs::File::open(path)?;
+    let max_bytes = crate::core::project_migration::MAX_PROJECT_JSON_BYTES;
+    if file.metadata()?.len() > max_bytes as u64 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Project file exceeds the {max_bytes} byte limit"),
+        ));
+    }
+    let mut data = String::new();
+    file.take(max_bytes.saturating_add(1) as u64)
+        .read_to_string(&mut data)?;
+    if data.len() > max_bytes {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Project file exceeds the {max_bytes} byte limit"),
+        ));
+    }
+    Ok(data)
+}
 
 /// Save a composition to a JSON file (.aeproj).
 pub fn save_project(comp: &Composition, path: &Path) -> io::Result<()> {
+    crate::core::production_document::ProductionDocument::validate_standalone_composition(comp)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
     let json = serde_json::to_string_pretty(comp)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    fs::write(path, json)
+    crate::core::project_migration::validate_project_json_size(&json)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    write_project_json_atomic(path, &json)
 }
 
 /// Load a composition from a JSON file (.aeproj).
 pub fn load_project(path: &Path) -> io::Result<Composition> {
-    let data = fs::read_to_string(path)?;
-    serde_json::from_str(&data).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+    let data = read_project_json(path)?;
+    let composition: Composition =
+        serde_json::from_str(&data).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    crate::core::production_document::ProductionDocument::validate_standalone_composition(
+        &composition,
+    )
+    .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    Ok(composition)
 }
 
 /// Project metadata saved alongside the composition.
@@ -42,21 +77,40 @@ impl Default for ProjectFile {
 
 /// Save a full project file with version metadata.
 pub fn save_project_file(proj: &ProjectFile, path: &Path) -> io::Result<()> {
+    crate::core::production_document::ProductionDocument::validate_standalone_composition(
+        &proj.composition,
+    )
+    .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
     let json = serde_json::to_string_pretty(proj)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    fs::write(path, json)
+    crate::core::project_migration::validate_project_json_size(&json)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    write_project_json_atomic(path, &json)
 }
 
 /// Load a full project file, handling version migration if needed.
 pub fn load_project_file(path: &Path) -> io::Result<ProjectFile> {
-    let data = fs::read_to_string(path)?;
+    let data = read_project_json(path)?;
     let mut proj: ProjectFile =
         serde_json::from_str(&data).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
     // Future: migrate old versions here
     if proj.version == 0 {
         proj.version = 1;
+    } else if proj.version > 1 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "Project version {} is newer than supported version 1",
+                proj.version
+            ),
+        ));
     }
+
+    crate::core::production_document::ProductionDocument::validate_standalone_composition(
+        &proj.composition,
+    )
+    .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
 
     Ok(proj)
 }

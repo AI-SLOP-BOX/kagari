@@ -1,0 +1,214 @@
+import "settings/general.ame";
+import "settings/locale_select.ame";
+import "settings/performance.ame";
+import "settings/media.ame";
+import "settings/display.ame";
+import "settings/playback.ame";
+import "settings/shortcuts.ame";
+import "settings/filepath.ame";
+import "settings/external.ame";
+import "settings/experimental.ame";
+
+component SettingsNavItem(active: Bool) {
+    ZStack {
+        If(active) { Svg("<svg xmlns='http://www.w3.org/2000/svg' width='196' height='36' viewBox='0 0 196 36'><rect x='0' y='0' width='196' height='36' rx='8' fill='#232933'/><rect x='8' y='7' width='3' height='22' rx='1.5' fill='#f58c4b'/></svg>", 196, 36) } else { Svg("<svg xmlns='http://www.w3.org/2000/svg' width='196' height='36' viewBox='0 0 196 36'><rect width='196' height='36' fill='transparent'/></svg>", 196, 36) }
+        slot
+    }
+}
+
+component SettingsGeneralNav() { If(ui_locale != "") { HitArea("settings_general_select", action: settings_general_select) { SettingsNavItem(active: settings_general) { Padding(horizontal: 18, vertical: 8) { HStack(spacing: 12) { If(settings_general) { Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#e6ebf2' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z'/><circle cx='12' cy='12' r='3'/></svg>", 20, 20) } else { Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#aeb7bd' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z'/><circle cx='12' cy='12' r='3'/></svg>", 20, 20) } Text("{t.settings_cat_general}", size: 13) Spacer } } } } } }
+
+component SettingsPerformanceNav() { If(ui_locale != "") { HitArea("settings_performance_select", action: settings_performance_select) { SettingsNavItem(active: settings_performance) { Padding(horizontal: 18, vertical: 8) { HStack(spacing: 12) { If(settings_performance) { Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#e6ebf2' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M13 2 4 14h7l-1 8 10-13h-7z'/></svg>", 20, 20) } else { Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#aeb7bd' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M13 2 4 14h7l-1 8 10-13h-7z'/></svg>", 20, 20) } Text("{t.settings_cat_performance}", size: 13) Spacer } } } } } }
+
+component SettingsMediaNav() { If(ui_locale != "") { HitArea("settings_media_select", action: settings_media_select) { SettingsNavItem(active: settings_media) { Padding(horizontal: 18, vertical: 8) { HStack(spacing: 12) { If(settings_media) { Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#e6ebf2' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><ellipse cx='12' cy='5' rx='8.5' ry='3'/><path d='M3.5 5v14c0 1.7 3.8 3 8.5 3s8.5-1.3 8.5-3V5M3.5 12c0 1.7 3.8 3 8.5 3s8.5-1.3 8.5-3'/></svg>", 20, 20) } else { Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#aeb7bd' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><ellipse cx='12' cy='5' rx='8.5' ry='3'/><path d='M3.5 5v14c0 1.7 3.8 3 8.5 3s8.5-1.3 8.5-3V5M3.5 12c0 1.7 3.8 3 8.5 3s8.5-1.3 8.5-3'/></svg>", 20, 20) } Text("{t.settings_cat_media}", size: 13) Spacer } } } } } }
+
+component SettingsDisplayNav() { If(ui_locale != "") { HitArea("settings_display_select", action: settings_display_select) { SettingsNavItem(active: settings_display) { Padding(horizontal: 18, vertical: 8) { HStack(spacing: 12) { If(settings_display) { Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#e6ebf2' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='3' width='18' height='14' rx='1.5'/><path d='M8 21h8m-4-4v4'/></svg>", 20, 20) } else { Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#aeb7bd' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='3' width='18' height='14' rx='1.5'/><path d='M8 21h8m-4-4v4'/></svg>", 20, 20) } Text("{t.settings_cat_display}", size: 13) Spacer } } } } } }
+
+component SettingsPlaybackNav() { If(ui_locale != "") { HitArea("settings_playback_select", action: settings_playback_select) { SettingsNavItem(active: settings_playback) { Padding(horizontal: 18, vertical: 8) { HStack(spacing: 12) { If(settings_playback) { Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#e6ebf2' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><polygon points='7 5 18 12 7 19'/></svg>", 20, 20) } else { Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#aeb7bd' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><polygon points='7 5 18 12 7 19'/></svg>", 20, 20) } Text("{t.settings_cat_playback}", size: 13) Spacer } } } } } }
+
+component SettingsShortcutsNav() { If(ui_locale != "") { HitArea("settings_shortcuts_select", action: settings_shortcuts_select) { SettingsNavItem(active: settings_shortcuts) { Padding(horizontal: 18, vertical: 8) { HStack(spacing: 12) { If(settings_shortcuts) { Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#e6ebf2' stroke-width='1.7' stroke-linejoin='round'><rect x='2' y='6' width='20' height='12' rx='2'/><path d='M6 10h1M10 10h1M14 10h1M18 10h1M6 14h12'/></svg>", 20, 20) } else { Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#aeb7bd' stroke-width='1.7' stroke-linejoin='round'><rect x='2' y='6' width='20' height='12' rx='2'/><path d='M6 10h1M10 10h1M14 10h1M18 10h1M6 14h12'/></svg>", 20, 20) } Text("{t.settings_cat_shortcuts}", size: 13) Spacer } } } } } }
+
+component SettingsFilepathNav() { If(ui_locale != "") { HitArea("settings_filepath_select", action: settings_filepath_select) { SettingsNavItem(active: settings_filepath) { Padding(horizontal: 18, vertical: 8) { HStack(spacing: 12) { If(settings_filepath) { Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#e6ebf2' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/></svg>", 20, 20) } else { Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#aeb7bd' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/></svg>", 20, 20) } Text("{t.settings_cat_filepath}", size: 13) Spacer } } } } } }
+
+component SettingsExternalNav() { If(ui_locale != "") { HitArea("settings_external_select", action: settings_external_select) { SettingsNavItem(active: settings_external) { Padding(horizontal: 18, vertical: 8) { HStack(spacing: 12) { If(settings_external) { Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#e6ebf2' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M4 4h5a3 3 0 1 1 6 0h5v5a3 3 0 1 0 0 6v5h-5a3 3 0 1 0-6 0H4v-5a3 3 0 1 0 0-6z'/></svg>", 20, 20) } else { Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#aeb7bd' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M4 4h5a3 3 0 1 1 6 0h5v5a3 3 0 1 0 0 6v5h-5a3 3 0 1 0-6 0H4v-5a3 3 0 1 0 0-6z'/></svg>", 20, 20) } Text("{t.settings_cat_external}", size: 13) Spacer } } } } } }
+
+component SettingsExperimentalNav() { If(ui_locale != "") { HitArea("settings_experimental_select", action: settings_experimental_select) { SettingsNavItem(active: settings_experimental) { Padding(horizontal: 18, vertical: 8) { HStack(spacing: 12) { If(settings_experimental) { Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#e6ebf2' stroke-width='1.8' stroke-linecap='round'><path d='M4 7h7M15 7h5M4 12h10M18 12h2M4 17h4M12 17h8'/><circle cx='13' cy='7' r='1.6'/><circle cx='16' cy='12' r='1.6'/><circle cx='10' cy='17' r='1.6'/></svg>", 20, 20) } else { Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#aeb7bd' stroke-width='1.8' stroke-linecap='round'><path d='M4 7h7M15 7h5M4 12h10M18 12h2M4 17h4M12 17h8'/><circle cx='13' cy='7' r='1.6'/><circle cx='16' cy='12' r='1.6'/><circle cx='10' cy='17' r='1.6'/></svg>", 20, 20) } Text("{t.settings_cat_experimental}", size: 13) Spacer } } } } } }
+
+component SettingsPanel() {
+    If(ui_locale != "") {
+    VStack(spacing: 0) {
+      Spacer
+      HStack(spacing: 0) {
+        Spacer
+        Padding(horizontal: 24, vertical: 20) {
+          MinWidth(980) {
+            MaxWidth(1160) {
+              Card(padding: 0, spacing: 0, hover_strength: 0.0, hover_elevation: 0.0, background: "#181d25", border_color: "#2b3240") {
+        HStack(spacing: 0) {
+          Align(stretch) {
+            Grow(1) { MaxWidth(220) { Grow(1) { MinWidth(212) { Grow(1) {
+              Surface(padding: 12, spacing: 10, radius: 0, border: false, background: "#14181f") {
+                VStack(spacing: 10) {
+                  TextField(settings_search, "設定を検索...", action: settings_search_changed)
+                  VStack(spacing: 2) {
+                    If(settings_show_general) { SettingsGeneralNav() }
+                    If(settings_show_performance) { SettingsPerformanceNav() }
+                    If(settings_show_media) { SettingsMediaNav() }
+                    If(settings_show_display) { SettingsDisplayNav() }
+                    If(settings_show_playback) { SettingsPlaybackNav() }
+                    If(settings_show_shortcuts) { SettingsShortcutsNav() }
+                    If(settings_show_filepath) { SettingsFilepathNav() }
+                    If(settings_show_external) { SettingsExternalNav() }
+                    If(settings_show_experimental) { SettingsExperimentalNav() }
+                  }
+                }
+                Spacer
+              }
+            } } } } }
+          }
+          Grow(1) {
+            Align(stretch) {
+              VStack(spacing: 0) {
+                Padding(horizontal: 24, vertical: 14) {
+                  HStack(spacing: 10) {
+                    Text("{t.settings_title}", size: 18).weight(bold)
+                    Spacer
+                    HitArea("close_settings", action: close_settings) { ZStack { Svg("<svg xmlns='http://www.w3.org/2000/svg' width='30' height='30' viewBox='0 0 30 30'><rect width='30' height='30' rx='8' fill='transparent'/></svg>", 30, 30)
+                      Center {
+                        Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#8d95a2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M18 6 6 18'/><path d='m6 6 12 12'/></svg>", 15, 15)
+                      } } }
+                  }
+                }
+                Surface(padding: 0, spacing: 0, radius: 0, border: false, background: "#252c38") { Spacer }.frame(height: 1)
+                Grow(1) {
+                  ScrollView(2400) {
+                    Padding(horizontal: 24, vertical: 14) {
+                      VStack(spacing: 0) {
+                        If(settings_feedback != "") {
+                          Padding(horizontal: 0, vertical: 7) { Caption("{settings_feedback}") }
+                        }
+                        If(settings_general) {
+                          SettingsGeneralPage()
+                        } else {
+                          If(settings_performance) {
+                            SettingsPerformancePage()
+                          } else {
+                            If(settings_media) {
+                              SettingsMediaPage()
+                            } else {
+                              If(settings_display) {
+                                SettingsDisplayPage()
+                              } else {
+                                If(settings_playback) {
+                                  SettingsPlaybackPage()
+                                } else {
+                                  If(settings_shortcuts) {
+                                    SettingsShortcutsPage()
+                                  } else {
+                                    If(settings_filepath) {
+                                      SettingsFilepathPage()
+                                    } else {
+                                      If(settings_external) {
+                                        SettingsExternalPage()
+                                      } else {
+                                        If(settings_experimental) {
+                                          SettingsExperimentalPage()
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }.frame(height: 620)
+                }
+                Surface(padding: 0, spacing: 0, radius: 0, border: false, background: "#252c38") { Spacer }.frame(height: 1)
+                If(settings_defaults_confirm_open) {
+                  Padding(horizontal: 24, vertical: 10) {
+                    HStack(spacing: 10) {
+                      Caption("すべての設定を初期値に戻しますか？")
+                      Spacer
+                      HitArea("settings_defaults_cancel", action: settings_defaults_cancel) { ZStack { Svg("<svg xmlns='http://www.w3.org/2000/svg' width='90' height='30' viewBox='0 0 90 30'><rect x='0.5' y='0.5' width='89' height='29' rx='14.5' fill='#1c2129' stroke='#2d3442'/></svg>", 90, 30)
+                        Center { Text("やめる", size: 12).weight(medium) } } }
+                      HitArea("settings_defaults_confirm", action: settings_defaults_confirm) { ZStack { Svg("<svg xmlns='http://www.w3.org/2000/svg' width='96' height='30' viewBox='0 0 96 30'><rect x='0.5' y='0.5' width='95' height='29' rx='14.5' fill='#382326' stroke='#8a3c42'/></svg>", 96, 30)
+                        Center { Text("戻す", size: 12).weight(semibold) } } }
+                    }
+                  }
+                } else {
+                  Padding(horizontal: 24, vertical: 12) {
+                    HStack(spacing: 10) {
+                      HitArea("settings_defaults", action: settings_defaults) { ZStack { Svg("<svg xmlns='http://www.w3.org/2000/svg' width='130' height='30' viewBox='0 0 130 30'><rect x='0.5' y='0.5' width='129' height='29' rx='14.5' fill='#181d25' stroke='#2d3442'/></svg>", 130, 30)
+                        Center { Text("初期設定に戻す...", size: 12).weight(medium) } } }
+                      Spacer
+                      HitArea("settings_cancel", action: settings_cancel) { ZStack { Svg("<svg xmlns='http://www.w3.org/2000/svg' width='104' height='32' viewBox='0 0 104 32'><rect x='0.5' y='0.5' width='103' height='31' rx='15.5' fill='#1c2129' stroke='#2d3442'/></svg>", 104, 32)
+                        Center { Text("キャンセル", size: 12).weight(medium) } } }
+                      HitArea("settings_apply", action: settings_apply) { ZStack { Svg("<svg xmlns='http://www.w3.org/2000/svg' width='92' height='32' viewBox='0 0 92 32'><rect x='0.5' y='0.5' width='91' height='31' rx='15.5' fill='#262d38' stroke='#3a4454'/></svg>", 92, 32)
+                        Center { Text("OK", size: 12).weight(semibold) } } }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+              }.frame(height: 740)
+            }
+          }
+        }
+        Spacer
+      }
+      Spacer
+    }
+    }
+  }
+
+component ExitConfirmModal() {
+    MaxWidth(420) {
+      Card {
+        Padding(22) {
+          VStack(spacing: 14) {
+            If(project_is_dirty) {
+              Text("未保存の変更があります", size: 20)
+              Caption("終了前にプロジェクトを保存するか、変更を破棄してください。")
+              HStack(spacing: 10) {
+                Spacer
+                Button("キャンセル", action: cancel_exit_app, tone: secondary)
+                Button("保存せずに終了", action: confirm_exit_app, tone: destructive)
+                Button("保存して終了", action: save_and_exit_app, tone: primary)
+              }
+            } else {
+              Text("Kagari VFX を終了しますか？", size: 20)
+              HStack(spacing: 10) {
+                Spacer
+                Button("キャンセル", action: cancel_exit_app, tone: secondary)
+                Button("終了", action: confirm_exit_app, tone: destructive)
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+component ProjectSwitchConfirmModal() {
+    MaxWidth(620) {
+      Card {
+        Padding(22) {
+          VStack(spacing: 14) {
+            Text("未保存の変更があります", size: 20)
+            Caption("新しいプロジェクトへ移ると、現在の未保存変更は失われます。先に保存しますか？")
+            HStack(spacing: 10) {
+              Spacer
+              Button("キャンセル", action: cancel_project_switch, tone: secondary)
+              Button("保存して切り替え", action: save_and_confirm_project_switch, tone: primary)
+              Button("保存せず切り替え", action: confirm_project_switch, tone: destructive)
+            }
+          }
+        }
+      }
+    }
+  }

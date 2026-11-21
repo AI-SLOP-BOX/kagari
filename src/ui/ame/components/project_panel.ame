@@ -1,0 +1,103 @@
+component ProjectPanel() {
+    Card(padding: 6, spacing: 5, hover_strength: 0.0, hover_elevation: 0.0) {
+      VStack(spacing: 5) {
+          Surface(padding: 6, spacing: 0, radius: 4, border: false, background: "#14181f") {
+            HStack(spacing: 5) {
+              Svg("<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='#f58c4b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polygon points='12 2 2 7 12 12 22 7 12 2'/><polyline points='2 17 12 22 22 17'/><polyline points='2 12 12 17 22 12'/></svg>", 14, 14)
+              Text("{t.panel_scene}", size: 13).weight(semibold)
+              Spacer
+            }
+          }
+          Surface(padding: 4, spacing: 0, radius: 5, border: false, background: "#11141a") {
+            Wrap(item_spacing: 4, line_spacing: 4) {
+            Button("粒子", action: add_particle_layer, tone: ghost, size: small)
+            Button("調整", action: add_adjustment_layer, tone: ghost, size: small)
+            Button("ヌル", action: add_null_layer, tone: ghost, size: small)
+            Button("文字", action: add_text_layer, tone: ghost, size: small)
+            Button("図形", action: add_shape_layer, tone: ghost, size: small)
+            Button("円", action: add_ellipse_layer, tone: ghost, size: small)
+            Button("星", action: add_star_layer, tone: ghost, size: small)
+            Button("多角形", action: add_polygon_layer, tone: ghost, size: small)
+            Button("平面", action: add_solid_layer, tone: ghost, size: small)
+            }
+          }
+          Wrap(item_spacing: 4, line_spacing: 4) {
+            Caption("3Dシーン")
+            Button("カメラ", action: add_scene_camera, tone: ghost, size: small)
+            Button("ライト", action: add_scene_light, tone: ghost, size: small)
+            Button("3Dトラックカメラ", action: add_tracked_3d_camera, tone: ghost, size: small)
+            Button("3D押し出し", action: add_3d_extruded_shape, tone: ghost, size: small)
+          }
+          TextField(search, "シーン内を検索", action: search_changed)
+          If(has_scene_layers) {
+            ForEach(scene_layers, layer, key: id, height: 360, row_height: 58, overscan: 6) {
+              VStack(spacing: 1) {
+                HStack(spacing: 5) {
+                  Caption("{layer.indent}")
+                If(layer.has_children) {
+                  If(layer.collapsed) { IconButton("chevron_right", action: toggle_scene_group, tone: ghost, size: small) } else { IconButton("chevron_down", action: toggle_scene_group, tone: ghost, size: small) }
+                } else { Icon("tree_branch", 14) }
+                If(layer.kind == "動画" || layer.kind == "画像") { Icon("film", 15) } else { If(layer.kind == "音声") { Icon("music", 15) } else { If(layer.kind == "カメラ") { Icon("camera", 15) } else { If(layer.kind == "ライト") { Icon("light", 15) } else { If(layer.kind == "テキスト") { Icon("edit", 15) } else { If(layer.kind == "シェイプ" || layer.kind == "平面") { Icon("grid", 15) } else { If(layer.kind == "調整レイヤー") { Icon("effect", 15) } else { If(layer.kind == "3Dモデル") { Icon("environment", 15) } else { If(layer.kind == "プリコンポーズ") { Icon("folder_open", 15) } else { If(layer.kind == "ヌル") { Icon("tree_branch", 15) } else { Icon("particle", 15) } } } } } } } } } }
+                Button("{layer.name}", action: select_layer, tone: ghost, size: small)
+                Spacer
+                Caption("{layer.kind}")
+                }
+                HStack(spacing: 4) {
+                If(layer.align_selected) { Button("整列対象", action: toggle_alignment_layer_selection, tone: ghost, size: small, disabled: layer.locked) } else { Button("整列対象", action: toggle_alignment_layer_selection, tone: ghost, size: small, disabled: layer.locked) }
+                Button("{layer.label}", action: cycle_layer_label_color, tone: ghost, size: small, disabled: layer.locked)
+                If(layer.visible) { IconButton("eye", action: toggle_layer_visibility, tone: ghost, size: small) } else { IconButton("eye_off", action: toggle_layer_visibility, tone: ghost, size: small) }
+                If(layer.locked) { IconButton("lock", action: toggle_layer_lock, tone: ghost, size: small) } else { IconButton("unlock", action: toggle_layer_lock, tone: ghost, size: small) }
+                Button("S", action: toggle_layer_solo, tone: ghost, size: small)
+                If(layer.has_audio) { Button("M", action: toggle_audio_mute, tone: ghost, size: small) }
+                Button("MB", action: toggle_layer_motion_blur, tone: ghost, size: small, disabled: layer.locked)
+                }
+              }
+            }
+            If(!has_scene_layer_matches) { Caption("検索条件に一致するレイヤーはありません。") }
+            Card { Padding(5) { VStack(spacing: 4) {
+              HStack(spacing: 4) {
+                Caption("整列・分布")
+                Caption("対象 {align_selected_count}件")
+                Spacer
+                Button("選択解除", action: clear_alignment_selection, tone: ghost, size: small)
+                If(align_to_composition) { Button("基準: コンポジション", action: toggle_align_to_composition, tone: primary, size: small) } else { Button("基準: 選択範囲", action: toggle_align_to_composition, tone: ghost, size: small) }
+              }
+              HStack(spacing: 3) {
+                Caption("横")
+                Button("左", action: align_scene_left, tone: ghost, size: small, disabled: !can_align_layers)
+                Button("中央", action: align_scene_horizontal_center, tone: ghost, size: small, disabled: !can_align_layers)
+                Button("右", action: align_scene_right, tone: ghost, size: small, disabled: !can_align_layers)
+                Button("中心を等間隔", action: distribute_scene_horizontal, tone: ghost, size: small, disabled: !can_distribute_layers)
+              }
+              HStack(spacing: 3) {
+                Caption("縦")
+                Button("上", action: align_scene_top, tone: ghost, size: small, disabled: !can_align_layers)
+                Button("中央", action: align_scene_vertical_center, tone: ghost, size: small, disabled: !can_align_layers)
+                Button("下", action: align_scene_bottom, tone: ghost, size: small, disabled: !can_align_layers)
+                Button("中心を等間隔", action: distribute_scene_vertical, tone: ghost, size: small, disabled: !can_distribute_layers)
+              }
+              If(!can_distribute_layers) { Caption("分布にはロック解除済みのレイヤーを3つ以上選択してください。") }
+            } } }
+            HStack(spacing: 6) {
+              If(selected_layer) { If(selected_layer_locked) { Caption("{layer_name} · ロック中") } else { TextField(layer_name, "レイヤー名", action: layer_changed) } } else { Caption("レイヤーを選択してください") }
+              IconButton("arrow_up", action: move_layer_up, tone: ghost, size: small, disabled: !selected_layer || selected_layer_locked)
+              IconButton("arrow_down", action: move_layer_down, tone: ghost, size: small, disabled: !selected_layer || selected_layer_locked)
+              Button("複製", action: duplicate_selected_layer, tone: ghost, size: small, disabled: !selected_layer || selected_layer_locked)
+              Button("削除", action: request_remove_selected_layer, tone: ghost, size: small, disabled: !selected_layer || selected_layer_locked)
+            }
+            HStack(spacing: 6) {
+              Caption("親: {selected_layer_parent_name}")
+              If(selected_layer_has_parent) { Button("親を解除", action: unparent_selected_layer, tone: ghost, size: small, disabled: !selected_layer || selected_layer_locked) }
+              If(has_parent_candidates) {
+                HorizontalVirtualList(parent_candidates, parent, key: id, width: 320, height: 32, item_width: auto, overscan: 4) {
+                  If(parent.selected) { Button("{parent.name}", action: set_layer_parent, tone: primary, size: small, disabled: !selected_layer || selected_layer_locked) } else { Button("{parent.name}", action: set_layer_parent, tone: ghost, size: small, disabled: !selected_layer || selected_layer_locked) }
+                }
+              } else { Caption("親にできるレイヤーはありません") }
+              Button("直前を親に", action: parent_selected_layer, tone: ghost, size: small, disabled: !selected_layer || selected_layer_locked)
+            }
+          } else {
+            Caption("シーンは空です。粒子・文字・図形を追加するか、素材を読み込んでください。")
+          }
+        }
+      }
+  }

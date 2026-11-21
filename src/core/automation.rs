@@ -9,523 +9,78 @@
 //! sound way to expose mutation. Scripts run against a working copy and are
 //! committed only after the whole evaluation succeeds.
 
-use crate::core::keyframe::{InterpolationType, Keyframe};
-use crate::core::property::Animatable;
-use crate::core::timeline::{Composition, Layer, LayerType, Project};
-use std::cell::RefCell;
+#![allow(dead_code)]
+
+pub mod context;
+pub mod engine;
+
+#[cfg(test)]
+mod tests;
+
+pub use context::*;
+pub use engine::*;
+
+use crate::core::timeline::Project;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-
-const MAX_LOG_LINES: usize = 8_192;
-const MAX_LOG_BYTES: usize = 1024 * 1024;
-
-#[derive(Default)]
-struct LogSink {
-    lines: Vec<String>,
-    bytes: usize,
-    truncated: bool,
-}
-
-fn append_log(sink: &Arc<Mutex<LogSink>>, message: &str) {
-    let Ok(mut sink) = sink.lock() else {
-        return;
-    };
-    if sink.truncated {
-        return;
-    }
-    if sink.lines.len() >= MAX_LOG_LINES || sink.bytes.saturating_add(message.len()) > MAX_LOG_BYTES
-    {
-        sink.lines.push("[automation log truncated]".to_string());
-        sink.truncated = true;
-        return;
-    }
-    sink.bytes = sink.bytes.saturating_add(message.len());
-    sink.lines.push(message.to_string());
-}
-
-thread_local! {
-    /// Project currently being scripted (valid only inside run_script).
-    static CURRENT_PROJECT: RefCell<*mut Project> = const { RefCell::new(std::ptr::null_mut()) };
-}
-
-#[derive(Debug)]
-struct ProjectScope;
-
-impl ProjectScope {
-    fn enter(project: &mut Project) -> Result<Self, String> {
-        CURRENT_PROJECT.with(|current| {
-            let mut ptr = current.borrow_mut();
-            if !ptr.is_null() {
-                return Err("nested automation execution is not supported".to_string());
-            }
-            *ptr = project as *mut Project;
-            Ok(Self)
-        })
-    }
-}
-
-impl Drop for ProjectScope {
-    fn drop(&mut self) {
-        CURRENT_PROJECT.with(|current| {
-            *current.borrow_mut() = std::ptr::null_mut();
-        });
-    }
-}
-
-fn with_project<R>(f: impl FnOnce(&mut Project) -> R) -> Option<R> {
-    CURRENT_PROJECT.with(|p| {
-        let ptr = *p.borrow();
-        if ptr.is_null() {
-            None
-        } else {
-            Some(f(unsafe { &mut *ptr }))
-        }
-    })
-}
 
 /// Execute an automation script against the project.
 /// Returns captured `log()` lines on success.
 pub fn run_script(project: &mut Project, source: &str) -> Result<Vec<String>, String> {
-    let log_sink = Arc::new(Mutex::new(LogSink::default()));
-    let engine = build_engine(Arc::clone(&log_sink));
+    let (working_copy, logs) = run_script_working_copy(project.clone(), source, None)?;
+    *project = working_copy;
+    Ok(logs)
+}
 
-    let mut working_copy = project.clone();
+/// Run against an owned project snapshot and return the modified snapshot.
+/// This avoids cloning the project a second time inside a background worker.
+pub fn run_script_owned(
+    project: Project,
+    source: &str,
+    cancel: Arc<AtomicBool>,
+) -> Result<(Project, Vec<String>), String> {
+    run_script_working_copy(project, source, Some(cancel))
+}
+
+fn run_script_working_copy(
+    mut working_copy: Project,
+    source: &str,
+    cancel: Option<Arc<AtomicBool>>,
+) -> Result<(Project, Vec<String>), String> {
+    if source.len() > MAX_SCRIPT_SOURCE_BYTES {
+        return Err(format!(
+            "automation script exceeds the {} MiB limit",
+            MAX_SCRIPT_SOURCE_BYTES / (1024 * 1024)
+        ));
+    }
+    let log_sink = Arc::new(Mutex::new(LogSink::default()));
+    let mut engine = build_engine(Arc::clone(&log_sink));
+    if let Some(cancel) = cancel {
+        engine.on_progress(move |_| {
+            cancel
+                .load(Ordering::Relaxed)
+                .then(|| "Script cancelled".into())
+        });
+    }
+
     let scope = ProjectScope::enter(&mut working_copy)?;
     let result = engine.run(source);
     drop(scope);
 
     result.map_err(|e| format!("script error: {e}"))?;
-
-    *project = working_copy;
-
+    let document = crate::core::production_document::ProductionDocument::new(working_copy);
+    document
+        .validate()
+        .map_err(|error| format!("script produced an invalid project: {error}"))?;
     let logs = log_sink
         .lock()
         .map(|sink| sink.lines.clone())
         .unwrap_or_default();
-    Ok(logs)
+    Ok((document.project, logs))
 }
 
 /// Convenience wrapper executing a `main() { ... }` program body.
 pub fn run_script_main(project: &mut Project, body: &str) -> Result<Vec<String>, String> {
     let wrapped = format!("main();\nfn main() {{\n{body}\n}}");
     run_script(project, &wrapped)
-}
-
-fn gen_id() -> String {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static COUNTER: AtomicU64 = AtomicU64::new(1);
-    format!("script_layer_{}", COUNTER.fetch_add(1, Ordering::Relaxed))
-}
-
-pub fn parse_hex(hex: &str) -> [f32; 3] {
-    let h = hex.trim_start_matches('#');
-    if h.len() == 6 {
-        if let (Ok(r), Ok(g), Ok(b)) = (
-            u8::from_str_radix(&h[0..2], 16),
-            u8::from_str_radix(&h[2..4], 16),
-            u8::from_str_radix(&h[4..6], 16),
-        ) {
-            return [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0];
-        }
-    }
-    [1.0, 1.0, 1.0]
-}
-
-fn finite_f32(value: f64) -> f32 {
-    if value.is_finite() {
-        value.clamp(f64::from(f32::MIN), f64::from(f32::MAX)) as f32
-    } else {
-        0.0
-    }
-}
-
-fn bounded_u32(value: i64, minimum: u32) -> u32 {
-    value.clamp(i64::from(minimum), i64::from(u32::MAX)) as u32
-}
-
-fn build_engine(log_sink: Arc<Mutex<LogSink>>) -> rhai::Engine {
-    let mut engine = rhai::Engine::new();
-    engine.set_max_operations(2_000_000);
-    engine
-        .set_max_string_size(1024 * 1024)
-        .set_max_array_size(16 * 1024)
-        .set_max_map_size(16 * 1024);
-
-    engine.on_print({
-        let sink = Arc::clone(&log_sink);
-        move |msg: &str| {
-            append_log(&sink, msg);
-        }
-    });
-
-    // ── Composition management ──
-    engine.register_fn("log", move |msg: &str| {
-        append_log(&log_sink, msg);
-    });
-    engine.register_fn(
-        "new_comp",
-        |name: &str, w: i64, ht: i64, fps: i64, dur: i64| {
-            with_project(|p| {
-                let comp = Composition::new(
-                    format!("comp_{}", p.compositions.len()),
-                    name.to_string(),
-                    bounded_u32(w, 1),
-                    bounded_u32(ht, 1),
-                    bounded_u32(fps, 1),
-                    bounded_u32(dur, 1),
-                );
-                p.compositions.push(comp);
-                p.active_composition_idx = p.compositions.len() - 1;
-            });
-        },
-    );
-    engine.register_fn("select_comp", |idx: i64| {
-        with_project(|p| {
-            if idx >= 0 && (idx as usize) < p.compositions.len() {
-                p.active_composition_idx = idx as usize;
-            }
-        });
-    });
-
-    // ── Layer creation ──
-    engine.register_fn("add_solid", |name: &str, color_hex: &str| -> String {
-        with_project(|p| {
-            let Some(idx) = p
-                .compositions
-                .get(p.active_composition_idx)
-                .map(|_| p.active_composition_idx)
-            else {
-                return String::new();
-            };
-            let c = parse_hex(color_hex);
-            let comp_len = { p.compositions[idx].duration_frames };
-            let mut layer = Layer::new(
-                gen_id(),
-                name.to_string(),
-                LayerType::Solid {
-                    color: [c[0], c[1], c[2], 1.0],
-                },
-                comp_len,
-            );
-            let comp = &mut p.compositions[idx];
-            let cw = comp.width as f32;
-            let ch = comp.height as f32;
-            layer.transform.scale = Animatable::new_constant([cw, ch]);
-            layer.transform.position = Animatable::new_constant([cw / 2.0, ch / 2.0]);
-            let n = layer.name.clone();
-            comp.layers.push(layer);
-            n
-        })
-        .unwrap_or_default()
-    });
-    engine.register_fn("add_text", |name: &str, text: &str, size: i64| -> String {
-        with_project(|p| {
-            let Some(idx) = p
-                .compositions
-                .get(p.active_composition_idx)
-                .map(|_| p.active_composition_idx)
-            else {
-                return String::new();
-            };
-            let comp_len = { p.compositions[idx].duration_frames };
-            let mut layer = Layer::new(
-                gen_id(),
-                name.to_string(),
-                LayerType::Text {
-                    text: text.to_string(),
-                    font_size: bounded_u32(size, 4),
-                    color: [1.0, 1.0, 1.0, 1.0],
-                    font_family: "Inter".to_string(),
-                    tracking: 0.0,
-                    leading: 1.2,
-                    align: 0,
-                    stroke_color: [1.0, 1.0, 1.0, 1.0],
-                    stroke_width: 0.0,
-                    text_on_path: false,
-                },
-                comp_len,
-            );
-            let comp = &mut p.compositions[idx];
-            let cw = comp.width as f32;
-            let ch = comp.height as f32;
-            layer.transform.scale = Animatable::new_constant([100.0, 100.0]);
-            layer.transform.position = Animatable::new_constant([cw / 2.0, ch / 2.0]);
-            let n = layer.name.clone();
-            comp.layers.push(layer);
-            n
-        })
-        .unwrap_or_default()
-    });
-
-    // ── Property animation ──
-    engine.register_fn("set_position", |layer: &str, x: f64, y: f64| {
-        with_project(|p| {
-            let Some(idx) = p
-                .compositions
-                .get(p.active_composition_idx)
-                .map(|_| p.active_composition_idx)
-            else {
-                return;
-            };
-            if let Some(i) = p.compositions[idx]
-                .layers
-                .iter()
-                .position(|l| l.name == layer)
-            {
-                p.compositions[idx].layers[i].transform.position =
-                    Animatable::new_constant([finite_f32(x), finite_f32(y)]);
-            }
-        });
-    });
-    engine.register_fn("set_opacity", |layer: &str, pct: f64| {
-        with_project(|p| {
-            let Some(idx) = p
-                .compositions
-                .get(p.active_composition_idx)
-                .map(|_| p.active_composition_idx)
-            else {
-                return;
-            };
-            if let Some(i) = p.compositions[idx]
-                .layers
-                .iter()
-                .position(|l| l.name == layer)
-            {
-                p.compositions[idx].layers[i].transform.opacity =
-                    Animatable::new_constant(finite_f32(pct).clamp(0.0, 100.0));
-            }
-        });
-    });
-    engine.register_fn("set_opacity", |layer: &str, pct: i64| {
-        with_project(|p| {
-            let Some(idx) = p
-                .compositions
-                .get(p.active_composition_idx)
-                .map(|_| p.active_composition_idx)
-            else {
-                return;
-            };
-            if let Some(i) = p.compositions[idx]
-                .layers
-                .iter()
-                .position(|l| l.name == layer)
-            {
-                p.compositions[idx].layers[i].transform.opacity =
-                    Animatable::new_constant(finite_f32(pct as f64).clamp(0.0, 100.0));
-            }
-        });
-    });
-    engine.register_fn("key_position", |layer: &str, frame: i64, x: f64, y: f64| {
-        with_project(|p| {
-            let Some(idx) = p
-                .compositions
-                .get(p.active_composition_idx)
-                .map(|_| p.active_composition_idx)
-            else {
-                return;
-            };
-            let Some(i) = p.compositions[idx]
-                .layers
-                .iter()
-                .position(|l| l.name == layer)
-            else {
-                return;
-            };
-            let kf = Keyframe::new(
-                bounded_u32(frame, 0),
-                [finite_f32(x), finite_f32(y)],
-                InterpolationType::Linear,
-            );
-            match &mut p.compositions[idx].layers[i].transform.position {
-                Animatable::Animated(kfs) => {
-                    kfs.push(kf);
-                    kfs.sort_by_key(|k| k.frame);
-                }
-                Animatable::Constant(v0) => {
-                    let v = *v0;
-                    p.compositions[idx].layers[i].transform.position = Animatable::Animated(vec![
-                        Keyframe::new(0, v, InterpolationType::Linear),
-                        kf,
-                    ]);
-                }
-            }
-        });
-    });
-
-    // ── Persistence ──
-    engine.register_fn("save_project", |path: &str| -> bool {
-        with_project(|p| {
-            let path = std::path::Path::new(path);
-            crate::core::project_migration::save_project_atomic(p, path).is_ok()
-        })
-        .unwrap_or(false)
-    });
-
-    engine
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_batch_creation_script() {
-        let mut project = Project::default();
-        let script = r#"
-            new_comp("Titles", 1920, 1080, 30, 60);
-            add_solid("BG", "101018");
-            add_text("Hello", "こんにちは", 72);
-            set_opacity("BG", 80);
-            log("done");
-        "#;
-        let logs = run_script(&mut project, script).expect("script runs");
-        assert!(logs.contains(&"done".to_string()));
-        let comp = project.active_composition();
-        assert_eq!(comp.name, "Titles");
-        assert_eq!(comp.layers.len(), 2, "solid + text added");
-        assert_eq!(project.compositions.len(), 2, "default + new");
-    }
-
-    #[test]
-    fn test_keyframe_script_animates_position() {
-        let mut project = Project::default();
-        let script = r#"
-            add_text("T", "Slide", 48);
-            key_position("T", 0, -200.0, 540.0);
-            key_position("T", 30, 960.0, 540.0);
-        "#;
-        run_script(&mut project, script).unwrap();
-        let comp = project.active_composition();
-        let layer = comp.layers.last().unwrap();
-        match &layer.transform.position {
-            Animatable::Animated(kfs) => {
-                // Implicit start keyframe from the static value + two scripted
-                assert_eq!(kfs.len(), 3);
-                assert_eq!(kfs.last().unwrap().frame, 30);
-            }
-            _ => panic!("expected animated position"),
-        }
-    }
-
-    #[test]
-    fn test_hex_parsing() {
-        assert_eq!(parse_hex("#FF0000"), [1.0, 0.0, 0.0]);
-        assert_eq!(parse_hex("00ff00"), [0.0, 1.0, 0.0]);
-        assert_eq!(parse_hex("zzz"), [1.0, 1.0, 1.0], "fallback white");
-    }
-
-    #[test]
-    fn test_error_propagates_and_unsets_pointer() {
-        let mut project = Project::default();
-        let err = run_script(&mut project, "this_is_not_a_fn();").unwrap_err();
-        assert!(err.contains("script error"));
-        // Pointer cleared: further calls safe
-        assert!(with_project(|_| 1).is_none());
-    }
-
-    #[test]
-    fn test_script_failure_rolls_back_all_mutations() {
-        let mut project = Project::default();
-        let original = project.clone();
-        let err = run_script(
-            &mut project,
-            r#"
-                new_comp("partial", 1920, 1080, 30, 60);
-                add_text("T", "must not commit", 48);
-                missing_function();
-            "#,
-        )
-        .unwrap_err();
-
-        assert!(err.contains("script error"));
-        assert_eq!(
-            serde_json::to_value(&project).unwrap(),
-            serde_json::to_value(&original).unwrap()
-        );
-    }
-
-    #[test]
-    fn test_project_scope_clears_pointer_during_unwind() {
-        let mut project = Project::default();
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let _scope = ProjectScope::enter(&mut project).unwrap();
-            panic!("simulated native callback panic");
-        }));
-
-        assert!(result.is_err());
-        assert!(with_project(|_| 1).is_none());
-    }
-
-    #[test]
-    fn test_nested_project_scope_is_rejected() {
-        let mut first = Project::default();
-        let mut second = Project::default();
-        let _scope = ProjectScope::enter(&mut first).unwrap();
-
-        let error = ProjectScope::enter(&mut second).unwrap_err();
-        assert!(error.contains("nested automation"));
-    }
-
-    #[test]
-    fn test_mutations_fail_closed_when_active_composition_is_missing() {
-        let mut project = Project::default();
-        project.compositions.clear();
-        let script = r#"
-            add_solid("BG", "ffffff");
-            add_text("T", "safe", 32);
-            set_opacity("BG", 50);
-            key_position("T", 10, 1.0, 2.0);
-        "#;
-        assert!(run_script(&mut project, script).is_ok());
-        assert!(project.compositions.is_empty());
-    }
-
-    #[test]
-    fn test_transform_mutations_sanitize_nonfinite_numbers() {
-        let mut project = Project::default();
-        run_script(
-            &mut project,
-            r#"
-                add_text("T", "safe", 32);
-                set_position("T", parse_float("NaN"), parse_float("Inf"));
-                set_opacity("T", parse_float("NaN"));
-                key_position("T", 1, parse_float("NaN"), parse_float("Inf"));
-            "#,
-        )
-        .unwrap();
-        let layer = project.active_composition().layers.last().unwrap();
-        assert!(layer
-            .transform
-            .position
-            .evaluate(1)
-            .iter()
-            .all(|v| v.is_finite()));
-        assert!(layer.transform.opacity.evaluate(1).is_finite());
-    }
-
-    #[test]
-    fn test_script_bounds_extreme_integer_inputs() {
-        let mut project = Project::default();
-        run_script(
-            &mut project,
-            r#"
-                new_comp("bounded", 9223372036854775807, -5, 0, 9223372036854775807);
-                add_text("T", "safe", 9223372036854775807);
-                key_position("T", 9223372036854775807, 1.0, 2.0);
-            "#,
-        )
-        .unwrap();
-        let comp = project.active_composition();
-        assert_eq!(comp.width, u32::MAX);
-        assert_eq!(comp.height, 1);
-        assert_eq!(comp.fps, 1);
-        assert_eq!(comp.duration_frames, u32::MAX);
-        match &comp.layers[0].layer_type {
-            LayerType::Text { font_size, .. } => assert_eq!(*font_size, u32::MAX),
-            other => panic!("expected text layer, got {other:?}"),
-        }
-        assert_eq!(
-            comp.layers[0].transform.position.evaluate(u32::MAX),
-            [1.0, 2.0]
-        );
-    }
 }

@@ -1,0 +1,226 @@
+use super::*;
+
+impl GpuComputeContext {
+    pub fn gpu_colorama(
+        &self,
+        p: &mut [u8],
+        w: u32,
+        h: u32,
+        hue_offset: f32,
+        sat: f32,
+        light: f32,
+    ) -> bool {
+        self.dispatch_fx(
+            p,
+            w,
+            h,
+            ParamsUniform {
+                width: w,
+                height: h,
+                radius: 0,
+                mode: 54,
+                angle: 0.0,
+                brightness: hue_offset,
+                contrast: sat,
+                saturation: light,
+                hue_shift: 0.0,
+                param_f3: 0.0,
+                param_f4: 0.0,
+                param_f5: 0.0,
+                param_f6: 0.0,
+                param_f7: 0.0,
+                param_f8: 0.0,
+                _pad: 0.0,
+            },
+            "gpu_cma",
+        )
+    }
+    pub fn gpu_chroma_key(
+        &self,
+        p: &mut [u8],
+        w: u32,
+        h: u32,
+        key_rgb: [f32; 3],
+        gain: f32,
+        softness: f32,
+    ) -> bool {
+        self.dispatch_fx(
+            p,
+            w,
+            h,
+            ParamsUniform {
+                width: w,
+                height: h,
+                radius: 0,
+                mode: 56,
+                angle: 0.0,
+                brightness: key_rgb[0],
+                contrast: key_rgb[1],
+                saturation: key_rgb[2],
+                hue_shift: gain,
+                param_f3: softness,
+                param_f4: 0.0,
+                param_f5: 0.0,
+                param_f6: 0.0,
+                param_f7: 0.0,
+                param_f8: 0.0,
+                _pad: 0.0,
+            },
+            "gpu_ck",
+        )
+    }
+    pub fn gpu_color_space_convert(&self, p: &mut [u8], w: u32, h: u32, mode: u32) -> bool {
+        self.dispatch_fx(
+            p,
+            w,
+            h,
+            ParamsUniform {
+                width: w,
+                height: h,
+                radius: 0,
+                mode: 57,
+                angle: 0.0,
+                brightness: mode as f32,
+                contrast: 1.0,
+                saturation: 1.0,
+                hue_shift: 0.0,
+                param_f3: 0.0,
+                param_f4: 0.0,
+                param_f5: 0.0,
+                param_f6: 0.0,
+                param_f7: 0.0,
+                param_f8: 0.0,
+                _pad: 0.0,
+            },
+            "gpu_csc",
+        )
+    }
+    pub fn gpu_alpha_from_luminance(&self, p: &mut [u8], w: u32, h: u32, invert: bool) -> bool {
+        self.dispatch_fx(
+            p,
+            w,
+            h,
+            ParamsUniform {
+                width: w,
+                height: h,
+                radius: 0,
+                mode: 34,
+                angle: 0.0,
+                brightness: if invert { 1.0 } else { 0.0 },
+                contrast: 1.0,
+                saturation: 1.0,
+                hue_shift: 0.0,
+                param_f3: 0.0,
+                param_f4: 0.0,
+                param_f5: 0.0,
+                param_f6: 0.0,
+                param_f7: 0.0,
+                param_f8: 0.0,
+                _pad: 0.0,
+            },
+            "gpu_afl",
+        )
+    }
+    pub fn gpu_luma_key_range(
+        &self,
+        p: &mut [u8],
+        w: u32,
+        h: u32,
+        low: f32,
+        high: f32,
+        invert: bool,
+    ) -> bool {
+        self.dispatch_fx(
+            p,
+            w,
+            h,
+            ParamsUniform {
+                width: w,
+                height: h,
+                radius: 0,
+                mode: 35,
+                angle: 0.0,
+                brightness: low,
+                contrast: high,
+                saturation: if invert { 1.0 } else { 0.0 },
+                hue_shift: 0.0,
+                param_f3: 0.0,
+                param_f4: 0.0,
+                param_f5: 0.0,
+                param_f6: 0.0,
+                param_f7: 0.0,
+                param_f8: 0.0,
+                _pad: 0.0,
+            },
+            "gpu_lk",
+        )
+    }
+    pub fn gpu_tritone(
+        &self,
+        p: &mut [u8],
+        w: u32,
+        h: u32,
+        shadow: [f32; 3],
+        mid: [f32; 3],
+        highlight: [f32; 3],
+    ) -> bool {
+        self.dispatch_fx(
+            p,
+            w,
+            h,
+            ParamsUniform {
+                width: w,
+                height: h,
+                radius: 0,
+                mode: 37,
+                angle: 0.0,
+                brightness: shadow[0],
+                contrast: shadow[1],
+                saturation: shadow[2],
+                hue_shift: mid[0],
+                param_f3: mid[1],
+                param_f4: mid[2],
+                param_f5: highlight[0],
+                param_f6: highlight[1],
+                param_f7: highlight[2],
+                param_f8: 0.0,
+                _pad: 0.0,
+            },
+            "gpu_tri",
+        )
+    }
+    pub fn gpu_gradient_map(
+        &self,
+        p: &mut [u8],
+        w: u32,
+        h: u32,
+        low: [f32; 3],
+        mid: [f32; 3],
+        high: [f32; 3],
+    ) -> bool {
+        self.dispatch_fx(
+            p,
+            w,
+            h,
+            ParamsUniform {
+                width: w,
+                height: h,
+                radius: 0,
+                mode: 38,
+                angle: 0.0,
+                brightness: low[0],
+                contrast: low[1],
+                saturation: low[2],
+                hue_shift: mid[0],
+                param_f3: mid[1],
+                param_f4: mid[2],
+                param_f5: high[0],
+                param_f6: high[1],
+                param_f7: high[2],
+                param_f8: 0.0,
+                _pad: 0.0,
+            },
+            "gpu_gm",
+        )
+    }
+}

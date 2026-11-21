@@ -1,0 +1,213 @@
+component EffectPanel() {
+  Padding(4) {
+    VStack(spacing: 5) {
+        Surface(padding: 6, spacing: 0, radius: 4, border: false, background: "#14181f") {
+          HStack(spacing: 8) {
+            Text("エフェクト", size: 13).weight(semibold)
+            Spacer
+            If(selected_layer) { Button("＋ ブラー", action: add_gaussian_blur, tone: ghost, size: small, disabled: selected_layer_locked) } else { Caption("レイヤー未選択") }
+          }
+        }
+        TextField(effect_search, "エフェクトを検索・追加", action: effect_search_changed)
+        If(selected_layer && effect_search != "") {
+          If(has_effect_catalog_items) {
+            HStack(spacing: 3) {
+              Caption("検索結果から追加")
+              HorizontalScrollView(360) {
+                HStack(spacing: 3) {
+                  ForEach(effect_catalog_items, candidate, key: id) {
+                    Button("{candidate.label}", action: add_effect_catalog, tone: ghost, size: small, disabled: selected_layer_locked)
+                  }
+                }
+              }
+            }
+          } else {
+            Caption("対応するエフェクトがありません。")
+          }
+        }
+        If(selected_layer) {
+          Surface(padding: 4, spacing: 0, radius: 5, border: false, background: "#141820") {
+            Wrap(item_spacing: 3, line_spacing: 3) {
+              If(effect_cat_all) { Button("すべて", action: effect_cat_all, tone: primary, size: small) } else { Button("すべて", action: effect_cat_all, tone: ghost, size: small) }
+              If(effect_cat_color) { Button("色調", action: effect_cat_color, tone: primary, size: small) } else { Button("色調", action: effect_cat_color, tone: ghost, size: small) }
+              If(effect_cat_blur) { Button("ブラー・光学", action: effect_cat_blur, tone: primary, size: small) } else { Button("ブラー・光学", action: effect_cat_blur, tone: ghost, size: small) }
+              If(effect_cat_distort) { Button("歪み", action: effect_cat_distort, tone: primary, size: small) } else { Button("歪み", action: effect_cat_distort, tone: ghost, size: small) }
+              If(effect_cat_key) { Button("キー・特殊", action: effect_cat_key, tone: primary, size: small) } else { Button("キー・特殊", action: effect_cat_key, tone: ghost, size: small) }
+            }
+          }
+          Surface(padding: 4, spacing: 0, radius: 5, border: false, background: "#11141a") {
+            Wrap(item_spacing: 2, line_spacing: 2) {
+            If(effect_cat_all || effect_cat_color) {
+              Button("色調", action: add_color_tint, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("HSL", action: add_hue_saturation, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("Levels", action: add_levels, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("Curves", action: add_curves, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("WB", action: add_white_balance, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("Tritone", action: add_tritone, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("ビネット", action: add_vignette, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("Posterize", action: add_posterize, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("Colorama", action: add_colorama, tone: ghost, size: small, disabled: selected_layer_locked)
+            }
+            If(effect_cat_all || effect_cat_blur) {
+              Button("Glow", action: add_glow, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("Glow Pro", action: add_glow_pro, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("Motion Blur", action: add_motion_blur, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("方向ぼかし", action: add_directional_blur, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("Radial Blur", action: add_radial_blur, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("CompoundBlur", action: add_compound_blur, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("Sharpen", action: add_sharpen, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("LightSweep", action: add_light_sweep, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("色収差", action: add_chromatic_aberration, tone: ghost, size: small, disabled: selected_layer_locked)
+            }
+            If(effect_cat_all || effect_cat_distort) {
+              Button("レンズ補正", action: add_lens_correction, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("CC Lens", action: add_cc_lens, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("Turbulent", action: add_turbulent_displace, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("Vortex", action: add_vortex, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("極座標", action: add_polar_coordinates, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("WaveWarp", action: add_wave_warp, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("MeshWarp", action: add_mesh_warp, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("CornerPin", action: add_corner_pin, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("DispMap", action: add_displacement_map, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("グリッチ", action: add_glitch_displacement, tone: ghost, size: small, disabled: selected_layer_locked)
+            }
+            If(effect_cat_all || effect_cat_key) {
+              Button("クロマキー", action: add_chroma_key, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("LumaKey", action: add_luma_key_range, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("MatteChoker", action: apply_matte_choker, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("影", action: add_drop_shadow, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("粒状", action: add_film_grain, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("フラクタル", action: add_fractal_noise, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("CRT", action: add_crt_scanlines, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("Mosaic", action: add_mosaic, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("Emboss", action: add_emboss, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("Bevel", action: add_bevel_alpha, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("Median", action: add_median_filter, tone: ghost, size: small, disabled: selected_layer_locked)
+              Button("Sobel", action: add_sobel_edges, tone: ghost, size: small, disabled: selected_layer_locked)
+            }
+            }
+          }
+        }
+        If(has_ofx_params) {
+          Caption("OpenFX パラメータ")
+          ForEach(ofx_param_items, param, key: id) {
+            HStack(spacing: 4) {
+              Caption("{param.name}")
+              Spacer
+              Caption("{param.param_type}")
+            }
+          }
+        }
+        If(selected_layer) {
+          Surface(padding: 4, spacing: 0, radius: 5, border: false, background: "#11141a") {
+            Wrap(item_spacing: 2, line_spacing: 2) {
+            Button("コピー", action: copy_selected_effect, tone: ghost, size: small, disabled: !has_selected_effect)
+            Button("複製", action: duplicate_selected_effect, tone: ghost, size: small, disabled: !has_selected_effect || selected_layer_locked)
+            Button("貼付", action: paste_effect_to_layer, tone: ghost, size: small, disabled: !has_effect_clipboard || selected_layer_locked)
+            }
+          }
+          If(has_effect_items) {
+            ForEach(effect_items, effect, key: id, height: 240, row_height: 28, overscan: 4) {
+              HStack(spacing: 4) {
+                If(effect.selected) { Button("{effect.name}", action: select_effect, tone: primary, size: small) } else { Button("{effect.name}", action: select_effect, tone: ghost, size: small) }
+                Spacer
+                Caption("{effect.kind}")
+                If(effect.can_move_up) { IconButton("arrow_up", action: move_effect_up, tone: ghost, size: small, disabled: selected_layer_locked) }
+                If(effect.can_move_down) { IconButton("arrow_down", action: move_effect_down, tone: ghost, size: small, disabled: selected_layer_locked) }
+                If(effect.enabled) { IconButton("eye", action: toggle_effect, tone: primary, size: small, disabled: selected_layer_locked) } else { IconButton("eye_off", action: toggle_effect, tone: ghost, size: small, disabled: selected_layer_locked) }
+                IconButton("close", action: remove_effect, tone: destructive, size: small, disabled: selected_layer_locked)
+              }
+            }
+          } else {
+            Caption("選択レイヤーにエフェクトはありません。＋ブラーから追加できます。")
+          }
+        } else {
+          Caption("シーンからエフェクトを適用するレイヤーを選んでください。")
+        }
+        If(has_effect_parameters) {
+          Spacer
+          VStack(spacing: 4) {
+            ForEach(effect_parameters, parameter, key: id) {
+              HStack(spacing: 5) {
+                MinWidth(72) { Caption("{parameter.label}") }
+                If(parameter.is_numeric && !selected_layer_locked) {
+                  Grow(1) { Slider(parameter.normalized, min: 0.0, max: 1.0, action: effect_parameter_slider_changed) }
+                  MaxWidth(72) { TextField(parameter.value, "0", action: effect_parameter_changed) }
+                } else {
+                  If(selected_layer_locked) { Caption("{parameter.value}") } else { TextField(parameter.value, "0", action: effect_parameter_changed) }
+                }
+                Caption("{parameter.unit}")
+                IconButton("diamond", action: effect_parameter_keyframe, tone: ghost, size: small, disabled: selected_layer_locked)
+              }
+            }
+          }
+        }
+        If(has_selected_effect_color) {
+          HStack(spacing: 5) {
+            MinWidth(72) { Caption("エフェクト色") }
+            If(selected_layer_locked) { Caption("{selected_effect_color}") } else { ColorPicker(selected_effect_color, action: effect_color_changed) }
+          }
+        }
+      }
+  }
+}
+
+component ColorWorkspacePanel() {
+  VStack(spacing: 6) {
+    Card { Padding(8) { VStack(spacing: 5) {
+      HStack(spacing: 6) { Text("色補正", size: 16) Spacer If(selected_layer) { Caption("{layer_name}") } else { Caption("レイヤー未選択") } }
+      If(selected_layer) {
+        Wrap(item_spacing: 4, line_spacing: 4) {
+          Button("HSL", action: add_hue_saturation, tone: ghost, size: small, disabled: selected_layer_locked)
+          Button("Levels", action: add_levels, tone: ghost, size: small, disabled: selected_layer_locked)
+          Button("色調", action: add_color_tint, tone: ghost, size: small, disabled: selected_layer_locked)
+          Button("ビネット", action: add_vignette, tone: ghost, size: small, disabled: selected_layer_locked)
+          Button("粒状", action: add_film_grain, tone: ghost, size: small, disabled: selected_layer_locked)
+          Button("WB", action: add_white_balance, tone: ghost, size: small, disabled: selected_layer_locked)
+          Button("Tritone", action: add_tritone, tone: ghost, size: small, disabled: selected_layer_locked)
+        }
+      } else {
+        Caption("シーンから色補正するレイヤーを選んでください。")
+      }
+      Wrap(item_spacing: 3, line_spacing: 3) {
+        Button("Parade", action: color_scope_parade, tone: ghost, size: small)
+        Button("Waveform", action: color_scope_waveform, tone: ghost, size: small)
+        Button("Vector", action: color_scope_vectorscope, tone: ghost, size: small)
+        Button("Hist", action: color_scope_histogram, tone: ghost, size: small)
+        Button("ホイールリセット", action: reset_color_wheels, tone: ghost, size: small)
+      }
+      HStack(spacing: 4) {
+        Grow(1) { Canvas("kagari.scopes").frame(height: 88) }
+        Grow(1) { Canvas("kagari.vectorscope").frame(height: 88) }
+      }
+      Canvas("kagari.color_wheels").frame(height: 96)
+      Caption("Lift: {color_lift_label} · Gamma: {color_gamma_label} · Gain: {color_gain_label}")
+    } } }
+    Card { Padding(8) { VStack(spacing: 5) {
+      HStack(spacing: 6) {
+        Text("VFX エンジン統合ハブ", size: 14).weight(semibold)
+        Spacer
+        If(engine_hub_expanded) { Button("閉じる", action: engine_hub_toggle, tone: ghost, size: small) } else { Button("展開 (13機能)", action: engine_hub_toggle, tone: ghost, size: small) }
+      }
+      If(engine_hub_expanded) {
+        Wrap(item_spacing: 3, line_spacing: 3) {
+          Button("スコープ計測", action: engine_analyze_color_scopes, tone: ghost, size: small)
+          Button("グレイン解析", action: engine_analyze_film_grain, tone: ghost, size: small)
+          Button("ProKeyer", action: engine_run_pro_keyer, tone: ghost, size: small)
+          Button("DAG/ROI", action: engine_run_deep_and_node_graph, tone: ghost, size: small)
+          Button("Roto調整", action: engine_run_roto_refine, tone: ghost, size: small)
+          Button("MoGraph3D", action: engine_run_mograph_cloner, tone: ghost, size: small)
+          Button("3Dカメラ/歪み", action: engine_run_sfm_and_lens, tone: ghost, size: small)
+          Button("クリーンプレート", action: engine_run_temporal_cleanplate, tone: ghost, size: small)
+          Button("Composer", action: engine_apply_composer_preset, tone: ghost, size: small)
+          Button("Pucker/Twist", action: engine_apply_shape_pucker_twist, tone: ghost, size: small)
+          Button("自動プロキシ", action: engine_auto_proxy_step, tone: ghost, size: small)
+          Button("Cryptomatte", action: engine_run_cryptomatte, tone: ghost, size: small)
+          Button("ACES 1.3", action: engine_run_aces_check, tone: ghost, size: small)
+        }
+        Caption("{engine_hub_status}")
+      }
+    } } }
+    EffectPanel()
+  }
+}

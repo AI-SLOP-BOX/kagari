@@ -58,7 +58,7 @@ pub fn convert_audio_to_keyframes(
     }
 
     let mut amp_layer = Layer::new_null(
-        format!("audio_amp_{}", comp.layers.len() + 1),
+        comp.next_layer_id("audio_amp"),
         "Audio Amplitude".to_string(),
         total_frames,
     );
@@ -118,7 +118,7 @@ pub fn convert_multiband_audio_to_keyframes(
     );
 
     let mut amp_layer = Layer::new_null(
-        format!("audio_multiband_amp_{}", comp.layers.len() + 1),
+        comp.next_layer_id("audio_multiband_amp"),
         "Audio Multi-Band Amplitude".to_string(),
         total_frames,
     );

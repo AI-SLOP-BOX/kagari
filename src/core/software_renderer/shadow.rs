@@ -6,6 +6,9 @@
 use crate::core::mask::point_in_polygon;
 use crate::core::timeline::{Composition, Layer, LayerType, Light3D, LightType, ShapeType};
 
+/// Direction from a surface toward the fixed parallel-light source.
+pub(crate) const PARALLEL_LIGHT_DIRECTION: [f32; 3] = [-1.0, -1.0, 1.0];
+
 /// Project a world point through a light onto the z=0 receiver plane.
 /// Returns None when the ray is parallel to the plane or points away.
 fn project_point_to_plane_z0(light: [f32; 3], point: [f32; 3]) -> Option<[f32; 2]> {
@@ -23,13 +26,29 @@ fn project_point_to_plane_z0(light: [f32; 3], point: [f32; 3]) -> Option<[f32; 2
     ])
 }
 
+/// Project a point along the renderer's fixed parallel-light ray direction.
+/// Surface lighting uses light direction `[-1,-1,1]`, so shadow rays travel
+/// toward `[1,1,-1]` and shift one composition unit per unit of caster height.
+fn project_parallel_point_to_plane_z0(point: [f32; 3]) -> Option<[f32; 2]> {
+    let ray = PARALLEL_LIGHT_DIRECTION.map(|component| -component);
+    if point[2] <= 0.0 || ray[2].abs() < f32::EPSILON {
+        return None;
+    }
+    let t = -point[2] / ray[2];
+    Some([point[0] + t * ray[0], point[1] + t * ray[1]])
+}
+
 /// Fill a convex polygon into the density buffer (scanline-free point test
 /// over the bbox — quads are tiny relative to frame, this is plenty fast).
+#[allow(clippy::too_many_arguments)]
 fn accumulate_polygon_density(
     density: &mut [f32],
     width: u32,
     height: u32,
     pts: &[[f32; 2]],
+    light: &Light3D,
+    light_pos: [f32; 3],
+    frame: u32,
     amount: f32,
 ) {
     if pts.len() < 3 || amount <= 0.0 {
@@ -60,11 +79,23 @@ fn accumulate_polygon_density(
         .ceil()
         .min(height as f32) as u32;
     for py in min_y..max_y.min(height) {
+        if super::render_cancelled() {
+            return;
+        }
         for px in min_x..max_x.min(width) {
             if point_in_polygon(px as f32 + 0.5, py as f32 + 0.5, pts) {
                 let idx = (py * width + px) as usize;
                 if idx < density.len() {
-                    density[idx] = (density[idx] + amount).min(1.0);
+                    let receiver = [px as f32 + 0.5, py as f32 + 0.5, 0.0];
+                    let (attenuation, cone) = if matches!(&light.light_type, LightType::Parallel) {
+                        (1.0, 1.0)
+                    } else {
+                        (
+                            light_attenuation(light, light_pos, receiver, frame),
+                            spot_cone_factor(light, light_pos, receiver, frame),
+                        )
+                    };
+                    density[idx] = (density[idx] + amount * attenuation * cone).min(1.0);
                 }
             }
         }
@@ -81,6 +112,9 @@ fn box_blur_f32(buf: &mut [f32], width: u32, height: u32, radius: u32) {
     let mut tmp = vec![0.0f32; buf.len()];
     // Horizontal
     for y in 0..h {
+        if super::render_cancelled() {
+            return;
+        }
         let row = &buf[y * w..(y + 1) * w];
         let out = &mut tmp[y * w..(y + 1) * w];
         for (x, slot) in out.iter_mut().enumerate() {
@@ -92,6 +126,9 @@ fn box_blur_f32(buf: &mut [f32], width: u32, height: u32, radius: u32) {
     }
     // Vertical
     for x in 0..w {
+        if super::render_cancelled() {
+            return;
+        }
         for y in 0..h {
             let lo = y.saturating_sub(r);
             let hi = (y + r + 1).min(h);
@@ -113,27 +150,27 @@ fn caster_outline_points(layer: &Layer, base_w: f32, base_h: f32, frame: u32) ->
             ShapeType::Ellipse { width, height } => {
                 let w = width.evaluate(frame).max(1.0) / 2.0;
                 let h = height.evaluate(frame).max(1.0) / 2.0;
-                Some(
-                    (0..24)
-                        .map(|i| {
-                            let a = i as f32 / 24.0 * std::f32::consts::TAU;
-                            [w * a.cos(), h * a.sin()]
-                        })
-                        .collect(),
-                )
+                let Some(mut points) = super::try_vec_with_capacity(24) else {
+                    return Vec::new();
+                };
+                for i in 0..24 {
+                    let a = i as f32 / 24.0 * std::f32::consts::TAU;
+                    points.push([w * a.cos(), h * a.sin()]);
+                }
+                Some(points)
             }
             ShapeType::Polygon { sides, radius } => {
                 let n = sides.evaluate(frame).round().max(3.0) as usize;
                 let r = radius.evaluate(frame).max(1.0);
-                Some(
-                    (0..n)
-                        .map(|i| {
-                            let a = i as f32 / n as f32 * std::f32::consts::TAU
-                                - std::f32::consts::FRAC_PI_2;
-                            [r * a.cos(), r * a.sin()]
-                        })
-                        .collect(),
-                )
+                let Some(mut points) = super::try_vec_with_capacity(n) else {
+                    return Vec::new();
+                };
+                for i in 0..n {
+                    let a =
+                        i as f32 / n as f32 * std::f32::consts::TAU - std::f32::consts::FRAC_PI_2;
+                    points.push([r * a.cos(), r * a.sin()]);
+                }
+                Some(points)
             }
             ShapeType::Star {
                 points,
@@ -143,16 +180,20 @@ fn caster_outline_points(layer: &Layer, base_w: f32, base_h: f32, frame: u32) ->
                 let n = points.evaluate(frame).round().max(3.0) as usize;
                 let ri = inner_radius.evaluate(frame).max(1.0);
                 let ro = outer_radius.evaluate(frame).max(ri);
-                Some(
-                    (0..n * 2)
-                        .map(|i| {
-                            let a = i as f32 / (n * 2) as f32 * std::f32::consts::TAU
-                                - std::f32::consts::FRAC_PI_2;
-                            let r = if i % 2 == 0 { ro } else { ri };
-                            [r * a.cos(), r * a.sin()]
-                        })
-                        .collect(),
-                )
+                let Some(point_count) = n.checked_mul(2) else {
+                    super::mark_render_allocation_failed();
+                    return Vec::new();
+                };
+                let Some(mut outline) = super::try_vec_with_capacity(point_count) else {
+                    return Vec::new();
+                };
+                for i in 0..point_count {
+                    let a = i as f32 / point_count as f32 * std::f32::consts::TAU
+                        - std::f32::consts::FRAC_PI_2;
+                    let r = if i % 2 == 0 { ro } else { ri };
+                    outline.push([r * a.cos(), r * a.sin()]);
+                }
+                Some(outline)
             }
             ShapeType::Rectangle { width, height, .. } => {
                 let hw = width.evaluate(frame).max(1.0) / 2.0;
@@ -169,31 +210,79 @@ fn caster_outline_points(layer: &Layer, base_w: f32, base_h: f32, frame: u32) ->
     shape_pts.unwrap_or_default()
 }
 
+/// Transform a centered layer-space caster point with the same Z*Y*X
+/// convention used by `Composition::resolve_world_transform_3d`.
+fn transform_3d_caster_point(layer: &Layer, frame: u32, point: [f32; 2]) -> [f32; 3] {
+    let position = layer.transform_3d.position.evaluate(frame);
+    let rotation = layer.transform_3d.rotation.evaluate(frame);
+    let scale = layer.transform_3d.scale.evaluate(frame);
+    let [rx, ry, rz] = rotation.map(f32::to_radians);
+    let (sx, cx) = rx.sin_cos();
+    let (sy, cy) = ry.sin_cos();
+    let (sz, cz) = rz.sin_cos();
+    let [x, y] = [point[0] * scale[0] / 100.0, point[1] * scale[1] / 100.0];
+    [
+        position[0] + cy * cz * x + (sx * sy * cz - cx * sz) * y,
+        position[1] + cy * sz * x + (sx * sy * sz + cx * cz) * y,
+        position[2] - sy * x + sx * cy * y,
+    ]
+}
+
 /// Build the shadow density map (0=lit, 1=fully shadowed) at comp resolution:
 /// every shadow-casting light projects every casting layer's world quad onto
 /// the z=0 plane; densities accumulate and are softened by a small blur.
 pub fn build_shadow_map(comp: &Composition, frame: u32, width: u32, height: u32) -> Vec<f32> {
+    build_shadow_map_scaled(
+        comp,
+        frame,
+        width,
+        height,
+        super::resolution::RenderScale::FULL,
+    )
+}
+
+pub(super) fn build_shadow_map_scaled(
+    comp: &Composition,
+    frame: u32,
+    width: u32,
+    height: u32,
+    render_scale: super::resolution::RenderScale,
+) -> Vec<f32> {
     let n = (width.max(1) as usize) * (height.max(1) as usize);
     let mut density = vec![0.0f32; n];
 
     for light in &comp.lights {
-        if !light.casts_shadows || light.intensity <= 0.0 {
+        if super::render_cancelled() {
+            return density;
+        }
+        let intensity = light.intensity_at(frame);
+        if !light.casts_shadows || intensity <= 0.0 {
             continue;
         }
-        let lpos = comp.light_position_at(light, frame);
-        let strength =
-            ((light.shadow_darkness / 100.0) * (light.intensity / 100.0)).clamp(0.0, 1.0);
+        let is_parallel = matches!(&light.light_type, LightType::Parallel);
+        let mut lpos = comp.light_position_at(light, frame);
+        lpos[0] *= render_scale.x;
+        lpos[1] *= render_scale.y;
+        let strength = ((light.shadow_darkness / 100.0) * (intensity / 100.0)).clamp(0.0, 1.0);
         if strength <= 0.003 {
             continue;
         }
         for layer in &comp.layers {
+            if super::render_cancelled() {
+                return density;
+            }
             if !layer.is_active(frame) || !layer.visible || !layer.material.cast_shadows {
                 continue;
             }
-            // Both the light and the caster geometry are evaluated at
-            // composition time. Time remapping changes source pixels, not
-            // the layer transform that casts the shadow.
-            let (pos, scale, rot, _op) = comp.resolve_world_transform(layer, frame);
+            let transmission = (layer.material.light_transmission / 100.0).clamp(0.0, 1.0);
+            let caster_strength = strength * (1.0 - transmission);
+            if caster_strength <= 0.003 {
+                continue;
+            }
+            // Time remapping changes source pixels, not the 3D transform that
+            // casts the shadow. Use the same 3D position, scale, and Euler
+            // rotation as the rendered plane; its independent 2D transform
+            // must not move or resize the shadow.
             // Outline points: real shape geometry when available (ellipse,
             // polygon, star, rect), else the full-size rect quad.
             let (base_w, base_h) = match &layer.layer_type {
@@ -214,29 +303,34 @@ pub fn build_shadow_map(comp: &Composition, frame: u32, width: u32, height: u32)
             if local_pts.len() < 3 {
                 continue;
             }
-            let lz = if layer.is_3d {
-                layer.transform_3d.position.evaluate(frame)[2]
-            } else {
-                0.0
+            let Some(mut caster_points) = super::try_vec_with_capacity(local_pts.len()) else {
+                continue;
             };
+            caster_points.extend(
+                local_pts
+                    .iter()
+                    .map(|point| transform_3d_caster_point(layer, frame, *point)),
+            );
             // Coplanar with the receiver plane: its "shadow" lands exactly on
             // itself and would blanket the frame — skip.
-            if lz.abs() < 1.0 {
+            if caster_points.iter().all(|point| point[2].abs() < 1.0) {
                 continue;
             }
-            let rad = rot.to_radians();
-            let (c, s) = (rad.cos(), rad.sin());
-            // Layer scale applies to shape-local coordinates too
-            let sx_mul = scale[0].abs() / 100.0;
-            let sy_mul = scale[1].abs() / 100.0;
-            let mut projected: Vec<[f32; 2]> = Vec::with_capacity(local_pts.len());
-            for cl in &local_pts {
-                let lx2 = cl[0] * sx_mul;
-                let ly2 = cl[1] * sy_mul;
-                let wx = pos[0] + lx2 * c - ly2 * s;
-                let wy = pos[1] + lx2 * s + ly2 * c;
-                match project_point_to_plane_z0(lpos, [wx, wy, lz]) {
-                    Some(p) => projected.push(p),
+            let Some(mut projected) = super::try_vec_with_capacity(caster_points.len()) else {
+                continue;
+            };
+            for point in caster_points {
+                let projection = if is_parallel {
+                    project_parallel_point_to_plane_z0(point)
+                } else {
+                    project_point_to_plane_z0(lpos, point)
+                };
+                match projection {
+                    Some(mut p) => {
+                        p[0] *= render_scale.x;
+                        p[1] *= render_scale.y;
+                        projected.push(p);
+                    }
                     None => {
                         projected.clear();
                         break;
@@ -244,21 +338,24 @@ pub fn build_shadow_map(comp: &Composition, frame: u32, width: u32, height: u32)
                 }
             }
             if projected.len() == local_pts.len() {
-                // Apply distance attenuation per shadow-casting pixel region
-
-                let atten = light_attenuation(light, lpos, [lpos[0], lpos[1], 0.0], frame);
                 accumulate_polygon_density(
                     &mut density,
                     width,
                     height,
                     &projected,
-                    strength * atten,
+                    light,
+                    lpos,
+                    frame,
+                    caster_strength,
                 );
             }
         }
     }
 
     // Soft penumbra
+    if super::render_cancelled() {
+        return density;
+    }
     box_blur_f32(
         &mut density,
         width,

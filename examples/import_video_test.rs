@@ -26,6 +26,7 @@ fn main() {
             frames_dir: asset.frames_dir.clone(),
             frame_count: asset.frame_count,
             audio_wav: asset.audio_wav.clone(),
+            audio_volume: kagari_vfx::core::property::Animatable::new_constant(0.0),
             speed: 1.0,
         },
         10,

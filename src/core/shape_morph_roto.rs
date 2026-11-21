@@ -1,5 +1,4 @@
-//! Advanced Bezier Path Morphing, Shape Boolean Operations, and
-//! Roto Brush 2/3 Temporal Propagation Engine (AE Parity).
+//! Bezier path morphing, shape boolean operations, and motion mask propagation helpers.
 
 #![allow(dead_code)]
 

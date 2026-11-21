@@ -1,0 +1,258 @@
+component HomeHeader() {
+    If(ui_locale != "") {
+    VStack(spacing: 14) {
+      VStack(spacing: 4) {
+        Text("{t.home_title}", size: 26).weight(bold)
+        Text("{t.home_subtitle}", size: 14)
+      }
+      If(narrow) {
+        VStack(spacing: 10) {
+          HomeActionNewCard()
+          HomeActionOpenCard()
+          HomeActionDemoCard()
+        }
+      } else {
+        HStack(spacing: 14) {
+          Grow(1) { HomeActionNewCard() }
+          Grow(1) { HomeActionOpenCard() }
+          Grow(1) { HomeActionDemoCard() }
+        }
+      }
+    }
+    }
+  }
+
+component HomeActionNewCard() {
+    If(ui_locale != "") {
+    HitArea("new_project", action: new_project) { Card(padding: 16, spacing: 6) {
+        HStack(spacing: 14) {
+          Svg("<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 44 44'><rect width='44' height='44' rx='10' fill='#282e39'/><path d='M22 15v14M15 22h14' stroke='#e2e8f0' stroke-width='2.2' stroke-linecap='round'/></svg>", 44, 44)
+          Grow(1) {
+            VStack(spacing: 3) {
+              Text("{t.home_new_project}", size: 16).weight(semibold)
+              Text("{t.home_new_project_sub}", size: 13)
+            }
+          }
+          Button("{t.home_create_btn}", action: new_project, tone: ghost, size: small)
+        }
+      } }
+    }
+  }
+
+component HomeActionOpenCard() {
+    If(ui_locale != "") {
+    HitArea("open_project", action: open_project) { Card(padding: 16, spacing: 6) {
+        HStack(spacing: 14) {
+          Svg("<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 44 44'><rect width='44' height='44' rx='10' fill='#282e39'/><path d='M14 17a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H16a2 2 0 0 1-2-2z' fill='none' stroke='#e2e8f0' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>", 44, 44)
+          Grow(1) {
+            VStack(spacing: 3) {
+              Text("{t.home_open_project}", size: 16).weight(semibold)
+              Text("{t.home_open_project_sub}", size: 13)
+            }
+          }
+          Button("{t.home_browse_btn}", action: open_project, tone: ghost, size: small)
+        }
+      } }
+    }
+  }
+
+component HomeActionDemoCard() {
+    If(ui_locale != "") {
+    HitArea("load_demo_vfx_scene", action: load_demo_vfx_scene) { Card(padding: 16, spacing: 6) {
+        HStack(spacing: 14) {
+          Svg("<svg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 44 44'><rect width='44' height='44' rx='10' fill='#282018' stroke='#ff8a2a' stroke-width='1.4'/><path d='M22 11l2.8 7.2L32 21l-7.2 2.8L22 31l-2.8-7.2L12 21l7.2-2.8z' fill='#ff8a2a'/></svg>", 44, 44)
+          Grow(1) {
+            VStack(spacing: 3) {
+              Text("{t.home_vfx_demo}", size: 16).weight(semibold)
+              Text("{t.home_vfx_demo_sub}")
+            }
+          }
+          Button("{t.home_try_btn}", action: load_demo_vfx_scene, tone: primary, size: small)
+        }
+      } }
+    }
+  }
+
+component RecentCardsGrid() {
+    If(ui_locale != "") {
+    VStack(spacing: 12) {
+      Surface(padding: 8, spacing: 0, radius: 6, border: false, background: "#14181f") {
+        HStack(spacing: 8) {
+          Text("{t.home_recent_title}", size: 15).weight(semibold)
+          Spacer
+          Button("{t.home_view_all}", action: go_projects, tone: ghost, size: small)
+        }
+      }
+      If(has_recent_1) {
+        Card(padding: 12, spacing: 0) {
+          HStack(spacing: 14) {
+            ZStack {
+              Svg("<svg xmlns='http://www.w3.org/2000/svg' width='144' height='81' viewBox='0 0 144 81'><defs><linearGradient id='rg' x1='0' y1='0' x2='1' y2='1'><stop offset='0%' stop-color='#212734'/><stop offset='100%' stop-color='#131720'/></linearGradient></defs><rect x='0.5' y='0.5' width='143' height='80' rx='6' fill='url(#rg)' stroke='#343b48'/><g transform='translate(58,27)' fill='none' stroke='#7c8798' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><rect x='2' y='4' width='24' height='18' rx='2.5'/><path d='M8 4v18M20 4v18M2 10h6M2 16h6M20 10h6M20 16h6'/></g></svg>", 144, 81)
+              AssetImage("kagari.home.recent.1", 1, 144, 81)
+            }
+            Grow(1) {
+              VStack(spacing: 4) {
+                Text("{recent_1_name}", size: 16).weight(semibold)
+                Text("{recent_1_res} · {recent_1_layers}レイヤー", size: 13)
+                Caption("最終更新 {recent_1_date}")
+              }
+            }
+            Button("編集を再開  →", action: open_recent_1, tone: primary, size: small)
+          }
+        }
+      } else {
+        Card(hover_strength: 0.0, hover_elevation: 0.0) { Padding(18) { HStack(spacing: 10) { Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#646d7a' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z'/></svg>", 16, 16) Text("{t.home_no_recent}", size: 14) Spacer Button("{t.home_open_project}", action: open_project, tone: secondary, size: small) } } }
+      }
+    }
+    }
+  }
+
+component QuickStartTemplates() {
+    If(ui_locale != "") {
+    VStack(spacing: 12) {
+      Surface(padding: 8, spacing: 0, radius: 6, border: false, background: "#14181f") {
+        HStack(spacing: 8) {
+          Text("{t.home_presets_title}", size: 15).weight(semibold)
+          Spacer
+          Button("{t.home_custom_setup}", action: new_project, tone: ghost, size: small)
+        }
+      }
+      If(narrow) {
+        Wrap(item_spacing: 12, line_spacing: 12) {
+          QuickStartCard1080()
+          QuickStartCard4K()
+          QuickStartCardVertical()
+          QuickStartCardSquare()
+        }
+      } else {
+        HStack(spacing: 12) {
+          Grow(1) { QuickStartCard1080() }
+          Grow(1) { QuickStartCard4K() }
+          Grow(1) { QuickStartCardVertical() }
+          Grow(1) { QuickStartCardSquare() }
+        }
+      }
+    }
+    }
+  }
+
+component QuickStartCard1080() {
+    If(ui_locale != "") {
+    HitArea("quick_start_1080p60", action: quick_start_1080p60) { Card(padding: 18, spacing: 6) {
+        Padding(vertical: 4) {
+          HStack(spacing: 10) {
+            Svg("<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='#d8dee4' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='2' y='4' width='20' height='14' rx='2.5'/><polygon points='10 8 15 11 10 14'/><line x1='8' y1='21' x2='16' y2='21'/></svg>", 20, 20)
+            Grow(1) {
+              VStack(spacing: 6) {
+                Text("{t.preset_fhd}", size: 15).weight(semibold)
+                Text("1920×1080", size: 13)
+                Caption("{t.preset_60fps_10s}")
+              }
+            }
+          }
+        }
+      } }
+    }
+  }
+
+component QuickStartCard4K() {
+    If(ui_locale != "") {
+    HitArea("quick_start_4k24", action: quick_start_4k24) { Card(padding: 18, spacing: 6) {
+        Padding(vertical: 4) {
+          HStack(spacing: 10) {
+            Svg("<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='#d8dee4' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='2' y='4' width='20' height='14' rx='2.5'/><line x1='8' y1='21' x2='16' y2='21'/></svg>", 20, 20)
+            Grow(1) {
+              VStack(spacing: 6) {
+                Text("{t.preset_4k}", size: 15).weight(semibold)
+                Text("3840×2160", size: 13)
+                Caption("{t.preset_24fps_10s}")
+              }
+            }
+          }
+        }
+      } }
+    }
+  }
+
+component QuickStartCardVertical() {
+    If(ui_locale != "") {
+    HitArea("quick_start_vertical", action: quick_start_vertical) { Card(padding: 18, spacing: 6) {
+        Padding(vertical: 4) {
+          HStack(spacing: 10) {
+            Svg("<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='#d8dee4' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='6' y='2' width='12' height='20' rx='2.5'/><line x1='10' y1='18' x2='14' y2='18'/></svg>", 20, 20)
+            Grow(1) {
+              VStack(spacing: 6) {
+                Text("{t.preset_vertical}", size: 15).weight(semibold)
+                Text("1080×1920", size: 13)
+                Caption("{t.preset_60fps_10s}")
+              }
+            }
+          }
+        }
+      } }
+    }
+  }
+
+component QuickStartCardSquare() {
+    If(ui_locale != "") {
+    HitArea("quick_start_square", action: quick_start_square) { Card(padding: 18, spacing: 6) {
+        Padding(vertical: 4) {
+          HStack(spacing: 10) {
+            Svg("<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='#d8dee4' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='4' y='4' width='16' height='16' rx='2.5'/></svg>", 20, 20)
+            Grow(1) {
+              VStack(spacing: 6) {
+                Text("{t.preset_square}", size: 15).weight(semibold)
+                Text("1080×1080", size: 13)
+                Caption("{t.preset_30fps_10s}")
+              }
+            }
+          }
+        }
+      } }
+    }
+  }
+
+component HomePanel() {
+    HStack(spacing: 0) {
+      Align(stretch) { HomeNavRail() }
+      Grow(1) {
+        Align(stretch) {
+          VStack(spacing: 0) {
+            If(!narrow) {
+              Padding(horizontal: 24, vertical: 14) {
+                HStack(spacing: 8) {
+                  Spacer
+                  CommandSearchButton()
+                }
+              }
+            }
+            Grow(1) {
+              ScrollView(760) {
+                Padding(horizontal: 24, vertical: 20) {
+                  MaxWidth(1040) {
+                    VStack(spacing: 28) {
+                      HomeHeader()
+                      RecentCardsGrid()
+                      QuickStartTemplates()
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+component HomeFooter() {
+    Card(hover_strength: 0.0, hover_elevation: 0.0) {
+      Padding(8) {
+        HStack(spacing: 8) {
+          Caption("Kagari Studio · ホーム")
+          Spacer
+          Caption("v0.3.0")
+        }
+      }
+    }
+  }

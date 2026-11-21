@@ -27,7 +27,45 @@ If you redistribute Kagari VFX binaries, keep this file alongside them and
 do not remove the copyright headers above. That satisfies the MPL-2.0
 notice and Larger-Work requirements for unmodified use.
 
-## 2. Embedded fonts (attribution required)
+## 2. SVG rasterization (Apache-2.0 OR MIT; BSD-3-Clause)
+
+- `resvg 0.48.1` and `usvg 0.48.1` — SVG rendering and parsing, including
+  the guarded SVG image import path. Both are Apache-2.0 OR MIT.
+  Upstream: https://github.com/linebender/resvg
+- `tiny-skia 0.12.0` — CPU raster surface used by resvg; BSD-3-Clause.
+  Upstream: https://github.com/linebender/tiny-skia
+
+The tiny-skia BSD-3-Clause notice and disclaimer:
+
+Copyright (c) 2011 Google Inc. All rights reserved.
+Copyright (c) 2020 Yevhenii Reizner All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+1. Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+
+## 3. Embedded fonts (attribution required)
 
 - egui default fonts (`epaint_default_fonts 0.29`):
   OFL-1.1 **and** LicenseRef-UFL-1.0 (Ubuntu Font Licence). Rendered
@@ -36,13 +74,13 @@ notice and Larger-Work requirements for unmodified use.
 - Phosphor icon font (loaded at runtime by `egui-phosphor`, OFL-1.1
   upstream at https://github.com/phosphor-icons). Same OFL conditions.
 
-## 3. Unicode data
+## 4. Unicode data
 
 ICU crates (`zerovec`, `zerotrie`, `yoke`, `writeable`, …) carry
 `Unicode-3.0` (Unicode DFS) data tables. See
 https://www.unicode.org/license.html.
 
-## 4. FFmpeg — external tool, NOT distributed (license-relevant)
+## 5. FFmpeg — external tool, NOT distributed (license-relevant)
 
 Video import/export shells out to an `ffmpeg` binary found on `PATH`.
 Kagari VFX **does not link, embed, or ship FFmpeg**:
@@ -60,7 +98,7 @@ Kagari VFX **does not link, embed, or ship FFmpeg**:
   alongside, or switch our invocations to non-GPL encoders
   (`mpeg4`, `libvpx-vp9`, `aac` via the native encoder) before bundling.
 
-## 5. Coverage gaps in this audit
+## 6. Coverage gaps in this audit
 
 41 platform-specific crates (Linux `alsa`/`zbus`/`wayland-backend`,
 Windows `windows-*`, Android `ndk`/`oboe`, plus `cc`, `futures-*`,
@@ -69,7 +107,7 @@ could not be machine-verified here. They are all published under MIT /
 Apache-2.0 upstream, but re-run the scan (`Cargo.lock` → registry
 metadata) before cutting release binaries for those targets.
 
-## 6. Dual/triple-licensed crates
+## 7. Dual/triple-licensed crates
 
 `r-efi` is `MIT OR Apache-2.0 OR LGPL-2.1-or-later`; this project uses it
 under the MIT/Apache-2.0 alternatives, so no LGPL obligations arise.
