@@ -107,9 +107,11 @@ app AfterEffectsStudio {
               Card(hover_strength: 0.0, hover_elevation: 0.0, background: "#181d25", border_color: "#2b3240") {
           VStack(spacing: 12) {
             HStack(spacing: 8) {
-              Text("検索")
-                .font_size(14)
-                .weight(semibold)
+              If(ui_locale != "") {
+                Text("{t.cmd_palette_title}")
+                  .font_size(14)
+                  .weight(semibold)
+              }
               Spacer
               Button("Esc", action: toggle_command_palette, tone: secondary, size: small)
             }

@@ -13,6 +13,8 @@ CASES = {
     "home_ja_1600": ["measure", STUDIO, "--width", "1600", "--height", "1000", "--output", "summary"],
     "home_en_1600": ["measure", STUDIO, "--width", "1600", "--height", "1000", "--bindings", "ui_locale=en", "--output", "summary"],
     "editor_ja_1600": ["measure", STUDIO, "--width", "1600", "--height", "1000", "--bindings", "home_page=false", "--bindings", "editor_page=true", "--output", "summary"],
+    "editor_en_1600": ["measure", STUDIO, "--width", "1600", "--height", "1000", "--bindings", "ui_locale=en", "--bindings", "home_page=false", "--bindings", "editor_page=true", "--output", "summary"],
+    "command_palette_1600": ["measure", STUDIO, "--width", "1600", "--height", "1000", "--bindings", "command_palette_open=true", "--output", "summary"],
     "settings_en_1600": ["measure", STUDIO, "--width", "1600", "--height", "1000", "--bindings", "ui_locale=en", "--bindings", "settings_page=true", "--output", "summary"],
     "export_en_1600": ["measure", STUDIO, "--width", "1600", "--height", "1000", "--bindings", "ui_locale=en", "--bindings", "home_page=false", "--bindings", "export_page=true", "--output", "summary"],
     "scale_200_1600": ["measure", STUDIO, "--width", "1600", "--height", "1000", "--scale", "2.0", "--output", "summary"],

@@ -1,22 +1,25 @@
 component SettingsGeneralPage() {
   If(ui_locale != "") {
   VStack(spacing: 12) {
-    VStack(spacing: 4) { Title("一般") Caption("アプリケーションの基本的な動作を設定します。") }
+    VStack(spacing: 4) { Title("{t.settings_gen_title}") Caption("{t.settings_gen_sub}") }
 
     Card(padding: 12, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
-      Text("起動と終了", size: 13)
-      SettingsRow("起動時の動作", label_width: 170) {
-        Checkbox("ホーム画面を開く", show_home_on_startup, action: setting_home_changed)
+      Text("{t.settings_gen_startup_section}", size: 13)
+      HStack(spacing: 12) {
+        Text("{t.settings_gen_startup_action}", size: 13).frame(width: 170)
+        Checkbox("{t.settings_gen_show_home}", show_home_on_startup, action: setting_home_changed)
       }
       If(!show_home_on_startup) {
         SettingsRow("再開する", label_width: 170) {
           Checkbox("前回のプロジェクトを開く", restore_previous_state, action: setting_restore_changed)
         }
       }
-      SettingsRow("終了時の確認", label_width: 170) {
-        Checkbox("プロジェクトを閉じる前に確認ダイアログを表示する", confirm_exit, action: setting_confirm_exit_changed)
+      HStack(spacing: 12) {
+        Text("{t.settings_gen_confirm_exit}", size: 13).frame(width: 170)
+        Checkbox("{t.settings_gen_confirm_exit_chk}", confirm_exit, action: setting_confirm_exit_changed)
       }
-      SettingsRow("自動保存", label_width: 170) {
+      HStack(spacing: 12) {
+        Text("{t.settings_gen_autosave}", size: 13).frame(width: 170)
         Select(autosave_interval, action: setting_autosave_interval_changed) {
           Option("0", "無効")
           Option("30", "30秒")
@@ -31,14 +34,17 @@ component SettingsGeneralPage() {
     }
 
     Card(padding: 12, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
-      Text("インターフェース", size: 13)
-      SettingsRow("テーマ", label_width: 170) {
-        Caption("ダーク (推奨)")
+      Text("{t.settings_gen_ui_section}", size: 13)
+      HStack(spacing: 12) {
+        Text("{t.settings_gen_theme}", size: 13).frame(width: 170)
+        Caption("{t.settings_gen_theme_dark}")
       }
-      SettingsRow("{t.settings_language}", label_width: 170) {
+      HStack(spacing: 12) {
+        Text("{t.settings_language}", size: 13).frame(width: 170)
         LocaleSelect()
       }
-      SettingsRow("アクセントカラー", label_width: 170) {
+      HStack(spacing: 12) {
+        Text("{t.settings_gen_accent}", size: 13).frame(width: 170)
         ColorSwatches(selected: accent_color) {
           Swatch("#f39c29")
           Swatch("#2b82f6")
@@ -50,20 +56,25 @@ component SettingsGeneralPage() {
           Swatch("#06b6d4")
         }
       }
-      SettingsRow("UI の拡大率", label_width: 170) {
+      HStack(spacing: 12) {
+        Text("{t.settings_gen_scale}", size: 13).frame(width: 170)
         HStack(spacing: 6) { Text("100%") Caption("(標準)") }
       }
     }
 
     Card(padding: 12, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
-      Text("プロジェクト", size: 13)
-      SettingsRow("新規プロジェクトの場所", label_width: 190) {
-        AttachedButton("参照…", action: setting_project_dir_browse) {
-          TextField(project_dir, "保存先フォルダ", action: setting_project_dir_changed)
+      Text("{t.settings_gen_project_section}", size: 13)
+      HStack(spacing: 12) {
+        Text("{t.settings_gen_project_dir}", size: 13).frame(width: 190)
+        Grow(1) {
+          AttachedButton("参照…", action: setting_project_dir_browse) {
+            TextField(project_dir, "保存先フォルダ", action: setting_project_dir_changed)
+          }
         }
       }
-      SettingsRow("自動命名", label_width: 190) {
-        Checkbox("プロジェクトに自動で名前を付ける（例：プロジェクト 1、2…）", auto_project_names, action: setting_auto_project_names_changed)
+      HStack(spacing: 12) {
+        Text("{t.settings_gen_autoname}", size: 13).frame(width: 190)
+        Checkbox("{t.settings_gen_autoname_chk}", auto_project_names, action: setting_auto_project_names_changed)
       }
     }
   }
