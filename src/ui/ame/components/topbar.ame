@@ -2,7 +2,7 @@ component CommandSearchButton() {
     If(ui_locale != "") {
     HitArea("検索", action: toggle_command_palette) {
       ZStack {
-        Svg("<svg xmlns='http://www.w3.org/2000/svg' width='136' height='32' viewBox='0 0 136 32'><rect x='0.5' y='0.5' width='135' height='31' rx='15.5' fill='#1c2129' stroke='#2d3442'/></svg>", 136, 32)
+        Svg("<svg xmlns='http://www.w3.org/2000/svg' width='148' height='32' viewBox='0 0 148 32'><rect x='0.5' y='0.5' width='147' height='31' rx='15.5' fill='#1c2129' stroke='#2d3442'/></svg>", 148, 32)
         Padding(horizontal: 10, vertical: 6) {
           HStack(spacing: 8) {
             Svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#8d95a2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><path d='m21 21-4.3-4.3'/></svg>", 14, 14)

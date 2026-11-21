@@ -252,31 +252,31 @@ app AfterEffectsStudio {
         ZStack {
           MainContent()
           If(project_switch_confirm_open) {
-          ZStack {
-            Surface(padding: 0, spacing: 0, radius: 0, border: false, background: "#06090f") { Spacer }.opacity(modal_scrim_opacity)
-            Center { ProjectSwitchConfirmModal() }
+            ZStack {
+              Surface(padding: 0, spacing: 0, radius: 0, border: false, background: "#06090f") { Spacer }.opacity(modal_scrim_opacity)
+              Center { ProjectSwitchConfirmModal() }
+            }
           }
-        }
-        If(composition_remove_confirm_open) {
-          ZStack {
-            Surface(padding: 0, spacing: 0, radius: 0, border: false, background: "#06090f") { Spacer }.opacity(modal_scrim_opacity)
-            Center { CompositionRemoveConfirmModal() }
+          If(composition_remove_confirm_open) {
+            ZStack {
+              Surface(padding: 0, spacing: 0, radius: 0, border: false, background: "#06090f") { Spacer }.opacity(modal_scrim_opacity)
+              Center { CompositionRemoveConfirmModal() }
+            }
           }
-        }
-        If(layer_remove_confirm_open) {
-          ZStack {
-            Surface(padding: 0, spacing: 0, radius: 0, border: false, background: "#06090f") { Spacer }.opacity(modal_scrim_opacity)
-            Center { LayerRemoveConfirmModal() }
+          If(layer_remove_confirm_open) {
+            ZStack {
+              Surface(padding: 0, spacing: 0, radius: 0, border: false, background: "#06090f") { Spacer }.opacity(modal_scrim_opacity)
+              Center { LayerRemoveConfirmModal() }
+            }
           }
-        }
-        If(exit_confirm_open) {
-          ZStack {
-            Surface(padding: 0, spacing: 0, radius: 0, border: false, background: "#06090f") { Spacer }.opacity(modal_scrim_opacity)
-            Center { ExitConfirmModal() }
+          If(exit_confirm_open) {
+            ZStack {
+              Surface(padding: 0, spacing: 0, radius: 0, border: false, background: "#06090f") { Spacer }.opacity(modal_scrim_opacity)
+              Center { ExitConfirmModal() }
+            }
           }
         }
       }
     }
   }
-}
 }

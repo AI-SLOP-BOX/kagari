@@ -18,7 +18,7 @@ CASES = {
     "scale_200_1600": ["measure", STUDIO, "--width", "1600", "--height", "1000", "--scale", "2.0", "--output", "summary"],
     "scale_125_1600": ["measure", STUDIO, "--width", "1600", "--height", "1000", "--scale", "1.25", "--output", "summary"],
     "theme_light_1600": ["measure", STUDIO, "--width", "1600", "--height", "1000", "--system-theme", "light", "--output", "summary"],
-    "min_size_640": ["measure", STUDIO, "--width", "640", "--height", "480", "--output", "summary"],
+    "min_size_640": ["measure", STUDIO, "--width", "640", "--height", "480", "--bindings", "narrow=true", "--output", "summary"],
     "aot_bytecode": ["build", STUDIO, "--target", "bytecode", "-o", "/tmp/kagari_probe_matrix.amec"],
 }
 

@@ -137,67 +137,79 @@ component QuickStartTemplates() {
   }
 
 component QuickStartCard1080() {
+    If(ui_locale != "") {
     HitArea("quick_start_1080p60", action: quick_start_1080p60) { Card(padding: 18, spacing: 6) {
         Padding(vertical: 4) {
           HStack(spacing: 10) {
             Svg("<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='#d8dee4' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='2' y='4' width='20' height='14' rx='2.5'/><polygon points='10 8 15 11 10 14'/><line x1='8' y1='21' x2='16' y2='21'/></svg>", 20, 20)
-            VStack(spacing: 6) {
-              Text("フルHD", size: 15).weight(semibold)
-              Text("1920×1080", size: 13)
-              Caption("60fps · 10秒")
+            Grow(1) {
+              VStack(spacing: 6) {
+                Text("{t.preset_fhd}", size: 15).weight(semibold)
+                Text("1920×1080", size: 13)
+                Caption("{t.preset_60fps_10s}")
+              }
             }
-            Spacer
           }
         }
       } }
+    }
   }
 
 component QuickStartCard4K() {
+    If(ui_locale != "") {
     HitArea("quick_start_4k24", action: quick_start_4k24) { Card(padding: 18, spacing: 6) {
         Padding(vertical: 4) {
           HStack(spacing: 10) {
             Svg("<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='#d8dee4' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='2' y='4' width='20' height='14' rx='2.5'/><line x1='8' y1='21' x2='16' y2='21'/></svg>", 20, 20)
-            VStack(spacing: 6) {
-              Text("4K", size: 15).weight(semibold)
-              Text("3840×2160", size: 13)
-              Caption("24fps · 10秒")
+            Grow(1) {
+              VStack(spacing: 6) {
+                Text("{t.preset_4k}", size: 15).weight(semibold)
+                Text("3840×2160", size: 13)
+                Caption("{t.preset_24fps_10s}")
+              }
             }
-            Spacer
           }
         }
       } }
+    }
   }
 
 component QuickStartCardVertical() {
+    If(ui_locale != "") {
     HitArea("quick_start_vertical", action: quick_start_vertical) { Card(padding: 18, spacing: 6) {
         Padding(vertical: 4) {
           HStack(spacing: 10) {
             Svg("<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='#d8dee4' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='6' y='2' width='12' height='20' rx='2.5'/><line x1='10' y1='18' x2='14' y2='18'/></svg>", 20, 20)
-            VStack(spacing: 6) {
-              Text("縦型", size: 15).weight(semibold)
-              Text("1080×1920", size: 13)
-              Caption("60fps · 10秒")
+            Grow(1) {
+              VStack(spacing: 6) {
+                Text("{t.preset_vertical}", size: 15).weight(semibold)
+                Text("1080×1920", size: 13)
+                Caption("{t.preset_60fps_10s}")
+              }
             }
-            Spacer
           }
         }
       } }
+    }
   }
 
 component QuickStartCardSquare() {
+    If(ui_locale != "") {
     HitArea("quick_start_square", action: quick_start_square) { Card(padding: 18, spacing: 6) {
         Padding(vertical: 4) {
           HStack(spacing: 10) {
             Svg("<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='#d8dee4' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='4' y='4' width='16' height='16' rx='2.5'/></svg>", 20, 20)
-            VStack(spacing: 6) {
-              Text("正方形", size: 15).weight(semibold)
-              Text("1080×1080", size: 13)
-              Caption("30fps · 10秒")
+            Grow(1) {
+              VStack(spacing: 6) {
+                Text("{t.preset_square}", size: 15).weight(semibold)
+                Text("1080×1080", size: 13)
+                Caption("{t.preset_30fps_10s}")
+              }
             }
-            Spacer
           }
         }
       } }
+    }
   }
 
 component HomePanel() {
