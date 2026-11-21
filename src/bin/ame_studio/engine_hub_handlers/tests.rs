@@ -72,6 +72,9 @@ mod engine_hub_tests {
             "add_generator_grid",
             "add_generator_gradient",
             "add_generator_cells",
+            "add_generator_light_leak",
+            "add_generator_film_grain",
+            "add_generator_anamorphic_flare",
         ] {
             app.handle_action(HostAction {
                 name: act.to_owned(),
@@ -82,7 +85,7 @@ mod engine_hub_tests {
         }
         assert_eq!(
             app.project_model.active_composition().layers.len(),
-            base_layers + 4
+            base_layers + 7
         );
         app.handle_action(HostAction {
             name: "time_remap_optical_flow".to_owned(),

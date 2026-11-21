@@ -2,19 +2,27 @@ use super::*;
 
 impl AfterEffectsStudio {
     pub(super) fn add_ae_generator_layer(&mut self, gen_idx: u8, label: &str) {
-        use kagari_vfx::core::timeline::{Animatable, Effect, EffectType, LayerType};
-        if gen_idx == 2 || gen_idx == 3 {
+        use kagari_vfx::core::timeline::{Animatable, BlendMode, Effect, EffectType, LayerType};
+        if (2..=6).contains(&gen_idx) {
             let center = {
                 let comp = self.project_model.active_composition();
                 [comp.width as f64 * 0.5, comp.height as f64 * 0.5]
             };
-            self.add_canvas_layer(
-                label.to_owned(),
-                LayerType::Solid {
+            let layer_type = match gen_idx {
+                5 => LayerType::Solid {
+                    color: [0.0, 0.0, 0.0, 0.0],
+                },
+                4 => LayerType::Solid {
+                    color: [0.06, 0.03, 0.02, 1.0],
+                },
+                6 => LayerType::Solid {
+                    color: [0.01, 0.03, 0.06, 1.0],
+                },
+                _ => LayerType::Solid {
                     color: [0.12, 0.16, 0.24, 1.0],
                 },
-                center,
-            );
+            };
+            self.add_canvas_layer(label.to_owned(), layer_type, center);
             if let Some(layer_id) = self.selected_layer_id.clone() {
                 if let Some(layer) = self
                     .project_model
@@ -23,50 +31,150 @@ impl AfterEffectsStudio {
                     .iter_mut()
                     .find(|l| l.id == layer_id)
                 {
-                    if gen_idx == 2 {
-                        layer.effects.push(Effect {
-                            id: format!("proc_grad_{}", self.current_frame),
-                            name: "Gradient Map (非破壊)".to_owned(),
-                            effect_type: EffectType::GradientMap {
-                                low_color: Animatable::new_constant([0.08, 0.18, 0.48]),
-                                mid_color: Animatable::new_constant([0.32, 0.62, 0.96]),
-                                high_color: Animatable::new_constant([0.98, 0.68, 0.24]),
-                            },
-                            enabled: true,
-                        });
-                        layer.effects.push(Effect {
-                            id: format!("proc_turb_{}", self.current_frame),
-                            name: "Turbulent Flow".to_owned(),
-                            effect_type: EffectType::TurbulentDisplace {
-                                amount: Animatable::new_constant(24.0),
-                                size: Animatable::new_constant(90.0),
-                                evolution: Animatable::new_constant(0.0),
-                                complexity: Animatable::new_constant(2.0),
-                            },
-                            enabled: true,
-                        });
-                    } else {
-                        layer.effects.push(Effect {
-                            id: format!("proc_noise_{}", self.current_frame),
-                            name: "Fractal Cells (非破壊)".to_owned(),
-                            effect_type: EffectType::FractalNoise {
-                                fractal_type: Animatable::new_constant(1.0),
-                                contrast: Animatable::new_constant(135.0),
-                                brightness: Animatable::new_constant(5.0),
-                                complexity: Animatable::new_constant(3.0),
-                                evolution: Animatable::new_constant(0.0),
-                            },
-                            enabled: true,
-                        });
-                        layer.effects.push(Effect {
-                            id: format!("proc_colorama_{}", self.current_frame),
-                            name: "Colorama".to_owned(),
-                            effect_type: EffectType::Colorama {
-                                preset_index: Animatable::new_constant(1.0),
-                                cycle_phase: Animatable::new_constant(0.25),
-                            },
-                            enabled: true,
-                        });
+                    match gen_idx {
+                        2 => {
+                            layer.effects.push(Effect {
+                                id: format!("proc_grad_{}", self.current_frame),
+                                name: "Gradient Map (非破壊)".to_owned(),
+                                effect_type: EffectType::GradientMap {
+                                    low_color: Animatable::new_constant([0.08, 0.18, 0.48]),
+                                    mid_color: Animatable::new_constant([0.32, 0.62, 0.96]),
+                                    high_color: Animatable::new_constant([0.98, 0.68, 0.24]),
+                                },
+                                enabled: true,
+                            });
+                            layer.effects.push(Effect {
+                                id: format!("proc_turb_{}", self.current_frame),
+                                name: "Turbulent Flow".to_owned(),
+                                effect_type: EffectType::TurbulentDisplace {
+                                    amount: Animatable::new_constant(24.0),
+                                    size: Animatable::new_constant(90.0),
+                                    evolution: Animatable::new_constant(0.0),
+                                    complexity: Animatable::new_constant(2.0),
+                                },
+                                enabled: true,
+                            });
+                        }
+                        3 => {
+                            layer.effects.push(Effect {
+                                id: format!("proc_noise_{}", self.current_frame),
+                                name: "Fractal Cells (非破壊)".to_owned(),
+                                effect_type: EffectType::FractalNoise {
+                                    fractal_type: Animatable::new_constant(1.0),
+                                    contrast: Animatable::new_constant(135.0),
+                                    brightness: Animatable::new_constant(5.0),
+                                    complexity: Animatable::new_constant(3.0),
+                                    evolution: Animatable::new_constant(0.0),
+                                },
+                                enabled: true,
+                            });
+                            layer.effects.push(Effect {
+                                id: format!("proc_colorama_{}", self.current_frame),
+                                name: "Colorama".to_owned(),
+                                effect_type: EffectType::Colorama {
+                                    preset_index: Animatable::new_constant(1.0),
+                                    cycle_phase: Animatable::new_constant(0.25),
+                                },
+                                enabled: true,
+                            });
+                        }
+                        4 => {
+                            layer.blend_mode = BlendMode::Screen;
+                            layer.effects.push(Effect {
+                                id: format!("proc_sweep_{}", self.current_frame),
+                                name: "Optical Light Sweep".to_owned(),
+                                effect_type: EffectType::LightSweep {
+                                    direction_deg: Animatable::new_constant(28.0),
+                                    center: Animatable::new_constant(0.32),
+                                    width: Animatable::new_constant(180.0),
+                                    sweep_intensity: Animatable::new_constant(88.0),
+                                    edge_intensity: Animatable::new_constant(28.0),
+                                },
+                                enabled: true,
+                            });
+                            layer.effects.push(Effect {
+                                id: format!("proc_leak_grad_{}", self.current_frame),
+                                name: "Light Leak Palette".to_owned(),
+                                effect_type: EffectType::GradientMap {
+                                    low_color: Animatable::new_constant([0.04, 0.01, 0.02]),
+                                    mid_color: Animatable::new_constant([0.92, 0.36, 0.14]),
+                                    high_color: Animatable::new_constant([1.0, 0.82, 0.44]),
+                                },
+                                enabled: true,
+                            });
+                            layer.effects.push(Effect {
+                                id: format!("proc_leak_glow_{}", self.current_frame),
+                                name: "Optical Bloom".to_owned(),
+                                effect_type: EffectType::GlowPro {
+                                    threshold: Animatable::new_constant(35.0),
+                                    radius: Animatable::new_constant(42.0),
+                                    intensity: Animatable::new_constant(1.4),
+                                },
+                                enabled: true,
+                            });
+                        }
+                        5 => {
+                            layer.is_adjustment_layer = true;
+                            layer.effects.push(Effect {
+                                id: format!("proc_grain_{}", self.current_frame),
+                                name: "35mm Film Grain".to_owned(),
+                                effect_type: EffectType::FilmGrain {
+                                    intensity: Animatable::new_constant(18.0),
+                                    grain_size: 1.4,
+                                    color_film: true,
+                                },
+                                enabled: true,
+                            });
+                            layer.effects.push(Effect {
+                                id: format!("proc_vignette_{}", self.current_frame),
+                                name: "Cinema Vignette".to_owned(),
+                                effect_type: EffectType::Vignette {
+                                    intensity: Animatable::new_constant(32.0),
+                                    roundness: Animatable::new_constant(50.0),
+                                    feather: Animatable::new_constant(65.0),
+                                    color: Animatable::new_constant([0.0, 0.0, 0.0, 1.0]),
+                                },
+                                enabled: true,
+                            });
+                        }
+                        _ => {
+                            layer.blend_mode = BlendMode::Add;
+                            layer.effects.push(Effect {
+                                id: format!("proc_flare_{}", self.current_frame),
+                                name: "Anamorphic Flare".to_owned(),
+                                effect_type: EffectType::LensFlare {
+                                    enabled: Animatable::new_constant(1.0),
+                                    position_x: Animatable::new_constant(0.5),
+                                    position_y: Animatable::new_constant(0.45),
+                                    intensity: Animatable::new_constant(1.25),
+                                    threshold: Animatable::new_constant(0.2),
+                                    color: Animatable::new_constant([0.38, 0.72, 1.0, 1.0]),
+                                    link_to_light: None,
+                                },
+                                enabled: true,
+                            });
+                            layer.effects.push(Effect {
+                                id: format!("proc_flare_ca_{}", self.current_frame),
+                                name: "Lens Fringing".to_owned(),
+                                effect_type: EffectType::ChromaticAberration {
+                                    shift_r: Animatable::new_constant(2.5),
+                                    shift_b: Animatable::new_constant(-2.5),
+                                    edge_falloff: Animatable::new_constant(0.6),
+                                    iris_linked: true,
+                                },
+                                enabled: true,
+                            });
+                            layer.effects.push(Effect {
+                                id: format!("proc_flare_glow_{}", self.current_frame),
+                                name: "Streak Glow".to_owned(),
+                                effect_type: EffectType::GlowPro {
+                                    threshold: Animatable::new_constant(40.0),
+                                    radius: Animatable::new_constant(36.0),
+                                    intensity: Animatable::new_constant(1.2),
+                                },
+                                enabled: true,
+                            });
+                        }
                     }
                 }
                 self.mark_project_changed();
@@ -77,8 +185,8 @@ impl AfterEffectsStudio {
         let (w, h, center) = {
             let comp = self.project_model.active_composition();
             (
-                comp.width.clamp(128, 640),
-                comp.height.clamp(72, 360),
+                comp.width.clamp(128, 1920),
+                comp.height.clamp(72, 1080),
                 [comp.width as f64 * 0.5, comp.height as f64 * 0.5],
             )
         };

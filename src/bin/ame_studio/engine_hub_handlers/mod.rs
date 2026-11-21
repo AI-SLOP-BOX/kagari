@@ -408,6 +408,18 @@ impl AfterEffectsStudio {
                 self.add_ae_generator_layer(3, "セルパターン");
                 true
             }
+            "add_generator_light_leak" => {
+                self.add_ae_generator_layer(4, "光学ライトリーク (Screen)");
+                true
+            }
+            "add_generator_film_grain" => {
+                self.add_ae_generator_layer(5, "35mm フィルムグレイン & ビネット");
+                true
+            }
+            "add_generator_anamorphic_flare" => {
+                self.add_ae_generator_layer(6, "アナモルフィック・レンズフレア (Add)");
+                true
+            }
             "time_remap_optical_flow" => {
                 self.run_time_remap_optical_flow();
                 true
