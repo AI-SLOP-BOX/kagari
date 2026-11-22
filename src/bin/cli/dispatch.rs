@@ -67,6 +67,9 @@ pub(super) fn dispatch(command: Commands) -> Result<(), Box<dyn std::error::Erro
         Commands::Effects { json } => {
             cmd_effects(json);
         }
+        Commands::Schema => {
+            info::cmd_schema();
+        }
         Commands::Info { project } => {
             cmd_info(&project)?;
         }

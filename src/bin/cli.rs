@@ -129,5 +129,16 @@ mod tests {
 
         assert!(Cli::try_parse_from(["kagari", "doctor", "--json"]).is_ok());
         assert!(Cli::try_parse_from(["kagari", "presets", "--json"]).is_ok());
+        assert!(Cli::try_parse_from(["kagari", "schema"]).is_ok());
+    }
+
+    #[test]
+    fn cli_schema_json_describes_commands_and_arguments() {
+        let schema = info::build_cli_schema_json();
+        assert_eq!(schema["schema_version"], 1);
+        let subcommands = schema["subcommands"].as_array().expect("subcommands array");
+        assert!(subcommands.iter().any(|c| c["name"] == "render"));
+        assert!(subcommands.iter().any(|c| c["name"] == "effects"));
+        assert!(subcommands.iter().any(|c| c["name"] == "schema"));
     }
 }

@@ -1,5 +1,63 @@
 use super::*;
 
+pub(super) fn command_to_schema_json(cmd: &clap::Command) -> serde_json::Value {
+    let args: Vec<serde_json::Value> = cmd
+        .get_arguments()
+        .filter(|arg| arg.get_id() != "help" && arg.get_id() != "version")
+        .map(|arg| {
+            let possible: Vec<String> = arg
+                .get_possible_values()
+                .into_iter()
+                .map(|v| v.get_name().to_owned())
+                .collect();
+            serde_json::json!({
+                "name": arg.get_id().as_str(),
+                "long": arg.get_long(),
+                "short": arg.get_short().map(|c| c.to_string()),
+                "required": arg.is_required_set(),
+                "takes_value": arg.get_num_args().is_some_and(|r| r.takes_values()),
+                "possible_values": possible,
+                "help": arg.get_help().map(|h| h.to_string()),
+            })
+        })
+        .collect();
+    let subcommands: Vec<serde_json::Value> = cmd
+        .get_subcommands()
+        .map(command_to_schema_json)
+        .collect();
+    serde_json::json!({
+        "name": cmd.get_name(),
+        "about": cmd.get_about().map(|a| a.to_string()),
+        "args": args,
+        "subcommands": subcommands,
+    })
+}
+
+pub(super) fn build_cli_schema_json() -> serde_json::Value {
+    use clap::CommandFactory;
+    let cmd = Cli::command();
+    let mut value = command_to_schema_json(&cmd);
+    if let Some(obj) = value.as_object_mut() {
+        obj.insert("schema_version".to_owned(), serde_json::json!(1));
+        obj.insert(
+            "binary".to_owned(),
+            serde_json::json!(env!("CARGO_PKG_NAME")),
+        );
+        obj.insert(
+            "version".to_owned(),
+            serde_json::json!(env!("CARGO_PKG_VERSION")),
+        );
+    }
+    value
+}
+
+pub(super) fn cmd_schema() {
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&build_cli_schema_json()).unwrap_or_default()
+    );
+}
+
 pub(super) fn cmd_effects(json_output: bool) {
     let effects = vec![
         ("GaussianBlur", "blur", "Fast box blur (CPU)"),

@@ -34,6 +34,9 @@ pub(super) enum Commands {
         json: bool,
     },
 
+    /// Emit machine-readable CLI command and argument schema for AI agents
+    Schema,
+
     /// Show project composition info
     Info {
         /// Path to project JSON file
