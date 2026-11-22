@@ -1,13 +1,17 @@
 #![allow(dead_code)]
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
+
+const MAX_CACHE_BYTES: usize = 512 * 1024 * 1024;
 
 /// Merkle Tree Node representing a hashed layer node or compositing sub-tree.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MerkleHash(pub String);
 
-/// Merkle Tree Content-Addressed Frame Cache Engine (Git-like zero-copy cache).
+/// Experimental content-keyed frame cache with a fixed RAM ceiling.
 pub struct MerkleFrameCache {
     cache_store: HashMap<MerkleHash, Vec<u8>>,
+    insertion_order: VecDeque<MerkleHash>,
+    current_bytes: usize,
 }
 
 impl Default for MerkleFrameCache {
@@ -20,6 +24,8 @@ impl MerkleFrameCache {
     pub fn new() -> Self {
         Self {
             cache_store: HashMap::new(),
+            insertion_order: VecDeque::new(),
+            current_bytes: 0,
         }
     }
 
@@ -60,7 +66,28 @@ impl MerkleFrameCache {
 
     /// Stores rendered frame buffer into Merkle Cache.
     pub fn insert(&mut self, hash: MerkleHash, buffer: Vec<u8>) {
-        self.cache_store.insert(hash, buffer);
+        if let Some(previous) = self.cache_store.remove(&hash) {
+            self.current_bytes = self.current_bytes.saturating_sub(previous.len());
+            self.insertion_order.retain(|entry| entry != &hash);
+        }
+        if buffer.len() > MAX_CACHE_BYTES {
+            return;
+        }
+        while self.current_bytes.saturating_add(buffer.len()) > MAX_CACHE_BYTES {
+            let Some(oldest) = self.insertion_order.pop_front() else {
+                break;
+            };
+            if let Some(evicted) = self.cache_store.remove(&oldest) {
+                self.current_bytes = self.current_bytes.saturating_sub(evicted.len());
+            }
+        }
+        self.current_bytes = self.current_bytes.saturating_add(buffer.len());
+        self.cache_store.insert(hash.clone(), buffer);
+        self.insertion_order.push_back(hash);
+    }
+
+    pub fn memory_bytes(&self) -> usize {
+        self.current_bytes
     }
 }
 

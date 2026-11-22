@@ -42,6 +42,36 @@ pub fn calculate_circle_of_confusion(layer_z: f32, settings: &CameraDofSettings)
     (raw_cof * (settings.blur_level / 100.0)).clamp(0.0, 150.0)
 }
 
+/// Thin-lens physical Circle of Confusion diameter.
+///
+/// `c = |A * f * (s - z) / (z * (s - f))|` where `A` is the aperture diameter,
+/// `f` the focal length, `s` the focus distance and `z` the layer depth
+/// (all in the same units, conventionally mm).
+///
+/// Ported from the retired `advanced_3d_engine` module so the physically
+/// grounded formula survives next to the simplified default above: the simple
+/// version stays the render-path default (cheap, stable), this one is available
+/// for physical camera matching and tests.
+pub fn calculate_circle_of_confusion_thin_lens(
+    layer_z: f32,
+    focus_distance: f32,
+    focal_length_mm: f32,
+    aperture_mm: f32,
+    blur_level: f32,
+) -> f32 {
+    let s = focus_distance.max(1.0);
+    let z = layer_z.max(1.0);
+    let a = aperture_mm;
+    let f = focal_length_mm;
+
+    if (s - f).abs() < 1e-3 || z <= f {
+        return 0.0;
+    }
+
+    let coc = (a * f * (s - z).abs() / (z * (s - f))).abs();
+    coc * (blur_level / 100.0)
+}
+
 /// Generate bokeh sample offsets for a given iris shape with optional anamorphic squeeze.
 /// Returns [(x, y, weight)] sample points within the CoF radius.
 pub fn generate_bokeh_samples(
@@ -175,6 +205,28 @@ mod tests {
         };
         let blur = calculate_circle_of_confusion(500.0, &settings);
         assert_eq!(blur, 0.0);
+    }
+
+    #[test]
+    fn test_thin_lens_coc_matches_physical_expectations() {
+        // At exact focal distance, CoC is 0.
+        let in_focus = calculate_circle_of_confusion_thin_lens(1000.0, 1000.0, 50.0, 25.0, 100.0);
+        assert!(in_focus < 1e-4);
+        // Foreground off-focus produces a positive CoC.
+        let fg = calculate_circle_of_confusion_thin_lens(500.0, 1000.0, 50.0, 25.0, 100.0);
+        assert!(fg > 1.0);
+        // Behind the focal plane also blurs.
+        let bg = calculate_circle_of_confusion_thin_lens(2000.0, 1000.0, 50.0, 25.0, 100.0);
+        assert!(bg > 0.0);
+        // Degenerate setups (focus at focal length, depth inside focal length) yield 0.
+        assert_eq!(
+            calculate_circle_of_confusion_thin_lens(500.0, 50.0, 50.0, 25.0, 100.0),
+            0.0
+        );
+        assert_eq!(
+            calculate_circle_of_confusion_thin_lens(40.0, 1000.0, 50.0, 25.0, 100.0),
+            0.0
+        );
     }
 
     #[test]

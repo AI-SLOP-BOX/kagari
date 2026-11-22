@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 954 540" width="954" height="540">
+  <defs>
+    <filter id="hero-shadow" x="-5%" y="-5%" width="110%" height="115%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000000" flood-opacity="0.35" />
+    </filter>
+  </defs>
+
+  <!-- Base background (#191a1f) -->
+  <rect width="954" height="540" fill="#191a1f"/>
+
+  <!-- Top Hero Header -->
+  <!-- App Title: Kagari (Bold, White, centered at x=477, y=66) -->
+  <text x="477" y="66" fill="#ffffff" font-family="Hiragino Sans, Hiragino Kaku Gothic Pro, Noto Sans JP, sans-serif" font-size="34" font-weight="700" text-anchor="middle" dominant-baseline="central">Kagari</text>
+
+  <!-- Subtitle (Muted Light Gray #9da2af, centered at x=477, y=108) -->
+  <text x="477" y="108" fill="#9da2af" font-family="Hiragino Sans, Hiragino Kaku Gothic Pro, Noto Sans JP, sans-serif" font-size="14" font-weight="500" text-anchor="middle" dominant-baseline="central">VFX・コンポジット・モーショングラフィックスの制作を始めましょう。</text>
+
+  <!-- Buttons Row (y=176..262, height=86, rx=10) -->
+
+  <!-- 1. Orange Action Button: 新規プロジェクト -->
+  <g transform="translate(81, 176)" filter="url(#hero-shadow)">
+    <rect width="378" height="86" rx="10" fill="#ff7f00"/>
+    
+    <!-- Plus Icon (Thick white plus at x=90, y=43) -->
+    <g stroke="#ffffff" stroke-width="3.2" stroke-linecap="round">
+      <line x1="78" y1="43" x2="98" y2="43"/>
+      <line x1="88" y1="33" x2="88" y2="53"/>
+    </g>
+
+    <!-- Button Text: 新規プロジェクト -->
+    <text x="122" y="44" fill="#ffffff" font-family="Hiragino Sans, Hiragino Kaku Gothic Pro, Noto Sans JP, sans-serif" font-size="20" font-weight="700" dominant-baseline="central">新規プロジェクト</text>
+  </g>
+
+  <!-- 2. Dark Gray Action Button: プロジェクトを開く... -->
+  <g transform="translate(485, 176)" filter="url(#hero-shadow)">
+    <rect width="389" height="86" rx="10" fill="#3f424b"/>
+    
+    <!-- Folder Icon (white outline, centered around x=76, y=43) -->
+    <g transform="translate(76, 43)" stroke="#ffffff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M-14 11 v-17 a2.5 2.5 0 0 1 2.5 -2.5 h7 l3.5 3.5 h14 a2.5 2.5 0 0 1 2.5 2.5 v13.5 a2.5 2.5 0 0 1 -2.5 2.5 h-24.5 a2.5 2.5 0 0 1 -2.5 -2.5 z"/>
+    </g>
+
+    <!-- Button Text: プロジェクトを開く... -->
+    <text x="115" y="44" fill="#ffffff" font-family="Hiragino Sans, Hiragino Kaku Gothic Pro, Noto Sans JP, sans-serif" font-size="20" font-weight="700" dominant-baseline="central">プロジェクトを開く...</text>
+  </g>
+
+  <!-- 3. Bottom Secondary Action Link: 素材からコンポジションを作成... (centered at x=477, y=326) -->
+  <g transform="translate(477, 326)">
+    <!-- Image/Media Landscape Icon (white outline, 22x20) -->
+    <g transform="translate(-160, 0)" stroke="#ffffff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <!-- Rect Frame -->
+      <rect x="-13" y="-11" width="26" height="22" rx="3"/>
+      <!-- Sun circle -->
+      <circle cx="-5" cy="-4" r="2.2" fill="#ffffff" stroke="none"/>
+      <!-- Mountain peaks -->
+      <path d="M-13 7 l7 -7 l6 6 l4 -4 l9 9"/>
+    </g>
+
+    <!-- Link Text -->
+    <text x="-136" y="1" fill="#ffffff" font-family="Hiragino Sans, Hiragino Kaku Gothic Pro, Noto Sans JP, sans-serif" font-size="14" font-weight="600" text-anchor="start" dominant-baseline="central">素材からコンポジションを作成...</text>
+  </g>
+</svg>
+

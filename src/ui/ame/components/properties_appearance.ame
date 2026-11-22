@@ -1,0 +1,142 @@
+component LayerCompositeProperties() {
+  Card(hover_strength: 0.0, hover_elevation: 0.0) { Padding(6) { VStack(spacing: 5) {
+    Caption("▎ 合成")
+    HStack(spacing: 5) {
+      MinWidth(78) { Caption("ブレンド") }
+      If(selected_layer_locked) {
+        Caption("{selected_blend_mode_label}")
+      } else {
+        Grow(1) {
+          Select(selected_blend_mode, action: select_layer_blend_mode) {
+            Option("Normal", "通常 (Normal)")
+            Option("Multiply", "乗算 (Multiply)")
+            Option("Screen", "スクリーン (Screen)")
+            Option("Overlay", "オーバーレイ (Overlay)")
+            Option("Add", "加算 (Add)")
+            Option("LinearDodge", "覆い焼きリニア (Add)")
+            Option("Darken", "比較(暗) (Darken)")
+            Option("Lighten", "比較(明) (Lighten)")
+            Option("SoftLight", "ソフトライト")
+            Option("HardLight", "ハードライト")
+            Option("Difference", "差の絶対値")
+            Option("Exclusion", "除外")
+            Option("Subtract", "減算")
+            Option("Divide", "除算")
+            Option("ColorBurn", "焼き込みカラー")
+            Option("LinearBurn", "焼き込みリニア")
+            Option("ColorDodge", "覆い焼きカラー")
+            Option("VividLight", "ビビッドライト")
+            Option("LinearLight", "リニアライト")
+            Option("Color", "カラー")
+            Option("Hue", "色相")
+            Option("Saturation", "彩度")
+            Option("Luminosity", "輝度")
+            Option("StencilAlpha", "シルエット/ステンシルα")
+            Option("StencilLuma", "ステンシル輝度")
+            Option("SilhouetteAlpha", "シルエットα")
+            Option("SilhouetteLuma", "シルエット輝度")
+            Option("Behind", "背面 (Behind)")
+            Option("AlphaAdd", "アルファ加算")
+          }
+        }
+      }
+    }
+    HStack(spacing: 5) {
+      MinWidth(78) { Caption("トラックマット") }
+      If(selected_layer_locked) {
+        Caption("{selected_track_matte_label}")
+      } else {
+        Grow(1) {
+          Select(selected_track_matte, action: select_layer_track_matte) {
+            Option("None", "なし")
+            Option("AlphaMatte", "アルファマット")
+            Option("AlphaMatteInverted", "アルファ反転マット")
+            Option("LumaMatte", "ルミナンスマット")
+            Option("LumaMatteInverted", "ルミナンス反転マット")
+          }
+        }
+      }
+    }
+    If(selected_has_track_matte) {
+      Caption("マット元レイヤー")
+      Button("直上のレイヤーを使用", action: clear_track_matte_source, tone: ghost, size: small, disabled: selected_layer_locked)
+      ForEach(matte_source_layers, source, key: id, height: 180, row_height: 28, overscan: 4) {
+        Button("{source.name}", action: select_track_matte_source, tone: ghost, size: small, disabled: selected_layer_locked)
+      }
+    }
+  } } }
+}
+
+component MotionTrackerProperties() {
+  Card(hover_strength: 0.0, hover_elevation: 0.0) { Padding(6) { VStack(spacing: 5) {
+    Caption("▎ モーショントラッキング")
+    HStack(spacing: 5) {
+      Button("トラッカーを追加", action: add_motion_tracker, tone: primary, size: small, disabled: selected_layer_locked)
+      If(has_tracker_items) {
+        Button("前方解析", action: analyze_motion_track_forward, tone: ghost, size: small, disabled: selected_layer_locked)
+      }
+    }
+    If(has_tracker_items) {
+      Caption("アクティブトラッカー")
+      ForEach(tracker_items, item, key: id, height: 150, row_height: 28, overscan: 4) {
+        HStack(spacing: 4) {
+          If(item.selected) {
+            Button("{item.name}", action: select_motion_tracker, tone: primary, size: small)
+          } else {
+            Button("{item.name}", action: select_motion_tracker, tone: ghost, size: small)
+          }
+          Caption("{item.points_count} pts")
+        }
+      }
+      Caption("ターゲット先レイヤーへ適用")
+      ForEach(tracker_target_layers, target, key: id, height: 180, row_height: 28, overscan: 4) {
+        HStack(spacing: 4) {
+          If(target.selected) {
+            Button("{target.name}", action: select_motion_tracker_target, tone: primary, size: small)
+          } else {
+            Button("{target.name}", action: select_motion_tracker_target, tone: ghost, size: small)
+          }
+        }
+      }
+      HStack(spacing: 4) {
+        Button("位置/回転を適用", action: apply_motion_track_to_target, tone: primary, size: small, disabled: selected_layer_locked)
+        Button("手ブレ補正 (反転)", action: apply_motion_track_stabilize, tone: ghost, size: small, disabled: selected_layer_locked)
+      }
+      HStack(spacing: 4) {
+        Button("4点プラナー コーナーピン適用", action: apply_planar_track_corner_pin, tone: primary, size: small, disabled: selected_layer_locked)
+      }
+    }
+    Caption("{tracker_status}")
+  } } }
+}
+
+component LayerStylesProperties() {
+  Card(hover_strength: 0.0, hover_elevation: 0.0) { Padding(6) { VStack(spacing: 5) {
+    Caption("▎ レイヤースタイル")
+    Wrap(item_spacing: 4, line_spacing: 4) {
+      ForEach(layer_style_items, style, key: id) {
+        If(style.enabled) { Button("{style.label}  ON", action: toggle_layer_style, tone: primary, size: small, disabled: selected_layer_locked) } else { Button("{style.label}  OFF", action: toggle_layer_style, tone: ghost, size: small, disabled: selected_layer_locked) }
+      }
+    }
+    If(has_layer_style_parameters) {
+      VStack(spacing: 6) {
+        ForEach(layer_style_parameters, parameter, key: id) {
+          HStack(spacing: 6) {
+            MinWidth(76) { Caption("{parameter.label}") }
+            If(!selected_layer_locked && parameter.is_numeric) {
+              Grow(1) { Slider(parameter.normalized, min: 0.0, max: 1.0, action: layer_style_parameter_slider_changed) }
+              MaxWidth(64) { TextField(parameter.value, "0", action: layer_style_parameter_changed) }
+            } else {
+              If(selected_layer_locked) {
+                Caption("{parameter.value}")
+              } else {
+                ColorPicker(parameter.value, action: layer_style_parameter_changed)
+              }
+            }
+            Caption("{parameter.unit}")
+          }
+        }
+      }
+    }
+  } } }
+}

@@ -1,0 +1,82 @@
+component SettingsGeneralPage() {
+  If(ui_locale != "") {
+  VStack(spacing: 12) {
+    VStack(spacing: 4) { Title("{t.settings_gen_title}") Caption("{t.settings_gen_sub}") }
+
+    Card(padding: 12, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
+      Text("{t.settings_gen_startup_section}", size: 13)
+      HStack(spacing: 12) {
+        Text("{t.settings_gen_startup_action}", size: 13).frame(width: 170)
+        Checkbox("{t.settings_gen_show_home}", show_home_on_startup, action: setting_home_changed)
+      }
+      If(!show_home_on_startup) {
+        SettingsRow("再開する", label_width: 170) {
+          Checkbox("前回のプロジェクトを開く", restore_previous_state, action: setting_restore_changed)
+        }
+      }
+      HStack(spacing: 12) {
+        Text("{t.settings_gen_confirm_exit}", size: 13).frame(width: 170)
+        Checkbox("{t.settings_gen_confirm_exit_chk}", confirm_exit, action: setting_confirm_exit_changed)
+      }
+      HStack(spacing: 12) {
+        Text("{t.settings_gen_autosave}", size: 13).frame(width: 170)
+        Select(autosave_interval, action: setting_autosave_interval_changed) {
+          Option("0", "無効")
+          Option("30", "30秒")
+          Option("60", "1分")
+          Option("180", "3分")
+          Option("300", "5分")
+          Option("600", "10分")
+          Option("900", "15分")
+          Option("1800", "30分")
+        }
+      }
+    }
+
+    Card(padding: 12, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
+      Text("{t.settings_gen_ui_section}", size: 13)
+      HStack(spacing: 12) {
+        Text("{t.settings_gen_theme}", size: 13).frame(width: 170)
+        Caption("{t.settings_gen_theme_dark}")
+      }
+      HStack(spacing: 12) {
+        Text("{t.settings_language}", size: 13).frame(width: 170)
+        LocaleSelect()
+      }
+      HStack(spacing: 12) {
+        Text("{t.settings_gen_accent}", size: 13).frame(width: 170)
+        ColorSwatches(selected: accent_color) {
+          Swatch("#f39c29")
+          Swatch("#2b82f6")
+          Swatch("#8b5cf6")
+          Swatch("#ec4899")
+          Swatch("#ef4444")
+          Swatch("#eab308")
+          Swatch("#22c55e")
+          Swatch("#06b6d4")
+        }
+      }
+      HStack(spacing: 12) {
+        Text("{t.settings_gen_scale}", size: 13).frame(width: 170)
+        HStack(spacing: 6) { Text("100%") Caption("(標準)") }
+      }
+    }
+
+    Card(padding: 12, spacing: 10, hover_strength: 0.0, hover_elevation: 0.0) {
+      Text("{t.settings_gen_project_section}", size: 13)
+      HStack(spacing: 12) {
+        Text("{t.settings_gen_project_dir}", size: 13).frame(width: 190)
+        Grow(1) {
+          AttachedButton("参照…", action: setting_project_dir_browse) {
+            TextField(project_dir, "保存先フォルダ", action: setting_project_dir_changed)
+          }
+        }
+      }
+      HStack(spacing: 12) {
+        Text("{t.settings_gen_autoname}", size: 13).frame(width: 190)
+        Checkbox("{t.settings_gen_autoname_chk}", auto_project_names, action: setting_auto_project_names_changed)
+      }
+    }
+  }
+  }
+}

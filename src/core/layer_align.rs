@@ -5,7 +5,50 @@
 
 #![allow(dead_code)]
 
-use crate::core::timeline::Layer;
+use crate::core::timeline::{Composition, Layer};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AlignOperation {
+    Align(AlignMode),
+    Distribute(DistributeMode),
+}
+
+pub fn apply_to_composition(
+    comp: &mut Composition,
+    selected_indices: &[usize],
+    frame: u32,
+    operation: AlignOperation,
+    relative_to_composition: bool,
+) -> bool {
+    let mut indices = selected_indices.to_vec();
+    indices.sort_unstable();
+    indices.dedup();
+    indices.retain(|index| *index < comp.layers.len());
+    if indices.is_empty() {
+        return false;
+    }
+
+    let before: Vec<[f32; 2]> = indices
+        .iter()
+        .map(|index| comp.layers[*index].transform.position.evaluate(frame))
+        .collect();
+    let bounds = relative_to_composition.then_some([comp.width as f32, comp.height as f32]);
+    let mut layers: Vec<&mut Layer> = comp
+        .layers
+        .iter_mut()
+        .enumerate()
+        .filter_map(|(index, layer)| indices.binary_search(&index).ok().map(|_| layer))
+        .collect();
+    match operation {
+        AlignOperation::Align(mode) => align_layers(&mut layers, frame, mode, bounds),
+        AlignOperation::Distribute(mode) => distribute_layers(&mut layers, frame, mode),
+    }
+    drop(layers);
+
+    indices.iter().zip(before).any(|(index, old_position)| {
+        comp.layers[*index].transform.position.evaluate(frame) != old_position
+    })
+}
 
 /// Alignment modes relative to selection bounding box or composition canvas.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -83,7 +126,7 @@ pub fn align_layers(
                 p[1] = target_val;
             }
         }
-        layer.transform.position = crate::core::property::Animatable::new_constant(p);
+        layer.transform.position.set_value_at_frame(frame, p);
     }
 }
 
@@ -114,14 +157,14 @@ pub fn distribute_layers(layers: &mut [&mut Layer], frame: u32, mode: Distribute
     for (i, layer) in layers.iter_mut().enumerate() {
         let mut p = layer.transform.position.evaluate(frame);
         p[axis] = start + step * i as f32;
-        layer.transform.position = crate::core::property::Animatable::new_constant(p);
+        layer.transform.position.set_value_at_frame(frame, p);
     }
 }
 
 /// Fits a layer's scale and position to the composition dimensions.
 pub fn fit_layer_to_comp(
     layer: &mut Layer,
-    _frame: u32,
+    frame: u32,
     layer_w: f32,
     layer_h: f32,
     comp_w: f32,
@@ -143,15 +186,87 @@ pub fn fit_layer_to_comp(
     };
 
     // Center position in composition
-    layer.transform.position =
-        crate::core::property::Animatable::new_constant([comp_w * 0.5, comp_h * 0.5]);
-    layer.transform.scale = crate::core::property::Animatable::new_constant(final_scale);
+    layer
+        .transform
+        .position
+        .set_value_at_frame(frame, [comp_w * 0.5, comp_h * 0.5]);
+    layer.transform.scale.set_value_at_frame(frame, final_scale);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::keyframe::{InterpolationType, Keyframe};
+    use crate::core::property::Animatable;
     use crate::core::timeline::LayerType;
+
+    #[test]
+    fn aligning_animated_layer_adds_keyframe_without_collapsing_animation() {
+        let mut comp = Composition::new("c".into(), "C".into(), 100, 80, 24, 100);
+        let mut layer = Layer::new("l".into(), "L".into(), LayerType::Null, 100);
+        layer.transform.position = Animatable::new_animated(vec![
+            Keyframe::new(0, [20.0, 30.0], InterpolationType::Linear),
+            Keyframe::new(10, [80.0, 50.0], InterpolationType::Linear),
+        ]);
+        comp.layers.push(layer);
+
+        assert!(apply_to_composition(
+            &mut comp,
+            &[0],
+            5,
+            AlignOperation::Align(AlignMode::Left),
+            true,
+        ));
+
+        let keys = comp.layers[0]
+            .transform
+            .position
+            .keyframes()
+            .expect("alignment must preserve the animated property");
+        assert_eq!(keys.len(), 3);
+        assert_eq!(keys[0].frame, 0);
+        assert_eq!(keys[1].frame, 5);
+        assert_eq!(keys[1].value, [0.0, 40.0]);
+        assert_eq!(keys[2].frame, 10);
+        assert_eq!(keys[2].value, [80.0, 50.0]);
+    }
+
+    #[test]
+    fn distribution_changes_only_selected_layers_and_preserves_keys() {
+        let mut comp = Composition::new("c".into(), "C".into(), 100, 80, 24, 100);
+        for (index, x) in [0.0, 20.0, 100.0, 77.0].into_iter().enumerate() {
+            let mut layer = Layer::new(
+                format!("l{index}"),
+                format!("L{index}"),
+                LayerType::Null,
+                100,
+            );
+            layer.transform.position = Animatable::new_constant([x, 10.0]);
+            comp.layers.push(layer);
+        }
+        comp.layers[1].transform.position = Animatable::new_animated(vec![
+            Keyframe::new(0, [20.0, 10.0], InterpolationType::Linear),
+            Keyframe::new(10, [30.0, 15.0], InterpolationType::Linear),
+        ]);
+
+        assert!(apply_to_composition(
+            &mut comp,
+            &[2, 0, 1, 1],
+            0,
+            AlignOperation::Distribute(DistributeMode::HorizontalCenters),
+            false,
+        ));
+
+        assert_eq!(comp.layers[0].transform.position.evaluate(0)[0], 0.0);
+        assert_eq!(comp.layers[1].transform.position.evaluate(0)[0], 50.0);
+        assert_eq!(comp.layers[2].transform.position.evaluate(0)[0], 100.0);
+        assert_eq!(comp.layers[3].transform.position.evaluate(0)[0], 77.0);
+        assert_eq!(
+            comp.layers[1].transform.position.keyframes().unwrap().len(),
+            2
+        );
+        assert_eq!(comp.layers[1].transform.position.evaluate(10), [30.0, 15.0]);
+    }
 
     #[test]
     fn test_align_layers_horizontal_center() {

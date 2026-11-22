@@ -22,12 +22,15 @@ pub enum PF_Cmd {
 }
 
 /// Pixel format descriptor for AE plugin worlds.
-#[repr(C)]
+#[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PF_PixelFormat {
-    PF_PixelFormat_ARGB32 = 0,  // 8bpc ARGB
-    PF_PixelFormat_ARGB64 = 1,  // 16bpc ARGB
-    PF_PixelFormat_ARGB128 = 2, // 32bpc Float ARGB
+pub struct PF_PixelFormat(pub i32);
+
+#[allow(non_upper_case_globals)]
+impl PF_PixelFormat {
+    pub const PF_PixelFormat_ARGB32: Self = Self(0);
+    pub const PF_PixelFormat_ARGB64: Self = Self(1);
+    pub const PF_PixelFormat_ARGB128: Self = Self(2);
 }
 
 /// Buffer representation passed to AE C++ plugins for input and output rendering.
@@ -40,9 +43,6 @@ pub struct PF_EffectWorld {
     pub rowbytes: i32,
     pub pixel_format: PF_PixelFormat,
 }
-
-unsafe impl Send for PF_EffectWorld {}
-unsafe impl Sync for PF_EffectWorld {}
 
 /// InData passed from host to AE plugin.
 #[repr(C)]
@@ -122,6 +122,31 @@ impl AePluginHostContext {
     ) -> Result<(), String> {
         let entry = self.entry_point.ok_or("No plugin entry point loaded")?;
 
+        if width <= 0 || height <= 0 {
+            return Err("AE plugin render dimensions must be positive".into());
+        }
+        if fps <= 0 {
+            return Err("AE plugin render frame rate must be positive".into());
+        }
+        let rowbytes = width
+            .checked_mul(4)
+            .ok_or("AE plugin render row size exceeds the supported range")?;
+        let required_len = usize::try_from(width)
+            .ok()
+            .and_then(|width| {
+                usize::try_from(height)
+                    .ok()
+                    .and_then(|height| width.checked_mul(height))
+            })
+            .and_then(|pixels| pixels.checked_mul(4))
+            .ok_or("AE plugin render buffer size exceeds the supported range")?;
+        if pixels.len() < required_len {
+            return Err(format!(
+                "AE plugin render buffer is too small: need {required_len} bytes, got {}",
+                pixels.len()
+            ));
+        }
+
         let in_data = PF_InData {
             current_time: frame,
             time_scale: fps,
@@ -140,7 +165,7 @@ impl AePluginHostContext {
             data: pixels.as_mut_ptr(),
             width,
             height,
-            rowbytes: width * 4,
+            rowbytes,
             pixel_format: PF_PixelFormat::PF_PixelFormat_ARGB32,
         };
 
@@ -181,7 +206,7 @@ mod tests {
             let len = (world.width * world.height * 4) as usize;
             let slice = std::slice::from_raw_parts_mut(world.data, len);
             // Invert red channel
-            for chunk in slice.chunks_exact_mut(4) {
+            for chunk in slice.as_chunks_mut::<4>().0 {
                 chunk[0] = 255 - chunk[0];
             }
             0 // PF_Err_NONE

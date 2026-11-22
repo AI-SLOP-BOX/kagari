@@ -98,7 +98,7 @@ pub fn apply_linear_color_key(
 
     let (kh, ks, _) = rgb_to_hsl(kr, kg, kb);
 
-    for chunk in pixels.chunks_exact_mut(4) {
+    for chunk in pixels.as_chunks_mut::<4>().0 {
         let pr = chunk[0] as f32 / 255.0;
         let pg = chunk[1] as f32 / 255.0;
         let pb = chunk[2] as f32 / 255.0;

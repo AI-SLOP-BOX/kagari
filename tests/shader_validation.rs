@@ -1,7 +1,12 @@
 //! Compile-time WGSL validation: catches shader syntax/type errors in CI
 //! instead of at GUI startup (wgpu compiles lazily at runtime).
 
-const SHADER: &str = include_str!("../src/core/shader.wgsl");
+const SHADER: &str = concat!(
+    include_str!("../src/core/shader/types.wgsl"),
+    include_str!("../src/core/shader/sampling.wgsl"),
+    include_str!("../src/core/shader/layer_styles.wgsl"),
+    include_str!("../src/core/shader/fragment.wgsl"),
+);
 
 #[test]
 fn shader_wgsl_parses_and_validates() {

@@ -68,6 +68,13 @@ pub fn apply_displacement_map(
         return target_pixels.to_vec();
     }
 
+    let cancel_flag = crate::core::software_renderer::get_render_cancel_flag();
+    if cancel_flag
+        .as_ref()
+        .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+    {
+        return target_pixels.to_vec();
+    }
     let mut out_pixels = vec![0u8; num_pixels * 4];
     let w_f32 = width as f32;
     let h_f32 = height as f32;
@@ -81,9 +88,21 @@ pub fn apply_displacement_map(
     } else {
         0.0
     };
-
     for y in 0..height {
+        if cancel_flag
+            .as_ref()
+            .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+        {
+            return target_pixels.to_vec();
+        }
         for x in 0..width {
+            if x.is_multiple_of(4096)
+                && cancel_flag
+                    .as_ref()
+                    .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Relaxed))
+            {
+                return target_pixels.to_vec();
+            }
             let idx = ((y * width + x) * 4) as usize;
             let ref_rgba = [
                 ref_map_pixels[idx],

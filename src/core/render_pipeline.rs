@@ -1,14 +1,15 @@
 #![allow(dead_code)]
-/// Vulkan/DirectX12-inspired lazy evaluation render pipeline with atomic cancellation tokens.
+/// Lazy evaluation render pipeline with generation-based stale request filtering
+/// and cooperative in-flight cancellation.
 ///
 /// The UI thread never blocks on GPU work. Instead, it enqueues `RenderCommand`
 /// messages. A background `RenderWorker` thread drains the queue, performs GPU
 /// rendering, and writes results to FrameCache.
-/// Includes atomic `CancellationToken` checks so stale seek/scrub tasks abort
-/// immediately before wasting CPU/GPU cycles.
+/// Flush skips queued work from earlier generations and flips any active
+/// `RenderCancellationToken` to cancelled so long-running callbacks can abort early.
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 /// Commands the UI thread sends to the render worker.
@@ -18,7 +19,7 @@ pub enum RenderCommand {
     RenderFrame { frame: u32, version: u64 },
     /// Render a contiguous range of frames (background pre-fetch).
     PrefetchRange { start: u32, end: u32, version: u64 },
-    /// Invalidate the in-flight queue (e.g., project changed).
+    /// Mark queued work from earlier generations as stale (e.g., project changed).
     Flush,
     /// Shut down the worker thread cleanly.
     Shutdown,
@@ -33,12 +34,34 @@ pub enum RenderResult {
     BatchReady { start: u32, end: u32 },
 }
 
+/// Cooperative cancellation token passed to each render callback invocation.
+#[derive(Debug, Clone)]
+pub struct RenderCancellationToken {
+    generation: Arc<AtomicU64>,
+    expected_generation: u64,
+}
+
+impl RenderCancellationToken {
+    /// Returns `true` if `RenderPipeline::flush()` has invalidated this job's generation.
+    pub fn is_cancelled(&self) -> bool {
+        self.generation.load(Ordering::SeqCst) != self.expected_generation
+    }
+}
+
 /// Manages the command channel to the background render worker.
 pub struct RenderPipeline {
-    cmd_tx: Sender<RenderCommand>,
+    cmd_tx: Sender<QueuedCommand>,
     result_rx: Receiver<RenderResult>,
-    /// Atomic cancellation token sequence. Incremented on Flush/Scrub to abort stale tasks.
-    cancellation_token: Arc<AtomicU64>,
+    generation: Arc<AtomicU64>,
+    command_gate: Mutex<()>,
+    /// Kept so `shutdown()` can join the worker instead of detaching it.
+    worker: Mutex<Option<std::thread::JoinHandle<()>>>,
+    worker_start_error: Option<String>,
+}
+
+struct QueuedCommand {
+    generation: u64,
+    command: RenderCommand,
 }
 
 impl RenderPipeline {
@@ -47,34 +70,45 @@ impl RenderPipeline {
     where
         F: Fn(RenderCommand, &Sender<RenderResult>) + Send + 'static,
     {
-        let (cmd_tx, cmd_rx) = mpsc::channel::<RenderCommand>();
-        let (result_tx, result_rx) = mpsc::channel::<RenderResult>();
-        let cancellation_token = Arc::new(AtomicU64::new(1));
-        let worker_token = Arc::clone(&cancellation_token);
+        Self::new_cancellable(move |command, result_tx, _cancel| render_fn(command, result_tx))
+    }
 
-        thread::Builder::new()
+    /// Spawn the background render worker with a cooperative cancellation token.
+    pub fn new_cancellable<F>(render_fn: F) -> Self
+    where
+        F: Fn(RenderCommand, &Sender<RenderResult>, &RenderCancellationToken) + Send + 'static,
+    {
+        let (cmd_tx, cmd_rx) = mpsc::channel::<QueuedCommand>();
+        let (result_tx, result_rx) = mpsc::channel::<RenderResult>();
+        let generation = Arc::new(AtomicU64::new(1));
+        let worker_generation = Arc::clone(&generation);
+
+        let worker = thread::Builder::new()
             .name("render_worker".to_string())
             .spawn(move || {
                 log::info!("[RenderWorker] started");
-                while let Ok(cmd) = cmd_rx.recv() {
-                    match &cmd {
+                while let Ok(queued) = cmd_rx.recv() {
+                    let QueuedCommand { generation, command } = queued;
+                    match &command {
                         RenderCommand::Shutdown => {
                             log::info!("[RenderWorker] shutting down");
                             break;
                         }
                         RenderCommand::Flush => {
-                            log::debug!("[RenderWorker] flush — draining queue");
-                            while cmd_rx.try_recv().is_ok() {}
+                            log::debug!("[RenderWorker] flush — obsolete queued work will be skipped");
                         }
                         RenderCommand::RenderFrame { version, .. }
                         | RenderCommand::PrefetchRange { version, .. } => {
-                            let cur_token = worker_token.load(Ordering::SeqCst);
-                            if *version < cur_token {
-                                log::debug!("[RenderWorker] aborting stale render command (ver {})", version);
+                            if generation != worker_generation.load(Ordering::SeqCst) {
+                                log::debug!("[RenderWorker] skipping stale render command (project version {})", version);
                                 continue;
                             }
+                            let cancel_token = RenderCancellationToken {
+                                generation: Arc::clone(&worker_generation),
+                                expected_generation: generation,
+                            };
                             let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                                render_fn(cmd, &result_tx);
+                                render_fn(command, &result_tx, &cancel_token);
                             }));
                             if let Err(e) = res {
                                 log::error!("[RenderWorker] Caught panic during render task execution: {:?}", e);
@@ -82,36 +116,82 @@ impl RenderPipeline {
                         }
                     }
                 }
-            })
-            .expect("Failed to spawn render worker thread");
+            });
+        let (worker, worker_start_error) = match worker {
+            Ok(worker) => (Some(worker), None),
+            Err(error) => {
+                let message = format!("Failed to spawn render worker thread: {error}");
+                log::error!("{message}");
+                (None, Some(message))
+            }
+        };
 
         Self {
             cmd_tx,
             result_rx,
-            cancellation_token,
+            generation,
+            command_gate: Mutex::new(()),
+            worker: Mutex::new(worker),
+            worker_start_error,
         }
+    }
+
+    /// Whether the background render worker started successfully.
+    pub fn is_available(&self) -> bool {
+        self.worker_start_error.is_none()
+            && self
+                .worker
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .is_some()
+    }
+
+    /// Startup failure detail, if the operating system could not create the worker.
+    pub fn worker_start_error(&self) -> Option<&str> {
+        self.worker_start_error.as_deref()
     }
 
     /// Request an asynchronous render of `frame`.
     pub fn request_frame(&self, frame: u32, version: u64) {
-        let _ = self
-            .cmd_tx
-            .send(RenderCommand::RenderFrame { frame, version });
+        if !self.is_available() {
+            return;
+        }
+        let _gate = self.command_gate.lock().unwrap_or_else(|e| e.into_inner());
+        let generation = self.generation.load(Ordering::SeqCst);
+        let _ = self.cmd_tx.send(QueuedCommand {
+            generation,
+            command: RenderCommand::RenderFrame { frame, version },
+        });
     }
 
     /// Pre-fetch a range of frames in the background.
     pub fn prefetch_range(&self, start: u32, end: u32, version: u64) {
-        let _ = self.cmd_tx.send(RenderCommand::PrefetchRange {
-            start,
-            end,
-            version,
+        if !self.is_available() {
+            return;
+        }
+        let _gate = self.command_gate.lock().unwrap_or_else(|e| e.into_inner());
+        let generation = self.generation.load(Ordering::SeqCst);
+        let _ = self.cmd_tx.send(QueuedCommand {
+            generation,
+            command: RenderCommand::PrefetchRange {
+                start,
+                end,
+                version,
+            },
         });
     }
 
-    /// Flush all pending commands and bump cancellation token.
+    /// Skip queued commands from earlier generations and accept subsequent requests.
     pub fn flush(&self) {
-        self.cancellation_token.fetch_add(1, Ordering::SeqCst);
-        let _ = self.cmd_tx.send(RenderCommand::Flush);
+        if !self.is_available() {
+            return;
+        }
+        let _gate = self.command_gate.lock().unwrap_or_else(|e| e.into_inner());
+        let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
+        let _ = self.cmd_tx.send(QueuedCommand {
+            generation,
+            command: RenderCommand::Flush,
+        });
     }
 
     /// Poll for completed frames without blocking.
@@ -123,9 +203,20 @@ impl RenderPipeline {
         results
     }
 
-    /// Gracefully shut down the worker thread.
+    /// Gracefully shut down the worker thread and wait for it to exit.
     pub fn shutdown(&self) {
-        let _ = self.cmd_tx.send(RenderCommand::Shutdown);
+        let handle = {
+            let _gate = self.command_gate.lock().unwrap_or_else(|e| e.into_inner());
+            let generation = self.generation.load(Ordering::SeqCst);
+            let _ = self.cmd_tx.send(QueuedCommand {
+                generation,
+                command: RenderCommand::Shutdown,
+            });
+            self.worker.lock().unwrap_or_else(|e| e.into_inner()).take()
+        };
+        if let Some(handle) = handle {
+            let _ = handle.join();
+        }
     }
 }
 
@@ -170,5 +261,76 @@ impl LazyFrameEvaluator {
 
     pub fn mark_delivered(&mut self, frame: u32) {
         self.in_flight.remove(&frame);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{RenderCommand, RenderPipeline};
+    use std::sync::{mpsc, Arc, Mutex};
+    use std::time::Duration;
+
+    #[test]
+    fn flush_skips_waiting_old_requests_but_keeps_new_requests() {
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let (rendered_tx, rendered_rx) = mpsc::channel();
+        let release_rx = Arc::new(Mutex::new(release_rx));
+        let worker_release = Arc::clone(&release_rx);
+        let pipeline = RenderPipeline::new(move |command, _| {
+            if let RenderCommand::RenderFrame { frame, .. } = command {
+                let _ = rendered_tx.send(frame);
+                if frame == 1 {
+                    let _ = started_tx.send(());
+                    let _ = worker_release.lock().unwrap().recv();
+                }
+            }
+        });
+
+        pipeline.request_frame(1, 1);
+        started_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("first render should begin");
+        pipeline.request_frame(2, 1);
+        pipeline.flush();
+        pipeline.request_frame(3, 1);
+        release_tx.send(()).expect("worker should be waiting");
+
+        assert_eq!(rendered_rx.recv_timeout(Duration::from_secs(2)), Ok(1));
+        assert_eq!(rendered_rx.recv_timeout(Duration::from_secs(2)), Ok(3));
+        assert!(rendered_rx.recv_timeout(Duration::from_millis(50)).is_err());
+        pipeline.shutdown();
+    }
+
+    #[test]
+    fn flush_cancels_in_flight_token_immediately() {
+        let (started_tx, started_rx) = mpsc::channel();
+        let (cancelled_tx, cancelled_rx) = mpsc::channel();
+        let pipeline = RenderPipeline::new_cancellable(move |command, _, cancel| {
+            if let RenderCommand::PrefetchRange { start, end, .. } = command {
+                let _ = started_tx.send(());
+                for _ in start..=end {
+                    if cancel.is_cancelled() {
+                        let _ = cancelled_tx.send(true);
+                        return;
+                    }
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                let _ = cancelled_tx.send(false);
+            }
+        });
+
+        pipeline.prefetch_range(0, 200, 1);
+        started_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("prefetch should start");
+        pipeline.flush();
+
+        assert_eq!(
+            cancelled_rx.recv_timeout(Duration::from_secs(2)),
+            Ok(true),
+            "in-flight prefetch must observe cancellation after flush"
+        );
+        pipeline.shutdown();
     }
 }

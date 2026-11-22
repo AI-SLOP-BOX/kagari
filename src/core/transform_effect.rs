@@ -161,12 +161,14 @@ mod tests {
     #[test]
     fn test_transform_rejects_overflow_and_sanitizes_parameters() {
         let original = vec![120u8; 16];
-        let mut params = TransformEffectParams::default();
-        params.anchor_point = [f32::NAN, f32::INFINITY];
-        params.position = [f32::NAN, f32::NEG_INFINITY];
-        params.scale_width = f32::NAN;
-        params.rotation_deg = f32::INFINITY;
-        params.opacity = f32::NAN;
+        let params = TransformEffectParams {
+            anchor_point: [f32::NAN, f32::INFINITY],
+            position: [f32::NAN, f32::NEG_INFINITY],
+            scale_width: f32::NAN,
+            rotation_deg: f32::INFINITY,
+            opacity: f32::NAN,
+            ..Default::default()
+        };
         let _rendered = apply_transform_effect(&original, 2, 2, &params);
         assert_eq!(
             apply_transform_effect(&original, u32::MAX, u32::MAX, &params),

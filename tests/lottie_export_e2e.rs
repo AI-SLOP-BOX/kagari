@@ -32,7 +32,7 @@ fn project_with_layers(layer_count: usize, bg: [f32; 4]) -> Project {
 #[test]
 fn lottie_output_is_valid_json_with_comp_settings() {
     let project = project_with_layers(1, [0.0, 0.5, 1.0, 1.0]);
-    let json = export_project_to_json(&project);
+    let json = export_project_to_json(&project).expect("export succeeds");
 
     let v: serde_json::Value =
         serde_json::from_str(&json).expect("export must produce parseable JSON");
@@ -48,7 +48,7 @@ fn lottie_output_is_valid_json_with_comp_settings() {
 #[test]
 fn lottie_export_includes_all_layers() {
     let project = project_with_layers(3, [0.0, 0.0, 0.0, 1.0]);
-    let json = export_project_to_json(&project);
+    let json = export_project_to_json(&project).expect("export succeeds");
     let v: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
     let layers = v["layers"].as_array().expect("layers array");
     assert_eq!(layers.len(), 3, "every layer must be exported");
@@ -56,7 +56,9 @@ fn lottie_export_includes_all_layers() {
 
 #[test]
 fn lottie_export_is_deterministic() {
-    let a = export_project_to_json(&project_with_layers(2, [0.1, 0.2, 0.3, 1.0]));
-    let b = export_project_to_json(&project_with_layers(2, [0.1, 0.2, 0.3, 1.0]));
+    let a = export_project_to_json(&project_with_layers(2, [0.1, 0.2, 0.3, 1.0]))
+        .expect("export succeeds");
+    let b = export_project_to_json(&project_with_layers(2, [0.1, 0.2, 0.3, 1.0]))
+        .expect("export succeeds");
     assert_eq!(a, b, "same input must yield byte-identical Lottie JSON");
 }

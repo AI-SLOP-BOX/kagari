@@ -7,6 +7,9 @@ use crate::core::timeline::LayerType;
 
 /// Rasterize a shape layer into its local buffer (plus pre-effect mask).
 pub(crate) fn rasterize_shape_layer(ctx: RasterCtx<'_>) {
+    if super::render_cancelled() {
+        return;
+    }
     let RasterCtx {
         layer,
         effective_frame,
@@ -52,7 +55,24 @@ pub(crate) fn rasterize_shape_layer(ctx: RasterCtx<'_>) {
     if merge_op.is_some() {
         // MergePaths: render shape SDF into a second buffer, then combine with boolean
         let merge_op_val = merge_op.unwrap_or(0);
-        let mut second_buf = vec![0u8; (bw * bh * 4) as usize];
+        let Some(second_size) = (bw as usize)
+            .checked_mul(bh as usize)
+            .and_then(|pixels| pixels.checked_mul(4))
+        else {
+            log::error!(
+                "[Renderer] Merge-path raster dimensions overflow for {}",
+                layer.id
+            );
+            super::mark_render_allocation_failed();
+            return;
+        };
+        let Some(mut second_buf) = super::try_zeroed_buffer(second_size) else {
+            log::error!(
+                "[Renderer] Could not allocate {second_size} bytes for merge paths on {}",
+                layer.id
+            );
+            return;
+        };
         // Render a copy shifted by 20% for visual demonstration of boolean op
         let shift_x = bounds_x * 0.3;
         let shift_y = bounds_y * 0.2;
@@ -96,11 +116,20 @@ pub(crate) fn rasterize_shape_layer(ctx: RasterCtx<'_>) {
             layer.trim_paths.as_ref(),
         );
         // Combine using boolean SDF: modify layer_buf alpha based on second_buf
-        for i in (3..layer_buf.len()).step_by(4) {
-            let a1 = layer_buf[i] as f32 / 255.0;
-            let a2 = second_buf[i] as f32 / 255.0;
-            let combined = sdf_boolean_op(merge_op_val, a1, a2);
-            layer_buf[i] = (combined.clamp(0.0, 1.0) * 255.0) as u8;
+        for py in 0..bh {
+            if super::render_cancelled() {
+                return;
+            }
+            for px in 0..bw {
+                let i = (((py * bw + px) * 4) + 3) as usize;
+                if i >= layer_buf.len() {
+                    continue;
+                }
+                let a1 = layer_buf[i] as f32 / 255.0;
+                let a2 = second_buf[i] as f32 / 255.0;
+                let combined = sdf_boolean_op(merge_op_val, a1, a2);
+                layer_buf[i] = (combined.clamp(0.0, 1.0) * 255.0) as u8;
+            }
         }
     } else if let Some(repeater) = &layer.shape_repeater {
         // Repeater: render shape multiple times with transforms
@@ -109,6 +138,9 @@ pub(crate) fn rasterize_shape_layer(ctx: RasterCtx<'_>) {
             effective_frame,
         );
         for instance in &instances {
+            if super::render_cancelled() {
+                return;
+            }
             // Apply repeater transform to center position
             let m = &instance.transform_matrix;
             let rx = cx * m[0][0] + cy * m[0][1] + m[0][2];
@@ -202,8 +234,8 @@ pub(crate) fn rasterize_shape_layer(ctx: RasterCtx<'_>) {
                         continue;
                     }
                     let cov = compute_combined_mask_coverage(
-                        (min_x + lx) as f32,
-                        (min_y + ly) as f32,
+                        (min_x + lx) as f32 + 0.5,
+                        (min_y + ly) as f32 + 0.5,
                         masks,
                     );
                     layer_buf[lidx + 3] = (layer_buf[lidx + 3] as f32 * cov) as u8;

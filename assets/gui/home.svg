@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 640" width="1024" height="640">
+  <defs>
+    <filter id="btn-shadow" x="-5%" y="-5%" width="110%" height="118%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.45" />
+    </filter>
+    <filter id="window-shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#000000" flood-opacity="0.6" />
+    </filter>
+  </defs>
+
+  <!-- 1. Window Background (#18191d) -->
+  <rect width="1024" height="640" fill="#18191d"/>
+
+  <!-- 2. Top Menu Bar (height=36, fill=#1e1f24, border-bottom=#2b2e35) -->
+  <rect x="0" y="0" width="1024" height="36" fill="#1e1f24"/>
+  <line x1="0" y1="36" x2="1024" y2="36" stroke="#2b2e35" stroke-width="1"/>
+
+  <!-- Menu Items: ファイル(F), 編集(E), 表示(V), ヘルプ(H) -->
+  <g font-family="Hiragino Sans, Hiragino Kaku Gothic Pro, Noto Sans JP, sans-serif" font-size="12" font-weight="500" fill="#cfd2d8">
+    <text x="16" y="18" dominant-baseline="central">ファイル(F)</text>
+    <text x="96" y="18" dominant-baseline="central">編集(E)</text>
+    <text x="164" y="18" dominant-baseline="central">表示(V)</text>
+    <text x="232" y="18" dominant-baseline="central">ヘルプ(H)</text>
+  </g>
+
+  <!-- Window Controls (macOS style subtle dots on right or clean window caption) -->
+  <text x="1008" y="18" fill="#686c75" font-family="sans-serif" font-size="14" text-anchor="end" dominant-baseline="central"></text>
+
+  <!-- 3. Central Hero Section (vertically centered in y=36..640) -->
+  <!-- Center Y is around 320 -->
+  <g transform="translate(0, 30)">
+    <!-- App Title: Kagari -->
+    <text x="512" y="140" fill="#ffffff" font-family="Hiragino Sans, Hiragino Kaku Gothic Pro, Noto Sans JP, sans-serif" font-size="36" font-weight="700" text-anchor="middle" dominant-baseline="central">Kagari</text>
+
+    <!-- Subtitle -->
+    <text x="512" y="188" fill="#9da2af" font-family="Hiragino Sans, Hiragino Kaku Gothic Pro, Noto Sans JP, sans-serif" font-size="14" font-weight="500" text-anchor="middle" dominant-baseline="central">VFX・コンポジット・モーショングラフィックスの制作を始めましょう。</text>
+
+    <!-- Two Main Action Buttons Row (y=240..326, height=86) -->
+    <!-- Total buttons width = 380 + 26 + 390 = 796, starting x = (1024 - 796)/2 = 114 -->
+    
+    <!-- 1. Orange Button: + 新規プロジェクト (x=114, y=240, w=380, h=86, rx=10) -->
+    <g transform="translate(114, 240)" filter="url(#btn-shadow)">
+      <rect width="380" height="86" rx="10" fill="#ff7f00"/>
+      
+      <!-- Plus Icon -->
+      <g stroke="#ffffff" stroke-width="3.2" stroke-linecap="round">
+        <line x1="78" y1="43" x2="98" y2="43"/>
+        <line x1="88" y1="33" x2="88" y2="53"/>
+      </g>
+
+      <!-- Text -->
+      <text x="122" y="44" fill="#ffffff" font-family="Hiragino Sans, Hiragino Kaku Gothic Pro, Noto Sans JP, sans-serif" font-size="20" font-weight="700" dominant-baseline="central">新規プロジェクト</text>
+    </g>
+
+    <!-- 2. Dark Slate Button: プロジェクトを開く... (x=520, y=240, w=390, h=86, rx=10) -->
+    <g transform="translate(520, 240)" filter="url(#btn-shadow)">
+      <rect width="390" height="86" rx="10" fill="#3f424b"/>
+      
+      <!-- Folder Icon -->
+      <g transform="translate(76, 43)" stroke="#ffffff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M-14 11 v-17 a2.5 2.5 0 0 1 2.5 -2.5 h7 l3.5 3.5 h14 a2.5 2.5 0 0 1 2.5 2.5 v13.5 a2.5 2.5 0 0 1 -2.5 2.5 h-24.5 a2.5 2.5 0 0 1 -2.5 -2.5 z"/>
+      </g>
+
+      <!-- Text -->
+      <text x="115" y="44" fill="#ffffff" font-family="Hiragino Sans, Hiragino Kaku Gothic Pro, Noto Sans JP, sans-serif" font-size="20" font-weight="700" dominant-baseline="central">プロジェクトを開く...</text>
+    </g>
+
+    <!-- 3. Bottom Secondary Link: 素材からコンポジションを作成... (centered at x=512, y=380) -->
+    <g transform="translate(512, 380)">
+      <!-- Landscape Media Icon -->
+      <g transform="translate(-155, 0)" stroke="#ffffff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="-13" y="-11" width="26" height="22" rx="3"/>
+        <circle cx="-5" cy="-4" r="2.2" fill="#ffffff" stroke="none"/>
+        <path d="M-13 7 l7 -7 l6 6 l4 -4 l9 9"/>
+      </g>
+
+      <!-- Text -->
+      <text x="-132" y="1" fill="#ffffff" font-family="Hiragino Sans, Hiragino Kaku Gothic Pro, Noto Sans JP, sans-serif" font-size="14" font-weight="600" text-anchor="start" dominant-baseline="central">素材からコンポジションを作成...</text>
+    </g>
+  </g>
+</svg>
+

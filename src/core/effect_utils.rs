@@ -186,7 +186,7 @@ mod tests {
     fn bilinear_identity() {
         let mut buf = vec![0u8; 4 * 4 * 4];
         // Fill pixel (1,1) with red
-        let idx = (1 * 4 + 1) * 4;
+        let idx = (4 + 1) * 4;
         buf[idx] = 255;
         buf[idx + 3] = 255;
         let sample = sample_bilinear(&buf, 4, 4, 1.0, 1.0);

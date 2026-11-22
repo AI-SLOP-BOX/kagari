@@ -22,6 +22,7 @@ pub struct TextLine {
     pub text: String,
     pub width: f32,
     pub y_offset: f32,
+    pub paragraph_last: bool,
 }
 
 /// Layout result containing all lines and total dimensions.
@@ -30,6 +31,26 @@ pub struct TextLayout {
     pub lines: Vec<TextLine>,
     pub total_width: f32,
     pub total_height: f32,
+}
+
+pub fn justification_space_width(
+    line: &TextLine,
+    actual_line_width: f32,
+    box_width: f32,
+    alignment: TextAlign,
+) -> f32 {
+    if alignment != TextAlign::Justify || line.paragraph_last || box_width <= 0.0 {
+        return 0.0;
+    }
+    let spaces = line
+        .text
+        .chars()
+        .filter(|character| *character == ' ')
+        .count();
+    if spaces == 0 || !actual_line_width.is_finite() {
+        return 0.0;
+    }
+    (box_width - actual_line_width).max(0.0) / spaces as f32
 }
 
 /// Compute the width of a text string given font size and tracking.
@@ -70,6 +91,7 @@ pub fn layout_text(
                 text: String::new(),
                 width: 0.0,
                 y_offset: all_lines.len() as f32 * line_height,
+                paragraph_last: true,
             });
             continue;
         }
@@ -81,36 +103,34 @@ pub fn layout_text(
                 text: paragraph.to_string(),
                 width: w,
                 y_offset: all_lines.len() as f32 * line_height,
+                paragraph_last: true,
             });
         } else {
             // Word-wrap
-            let words: Vec<&str> = paragraph.split_whitespace().collect();
-            let mut current_line = String::new();
-            let mut current_width = 0.0f32;
+            let mut words = paragraph.split_whitespace();
+            let Some(first_word) = words.next() else {
+                continue;
+            };
+            let mut current_line = first_word.to_owned();
+            let mut current_width = measure_text_width(first_word, font_size, tracking);
 
-            for word in &words {
+            for word in words {
                 let word_width = measure_text_width(word, font_size, tracking);
-                let space_width = if current_line.is_empty() {
-                    0.0
-                } else {
-                    font_size * 0.25 + tracking * 0.1
-                };
+                let space_width = font_size * 0.25 + tracking * 0.1;
 
-                if current_width + space_width + word_width > box_width && !current_line.is_empty()
-                {
+                if current_width + space_width + word_width > box_width {
                     // Flush current line
                     all_lines.push(TextLine {
-                        text: current_line.clone(),
+                        text: std::mem::take(&mut current_line),
                         width: current_width,
                         y_offset: all_lines.len() as f32 * line_height,
+                        paragraph_last: false,
                     });
-                    current_line = word.to_string();
+                    current_line.push_str(word);
                     current_width = word_width;
                 } else {
-                    if !current_line.is_empty() {
-                        current_line.push(' ');
-                        current_width += space_width;
-                    }
+                    current_line.push(' ');
+                    current_width += space_width;
                     current_line.push_str(word);
                     current_width += word_width;
                 }
@@ -121,6 +141,7 @@ pub fn layout_text(
                     text: current_line,
                     width: current_width,
                     y_offset: all_lines.len() as f32 * line_height,
+                    paragraph_last: true,
                 });
             }
         }

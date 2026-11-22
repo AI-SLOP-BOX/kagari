@@ -24,8 +24,12 @@ pub(crate) struct RasterCtx<'a> {
     pub height: u32,
     pub cx: f32,
     pub cy: f32,
+    pub three_d_matrix: Option<[[f32; 4]; 4]>,
+    pub scale: [f32; 2],
     pub cos_r: f32,
     pub sin_r: f32,
+    pub flip_x: bool,
+    pub flip_y: bool,
     pub bounds_x: f32,
     pub bounds_y: f32,
     pub base_color: [f32; 4],
@@ -58,6 +62,7 @@ pub(crate) fn rasterize_layer_content(ctx: RasterCtx<'_>) {
 /// Rasterize image/video layers (texture-mapped, masked).
 fn rasterize_image_layer(ctx: RasterCtx<'_>) {
     let RasterCtx {
+        comp,
         layer,
         effective_frame: _,
         source_frame,
@@ -68,17 +73,21 @@ fn rasterize_image_layer(ctx: RasterCtx<'_>) {
         max_y,
         bw,
         bh: _,
+        width,
+        height,
         cx,
         cy,
+        three_d_matrix,
         cos_r,
         sin_r,
+        flip_x,
+        flip_y,
         bounds_x,
         bounds_y,
         layer_buf,
         ..
     } = ctx;
     // Image layers load directly; Video layers resolve their frame PNG first.
-    use crate::core::image_cache::with_image_cache;
 
     let (img_path, next_img_path, blend_t) = match &layer.layer_type {
         LayerType::Video {
@@ -87,7 +96,12 @@ fn rasterize_image_layer(ctx: RasterCtx<'_>) {
             speed,
             ..
         } => {
-            let source_position = (source_frame * speed.max(0.0)).max(0.0);
+            let source_position = crate::core::timeline::video_sequence_frame(
+                source_frame,
+                *speed,
+                frames_dir,
+                comp.fps,
+            );
             let first = (source_position.floor() as u32).min(frame_count.saturating_sub(1));
             let second = (first + 1).min(frame_count.saturating_sub(1));
             let t = if layer.frame_blending {
@@ -120,73 +134,97 @@ fn rasterize_image_layer(ctx: RasterCtx<'_>) {
         ),
         _ => unreachable!(),
     };
-    with_image_cache(|cache| {
-        let Some(img) = cache.load_image(&img_path).cloned() else {
-            return;
-        };
-        let next_img = if blend_t > 0.0 && next_img_path != img_path {
-            cache.load_image(&next_img_path).cloned()
-        } else {
-            None
-        };
-        {
-            let img_w = img.width as f32;
-            let img_h = img.height as f32;
+    let Some(img) = crate::core::image_cache::load_image_shared(&img_path) else {
+        return;
+    };
+    let next_img = if blend_t > 0.0 && next_img_path != img_path {
+        crate::core::image_cache::load_image_shared(&next_img_path)
+            .filter(|next| next.width == img.width && next.height == img.height)
+    } else {
+        None
+    };
+    {
+        for py in min_y..max_y {
+            if super::render_cancelled() {
+                return;
+            }
+            for px in min_x..max_x {
+                // Vector mask check
+                let mut mask_alpha = 1.0;
+                if !masks.is_empty() {
+                    mask_alpha =
+                        compute_combined_mask_coverage(px as f32 + 0.5, py as f32 + 0.5, masks);
+                }
+                if mask_alpha <= 0.001 {
+                    continue;
+                }
 
-            for py in min_y..max_y {
-                for px in min_x..max_x {
-                    // Vector mask check
-                    let mut mask_alpha = 1.0;
-                    if !masks.is_empty() {
-                        mask_alpha = compute_combined_mask_coverage(px as f32, py as f32, masks);
-                    }
-                    if mask_alpha <= 0.001 {
+                // Map pixel to image texture coordinates [0, 1]
+                let dx = px as f32 + 0.5 - cx;
+                let dy = py as f32 + 0.5 - cy;
+                let lx = dx * cos_r + dy * sin_r;
+                let ly = -dx * sin_r + dy * cos_r;
+                let (u, v) = if let Some(matrix) = three_d_matrix {
+                    let Some([u, v]) = super::projective::screen_to_uv(
+                        matrix,
+                        width as f32,
+                        height as f32,
+                        px as f32 + 0.5,
+                        py as f32 + 0.5,
+                    ) else {
                         continue;
-                    }
+                    };
+                    (u, v)
+                } else {
+                    ((lx / bounds_x + 1.0) * 0.5, (ly / bounds_y + 1.0) * 0.5)
+                };
+                let (u, v) = if three_d_matrix.is_some() {
+                    (u, v)
+                } else {
+                    (
+                        if flip_x { 1.0 - u } else { u },
+                        if flip_y { 1.0 - v } else { v },
+                    )
+                };
 
-                    // Map pixel to image texture coordinates [0, 1]
-                    let dx = px as f32 - cx;
-                    let dy = py as f32 - cy;
-                    let lx = dx * cos_r + dy * sin_r;
-                    let ly = -dx * sin_r + dy * cos_r;
-                    let u = (lx / bounds_x + 1.0) * 0.5;
-                    let v = (ly / bounds_y + 1.0) * 0.5;
-
-                    if (0.0..=1.0).contains(&u) && (0.0..=1.0).contains(&v) {
-                        let tex_x = ((u * (img_w - 1.0)).round() as u32).min(img_w as u32 - 1);
-                        let tex_y = ((v * (img_h - 1.0)).round() as u32).min(img_h as u32 - 1);
-                        let tidx = ((tex_y * img.width + tex_x) * 4) as usize;
-                        if tidx + 3 < img.pixels.len() {
-                            let lidx = (((py - min_y) * bw + (px - min_x)) * 4) as usize;
-                            if lidx + 3 < layer_buf.len() {
-                                let sample = |channel: usize| -> u8 {
-                                    let a = img.pixels[tidx + channel] as f32;
-                                    let b = next_img
-                                        .as_ref()
-                                        .filter(|next| {
-                                            next.width == img.width && next.height == img.height
-                                        })
-                                        .and_then(|next| {
-                                            let next_idx =
-                                                ((tex_y * next.width + tex_x) * 4) as usize;
-                                            next.pixels.get(next_idx + channel).copied()
-                                        })
-                                        .map(f32::from)
-                                        .unwrap_or(a);
-                                    (a + (b - a) * blend_t).round().clamp(0.0, 255.0) as u8
-                                };
-                                let src_a = (f32::from(sample(3)) / 255.0) * mask_alpha;
-                                layer_buf[lidx] = sample(0);
-                                layer_buf[lidx + 1] = sample(1);
-                                layer_buf[lidx + 2] = sample(2);
-                                layer_buf[lidx + 3] = (src_a * 255.0) as u8;
-                            }
-                        }
+                if (0.0..=1.0).contains(&u) && (0.0..=1.0).contains(&v) {
+                    let Some(sample_a) = super::sampling::sample_rgba8_linear(
+                        &img.pixels,
+                        img.width,
+                        img.height,
+                        u,
+                        v,
+                    ) else {
+                        continue;
+                    };
+                    let sample_b = next_img
+                        .as_ref()
+                        .filter(|next| next.width == img.width && next.height == img.height)
+                        .and_then(|next| {
+                            super::sampling::sample_rgba8_linear(
+                                &next.pixels,
+                                next.width,
+                                next.height,
+                                u,
+                                v,
+                            )
+                        })
+                        .unwrap_or(sample_a);
+                    let sample = crate::core::frame_blending::blend_rgba_samples(
+                        sample_a, sample_b, blend_t,
+                    );
+                    let lidx = (((py - min_y) * bw + (px - min_x)) * 4) as usize;
+                    if lidx + 3 < layer_buf.len() {
+                        layer_buf[lidx] = sample[0].round().clamp(0.0, 255.0) as u8;
+                        layer_buf[lidx + 1] = sample[1].round().clamp(0.0, 255.0) as u8;
+                        layer_buf[lidx + 2] = sample[2].round().clamp(0.0, 255.0) as u8;
+                        let src_a = (sample[3] / 255.0) * mask_alpha;
+                        layer_buf[lidx + 3] = (src_a * 255.0).round().clamp(0.0, 255.0) as u8;
                     }
                 }
             }
         }
-    });
+    }
 }
 
 /// Flat rasterization for solid (and other non-shape) layers.
@@ -211,11 +249,15 @@ fn rasterize_flat_layer(ctx: RasterCtx<'_>) {
     } = ctx;
     // Other non-shape layers: flat rasterization with mask support
     for py in min_y..max_y {
+        if super::render_cancelled() {
+            return;
+        }
         for px in min_x..max_x {
             // Vector mask check with feathering support
             let mut mask_alpha = 1.0;
             if !masks.is_empty() {
-                mask_alpha = compute_combined_mask_coverage(px as f32, py as f32, masks);
+                mask_alpha =
+                    compute_combined_mask_coverage(px as f32 + 0.5, py as f32 + 0.5, masks);
             }
 
             if mask_alpha <= 0.001 {

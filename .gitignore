@@ -1,7 +1,9 @@
 /target
 **/*.rs.bk
-test_project.json
-test_text_only.json
+glitch_project.json
+tests/fixtures/test_project.json
+tests/fixtures/test_text_only.json
+tests/fixtures/test_invalid.json
 .DS_Store
 *.log
 *.env
@@ -12,3 +14,15 @@ test_text_only.json
 *.credentials
 *.swp
 *.bak
+
+# Generated media/assets at repository root (do not commit)
+kagari_product_showcase.mp4
+kagari_product_promo.json
+promo_soundtrack.wav
+demo_synth_beat.wav
+preferences-cache-overlay.png
+preferences-cache-overlay-only.png
+showcase_product_promo.mp4/
+.commandcode/
+vendor/
+*.dmg

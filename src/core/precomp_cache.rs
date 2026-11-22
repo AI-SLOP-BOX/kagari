@@ -3,11 +3,12 @@
 ///
 /// Uses a thread-local LRU cache keyed by composition content, frame, and resolution.
 use std::collections::HashMap;
+use std::sync::Arc;
 
 type CacheKey = (String, u64, u32, u32, u32);
 
 struct CacheEntry {
-    pixels: Vec<u8>,
+    pixels: Arc<[u8]>,
 }
 
 pub struct PrecompCache {
@@ -42,12 +43,12 @@ impl PrecompCache {
         frame: u32,
         w: u32,
         h: u32,
-    ) -> Option<Vec<u8>> {
+    ) -> Option<Arc<[u8]>> {
         let key = (comp_id.to_string(), content_revision, frame, w, h);
         if let Some(entry) = self.entries.get(&key) {
             self.order.retain(|k| *k != key);
             self.order.push(key);
-            return Some(entry.pixels.clone());
+            return Some(Arc::clone(&entry.pixels));
         }
         None
     }
@@ -59,8 +60,9 @@ impl PrecompCache {
         frame: u32,
         w: u32,
         h: u32,
-        pixels: Vec<u8>,
+        pixels: impl Into<Arc<[u8]>>,
     ) {
+        let pixels = pixels.into();
         if self.max_entries == 0 || self.max_bytes == 0 {
             return;
         }
@@ -131,7 +133,7 @@ mod tests {
         cache.insert("comp1", 1, 0, 1920, 1080, data.clone());
         let cached = cache.get("comp1", 1, 0, 1920, 1080);
         assert!(cached.is_some());
-        assert_eq!(cached.unwrap(), data);
+        assert_eq!(&*cached.unwrap(), data.as_slice());
     }
 
     #[test]
@@ -169,7 +171,7 @@ mod tests {
         cache.insert("b", 1, 0, 1, 1, vec![2; 6]);
 
         assert!(cache.get("a", 1, 0, 1, 1).is_none());
-        assert_eq!(cache.get("b", 1, 0, 1, 1).unwrap(), vec![2; 6]);
+        assert_eq!(&*cache.get("b", 1, 0, 1, 1).unwrap(), &[2; 6]);
         assert_eq!(cache.used_bytes(), 6);
     }
 

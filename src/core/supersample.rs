@@ -50,12 +50,12 @@ mod tests {
     fn test_downsample_uniform_stays_uniform() {
         // 4x4 all red opaque → 2x2 all red opaque.
         let mut src = vec![0u8; 16 * 4];
-        for px in src.chunks_exact_mut(4) {
+        for px in src.as_chunks_mut::<4>().0 {
             px.copy_from_slice(&[255, 0, 0, 255]);
         }
         let out = downsample2x(&src, 2, 2);
         assert_eq!(out.len(), 2 * 2 * 4);
-        for px in out.chunks_exact(4) {
+        for px in out.as_chunks::<4>().0 {
             assert_eq!(px, &[255, 0, 0, 255]);
         }
     }

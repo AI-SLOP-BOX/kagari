@@ -1,0 +1,63 @@
+component TimelineMarkers() {
+  Card { Padding(4) { VStack(spacing: 3) {
+    HStack(spacing: 5) {
+      Caption("コンポジションマーカー")
+      Button("現在位置", action: add_timeline_marker, tone: ghost, size: small)
+      If(has_timeline_markers) {
+        If(has_selected_timeline_marker) {
+          MaxWidth(190) { TextField(timeline_marker_label, "マーカー名", action: timeline_marker_label_changed) }
+          MaxWidth(72) { TextField(timeline_marker_frame, "フレーム", action: timeline_marker_frame_changed) }
+          Button("削除", action: remove_timeline_marker, tone: ghost, size: small)
+        } else { Caption("一覧からマーカーを選択して編集") }
+      }
+    }
+    If(has_timeline_markers) {
+      HorizontalVirtualList(timeline_markers, marker, key: id, width: 520, height: 32, item_width: auto, overscan: 4) {
+        If(marker.selected) { Button("{marker.time}  {marker.label}", action: go_timeline_marker, tone: primary, size: small) } else { Button("{marker.time}  {marker.label}", action: go_timeline_marker, tone: ghost, size: small) }
+      }
+    } else { Caption("マーカーはありません。現在位置に追加できます。") }
+  } } }
+}
+
+component LayerMarkerTrackList() {
+  Card { Padding(4) { VStack(spacing: 3) {
+    HStack(spacing: 5) {
+      Caption("レイヤーマーカーを編集するレイヤー")
+      Spacer
+      If(selected_layer) { Button("現在位置", action: add_layer_marker, tone: ghost, size: small, disabled: selected_layer_locked) } else { Caption("レイヤーを選ぶと追加できます") }
+    }
+    If(has_timeline_layers) {
+      ForEach(timeline_layers, layer, key: id, height: 200, row_height: 26, overscan: 5) {
+            HStack(spacing: 5) {
+              If(layer.selected) { Button("{layer.name}", action: select_layer, tone: primary, size: small) } else { Button("{layer.name}", action: select_layer, tone: ghost, size: small) }
+              Caption("{layer.kind}")
+              Spacer
+              If(layer.selected) { Caption("選択中") }
+            }
+      }
+    } else {
+      Caption("レイヤーマーカーはありません。レイヤーを選択し、プロパティから現在位置に追加できます。")
+    }
+    Spacer
+    HStack(spacing: 5) {
+      Caption("選択中レイヤーのマーカー")
+      Spacer
+      If(has_layer_markers) { Caption("選択して再生位置へ移動") }
+    }
+    If(has_layer_markers) {
+      HorizontalVirtualList(layer_markers, marker, key: id, width: 520, height: 32, item_width: auto, overscan: 4) {
+        If(marker.selected) { Button("{marker.time} · {marker.label}", action: go_layer_marker, tone: primary, size: small) } else { Button("{marker.time} · {marker.label}", action: go_layer_marker, tone: ghost, size: small) }
+      }
+      If(has_selected_layer_marker) {
+        HStack(spacing: 5) {
+          If(selected_layer_locked) { Caption("{layer_marker_label}") } else { TextField(layer_marker_label, "マーカー名", action: layer_marker_label_changed) }
+          MaxWidth(82) { If(selected_layer_locked) { Caption("{layer_marker_frame}") } else { TextField(layer_marker_frame, "フレーム", action: layer_marker_frame_changed) } }
+          Button("削除", action: remove_layer_marker, tone: destructive, size: small, disabled: selected_layer_locked)
+        }
+      } else { Caption("一覧からマーカーを選択して編集") }
+    } else {
+      Caption("選択したレイヤーにマーカーはありません。プロパティの「＋ 現在位置」から追加できます。")
+    }
+  } } }
+}
+

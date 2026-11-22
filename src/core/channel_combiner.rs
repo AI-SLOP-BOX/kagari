@@ -109,7 +109,7 @@ pub fn apply_channel_combiner(
         (r1 + m, g1 + m, b1 + m)
     };
 
-    for chunk in pixels.chunks_exact_mut(4) {
+    for chunk in pixels.as_chunks_mut::<4>().0 {
         let r = chunk[0] as f32 / 255.0;
         let g = chunk[1] as f32 / 255.0;
         let b = chunk[2] as f32 / 255.0;

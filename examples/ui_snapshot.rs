@@ -5,7 +5,7 @@ fn main() {
     let args: Vec<_> = std::env::args().collect();
     let path = args
         .get(1)
-        .expect("usage: ui_snapshot output.png [width height] [normal|expanded|graph|expression|effects_panel|viewer_max|project_drawer|inspector_drawer|asset_library|tutorial|text|color|home|assets|render|templates|settings]");
+        .expect("usage: ui_snapshot output.png [width height] [normal|expanded|graph|expression|effects_panel|viewer_max|project_drawer|inspector_drawer|asset_library|text|color|home|assets|render|templates|settings]");
     let width: u32 = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(1440);
     let height: u32 = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(900);
     let mode = args.get(4).map(String::as_str).unwrap_or("normal");
@@ -24,7 +24,7 @@ fn main() {
         app.viewer_maximized = mode == "viewer_max";
         app.show_graph_editor = mode == "graph";
         if mode == "expression" {
-            app.ui_tabs.right_tab_idx = 10;
+            app.ui_tabs.right_panel = kagari_vfx::app_state::RightPanel::Expressions;
         }
         if mode == "effects_panel" {
             app.ui_tabs.left_tab_idx = 1;
@@ -80,19 +80,17 @@ fn main() {
                     ui::home_screen::draw(&mut app, ctx);
                 } else if mode == "asset_library" {
                     app.ui_tabs.left_tab_idx = 0;
-                    app.ui_tabs.right_tab_idx = 30;
+                    app.ui_tabs.right_panel = kagari_vfx::app_state::RightPanel::Properties;
                     ctx.data_mut(|data| {
                         data.insert_temp(egui::Id::new("studio_active_workspace"), 3_usize);
                     });
                     ui::asset_library::draw(&mut app, ctx);
-                } else if mode == "tutorial" {
-                    ui::tutorial_workspace::draw(&mut app, ctx);
                 } else if mode == "text" {
                     app.active_tool = kagari_vfx::ui::toolbar::ActiveTool::Text;
                     ui::text_workspace::draw(&mut app, ctx);
                 } else if mode == "color" {
                     app.ui_tabs.left_tab_idx = 1;
-                    app.ui_tabs.right_tab_idx = 19;
+                    app.ui_tabs.right_panel = kagari_vfx::app_state::RightPanel::Color;
                     ui::color_workspace::draw(&mut app, ctx);
                 } else if mode == "effects_panel" {
                     ui::effects_workspace::draw(&mut app, ctx);

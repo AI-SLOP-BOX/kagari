@@ -1,0 +1,125 @@
+component MaskProperties() {
+  If(selected_layer) {
+  Card(hover_strength: 0.0, hover_elevation: 0.0) { Padding(6) { VStack(spacing: 5) {
+    HStack(spacing: 5) {
+      Caption("▎ マスク")
+      Spacer
+      Button("パス", action: mask_path_keyframe, tone: ghost, size: small, disabled: !selected_layer || selected_layer_locked || !has_layer_masks)
+      Button("矩形", action: add_rect_mask, tone: ghost, size: small, disabled: !selected_layer || selected_layer_locked)
+      Button("楕円", action: add_ellipse_mask, tone: ghost, size: small, disabled: !selected_layer || selected_layer_locked)
+    }
+    If(has_layer_masks) {
+      ForEach(layer_masks, mask, key: id, height: 150, row_height: 32, overscan: 4) {
+        HStack(spacing: 4) {
+          Button("{mask.name}", action: select_mask, tone: ghost, size: small, disabled: selected_layer_locked)
+          Caption("{mask.mode}")
+          If(mask.enabled) { Button("表示", action: toggle_mask_enabled, tone: primary, size: small, disabled: selected_layer_locked) } else { Button("無効", action: toggle_mask_enabled, tone: ghost, size: small, disabled: selected_layer_locked) }
+          Button("削除", action: remove_mask, tone: destructive, size: small, disabled: selected_layer_locked)
+        }
+      }
+      HStack(spacing: 5) { MinWidth(72) { Caption("名前") } If(selected_layer_locked) { Caption("{selected_mask_name}") } else { TextField(selected_mask_name, "Mask 1", action: mask_name_changed) } }
+      HStack(spacing: 5) {
+        Caption("合成")
+        If(selected_layer_locked) {
+          Caption("{mask_mode_label}")
+        } else {
+          Select(mask_mode_label, action: select_mask_mode) {
+            Option("加算", "加算")
+            Option("減算", "減算")
+            Option("交差", "交差")
+            Option("明るく", "明るく")
+            Option("暗く", "暗く")
+            Option("差分", "差分")
+            Option("なし", "なし")
+          }
+        }
+        Button("反転", action: toggle_mask_inverted, tone: ghost, size: small, disabled: selected_layer_locked)
+      }
+      HStack(spacing: 5) { MinWidth(72) { Caption("ぼかし") } If(selected_layer_locked) { Caption("{mask_feather}") } else { TextField(mask_feather, "0", action: mask_feather_changed) } Caption("px") IconButton("diamond", action: mask_feather_keyframe, tone: ghost, size: small, disabled: selected_layer_locked) }
+      HStack(spacing: 5) { MinWidth(72) { Caption("不透明度") } If(selected_layer_locked) { Caption("{mask_opacity}") } else { TextField(mask_opacity, "100", action: mask_opacity_changed) } Caption("%") IconButton("diamond", action: mask_opacity_keyframe, tone: ghost, size: small, disabled: selected_layer_locked) }
+      HStack(spacing: 5) { MinWidth(72) { Caption("拡張") } If(selected_layer_locked) { Caption("{mask_expansion}") } else { TextField(mask_expansion, "0", action: mask_expansion_changed) } Caption("px") IconButton("diamond", action: mask_expansion_keyframe, tone: ghost, size: small, disabled: selected_layer_locked) }
+      Caption("Canvas上でマスクの頂点をドラッグして形を調整")
+    } else {
+      Caption("矩形または楕円マスクを追加して、レイヤーの表示範囲を調整できます。")
+    }
+  } } }
+  } else {
+    Card(hover_strength: 0.0, hover_elevation: 0.0) { Padding(8) { Caption("マスクを追加・編集するレイヤーを選択してください。") } }
+  }
+}
+
+component LayerOptionsProperties() {
+  Card(hover_strength: 0.0, hover_elevation: 0.0) { Padding(6) { VStack(spacing: 5) {
+    Caption("▎ レイヤースイッチ")
+    Wrap(item_spacing: 4, line_spacing: 4) {
+      If(layer_preserve_transparency) { Button("透明部分を保持", action: toggle_preserve_transparency, tone: primary, size: small, disabled: selected_layer_locked) } else { Button("透明部分を保持", action: toggle_preserve_transparency, tone: ghost, size: small, disabled: selected_layer_locked) }
+      If(layer_effects_enabled) { Button("エフェクト有効", action: toggle_layer_effects, tone: primary, size: small, disabled: selected_layer_locked) } else { Button("エフェクト無効", action: toggle_layer_effects, tone: ghost, size: small, disabled: selected_layer_locked) }
+    }
+    Wrap(item_spacing: 4, line_spacing: 4) {
+      Button("ガイドレイヤー", action: toggle_guide_layer, tone: ghost, size: small, disabled: selected_layer_locked)
+      Button("シャイ", action: toggle_shy_layer, tone: ghost, size: small, disabled: selected_layer_locked)
+      If(selected_is_video) { If(layer_frame_blending) { Button("フレーム補間: ON", action: toggle_frame_blending, tone: primary, size: small, disabled: selected_layer_locked) } else { Button("フレーム補間: OFF", action: toggle_frame_blending, tone: ghost, size: small, disabled: selected_layer_locked) } }
+    }
+    Wrap(item_spacing: 4, line_spacing: 4) {
+      If(layer_motion_blur) { Button("モーションブラー", action: toggle_selected_layer_motion_blur, tone: primary, size: small, disabled: selected_layer_locked) } else { Button("モーションブラー", action: toggle_selected_layer_motion_blur, tone: ghost, size: small, disabled: selected_layer_locked) }
+      Caption("コンポジション設定のシャッター角を使用")
+    }
+    HStack(spacing: 5) {
+      Caption("自動方向")
+      If(selected_layer_locked) {
+        Caption("{layer_auto_orient_label}")
+        Caption("ラベル: {layer_label_color_label}")
+      } else {
+        Select(layer_auto_orient_label, action: select_auto_orient) {
+          Option("なし", "なし")
+          Option("パスに沿う", "パスに沿う")
+          Option("点を向く", "点を向く")
+        }
+        Select(layer_label_color_label, action: select_layer_label_color) {
+          Option("なし", "なし")
+          Option("赤", "赤")
+          Option("黄", "黄")
+          Option("水色", "水色")
+          Option("桃", "桃")
+          Option("藤", "藤")
+          Option("橙", "橙")
+          Option("緑", "緑")
+          Option("青", "青")
+          Option("紫", "紫")
+        }
+      }
+    }
+    If(layer_auto_orient_label == "点を向く") {
+      HStack(spacing: 5) {
+        Caption("注視点")
+        If(selected_layer_locked) { Caption("{layer_auto_orient_point_x}") } else { TextField(layer_auto_orient_point_x, "960", action: auto_orient_point_x_changed) }
+        If(selected_layer_locked) { Caption("{layer_auto_orient_point_y}") } else { TextField(layer_auto_orient_point_y, "540", action: auto_orient_point_y_changed) }
+      }
+    }
+  } } }
+}
+
+component LayerMarkerProperties() {
+  Card(hover_strength: 0.0, hover_elevation: 0.0) { Padding(6) { VStack(spacing: 5) {
+    HStack(spacing: 5) {
+      Caption("▎ レイヤーマーカー")
+      Spacer
+      Button("現在位置", action: add_layer_marker, tone: ghost, size: small, disabled: !selected_layer || selected_layer_locked)
+    }
+    If(has_layer_markers) {
+      Wrap(item_spacing: 4, line_spacing: 4) {
+        ForEach(layer_markers, marker, key: id) {
+          Button("{marker.time} · {marker.label}", action: go_layer_marker, tone: ghost, size: small)
+        }
+      }
+      If(has_selected_layer_marker) {
+        HStack(spacing: 5) {
+          If(selected_layer_locked) { Caption("{layer_marker_label}") } else { TextField(layer_marker_label, "マーカー名", action: layer_marker_label_changed) }
+          Button("削除", action: remove_layer_marker, tone: destructive, size: small, disabled: selected_layer_locked)
+        }
+      } else { Caption("一覧からマーカーを選択して編集") }
+    } else {
+      Caption("レイヤー内の重要なフレームに目印を付けられます。")
+    }
+  } } }
+}

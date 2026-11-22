@@ -1,7 +1,6 @@
-//! Essential Graphics & Motion Graphics Template (MOGRT) Engine (AE Parity).
+//! Kagari's JSON template package and Essential Properties support.
 //!
-//! Provides the complete data structure, serialization, and override binding system
-//! for Essential Properties and .mogrt template packages used in video editors (Premiere Pro / NLEs).
+//! This is Kagari's own template envelope, not Adobe's Premiere Pro MOGRT format.
 
 #![allow(dead_code)]
 
@@ -168,7 +167,7 @@ pub fn apply_essential_property_overrides(
     }
 }
 
-/// Self-contained Motion Graphics Template (MOGRT) package containing manifest, project data, and metadata.
+/// Kagari-specific JSON template envelope containing a manifest and project data.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MogrtPackage {
     pub manifest: MogrtManifest,
@@ -185,18 +184,18 @@ impl MogrtPackage {
         }
     }
 
-    /// Serializes MOGRT package to formatted JSON string.
+    /// Serializes the Kagari template envelope as formatted JSON.
     pub fn to_json(&self) -> Result<String, serde_json::Error> {
         serde_json::to_string_pretty(self)
     }
 
-    /// Deserializes MOGRT package from JSON string.
+    /// Deserializes a Kagari template envelope from JSON.
     pub fn from_json(json_str: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(json_str)
     }
 }
 
-/// Generates a MOGRT manifest from a composition and registered essential properties.
+/// Generates a Kagari template manifest from a composition and exposed properties.
 pub fn create_mogrt_manifest(
     comp: &Composition,
     name: impl Into<String>,

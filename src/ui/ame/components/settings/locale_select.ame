@@ -1,0 +1,6 @@
+component LocaleSelect() {
+  Select(ui_locale, action: setting_locale_changed) {
+    Option("ja", "日本語 (Japanese)")
+    Option("en", "English")
+  }
+}

@@ -74,6 +74,7 @@ fn main() {
         assets: Vec::new(),
     };
     let json = serde_json::to_string_pretty(&project).expect("serialize");
-    std::fs::write("test_invalid.json", json).expect("write");
-    println!("Wrote test_invalid.json");
+    std::fs::create_dir_all("tests/fixtures").expect("fixtures dir");
+    std::fs::write("tests/fixtures/test_invalid.json", json).expect("write");
+    println!("Wrote tests/fixtures/test_invalid.json");
 }

@@ -140,9 +140,8 @@ pub fn generate_lightning_arcs(config: &AdvancedLightningConfig) -> Vec<Lightnin
     // Generate sub-branches from interior main nodes
     let num_main = main_pts.len();
     if num_main >= 3 {
-        for i in 1..num_main - 1 {
+        for &start in main_pts.iter().take(num_main - 1).skip(1) {
             if next_f32() < branch_prob {
-                let start = main_pts[i];
                 let dir = [(next_f32() - 0.5) * 200.0, (next_f32() - 0.5) * 200.0];
                 let branch_dest = [start[0] + dir[0], start[1] + dir[1]];
 
@@ -465,8 +464,10 @@ mod tests {
 
     #[test]
     fn test_lightning_segments_parameter_changes_path_resolution() {
-        let mut low = AdvancedLightningConfig::default();
-        low.segments = 2;
+        let low = AdvancedLightningConfig {
+            segments: 2,
+            ..Default::default()
+        };
         let mut high = low.clone();
         high.segments = 32;
         let low_count = generate_lightning_arcs(&low)[0].points.len();

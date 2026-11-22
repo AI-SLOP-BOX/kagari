@@ -1,0 +1,29 @@
+component AudioMixerPanel() {
+  Card(hover_strength: 0.0, hover_elevation: 0.0) { Padding(6) { VStack(spacing: 5) {
+    HStack(spacing: 5) {
+      Text("オーディオミキサー", size: 14)
+      Spacer
+      If(has_audio_tracks) { Button("音声をキーフレームへ変換", action: audio_to_keyframes, tone: ghost, size: small) }
+      Caption("音量入力またはキー追加 · ミュートとソロを切り替え")
+    }
+    If(has_audio_tracks) {
+      VirtualList(audio_tracks, track, key: id, height: 300, row_height: 54, overscan: 4) {
+        VStack(spacing: 3) {
+          HStack(spacing: 5) {
+            If(track.selected) { Button("{track.name}", action: select_layer, tone: primary, size: small) } else { Button("{track.name}", action: select_layer, tone: ghost, size: small) }
+            Caption("{track.source_kind}")
+            Spacer
+          }
+          HStack(spacing: 5) {
+            If(track.has_volume) { If(track.locked) { Caption("{track.volume} dB · ロック中") } else { TextField(track.volume, "0.0", action: audio_track_volume_changed) Caption("dB") If(track.keyframe_here) { IconButton("diamond", action: audio_track_volume_keyframe, tone: primary, size: small) } else { IconButton("diamond", action: audio_track_volume_keyframe, tone: ghost, size: small) } } }
+            Spacer
+            If(track.muted) { Button("ミュート", action: toggle_audio_mute, tone: primary, size: small) } else { Button("ミュート", action: toggle_audio_mute, tone: ghost, size: small) }
+            If(track.solo) { Button("ソロ", action: toggle_layer_solo, tone: primary, size: small) } else { Button("ソロ", action: toggle_layer_solo, tone: ghost, size: small) }
+          }
+        }
+      }
+    } else {
+      Caption("音声トラックがありません。プロジェクトパネルから音声を追加できます。")
+    }
+  } } }
+}

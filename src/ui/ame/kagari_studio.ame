@@ -1,0 +1,284 @@
+app AfterEffectsStudio {
+  window {
+    title: "KAGARI VFX"
+    size: 1600, 1000
+    min_size: 640, 480
+  }
+  theme dark;
+  accessibility {
+    exit_retention: true
+    layout_motion: true
+  }
+
+  menu "Kagari Studio" {
+    item "環境設定..." action go_settings;
+    item "終了" action exit_app;
+  }
+  menu "ファイル" {
+    item "新規プロジェクト" action new_project;
+    item "プロジェクトを開く..." action open_project;
+    item "保存" action save_project;
+    item "書き出し..." action go_export;
+  }
+  menu "編集" {
+    item "元に戻す" action undo_project;
+    item "やり直す" action redo_project;
+    item "コマンドパレット..." action toggle_command_palette;
+  }
+  menu "表示" {
+    item "ホーム" action go_home;
+    item "編集ワークスペース" action workspace_default;
+    item "カラーワークスペース" action workspace_color;
+    item "エフェクトワークスペース" action workspace_effects;
+  }
+  menu "再生" {
+    item "再生 / 一時停止" action play_toggle;
+    item "停止" action play_stop;
+    item "前のフレーム" action step_frame_backward;
+    item "次のフレーム" action step_frame_forward;
+  }
+  menu "ヘルプ" {
+    item "ドキュメント" action go_documents;
+  }
+
+  material GlassCard {
+    kind: liquid_glass
+    specular_border: 24
+    elevation: 16
+  }
+  material HeroBloom {
+    kind: bloom
+  }
+  material AccentBorder {
+    kind: gradient_border
+  }
+  material HomeMeshBg {
+    kind: mesh_gradient
+  }
+  material FilmGrain {
+    kind: grain
+  }
+
+  import "state/records.ame";
+  import "state/bindings.ame";
+  import "state/actions.ame";
+  import "state/strings.ame";
+  bind modal_scrim_opacity: Float = 0.78;
+
+
+  import "components/navigation.ame";
+  import "components/home.ame";
+  import "components/projects.ame";
+  import "components/activity.ame";
+  import "components/documents.ame";
+  import "components/project_setup.ame";
+  import "components/settings.ame";
+  import "components/export.ame";
+  import "components/asset_panel.ame";
+  import "components/scene_panel.ame";
+  import "components/project_panel.ame";
+  import "components/composition_panel.ame";
+  import "components/properties_transform.ame";
+  import "components/properties_content.ame";
+  import "components/properties_appearance.ame";
+  import "components/properties_advanced.ame";
+  import "components/properties_panel.ame";
+  import "components/effect_panel.ame";
+  import "components/animation_panel.ame";
+  import "components/audio_mixer_panel.ame";
+  import "components/time_remap_panel.ame";
+  import "components/graph_editor_panel.ame";
+  import "components/timeline_markers.ame";
+  import "components/flowchart_panel.ame";
+  import "components/timeline.ame";
+  import "components/topbar.ame";
+  import "components/toolbar.ame";
+  import "components/status_bar.ame";
+  import "components/workspace_layout.ame";
+
+  component CommandPaletteModal() {
+    VStack(spacing: 0) {
+      Spacer
+      HStack(spacing: 0) {
+        Spacer
+        Padding(horizontal: 24, vertical: 0) {
+          MinWidth(560) {
+            MaxWidth(620) {
+              Card(hover_strength: 0.0, hover_elevation: 0.0, background: "#181d25", border_color: "#2b3240") {
+          VStack(spacing: 12) {
+            HStack(spacing: 8) {
+              If(ui_locale != "") {
+                Text("{t.cmd_palette_title}")
+                  .font_size(14)
+                  .weight(semibold)
+              }
+              Spacer
+              Button("Esc", action: toggle_command_palette, tone: secondary, size: small)
+            }
+            Grow(1) {
+              ScrollView(360) {
+                CommandPalette(action: execute_command, placeholder: "画面、新規作成、プリセット、ツール、ワークスペースを検索...") {
+              Command("go_home", "画面: ホームへ移動")
+              Command("go_projects", "画面: プロジェクト一覧")
+              Command("go_settings", "画面: 環境設定", hint: "⌘,")
+              // <generated-locale-commands>
+              Command("switch_locale_ja", "言語 / Language: 日本語 (Japanese)")
+              Command("switch_locale_en", "言語 / Language: English (英語)")
+              // </generated-locale-commands>
+              Command("go_documents", "画面: ヘルプ / ドキュメント")
+              Command("new_project", "プロジェクト: 新規作成", hint: "⌘N")
+              Command("load_demo_vfx_scene", "チュートリアル: VFX サンプルシーンを開く")
+              Command("open_project", "プロジェクト: フォルダから開く...")
+              Command("quick_start_1080p60", "プリセット: フルHD (1920×1080 · 60fps)")
+              Command("quick_start_4k24", "プリセット: 4K (3840×2160 · 24fps)")
+              Command("quick_start_vertical", "プリセット: 縦型 (1080×1920 · 60fps)")
+              Command("quick_start_square", "プリセット: 正方形 (1080×1080 · 30fps)")
+              Command("tool_select", "ツール: 選択", hint: "V")
+              Command("tool_hand", "ツール: 手のひら", hint: "H")
+              Command("tool_zoom", "ツール: ズーム", hint: "Z")
+              Command("tool_text", "ツール: テキスト", hint: "T")
+              Command("tool_shape", "ツール: シェイプ", hint: "Q")
+              Command("tool_pen", "ツール: ペン", hint: "G")
+              Command("tool_roto", "ツール: ロトブラシ", hint: "R")
+              Command("workspace_default", "ワークスペース: 標準 (Default)")
+              Command("workspace_composition", "ワークスペース: コンポジション")
+              Command("workspace_timeline", "ワークスペース: タイムライン")
+              Command("workspace_animation", "ワークスペース: アニメーション")
+              Command("workspace_graph", "ワークスペース: グラフエディタ")
+              Command("add_chroma_key", "エフェクト: クロマキー (グリーンバック抜き)")
+              Command("add_curves", "エフェクト: Curves (トーンカーブ)")
+              Command("add_chromatic_aberration", "エフェクト: 色収差")
+              Command("add_lens_correction", "エフェクト: レンズ歪み補正")
+              Command("add_fractal_noise", "エフェクト: フラクタルノイズ")
+              Command("add_glitch_displacement", "エフェクト: グリッチ")
+              Command("add_glow_pro", "エフェクト: Glow Pro (光学グロー)")
+              Command("add_white_balance", "エフェクト: ホワイトバランス (色温度/ティント)")
+              Command("add_turbulent_displace", "エフェクト: タービュレントディスプレイス")
+              Command("add_cc_lens", "エフェクト: CC Lens (レンズ歪み)")
+              Command("add_vortex", "エフェクト: 渦 (Vortex)")
+              Command("add_light_sweep", "エフェクト: ライトスイープ")
+              Command("add_luma_key_range", "エフェクト: 輝度キー (Luma Key)")
+              Command("add_tritone", "エフェクト: トライトーン (3色階調)")
+              Command("docs_roto_brush", "ガイド: ロトスコープの使い方")
+              Command("docs_pro_keyer", "ガイド: キーイング (グリーンバック抜き)")
+              Command("docs_aces_color", "ガイド: ACES カラーマネジメント")
+              Command("docs_node_graph", "ガイド: ノードグラフ合成")
+              Command("engine_analyze_color_scopes", "エンジン: カラースコープ・HDRスポイト計測")
+              Command("engine_analyze_film_grain", "エンジン: フィルムグレイン自動解析")
+              Command("engine_run_pro_keyer", "エンジン: ProKeyer (グリーンバック抜き)")
+              Command("engine_run_deep_and_node_graph", "エンジン: Deep/DAGノードグラフ & ROI実行")
+              Command("engine_run_roto_refine", "エンジン: ロトエッジリファイン & 汚染除去")
+              Command("engine_run_mograph_cloner", "エンジン: MoGraph 3Dクローナー & 押し出し生成")
+              Command("engine_run_sfm_and_lens", "エンジン: SfM 3Dカメラトラッカー & レンズ歪み解析")
+              Command("engine_run_temporal_cleanplate", "エンジン: 時間軸クリーンプレート (不要物除去)")
+              Command("engine_apply_composer_preset", "エンジン: Animation Composer リグ評価")
+              Command("engine_apply_shape_pucker_twist", "エンジン: AEシェイプ Pucker/Twist/Wiggle")
+              Command("engine_auto_proxy_step", "エンジン: 自動プロキシ & レイアウトJSON検証")
+              Command("engine_run_cryptomatte", "エンジン: Cryptomatte IDマット抽出")
+              Command("engine_run_aces_check", "エンジン: ACES 1.3 色域圧縮 & ODT変換")
+              Command("node_graph_evaluate", "ノードグラフ: 現在のDAGパイプラインを評価実行")
+              Command("add_generator_smpte", "生成レイヤー: SMPTE カラーバー")
+              Command("add_generator_grid", "生成レイヤー: Pro Grid (基準グリッド)")
+              Command("add_generator_gradient", "生成レイヤー: 4色グラデーション")
+              Command("add_generator_cells", "生成レイヤー: セルパターン (Voronoi)")
+              Command("add_generator_light_leak", "生成レイヤー: 光学ライトリーク (非破壊・Screen)")
+              Command("add_generator_film_grain", "生成レイヤー: 35mm フィルムグレイン & ビネット (調整レイヤー)")
+              Command("add_generator_anamorphic_flare", "生成レイヤー: アナモルフィック・レンズフレア (非破壊・Add)")
+              Command("time_remap_optical_flow", "タイムリマップ: Optical Flow 動き補間")
+              Command("add_saber_beam_layer", "生成レイヤー: Saber エネルギービーム")
+              Command("add_3d_extruded_shape", "生成レイヤー: 3D押し出しベベルシェイプ")
+              Command("add_tracked_3d_camera", "3Dカメラ: SfM トラッキング済みカメラ生成")
+              Command("node_graph_add_sapphire", "ノードグラフ: + Sapphire 光学グロー")
+              Command("node_graph_add_saber", "ノードグラフ: + Saber ビーム")
+              Command("node_graph_add_deep_merge", "ノードグラフ: + DeepMerge (Z深度合成)")
+              Command("node_graph_add_openfx", "ノードグラフ: + OpenFX プラグインノード")
+              Command("node_graph_add_over_merge", "ノードグラフ: + OverMerge (2入力合成)")
+              Command("node_graph_auto_layout", "ノードグラフ: 自動整列")
+              Command("toggle_node_graph_preview", "ノードグラフ: ライブ合成モード切替")
+              Command("add_3d_studio_rig", "3Dセット: 立体シェイプ + ライト + カメラ一括構築")
+              Command("apply_wiggle_keyframes", "アニメ: 選択レイヤーへ Wiggle 揺れキーフレーム適用")
+              Command("mograph_clone_selected_layer", "MoGraph: 選択レイヤーを放射状6クローン複製")
+              Command("apply_matte_choker", "エフェクト: Matte Choker (ロト境界補正)")
+              Command("add_mesh_warp", "エフェクト: メッシュワープ (4隅ワープ)")
+              Command("add_displacement_map", "エフェクト: ディスプレイスメントマップ")
+              Command("add_compound_blur", "エフェクト: コンパウンドブラー")
+              Command("node_graph_bake_to_layer", "ノードグラフ: 評価結果をレイヤーへ書き出し")
+              Command("bake_cleanplate_layer", "生成レイヤー: 時間軸クリーンプレート (背景復元)")
+              Command("add_crt_scanlines", "エフェクト: CRT スキャンライン")
+              Command("add_polar_coordinates", "エフェクト: 極座標")
+              Command("add_wave_warp", "エフェクト: 波形ワープ (Wave Warp)")
+              Command("add_mosaic", "エフェクト: モザイク")
+              Command("add_emboss", "エフェクト: エンボス")
+              Command("add_bevel_alpha", "エフェクト: アルファベベル")
+              Command("add_median_filter", "エフェクト: メディアンフィルター (ノイズ除去)")
+              Command("add_sobel_edges", "エフェクト: Sobel エッジ検出")
+              Command("add_corner_pin", "エフェクト: コーナーピン (8-DOF 透視)")
+              Command("add_colorama", "エフェクト: Colorama (カラーサイクル)")
+              Command("export_run_qc", "書き出し: 書き出し前 QC 品質検査 (黒フレーム/ROI/輝度)")
+                }
+              }.frame(height: 360)
+            }
+          }
+          .padding(16)
+        }
+        .material(GlassCard)
+        .frame(height: 480)
+            }
+          }
+        }
+        Spacer
+      }
+      Spacer
+    }
+  }
+
+  view {
+    If(settings_page) {
+      ZStack {
+        MainContent()
+        ZStack {
+          Surface(padding: 0, spacing: 0, radius: 0, border: false, background: "#06090f") { Spacer }.opacity(modal_scrim_opacity)
+          SettingsPanel()
+        }
+      }
+    } else {
+      If(command_palette_open) {
+        ZStack {
+          MainContent()
+          ZStack {
+            Surface(padding: 0, spacing: 0, radius: 0, border: false, background: "#06090f") { Spacer }.opacity(modal_scrim_opacity)
+            CommandPaletteModal()
+          }
+        }
+      } else {
+        ZStack {
+          MainContent()
+          If(project_switch_confirm_open) {
+            ZStack {
+              Surface(padding: 0, spacing: 0, radius: 0, border: false, background: "#06090f") { Spacer }.opacity(modal_scrim_opacity)
+              Center { ProjectSwitchConfirmModal() }
+            }
+          }
+          If(composition_remove_confirm_open) {
+            ZStack {
+              Surface(padding: 0, spacing: 0, radius: 0, border: false, background: "#06090f") { Spacer }.opacity(modal_scrim_opacity)
+              Center { CompositionRemoveConfirmModal() }
+            }
+          }
+          If(layer_remove_confirm_open) {
+            ZStack {
+              Surface(padding: 0, spacing: 0, radius: 0, border: false, background: "#06090f") { Spacer }.opacity(modal_scrim_opacity)
+              Center { LayerRemoveConfirmModal() }
+            }
+          }
+          If(exit_confirm_open) {
+            ZStack {
+              Surface(padding: 0, spacing: 0, radius: 0, border: false, background: "#06090f") { Spacer }.opacity(modal_scrim_opacity)
+              Center { ExitConfirmModal() }
+            }
+          }
+        }
+      }
+    }
+  }
+}
